@@ -11,6 +11,8 @@ export default function DroneDeclareSection({
   onWeaponSelect,
   assaultTargetId,
   onChooseTarget,
+  aoeDirection,
+  onStartAoeDirection,
   getLabel,
   style,
 }) {
@@ -47,9 +49,11 @@ export default function DroneDeclareSection({
         droneWeapons={droneWeapons}
         selectedWeaponId={selectedWeaponId}
         assaultTargetId={assaultTargetId}
+        aoeDirection={aoeDirection}
         showReadyBadge={false}
         onWeaponSelect={onWeaponSelect}
         onChooseTarget={onChooseTarget}
+        onStartAoeDirection={onStartAoeDirection}
         getLabel={getLabel}
       />
     </div>

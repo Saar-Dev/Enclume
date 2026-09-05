@@ -544,6 +544,42 @@ test('drone — arme introuvable dans la liste → traité comme Tir (le serveur
   assert.ok('attack' in r.mapActions)
 })
 
+// ─── drone — zone d'effet (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) ──────────────────────
+
+test('drone AOE — arme sélectionnée + aoeDirection, sans cible → attack[] avec aoe.direction, targetTokenId null', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', aoeDirection: 45,
+    droneWeapons: [{ id: 'w1', ref_category: 'Lanceur', fire_mode: 'rl' }],
+  }))
+  assert.equal(r.stateFireMode, 'rl')
+  assert.deepEqual(r.mapActions, { move: null, attack: [{ droneWeaponInvId: 'w1', targetTokenId: null, aoe: { direction: 45 } }] })
+})
+
+test('drone AOE — aoeDirection seul (sans arme sélectionnée) → pas d\'attaque', () => {
+  const r = buildDroneMapActions(droneSel({ aoeDirection: 45 }))
+  assert.deepEqual(r.mapActions, { move: null })
+  assert.ok(!('attack' in r.mapActions))
+})
+
+test('drone AOE — aoeDirection + déplacement → move ET attack de zone', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', aoeDirection: 200,
+    droneWeapons: [{ id: 'w1', ref_category: 'Lanceur', fire_mode: 'rl' }],
+    pendingMove: { targetPosX: 1, targetPosY: 2, ini_mod: -3, action_key: 'move_lente' },
+  }))
+  assert.ok(r.mapActions.move)
+  assert.deepEqual(r.mapActions.attack, [{ droneWeaponInvId: 'w1', targetTokenId: null, aoe: { direction: 200 } }])
+})
+
+test('drone AOE — arme de contact + aoeDirection → jamais de zone (retombe sur CaC normal)', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', aoeDirection: 45, assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', ref_category: 'Arme de contact' }],
+  }))
+  assert.deepEqual(r.mapActions.melee, [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }])
+  assert.ok(!('attack' in r.mapActions))
+})
+
 // ─── Exo (buildExoMapActions) ────────────────────────────────────────────────
 const exoSel = (over = {}) => ({
   selectedExoWeaponId: null, assaultTargetId: null, exoWeapons: [], ...over,

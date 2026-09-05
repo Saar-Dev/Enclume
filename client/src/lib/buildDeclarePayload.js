@@ -271,17 +271,27 @@ export function buildMeleeEntries({
 // modes de tir (shared/fireModes.js), une arme de contact n'a aucun fire_mode. Changement de règle
 // assumé vs le littéral d'origine `handleDeclare` — ticket DRONE-CC-MELEE-MISCLASS, tests golden
 // master mis à jour en conséquence.
+// `aoeDirection` (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) : mutuellement exclusif avec
+// `assaultTargetId` (garanti par useDroneDeclare, pas de reducer côté drone — mirror buildExoMapActions).
+// Jamais pour une arme de contact (aucune arme catalogue AOE n'est CaC, cohérent avec `isAoeWeapon`
+// côté déclaration qui ne s'affiche déjà que pour une arme à distance).
 export function buildDroneMapActions(sel) {
-  const hasAttack = !!sel.selectedDroneWeaponId && !!sel.assaultTargetId
+  const hasAoe    = sel.aoeDirection != null
+  const hasAttack = !!sel.selectedDroneWeaponId && (!!sel.assaultTargetId || hasAoe)
   const weapon    = hasAttack ? sel.droneWeapons.find(w => w.id === sel.selectedDroneWeaponId) : null
   const isCaC         = weapon?.ref_category === 'Arme de contact'
   const explicitFm    = weapon?.fire_mode
   const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
-  const attackPayload = hasAttack
-    ? (isCaC
-        ? { melee: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] }
-        : { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] })
-    : {}
+  let attackPayload = {}
+  if (hasAttack) {
+    if (hasAoe && !isCaC) {
+      attackPayload = { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: null, aoe: { direction: sel.aoeDirection } }] }
+    } else {
+      attackPayload = isCaC
+        ? { melee:  [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] }
+        : { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] }
+    }
+  }
   return {
     stateFireMode,
     mapActions: {

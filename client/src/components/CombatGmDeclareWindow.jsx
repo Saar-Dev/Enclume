@@ -219,6 +219,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     allures:          activeDroneCharId ? droneAllures : DEFAULT_PNJ_ALLURES,
     onEnterMoveMode,
     onEnterTargetMode,
+    onEnterAoeTargetMode,
     // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActiveDrone` (déjà la source unique "drone
     // géré par le MJ, pas encore déclaré", cf. ligne 191) remplace `!!activeDroneCharId` : fermait le
     // survol/clic-attaque au bon moment (has_announced) et exclut aussi un drone appartenant à un
@@ -774,9 +775,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
               droneWeapons={droneDeclare.droneWeapons}
               selectedWeaponId={droneDeclare.selectedDroneWeaponId}
-              onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
+              onWeaponSelect={droneDeclare.selectDroneWeapon}
               assaultTargetId={droneDeclare.assaultTargetId}
               onChooseTarget={() => droneDeclare.handleChooseTarget(activeToken)}
+              aoeDirection={droneDeclare.aoeDirection}
+              onStartAoeDirection={droneDeclare.handleStartAoeDirection}
               getLabel={getLabel}
               style={S.controls}
             />

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { isAoeWeapon } from '../../../shared/combatAoe.js'
 
 const P = {
   section: {
@@ -68,12 +69,19 @@ export default function DroneWeaponPanel({
   droneWeapons,       // weapon[]
   selectedWeaponId,   // string | null
   assaultTargetId,    // string | null
+  aoeDirection,       // number | null — Segment 2b AOE
   showReadyBadge,     // bool
   onWeaponSelect,     // (id) => void
   onChooseTarget,     // () => void
+  onStartAoeDirection,// () => void — Segment 2b AOE
   getLabel,           // (tokenId) => string
 }) {
   const { t } = useTranslation('combat')
+  // Zone d'effet (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — même autorité que
+  // humanoïde/exo (shared/combatAoe.js#isAoeWeapon, donnée catalogue ref_aoe_profile). Une arme
+  // éligible bascule la section « cible » sur « Viser une zone » (l'arme n'a pas de mode de tir normal).
+  const selectedWeapon = droneWeapons.find(w => w.id === selectedWeaponId)
+  const isAoeEligible = isAoeWeapon(selectedWeapon?.ref_aoe_profile)
   return (
     <>
       <div style={P.section}>
@@ -107,17 +115,31 @@ export default function DroneWeaponPanel({
         )}
       </div>
 
-      <div style={P.section}>
-        <div style={P.sectionTitle}>{t('common.targetSection')}</div>
-        {assaultTargetId ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={P.targetName}>→ {getLabel(assaultTargetId)}</span>
-            <button style={P.changeBtn} onClick={onChooseTarget}>{t('common.changeButton')}</button>
-          </div>
-        ) : (
-          <button style={P.chooseBtn} onClick={onChooseTarget}>{t('common.chooseTargetButton')}</button>
-        )}
-      </div>
+      {isAoeEligible ? (
+        <div style={P.section}>
+          <div style={P.sectionTitle}>{t('assaultPanel.aoeSection')}</div>
+          {aoeDirection != null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={P.targetName}>{t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
+              <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
+            </div>
+          ) : (
+            <button style={P.chooseBtn} onClick={onStartAoeDirection}>{t('assaultPanel.aimAoeButton')}</button>
+          )}
+        </div>
+      ) : (
+        <div style={P.section}>
+          <div style={P.sectionTitle}>{t('common.targetSection')}</div>
+          {assaultTargetId ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={P.targetName}>→ {getLabel(assaultTargetId)}</span>
+              <button style={P.changeBtn} onClick={onChooseTarget}>{t('common.changeButton')}</button>
+            </div>
+          ) : (
+            <button style={P.chooseBtn} onClick={onChooseTarget}>{t('common.chooseTargetButton')}</button>
+          )}
+        </div>
+      )}
 
       {showReadyBadge && (
         <div style={{ padding: '8px 14px' }}>

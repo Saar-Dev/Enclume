@@ -172,6 +172,7 @@ export default function CombatActionWindow({
     allures:          isDrone ? droneAllures : allures,
     onEnterMoveMode,
     onEnterTargetMode,
+    onEnterAoeTargetMode,
     // CLICKATTACK-TURNGATE1 — flag partagé par le survol et le clic-attaque du drone (useDroneDeclare) :
     // corriger ici ferme les deux gaps en un seul endroit, pas besoin de séparer en deux flags distincts.
     moveHoverEnabled: isDrone && isMyTurnToAct,
@@ -1064,9 +1065,11 @@ export default function CombatActionWindow({
                 onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
                 droneWeapons={droneDeclare.droneWeapons}
                 selectedWeaponId={droneDeclare.selectedDroneWeaponId}
-                onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
+                onWeaponSelect={droneDeclare.selectDroneWeapon}
                 assaultTargetId={droneDeclare.assaultTargetId}
                 onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
+                aoeDirection={droneDeclare.aoeDirection}
+                onStartAoeDirection={droneDeclare.handleStartAoeDirection}
                 getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
               />
             </div>
