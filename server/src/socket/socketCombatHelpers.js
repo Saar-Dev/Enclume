@@ -2501,6 +2501,33 @@ export async function resolveAttackLOS({ io, campaignId, action, character }) {
   return { blocked: false, intercepted: false, coverageModifier: los.coverageModifier ?? 0 }
 }
 
+// fetchDroneWeapon — arme drone re-vérifiée à la Résolution (combat.md : seule la Résolution vérifie
+// ce qui est réellement possible), jamais confiance au fetch de la Déclaration (l'arme a pu être
+// désinstallée entre-temps). Extraite de resolveDroneAssaultAction ci-dessous (Segment 2b AOE,
+// PLAN_ARMES_SPECIALES.md §1.4bis) pour être partagée avec le tronc AOE
+// (socketCombatAoe.js#fetchAoeShooterWeapon) — une seule requête, jamais une 2ᵉ copie de cette
+// jointure (mirror fetchExoWeapon, socketCombatExo.js). `equipment_id`/`ref_aoe_profile` : colonnes
+// ajoutées pour l'AOE (getAoeMechanic + garde Choc d'un tireur non-humanoïde + messages d'erreur du
+// tronc), jamais lues par resolveDroneAssaultAction — additif, comportement Tir/CaC drone inchangé.
+export async function fetchDroneWeapon(droneWeaponInvId) {
+  return db('drone_weapons')
+    .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+    .where({ 'drone_weapons.id': droneWeaponInvId })
+    .select(
+      'drone_weapons.equipment_id as equipment_id',
+      'ref_equipment.name as ref_name',
+      'ref_equipment.category as ref_category',
+      'ref_equipment.range as ref_range',
+      'ref_equipment.aoe_profile as ref_aoe_profile',
+      db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
+      db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
+      'ref_equipment.shock as ref_shock',
+      'ref_equipment.shock_mechanism as ref_shock_mechanism',
+      'ref_equipment.shock_reduced_by_armor as ref_shock_reduced_by_armor',
+    )
+    .first()
+}
+
 export async function resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   console.log(`[DBG] resolveDroneAssaultAction — début token:${action.token_id} drone_weapon:${action.drone_weapon_inv_id} target:${action.target_token_id}`)
   try {
@@ -2513,23 +2540,11 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       } })
       return { suspend: false, emissions }
     }
-    // 1. Arme drone. shock/shock_mechanism/shock_reduced_by_armor (docs/PLANS/PLAN_CHOC_EXO_DRONE.md
-    // Palier B) : le Choc d'arme (LdB p.243, CHOC1) n'était jamais sélectionné pour un tireur drone,
-    // silencieusement absent du Tir ET du CaC (les deux passent par cette même fonction) — additif,
-    // comportement Tir/CaC drone existant inchangé pour tout le reste.
-    const weapon = await db('drone_weapons')
-      .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
-      .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
-      .select(
-        'ref_equipment.category as ref_category',
-        'ref_equipment.range as ref_range',
-        db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
-        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
-        'ref_equipment.shock as ref_shock',
-        'ref_equipment.shock_mechanism as ref_shock_mechanism',
-        'ref_equipment.shock_reduced_by_armor as ref_shock_reduced_by_armor',
-      )
-      .first()
+    // 1. Arme drone (fetchDroneWeapon ci-dessus — jointure partagée avec le tronc AOE).
+    // shock/shock_mechanism/shock_reduced_by_armor (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) : le
+    // Choc d'arme (LdB p.243, CHOC1) n'était jamais sélectionné pour un tireur drone, silencieusement
+    // absent du Tir ET du CaC (les deux passent par cette même fonction).
+    const weapon = await fetchDroneWeapon(action.drone_weapon_inv_id)
     // Choc d'arme — dérivé ici, une seule fois, transmis à ctx plus bas ; seule resolveAttackHitPnj/Pj
     // (cible humanoïde) le consomme, cohérent avec resolveTargetHit qui ignore déjà chocDsl pour une
     // cible drone/exo.
