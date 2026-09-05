@@ -32,6 +32,7 @@ import { findAoeMechanismEntry } from '../lib/aoeMechanisms/registry.js'
 import {
   resolveCriticalFailReroll,
   fetchAssaultWeaponAndMods,
+  fetchDroneWeapon,
   resolveDroneIntegrityLoss,
   SITUATION_LABELS,
   TAILLE_LABELS,
@@ -143,9 +144,9 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
 // introuvable ou type pas encore supporté — jamais un throw (même contrat que fetchExoWeapon/
 // fetchAssaultWeaponAndMods eux-mêmes).
 //
-// Segment 2a (ce lot) : pj/pnj + exo. Drone : `null` explicite (Segment 2b, pas câblé) — le tronc
-// traite ça comme « arme introuvable », message clair, même discipline que findAoeMechanismEntry pour
-// un mécanisme inconnu.
+// Segment 2a : pj/pnj + exo. Segment 2b : drone (même patron via fetchDroneWeapon). Type pas encore
+// supporté → `null` explicite — le tronc traite ça comme « arme introuvable », message clair, même
+// discipline que findAoeMechanismEntry pour un mécanisme inconnu.
 async function fetchAoeShooterWeapon(character, action) {
   if (character.type === 'exo') {
     if (!action.exo_weapon_inv_id) return null
@@ -161,7 +162,22 @@ async function fetchAoeShooterWeapon(character, action) {
       ref_shock: row.ref_shock, ref_shock_mechanism: row.ref_shock_mechanism, ref_shock_reduced_by_armor: row.ref_shock_reduced_by_armor,
     }
   }
-  if (character.type === 'drone') return null // Segment 2b
+  if (character.type === 'drone') {
+    if (!action.drone_weapon_inv_id) return null
+    const row = await fetchDroneWeapon(action.drone_weapon_inv_id)
+    // Arme drone « maison » (label_override sans equipment_id) : jamais une arme de zone (aucun
+    // aoe_profile sans ligne catalogue) — même garde que la branche exo.
+    if (!row?.equipment_id) return null
+    return {
+      equipment_id: row.equipment_id, ref_range: row.ref_range,
+      ref_damage_h: row.effective_formula, ref_aoe_profile: row.ref_aoe_profile,
+      ref_name: row.ref_name, display_name: row.display_name,
+      // drone_weapons.ammo_restant existe mais AUCUN chemin drone (Tir/CaC non plus) ne la décrémente
+      // — pas de suivi de munition drone à ce jour (cf. decrementAoeShooterAmmo). `null` explicite.
+      ammo_remaining: null,
+      ref_shock: row.ref_shock, ref_shock_mechanism: row.ref_shock_mechanism, ref_shock_reduced_by_armor: row.ref_shock_reduced_by_armor,
+    }
+  }
   if (!action.weapon_inv_id) return null
   const { weapon } = await fetchAssaultWeaponAndMods(action.weapon_inv_id, character.id)
   return weapon?.equipment_id ? weapon : null
@@ -174,8 +190,10 @@ async function fetchAoeShooterWeapon(character, action) {
 //  - exo : `resolveExoAssaultAction` (Tir/CaC exo non-AOE) ne vérifie JAMAIS `pnj_unlimited_ammo` —
 //    ce réglage ne s'applique qu'à un tireur humanoïde, reproduit ici à l'identique (vérifié dans
 //    socketCombatExo.js avant d'écrire cette branche), pas une omission.
-// drone : no-op — `drone_weapons` n'a aucune colonne munitions (migration 39_drone_weapons.js), aucun
-// tracking possible ; Segment 2b n'y changera rien (gap de schéma, pas de ce lot).
+// drone : no-op — `drone_weapons.ammo_restant` EXISTE (migration 39_drone_weapons.js) mais aucun
+// chemin drone ne la décrémente (ni resolveDroneAssaultAction pour le Tir/CaC, vérifié). No-op ici =
+// cohérence avec le Tir/CaC drone, pas un gap propre à l'AOE ; harmoniser le suivi munition drone est
+// une dette distincte (ROADMAP.md).
 async function decrementAoeShooterAmmo(campaignId, { character, weapon, action }) {
   if (weapon.ammo_remaining === null || weapon.ammo_remaining === undefined) return
   const bulletsFired = action.bullet_count ?? 1

@@ -1797,7 +1797,11 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
         'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
-
+        // ref_aoe_profile (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — sans elle, le client ne
+        // peut jamais savoir qu'une arme drone est une arme de zone (shared/combatAoe.js#isAoeWeapon,
+        // même autorité que côté humanoïde/exo). Sélectionnée aussi par POST/PUT (réponse cohérente
+        // avec GET — précédent bug exo/drone : ligne renvoyée sans jointure affichée « — » côté client).
+        'ref_equipment.aoe_profile as ref_aoe_profile',
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )
@@ -1863,7 +1867,11 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
         'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
-
+        // ref_aoe_profile (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — sans elle, le client ne
+        // peut jamais savoir qu'une arme drone est une arme de zone (shared/combatAoe.js#isAoeWeapon,
+        // même autorité que côté humanoïde/exo). Sélectionnée aussi par POST/PUT (réponse cohérente
+        // avec GET — précédent bug exo/drone : ligne renvoyée sans jointure affichée « — » côté client).
+        'ref_equipment.aoe_profile as ref_aoe_profile',
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )
@@ -1908,7 +1916,11 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
         'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
-
+        // ref_aoe_profile (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — sans elle, le client ne
+        // peut jamais savoir qu'une arme drone est une arme de zone (shared/combatAoe.js#isAoeWeapon,
+        // même autorité que côté humanoïde/exo). Sélectionnée aussi par POST/PUT (réponse cohérente
+        // avec GET — précédent bug exo/drone : ligne renvoyée sans jointure affichée « — » côté client).
+        'ref_equipment.aoe_profile as ref_aoe_profile',
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )
