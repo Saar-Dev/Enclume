@@ -933,8 +933,16 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
       // repli sur la formule brute stockée à la Déclaration plutôt qu'un échec muet (le combat_pending
       // est déjà supprimé et la FSM déjà repassée à SLOT_ACTIVE avant ce bloc, cf. plus haut).
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId, { rangeBand: portee })
-      if (!effectiveDamage) {
+      // weaponInvId absent (tireur exo/drone, hors char_inventory — resolveAttackHitPj ne le fournit
+      // jamais, ticket EXODRONE-CONFIRMDAMAGE-CRASH/PLAN_CHOC_EXO_DRONE.md §2.2 Palier 0) : ne jamais
+      // interroger char_inventory avec un id indéfini — Knex lève une exception à la construction de
+      // la requête (bindings undefined), ce qui faisait échouer confirmDamage en silence pour tout PJ
+      // touché par une exo/un drone. Repli direct sur la formule stockée, cas attendu (pas un
+      // désequipement), donc pas de console.warn dans ce cas.
+      const effectiveDamage = weaponInvId
+        ? await damageService.getEffectiveWeaponDamage(db, weaponInvId, { rangeBand: portee })
+        : null
+      if (weaponInvId && !effectiveDamage) {
         console.warn(`[WS] confirmDamage — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
       }
       const rolled = effectiveDamage ? null : await parseDice(formula.replace(/\s/g, ''))
