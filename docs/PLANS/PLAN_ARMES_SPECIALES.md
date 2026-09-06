@@ -548,24 +548,82 @@ segment 0a/0d clôturé par une session Saar de non-régression.
 
 ### 2.2 Bloqué par
 
-1. **Migration catalogue (§6c PLAN_AOE)** — les ~15 lignes `ref_equipment` category Grenade portent
-   leur zone d'effet en **texte libre** dans `description`. Il faut des colonnes structurées (forme,
-   amplitude, dégression standard vs rayon fixe) — audit ligne par ligne + migration.
-2. **Champ payload `intendedOrigin`** — le lanceur vise un **POINT**, pas une direction (contrairement
+1. **Champ payload `intendedOrigin`** — le lanceur vise un **POINT**, pas une direction (contrairement
    au fusil à pompe / lance-flammes). Nouveau champ dans `COMBAT_ACTION_DECLARE` (`aoe.intendedOrigin`)
    + déviation serveur (1D6 direction × marge d'échec du Test de Coordination) + **explosion différée**
    (nouveau : une action qui se résout au Tour *suivant*, au rang d'Ini du lanceur — pas d'infra
    d'action différée inter-tours à ce jour).
-3. **RAW manquant** — 2 types de grenade (**neuro-charge**, **sonique**) n'ont **aucune donnée de
-   zone** dans le RAW transcrit. **Pages du Livre de Base à fournir par Saar** avant cadrage complet.
+2. **Migration catalogue** — les lignes `ref_equipment` en périmètre portent leur zone en **texte
+   libre** dans `description`. Elle sera peuplée dans `aoe_profile` (JSONB, colonne existante — **pas**
+   de nouvelle colonne) **en même temps que le moteur `grenade_blast`**, jamais avant (décision Saar
+   2026-09-06 : coder le moteur d'abord, semer le catalogue une seule fois). Audit ligne par ligne
+   fait — §2.5.
 
-### 2.3 Pas bloqué (utilisable dès la migration catalogue faite)
+### 2.3 Pas bloqué
 
-- Géométrie `circle` (`aoeShapes.js`) + `distanceBands` (`shared/world/distanceBands.js`, la
-  dégression par palier existe déjà, écrite pour le fusil à pompe).
+- Géométrie `circle` (`aoeShapes.js`) + `distanceBands` (`shared/world/distanceBands.js`, dégression
+  par palier déjà écrite) + `resolveScatter` (`aoeShapes.js`, dispersion 1D6 sur échec, déjà écrite,
+  jamais câblée).
 - Résolution par cible : `resolveTargetHit` (protections normales — pas de `armorReductionFactor`).
-- 7 grenades à **nuage volumétrique** (fumigène, gaz…) = **hors scope v1** (PLAN_AOE §10 — persistance
-  de zone, pas une explosion ponctuelle).
+- Registre de mécanismes AOE (`server/src/lib/aoeMechanisms/`, Segment 1.5) — `grenade_blast` s'ajoute
+  comme une entrée, `buildShape(ctx)` décide son origine (point d'impact) sans refactor du tronc.
+
+### 2.5 Audit catalogue grenades — 2026-09-06 [VÉRIFIÉ base + RAW Saar]
+
+23 lignes `category IN ('Grenade','Capsules')` (hors faux positifs « lu**mine**uses » / Détecteur de
+mines). RAW complet fourni par Saar (tableau catalogue + descriptions par type + options + capsules
++ lanceurs), transcrit dans `docs/REGLES/REGLES_ARMES_SPECIALES.md` §« Grenades — catalogue » et
+`docs/REGLES/REGLES_ARMES_SONIQUES.md`.
+
+| Régime (moteur `grenade_blast`) | Lignes | Amplitude |
+|---|---|---|
+| **Dégression standard** (table RAW §2.1, rayon max 15 m) | grenade fragmentation, grenade concussion, **grenade sonique** (écart RAW assumé — Saar 2026-09-06, à écrire `JOURNAL8.md`) | table de paliers = constante de code partagée, pas du catalogue |
+| **Rayon fixe, effet uniforme** (`falloff: none`) | grenade assommante (Ø 5 m → r 2,5), grenade incendiaire (Ø 5 m → r 2,5 + feu 1 Tour), grenade à énergie (Ø 5 m → r 2,5), grenade étourdissante (Ø 20 m → r 10), capsule napalm (Ø 3 m → r 1,5 + feu), capsule explosive (r 2 m, « pas d'effet de souffle »), capsule acide (r ~1,5 m — écart RAW : aucun Ø donné, modèle Saar « conteneur qui éclate à l'impact ») | par ligne |
+| **Nuage volumétrique** → `PLAN_NUAGE.md` | grenade fumigène + 6 grenades gaz + capsule fumigène + 6 capsules gaz | hors ce PLAN |
+| **Différé — mécanique de debuff de zone** → §2.6 | grenade à neuro-charge | — |
+
+- **incendiaire / capsule napalm** : feu court (1 Tour / 10 Tours) → réutilise `exposeToHazard({
+  durationDice })` (déjà écrit pour le lance-flammes), durée fixe.
+- **capsule acide** : DoT acide 1D10/Tour × 2D6 Tours, matières organiques seulement — statut
+  périodique, patron `burning` à confirmer.
+- **étourdissante** : pas de dés de dégâts ; applique le statut « étourdi » 1D6 Tours ; Test de
+  Réaction d'anticipation (yeux fermés + oreilles bouchées → sans effet).
+
+### 2.6 Grenade à neuro-charge — mécanique identifiée, DIFFÉRÉE (Segment 4)
+
+RAW : « effets semblables à ceux d'un disrupteur neural » (`REGLES_ARMES_SONIQUES.md`, LdB p. 305).
+Disrupteur neural (arme mono-cible) : **la cible subit un malus égal à la marge de réussite de
+l'attaque** ; résistance = **Test de Volonté**, la réussite réduit le malus du modificateur de
+réussite obtenu. Effet secondaire : peut endommager appareils / structure dans la zone d'effet ;
+Test de Chance sur Catastrophe → les Dommages de Choc deviennent physiques.
+
+- **Aucune dimension de zone** dans le RAW (ni pour la grenade, ni pour le fusil).
+- **Aucun dé de dégâts** — l'effet est un **debuff appliqué à chaque cible d'une zone** (malus aux
+  Tests), pas une résolution de dégâts. Mécanique nouvelle, absente du moteur `grenade_blast`.
+- Même la version mono-cible (disrupteur neural fusil) **n'est pas implémentée** (grep serveur
+  2026-09-06 : zéro occurrence hors « Dague neurale Brain »).
+- → **Segment 4**, cadrage séparé. La ligne catalogue reste un objet inerte (pas de `aoe_profile`)
+  jusque-là.
+
+### 2.7 Options de grenade (MIN / PER / DRO) — analyse à charge 2026-09-06, EN ARBITRAGE
+
+RAW : « toutes les grenades peuvent être dotées de l'une des options » — **universel**, donc **rien à
+seed par ligne** ; l'option est un choix au moment du lancer, pas une donnée `ref_equipment`.
+
+- **MIN** (minutée, défaut RAW) : explose au Tour suivant, au rang d'Ini du lanceur. Seule option qui
+  force l'infra nouvelle « action différée inter-tours ». **Nécessaire — v1.**
+- **PER** (percussion) : explose à l'impact, même Tour. Petit ajout une fois la couture
+  delivery/blast posée (explosion immédiate au lieu de différée), **si** le « point d'impact » se
+  résout sans moteur de trajectoire (à trancher dans le plan détaillé).
+- **DRO** (drone) : projectile autonome — plane 10 min, détecte une cible à 20 m, se déplace 40 m/Tour,
+  fonce et explose. NT V, ×10 coût. Recoupe la dette « drone autonome en combat » (`COUVERTURE_RAW.md`
+  §2, jamais construite). **Différé** — le champ `detonation_mode` acceptera `drone` structurellement
+  (rejeté à la résolution avec message clair, comme `AOE_MECHANICS` pour un mécanisme non câblé) →
+  ajout ultérieur sans migration ni refactor.
+
+Position Claude : **couture delivery/blast explicite dès le départ ; MIN + PER en v1 ; DRO différé
+mais structurellement prêt.** Position Saar (proposée) : les 3 modes tout de suite, en miroir de
+CC/RC/RL. **À trancher avant le plan détaillé du Segment 3.**
 
 ### 2.4 Mines — sous-lot séparé, hors scope v1
 
@@ -580,8 +638,9 @@ après le Lot 2 grenades.
 - Test de Chance (grenades longue/extrême portée, comme le fusil à pompe) — chantier Chance
   (`docs/PLANS/PLAN_CHANCE.md`). **Correction 2026-09-05** : le score de Chance existe bien
   (`char_sheet.chc`) ; ce qui manque = la réserve dépensable + la primitive + le geste de dépense.
-- Nuages volumétriques / persistance de zone inter-tours (fumigène, gaz, et le « tir de suppression »
-  de l'AOE) — même blocage, même report.
+- Nuages volumétriques (fumigène + gaz, grenades **et** capsules) — chantier séparé
+  `docs/PLANS/PLAN_NUAGE.md` (propagation par compartiments, `worldEffects.js`). Le « tir de
+  suppression » de l'AOE reste sur le même blocage de persistance de zone inter-tours.
 - Pénétration / bonus de protection +3 pare-balles du fusil à pompe (déjà noté hors scope AOE §12).
 
 ---
@@ -618,6 +677,8 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 | **Segment 1.5 — registre de mécanismes AOE** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`1999ab4`, `9256e01`). CHANTIER FONCTIONNELLEMENT CLOS.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Non-régression fusil à pompe + lance-flammes confirmée par Saar. Détail §1.4bis. |
 | **Segment 2a — AOE tireur exo** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`183177e`..`f9484f3`). CHANTIER FONCTIONNELLEMENT CLOS.** Adaptateur serveur (`fetchAoeShooterWeapon`/`decrementAoeShooterAmmo`) + UI `CombatExoActionWindow`/`useExoDeclare`. 3 bugs réels trouvés en session (colonne `ref_aoe_profile` manquante côté endpoint, libellé bouton codé en dur, `useAutoMoveMode` jamais désarmé pendant la visée — collision avec le clic au sol de l'AOE). Détail §1.4bis. |
 | **Segment 2b — AOE tireur drone** | **Codé + VALIDÉ en session réelle (2026-09-05), poussé `dev/Saar` (`022de42`..`2f54eda`). CHANTIER FONCTIONNELLEMENT CLOS.** 4 commits isolés : C1 refactor `fetchDroneWeapon` (0 comportement), C2 serveur AOE drone (branche `fetchAoeShooterWeapon` + endpoint `aoe_profile`), C3 client 2 fenêtres hôtes + `DroneWeaponPanel` partagé, C4 exclusivité d'une Action de zone hoistée aux 3 plateformes de l'ANNONCE (drone/exo/humanoïde — autorité pure déjà agnostique, seul l'enforcement manquait). Débloque aussi le fusil à pompe monté sur drone. Détail §1.4bis + `JOURNAL8.md`. |
-| Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
+| Segment 3 — grenades explosives + capsules | **Audit catalogue fait (2026-09-06, §2.5).** Reste : moteur `grenade_blast` (mécanisme `circle` sur le registre 1.5, régimes `standard` / `falloff:none`) + visée d'un point (`intendedOrigin`) + déviation 1D6 sur échec (`resolveScatter`) + explosion différée inter-tours + options MIN/PER/DRO (§2.7, en arbitrage) → **puis** 1 migration `aoe_profile`. RAW complet transcrit. |
+| Segment 4 — grenade à neuro-charge | Différé, non cadré — mécanique de debuff de zone (§2.6). |
+| Nuages (fumigène + gaz) | Hors périmètre — chantier `docs/PLANS/PLAN_NUAGE.md`. |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |

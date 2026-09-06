@@ -101,11 +101,12 @@ pour trancher la dépendance elle-même.
 
 | Sous-règle | État | Doc |
 |---|---|---|
-| Acquisition, Intégrité et qualité (p.277), Munitions spéciales, Armes étourdissantes/soniques, Accessoires pour armes, Armures/protections simples, Encombrement, Autres types de dommages | ✅ | — |
+| Acquisition, Intégrité et qualité (p.277), Munitions spéciales, Accessoires pour armes, Armures/protections simples, Encombrement, Autres types de dommages | ✅ | — |
+| Armes étourdissantes / soniques | ✅ catalogue seedé et jouable — mais canon à infrasons (table 1D20), disrupteur neural (malus = marge, Test de Volonté), modulateur sonique (zone, ré-attaque/Tour), générateur d'onde de choc (Test de panne) **ne sont pas câblés en tant qu'effets** | RAW transcrite 2026-09-06 : `REGLES/REGLES_ARMES_SONIQUES.md` |
 | Drones courants — fiche, création, programmes, armes/ordinateurs | ✅ | — **mais leur comportement EN COMBAT a des gaps réels, voir §2** (télépilotage, séquence autonome, Esquive/Interception) — ne pas confondre "le drone existe et s'équipe" avec "le drone se comporte selon la RAW en combat" |
 | Tests et équipement (p.277) | ❓ | fait, à revérifier en jeu réel |
 | Intégrité du matériel, Tests de panne, Usure et détérioration, Réparation du matériel | 🔲 | `PLANS/PLAN_USURE&INTEGRITE.md` (stub, à cadrer) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) |
-| Grenades et autres armes à aire d'effet, Explosifs | 🔲 | `PLANS/PLAN_ARMES_SPECIALES.md`, nécessite la résolution de zone d'effet (§9) |
+| Grenades et autres armes à aire d'effet, Explosifs | 🔲 | Audit catalogue fait (2026-09-06). Explosives + capsules : `PLANS/PLAN_ARMES_SPECIALES.md` §2 (Segment 3, moteur `grenade_blast`). Nuages (fumigène + gaz) : `PLANS/PLAN_NUAGE.md`. Neuro-charge : Segment 4 différé. RAW : `REGLES/REGLES_ARMES_SPECIALES.md` §Grenades — catalogue |
 | Champs de force portatifs, Micro-drones/nano-drones, Dégradation des armures simples | 🔲 | pas cadré, aucune dépendance connue |
 | Le marché légal, Le marché noir | 🔲 | non pertinent en l'état actuel (pas de simulation économique) selon la note de Saar, à confirmer |
 
