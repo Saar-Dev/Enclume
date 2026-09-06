@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildShotgunSpreadSegments, projectShotgunSpreadCorners,
   buildConeSpan, projectConeTriangles,
+  buildCircleSpan, projectCircleFan,
 } from './aoePreviewShape.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js) —
@@ -120,4 +121,35 @@ test('projectConeTriangles — 0° : arc centré sur +X, borné à ±15° pour u
 
 test('projectConeTriangles — span null : tableau vide, jamais une exception', () => {
   assert.deepEqual(projectConeTriangles(null, { x: 0, z: 0 }, 0), [])
+})
+
+// ─── Cercle grenade ───────────────────────────────────────────────────────────────────────────────
+
+test('buildCircleSpan — rayon exploitable → { radiusM } ; inexploitable → null, jamais une exception', () => {
+  assert.deepEqual(buildCircleSpan(15), { radiusM: 15 })
+  assert.equal(buildCircleSpan(0), null)
+  assert.equal(buildCircleSpan(-3), null)
+  assert.equal(buildCircleSpan(NaN), null)
+  assert.equal(buildCircleSpan(null), null)
+  assert.equal(buildCircleSpan('15'), null)
+})
+
+test('projectCircleFan — éventail fermé centré sur le POINT D\'IMPACT (pas le tireur), coins sur le cercle', () => {
+  const center = { x: 10, z: -4 }
+  const tris = projectCircleFan(buildCircleSpan(15), center, 48)
+  assert.equal(tris.length, 48)
+  for (let i = 0; i < tris.length; i++) {
+    assertPointClose(tris[i].corners[0], center, `tri${i}.apex`)
+    for (const c of [tris[i].corners[1], tris[i].corners[2]]) {
+      assert.ok(Math.abs(Math.hypot(c.x - center.x, c.z - center.z) - 15) < 1e-9, `tri${i} coin sur le cercle r=15`)
+    }
+    // arête partagée avec le triangle voisin → éventail contigu, fermé sur 360°
+    const next = tris[(i + 1) % tris.length]
+    assertPointClose(tris[i].corners[2], next.corners[1], `tri${i} arête partagée`)
+  }
+})
+
+test('projectCircleFan — nombre de facettes plancher à 8, span null → tableau vide', () => {
+  assert.equal(projectCircleFan(buildCircleSpan(5), { x: 0, z: 0 }, 2).length, 8)
+  assert.deepEqual(projectCircleFan(null, { x: 0, z: 0 }), [])
 })

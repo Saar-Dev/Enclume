@@ -86,6 +86,43 @@ export function projectConeTriangles(coneSpan, origin, directionDeg, steps = nul
   return Object.freeze(triangles)
 }
 
+// ─── Cercle grenade (PLAN_GRENADES.md §5/§6 3c) ───────────────────────────────────────────────────
+//
+// Différence clé avec le cône/rayon : le cercle est centré sur le POINT D'IMPACT visé par le lanceur,
+// **pas** sur la position du tireur. Rayon = `aoe_profile.radiusM` de l'arme (donnée catalogue, comme
+// `angleDeg` pour le cône). L'aperçu ne dessine que le disque d'effet — la dégression par palier
+// (centre/courte/moyenne/longue/extrême) est résolue serveur, pas empilée en 5 anneaux illisibles.
+
+/**
+ * @param {number} radiusM  rayon d'effet en mètres, `aoe_profile.radiusM`
+ * @returns {{ radiusM: number } | null}  `null` si le rayon est inexploitable (jamais une exception —
+ *   un aperçu manquant n'est pas bloquant, contrairement à la résolution serveur).
+ */
+export function buildCircleSpan(radiusM) {
+  if (!Number.isFinite(radiusM) || radiusM <= 0) return null
+  return Object.freeze({ radiusM })
+}
+
+// projectCircleFan — tesselle le disque en éventail de triangles (apex = centre = point d'impact,
+// base = cercle de rayon `radiusM`), dans le plan horizontal monde (X/Z). Même convention d'axes et
+// même esprit que projectConeTriangles (un « cône » de 360°). `steps` = nombre de facettes de l'arc ;
+// 48 par défaut pour un cercle lisse à l'échelle d'une table de jeu.
+export function projectCircleFan(circleSpan, center, steps = 48) {
+  if (!circleSpan) return Object.freeze([])
+  const { radiusM } = circleSpan
+  const facets = Math.max(8, Math.floor(steps))
+  const pointAt = (i) => {
+    const rad = (2 * Math.PI * i) / facets
+    return Object.freeze({ x: center.x + Math.cos(rad) * radiusM, z: center.z + Math.sin(rad) * radiusM })
+  }
+  const apex = Object.freeze({ x: center.x, z: center.z })
+  const triangles = []
+  for (let i = 0; i < facets; i++) {
+    triangles.push(Object.freeze({ corners: Object.freeze([apex, pointAt(i), pointAt(i + 1)]) }))
+  }
+  return Object.freeze(triangles)
+}
+
 // projectShotgunSpreadCorners — place les segments dans le plan horizontal monde (X/Z), en 4 coins par
 // segment (quadrilatère), depuis une origine et une direction en degrés. Même convention que
 // shared/world/aoeShapes.js (0° = axe +X, sens trigonométrique vers +Z, `alongX=cos, alongZ=sin`,
