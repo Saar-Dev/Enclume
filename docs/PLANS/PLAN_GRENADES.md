@@ -182,11 +182,17 @@ avant 3b).** Deux constats changent le plan :
    chemin).
 
 3. **`resolveAoeAssaultAction` n'a AUCUN test d'orchestration** (`socketCombatAoe.test.mjs` ne couvre
-   que les fonctions pures `filter*` / `resolveAoeAttackRoll`). Modifier ce chemin sans filet = contre
-   la priorité « rework pour stabiliser ». → **3b.0 (nouveau) : couverture d'intégration du tronc
-   AOE** (fixture monde compilé + combat, patron `combatantContextService.test.mjs` : `skip =
-   !process.env.DATABASE_URL`) — fusil à pompe + lance-flammes, cibles touchées + lignes
-   `combat_action_targets` + émissions. Son propre morceau, avant toute modification du tronc.
+   que les fonctions pures `filter*` / `resolveAoeAttackRoll`). Le filet doit être **proportionné au
+   risque de chaque étape** :
+   - **3b** (capacités de flux) : changement **behavior-preserving par construction** — chaque garde
+     est `mech.X ?? <défaut historique>`, aucun appelant existant ne déclare `X`. Le risque est « le
+     câblage de la garde », pas « une dérive silencieuse » → filet = revue + `node --check` + tests
+     purs verts + **session Saar** (qu'il fait de toute façon pour toute modif AOE). Fait `92df5ed`.
+   - **3d / 3e** (nouveau flux : lancer + timeline + explosion différée) : c'est LÀ que le risque
+     justifie une **couverture d'intégration** (`socketCombatAoe.integration.test.mjs`, fixture monde
+     compilé + combat, patron `combatantContextService.test.mjs` `skip = !DATABASE_URL`) — elle
+     pinne le nouveau chemin grenade **et** exerce fusil à pompe / lance-flammes par le tronc partagé.
+     Construite en préalable de 3d.
 
 ---
 
@@ -199,8 +205,7 @@ avant 3b).** Deux constats changent le plan :
 | | Contenu | Nature | Filet |
 |---|---|---|---|
 | **3a** ✅ CLOS (2026-09-06, `6a4e6ad`+`1815df3`+`e94c51e`, non poussé) | `rollSignedDie`→`diceParser.js` · `grenadeFrag.js` (6 hooks invariants + `GRENADE_FRAG_BANDS` + `losSource: 'origin'`) + `registry.js` + `AOE_MECHANICS` + 3 fichiers de test. `node --test` AOE+shared 572/0. Inatteignable par l'appli. | résolution pure | ✅ 17 tests fixtures |
-| **3b.0** | **Couverture d'intégration du tronc AOE** — `socketCombatAoe.integration.test.mjs`, fixture monde compilé + combat (patron `combatantContextService.test.mjs`, `skip = !DATABASE_URL`). Fusil à pompe **et** lance-flammes : cibles touchées, lignes `combat_action_targets`, formes des émissions. **Aucune modif de code applicatif.** | test seul | — (c'EST le filet) |
-| **3b** | Capacités de mécanisme dans `resolveAoeAssaultAction` (défaut = comportement actuel) : `needsWeaponRange` / `rollsPhaseA` / `decrementsAmmo` / `losSource`. `grenade_frag` opte hors des 4. | tronc | 3b.0 + session Saar |
+| **3b** ✅ CODÉ (2026-09-06, `92df5ed`, ⚠️ clos partiel — session Saar due) | Capacités de flux lues par `resolveAoeAssaultAction` avec défaut = comportement historique : `needsWeaponRange` / `decrementsAmmo` / `losSource`. `grenade_frag` déclare les 3 (false/false/'origin'). `rollsPhaseA` (Test de Coordination) reporté à 3d. **Inerte pour le jeu actuel** (aucune grenade seedée, aucun chemin de déclaration). Fusil à pompe / lance-flammes inchangés *par construction* (`?? défaut`). | tronc | guards à défaut + `node --test` 63/509 + **session Saar fusil à pompe + lance-flammes** |
 | **3c** | Déclaration « Viser un point » : payload `aoe.intendedOrigin` (`socketCombatAnnouncement.js`), aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité aux 3 fenêtres. | payload + UI | golden-master payload + session |
 | **migration** | `aoe_profile` `grenade_frag` sur la ligne fragmentation. **Placée ici** (après 3c) : avant, `isAoeWeapon` rendrait la grenade éligible à une déclaration « direction » cassée. | migration | — |
 | **3d** | **Lancer (T1)** : `combat_action` `assault` + `modifiers.aoe.mode:'grenade'` → Test de Coordination serveur (§5 pt 2) + `resolveScatter` → `resolvedOrigin`. Insère une ligne `combat_timeline_entries` T+1 @ `phase_position` du lanceur → `combat_action` synthétique `type:'grenade_explosion'` (`resolution_snapshot` = point + formule + mechanic). Émet « grenade lancée, explose au prochain Tour ». | résolution + timeline | session Saar |
@@ -208,10 +213,10 @@ avant 3b).** Deux constats changent le plan :
 | **3f** | Mode **PER** : résolution immédiate en T1 au lieu du différé (branche sur `modifiers.aoe.detonation`). Raffinement « obstacle intercalé » via LOS = ultérieur. | 1 branche | session |
 | **3g** | Doc : écarts `JOURNAL8.md` (dégression = diamètre/2, sonique, acide), `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | doc | — |
 
-Chaque sous-segment validé avant le suivant (feedback_segment_by_file). **3b.0 est le vrai
-préalable** : on ne touche pas `resolveAoeAssaultAction` (combat-critique, zéro test d'orchestration)
-sans filet. 3d/3e s'appuient sur le moteur `combat_timeline_entries` existant (§5) — pas de nouvelle
-infra de différé.
+Chaque sous-segment validé avant le suivant (feedback_segment_by_file). Filet proportionné (§5 pt 3) :
+3b = guards à défaut + session ; **la couverture d'intégration est construite en préalable de 3d**
+(le nouveau flux). 3d/3e s'appuient sur le moteur `combat_timeline_entries` existant (§5) — pas de
+nouvelle infra de différé.
 
 ### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme = un concern nouveau)
 
