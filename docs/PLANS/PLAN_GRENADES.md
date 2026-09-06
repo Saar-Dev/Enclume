@@ -43,9 +43,9 @@ le palier de diamètre `2r`. **[HYPOTHÈSE — seule lecture cohérente ; écart
 23 lignes `category IN ('Grenade','Capsules')` (hors faux positifs « lu**mine**uses » / Détecteur de
 mines). Aucune ne porte de forme structurée — la zone est en texte libre dans `description`.
 
-| Régime | Lignes en périmètre de CE plan | Amplitude |
+| Régime | Lignes | Amplitude |
 |---|---|---|
-| **Dégression standard** | grenade à fragmentation, grenade à concussion, **grenade sonique** (écart RAW — §3) | rayon max 15 m ; table de paliers = constante de code |
+| **Dégression standard** | grenade à fragmentation **(Segment 3)** · grenade à concussion, grenade sonique **(Segment 3-bis** — un concern nouveau chacun, §3/§6**)** | rayon max 15 m ; table de paliers = constante de code |
 | **Rayon fixe, effet uniforme** | grenade assommante (Ø 5 → r 2,5), grenade incendiaire (Ø 5 → r 2,5), grenade à énergie (Ø 5 → r 2,5), grenade étourdissante (Ø 20 → r 10) ; capsule napalm (Ø 3 → r 1,5), capsule explosive (r 2), capsule acide (r 1,5 — écart RAW, §3) | par ligne |
 | **Nuage volumétrique** → `PLAN_NUAGE.md` | grenade fumigène + 6 grenades gaz + capsule fumigène + 6 capsules gaz | hors ce plan |
 | **Debuff de zone** → `PLAN_ARMES_SPECIALES.md` §2.6 (Segment 4) | grenade à neuro-charge | — |
@@ -69,10 +69,17 @@ feu continu du lance-flammes) :
 1. **La famille grenade = plusieurs mécanismes de registre, pas un `grenade_blast` fourre-tout.**
    Le registre AOE (Segment 1.5) est « un `mechanic` ↔ une stratégie de résolution » (patron Foundry) —
    `shotgun_spread` et `flamethrower` sont séparés bien qu'ils soient tous deux des cônes. De même :
-   `grenade_frag` (dégression, éclats + Choc) est le **premier** mécanisme ; `grenade_incendiary`,
+   `grenade_frag` (dégression, éclats) est le **premier** mécanisme ; `grenade_incendiary`,
    `grenade_flashbang`, `grenade_stun`, `grenade_energy`, `capsule_explosive`, `capsule_acide`
    s'ajoutent ensuite comme des entrées de registre réutilisant le même pipeline (exactement comme le
    lance-flammes après le fusil à pompe).
+
+   **Segment 3 = grenade à fragmentation SEULE** (analyse à charge de 3a, 2026-09-06). C'est la seule
+   charge utile à **zéro effet spécial** : pas de Choc (`Choc: -` au catalogue), pas de feu, pas de
+   statut. Elle valide toute l'infra risquée (viser un point, dispersion, explosion différée, cercle,
+   dégression) contre le payload minimal. **concussion** (extension de durée d'étourdissement sur échec
+   du Test de Choc → question `statusService`) et **sonique** (§3 pt 3) rejoignent le **Segment 3-bis**,
+   un concern nouveau chacun.
 
 2. **Options MIN / PER / DRO** : RAW « toutes les grenades peuvent être dotées de l'une des options »
    → **universel, rien à seed par ligne** ; l'option est un choix au moment du lancer.
@@ -83,15 +90,20 @@ feu continu du lance-flammes) :
      `COUVERTURE_RAW.md` §2). `detonation_mode = 'drone'` accepté **structurellement**, rejeté à la
      résolution avec message clair (patron `AOE_MECHANICS`).
 
-3. **Grenade sonique = dégression standard** (`grenade_frag`). Le RAW ne donne aucune zone ; c'est une
-   onde de choc anti-personnel avec dés de dégâts (5D10) + Choc (1D10). Écart RAW → `JOURNAL8.md`.
+3. **Grenade sonique = dégression standard, mais Segment 3-bis** (pas Segment 3). Le RAW ne donne
+   aucune zone ; c'est une onde de choc anti-personnel avec dés de dégâts (5D10) **+ Choc (1D10)** —
+   or c'est la **seule** grenade du régime dégression à porter un Choc, et la dégression RAW s'applique
+   aussi au Choc (« La réduction… concerne aussi les Dommages de Choc »). Le tronc ne sait pas dégresser
+   un Choc aujourd'hui → sous-problème réel, résolu une fois en 3-bis. Écart RAW (dégression appliquée)
+   → `JOURNAL8.md`.
 
 4. **Capsule acide = cercle rayon 1,5 m** (Ø 3 m, calé sur la capsule napalm — l'autre « capsule de
    liquide qui couvre une zone »). Le RAW ne donne aucun Ø. Écart RAW → `JOURNAL8.md`.
 
-5. **Migration catalogue APRÈS le moteur, une seule fois.** On ne seed pas un `aoe_profile` qui
-   pointe vers un mécanisme absent du registre. Ordre : mécanisme `grenade_frag` (3a) → migration des
-   2 lignes concernées (3g). Pas de nouvelle colonne — `aoe_profile` JSONB existant.
+5. **Migration catalogue APRÈS le moteur, une seule fois par segment.** On ne seed pas un `aoe_profile`
+   qui pointe vers un mécanisme absent du registre. Segment 3 : mécanisme `grenade_frag` (3a) →
+   migration de **la seule ligne fragmentation** (3g). Segment 3-bis : chaque mécanisme apporte sa/ses
+   ligne(s). Pas de nouvelle colonne — `aoe_profile` JSONB existant.
 
 **Hors périmètre de ce PLAN :** mines (système entité-piège, `PLAN_ARMES_SPECIALES.md` §2.4) ;
 lancer une grenade **au lance-grenades / lance-capsules** (Test de tir `ARMES_LOURDES` au lieu du Test
@@ -109,11 +121,12 @@ neuro-charge (Segment 4).
 | Dispersion 1D6 sur échec | `shared/world/aoeShapes.js#resolveScatter` (`{throwerPosition, intendedOrigin, failureMarginM, d6Roll}` → point dévié ; `failureMarginM<=0` → point inchangé) | **Écrite, jamais câblée.** Câblage = 3d. |
 | Primitive de palier par distance | `shared/world/distanceBands.js` (`normalizeDistanceBands` / `resolveDistanceBand`) | **Écrite, jamais consommée** — `grenade_frag` est son 1ᵉʳ client. |
 | Table de paliers RAW figée | patron `shared/combatRange.js#SHOTGUN_SPREAD_BY_BAND` (objet gelé `{ widthM, damageDice, savePossible, saveBonus }`) | Miroir : `GRENADE_FRAG_BANDS` gelé `{ maxDistanceM, damageDice, locations, chanceTest, chanceBonus }`. |
-| Dé signé de dégression | `shotgunSpread.js#rollSignedDie('-2D10')` | Même helper (à sortir en partagé si `grenade_frag` le réutilise — sinon copie assumée d'une ligne). |
-| Dégât brut | `server/src/lib/combatAttackRoll.js#computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg })` | **`mr` non pertinent pour une grenade** (§5) → `computeTargetDamage` grenade n'appelle PAS cette fonction, ou l'appelle avec `mr: 0, portee: null`. |
-| Application par cible + finalisation | `socketCombatAoe.js#resolveAoeTargetDamage` / `finalizeAoeResults` | Génériques — 1D3 Loc au centre = `locationsCount: 3` déjà supporté (lance-flammes). |
+| Dé signé de dégression | `shotgunSpread.js#rollSignedDie('-2D10')` | **Extrait vers `server/src/lib/diceParser.js`** en 3a (utilitaire de dé, pas de la logique fusil à pompe ; déjà importé par les 2 mécanismes) ; `shotgunSpread.js` bascule dessus — move pur. |
+| Dégât brut | `server/src/lib/combatAttackRoll.js#computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg })` | **`mr` non pertinent pour une grenade** (§5) → `computeTargetDamage` grenade n'appelle PAS cette fonction : `degautsBruts = baseRaw + rollSignedDie(band)`. |
+| Application par cible + finalisation | `socketCombatAoe.js#resolveAoeTargetDamage` / `finalizeAoeResults` | **Déjà génériques** (dispatch drone/exo/humanoïde, `outcome`, émissions ; 1D3 Loc au centre = `locationsCount: 3` déjà supporté). **Extraits de `socketCombatAoe.js` vers un module partagé en 3e** — ils servent le nouvel orchestrateur grenade sans passer par `resolveAoeAssaultAction`. |
 | Feu continu | `environmentalHazardService.js#exposeToHazard({ durationDice })` | `grenade_incendiary` (Segment 3-bis). |
-| LOS + couverture | `worldVisibilityService.js#evaluateAoeVisibility` | Inchangé. Couverture partielle RAW (−1 à −2D10) : couche 3, à cadrer en 3a §7. |
+| LOS + couverture | `worldVisibilityService.js#evaluateAoeVisibility` | Inchangé. `target.visibility.coverage` **existe** par cible mais ni le fusil à pompe ni le lance-flammes ne consomment la couverture *partielle* (LOS binaire ; couverture *totale* = déjà gérée par LOS bloquée). Couverture partielle RAW (−1 à −2D10) = amélioration transverse AOE, **hors Segment 3**, écart noté. |
+| Persistance d'une explosion en attente | candidats existants : `combat_pending` (mig. 31), `combat_timeline_entries` (mig. 34), pattern d'expiration par Tour de `environmentalHazardService` | **3e tranche** — le RAW (explose même si le lanceur meurt, au rang d'Ini du lanceur) penche vers le pattern minuteur/tick plutôt qu'une action de personnage. |
 
 ---
 
@@ -146,30 +159,55 @@ compétence de l'arme) dont la marge `mr` module le dégât, puis résolution im
 profil de zone → dégâts par cible. Il ne fait ni le lancer, ni le Test de Coordination, ni la
 dispersion, ni le différé. Ces quatre points sont 3c/3d/3e, chacun avec sa propre étape.
 
+**Conséquence d'architecture (analyse à charge de 3a, 2026-09-06)** : brancher la grenade avec des
+`if` dans `resolveAoeAssaultAction` ferait porter à ce fichier **deux** responsabilités (mono-phase
+*et* différé) → violation de « un fichier = une responsabilité ». Donc **3e = extraction + nouveau
+fichier**, pas « câbler un minuteur dans le tronc » :
+
+1. Extraire `resolveAoeTargetDamage` / `finalizeAoeResults` (déjà génériques) hors de
+   `socketCombatAoe.js` vers un module partagé — le tronc cesse de mélanger « résolution AOE
+   générique » et « flux propre à l'action d'assaut ». Non-régression fusil à pompe + lance-flammes.
+2. Nouveau fichier `socketCombatGrenade.js` (ou équivalent) : **une** responsabilité — résoudre une
+   grenade lancée (Test de Coordination, dispersion, explosion différée, appel des helpers partagés).
+3. Persistance d'une explosion en attente (§4, dernière ligne).
+
+Le mécanisme-stratégie `grenade_frag` reste consommé par `findAoeMechanismEntry` quel que soit
+l'orchestrateur — d'où le périmètre resserré de 3a (§7.1).
+
 ---
 
 ## 6. Découpage
 
-### Segment 3 — grenade à fragmentation + grenade à concussion (+ sonique), lancées à la main, MIN + PER
+### Segment 3 — grenade à **fragmentation SEULE**, lancée à la main, MIN + PER
 
 | | Contenu | Nature | Touche le combat humain ? |
 |---|---|---|---|
-| **3a** | Mécanisme `grenade_frag` : entrée de registre + `GRENADE_FRAG_BANDS` + les 6 hooks. **Fonction pure, fixtures.** Enregistré mais inatteignable par l'appli tant que 3c n'existe pas. | résolution pure | non |
-| **3b** | Adaptations du tronc : un mécanisme peut déclarer qu'il ne passe pas par `runAoePhaseA` (compétence d'arme) et qu'il tire son amplitude de `aoe_profile` (pas de `ref_range`) ; `ctx.aoe.intendedOrigin` transporté. Non-régression fusil à pompe + lance-flammes. | tronc | oui — clôture session Saar |
+| **3a** | Mécanisme `grenade_frag` (sémantique fragmentation seule) : `grenadeFrag.js` + `GRENADE_FRAG_BANDS` + les 6 hooks **invariants à l'orchestrateur** + extraction `rollSignedDie` → `diceParser.js`. **Fixtures.** Enregistré, inatteignable par l'appli tant que 3b+3c n'existent pas. | résolution pure | non |
+| **3b** | Adaptations du tronc : un mécanisme peut déclarer qu'il ne passe pas par `runAoePhaseA` (compétence d'arme) et qu'il tire son amplitude de `aoe_profile` (pas de `ref_range`) ; `ctx.aoe` transporte le point. Non-régression fusil à pompe + lance-flammes. | tronc | oui — clôture session Saar |
 | **3c** | Déclaration « Viser un point » : payload `aoe.intendedOrigin` (`socketCombatAnnouncement.js`), aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité aux 3 fenêtres de déclaration. | payload + UI | non (déclaration seule) |
-| **3d** | **Lancer** : Test de Coordination serveur (§5 pt 2) + `resolveScatter` câblé → point d'impact dévié sur échec (1D6 direction × marge). | résolution | oui |
-| **3e** | **Explosion différée (MIN)** — couture `programmerExplosion(…, quand)` + action résolue au Tour suivant au rang d'Ini du lanceur. **Analyse à charge dédiée + recherche pattern (Foundry delayed effects, PF2e) avant tout code.** | infra neuve | oui — FSM |
+| **3d** | **Lancer** : Test de Coordination serveur (§5 pt 2) + `resolveScatter` câblé **côté orchestrateur** → `resolvedOrigin` dévié sur échec (1D6 direction × marge). | résolution | oui |
+| **3e** | **Extraction des helpers AOE génériques + nouveau fichier orchestrateur `socketCombatGrenade.js` + explosion différée (MIN)** — action résolue au Tour suivant au rang d'Ini du lanceur, persistance §4. **Analyse à charge dédiée + recherche pattern (Foundry delayed effects, PF2e) avant tout code.** | refactor tronc + infra neuve | oui — FSM |
 | **3f** | Mode **PER** : `quand = maintenant` sur la même couture (raffinement « détonation contre un obstacle intercalé » via le LOS déjà calculé = ultérieur). | 1 param | oui |
-| **3g** | **1 migration** `aoe_profile` pour fragmentation + concussion (+ sonique) · doc : écarts `JOURNAL8.md`, `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | migration + doc | non |
+| **3g** | **1 migration** `aoe_profile` pour la ligne fragmentation · doc : écarts `JOURNAL8.md`, `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | migration + doc | non |
 
-Chaque sous-segment est validé avant le suivant (feedback_segment_by_file). 3a–3b livrables sans
-risque combat. 3e est le vrai morceau.
+Chaque sous-segment est validé avant le suivant (feedback_segment_by_file). 3a livrable sans risque
+combat. 3e est le vrai morceau (refactor + FSM).
 
-### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme à la fois)
+### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme = un concern nouveau)
 
-`grenade_incendiary` (+ capsule napalm) · `grenade_flashbang` (étourdissante — statut, zéro dé de
-dégât) · `grenade_stun` (assommante) · `grenade_energy` · `capsule_explosive` · `capsule_acide`.
-Chacun = une entrée de registre + une ligne de migration, pipeline 3c–3f inchangé.
+| Mécanisme | Grenades / capsules | Concern nouveau vs `grenade_frag` |
+|---|---|---|
+| `grenade_frag` + flag `concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) |
+| `grenade_sonic` (ou `grenade_frag` + param Choc) | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) |
+| `grenade_incendiary` | grenade incendiaire · capsule napalm | feu court (`exposeToHazard({ durationDice })`, durée fixe) |
+| `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — applique le statut « étourdi » 1D6 Tours, Test de Réaction d'anticipation |
+| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) |
+| `grenade_energy` | grenade à énergie | rayon fixe uniforme |
+| `capsule_explosive` | capsule explosive | rayon fixe 2 m, « pas d'effet de souffle » |
+| `capsule_acide` | capsule acide | DoT acide 1D10/Tour × 2D6 Tours, matières organiques |
+
+Chacun = une entrée de registre + sa ligne de migration, pipeline 3b–3f inchangé (le différé et le
+ciblage d'un point sont déjà là).
 
 ### Segment 4 — grenade à neuro-charge
 
@@ -182,31 +220,40 @@ Mécanique de debuff de zone (malus = marge d'attaque, Test de Volonté). Non ca
 
 ### 7.1 Périmètre exact de 3a
 
-**Dans 3a :**
-- `server/src/lib/aoeMechanisms/grenadeFrag.js` — objet stratégie, 6 hooks, même forme que
-  `shotgunSpread.js` / `flamethrower.js`.
-- `GRENADE_FRAG_BANDS` — table RAW figée (dans `grenadeFrag.js` ou `shared/combatRange.js` à côté de
-  `SHOTGUN_SPREAD_BY_BAND` — **à trancher** : la dégression grenade est-elle « mécanique RAW
-  partagée » comme le fusil à pompe, ou propre au mécanisme ? Défaut proposé : dans `grenadeFrag.js`,
-  elle n'a qu'un seul conscommateur).
-- `registry.js` — `{ key: 'grenade_frag', ...grenadeFragMechanism }`.
-- `shared/combatAoe.js#AOE_MECHANICS` — `+ 'grenade_frag'`.
-- Tests : `grenadeFrag.test.mjs` (fixtures) + extension `registry.test.mjs` (3 mécanismes, 6 hooks).
+**Dans 3a (un fichier à la fois, pause entre chaque — feedback_segment_by_file) :**
+1. **Extraction `rollSignedDie`** de `shotgunSpread.js` vers `server/src/lib/diceParser.js` ;
+   `shotgunSpread.js` bascule sur l'import. Move pur, couvert par `node --test` (shotgun + un test
+   unitaire neuf sur `rollSignedDie`). Fait **avant** `grenadeFrag.js` pour ne pas créer une
+   dépendance mécanisme→mécanisme.
+2. `server/src/lib/aoeMechanisms/grenadeFrag.js` — objet stratégie, 6 hooks, même forme que
+   `shotgunSpread.js` / `flamethrower.js`. Sémantique **fragmentation seule** (pas de Choc, pas de
+   feu, pas de statut). `GRENADE_FRAG_BANDS` figée **dans ce fichier** (précédent : `flamethrower.js`
+   porte ses constantes inline ; un seul consommateur → YAGNI).
+3. `registry.js` — `{ key: 'grenade_frag', ...grenadeFragMechanism }`.
+4. `shared/combatAoe.js#AOE_MECHANICS` — `+ 'grenade_frag'`.
+5. Tests : `grenadeFrag.test.mjs` (fixtures) + extension `registry.test.mjs` (3 mécanismes, 6 hooks) +
+   `combatAoe.test.mjs` (`'grenade_frag' ∈ AOE_MECHANICS`).
 
-**Hors 3a (explicite) :** aucune modification du tronc `socketCombatAoe.js`, aucun payload, aucune
-migration, aucune UI, aucun Test de Coordination, aucune dispersion, aucun différé. Le mécanisme est
-enregistré et unit-testé ; il devient atteignable par l'appli en 3b+3c.
+**Contrainte des hooks — invariants à l'orchestrateur** : aucun hook de `grenadeFrag.js` ne lit
+`ctx.rollResult`, `ctx.weapon.ref_range`, la position de `ctx.shooterToken`, ni `ctx.metrics` autrement
+qu'en passe-plat. Tout ce qui est en forme de Phase-A ou de direction. Ainsi le mécanisme reste bon
+que l'orchestrateur runtime (3e) soit `resolveAoeAssaultAction` bardé de branches OU un nouveau
+`socketCombatGrenade.js` — choix explicitement reporté à 3e.
+
+**Hors 3a (explicite) :** aucune modification du tronc `socketCombatAoe.js` (sauf import du nouveau
+`diceParser.rollSignedDie` si `socketCombatAoe.js` l'utilisait — à vérifier), aucun payload, aucune
+migration, aucune UI, aucun Test de Coordination, aucune dispersion, aucun différé.
 
 ### 7.2 Contrat des 6 hooks pour `grenade_frag`
 
 | Hook | Comportement |
 |---|---|
-| `buildShape(ctx)` | `origin = ctx.aoe.resolvedOrigin` (point d'impact — posé par le tronc en 3d après dispersion ; en 3a/fixtures, fourni directement). `amplitudeM = 15` (rayon max RAW). `normalizeAoeShape({ shape: 'circle', origin, amplitudeM })`. |
+| `buildShape(ctx)` | **Trivial** : `normalizeAoeShape({ shape: 'circle', origin: ctx.aoe.resolvedOrigin, amplitudeM: 15 })`. `resolvedOrigin` = point d'impact déjà dévié, posé par l'orchestrateur en 3d (qui a le résultat du Test de Coordination) ; en 3a/fixtures, fourni directement. **`resolveScatter` n'est PAS appelé ici** — il a besoin de la marge du Test, domaine combat, pas géométrie de forme. |
 | `filterTargets(ctx, visTargets)` | Pur. Pour chaque candidat : exclure le lanceur (`candidate.tokenId === ctx.action.token_id`) **seulement s'il n'est pas dans la zone** — RAW §5.5 PLAN_AOE : le lanceur peut être pris dans sa propre explosion (dispersion vers lui), pas d'exclusion silencieuse ; exclure hors-LOS ; `isPointInAoeShape(circle r=15)`. Retenus : `{ ...candidate, band: resolveGrenadeBand(distanceToOriginM) }`. |
 | `extraTargets(ctx, hitTargets)` | `[]` — pas de pseudo-cible (le lanceur, s'il est dans la zone, est déjà une cible normale via `filterTargets`, contrairement au lance-flammes où l'auto-éclaboussure < 3 m est un contrôle séparé). |
 | `targetRowModifier(ht)` | `{ band: ht.band.name, damageDice: ht.band.damageDice }` (persisté dans `combat_action_targets.damage_modifier`, nullable depuis segment 0c). |
-| `computeTargetDamage(ctx, ht, { baseRaw })` | `spreadRaw = rollSignedDie(ht.band.damageDice)` ; `degautsBruts = baseRaw + spreadRaw` (**pas** de `mr`, **pas** de `fireModeBonusDmg` — §5 pt 3) ; `locationsCount = ht.band.locations` (3 au centre via `parseDice('1D3')`, sinon 1) ; `armorReductionFactor = 1` (protections normales, RAW). **Choc** : la dégression s'applique aussi au Choc (RAW) — le `shooterChocDsl` générique du tronc ne sait pas dégresser → `grenade_frag` renvoie en plus `chocDamageDice: ht.band.damageDice` **[à valider en analyse à charge : le tronc applique-t-il un dé signé au Choc, ou faut-il l'étendre ?]**. |
-| `postResolve(io, campaignId, ctx, perTargetResults)` | Segment 3 fragmentation pure : `[]`. Concussion (profil `{ mechanic:'grenade_frag', concussion:true }`) : pour chaque cible dont le Test de résistance au Choc a échoué, **doubler la durée d'étourdissement** — `[à cadrer : statusService expose-t-il une prolongation, ou re-`applyStun` ?]`. |
+| `computeTargetDamage(ctx, ht, { baseRaw })` | `spreadRaw = rollSignedDie(ht.band.damageDice)` ; `degautsBruts = baseRaw + spreadRaw` (**pas** de `mr`, **pas** de `fireModeBonusDmg` — §5 pt 3) ; `locationsCount = ht.band.locations` (3 au centre via `parseDice('1D3')`, sinon 1) ; `armorReductionFactor = 1` (protections normales, RAW). **Aucun Choc** — la fragmentation n'en porte pas (`Choc: -` au catalogue). La dégression du Choc est un problème de Segment 3-bis (sonique). |
+| `postResolve(io, campaignId, ctx, perTargetResults)` | `[]` — fragmentation pure, aucun effet post-résolution. (concussion / feu / statut = Segment 3-bis.) |
 
 ### 7.3 `GRENADE_FRAG_BANDS` (table RAW figée)
 
@@ -252,35 +299,44 @@ Object.freeze({
 - `registry.test.mjs` : 3 mécanismes, chacun 6 hooks ; `findAoeMechanismEntry('grenade_frag')` défini.
 - `combatAoe.test.mjs` : `'grenade_frag' ∈ AOE_MECHANICS` ; `isKnownAoeMechanic('grenade_frag')`.
 
-### 7.6 [INCONNU] à lever en analyse à charge de 3a (tour suivant)
+### 7.6 [INCONNU] — tranchés à l'analyse à charge de 3a (2026-09-06)
 
-1. **Dégression du Choc** — le tronc (`resolveAoeTargetDamage`) passe `chocDsl` tel quel à
-   `resolveTargetHit` ; il n'existe pas de « dé signé appliqué au Choc ». Étendre le tronc, ou
-   `grenade_frag` construit-il un `chocDsl` déjà dégressé ? Impacte le contrat `computeTargetDamage`.
-2. **Couverture partielle (−1 à −2D10 selon la protection)** — `evaluateAoeVisibility` renvoie-t-il un
-   niveau de couverture exploitable par cible, ou seulement un booléen LOS ? Si booléen seul →
-   couverture partielle = écart RAW noté, hors 3a.
-3. **Table `GRENADE_FRAG_BANDS` : `grenadeFrag.js` ou `shared/combatRange.js` ?** (un seul
-   consommateur aujourd'hui — défaut : local au mécanisme).
-4. **`rollSignedDie`** — sortir de `shotgunSpread.js` en helper partagé, ou copie d'une ligne ?
-5. **Test de Chance (paliers longue/extrême)** — `chanceTest: true` est porté par la table mais **non
-   consommé en v1** (chantier Chance, `PLAN_CHANCE.md`). Confirmer que le porter en donnée dès 3a
-   (sans le câbler) est acceptable — cohérent avec `savePossible`/`saveBonus` du fusil à pompe, déjà
-   dans la table sans être tous câblés.
+1. **Dégression du Choc** → **neutralisé pour 3a** : la fragmentation ne porte pas de Choc. Le
+   problème (le tronc ne sait pas dégresser un `chocDsl`) ne se pose qu'à la grenade sonique →
+   **Segment 3-bis**.
+2. **Couverture partielle (−1 à −2D10)** → **hors 3a, cohérent.** La donnée existe
+   (`target.visibility.coverage` par cible) mais ni le fusil à pompe ni le lance-flammes ne consomment
+   la couverture *partielle* (couverture *totale* = déjà gérée par LOS bloquée). Ne pas faire de la
+   grenade la première à mapper « objet coverage → dé signé » : amélioration transverse AOE, plus
+   tard. Écart RAW noté (déjà noté pour les autres armes AOE).
+3. **Emplacement `GRENADE_FRAG_BANDS`** → **`grenadeFrag.js`** (précédent `flamethrower.js`, un seul
+   consommateur).
+4. **`rollSignedDie`** → **extrait vers `diceParser.js`** (utilitaire de dé, supprime une dépendance
+   mécanisme→mécanisme). Premier fichier de 3a.
+5. **Test de Chance non câblé** → **OK, aucun écart.** `SHOTGUN_SPREAD_BY_BAND` porte déjà
+   `savePossible`/`saveBonus` non câblés. `chanceTest`/`chanceBonus` = donnée RAW latente, prête pour
+   le chantier Chance (`PLAN_CHANCE.md`).
+
+**Vérifié au passage (pas un [INCONNU]) :** `getEffectiveWeaponDamage` sur une ligne d'inventaire
+grenade (appelée par le tronc pour tout tireur humanoïde) — code lu : pas d'ammo → repli sur
+`weapon_formula` (« 5D10 »), renvoie `{ total }` sain, le `rangeBand` passé est ignoré (pas de
+mécanique munition). Aucun opt-out nécessaire en 3b sur ce point.
 
 ---
 
 ## 8. Validation (proportionnée au risque — clôture AGENTS.md)
 
-- **3a** : `node --test` (grenadeFrag + registry + combatAoe) · `node --check`. Aucun risque combat.
+- **3a** : `node --test` (rollSignedDie + shotgunSpread non-régression + grenadeFrag + registry +
+  combatAoe) · `node --check`. Aucun risque combat.
 - **3b** : + non-régression fusil à pompe **et** lance-flammes en session réelle Saar (le tronc
   bouge).
 - **3c–3d** : + `buildDeclarePayload.test.mjs`, lint + build client, session réelle (viser un point,
   dispersion sur échec visible).
-- **3e** : analyse à charge dédiée + scénario FSM complet (grenade lancée T1, explosion T2 au bon
-  rang d'Ini, lanceur mort entre-temps, reconnexion PJ, répétition réseau).
-- **3g** : + scénario réel multi-cibles à paliers différents (centre 1D3 Loc, extrême −3D10),
-  concussion (double étourdissement), + build client.
+- **3e** : analyse à charge dédiée + non-régression fusil à pompe/lance-flammes (extraction des
+  helpers) + scénario FSM complet (grenade lancée T1, explosion T2 au bon rang d'Ini, lanceur mort
+  entre-temps, reconnexion PJ, répétition réseau).
+- **3g** : + scénario réel multi-cibles à paliers différents (centre 1D3 Loc, extrême −3D10) + build
+  client.
 
 ## 9. Retour arrière
 
