@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildHumanDeclarePayload, buildGmDeclarePayload,
   buildDroneMapActions, buildExoMapActions,
-  buildAttackEntries, buildMeleeEntries,
+  buildAttackEntries, buildMeleeEntries, buildAoeField,
 } from './buildDeclarePayload.js'
 
 // Golden master — fige l'assemblage du payload COMBAT_ACTION_DECLARE (humain/PJ) tel que
@@ -145,6 +145,28 @@ test('Zone d\'effet — aoeDirection à 0° (falsy) reste bien traité comme une
   }))
   assert.equal(p.mapActions.attack.length, 1)
   assert.deepEqual(p.mapActions.attack[0].aoe, { direction: 0 })
+})
+
+test('Zone d\'effet — grenade : aoeIntendedOrigin (point) → aoe.intendedOrigin, une entrée sans cible', () => {
+  const p = buildHumanDeclarePayload(baseSel({
+    attackSelected: true, assaultWeaponId: 'grenade-1', aoeIntendedOrigin: { x: 3, y: 0, z: -4 },
+    isDualWield: true, hasTwoWeapons: true, sameFirMode: true, aimTranches: 2, aimedLocation: 'head',
+    assaultPendingTokenIds: ['stale-target'],
+  }))
+  assert.deepEqual(p.mapActions.attack, [{
+    weaponInvId: 'grenade-1', offhandWeaponInvId: null, targetTokenId: null,
+    aoe: { intendedOrigin: { x: 3, y: 0, z: -4 } },
+    bulletCount: null, fireModeBonusComp: null, fireModeBonusDmg: null,
+    isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  }])
+})
+
+test('buildAoeField — intendedOrigin prioritaire, sinon direction, sinon null', () => {
+  assert.deepEqual(buildAoeField({ aoeDirection: 42, aoeIntendedOrigin: { x: 1, y: 2, z: 3 } }), { intendedOrigin: { x: 1, y: 2, z: 3 } })
+  assert.deepEqual(buildAoeField({ aoeDirection: 0 }), { direction: 0 })
+  assert.deepEqual(buildAoeField({ aoeDirection: 42 }), { direction: 42 })
+  assert.equal(buildAoeField({}), null)
+  assert.equal(buildAoeField({ aoeDirection: null, aoeIntendedOrigin: null }), null)
 })
 
 test('Corps à corps — arme d\'inventaire', () => {
@@ -580,6 +602,14 @@ test('drone AOE — arme de contact + aoeDirection → jamais de zone (retombe s
   assert.ok(!('attack' in r.mapActions))
 })
 
+test('drone AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', aoeIntendedOrigin: { x: 5, y: 0, z: 2 },
+    droneWeapons: [{ id: 'w1', ref_category: 'Grenade', fire_mode: 'cc' }],
+  }))
+  assert.deepEqual(r.mapActions.attack, [{ droneWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: 5, y: 0, z: 2 } } }])
+})
+
 // ─── Exo (buildExoMapActions) ────────────────────────────────────────────────
 const exoSel = (over = {}) => ({
   selectedExoWeaponId: null, assaultTargetId: null, exoWeapons: [], ...over,
@@ -636,6 +666,14 @@ test('exo AOE — arme de contact + aoeDirection → jamais de zone (RAW, retomb
     exoWeapons: [{ id: 'w1', ref_category: 'Arme de contact' }],
   }))
   assert.deepEqual(r, { melee: [{ exoWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
+test('exo AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'w1', aoeIntendedOrigin: { x: -2, y: 0, z: 8 },
+    exoWeapons: [{ id: 'w1', ref_category: 'Grenade' }],
+  }))
+  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: -2, y: 0, z: 8 } } }] })
 })
 
 // ─── Cœur commun buildAttackEntries / buildMeleeEntries (PLAN_RW_DECLARE_DERIVATION Étape A) ──────

@@ -55,6 +55,7 @@ export function buildHumanDeclarePayload(sel) {
       attack: sel.attackSelected
         ? buildAttackEntries({
             aoeDirection:          sel.aoeDirection,
+            aoeIntendedOrigin:     sel.aoeIntendedOrigin,
             weaponInvId:           sel.assaultWeaponId,
             targets:              sel.assaultPendingTokenIds,
             effectiveAssaultCount: sel.effectiveAssaultCount,
@@ -147,9 +148,10 @@ export function buildGmDeclarePayload(sel) {
       // Zone d'effet + forme normale + neutralisation : `buildAttackEntries` (cœur commun PJ/MJ).
       // Divergences PNJ : `weapon.inv_id` ; offhand par `inv_id` ; cibles dans `assaultTargets` ;
       // bonus par défaut `0` (`emptyBonus`).
-      attack: sel.weapon && (sel.assaultTargets.length > 0 || sel.aoeDirection != null) && sel.mapAction !== 'reload'
+      attack: sel.weapon && (sel.assaultTargets.length > 0 || sel.aoeDirection != null || sel.aoeIntendedOrigin != null) && sel.mapAction !== 'reload'
         ? buildAttackEntries({
             aoeDirection:          sel.aoeDirection,
+            aoeIntendedOrigin:     sel.aoeIntendedOrigin,
             weaponInvId:           sel.weapon.inv_id,
             targets:              sel.assaultTargets,
             effectiveAssaultCount: sel.effectiveAssaultCount,
@@ -192,23 +194,36 @@ export function buildGmDeclarePayload(sel) {
 // @param {string|null}   p.aimedLocation
 // @param {null|0}        p.emptyBonus            valeur de bulletCount/fireModeBonus* sans variant — `null` (PJ) | `0` (MJ)
 // @returns {object[]}
+// Champ `aoe` du payload — deux formes selon `aoe_profile.shape` de l'arme (PLAN_AOE.md §6 /
+// PLAN_GRENADES.md §6 3c) : cône/rayon (fusil à pompe, lance-flammes) → `{ direction }` en degrés ;
+// cercle (grenade `grenade_frag`) → `{ intendedOrigin }`, un point `{x,y,z}` au sol visé par le
+// lanceur. Mutuellement exclusifs — la reducer / le hook n'en pose qu'un, selon la forme de l'arme.
+// `null` si aucune visée de zone (cible unique classique).
+export function buildAoeField({ aoeDirection, aoeIntendedOrigin }) {
+  if (aoeIntendedOrigin != null) return { intendedOrigin: aoeIntendedOrigin }
+  if (aoeDirection != null) return { direction: aoeDirection }
+  return null
+}
+
 export function buildAttackEntries({
-  aoeDirection, weaponInvId, targets, effectiveAssaultCount,
+  aoeDirection, aoeIntendedOrigin, weaponInvId, targets, effectiveAssaultCount,
   isDualWield, hasTwoWeapons, sameFirMode, offhandWeaponId,
   currentVariant, dualWieldBonusComp, aimTranches, aimedLocation, emptyBonus,
 }) {
-  // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9 ; PLAN_ARMES_SPECIALES.md §1.4) : une seule
-  // entrée, sans cible, avec `aoe.direction`. Dual-wield / Tir visé neutralisés **explicitement**
-  // (pas juste laissés à la valeur courante) : la reducer n'efface pas ces champs en entrant en
-  // mode zone (seuls aoeDirection/targets le sont), et une action de zone n'a pas de cible unique
-  // ni de deux armes ni de localisation visée (RAW) — les envoyer tels quels enverrait un payload
+  // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9 ; PLAN_ARMES_SPECIALES.md §1.4 ; PLAN_GRENADES.md
+  // §6 3c) : une seule entrée, sans cible, avec le champ `aoe` (`{ direction }` ou `{ intendedOrigin }`
+  // — buildAoeField). Dual-wield / Tir visé neutralisés **explicitement** (pas juste laissés à la
+  // valeur courante) : la reducer n'efface pas ces champs en entrant en mode zone (seuls
+  // aoeDirection/aoeIntendedOrigin/targets le sont), et une action de zone n'a pas de cible unique ni
+  // de deux armes ni de localisation visée (RAW) — les envoyer tels quels enverrait un payload
   // contradictoire au serveur.
-  if (aoeDirection != null) {
+  const aoe = buildAoeField({ aoeDirection, aoeIntendedOrigin })
+  if (aoe != null) {
     return [{
       weaponInvId,
       offhandWeaponInvId: null,
       targetTokenId:      null,
-      aoe:                { direction: aoeDirection },
+      aoe,
       bulletCount:        null,
       fireModeBonusComp:  emptyBonus,
       fireModeBonusDmg:   emptyBonus,
@@ -276,7 +291,8 @@ export function buildMeleeEntries({
 // Jamais pour une arme de contact (aucune arme catalogue AOE n'est CaC, cohérent avec `isAoeWeapon`
 // côté déclaration qui ne s'affiche déjà que pour une arme à distance).
 export function buildDroneMapActions(sel) {
-  const hasAoe    = sel.aoeDirection != null
+  const aoeField  = buildAoeField(sel)
+  const hasAoe    = aoeField != null
   const hasAttack = !!sel.selectedDroneWeaponId && (!!sel.assaultTargetId || hasAoe)
   const weapon    = hasAttack ? sel.droneWeapons.find(w => w.id === sel.selectedDroneWeaponId) : null
   const isCaC         = weapon?.ref_category === 'Arme de contact'
@@ -285,7 +301,7 @@ export function buildDroneMapActions(sel) {
   let attackPayload = {}
   if (hasAttack) {
     if (hasAoe && !isCaC) {
-      attackPayload = { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: null, aoe: { direction: sel.aoeDirection } }] }
+      attackPayload = { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: null, aoe: aoeField }] }
     } else {
       attackPayload = isCaC
         ? { melee:  [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] }
@@ -319,11 +335,12 @@ export function buildDroneMapActions(sel) {
 // Jamais pour une arme de contact (RAW : aucune arme catalogue AOE n'est CaC, cohérent avec
 // isAoeWeapon côté déclaration qui ne s'affiche déjà que pour une arme à distance).
 export function buildExoMapActions(sel) {
-  if (!sel.selectedExoWeaponId || (!sel.assaultTargetId && sel.aoeDirection == null)) return {}
+  const aoeField = buildAoeField(sel)
+  if (!sel.selectedExoWeaponId || (!sel.assaultTargetId && aoeField == null)) return {}
   const weapon = sel.exoWeapons.find(w => w.id === sel.selectedExoWeaponId)
   const isCaC = weapon?.ref_category === 'Arme de contact'
-  if (sel.aoeDirection != null && !isCaC) {
-    return { attack: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: null, aoe: { direction: sel.aoeDirection } }] }
+  if (aoeField != null && !isCaC) {
+    return { attack: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: null, aoe: aoeField }] }
   }
   return isCaC
     ? { melee: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: sel.assaultTargetId }] }
