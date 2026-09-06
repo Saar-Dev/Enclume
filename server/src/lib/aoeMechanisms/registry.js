@@ -16,9 +16,12 @@
 //
 // Forme d'une entrée : { key, buildShape, filterTargets, extraTargets, targetRowModifier,
 // computeTargetDamage, postResolve } — voir shotgunSpread.js pour le détail de chaque hook.
-// Propriété non-hook optionnelle : `losSource` ('caster' par défaut si absente | 'origin') — d'où
-// part la LOS de la zone (le tireur pour cône/rayon, le point d'impact pour une grenade). Consommée
-// par l'orchestrateur, pas par le dispatch.
+// Propriétés non-hook OPTIONNELLES (capacités de flux, lues par `resolveAoeAssaultAction` avec un
+// défaut = comportement historique ; un mécanisme ne déclare QUE ce qui diffère) :
+//   `needsWeaponRange` (défaut true)  — l'amplitude vient de `weapon.ref_range` ; false → du mécanisme.
+//   `decrementsAmmo`   (défaut true)  — une cartouche décrémentée par résolution ; false → jamais.
+//   `losSource`        (défaut 'caster' | 'origin') — LOS depuis le tireur ou depuis le point d'impact.
+// Consommées par l'orchestrateur, jamais par le dispatch.
 
 import { shotgunSpreadMechanism } from './shotgunSpread.js'
 import { flamethrowerMechanism } from './flamethrower.js'

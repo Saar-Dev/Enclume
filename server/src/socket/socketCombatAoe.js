@@ -457,14 +457,21 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
 
-    const thresholds = parseWeaponRangeBands(weapon.ref_range)
-    if (!thresholds) {
-      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-        username: character.name, message: 'Tir en zone impossible — portée d\'arme non exploitable',
-      } })
-      return { suspend: false, emissions }
+    // Amplitude de la zone = portée extrême de l'arme (fusil à pompe, lance-flammes — `ref_range`).
+    // Un mécanisme qui tire son amplitude de son propre profil (`grenade_frag` : rayon RAW fixe dans
+    // `buildShape`) déclare `needsWeaponRange: false` — pas de colonne `ref_range` pour une grenade
+    // (PLAN_GRENADES.md §5, Segment 3b). Défaut `true` : comportement historique inchangé.
+    let amplitudeM
+    if (mech.needsWeaponRange ?? true) {
+      const thresholds = parseWeaponRangeBands(weapon.ref_range)
+      if (!thresholds) {
+        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+          username: character.name, message: 'Tir en zone impossible — portée d\'arme non exploitable',
+        } })
+        return { suspend: false, emissions }
+      }
+      amplitudeM = thresholds[thresholds.length - 1]
     }
-    const amplitudeM = thresholds[thresholds.length - 1]
 
     let ctx = { character, action, confirmedModifiers, weapon, shooterToken, aoe, amplitudeM }
 
@@ -484,8 +491,12 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     }
     ctx = { ...ctx, aoeShape }
 
+    // LOS de la zone : depuis le tireur (`'caster'`) pour un projectile qui part de lui (fusil à
+    // pompe, lance-flammes) ; depuis le point d'impact (`'origin'`) pour une explosion (`grenade_frag`)
+    // — une cible masquée au lanceur mais à découvert du souffle est touchée. Défaut `'caster'`.
     const visibility = await evaluateAoeVisibility({
-      battlemapId: shooterToken.battlemap_id, aoeShape, casterToken: shooterToken, losSource: 'caster',
+      battlemapId: shooterToken.battlemap_id, aoeShape, casterToken: shooterToken,
+      losSource: mech.losSource ?? 'caster',
     })
     if (visibility.status !== 'ok') return { suspend: false, emissions }
 
@@ -503,7 +514,11 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       site: 'assault_aoe', actorTokenId: action.token_id, targetTokenId: null,
     })
 
-    await decrementAoeShooterAmmo(campaignId, { character, weapon, action })
+    // Une grenade est consommée au LANCER (T1), jamais à l'explosion → `decrementsAmmo: false`.
+    // Défaut `true` : fusil à pompe / lance-flammes décrémentent une cartouche par gerbe, inchangé.
+    if (mech.decrementsAmmo ?? true) {
+      await decrementAoeShooterAmmo(campaignId, { character, weapon, action })
+    }
 
     if (hitTargets.length === 0) {
       // Le tir est parti (RAW), personne dans la zone d'effet. Jamais un COMBAT_ATTACK_RESULT

@@ -135,9 +135,19 @@ function postResolve() {
 
 export const grenadeFragMechanism = {
   buildShape, filterTargets, extraTargets, targetRowModifier, computeTargetDamage, postResolve,
-  // Consommé par l'orchestrateur en 3b : la LOS d'une explosion part du POINT D'IMPACT, pas du
-  // lanceur (`evaluateAoeVisibility({ losSource: 'origin' })`) — une cible masquée pour le lanceur
-  // mais à découvert du souffle EST touchée. Le fusil à pompe / lance-flammes gardent `'caster'`
-  // (le projectile part du tireur). Défaut du tronc aujourd'hui : `'caster'`.
+  // ─── Capacités de flux (PLAN_GRENADES.md §5, Segment 3b) ─────────────────────────────────────────
+  // Propriétés non-hook lues par `resolveAoeAssaultAction` avec un défaut = comportement historique.
+  // Un mécanisme ne déclare QUE ce qui diffère du défaut (fusil à pompe / lance-flammes n'en ont
+  // aucune). La grenade s'écarte sur trois axes :
+  //  - `needsWeaponRange: false` — pas de colonne `ref_range` ; l'amplitude vient du mécanisme
+  //    (`GRENADE_FRAG_MAX_RADIUS_M` dans `buildShape`), pas de `parseWeaponRangeBands`.
+  //  - `decrementsAmmo: false` — une grenade est consommée au LANCER (T1), jamais à l'explosion.
+  //  - `losSource: 'origin'` — la LOS de l'explosion part du POINT D'IMPACT, pas du lanceur : une
+  //    cible masquée pour le lanceur mais à découvert du souffle EST touchée.
+  // `rollsPhaseA` (jet de compétence d'arme) : PAS déclaré ici — le Test de Coordination du lancer
+  // est câblé au Segment 3d, avec sa source de `rollResult` (jusque-là, le tronc roule un jet de
+  // compétence cosmétiquement faux mais sans effet sur le dégât, qui ignore `mr`).
+  needsWeaponRange: false,
+  decrementsAmmo: false,
   losSource: 'origin',
 }

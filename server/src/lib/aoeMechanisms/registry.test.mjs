@@ -29,11 +29,19 @@ test('AOE_MECHANISM_REGISTRY — 3 entrées, clés uniques (fusil à pompe + lan
   assert.equal(new Set(keys).size, keys.length)
 })
 
-test('grenade_frag — losSource = origin (la LOS de l\'explosion part du point d\'impact, pas du lanceur)', () => {
-  assert.equal(findAoeMechanismEntry('grenade_frag').losSource, 'origin')
-  // les cônes/rayons n'en déclarent pas → défaut 'caster' côté orchestrateur
-  assert.equal(findAoeMechanismEntry('shotgun_spread').losSource, undefined)
-  assert.equal(findAoeMechanismEntry('flamethrower').losSource, undefined)
+test('capacités de flux — grenade_frag s\'écarte des défauts (needsWeaponRange/decrementsAmmo/losSource), les cônes/rayons non', () => {
+  const g = findAoeMechanismEntry('grenade_frag')
+  assert.equal(g.needsWeaponRange, false) // amplitude depuis le mécanisme, pas ref_range
+  assert.equal(g.decrementsAmmo, false)   // consommée au lancer, pas à l'explosion
+  assert.equal(g.losSource, 'origin')     // LOS depuis le point d'impact
+  assert.equal(g.rollsPhaseA, undefined)  // pas encore déclaré — Test de Coordination = Segment 3d
+
+  for (const key of ['shotgun_spread', 'flamethrower']) {
+    const m = findAoeMechanismEntry(key)
+    assert.equal(m.needsWeaponRange, undefined) // → défaut true (comportement historique)
+    assert.equal(m.decrementsAmmo, undefined)   // → défaut true
+    assert.equal(m.losSource, undefined)        // → défaut 'caster'
+  }
 })
 
 // extraTargets par défaut (fusil à pompe) : jamais de pseudo-cible — vérifie le contrat générique que
