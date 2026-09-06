@@ -402,7 +402,7 @@ function SessionContent({ campaignId }) {
     combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, targetRecap, combatCameraCenter,
     handleModeReset, handleEnterMoveMode, handleValidateMove,
     handleCancelPendingMove, handleEnterTargetMode, handleValidateTarget, handleEnterAoeTargetMode,
-    handleValidateAoeDirection,
+    handleValidateAoeAim,
     registerAmbientAttackHandler, handleAmbientTokenClick, ambientAttackArmed, showTargetRecap,
   } = useCombatUIState()
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
@@ -1282,7 +1282,7 @@ function SessionContent({ campaignId }) {
           onEnterTargetMode={handleEnterTargetMode}
           onEnterAoeTargetMode={handleEnterAoeTargetMode}
           onValidateTarget={handleValidateTarget}
-          onValidateAoeDirection={handleValidateAoeDirection}
+          onValidateAoeAim={handleValidateAoeAim}
           registerAmbientAttackHandler={registerAmbientAttackHandler}
           showTargetRecap={showTargetRecap}
           pjPreview={combatSocket.pjPreview}

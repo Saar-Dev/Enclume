@@ -20,7 +20,8 @@
     "targetLegend": {
       "ranged": "Tir — Cliquez sur la cible",
       "melee": "Corps à corps — Cliquez sur la cible",
-      "aoe": "Zone d'effet — Déplacez la souris pour viser, cliquez pour figer"
+      "aoe": "Zone d'effet — Déplacez la souris pour viser, cliquez pour figer",
+      "aoePoint": "Grenade — Déplacez la souris pour choisir le point d'impact, cliquez pour figer"
     },
     "targetRecap": {
       "losClear": "Ligne de vue dégagée",
@@ -128,7 +129,9 @@
     "aimedLocationSection": "Viser une localisation",
     "aoeSection": "Zone d'effet",
     "aoeDirectionValue": "Direction : {{deg}}°",
-    "aimAoeButton": "Viser une zone"
+    "aoePointValue": "Point d'impact visé",
+    "aimAoeButton": "Viser une zone",
+    "aimAoePointButton": "Viser un point"
   },
   "rosterWindow": {
     "title": "ROSTER COMBAT",

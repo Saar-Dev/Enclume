@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { getAoeProfile } from '../../../shared/combatAoe.js'
 
 export function useCombatUIState() {
   const [combatMoveMode,       setCombatMoveMode]       = useState(null)
@@ -131,9 +132,19 @@ export function useCombatUIState() {
   // position obsolète au lieu d'attendre un vrai mouvement de souris sur la carte (bug rapporté Saar
   // 2026-09-02 : "l'AOE est posée dès le clic sur CIBLE").
   const aoeArmSeqRef = useRef(0)
-  const handleEnterAoeTargetMode = useCallback((tokenId, tokenPos, weaponRange, weaponAoeProfile, onDirectionSelected, onCancel) => {
-    const wrappedSelected = (directionDeg) => {
-      onDirectionSelected(directionDeg)
+  // `aimMode` — deux visées de zone selon `aoe_profile.shape` de l'arme (PLAN_GRENADES.md §6 3c) :
+  //  - `'direction'` (défaut : fusil à pompe, lance-flammes — cône/rayon) : le clic sur la carte fige
+  //    un cap (`pendingDirectionDeg`), l'origine reste la position du tireur à la résolution ;
+  //  - `'point'` (grenade `grenade_frag` — cercle) : le clic fige un POINT au sol (`pendingPoint`,
+  //    `{x,y,z}`) où le lanceur veut que la grenade atterrisse.
+  // Le corps du mode ne porte QUE les champs de son `aimMode` — Canvas3D / CombatOverlay branchent
+  // dessus. `onAimSelected` reçoit un `number` (deg) ou un `{x,y,z}` (point) selon le mode ; c'est
+  // l'appelant (useExoDeclare / useDroneDeclare / reducer humanoïde) qui sait déjà quelle forme
+  // attendre (il a testé `isAoeWeapon` + la forme de l'arme).
+  const handleEnterAoeTargetMode = useCallback((tokenId, tokenPos, weaponRange, weaponAoeProfile, onAimSelected, onCancel) => {
+    const isPoint = getAoeProfile(weaponAoeProfile)?.shape === 'circle'
+    const wrappedSelected = (aim) => {
+      onAimSelected(aim)
       setCombatAoeTargetMode(null)
     }
     const wrappedCancel = () => {
@@ -141,23 +152,48 @@ export function useCombatUIState() {
       setCombatAoeTargetMode(null)
     }
     aoeArmSeqRef.current += 1
-    setCombatAoeTargetMode({
-      tokenId, weaponRange, weaponAoeProfile, pendingDirectionDeg: null, armSeq: aoeArmSeqRef.current,
-      onDirectionSelected: wrappedSelected,
+    const base = {
+      tokenId, weaponRange, weaponAoeProfile, armSeq: aoeArmSeqRef.current,
+      aimMode: isPoint ? 'point' : 'direction',
       onCancel: wrappedCancel,
-      // deg === null repasse en survol libre (bouton "Changer") — jamais un guard self-cible ici
-      // (contrairement à onPendingTarget) : une direction n'a pas de notion de "viser soi-même" à
-      // exclure au-delà de ce que Canvas3D filtre déjà (atan2(0,0) sur le tireur lui-même).
-      onPendingDirection: (deg) => {
-        setCombatAoeTargetMode(prev => prev ? { ...prev, pendingDirectionDeg: deg } : null)
-      },
-    })
+    }
+    if (isPoint) {
+      setCombatAoeTargetMode({
+        ...base, pendingPoint: null,
+        onPointSelected: wrappedSelected,
+        // point === null repasse en survol libre (bouton « Changer »). Le lanceur PEUT viser sa
+        // propre position (grenade qui retombe sur lui, PLAN_AOE §5.5) — aucun guard self ici.
+        onPendingPoint: (point) => {
+          setCombatAoeTargetMode(prev => prev ? { ...prev, pendingPoint: point } : null)
+        },
+      })
+    } else {
+      setCombatAoeTargetMode({
+        ...base, pendingDirectionDeg: null,
+        onDirectionSelected: wrappedSelected,
+        // deg === null repasse en survol libre (bouton "Changer") — jamais un guard self-cible ici
+        // (contrairement à onPendingTarget) : une direction n'a pas de notion de "viser soi-même" à
+        // exclure au-delà de ce que Canvas3D filtre déjà (atan2(0,0) sur le tireur lui-même).
+        onPendingDirection: (deg) => {
+          setCombatAoeTargetMode(prev => prev ? { ...prev, pendingDirectionDeg: deg } : null)
+        },
+      })
+    }
     setCombatCameraCenter(tokenPos)
   }, [])
 
-  const handleValidateAoeDirection = useCallback(() => {
-    if (combatAoeTargetMode?.pendingDirectionDeg == null) return
-    combatAoeTargetMode.onDirectionSelected(combatAoeTargetMode.pendingDirectionDeg)
+  // Valider la visée de zone en attente — dispatch sur `aimMode`. Remplace `handleValidateAoeDirection`
+  // (renommé : couvre les deux formes de visée).
+  const handleValidateAoeAim = useCallback(() => {
+    const m = combatAoeTargetMode
+    if (!m) return
+    if (m.aimMode === 'point') {
+      if (m.pendingPoint == null) return
+      m.onPointSelected(m.pendingPoint)
+    } else {
+      if (m.pendingDirectionDeg == null) return
+      m.onDirectionSelected(m.pendingDirectionDeg)
+    }
   }, [combatAoeTargetMode])
 
   return {
@@ -174,7 +210,7 @@ export function useCombatUIState() {
     handleEnterTargetMode,
     handleValidateTarget,
     handleEnterAoeTargetMode,
-    handleValidateAoeDirection,
+    handleValidateAoeAim,
     registerAmbientAttackHandler,
     handleAmbientTokenClick,
     ambientAttackArmed,
