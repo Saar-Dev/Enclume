@@ -8,7 +8,7 @@ import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } f
 import { getMutationEffects } from '../services/mutationService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
-import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
+import { startAnnouncementTimers, startResolutionPhase } from './combatTurnEngine.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
 import { getAllModStatusCodes } from '../services/weaponModService.js'

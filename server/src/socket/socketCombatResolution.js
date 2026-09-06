@@ -17,6 +17,8 @@ import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
   triggerActNow, triggerDelayedPass,
+} from './combatTurnEngine.js'
+import {
   resolveMeleeAction, resolveReloadAction,
   resolveDroneAssaultAction, resolveAssaultAction,
   resolveExoStandUpAction,
