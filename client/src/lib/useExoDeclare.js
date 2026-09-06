@@ -100,7 +100,7 @@ export function useExoDeclare({
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => { setAssaultTargetId(targetId); setAoeDirection(null); setIsSelectingTarget(false) },
+      (targetId) => { setAssaultTargetId(targetId); setAoeDirection(null); setAoeIntendedOrigin(null); setIsSelectingTarget(false) },
       () => { setIsSelectingTarget(false) },
       targetMode,
     )

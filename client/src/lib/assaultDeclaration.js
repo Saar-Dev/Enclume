@@ -25,14 +25,18 @@ export const ASSAULT_DECLARATION_INITIAL = {
   // degrés se fait en amont (capture du clic, Canvas3D) ; ce module reste un conteneur d'état pur,
   // il ne connaît que la valeur déjà résolue — jamais un point écran ni une conversion ici.
   // Mutuellement exclusif avec `targets` (RAW : une action de zone n'a pas de cible unique) — voir
-  // SET_AOE_DIRECTION / SET_TARGET / SET_SOLE_TARGET ci-dessous.
+  // SET_AOE_DIRECTION / SET_AOE_POINT / SET_TARGET / SET_SOLE_TARGET ci-dessous.
   aoeDirection:  null,
+  // Zone d'effet « cercle » (grenade — PLAN_GRENADES.md §6 3c) : point d'impact visé au sol
+  // `{x,y,z}` (coordonnées monde), déjà résolu par l'appelant (Canvas3D). Exclusif avec `aoeDirection`
+  // (une arme est d'une seule forme) ET avec `targets`.
+  aoeIntendedOrigin: null,
 }
 
 // Mode de ciblage "zone d'effet" actif ? Dérivé pur — les fichiers appelants (fenêtre, payload) n'ont
 // pas besoin de connaître le détail du champ, seulement ce booléen.
 export function assaultIsAoeMode(state) {
-  return state.aoeDirection != null
+  return state.aoeDirection != null || state.aoeIntendedOrigin != null
 }
 
 // Nombre de tirs effectifs : la série multiple n'existe qu'en Coup par Coup (RC/RL forcent 1).
@@ -153,22 +157,26 @@ export function assaultDeclarationReducer(state, action) {
     case 'SET_AIMED_LOCATION':
       return { ...state, aimedLocation: action.value }
 
-    // aoeDirection effacé : poser une cible unique annule une zone d'effet en cours de sélection —
-    // exclusivité dans les deux sens (voir SET_AOE_DIRECTION).
+    // Zone d'effet (direction ET point) effacée : poser une cible unique annule une zone d'effet en
+    // cours de sélection — exclusivité dans les deux sens (voir SET_AOE_DIRECTION / SET_AOE_POINT).
     case 'SET_TARGET':
-      return { ...state, aoeDirection: null, targets: assaultPlaceTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
+      return { ...state, aoeDirection: null, aoeIntendedOrigin: null, targets: assaultPlaceTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
 
     // Cible unique imposée (clic direct sur un token adverse, sans passer par la liste d'armes) —
     // miroir exact de l'ancien `setAssaultPendingTokenIds([tid])`.
     case 'SET_SOLE_TARGET':
-      return { ...state, aoeDirection: null, targets: [action.tokenId] }
+      return { ...state, aoeDirection: null, aoeIntendedOrigin: null, targets: [action.tokenId] }
 
-    // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9) — action.value en degrés (convention
-    // aoeShapes.js, déjà résolue par l'appelant) ou `null` pour effacer la sélection en cours.
-    // Vide `targets` dès qu'une direction est posée : les deux modes sont mutuellement exclusifs,
-    // jamais une cible unique ET une zone en même temps.
+    // Zone d'effet cône/rayon (docs/PLANS/PLAN_AOE.md §8 étape 9) — action.value en degrés (convention
+    // aoeShapes.js, déjà résolue par l'appelant) ou `null` pour effacer. Vide `targets` et
+    // `aoeIntendedOrigin` : les 3 modes de visée sont mutuellement exclusifs.
     case 'SET_AOE_DIRECTION':
-      return { ...state, aoeDirection: action.value, targets: action.value != null ? [] : state.targets }
+      return { ...state, aoeDirection: action.value, aoeIntendedOrigin: null, targets: action.value != null ? [] : state.targets }
+
+    // Zone d'effet cercle (grenade — PLAN_GRENADES.md §6 3c) — action.value = point `{x,y,z}` visé au
+    // sol (coordonnées monde, déjà résolu par Canvas3D) ou `null` pour effacer. Même exclusivité.
+    case 'SET_AOE_POINT':
+      return { ...state, aoeIntendedOrigin: action.value, aoeDirection: null, targets: action.value != null ? [] : state.targets }
 
     // Efface le sous-état Tir : nouveau tour, changement de slot actif, ou sélection d'une autre
     // action de combat (CaC) — l'exclusivité Tir ⊕ CaC est portée par la fenêtre.

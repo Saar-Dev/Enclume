@@ -18,7 +18,7 @@ import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '..
 import { parseFireModes } from '../../../shared/fireModes.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
-import { isAoeWeapon } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
@@ -648,14 +648,15 @@ export default function CombatActionWindow({
   // de combatAoeTargetMode (état partagé), pas d'un flag local (COMBAT-DEPLACEMENT-HOVER, cf. commentaire
   // sur isTargeting : un flag local n'est pas toujours positionné par tous les points d'entrée).
   const handleStartAoeDirection = () => {
+    const isPoint = getAoeProfile(selectedWeapon?.ref_aoe_profile)?.shape === 'circle'
     setInTargetMode(true)
     onEnterAoeTargetMode(
       playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       selectedWeapon?.ref_range ?? null,
       selectedWeapon?.ref_aoe_profile ?? null,
-      (directionDeg) => {
-        assaultDecl.setAoeDirection(directionDeg)
+      (aim) => {
+        if (isPoint) assaultDecl.setAoeIntendedOrigin(aim); else assaultDecl.setAoeDirection(aim)
         setInTargetMode(false)
       },
       () => { setInTargetMode(false) },
@@ -766,7 +767,7 @@ export default function CombatActionWindow({
       attackSelected: attackActive,   // D7 : Recharger exclut le Tir dans le payload
       assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
-      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection,
+      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
       meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount, chargeSelection,
       effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
       reloadSelected, selectedWeapon, selectedAmmoId,
@@ -1279,6 +1280,8 @@ export default function CombatActionWindow({
               isAoeEligible={isAoeEligible}
               isAoeMode={assaultDecl.isAoeMode}
               aoeDirection={assaultDecl.state.aoeDirection}
+              aoeIntendedOrigin={assaultDecl.state.aoeIntendedOrigin}
+              weaponAoeProfile={selectedWeapon?.ref_aoe_profile ?? null}
               onStartAoeDirection={handleStartAoeDirection}
             />
           </div>

@@ -145,10 +145,36 @@ test('SET_SOLE_TARGET efface une direction de zone en cours', () => {
   assert.deepEqual(s.targets, ['a'])
 })
 
-test('assaultIsAoeMode : reflète uniquement aoeDirection', () => {
+test('assaultIsAoeMode : direction OU point posé', () => {
   assert.equal(assaultIsAoeMode(INIT), false)
   assert.equal(assaultIsAoeMode({ ...INIT, aoeDirection: 0 }), true) // 0° est une direction valide, pas "absent"
   assert.equal(assaultIsAoeMode({ ...INIT, aoeDirection: null }), false)
+  assert.equal(assaultIsAoeMode({ ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 2 } }), true)
+})
+
+// --- SET_AOE_POINT : zone d'effet « cercle » grenade (PLAN_GRENADES.md §6 3c) ---
+
+test('SET_AOE_POINT : pose le point, vide targets, efface aoeDirection (3 modes exclusifs)', () => {
+  const s = reduce({ ...INIT, count: 3, targets: ['a', 'a', 'a'], aoeDirection: 90 }, { type: 'SET_AOE_POINT', value: { x: 5, y: 0, z: -2 } })
+  assert.deepEqual(s.aoeIntendedOrigin, { x: 5, y: 0, z: -2 })
+  assert.equal(s.aoeDirection, null)
+  assert.deepEqual(s.targets, [])
+})
+
+test('SET_AOE_DIRECTION efface un point de zone en cours (et réciproquement)', () => {
+  assert.equal(reduce({ ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 1 } }, { type: 'SET_AOE_DIRECTION', value: 45 }).aoeIntendedOrigin, null)
+  assert.equal(reduce({ ...INIT, aoeDirection: 45 }, { type: 'SET_AOE_POINT', value: { x: 1, y: 0, z: 1 } }).aoeDirection, null)
+})
+
+test('SET_TARGET / SET_SOLE_TARGET effacent aussi un point de zone', () => {
+  assert.equal(reduce({ ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 1 } }, { type: 'SET_TARGET', index: 0, tokenId: 'a', seriesLength: 1 }).aoeIntendedOrigin, null)
+  assert.equal(reduce({ ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 1 } }, { type: 'SET_SOLE_TARGET', tokenId: 'a' }).aoeIntendedOrigin, null)
+})
+
+test('SELECT_WEAPON et CLEAR remettent aoeIntendedOrigin à null', () => {
+  const dirty = { ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 1 } }
+  assert.equal(reduce(dirty, { type: 'SELECT_WEAPON', weaponId: 'w2' }).aoeIntendedOrigin, null)
+  assert.equal(reduce(dirty, { type: 'CLEAR' }).aoeIntendedOrigin, null)
 })
 
 test('assaultTargetsComplete : une direction de zone posée compte comme complet, sans cible', () => {

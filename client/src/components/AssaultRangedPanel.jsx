@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
 import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
+import { getAoeProfile } from '../../../shared/combatAoe.js'
 import AimedLocationPicker from './AimedLocationPicker.jsx'
 
 // Chips inline pour le nombre de tirs. D4b : la sélection = accent de famille (`--decl-acc`),
@@ -123,8 +124,10 @@ export default function AssaultRangedPanel({
   // calculé par le parent via `shared/combatAoe.js#isAoeWeapon(weapon.ref_aoe_profile)` (donnée
   // catalogue). Voir le early return juste après la déstructuration.
   isAoeEligible,   // bool — calculé par le parent
-  isAoeMode,       // bool — assaultDecl.isAoeMode (aoeDirection posé)
+  isAoeMode,       // bool — assaultDecl.isAoeMode (direction OU point posé)
   aoeDirection,    // number | null — degrés, convention aoeShapes.js (0° = +X, trigo → +Z)
+  aoeIntendedOrigin, // {x,y,z} | null — grenade (cercle), PLAN_GRENADES.md §6 3c
+  weaponAoeProfile,  // ref_equipment.aoe_profile de l'arme — sa `shape` choisit le libellé
   onStartAoeDirection, // () => void — arme combatAoeTargetMode (Canvas3D)
 }) {
   const { t } = useTranslation('combat')
@@ -148,12 +151,14 @@ export default function AssaultRangedPanel({
         </div>
         {isAoeMode ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={P.targetName}>{t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
+            <span style={P.targetName}>{aoeIntendedOrigin != null
+              ? t('assaultPanel.aoePointValue')
+              : t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
             <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
           </div>
         ) : (
           <button style={{ ...P.chooseBtn, width: 'auto', alignSelf: 'flex-start' }} onClick={onStartAoeDirection}>
-            {t('assaultPanel.aimAoeButton')}
+            {t(getAoeProfile(weaponAoeProfile)?.shape === 'circle' ? 'assaultPanel.aimAoePointButton' : 'assaultPanel.aimAoeButton')}
           </button>
         )}
       </div>

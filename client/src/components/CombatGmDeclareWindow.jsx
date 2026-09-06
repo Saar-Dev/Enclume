@@ -12,7 +12,7 @@ import {
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { parseFireModes } from '../../../shared/fireModes.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
-import { isAoeWeapon } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -548,14 +548,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js) — `shape` choisit couloir vs cône.
   const handleStartAoeDirection = () => {
     if (!onEnterAoeTargetMode || !activeTokenId || !activeToken) return
+    const isPoint = getAoeProfile(weapon?.ref_aoe_profile)?.shape === 'circle'
     setIsSelectingOnMap(true)
     onEnterAoeTargetMode(
       activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
       weapon?.ref_range ?? null,
       weapon?.ref_aoe_profile ?? null,
-      (directionDeg) => {
-        assaultDecl.setAoeDirection(directionDeg)
+      (aim) => {
+        if (isPoint) assaultDecl.setAoeIntendedOrigin(aim); else assaultDecl.setAoeDirection(aim)
         setIsSelectingOnMap(false)
       },
       () => { setIsSelectingOnMap(false) },
@@ -641,7 +642,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       pendingMove, chargeSelection,
       weapon, assaultTargets, effectiveAssaultCount,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
-      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection,
+      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
       meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
       effectiveDualWieldMelee, meleeOffhandWeapon,
       mapAction,
@@ -1003,6 +1004,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               isAoeEligible={isAoeEligible}
               isAoeMode={assaultDecl.isAoeMode}
               aoeDirection={assaultDecl.state.aoeDirection}
+              aoeIntendedOrigin={assaultDecl.state.aoeIntendedOrigin}
+              weaponAoeProfile={weapon?.ref_aoe_profile ?? null}
               onStartAoeDirection={handleStartAoeDirection}
             />
           </div>
