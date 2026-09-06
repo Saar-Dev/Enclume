@@ -12,6 +12,7 @@ export default function DroneDeclareSection({
   assaultTargetId,
   onChooseTarget,
   aoeDirection,
+  aoeIntendedOrigin,
   onStartAoeDirection,
   getLabel,
   style,
@@ -50,6 +51,7 @@ export default function DroneDeclareSection({
         selectedWeaponId={selectedWeaponId}
         assaultTargetId={assaultTargetId}
         aoeDirection={aoeDirection}
+        aoeIntendedOrigin={aoeIntendedOrigin}
         showReadyBadge={false}
         onWeaponSelect={onWeaponSelect}
         onChooseTarget={onChooseTarget}

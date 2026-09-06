@@ -1069,6 +1069,7 @@ export default function CombatActionWindow({
                 assaultTargetId={droneDeclare.assaultTargetId}
                 onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
                 aoeDirection={droneDeclare.aoeDirection}
+                aoeIntendedOrigin={droneDeclare.aoeIntendedOrigin}
                 onStartAoeDirection={droneDeclare.handleStartAoeDirection}
                 getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
               />

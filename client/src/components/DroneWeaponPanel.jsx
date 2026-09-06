@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { isAoeWeapon } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
 
 const P = {
   section: {
@@ -69,11 +69,12 @@ export default function DroneWeaponPanel({
   droneWeapons,       // weapon[]
   selectedWeaponId,   // string | null
   assaultTargetId,    // string | null
-  aoeDirection,       // number | null — Segment 2b AOE
+  aoeDirection,       // number | null — Segment 2b AOE (cône/rayon)
+  aoeIntendedOrigin,  // {x,y,z} | null — grenade (cercle), PLAN_GRENADES.md §6 3c
   showReadyBadge,     // bool
   onWeaponSelect,     // (id) => void
   onChooseTarget,     // () => void
-  onStartAoeDirection,// () => void — Segment 2b AOE
+  onStartAoeDirection,// () => void — arme le mode de visée (direction OU point selon la forme)
   getLabel,           // (tokenId) => string
 }) {
   const { t } = useTranslation('combat')
@@ -82,6 +83,8 @@ export default function DroneWeaponPanel({
   // éligible bascule la section « cible » sur « Viser une zone » (l'arme n'a pas de mode de tir normal).
   const selectedWeapon = droneWeapons.find(w => w.id === selectedWeaponId)
   const isAoeEligible = isAoeWeapon(selectedWeapon?.ref_aoe_profile)
+  const isPointAoe = getAoeProfile(selectedWeapon?.ref_aoe_profile)?.shape === 'circle'
+  const aoePosed = aoeDirection != null || aoeIntendedOrigin != null
   return (
     <>
       <div style={P.section}>
@@ -118,13 +121,15 @@ export default function DroneWeaponPanel({
       {isAoeEligible ? (
         <div style={P.section}>
           <div style={P.sectionTitle}>{t('assaultPanel.aoeSection')}</div>
-          {aoeDirection != null ? (
+          {aoePosed ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={P.targetName}>{t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
+              <span style={P.targetName}>{isPointAoe
+                ? t('assaultPanel.aoePointValue')
+                : t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
               <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
             </div>
           ) : (
-            <button style={P.chooseBtn} onClick={onStartAoeDirection}>{t('assaultPanel.aimAoeButton')}</button>
+            <button style={P.chooseBtn} onClick={onStartAoeDirection}>{t(isPointAoe ? 'assaultPanel.aimAoePointButton' : 'assaultPanel.aimAoeButton')}</button>
           )}
         </div>
       ) : (

@@ -779,6 +779,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               assaultTargetId={droneDeclare.assaultTargetId}
               onChooseTarget={() => droneDeclare.handleChooseTarget(activeToken)}
               aoeDirection={droneDeclare.aoeDirection}
+              aoeIntendedOrigin={droneDeclare.aoeIntendedOrigin}
               onStartAoeDirection={droneDeclare.handleStartAoeDirection}
               getLabel={getLabel}
               style={S.controls}

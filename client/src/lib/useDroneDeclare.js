@@ -4,6 +4,7 @@ import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { useAutoMoveMode } from './useAutoMoveMode.js'
 import { useCombatClickAttack } from './useCombatClickAttack.js'
 import { buildDroneMapActions } from './buildDeclarePayload.js'
+import { getAoeProfile } from '../../../shared/combatAoe.js'
 
 export function useDroneDeclare({
   charId, tokenId, tokenPos, allures, onEnterMoveMode, onEnterTargetMode, onEnterAoeTargetMode = null,
@@ -22,8 +23,11 @@ export function useDroneDeclare({
   const [isSelectingTarget,     setIsSelectingTarget]     = useState(false)
   // Zone d'effet (Segment 2b AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — mutuellement exclusif avec
   // assaultTargetId. Pas de reducer (comme useExoDeclare) : exclusivité maintenue manuellement à
-  // chaque point qui pose l'un ou l'autre, ci-dessous.
+  // chaque point qui pose l'un ou l'autre, ci-dessous. Deux formes selon `aoe_profile.shape`
+  // (PLAN_GRENADES.md §6 3c) : cône/rayon → aoeDirection (deg) ; cercle (grenade) → aoeIntendedOrigin
+  // (point {x,y,z}). Mirror useExoDeclare.
   const [aoeDirection,          setAoeDirection]          = useState(null)
+  const [aoeIntendedOrigin,     setAoeIntendedOrigin]     = useState(null)
 
   // Fetch armes drone quand le personnage change (cancelled flag = convention projet)
   useEffect(() => {
@@ -52,10 +56,11 @@ export function useDroneDeclare({
     setDroneWeapons([])
     setIsSelectingTarget(false)
     setAoeDirection(null)
+    setAoeIntendedOrigin(null)
   }, [tokenId])
 
   const canDeclare = hasPassed || !!pendingMove
-    || (!!selectedDroneWeaponId && (!!assaultTargetId || aoeDirection != null))
+    || (!!selectedDroneWeaponId && (!!assaultTargetId || aoeDirection != null || aoeIntendedOrigin != null))
 
   // Déplacement : plus de clic préalable — useAutoMoveMode maintient le survol/preview actif par
   // défaut tant qu'aucun ciblage Attaque n'est en cours (décision Saar, COMBAT-DEPLACEMENT-HOVER).
@@ -96,8 +101,8 @@ export function useDroneDeclare({
     showTargetRecap,
     registerAmbientAttackHandler,
     // aoeDirection effacé ici : exclusivité manuelle avec assaultTargetId (mirror useExoDeclare).
-    onMeleeTarget:   (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
-    onAssaultTarget: (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
+    onMeleeTarget:   (tid) => { setAssaultTargetId(tid); setAoeDirection(null); setAoeIntendedOrigin(null) },
+    onAssaultTarget: (tid) => { setAssaultTargetId(tid); setAoeDirection(null); setAoeIntendedOrigin(null) },
   })
 
   // Sélection d'arme — efface la cible / direction de zone d'une arme précédente (mirror
@@ -108,6 +113,7 @@ export function useDroneDeclare({
     setSelectedDroneWeaponId(weaponId)
     setAssaultTargetId(null)
     setAoeDirection(null)
+    setAoeIntendedOrigin(null)
   }, [])
 
   const handleChooseTarget = useCallback((activeToken) => {
@@ -122,7 +128,7 @@ export function useDroneDeclare({
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => { setAssaultTargetId(targetId); setAoeDirection(null); setIsSelectingTarget(false) },
+      (targetId) => { setAssaultTargetId(targetId); setAoeDirection(null); setAoeIntendedOrigin(null); setIsSelectingTarget(false) },
       () => { setIsSelectingTarget(false) },
       isCaC ? 'melee' : 'ranged',
     )
@@ -135,11 +141,16 @@ export function useDroneDeclare({
   const handleStartAoeDirection = useCallback(() => {
     if (!onEnterAoeTargetMode || !tokenId) return
     const selectedWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
+    const isPoint = getAoeProfile(selectedWeapon?.ref_aoe_profile)?.shape === 'circle'
     setAssaultTargetId(null)
+    setAoeDirection(null); setAoeIntendedOrigin(null)
     setIsSelectingTarget(true)
     onEnterAoeTargetMode(
       tokenId, tokenPos, selectedWeapon?.ref_range ?? null, selectedWeapon?.ref_aoe_profile ?? null,
-      (directionDeg) => { setAoeDirection(directionDeg); setIsSelectingTarget(false) },
+      (aim) => {
+        if (isPoint) setAoeIntendedOrigin(aim); else setAoeDirection(aim)
+        setIsSelectingTarget(false)
+      },
       () => { setIsSelectingTarget(false) },
     )
   }, [tokenId, tokenPos, onEnterAoeTargetMode, droneWeapons, selectedDroneWeaponId])
@@ -156,8 +167,8 @@ export function useDroneDeclare({
   // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — cœur pur testé
   // (client/src/lib/buildDeclarePayload.js, module 0 M0.3).
   const buildMapActions = useCallback(
-    () => buildDroneMapActions({ selectedDroneWeaponId, assaultTargetId, aoeDirection, droneWeapons, pendingMove }),
-    [selectedDroneWeaponId, assaultTargetId, aoeDirection, droneWeapons, pendingMove],
+    () => buildDroneMapActions({ selectedDroneWeaponId, assaultTargetId, aoeDirection, aoeIntendedOrigin, droneWeapons, pendingMove }),
+    [selectedDroneWeaponId, assaultTargetId, aoeDirection, aoeIntendedOrigin, droneWeapons, pendingMove],
   )
 
   // Exposé tel quel aux appelants (nom stable) — combine ciblage explicite ET sélection de
@@ -171,7 +182,7 @@ export function useDroneDeclare({
     assaultTargetId, pendingMove, hasPassed, setHasPassed, isSelectingOnMap,
     canDeclare, buildMapActions, clearPendingMove, rearmDroneMove,
     handleChooseTarget,
-    // Zone d'effet (Segment 2b AOE)
-    aoeDirection, handleStartAoeDirection,
+    // Zone d'effet (Segment 2b AOE + grenade PLAN_GRENADES.md §6 3c)
+    aoeDirection, aoeIntendedOrigin, handleStartAoeDirection,
   }
 }
