@@ -22,7 +22,7 @@ import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPr
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
-import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles, buildCircleSpan, projectCircleFan } from '../lib/aoePreviewShape.js'
+import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles, buildCircleSpan, projectCircleFan, buildGrenadeBlastRings, projectRingQuads, projectCircleOutline } from '../lib/aoePreviewShape.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -1451,26 +1451,58 @@ function Scene({
         // Point figé (clic, Valider/Changer en attente) prioritaire sur le survol en cours.
         const displayPoint = combatAoeTargetMode.pendingPoint ?? aoePreviewPoint
         if (displayPoint == null) return null
-        const radiusM = combatAoeTargetMode.weaponAoeProfile?.radiusM
-        const span = buildCircleSpan(radiusM)
-        if (!span) return null
-        const y = displayPoint.y + 0.06
+        const center = { x: displayPoint.x, z: displayPoint.z }
+        const fillY = displayPoint.y + 0.06
+        const lineY = displayPoint.y + 0.07 // au-dessus des remplissages → pas de z-fight ligne/bord
         // Clé de remontage (précision 5 cm) — même raison qu'en mode direction : réaffecter la prop
         // `array` d'un <bufferAttribute> monté ne pose jamais `.needsUpdate` (vérifié dans le code
         // @react-three/fiber installé), il faut un remontage complet à chaque déplacement réel.
         const ptKey = `${Math.round(displayPoint.x * 20)}_${Math.round(displayPoint.z * 20)}`
-        const faces = projectCircleFan(span, { x: displayPoint.x, z: displayPoint.z }).map((tri, i) => {
+
+        // Mécanisme `grenade_frag` (PLAN_GRENADES.md §10.2) : 5 anneaux de dégression RAW du centre
+        // (le plus meurtrier, opaque) vers l'extrême (ténu) + une ligne de bord par palier pour rendre
+        // les seuils lisibles. Un mesh + une ligne par anneau (10 objets) — pas un mesh par facette.
+        // Toute autre arme `circle` : disque plein générique (buildCircleSpan/projectCircleFan).
+        if (combatAoeTargetMode.weaponAoeProfile?.mechanic === 'grenade_frag') {
+          return buildGrenadeBlastRings().flatMap(ring => {
+            const verts = []
+            for (const quad of projectRingQuads(ring, center)) {
+              const [a, b, c, d] = quad.corners
+              verts.push(a.x, fillY, a.z, b.x, fillY, b.z, c.x, fillY, c.z, a.x, fillY, a.z, c.x, fillY, c.z, d.x, fillY, d.z)
+            }
+            const fill = new Float32Array(verts)
+            const outline = projectCircleOutline(ring.outerM, center)
+            const edge = new Float32Array(outline.flatMap(p => [p.x, lineY, p.z]))
+            return [
+              <mesh key={`aoe-ring-${ring.band}-${ptKey}`}>
+                <bufferGeometry>
+                  <bufferAttribute attach="attributes-position" count={fill.length / 3} array={fill} itemSize={3} />
+                </bufferGeometry>
+                <meshBasicMaterial color="#ff0000" transparent opacity={ring.opacity} depthWrite={false} side={THREE.DoubleSide} />
+              </mesh>,
+              <line key={`aoe-ring-edge-${ring.band}-${ptKey}`}>
+                <bufferGeometry>
+                  <bufferAttribute attach="attributes-position" count={outline.length} array={edge} itemSize={3} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#ff3030" transparent opacity={Math.min(0.9, ring.opacity + 0.35)} depthWrite={false} />
+              </line>,
+            ]
+          })
+        }
+
+        const span = buildCircleSpan(combatAoeTargetMode.weaponAoeProfile?.radiusM)
+        if (!span) return null
+        return projectCircleFan(span, center).map((tri, i) => {
           const [a, b, c] = tri.corners
-          return { key: `aoe-circle-${i}-${ptKey}`, positions: new Float32Array([a.x, y, a.z, b.x, y, b.z, c.x, y, c.z]) }
+          return (
+            <mesh key={`aoe-circle-${i}-${ptKey}`}>
+              <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={3} array={new Float32Array([a.x, fillY, a.z, b.x, fillY, b.z, c.x, fillY, c.z])} itemSize={3} />
+              </bufferGeometry>
+              <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
+            </mesh>
+          )
         })
-        return faces.map(face => (
-          <mesh key={face.key}>
-            <bufferGeometry>
-              <bufferAttribute attach="attributes-position" count={face.positions.length / 3} array={face.positions} itemSize={3} />
-            </bufferGeometry>
-            <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
-          </mesh>
-        ))
       })()}
 
       {combatAoeTargetMode && combatAoeTargetMode.aimMode !== 'point' && (() => {

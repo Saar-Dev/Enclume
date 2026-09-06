@@ -5,7 +5,9 @@ import {
   buildShotgunSpreadSegments, projectShotgunSpreadCorners,
   buildConeSpan, projectConeTriangles,
   buildCircleSpan, projectCircleFan,
+  buildGrenadeBlastRings, projectRingQuads, projectCircleOutline,
 } from './aoePreviewShape.js'
+import { GRENADE_FRAG_BANDS } from '../../../shared/combatRange.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js) —
 // même constante que shared/combatRange.test.mjs, pas une valeur inventée.
@@ -152,4 +154,68 @@ test('projectCircleFan — éventail fermé centré sur le POINT D\'IMPACT (pas 
 test('projectCircleFan — nombre de facettes plancher à 8, span null → tableau vide', () => {
   assert.equal(projectCircleFan(buildCircleSpan(5), { x: 0, z: 0 }, 2).length, 8)
   assert.deepEqual(projectCircleFan(null, { x: 0, z: 0 }), [])
+})
+
+// ─── Anneaux de dégression grenade (§10.2) ────────────────────────────────────────────────────────
+
+test('buildGrenadeBlastRings — un anneau par palier RAW, innerM chaîné sur le outerM précédent', () => {
+  const rings = buildGrenadeBlastRings()
+  assert.equal(rings.length, GRENADE_FRAG_BANDS.length)
+  assert.deepEqual(rings.map(r => r.band), ['centre', 'courte', 'moyenne', 'longue', 'extreme'])
+  assert.deepEqual(rings.map(r => r.innerM), [0, 1, 2.5, 5, 10])
+  assert.deepEqual(rings.map(r => r.outerM), [1, 2.5, 5, 10, 15])
+  for (let i = 1; i < rings.length; i++) {
+    assert.equal(rings[i].innerM, rings[i - 1].outerM, `anneau ${i} contigu au précédent`)
+  }
+})
+
+test('buildGrenadeBlastRings — opacité décroissante du centre vers l\'extrême (affichage : le regard va au danger)', () => {
+  const op = buildGrenadeBlastRings().map(r => r.opacity)
+  for (let i = 1; i < op.length; i++) assert.ok(op[i] < op[i - 1], `opacité ${i} < ${i - 1}`)
+  assert.ok(op[0] > 0 && op[op.length - 1] > 0)
+})
+
+test('projectRingQuads — couronne : 4 coins par quad, sur les cercles innerM/outerM, centrée sur le point d\'impact', () => {
+  const center = { x: 7, z: -2 }
+  const ring = { band: 'moyenne', innerM: 2.5, outerM: 5, opacity: 0.25 }
+  const quads = projectRingQuads(ring, center, 32)
+  assert.equal(quads.length, 32)
+  for (const q of quads) {
+    assert.equal(q.corners.length, 4)
+    const [innerA, outerA, outerB, innerB] = q.corners
+    for (const c of [innerA, innerB]) assert.ok(Math.abs(Math.hypot(c.x - center.x, c.z - center.z) - 2.5) < 1e-9)
+    for (const c of [outerA, outerB]) assert.ok(Math.abs(Math.hypot(c.x - center.x, c.z - center.z) - 5) < 1e-9)
+  }
+  // contiguïté angulaire : le coin externe d'un quad = le coin externe entrant du suivant
+  for (let i = 0; i < quads.length; i++) {
+    const next = quads[(i + 1) % quads.length]
+    assertPointClose(quads[i].corners[2], next.corners[1], `quad${i} arête partagée (externe)`)
+  }
+})
+
+test('projectRingQuads — palier centre (innerM 0) : quads dégénérés acceptés, coins internes au centre', () => {
+  const center = { x: 0, z: 0 }
+  const quads = projectRingQuads({ band: 'centre', innerM: 0, outerM: 1, opacity: 0.45 }, center, 16)
+  assert.equal(quads.length, 16)
+  for (const q of quads) {
+    assertPointClose(q.corners[0], center, 'coin interne = centre')
+    assertPointClose(q.corners[3], center, 'coin interne = centre')
+  }
+})
+
+test('projectRingQuads — anneau invalide (outerM ≤ 0, innerM ≥ outerM, null) → tableau vide, jamais une exception', () => {
+  assert.deepEqual(projectRingQuads(null, { x: 0, z: 0 }), [])
+  assert.deepEqual(projectRingQuads({ innerM: 5, outerM: 5 }, { x: 0, z: 0 }), [])
+  assert.deepEqual(projectRingQuads({ innerM: 8, outerM: 5 }, { x: 0, z: 0 }), [])
+  assert.deepEqual(projectRingQuads({ innerM: 0, outerM: 0 }, { x: 0, z: 0 }), [])
+})
+
+test('projectCircleOutline — polyligne fermée sur le cercle du palier, premier = dernier point', () => {
+  const center = { x: 3, z: 4 }
+  const pts = projectCircleOutline(10, center, 24)
+  assert.equal(pts.length, 25) // 24 facettes + point de fermeture
+  for (const p of pts) assert.ok(Math.abs(Math.hypot(p.x - center.x, p.z - center.z) - 10) < 1e-9)
+  assertPointClose(pts[0], pts[pts.length - 1], 'boucle fermée')
+  assert.deepEqual(projectCircleOutline(0, center), [])
+  assert.deepEqual(projectCircleOutline(NaN, center), [])
 })

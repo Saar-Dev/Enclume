@@ -420,29 +420,34 @@ et `:395`.
 n'ont aucun chemin de combat — futur chantier dédié type « moteur de jet » (comme les grenades ont eu
 le leur), pas un ride-along. Noté ici pour ne pas reperdre l'info.
 
-### 10.2 Aperçu multi-anneaux — dégression visible (demandé Saar, à faire — « 3c/2b-6 »)
+### 10.2 Aperçu multi-anneaux — dégression visible ✅ FAIT (2026-09-06, commits `8c992be` + suivant)
 
-Aujourd'hui l'aperçu = **un seul disque** r=15 (`buildCircleSpan`/`projectCircleFan`, `aoePreviewShape.js`).
-Saar veut les **5 paliers RAW** visibles (rayons diamètre/2 = **1 / 2,5 / 5 / 10 / 15 m** ;
-centre/courte/moyenne/longue/extrême).
+Avant : aperçu = **un seul disque** r=15. Maintenant : **5 anneaux concentriques** aux rayons RAW
+(diamètre/2 = 1 / 2,5 / 5 / 10 / 15 m), opacité graduée centre → extrême + ligne de bord par palier.
 
-**UX retenue** (réponse expert donnée à Saar) : anneaux (annuli) concentriques, **opacité graduée**
-— centre (+1D10) le plus opaque (~0,45), extrême (−3D10) le plus ténu (~0,12) ; fine ligne de bord
-plus vive à chaque transition de palier pour que les seuils soient lisibles ; **pas** de dégradé
-continu (la RAW est un palier discret) ; pas de label texte sur le sol (clutter) — au survol
-éventuellement plus tard. Garder rouge, faire varier l'opacité (pas la teinte → moins criard).
+**Décisions actées :**
+- **Home de la table = `shared/combatRange.js`** (pas un fichier dédié). Section miroir de
+  `SHOTGUN_SPREAD_BY_BAND` — même motif : table mécanique RAW d'une arme AOE partagée apercu+résolveur,
+  `shotgunSpread.js` l'importe déjà de là. `grenadeFrag.js` re-exporte (surface publique inchangée).
+  Move nécessaire, pas cosmétique : `grenadeFrag.js` importe `parseDice` d'un chemin serveur → le
+  client ne peut pas importer ce module. **Seam futur** (pas maintenant) : si concussion/sonique
+  arrivent (§6), extraire `shared/grenadeBands.js` avec toutes les tables de la famille.
+- **Un mesh + une ligne par anneau** (10 objets), pas un mesh par facette — le survol re-render à
+  ~5 cm, 485 meshes auraient été lourds.
+- **Opacité = donnée d'affichage** (`GRENADE_RING_OPACITY` local à `aoePreviewShape.js`, calibré à
+  l'œil : 0,45 → 0,12), **pas** dans la table RAW partagée.
+- **Choix anneaux vs disque** = `aoe_profile.mechanic === 'grenade_frag'` dans Canvas3D (1 ligne,
+  cohérent avec le `shape === 'cone'` voisin). `buildCircleSpan`/`projectCircleFan` conservés en repli
+  pour une future arme `circle` d'un autre mécanisme.
+- Pas de label texte sol, pas de dégradé continu, rouge unique (opacité pas teinte) — comme cadré.
 
-**Implémentation (aggradation)** :
-1. **Sortir la table des paliers en `shared/combatRange.js`** (`GRENADE_FRAG_BANDS`, tableau simple,
-   à côté de `SHOTGUN_SPREAD_BY_BAND`). Aujourd'hui elle est locale à `server/.../grenadeFrag.js`
-   (décision 3a « un seul consommateur » — **caduque** : le client la veut aussi). `grenadeFrag.js`
-   l'importe et wrappe avec `normalizeDistanceBands`. Une seule autorité RAW.
-2. `aoePreviewShape.js` : `buildGrenadeBlastRings()` → `[{ band, innerM, outerM, opacity }]` ;
-   `projectRingQuads(ring, center, steps)` → quads d'anneau (plan X/Z, centre = point d'impact).
-   + tests (mirror `projectCircleFan`).
-3. `Canvas3D.jsx` : le bloc `aimMode === 'point'` boucle sur les anneaux (N meshes, opacité par
-   anneau) au lieu d'un seul `projectCircleFan`. Clé de remontage inchangée.
-4. `radiusM` du profil = borne du dernier anneau ; garder la cohérence avec `GRENADE_FRAG_BANDS[last]`.
+**Fichiers :** `shared/combatRange.js` (+`GRENADE_FRAG_BANDS`/`GRENADE_FRAG_MAX_RADIUS_M`/`resolveGrenadeBand`),
+`shared/combatRange.test.mjs`, `server/.../grenadeFrag.js` (re-export), `server/.../grenadeFrag.test.mjs`,
+`client/src/lib/aoePreviewShape.js` (+`buildGrenadeBlastRings`/`projectRingQuads`/`projectCircleOutline`),
+`client/src/lib/aoePreviewShape.test.mjs`, `client/src/components/Canvas3D.jsx`.
+**Testé :** `node --test` combatRange (12) / aoeMechanisms (24) / aoePreviewShape (21) / `shared/**` (519) ;
+`npm run build` client OK ; eslint 0 nouvelle erreur. **Visuel = Saar** (5 anneaux à la déclaration,
+les 3 plateformes).
 
 ### 10.3 Segment 3d (prochaine grosse étape serveur)
 
