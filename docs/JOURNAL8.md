@@ -5478,7 +5478,7 @@ créé (`new`, suggestion, non cadrée).
 **Retour arrière** : 1 commit `dev/Saar` (`cafb0cd`) pour le correctif + 1 commit pour cette clôture
 documentaire, aucune dépendance de schéma. `git revert` dans l'ordre inverse si besoin.
 
-## Session (Claude) — 2026-09-05 — AOE Segment 2b (tireur drone) + exclusivité 3 plateformes — ⚠️ CLOS PARTIEL (attend session Saar)
+## Session (Claude) — 2026-09-05 — AOE Segment 2b (tireur drone) + exclusivité 3 plateformes — CHANTIER FONCTIONNELLEMENT CLOS
 
 **Contexte** : Segment 2b de `docs/PLANS/PLAN_ARMES_SPECIALES.md` §1.4bis — réplique du patron 2a
 (exo) pour un tireur drone d'arme de zone (lance-flammes, fusil à pompe montés). Plan détaillé +
@@ -5528,14 +5528,19 @@ plateformes ; arme drone/exo normale inchangée.
 drone AOE) ; `eslint` sur les 6 fichiers client — baseline **inchangée** (7 problèmes préexistants,
 diff vide vs `git stash`) ; `npm run build` OK ; `git diff --check` propre.
 
-**Non testé (`⚠️ clos partiel`)** : aucune session réelle contre PostgreSQL (pas de `DATABASE_URL`).
-Reste à valider par Saar — drone joueur **et** drone MJ, lance-flammes **et** fusil à pompe montés :
-« Viser une zone », cibles à paliers, dégâts + feu continu, refus « Action exclusive » si déplacement
-déclaré en même temps. Vérifs à faire en session (plan §1.4bis) : gating effectif des hooks ambiants
-drone pendant la visée, arme drone « maison » (sans catalogue) jamais proposée en zone.
+**Session réelle Saar (2026-09-05)** : combat complet, drone au lance-flammes en zone —
+`resolveAoeAssaultAction … type_perso:drone` atteint (avant C2 il bâillait), cible touchée, Choc
+`pure` appliqué (`applyStunWithDuration … etourdi`), combat terminé proprement (`FIN COMBAT`, zéro
+blocage). Non-régression tireur exo confirmée dans le même combat. Feu continu correctement absent
+(cibles exo/drone — décision D). Exclusivité (C4), dégâts par palier, cas 0 cible : « tout vérifié et
+attendu » (Saar).
+
+**Non testé (automatique uniquement)** : aucun test unitaire DB sur le chemin serveur drone
+(`resolveAoeAssaultAction` non exportée, DB-dépendante — même limite que 2a). Fait foi : la session
+ci-dessus.
 
 **Données** : aucune migration, aucun changement de schéma (`aoe_profile` est une colonne
 `ref_equipment` existante depuis le Segment 1).
 
-**Retour arrière** : 4 commits `dev/Saar` isolés (C1→C4) + docs, non poussés. `git revert` dans
-l'ordre inverse — C4 puis C3 puis C2 puis C1 ; C1 seul est sans risque (refactor pur).
+**Retour arrière** : 4 commits `dev/Saar` isolés (C1→C4) + 1 doc plan + 1 doc clôture. `git revert`
+dans l'ordre inverse — C4 puis C3 puis C2 puis C1 ; C1 seul est sans risque (refactor pur).

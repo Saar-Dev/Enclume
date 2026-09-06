@@ -270,7 +270,14 @@ maintenue manuellement) + `CombatExoActionWindow.jsx` (section « Zone d'effet �
 `e5dbd9e` (UI) · `f9484f3` (fix useAutoMoveMode). Non-régression Tir/CaC exo classique confirmée
 (chemin non-AOE inchangé, `fetchExoWeapon` partagée sans changement de comportement).
 
-#### Segment 2b — AOE tireur drone — PLAN DÉTAILLÉ (2026-09-05, avant code — amendé après analyse à charge)
+#### Segment 2b — AOE tireur drone — CODÉ + VALIDÉ EN SESSION RÉELLE (2026-09-05), CHANTIER FONCTIONNELLEMENT CLOS
+
+> **Clos (2026-09-05)** : C1→C4 commités `dev/Saar` (`022de42`..`2f54eda`), validés en session réelle
+> Saar — drone au lance-flammes en zone, cible touchée + Choc, combat terminé proprement ;
+> non-régression tireur exo confirmée. Exclusivité (C4), dégâts par palier, feu continu (absent car
+> cibles exo/drone, décision D), cas 0 cible : « tout vérifié et attendu ». Détail `JOURNAL8.md`
+> §« AOE Segment 2b ». Le plan détaillé ci-dessous est conservé pour l'historique.
+
 
 > Rédigé après lecture complète des chemins 2a (exo) et drone (déclaration + résolution) + du graphe
 > de dispatch réel. Réplique du patron 2a. Débloque du même coup le **fusil à pompe monté sur drone**
@@ -609,7 +616,7 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 | **Segment 1 — lance-flammes (main)** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`21fb40e`). CHANTIER FONCTIONNELLEMENT CLOS** — détail complet `JOURNAL8.md` §« Lance-flammes (main) ». 4 bugs réels trouvés et corrigés en session (`hasVariant`/`aimActive` non neutralisés en AOE, PC23 armes spéciales, « changement de mode de tir » faux positif arme à mode unique, Choc évalué par Localisation au lieu d'une fois par cible) + Catastrophe ×4 investigué (non-bug, Seuil PNJ bas). |
 | **Segment 1.5 — registre de mécanismes AOE** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`1999ab4`, `9256e01`). CHANTIER FONCTIONNELLEMENT CLOS.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Non-régression fusil à pompe + lance-flammes confirmée par Saar. Détail §1.4bis. |
 | **Segment 2a — AOE tireur exo** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`183177e`..`f9484f3`). CHANTIER FONCTIONNELLEMENT CLOS.** Adaptateur serveur (`fetchAoeShooterWeapon`/`decrementAoeShooterAmmo`) + UI `CombatExoActionWindow`/`useExoDeclare`. 3 bugs réels trouvés en session (colonne `ref_aoe_profile` manquante côté endpoint, libellé bouton codé en dur, `useAutoMoveMode` jamais désarmé pendant la visée — collision avec le clic au sol de l'AOE). Détail §1.4bis. |
-| **Segment 2b — AOE tireur drone** | **Prochain — plan détaillé + analyse à charge faits (2026-09-05, §1.4bis).** 3 commits isolés : C1 refactor `fetchDroneWeapon` (extraction de `resolveDroneAssaultAction`, 0 comportement), C2 serveur AOE drone (branche `fetchAoeShooterWeapon` + endpoint `aoe_profile`), C3 client **2 fenêtres hôtes** (`CombatActionWindow` joueur + `CombatGmDeclareWindow` MJ) + `DroneWeaponPanel` partagé ; C4 câble l'exclusivité d'une Action de zone aux branches drone + exo de l'ANNONCE (aujourd'hui humanoïde-only — autorité pure déjà agnostique, seul l'enforcement manquait). Dispatch résolution vérifié (interception `socketCombatResolution.js:403`). Débloque aussi le fusil à pompe monté sur drone. |
+| **Segment 2b — AOE tireur drone** | **Codé + VALIDÉ en session réelle (2026-09-05), poussé `dev/Saar` (`022de42`..`2f54eda`). CHANTIER FONCTIONNELLEMENT CLOS.** 4 commits isolés : C1 refactor `fetchDroneWeapon` (0 comportement), C2 serveur AOE drone (branche `fetchAoeShooterWeapon` + endpoint `aoe_profile`), C3 client 2 fenêtres hôtes + `DroneWeaponPanel` partagé, C4 exclusivité d'une Action de zone hoistée aux 3 plateformes de l'ANNONCE (drone/exo/humanoïde — autorité pure déjà agnostique, seul l'enforcement manquait). Débloque aussi le fusil à pompe monté sur drone. Détail §1.4bis + `JOURNAL8.md`. |
 | Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |

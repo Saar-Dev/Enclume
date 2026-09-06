@@ -27,11 +27,13 @@
 > omis une première fois de la discussion de séquence — analyse à charge du 2026-08-26). Détail des
 > dépendances réelles vs priorités : `docs/SYSTEME/COUVERTURE_RAW.md` (section "Ordre").
 >
-> **Avancement au 2026-09-03** : **AOE fusil à pompe** clos — tireur PNJ **et PJ** (validé session
-> réelle) ; **Portes** clos ; **Exo Étape A/B** clos (2026-08-27/30). Suite de la séquence :
-> Usure/Intégrité + Informatique/pannes exo, puis Drones. **En parallèle, choix de Saar (2026-09-03)** :
-> **lance-flammes** (armes spéciales, le moins bloqué). Grenades et tir de suppression restent bloqués
-> (RAW manquant / chantier Chance). Voir §2, lignes AOE et Armes spéciales.
+> **Avancement au 2026-09-05** : **AOE fusil à pompe** clos (PNJ + PJ) ; **Portes** clos ; **Exo
+> Étape A/B** clos. **Armes spéciales — lance-flammes clos** (PJ/PNJ/exo/drone), socle AOE
+> data-driven + registre de mécanismes en place (Segments 0-1.5), **tireur exo (2a) et tireur drone
+> (2b) clos** — l'exclusivité d'une Action de zone est désormais câblée aux 3 plateformes. Reste
+> bloqué : **grenades** (catalogue + `intendedOrigin` + 2 pages RAW) et **tir de suppression**
+> (chantier Chance + zone persistante). Suite de la séquence principale : Usure/Intégrité +
+> Informatique/pannes exo, puis Drones. Voir §2, lignes AOE et Armes spéciales.
 >
 > **Correction (2026-08-25, analyse à charge, historique)** : l'ordre de séquencement proposé plus bas
 > (Usure/Intégrité → AOE → Armes spéciales → ...) avait été retiré une première fois — construit par
