@@ -381,21 +381,44 @@ Grenade à fragmentation déclarable + visée d'un point + aperçu disque ; rés
 implémenté (Segment 3d) ». Migration 325 appliquée (nodemon). Testé en session Saar (déclaration OK
 après le fix `fdd613c`).
 
-### 10.1 Fix `ref_fire_mode || isAoeWeapon` — patch sûr mais symptôme (À REWORK)
+### 10.1 Fix `ref_fire_mode || isAoeWeapon` — SOUND (analyse critique 2026-09-06, mon 1ᵉʳ jet était FAUX)
 
-Commit `fdd613c` : la liste des armes de **Tir** (`CombatActionWindow` L366, `CombatGmDeclareWindow`
-L~393 + `pickedGmRanged` L~338) filtrait sur `ref_fire_mode`. La grenade `grenade_frag` = 1ʳᵉ arme
-AOE sans `fire_mode` → jamais listée. Patch = `|| isAoeWeapon(...)` : **purement additif** (seul
-nouvel item surfacé = la grenade ; Klauss/lance-flammes passaient déjà par `fire_mode`), **zéro
-régression**.
+Commit `fdd613c` : la liste des armes de **Tir** (`CombatActionWindow.jsx:368`, `CombatGmDeclareWindow.jsx:395`
++ garde `pickedGmRanged:338`) filtrait sur `ref_fire_mode`. La grenade `grenade_frag` = 1ʳᵉ arme AOE
+sans `fire_mode` → jamais listée. Patch = `|| isAoeWeapon(...)`.
 
-**MAIS** : le discriminant `fire_mode` pour « arme de Tir » **contredit `combat.md`** (« le type
-d'une arme vient de `category === 'Arme de contact'`, jamais de `fire_mode` »). **Fix robuste** =
-filtrer `w.ref_category !== 'Arme de contact'` (miroir du filtre `meleeWeapons`), `resolveHandWeapons`/
-`isWeaponItem` gardant déjà « est-ce une arme ». Risque : surface d'autres armes sans `fire_mode`
-(arcs `Armes de trait`, `Armes de jet`, énergie…) qui **devraient** être sélectionnables au Tir de
-toute façon. → **Sa propre session** (change la liste d'armes pour tous les persos), pas fait ici
-faute de contexte.
+**Mon 1ᵉʳ diagnostic (« contredit `combat.md`, fix robuste = `!== 'Arme de contact'` ») était erroné.**
+Il confondait deux questions distinctes :
+- **classifier** une arme déjà jouable : Tir vs CaC → `category === 'Arme de contact'` (`combat.md`,
+  correct partout : `socketCombatHelpers.js:2575`, `socketCombatExo.js:301`, `useExoDeclare/useDroneDeclare`).
+- **admettre** une arme dans la liste des candidates à une déclaration d'attaque → test de **capacité**
+  (un chemin de résolution existe-t-il pour cette arme ?). C'est ce que fait la liste humanoïde.
+
+Audit catalogue (`scratchpad/weapons_audit.js`, DB locale) — le fix `!== 'Arme de contact'` **régresserait** :
+il verserait **35 lignes** dans le panneau Tir humanoïde, dont ~20 **sans chemin de résolution** —
+15 `Armes de jet` (javelot, haches, disques… mécanique de jet jamais câblée), 7 grenades + 4 capsules
+**non encore migrées** (pas d'`aoe_profile` → `isAoeWeapon` faux → traitées comme arme à feu sans mode
+→ `fire_mode || 'cc'` → cassé), 6 `Torpilles et missiles` Taille 1-3, 2 `Systèmes défensifs`
+(non tenus en main). Vérifié : **0** arme de contact avec `fire_mode` ; **100 %** des catégories à
+résolution « arme à feu » standard (épaule, poing, lourde, trait, énergie, supercav, sous-marine,
+lanceur) ont un `fire_mode`.
+
+⟹ **`fire_mode IS NOT NULL` est un proxy fidèle de « chemin de résolution arme à feu standard »**, pas
+un accident. Et `isAoeWeapon(aoe_profile)` = « mécanisme AOE câblé », **data-gated** : une nouvelle
+grenade (concussion…) apparaît automatiquement dès que sa migration pose l'`aoe_profile`, sans toucher
+au code (pattern `combatAoe.js`, inspiré Foundry dnd5e). Les deux clauses sont des **tests de capacité
+pilotés par la donnée** — c'est déjà le bon modèle. **Le patch reste tel quel.**
+
+**Seule aggradation retenue (petite, risque nul)** : extraire le prédicat `w.ref_fire_mode ||
+isAoeWeapon(w.ref_aoe_profile)` (dupliqué 3×) en une fonction nommée partagée — p.ex.
+`weaponHasRangedAttackPath(item)` dans `shared/combatAoe.js` (accepte `ref_*` et `*` nus). Rend
+l'intention lisible (« a un chemin de résolution à distance », pas « a un fire_mode »), DRY, testable.
+**Zéro changement de comportement.** 3 sites : `CombatActionWindow.jsx:368`, `CombatGmDeclareWindow.jsx:338`
+et `:395`.
+
+**Dette réelle séparée, PAS pour ce chantier** : les **15 `Armes de jet`** (armes de lancer physiques)
+n'ont aucun chemin de combat — futur chantier dédié type « moteur de jet » (comme les grenades ont eu
+le leur), pas un ride-along. Noté ici pour ne pas reperdre l'info.
 
 ### 10.2 Aperçu multi-anneaux — dégression visible (demandé Saar, à faire — « 3c/2b-6 »)
 

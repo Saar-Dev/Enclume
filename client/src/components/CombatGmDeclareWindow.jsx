@@ -12,7 +12,7 @@ import {
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { parseFireModes } from '../../../shared/fireModes.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
-import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -335,7 +335,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const resolvedGmPrimary = gmEq?.weapon ?? null
   // D5 : la liste d'armes peut fixer explicitement l'arme de tir (assaultDecl.weaponId) ; sinon primaire.
   const pickedGmRanged = assaultDecl.state.weaponId
-    ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && (w.ref_fire_mode || isAoeWeapon(w.ref_aoe_profile)))
+    ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && weaponHasRangedAttackPath(w))
     : null
   const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
   // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6 segment 0b) — l'AOE-ness est une donnée catalogue
@@ -390,9 +390,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Liste d'armes groupée (module 4, D5) — CombatDeclareActionList ────────
   const weaponGroups = buildWeaponList({
-    // Tir = arme à feu (ref_fire_mode) OU arme de zone sans mode de tir (grenade `grenade_frag` —
-    // PLAN_GRENADES.md §6 3c : 1er cas d'arme AOE sans fire_mode). Mirror CombatActionWindow.jsx.
-    rangedWeapons: gmHandWeapons.filter(w => w.ref_fire_mode || isAoeWeapon(w.ref_aoe_profile)),
+    // Tir = a un chemin de résolution à distance (`weaponHasRangedAttackPath` : arme à feu OU
+    // mécanisme de zone câblé — PLAN_GRENADES.md §10.1). Mirror CombatActionWindow.jsx.
+    rangedWeapons: gmHandWeapons.filter(weaponHasRangedAttackPath),
     meleeWeapons:  gmHandWeapons.filter(w => w.ref_category === 'Arme de contact'),
     naturalWeapons: naturalWeaponsAvailable.map(m => ({
       id: m.id, name: m.name,

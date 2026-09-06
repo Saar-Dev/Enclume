@@ -18,7 +18,7 @@ import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '..
 import { parseFireModes } from '../../../shared/fireModes.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
-import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
@@ -361,11 +361,10 @@ export default function CombatActionWindow({
       if (cancelled) return
       const items = res.data.items || []
       // shared/weaponSlots.js — inclut le deux-mains (2M), pas seulement MG/MD (Session 158, Loulou/
-      // Breather non détecté). Armes de « Tir » = arme à feu (ref_fire_mode) OU arme de zone sans mode
-      // de tir (grenade `grenade_frag` — PLAN_GRENADES.md §6 3c : premier cas d'arme AOE sans
-      // fire_mode ; le fusil à pompe et le lance-flammes en ont un). Le panneau CaC a son propre
-      // filtre pour les armes de contact.
-      setAssaultWeapons(flattenItemsBySlot(items).filter(item => item.ref_fire_mode || isAoeWeapon(item.ref_aoe_profile)))
+      // Breather non détecté). Armes de « Tir » = a un chemin de résolution à distance
+      // (`weaponHasRangedAttackPath` : arme à feu OU mécanisme de zone câblé — PLAN_GRENADES.md §10.1).
+      // Le panneau CaC a son propre filtre pour les armes de contact.
+      setAssaultWeapons(flattenItemsBySlot(items).filter(weaponHasRangedAttackPath))
       setAllInventoryItems(items)
     }).catch(() => {})
     return () => { cancelled = true }

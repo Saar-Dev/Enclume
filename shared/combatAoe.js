@@ -64,3 +64,23 @@ export function isAoeWeapon(raw) {
 export function getAoeMechanic(raw) {
   return getAoeProfile(raw)?.mechanic ?? null
 }
+
+// weaponHasRangedAttackPath — « cette arme peut-elle être déclarée comme une attaque à distance,
+// et un chemin de résolution existe-t-il ? ». Gate de la liste des armes de « Tir » dans les fenêtres
+// de déclaration humanoïdes (`CombatActionWindow`, `CombatGmDeclareWindow`). NE classe PAS Tir/CaC —
+// ça, c'est `category === 'Arme de contact'` (`.claude/rules/combat.md`) : ici on ADMET une candidate,
+// on ne la classe pas. Deux capacités, toutes deux pilotées par la donnée :
+//   1. `fire_mode` non nul  → résolution « arme à feu » standard (portée par palier, munitions, modes
+//      de tir). Proxy fidèle vérifié catalogue : 100 % des catégories à résolution arme à feu en ont
+//      un, 0 arme de contact n'en a.
+//   2. `aoe_profile` valide → mécanisme de zone câblé (`isAoeWeapon`, membre de fait d'`AOE_MECHANICS`
+//      via la migration qui pose le profil — ex. grenade à fragmentation).
+// Une arme sans ni l'un ni l'autre (Armes de jet, grenades non encore migrées) n'a pas de chemin :
+// hors liste tant que son moteur n'existe pas. Accepte les deux conventions de nommage de champ
+// (`ref_fire_mode`/`fire_mode`, `ref_aoe_profile`/`aoe_profile`) — items d'inventaire vs lignes
+// `ref_equipment` nues.
+export function weaponHasRangedAttackPath(item) {
+  if (!item) return false
+  return Boolean(item.ref_fire_mode ?? item.fire_mode)
+      || isAoeWeapon(item.ref_aoe_profile ?? item.aoe_profile)
+}
