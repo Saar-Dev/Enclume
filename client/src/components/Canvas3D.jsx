@@ -22,7 +22,7 @@ import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPr
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
-import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles } from '../lib/aoePreviewShape.js'
+import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles, buildCircleSpan, projectCircleFan } from '../lib/aoePreviewShape.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -557,8 +557,17 @@ function Scene({
   // handlePointerMove) jusqu'à "Changer" (qui repasse pendingDirectionDeg à null côté fenêtre).
   const [aoePreviewDeg, setAoePreviewDeg] = useState(null)
   const aoePreviewDegRef = useRef(null)
+  // Visée « point » (grenade, `aimMode === 'point'`, PLAN_GRENADES.md §6 3c) : le survol fige un
+  // POINT au sol `{x,y,z}` (coordonnées monde = Three.js, PE14) au lieu d'un cap. Même cycle de vie
+  // que `aoePreviewDeg` — alimenté par useFrame tant qu'aucun clic n'a posé `pendingPoint`, remis à
+  // null à la fermeture du mode.
+  const [aoePreviewPoint, setAoePreviewPoint] = useState(null)
+  const aoePreviewPointRef = useRef(null)
   useEffect(() => {
-    if (!combatAoeTargetMode) { aoePreviewDegRef.current = null; setAoePreviewDeg(null) }
+    if (!combatAoeTargetMode) {
+      aoePreviewDegRef.current = null; setAoePreviewDeg(null)
+      aoePreviewPointRef.current = null; setAoePreviewPoint(null)
+    }
   }, [combatAoeTargetMode])
   // Garde-fou armement : au clic sur "Viser une zone"/"Changer" (bouton du panneau, donc hors du
   // canvas), state.raycaster de R3F n'a pas encore reçu de nouveau pointermove — il reste positionné
@@ -715,7 +724,8 @@ function Scene({
   useFrame((state) => {
     const mode = combatAoeTargetModeRef.current
     if (!mode) return
-    if (mode.pendingDirectionDeg != null) return
+    const isPoint = mode.aimMode === 'point'
+    if (isPoint ? mode.pendingPoint != null : mode.pendingDirectionDeg != null) return
     // Rien à afficher tant qu'aucun pointermove réel n'a eu lieu sur le canvas depuis cet armement —
     // state.raycaster peut encore refléter un survol bien antérieur (cf. aoeArmedMovedRef ci-dessus).
     if (!aoeArmedMovedRef.current) return
@@ -725,6 +735,19 @@ function Scene({
       destination = state.raycaster.ray.intersectPlane(groundPlane, groundHit) ? groundHit : null
     }
     if (!destination) return
+
+    if (isPoint) {
+      // Grenade : on fige le POINT survolé (coordonnées monde = Three.js, PE14). Aucun garde
+      // « viser soi-même » — le lanceur peut vouloir que la grenade retombe sur lui (PLAN_AOE §5.5).
+      const prev = aoePreviewPointRef.current
+      // Garde-fou perf : pas de re-render à ~60 im/s si la souris est quasi immobile (< 5 cm).
+      if (prev && Math.hypot(destination.x - prev.x, destination.z - prev.z) < 0.05) return
+      const point = { x: destination.x, y: destination.y, z: destination.z }
+      aoePreviewPointRef.current = point
+      setAoePreviewPoint(point)
+      return
+    }
+
     const shooter = tokensRef.current.find(t => t.id === mode.tokenId)
     if (!shooter) return
     const dx = destination.x - shooter.pos_x
@@ -1011,8 +1034,11 @@ function Scene({
     // fenêtre décident ensuite (retour Saar 2026-09-02). Un clic alors qu'une direction est déjà figée,
     // ou sans survol valide depuis l'armement, ne fait rien.
     if (combatAoeTargetModeRef.current) {
-      if (combatAoeTargetModeRef.current.pendingDirectionDeg == null && aoePreviewDegRef.current != null) {
-        combatAoeTargetModeRef.current.onPendingDirection(aoePreviewDegRef.current)
+      const m = combatAoeTargetModeRef.current
+      if (m.aimMode === 'point') {
+        if (m.pendingPoint == null && aoePreviewPointRef.current != null) m.onPendingPoint(aoePreviewPointRef.current)
+      } else if (m.pendingDirectionDeg == null && aoePreviewDegRef.current != null) {
+        m.onPendingDirection(aoePreviewDegRef.current)
       }
       return
     }
@@ -1416,15 +1442,38 @@ function Scene({
         )
       })()}
 
-      {/* ── Aperçu zone d'effet (PLAN_AOE.md §8 étape 9 ; PLAN_ARMES_SPECIALES.md §1.4) ─────── */}
-      {/* Deux formes selon `weaponAoeProfile.shape` — même géométrie que le serveur teste          */}
-      {/* (shared/world/aoeShapes.js), l'aperçu montre ce que la résolution va tester, pas une      */}
-      {/* approximation séparée :                                                                   */}
-      {/*  - 'ray' (fusil à pompe) : rectangles empilés, un par palier RAW (bout_portant exclu),    */}
-      {/*    jamais un dégradé continu — la RAW est un palier discret (aoePreviewShape.js) ;         */}
-      {/*  - 'cone' (lance-flammes) : secteur angulaire (angle fixe, rayon = portée extrême),       */}
-      {/*    tessellé en éventail de triangles.                                                     */}
-      {combatAoeTargetMode && (() => {
+      {/* ── Aperçu zone d'effet (PLAN_AOE.md §8 étape 9 ; PLAN_ARMES_SPECIALES.md §1.4 ;             */}
+      {/*    PLAN_GRENADES.md §6 3c) — même géométrie que le serveur teste (shared/world/aoeShapes.js) */}
+      {/*  - 'ray' (fusil à pompe) : rectangles empilés, un par palier RAW, centrés sur le tireur ;   */}
+      {/*  - 'cone' (lance-flammes) : secteur angulaire, centré sur le tireur ;                       */}
+      {/*  - 'circle' (grenade) : disque centré sur le POINT D'IMPACT visé, pas sur le tireur.        */}
+      {combatAoeTargetMode?.aimMode === 'point' && (() => {
+        // Point figé (clic, Valider/Changer en attente) prioritaire sur le survol en cours.
+        const displayPoint = combatAoeTargetMode.pendingPoint ?? aoePreviewPoint
+        if (displayPoint == null) return null
+        const radiusM = combatAoeTargetMode.weaponAoeProfile?.radiusM
+        const span = buildCircleSpan(radiusM)
+        if (!span) return null
+        const y = displayPoint.y + 0.06
+        // Clé de remontage (précision 5 cm) — même raison qu'en mode direction : réaffecter la prop
+        // `array` d'un <bufferAttribute> monté ne pose jamais `.needsUpdate` (vérifié dans le code
+        // @react-three/fiber installé), il faut un remontage complet à chaque déplacement réel.
+        const ptKey = `${Math.round(displayPoint.x * 20)}_${Math.round(displayPoint.z * 20)}`
+        const faces = projectCircleFan(span, { x: displayPoint.x, z: displayPoint.z }).map((tri, i) => {
+          const [a, b, c] = tri.corners
+          return { key: `aoe-circle-${i}-${ptKey}`, positions: new Float32Array([a.x, y, a.z, b.x, y, b.z, c.x, y, c.z]) }
+        })
+        return faces.map(face => (
+          <mesh key={face.key}>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" count={face.positions.length / 3} array={face.positions} itemSize={3} />
+            </bufferGeometry>
+            <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+        ))
+      })()}
+
+      {combatAoeTargetMode && combatAoeTargetMode.aimMode !== 'point' && (() => {
         // Direction figée (clic, Valider/Changer en attente) prioritaire sur le survol en cours —
         // une fois `pendingDirectionDeg` posé, handlePointerMove n'écrit plus dans aoePreviewDeg (cf.
         // bannière plus haut), donc les deux ne peuvent pas diverger, mais figée reste la source de
@@ -1582,11 +1631,14 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-// combatAoeTargetMode : { tokenId, weaponRange, pendingDirectionDeg, onDirectionSelected,
-//   onPendingDirection, onCancel } | null — visée zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) ;
-//   même patron que combatTargetMode/pendingTargetId (survol continu → clic fige un candidat →
-//   Valider/Changer dans la fenêtre), pas un clic-glisser-relâcher (essayé puis abandonné, retour
-//   Saar 2026-09-02)
+// combatAoeTargetMode : { tokenId, weaponRange, weaponAoeProfile, armSeq, aimMode, onCancel, ... } | null
+//   — visée zone d'effet (PLAN_AOE.md §8 étape 9 ; PLAN_GRENADES.md §6 3c). Survol continu → clic fige
+//   → Valider/Changer dans le panneau (CombatOverlay), pas un clic-glisser-relâcher (abandonné, Saar
+//   2026-09-02). Deux formes selon `aimMode` :
+//   - 'direction' (fusil à pompe, lance-flammes) : + pendingDirectionDeg / onDirectionSelected /
+//     onPendingDirection — un cap ; origine = position du tireur.
+//   - 'point' (grenade) : + pendingPoint {x,y,z} / onPointSelected / onPendingPoint — le point
+//     d'impact au sol ; l'aperçu (disque) est centré dessus, pas sur le tireur.
 export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
