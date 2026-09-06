@@ -70,8 +70,8 @@ export function resolveGrenadeBand(distanceM) {
 // PLAN_AOE.md §5.5, « pas d'exclusion silencieuse du lanceur ». Contrairement au cône du lance-flammes
 // (origine = position du tireur, toujours dedans), ici l'origine est le point d'impact : le lanceur
 // n'est un candidat que si le souffle l'atteint géométriquement.
-export function filterGrenadeFragHitTargets({ visibilityTargets, origin, metrics }) {
-  const circle = normalizeAoeShape({ shape: 'circle', origin, amplitudeM: GRENADE_FRAG_MAX_RADIUS_M })
+export function filterGrenadeFragHitTargets({ visibilityTargets, origin, amplitudeM = GRENADE_FRAG_MAX_RADIUS_M, metrics }) {
+  const circle = normalizeAoeShape({ shape: 'circle', origin, amplitudeM })
   const hitTargets = []
   for (const candidate of visibilityTargets) {
     if (!candidate.hasLineOfSight) continue
@@ -84,6 +84,15 @@ export function filterGrenadeFragHitTargets({ visibilityTargets, origin, metrics
 
 // ─── Hooks du registre ────────────────────────────────────────────────────────────────────────────
 
+// Rayon d'effet = `aoe_profile.radiusM` de l'arme (donnée catalogue, autorité unique — comme
+// `angleDeg` pour le cône du lance-flammes ; l'aperçu client lit la même valeur). Repli
+// `GRENADE_FRAG_MAX_RADIUS_M` pour les fixtures / une ligne catalogue sans `radiusM` (jamais en prod
+// une fois la migration passée). Pour `grenade_frag`, `radiusM` doit valoir la borne du dernier
+// palier de dégression (`GRENADE_FRAG_BANDS`) — au-delà, RAW « rien n'est affecté ».
+function aoeRadiusM(ctx) {
+  return ctx.weapon?.ref_aoe_profile?.radiusM ?? GRENADE_FRAG_MAX_RADIUS_M
+}
+
 // Cercle centré sur le POINT D'IMPACT déjà résolu (`ctx.aoe.resolvedOrigin` — posé par l'orchestrateur
 // en 3d, après le Test de Coordination et l'éventuelle dispersion ; en fixtures, fourni directement).
 // `resolveScatter` N'EST PAS appelé ici : il a besoin de la marge du Test, domaine combat, pas
@@ -93,7 +102,7 @@ function buildShape(ctx) {
   return normalizeAoeShape({
     shape: 'circle',
     origin: ctx.aoe.resolvedOrigin,
-    amplitudeM: GRENADE_FRAG_MAX_RADIUS_M,
+    amplitudeM: aoeRadiusM(ctx),
   })
 }
 
@@ -101,6 +110,7 @@ function filterTargets(ctx, visibilityTargets) {
   return filterGrenadeFragHitTargets({
     visibilityTargets,
     origin: ctx.aoeShape.origin,
+    amplitudeM: ctx.aoeShape.amplitudeM, // = aoeRadiusM(ctx), figé par buildShape — une seule source
     metrics: ctx.metrics,
   })
 }

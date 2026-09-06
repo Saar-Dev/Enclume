@@ -424,6 +424,20 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
 
+    // Visée d'un POINT (grenade — `aoe.intendedOrigin`) sans point d'impact résolu : le LANCER
+    // (Test de Coordination + dispersion 1D6 sur échec → `aoe.resolvedOrigin`, puis explosion
+    // différée au Tour suivant) est le Segment 3d de PLAN_GRENADES.md, pas encore câblé. Message
+    // clair plutôt qu'un « profil de zone invalide » cryptique quand `buildShape` lèverait sur
+    // `resolvedOrigin` absent. Mécanisme-agnostique : tout futur mécanisme à point aura le même
+    // garde jusqu'à ce que sa résolution de lancer existe.
+    if (aoe.intendedOrigin && !aoe.resolvedOrigin) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Lancer de grenade — résolution pas encore implémentée (PLAN_GRENADES.md Segment 3d).',
+      } })
+      return { suspend: false, emissions }
+    }
+
     // Arme normalisée quel que soit le type de tireur (pj/pnj/exo — drone : Segment 2b, pas encore
     // câblé) — fetchAoeShooterWeapon ci-dessus, jamais action.weapon_inv_id lu en dur ici : ce champ
     // n'existe que pour un tireur humanoïde (exo/drone portent exo_weapon_inv_id/drone_weapon_inv_id).

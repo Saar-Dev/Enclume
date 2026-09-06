@@ -106,11 +106,31 @@ test('grenadeFragMechanism — les 6 hooks sont des fonctions + losSource origin
   assert.equal(grenadeFragMechanism.losSource, 'origin')
 })
 
-test('grenadeFragMechanism.buildShape — cercle centré sur ctx.aoe.resolvedOrigin, rayon = max', () => {
-  const shape = grenadeFragMechanism.buildShape({ aoe: { resolvedOrigin: { x: 3, y: 0, z: 4 } } })
-  assert.equal(shape.shape, 'circle')
-  assert.deepEqual(shape.origin, { x: 3, y: 0, z: 4 })
-  assert.equal(shape.amplitudeM, GRENADE_FRAG_MAX_RADIUS_M)
+test('grenadeFragMechanism.buildShape — cercle centré sur ctx.aoe.resolvedOrigin ; rayon depuis aoe_profile.radiusM', () => {
+  // Sans arme (fixture) → repli GRENADE_FRAG_MAX_RADIUS_M
+  const s1 = grenadeFragMechanism.buildShape({ aoe: { resolvedOrigin: { x: 3, y: 0, z: 4 } } })
+  assert.equal(s1.shape, 'circle')
+  assert.deepEqual(s1.origin, { x: 3, y: 0, z: 4 })
+  assert.equal(s1.amplitudeM, GRENADE_FRAG_MAX_RADIUS_M)
+  // Avec aoe_profile.radiusM → c'est lui l'autorité (catalogue), pas la constante
+  const s2 = grenadeFragMechanism.buildShape({
+    aoe: { resolvedOrigin: { x: 0, y: 0, z: 0 } },
+    weapon: { ref_aoe_profile: { shape: 'circle', mechanic: 'grenade_frag', radiusM: 15 } },
+  })
+  assert.equal(s2.amplitudeM, 15)
+})
+
+test('grenadeFragMechanism.filterTargets — rayon = celui de ctx.aoeShape (figé par buildShape, une seule source)', () => {
+  // aoeShape à rayon 8 → une cible à 10 m est HORS zone même si GRENADE_FRAG_MAX_RADIUS_M vaut 15
+  const ctx = {
+    aoeShape: normalizeAoeShape({ shape: 'circle', origin: ORIGIN, amplitudeM: 8 }),
+    metrics: M,
+  }
+  const out = grenadeFragMechanism.filterTargets(ctx, [
+    cand({ tokenId: 'in', position: { x: 6, y: 0, z: 0 }, distanceToOriginM: 6 }),
+    cand({ tokenId: 'out', position: { x: 10, y: 0, z: 0 }, distanceToOriginM: 10 }),
+  ])
+  assert.deepEqual(out.map(t => t.tokenId), ['in'])
 })
 
 test('grenadeFragMechanism.buildShape — sans resolvedOrigin → lève (l\'orchestrateur doit toujours le poser)', () => {
