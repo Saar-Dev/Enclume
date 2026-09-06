@@ -113,12 +113,14 @@
 - Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié en cadrant Battlemap 2D
 - Eau structurelle authorée (lacs, sas/calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur (`WorldSnapshot`), pas une reconstruction géométrique client. Différé (Saar, 2026-07-29 : "peut largement attendre")
 - Mutations & Avantages, narratif/économie (`docs/Old/PLAN_MUTATION2.md` Lot 7) — priorité basse
-- **Mécanique de point de Chance** (décision Saar, 2026-08-26, cadrage `PLANS/PLAN_AOE.md` §5.2) —
-  ressource RAW transversale (relancer un jet, réduire la gravité d'une Blessure ou de Dommages
-  d'armure, forcer un Test de Chance) : bouton PJ "Utiliser sa Chance" à ajouter à plusieurs endroits.
-  Pas complexe en soi mais transversal — non urgent, aucun PLAN écrit. Tant que ce chantier n'est pas
-  fait, l'AOE (et tout Test de Chance en général) se résout sans option de dépense côté serveur, écart
-  RAW assumé
+- **Mécanique de point de Chance** — **cadrage écrit : `PLANS/PLAN_CHANCE.md` (2026-09-05)**.
+  Ressource RAW transversale (relancer un jet, réduire la gravité d'une Blessure ou de Dommages
+  d'armure, forcer un Test de Chance) : bouton PJ « Utiliser sa Chance » transversal. **Le score
+  existe déjà** (`char_sheet.chc`, déjà consommé par le Test de Chance du Petit bouclier) — ce qui
+  manque = la réserve dépensable + la primitive partagée + le geste de dépense + l'UI. **Bloqué en
+  amont** : le cœur des règles (« chapitre système de jeu — Chance ») n'est pas transcrit, pages
+  Livre de Base à fournir par Saar. Débloque le tir de suppression + lève l'écart RAW du Test de
+  Chance AOE longue/extrême portée.
 
 ## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
 

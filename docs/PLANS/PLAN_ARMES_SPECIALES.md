@@ -577,8 +577,9 @@ après le Lot 2 grenades.
 
 ## 3. Hors scope (tous lots)
 
-- Test de Chance (grenades longue/extrême portée, comme le fusil à pompe) — aucune colonne Chance dans
-  le schéma, chantier Chance différé (`ROADMAP.md` §4, `PLAN_AOE.md` §5.2).
+- Test de Chance (grenades longue/extrême portée, comme le fusil à pompe) — chantier Chance
+  (`docs/PLANS/PLAN_CHANCE.md`). **Correction 2026-09-05** : le score de Chance existe bien
+  (`char_sheet.chc`) ; ce qui manque = la réserve dépensable + la primitive + le geste de dépense.
 - Nuages volumétriques / persistance de zone inter-tours (fumigène, gaz, et le « tir de suppression »
   de l'AOE) — même blocage, même report.
 - Pénétration / bonus de protection +3 pare-balles du fusil à pompe (déjà noté hors scope AOE §12).

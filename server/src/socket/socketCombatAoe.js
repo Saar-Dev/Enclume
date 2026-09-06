@@ -385,12 +385,13 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
 // 1. "même sur un échec au Test de tir, les cibles peuvent être touchées" — AUCUNE branche "raté" ici,
 //    contrairement à un Tir normal : le jet unique (Phase A) ne fait que moduler `mr`, jamais un
 //    hit/miss de toute l'action. Cohérent avec le commentaire déjà écrit en tête de resolveAoeAttackRoll.
-// 2. Aucune colonne "Chance" n'existe nulle part dans le schéma (vérifié : grep sur toutes les
-//    migrations, zéro résultat char_sheet). Le "Test de Chance" RAW à longue/extrême portée (évite
-//    complètement d'être touché) n'est donc PAS auto-résolu par un faux jet inventé — la décision v4
-//    (§5.2, "le serveur résout automatiquement") est affinée ici : en l'absence de tout score de Chance
-//    modélisé, "automatique" veut dire "ignoré pour cette tranche", pas un jet fabriqué sans seuil réel.
-//    Écart RAW explicite et documenté (CLAUDE.md §1.9), lié au chantier Chance déjà différé (ROADMAP §4).
+// 2. Le "Test de Chance" RAW à longue/extrême portée (la cible évite complètement d'être touchée)
+//    n'est PAS câblé dans cette tranche AOE — écart RAW explicite (CLAUDE.md §1.9), lié au chantier
+//    Chance (docs/PLANS/PLAN_CHANCE.md). CORRECTION (2026-09-05) : contrairement à ce que ce
+//    commentaire affirmait, le score de Chance EXISTE (`char_sheet.chc`, migration 22, déjà consommé
+//    par le Test de Chance du Petit bouclier, damageService.js). Ce qui manque = la réserve
+//    dépensable + la primitive `resolveChanceTest` partagée + le geste de dépense (PLAN_CHANCE.md §3).
+//    Le wiring AOE (retirer la cible de `resolveTargets` sur réussite du Test) est l'étape 6 de ce plan.
 // 3. Bonus de protection +3 (gilet pare-balles/couverture légère, spécifique à la dispersion de plombs)
 //    et blocage par une cible interposée ("derrière une cible exposée") : non modélisés, gap RAW connu,
 //    hors scope de cette tranche (nuance d'armure/occlusion par un combattant, pas une question d'AOE).

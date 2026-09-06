@@ -473,15 +473,19 @@ dépense — écart RAW explicite et documenté (CLAUDE.md §1.9), à lever quan
 construit pour lui-même. Ce n'est plus une simplification "en attente d'arbitrage", c'est la décision
 actée.
 
-**Affiné v8, en codant l'étape 8** : "résout automatiquement" présupposait un score de Chance déjà
-modélisé quelque part. Vérifié en codant — **aucune colonne "Chance" n'existe dans le schéma**
-(`char_sheet` ou ailleurs, grep sur toutes les migrations, zéro résultat). Sans seuil réel à tester, un
-"jet automatique" serait un jet fabriqué contre un nombre inventé — exactement le genre de correctif
-non instrumenté que CLAUDE.md §6 interdit. La décision reste la même dans son intention (pas de Test de
-Chance fonctionnel en v1) mais sa mise en œuvre concrète est : **le Test de Chance RAW à longue/extrême
-portée est ignoré**, les cibles à ces paliers subissent le dégât réduit (-2D10/-3D10) sans aucune
-chance d'éviter complètement le tir — écart RAW explicite, à lever avec le chantier Chance
-(`docs/ROADMAP.md` §4).
+**Affiné v8, en codant l'étape 8** : décision retenue — **le Test de Chance RAW à longue/extrême
+portée est ignoré** dans cette tranche AOE, les cibles à ces paliers subissent le dégât réduit
+(-2D10/-3D10) sans aucune chance d'éviter complètement le tir — écart RAW explicite, à lever avec le
+chantier Chance (`docs/PLANS/PLAN_CHANCE.md`).
+
+> **⚠️ Correction 2026-09-05** — les phrases « aucune colonne "Chance" n'existe dans le schéma, grep
+> zéro résultat » (ici et dans plusieurs autres docs/commentaires) étaient **fausses** : le grep
+> cherchait `chance`, la colonne s'appelle **`char_sheet.chc`** (score sur 20, default 11, migration
+> `22_char_sheet.js`), déjà consommée par le Test de Chance du Petit bouclier
+> (`damageService.js:404`). Ce qui manque réellement pour l'AOE = la réserve dépensable + une
+> primitive `resolveChanceTest` partagée + le geste de dépense. Détail : `docs/PLANS/PLAN_CHANCE.md`.
+> Cas d'école `feedback_no_laundering_inherited_claims` — une conclusion négative tirée d'un grep
+> mal formulé, recopiée telle quelle dans 4 documents.
 
 ### 5.3 Correction MJ après résolution — recadré v4, plus simple que prévu
 
