@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   parseWeaponRangeBands, resolveWeaponRangeBand, resolveMeleeReachM,
   resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND,
+  GRENADE_FRAG_BANDS, GRENADE_FRAG_MAX_RADIUS_M, resolveGrenadeBand,
 } from './combatRange.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js,
@@ -69,3 +70,44 @@ test('SHOTGUN_SPREAD_BY_BAND — une entrée par palier RAW, aucun trou', () => 
 
 // isShotgunSpreadWeapon retiré (segment 0b) — l'identification AOE est dans shared/combatAoe.js
 // (donnée `ref_equipment.aoe_profile`), testée dans shared/combatAoe.test.mjs.
+
+// ─── Grenade à fragmentation — dégression par rayon (mécanisme grenade_frag, PLAN_GRENADES.md §10.2) ─
+// Table déplacée ici depuis grenadeFrag.js (serveur) : l'aperçu client en a besoin aussi.
+
+test('GRENADE_FRAG_BANDS — 5 paliers RAW, rayons = moitié du diamètre, triés croissants', () => {
+  assert.deepEqual(GRENADE_FRAG_BANDS.map(b => b.name), ['centre', 'courte', 'moyenne', 'longue', 'extreme'])
+  assert.deepEqual(GRENADE_FRAG_BANDS.map(b => b.maxDistanceM), [1, 2.5, 5, 10, 15])
+})
+
+test('GRENADE_FRAG_MAX_RADIUS_M — borne du dernier palier = radiusM figé par la migration 325', () => {
+  assert.equal(GRENADE_FRAG_MAX_RADIUS_M, 15)
+  assert.equal(GRENADE_FRAG_MAX_RADIUS_M, GRENADE_FRAG_BANDS[GRENADE_FRAG_BANDS.length - 1].maxDistanceM)
+})
+
+test('resolveGrenadeBand — bornes des paliers', () => {
+  assert.equal(resolveGrenadeBand(0).name, 'centre')
+  assert.equal(resolveGrenadeBand(1).name, 'centre')
+  assert.equal(resolveGrenadeBand(1.01).name, 'courte')
+  assert.equal(resolveGrenadeBand(2.5).name, 'courte')
+  assert.equal(resolveGrenadeBand(2.51).name, 'moyenne')
+  assert.equal(resolveGrenadeBand(5).name, 'moyenne')
+  assert.equal(resolveGrenadeBand(5.01).name, 'longue')
+  assert.equal(resolveGrenadeBand(10).name, 'longue')
+  assert.equal(resolveGrenadeBand(10.01).name, 'extreme')
+  assert.equal(resolveGrenadeBand(15).name, 'extreme')
+  assert.equal(resolveGrenadeBand(999).name, 'extreme') // au-delà : dernier palier (exclusion faite en amont)
+})
+
+test('resolveGrenadeBand — charge utile RAW par palier (dés signés + Localisations + Test de Chance latent)', () => {
+  assert.equal(resolveGrenadeBand(0.5).damageDice, '+1D10')
+  assert.equal(resolveGrenadeBand(0.5).locationsDice, '1D3')
+  assert.equal(resolveGrenadeBand(2).damageDice, '+0')
+  assert.equal(resolveGrenadeBand(2).locationsDice, undefined) // 1 Localisation hors centre
+  assert.equal(resolveGrenadeBand(4).damageDice, '-1D10')
+  assert.equal(resolveGrenadeBand(8).damageDice, '-2D10')
+  assert.equal(resolveGrenadeBand(8).chanceTest, true)
+  assert.equal(resolveGrenadeBand(8).chanceBonus, 0)
+  assert.equal(resolveGrenadeBand(13).damageDice, '-3D10')
+  assert.equal(resolveGrenadeBand(13).chanceTest, true)
+  assert.equal(resolveGrenadeBand(13).chanceBonus, 5)
+})

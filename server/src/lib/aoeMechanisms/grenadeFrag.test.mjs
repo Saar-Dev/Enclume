@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-// grenadeFrag.js importe parseDice/rollSignedDie (server/src/lib/diceParser.js) + aoeShapes/distanceBands
-// (shared, purs) — aucune requête à l'import, même discipline que registry.test.mjs / socketCombatAoe.test.mjs.
+// grenadeFrag.js importe parseDice/rollSignedDie (server/src/lib/diceParser.js) + aoeShapes (shared, pur)
+// + re-exporte la table de dégression depuis shared/combatRange.js — aucune requête à l'import, même
+// discipline que registry.test.mjs / socketCombatAoe.test.mjs.
 import {
   grenadeFragMechanism,
   filterGrenadeFragHitTargets,
@@ -15,37 +16,14 @@ import { createWorldMetrics } from '../../../../shared/world/worldMetrics.js'
 const M = createWorldMetrics({ metersPerCell: 1, worldUnitsPerCell: 1 }) // 1 unité monde = 1 m
 const cand = (over) => ({ hasLineOfSight: true, ...over })
 
-// ─── Table de dégression ──────────────────────────────────────────────────────────────────────────
+// La table de dégression RAW (GRENADE_FRAG_BANDS / resolveGrenadeBand / GRENADE_FRAG_MAX_RADIUS_M) vit
+// désormais dans shared/combatRange.js et est testée dans shared/combatRange.test.mjs. Ici on ne teste
+// que le MÉCANISME (hooks du registre) + le ciblage pur, avec un contrôle de cohérence minimal que le
+// re-export fonctionne et que la valeur attendue par ce mécanisme n'a pas bougé.
 
-test('GRENADE_FRAG_MAX_RADIUS_M — rayon max = borne du dernier palier (une seule source de vérité)', () => {
+test('grenadeFrag re-exporte la table partagée — GRENADE_FRAG_MAX_RADIUS_M = 15 (cohérence migration 325)', () => {
   assert.equal(GRENADE_FRAG_MAX_RADIUS_M, 15)
-})
-
-test('resolveGrenadeBand — bornes des paliers (RAW : diamètre → rayon = moitié)', () => {
-  assert.equal(resolveGrenadeBand(0).name, 'centre')
-  assert.equal(resolveGrenadeBand(1).name, 'centre')
-  assert.equal(resolveGrenadeBand(1.01).name, 'courte')
-  assert.equal(resolveGrenadeBand(2.5).name, 'courte')
-  assert.equal(resolveGrenadeBand(2.51).name, 'moyenne')
-  assert.equal(resolveGrenadeBand(5).name, 'moyenne')
-  assert.equal(resolveGrenadeBand(5.01).name, 'longue')
-  assert.equal(resolveGrenadeBand(10).name, 'longue')
-  assert.equal(resolveGrenadeBand(10.01).name, 'extreme')
-  assert.equal(resolveGrenadeBand(15).name, 'extreme')
-})
-
-test('resolveGrenadeBand — charge utile RAW par palier (dés de dégression + Localisations + Test de Chance latent)', () => {
-  assert.equal(resolveGrenadeBand(0.5).damageDice, '+1D10')
-  assert.equal(resolveGrenadeBand(0.5).locationsDice, '1D3')
-  assert.equal(resolveGrenadeBand(2).damageDice, '+0')
-  assert.equal(resolveGrenadeBand(2).locationsDice, undefined) // 1 Localisation hors centre
-  assert.equal(resolveGrenadeBand(4).damageDice, '-1D10')
-  assert.equal(resolveGrenadeBand(8).damageDice, '-2D10')
-  assert.equal(resolveGrenadeBand(8).chanceTest, true)
-  assert.equal(resolveGrenadeBand(8).chanceBonus, 0)
-  assert.equal(resolveGrenadeBand(13).damageDice, '-3D10')
-  assert.equal(resolveGrenadeBand(13).chanceTest, true)
-  assert.equal(resolveGrenadeBand(13).chanceBonus, 5)
+  assert.equal(resolveGrenadeBand(0.5).name, 'centre')
 })
 
 // ─── Ciblage pur ──────────────────────────────────────────────────────────────────────────────────

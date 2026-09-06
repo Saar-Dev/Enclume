@@ -2,6 +2,9 @@
 // docs/PLANS/PLAN_AOE.md §4) : même algorithme de recherche par seuils croissants, volontairement pas
 // fusionnés — ce fichier-ci tolère des seuils dégénérés (portée catalogue incomplète), l'autre les
 // refuse par construction. Voir le commentaire de tête de distanceBands.js pour le détail.
+
+import { normalizeDistanceBands, resolveDistanceBand } from './world/distanceBands.js'
+
 export const RANGE_BANDS = Object.freeze([
   'bout_portant',
   'courte',
@@ -90,3 +93,46 @@ export function resolveShotgunSpread(distanceM, referenceRange) {
 // catalogue (`ref_equipment.aoe_profile`), plus un Set de noms en dur ici.
 // `resolveShotgunSpread` / `SHOTGUN_SPREAD_BY_BAND` ci-dessus restent la table mécanique RAW du
 // mécanisme `shotgun_spread`, vers lequel `aoe_profile.mechanic` pointe.
+
+// ─── Grenade à fragmentation — dégression par distance au point d'explosion (mécanisme grenade_frag) ─
+//
+// Table mécanique RAW (docs/REGLES/REGLES_ARMES_SPECIALES.md § « Grenades et mines »), partagée ici
+// pour la même raison que SHOTGUN_SPREAD_BY_BAND ci-dessus : le résolveur serveur
+// (server/src/lib/aoeMechanisms/grenadeFrag.js) ET l'aperçu client (client/src/lib/aoePreviewShape.js,
+// anneaux concentriques) la lisent — jamais deux copies qui dérivent (PLAN_GRENADES.md §10.2).
+//
+// Différence avec le fusil à pompe : ici les seuils sont des rayons ABSOLUS depuis le point d'impact
+// (pas les seuils de portée propres à l'arme). Le RAW exprime les paliers en DIAMÈTRE ; lecture retenue
+// (PLAN_GRENADES.md §1, [HYPOTHÈSE] — seule lecture cohérente) : cible à distance `r` du point
+// d'explosion → palier de diamètre `2r`, donc `maxDistanceM` = rayon.
+//   centre  (Ø < 2 m,   r ≤ 1 m)    : 1D3 Localisations, dégâts +1D10.
+//   courte  (Ø 2-5 m,   r ≤ 2,5 m)  : dégâts normaux.
+//   moyenne (Ø 5-10 m,  r ≤ 5 m)    : -1D10.
+//   longue  (Ø 10-20 m, r ≤ 10 m)   : -2D10, Test de Chance.
+//   extreme (Ø 20-30 m, r ≤ 15 m)   : -3D10, Test de Chance (+5).
+//   au-delà de r = 15 m : « Rien d'autre n'est affecté » (la cible est exclue par la forme AOE
+//   `isPointInAoeShape(circle, GRENADE_FRAG_MAX_RADIUS_M)` AVANT tout appel à resolveGrenadeBand).
+//
+// `damageDice` : chaîne SIGNÉE pour `rollSignedDie` (comme SHOTGUN_SPREAD_BY_BAND). `+0` = neutre.
+// `chanceTest` / `chanceBonus` : donnée RAW LATENTE, pas consommée en v1 (chantier Chance,
+// docs/PLANS/PLAN_CHANCE.md) — portée ici comme `savePossible`/`saveBonus` côté fusil à pompe.
+// `locationsDice` : présent uniquement au palier centre (1D3 Localisations) ; absent ailleurs → 1.
+export const GRENADE_FRAG_BANDS = normalizeDistanceBands([
+  { name: 'centre',  maxDistanceM: 1,   damageDice: '+1D10', locationsDice: '1D3', chanceTest: false, chanceBonus: 0 },
+  { name: 'courte',  maxDistanceM: 2.5, damageDice: '+0',                          chanceTest: false, chanceBonus: 0 },
+  { name: 'moyenne', maxDistanceM: 5,   damageDice: '-1D10',                       chanceTest: false, chanceBonus: 0 },
+  { name: 'longue',  maxDistanceM: 10,  damageDice: '-2D10',                       chanceTest: true,  chanceBonus: 0 },
+  { name: 'extreme', maxDistanceM: 15,  damageDice: '-3D10',                       chanceTest: true,  chanceBonus: 5 },
+])
+
+// Rayon maximal d'effet = borne du dernier palier — une seule source de vérité (jamais un `15` en dur
+// à côté de la table). Doit valoir la valeur `radiusM` figée par la migration 325 dans
+// `ref_equipment.aoe_profile` (garde : shared/combatRange.test.mjs).
+export const GRENADE_FRAG_MAX_RADIUS_M = GRENADE_FRAG_BANDS[GRENADE_FRAG_BANDS.length - 1].maxDistanceM
+
+// resolveGrenadeBand — palier de dégression pour une distance au point d'explosion. `GRENADE_FRAG_BANDS`
+// est déjà normalisée au chargement du module → `resolveDistanceBand` ne fait que chercher (bon marché
+// en boucle multi-cibles). Frère de `resolveShotgunSpread` : la table + son accès au même endroit.
+export function resolveGrenadeBand(distanceM) {
+  return resolveDistanceBand(distanceM, GRENADE_FRAG_BANDS)
+}
