@@ -24,7 +24,7 @@
 //   postResolve(io, campaignId, ctx, perTargetResults) → emissions[] — fusil à pompe : aucun effet
 //     post-résolution (contrairement au feu continu du lance-flammes).
 
-import { parseDice } from '../diceParser.js'
+import { rollSignedDie } from '../diceParser.js'
 import { computeAssaultRawDamage } from '../combatAttackRoll.js'
 import { normalizeAoeShape, isPointInAoeShape } from '../../../../shared/world/aoeShapes.js'
 import { dbPositionToWorldPoint } from '../../../../shared/world/worldMetrics.js'
@@ -57,15 +57,6 @@ export function filterShotgunHitTargets({ visibilityTargets, shooterTokenId, ori
     hitTargets.push({ ...candidate, band: range.band, spread: range.spread })
   }
   return hitTargets
-}
-
-// Roule un dé signé de type "+1D10" / "-2D10" / "+0" → entier signé (0 pour "+0"/absent). Déplacé
-// depuis socketCombatAoe.js — usage exclusif au dé de dispersion du fusil à pompe, jamais générique.
-async function rollSignedDie(diceStr) {
-  if (!diceStr || diceStr === '+0') return 0
-  const sign = diceStr.startsWith('-') ? -1 : 1
-  const rolled = await parseDice(diceStr.replace(/^[+-]/, ''))
-  return sign * rolled.total
 }
 
 function buildShape(ctx) {

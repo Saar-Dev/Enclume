@@ -94,6 +94,19 @@ export async function parseDice(formula) {
   }
 }
 
+// ─── rollSignedDie ────────────────────────────────────────────────────────────
+// Roule une chaîne de dé SIGNÉE — "+1D10", "-2D10", "+0" (ou falsy) → entier signé
+// (0 pour "+0" / chaîne absente). Le signe de tête est retiré avant `parseDice`, puis réappliqué au
+// total. Extrait de `aoeMechanisms/shotgunSpread.js` (lui-même déplacé depuis `socketCombatAoe.js`) :
+// c'est un utilitaire de dé, pas de la logique fusil à pompe — le mécanisme `grenade_frag` (dégression
+// par palier, PLAN_GRENADES.md §7) en a le même besoin, sans dépendre d'un autre mécanisme.
+export async function rollSignedDie(diceStr) {
+  if (!diceStr || diceStr === '+0') return 0
+  const sign = diceStr.startsWith('-') ? -1 : 1
+  const rolled = await parseDice(diceStr.replace(/^[+-]/, ''))
+  return sign * rolled.total
+}
+
 // ─── buildNormalizedFormula ───────────────────────────────────────────────────
 // Produit une formule lisible : "d20", "3d6", "2d6+3", "1d8-2"
 function buildNormalizedFormula(count, faces, modifier) {
