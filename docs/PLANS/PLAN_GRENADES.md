@@ -182,7 +182,7 @@ l'orchestrateur — d'où le périmètre resserré de 3a (§7.1).
 
 | | Contenu | Nature | Touche le combat humain ? |
 |---|---|---|---|
-| **3a** | Mécanisme `grenade_frag` (sémantique fragmentation seule) : `grenadeFrag.js` + `GRENADE_FRAG_BANDS` + les 6 hooks **invariants à l'orchestrateur** + extraction `rollSignedDie` → `diceParser.js`. **Fixtures.** Enregistré, inatteignable par l'appli tant que 3b+3c n'existent pas. | résolution pure | non |
+| **3a** ✅ CLOS (2026-09-06, `6a4e6ad`+`1815df3`, non poussé) | `rollSignedDie`→`diceParser.js` (`6a4e6ad`) · `grenadeFrag.js` + `GRENADE_FRAG_BANDS` + 6 hooks invariants + `losSource: 'origin'` + `registry.js` + `AOE_MECHANICS` + 3 fichiers de test (`1815df3`). `node --test` AOE+shared 572, 0 échec. Enregistré, inatteignable par l'appli (orchestrateur 3b-3e + migration 3g absents). | résolution pure | non |
 | **3b** | Adaptations du tronc : un mécanisme peut déclarer qu'il ne passe pas par `runAoePhaseA` (compétence d'arme) et qu'il tire son amplitude de `aoe_profile` (pas de `ref_range`) ; `ctx.aoe` transporte le point. Non-régression fusil à pompe + lance-flammes. | tronc | oui — clôture session Saar |
 | **3c** | Déclaration « Viser un point » : payload `aoe.intendedOrigin` (`socketCombatAnnouncement.js`), aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité aux 3 fenêtres de déclaration. | payload + UI | non (déclaration seule) |
 | **3d** | **Lancer** : Test de Coordination serveur (§5 pt 2) + `resolveScatter` câblé **côté orchestrateur** → `resolvedOrigin` dévié sur échec (1D6 direction × marge). | résolution | oui |
