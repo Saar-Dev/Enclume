@@ -26,6 +26,9 @@ import { SHAPES } from './world/aoeShapes.js'
 export const AOE_MECHANICS = Object.freeze([
   'shotgun_spread', // fusil à pompe — cône/couloir + dispersion par palier
   'flamethrower',   // lance-flammes — cône, feu continu, pas de dégression par portée
+  'grenade_frag',   // grenade à fragmentation — cercle sur point d'impact, dégression par palier
+                    // (PLAN_GRENADES.md §7). Mécanisme de résolution enregistré (registry.js) ;
+                    // l'orchestrateur (lancer/dispersion/différé) est 3b-3e, la migration catalogue 3g.
 ])
 
 // isKnownAoeMechanic — garde du dispatch serveur (voir commentaire ci-dessus).

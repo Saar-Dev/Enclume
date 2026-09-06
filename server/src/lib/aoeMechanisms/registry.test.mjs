@@ -6,8 +6,8 @@ import assert from 'node:assert/strict'
 // discipline que socketCombatAoe.test.mjs (le module ne se connecte qu'au premier appel réel).
 import { AOE_MECHANISM_REGISTRY, findAoeMechanismEntry } from './registry.js'
 
-test('findAoeMechanismEntry — les 2 mécanismes du Segment 1 sont enregistrés, chacun avec les 6 hooks', () => {
-  for (const key of ['shotgun_spread', 'flamethrower']) {
+test('findAoeMechanismEntry — les mécanismes câblés sont enregistrés, chacun avec les 6 hooks', () => {
+  for (const key of ['shotgun_spread', 'flamethrower', 'grenade_frag']) {
     const entry = findAoeMechanismEntry(key)
     assert.ok(entry, `entrée "${key}" absente du registre`)
     assert.equal(entry.key, key)
@@ -23,10 +23,17 @@ test('findAoeMechanismEntry — mécanisme inconnu → undefined, jamais un thro
   assert.equal(findAoeMechanismEntry(undefined), undefined)
 })
 
-test('AOE_MECHANISM_REGISTRY — exactement 2 entrées, clés uniques (Segment 1 : fusil à pompe + lance-flammes)', () => {
-  assert.equal(AOE_MECHANISM_REGISTRY.length, 2)
+test('AOE_MECHANISM_REGISTRY — 3 entrées, clés uniques (fusil à pompe + lance-flammes + grenade à fragmentation)', () => {
+  assert.equal(AOE_MECHANISM_REGISTRY.length, 3)
   const keys = AOE_MECHANISM_REGISTRY.map(e => e.key)
   assert.equal(new Set(keys).size, keys.length)
+})
+
+test('grenade_frag — losSource = origin (la LOS de l\'explosion part du point d\'impact, pas du lanceur)', () => {
+  assert.equal(findAoeMechanismEntry('grenade_frag').losSource, 'origin')
+  // les cônes/rayons n'en déclarent pas → défaut 'caster' côté orchestrateur
+  assert.equal(findAoeMechanismEntry('shotgun_spread').losSource, undefined)
+  assert.equal(findAoeMechanismEntry('flamethrower').losSource, undefined)
 })
 
 // extraTargets par défaut (fusil à pompe) : jamais de pseudo-cible — vérifie le contrat générique que

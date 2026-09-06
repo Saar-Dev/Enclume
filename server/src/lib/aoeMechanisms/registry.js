@@ -16,13 +16,22 @@
 //
 // Forme d'une entrée : { key, buildShape, filterTargets, extraTargets, targetRowModifier,
 // computeTargetDamage, postResolve } — voir shotgunSpread.js pour le détail de chaque hook.
+// Propriété non-hook optionnelle : `losSource` ('caster' par défaut si absente | 'origin') — d'où
+// part la LOS de la zone (le tireur pour cône/rayon, le point d'impact pour une grenade). Consommée
+// par l'orchestrateur, pas par le dispatch.
 
 import { shotgunSpreadMechanism } from './shotgunSpread.js'
 import { flamethrowerMechanism } from './flamethrower.js'
+import { grenadeFragMechanism } from './grenadeFrag.js'
 
 export const AOE_MECHANISM_REGISTRY = [
   { key: 'shotgun_spread', ...shotgunSpreadMechanism },
   { key: 'flamethrower', ...flamethrowerMechanism },
+  // grenade à fragmentation (PLAN_GRENADES.md §7, Segment 3). Résolution de l'explosion seule ; le
+  // lancer / Test de Coordination / dispersion / différé sont l'orchestrateur (3b-3e), pas encore
+  // câblé — une grenade déclarée aujourd'hui serait rejetée en amont (aucune ligne `aoe_profile`
+  // `grenade_frag` au catalogue avant la migration 3g).
+  { key: 'grenade_frag', ...grenadeFragMechanism },
 ]
 
 // mechanic inconnu → undefined, jamais une erreur ici — le tronc décide seul du message d'erreur

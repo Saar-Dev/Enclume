@@ -48,9 +48,9 @@ test('getAoeProfile — tableau ou primitive → null', () => {
 })
 
 test('getAoeProfile — structure valide mais mechanic non câblé → RENVOYÉ (garde AOE_MECHANICS = dispatch serveur, pas ici)', () => {
-  const p = { shape: 'circle', mechanic: 'grenade_fragmentation' }
+  const p = { shape: 'circle', mechanic: 'suppression' }
   assert.deepEqual(getAoeProfile(p), p)
-  assert.equal(isKnownAoeMechanic('grenade_fragmentation'), false)
+  assert.equal(isKnownAoeMechanic('suppression'), false)
 })
 
 test('isAoeWeapon — miroir de getAoeProfile != null', () => {
@@ -66,9 +66,10 @@ test('getAoeMechanic — identifiant ou null', () => {
   assert.equal(getAoeMechanic({ shape: 'ray' }), null)
 })
 
-test('AOE_MECHANICS / isKnownAoeMechanic — les 2 mécanismes câblés à ce jour, tableau gelé', () => {
+test('AOE_MECHANICS / isKnownAoeMechanic — les mécanismes câblés à ce jour, tableau gelé', () => {
   assert.equal(isKnownAoeMechanic('shotgun_spread'), true)
   assert.equal(isKnownAoeMechanic('flamethrower'), true)
+  assert.equal(isKnownAoeMechanic('grenade_frag'), true)
   assert.equal(isKnownAoeMechanic('suppression'), false)
   assert.throws(() => AOE_MECHANICS.push('x'))
 })
