@@ -335,7 +335,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const resolvedGmPrimary = gmEq?.weapon ?? null
   // D5 : la liste d'armes peut fixer explicitement l'arme de tir (assaultDecl.weaponId) ; sinon primaire.
   const pickedGmRanged = assaultDecl.state.weaponId
-    ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && w.ref_fire_mode)
+    ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && (w.ref_fire_mode || isAoeWeapon(w.ref_aoe_profile)))
     : null
   const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
   // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6 segment 0b) — l'AOE-ness est une donnée catalogue
@@ -390,7 +390,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Liste d'armes groupée (module 4, D5) — CombatDeclareActionList ────────
   const weaponGroups = buildWeaponList({
-    rangedWeapons: gmHandWeapons.filter(w => w.ref_fire_mode),
+    // Tir = arme à feu (ref_fire_mode) OU arme de zone sans mode de tir (grenade `grenade_frag` —
+    // PLAN_GRENADES.md §6 3c : 1er cas d'arme AOE sans fire_mode). Mirror CombatActionWindow.jsx.
+    rangedWeapons: gmHandWeapons.filter(w => w.ref_fire_mode || isAoeWeapon(w.ref_aoe_profile)),
     meleeWeapons:  gmHandWeapons.filter(w => w.ref_category === 'Arme de contact'),
     naturalWeapons: naturalWeaponsAvailable.map(m => ({
       id: m.id, name: m.name,
