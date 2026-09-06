@@ -4,6 +4,7 @@ import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAoeProfile } from '../../../shared/combatAoe.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -653,18 +654,31 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           weaponInvId, offhandWeaponInvId, droneWeaponInvId, exoWeaponInvId, targetTokenId, aoe,
           bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp,
         } of mapActions.attack) {
-          // AOE (docs/PLANS/PLAN_AOE.md §6/§8 étape 6b, fusil à pompe/tir de suppression uniquement —
-          // grenades en attente du catalogue §6.2bis) : un tir en zone n'a pas de targetTokenId, il a
-          // une direction visée à la place. `origin`/`amplitude` ne sont volontairement PAS envoyés
-          // par le client — l'origine est toujours la position réelle du tireur à la RÉSOLUTION,
-          // l'amplitude du fusil à pompe découle de bulletCount (déjà déclaré), celle du tir de
-          // suppression aussi (RAW, mètres additionnels par groupe de 5 balles) — jamais une valeur
-          // client à valider ici (`.claude/rules/combat.md` : seule la RÉSOLUTION recalcule depuis la
-          // position réellement atteinte, l'ANNONCE ne fait qu'enregistrer l'intention).
+          // AOE (docs/PLANS/PLAN_AOE.md §6/§8 étape 6b) : un tir en zone n'a pas de targetTokenId.
+          // Deux formes de visée selon `aoe_profile.shape` de l'arme (autorité = donnée catalogue,
+          // shared/combatAoe.js) :
+          //  - cône/rayon (fusil à pompe, lance-flammes, tir de suppression) → `aoe.direction` (degrés) ;
+          //  - cercle (grenade, `grenade_frag`, PLAN_GRENADES.md §5/§6 3c) → `aoe.intendedOrigin`, un
+          //    POINT au sol visé (le lanceur choisit où la grenade doit atterrir).
+          // `origin`/`amplitude` d'un cône/rayon ne sont PAS envoyés (origine = position réelle du
+          // tireur à la RÉSOLUTION). Pour un cercle, `intendedOrigin` EST l'intention — le serveur ne
+          // valide ICI que sa forme ({x,y,z} finis) ; la portée de lancer + la dispersion sur échec du
+          // Test de Coordination sont résolues à la RÉSOLUTION depuis la position réelle du lanceur
+          // (Segment 3d). `.claude/rules/combat.md` : l'ANNONCE enregistre l'intention, seule la
+          // RÉSOLUTION refuse pour un motif qui peut changer.
           if (!targetTokenId && !aoe) continue
-          if (aoe && (typeof aoe.direction !== 'number' || !Number.isFinite(aoe.direction))) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : direction invalide" })
-            return
+          if (aoe) {
+            const isPointAoe = getAoeProfile(assaultWeaponAoeProfile)?.shape === 'circle'
+            if (isPointAoe) {
+              const p = aoe.intendedOrigin
+              if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) {
+                socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : point d'impact visé invalide" })
+                return
+              }
+            } else if (typeof aoe.direction !== 'number' || !Number.isFinite(aoe.direction)) {
+              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : direction invalide" })
+              return
+            }
           }
           actionRows.push({
             campaign_id:          campaignId, token_id: tokenId,
