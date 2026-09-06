@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from './api.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { getAoeProfile } from '../../../shared/combatAoe.js'
 import { useCombatClickAttack } from './useCombatClickAttack.js'
 import { buildExoMapActions } from './buildDeclarePayload.js'
 
@@ -25,7 +26,11 @@ export function useExoDeclare({
   // assaultTargetId. Pas de reducer ici (contrairement à assaultDeclaration.js côté humanoïde) : ce
   // hook gère son état à plat depuis l'origine (une seule arme, une seule cible) — l'exclusivité est
   // donc maintenue manuellement à chaque point qui pose l'un ou l'autre, ci-dessous.
+  // Deux formes de visée selon `aoe_profile.shape` (PLAN_GRENADES.md §6 3c) : cône/rayon →
+  // `aoeDirection` (degrés) ; cercle (grenade) → `aoeIntendedOrigin` (point `{x,y,z}` visé au sol).
+  // Mutuellement exclusifs entre eux aussi (une arme est d'une seule forme).
   const [aoeDirection,        setAoeDirection]        = useState(null)
+  const [aoeIntendedOrigin,   setAoeIntendedOrigin]   = useState(null)
 
   // Fetch armes exo quand le personnage change — GET /:characterId/exo/weapons (déjà existant, Lot C).
   useEffect(() => {
@@ -48,6 +53,7 @@ export function useExoDeclare({
     setExoWeapons([])
     setIsSelectingTarget(false)
     setAoeDirection(null)
+    setAoeIntendedOrigin(null)
   }, [tokenId])
 
   // category === 'Arme de contact' est l'autorité serveur pour CaC (socketCombatExo.js,
@@ -77,8 +83,8 @@ export function useExoDeclare({
     // (cas normalement impossible — handleStartAoeDirection désarme déjà useCombatClickAttack via
     // isSelectingTarget — mais gardé pour la même raison que setSoleTarget côté humanoïde : rester
     // fidèle même si un futur appelant contourne le flux attendu).
-    onMeleeTarget:   (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
-    onAssaultTarget: (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
+    onMeleeTarget:   (tid) => { setAssaultTargetId(tid); setAoeDirection(null); setAoeIntendedOrigin(null) },
+    onAssaultTarget: (tid) => { setAssaultTargetId(tid); setAoeDirection(null); setAoeIntendedOrigin(null) },
   })
 
   const handleChooseTarget = useCallback((activeToken) => {
@@ -108,11 +114,18 @@ export function useExoDeclare({
   const handleStartAoeDirection = useCallback(() => {
     if (!onEnterAoeTargetMode || !tokenId) return
     const weapon = exoWeapons.find(w => w.id === selectedExoWeaponId)
+    const isPoint = getAoeProfile(weapon?.ref_aoe_profile)?.shape === 'circle'
     setAssaultTargetId(null)
+    setAoeDirection(null); setAoeIntendedOrigin(null)
     setIsSelectingTarget(true)
+    // `onEnterAoeTargetMode` (useCombatUIState) détecte lui-même la forme et rappelle avec un `number`
+    // (cap) ou un `{x,y,z}` (point) — ce hook range dans le bon champ selon la forme de l'arme.
     onEnterAoeTargetMode(
       tokenId, tokenPos, weapon?.ref_range ?? null, weapon?.ref_aoe_profile ?? null,
-      (directionDeg) => { setAoeDirection(directionDeg); setIsSelectingTarget(false) },
+      (aim) => {
+        if (isPoint) setAoeIntendedOrigin(aim); else setAoeDirection(aim)
+        setIsSelectingTarget(false)
+      },
       () => { setIsSelectingTarget(false) },
     )
   }, [tokenId, tokenPos, onEnterAoeTargetMode, exoWeapons, selectedExoWeaponId])
@@ -126,21 +139,21 @@ export function useExoDeclare({
   // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — cœur pur testé
   // (client/src/lib/buildDeclarePayload.js, module 0 M0.3).
   const buildMapActions = useCallback(
-    () => buildExoMapActions({ selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection }),
-    [selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection],
+    () => buildExoMapActions({ selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection, aoeIntendedOrigin }),
+    [selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection, aoeIntendedOrigin],
   )
 
   return {
     exoWeapons, selectedExoWeaponId, selectWeapon,
     assaultTargetId, handleChooseTarget, buildMapActions,
-    aoeDirection, handleStartAoeDirection,
+    aoeDirection, aoeIntendedOrigin, handleStartAoeDirection,
     // Exposé pour que CombatExoActionWindow puisse désarmer useAutoMoveMode pendant la visée (ciblage
     // normal ET zone d'effet) — bug trouvé en session réelle (Saar, 2026-09-04) : le survol de
     // déplacement ambiant n'était jamais gaté sur ce flag, invisible pour le ciblage d'entité (surfaces
     // de clic différentes) mais réellement en collision avec la visée de zone (les deux répondent au
     // clic au sol). Contrat déjà documenté par useAutoMoveMode.js lui-même, jamais respecté ici.
     isSelectingTarget,
-    canDeclareAttack: !!selectedExoWeaponId && (!!assaultTargetId || aoeDirection != null),
+    canDeclareAttack: !!selectedExoWeaponId && (!!assaultTargetId || aoeDirection != null || aoeIntendedOrigin != null),
     // Bug UI trouvé en jeu réel (Saar, 2026-08-27) : sélectionner une arme puis Déclarer sans cible
     // envoyait un payload sans attack/melee (buildMapActions() → {}) — la sélection se perdait
     // silencieusement, rien ne l'indiquait. Mirroir exact du gate déjà en place pour PJ
@@ -148,6 +161,6 @@ export function useExoDeclare({
     // désactive tant qu'une arme est choisie sans cible — jamais bloqué si rien n'est sélectionné du
     // tout (passer le Tour reste toujours permis, cf. exoActionWindow.normalHint). `aoeDirection`
     // compte comme une cible valide (Segment 2a AOE) — même logique que canDeclareAttack ci-dessus.
-    canDeclare: !selectedExoWeaponId || !!assaultTargetId || aoeDirection != null,
+    canDeclare: !selectedExoWeaponId || !!assaultTargetId || aoeDirection != null || aoeIntendedOrigin != null,
   }
 }

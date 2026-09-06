@@ -15,7 +15,7 @@ import CombatDeclareActionList from './CombatDeclareActionList.jsx'
 import { buildWeaponList } from '../lib/weaponList.js'
 import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer.js'
 import { assaultCheck, buildBlockReason } from '../lib/declareChecks.js'
-import { isAoeWeapon } from '../../../shared/combatAoe.js'
+import { isAoeWeapon, getAoeProfile } from '../../../shared/combatAoe.js'
 import api from '../lib/api.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — fenêtre dédiée exo-armure, réutilisée à l'identique côté
@@ -245,7 +245,7 @@ export default function CombatExoActionWindow({
     // inconditionnellement true/false ci-dessous, PAS le bug du Segment 1 (assaultCheckInputs
     // humanoïde) : ici les deux sont déjà des constantes, jamais dérivées d'un état de mode de tir
     // qui existerait pour une exo (elle n'en a aucun).
-    targetsFilled: (exoDeclare.assaultTargetId || exoDeclare.aoeDirection != null) ? 1 : 0,
+    targetsFilled: (exoDeclare.assaultTargetId || exoDeclare.aoeDirection != null || exoDeclare.aoeIntendedOrigin != null) ? 1 : 0,
     targetsNeeded: 1,
     hasVariant:    true,   // mode de tir exo fixe, jamais à configurer
     aimActive:     false,  // pas de Tir visé pour une exo
@@ -265,6 +265,9 @@ export default function CombatExoActionWindow({
   // toute la section cible sur « Viser une zone » au lieu de « Choisir une cible » — même principe que
   // AssaultRangedPanel.jsx (pas un choix parmi d'autres, l'arme n'a pas de mode de tir normal).
   const isAoeEligible = isAoeWeapon(selectedExoWeapon?.ref_aoe_profile)
+  // Grenade (cercle) → visée d'un POINT ; cône/rayon → visée d'une direction (PLAN_GRENADES.md §6 3c).
+  const isPointAoe = getAoeProfile(selectedExoWeapon?.ref_aoe_profile)?.shape === 'circle'
+  const aoePosed = exoDeclare.aoeDirection != null || exoDeclare.aoeIntendedOrigin != null
 
   return (
     <>
@@ -333,9 +336,11 @@ export default function CombatExoActionWindow({
                   <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
                   {t('assaultPanel.aoeSection')}
                 </div>
-                {exoDeclare.aoeDirection != null ? (
+                {aoePosed ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>{t('assaultPanel.aoeDirectionValue', { deg: Math.round(exoDeclare.aoeDirection) })}</span>
+                    <span>{isPointAoe
+                      ? t('assaultPanel.aoePointValue')
+                      : t('assaultPanel.aoeDirectionValue', { deg: Math.round(exoDeclare.aoeDirection) })}</span>
                     <button type="button" className="btn-tac-ghost" onClick={exoDeclare.handleStartAoeDirection}>
                       {t('common.changeButton')}
                     </button>
@@ -347,7 +352,7 @@ export default function CombatExoActionWindow({
                     style={{ alignSelf: 'flex-start' }}
                     onClick={exoDeclare.handleStartAoeDirection}
                   >
-                    {t('assaultPanel.aimAoeButton')}
+                    {t(isPointAoe ? 'assaultPanel.aimAoePointButton' : 'assaultPanel.aimAoeButton')}
                   </button>
                 )}
               </div>
