@@ -126,7 +126,7 @@ neuro-charge (Segment 4).
 | Application par cible + finalisation | `socketCombatAoe.js#resolveAoeTargetDamage` / `finalizeAoeResults` | **Déjà génériques** (dispatch drone/exo/humanoïde, `outcome`, émissions ; 1D3 Loc au centre = `locationsCount: 3` déjà supporté). **Extraits de `socketCombatAoe.js` vers un module partagé en 3e** — ils servent le nouvel orchestrateur grenade sans passer par `resolveAoeAssaultAction`. |
 | Feu continu | `environmentalHazardService.js#exposeToHazard({ durationDice })` | `grenade_incendiary` (Segment 3-bis). |
 | LOS + couverture | `worldVisibilityService.js#evaluateAoeVisibility` | Inchangé. `target.visibility.coverage` **existe** par cible mais ni le fusil à pompe ni le lance-flammes ne consomment la couverture *partielle* (LOS binaire ; couverture *totale* = déjà gérée par LOS bloquée). Couverture partielle RAW (−1 à −2D10) = amélioration transverse AOE, **hors Segment 3**, écart noté. |
-| Persistance d'une explosion en attente | candidats existants : `combat_pending` (mig. 31), `combat_timeline_entries` (mig. 34), pattern d'expiration par Tour de `environmentalHazardService` | **3e tranche** — le RAW (explose même si le lanceur meurt, au rang d'Ini du lanceur) penche vers le pattern minuteur/tick plutôt qu'une action de personnage. |
+| Résolution différée inter-tours | **`combat_timeline_entries`** (`turn_number`, `phase_position`, `status:'scheduled'`, `combat_action_id`, `resolution_snapshot`) + `pickNextTimelineStep` + `advanceTimeline` + dispatch `action.type` (`socketCombatResolution.js:383+`) | **Tranché (exploration 2026-09-06) : infra EXISTANTE.** L'explosion = ligne `combat_timeline_entries` pour T+1 @ `phase_position` du lanceur → `combat_action` synthétique `type:'grenade_explosion'`. Explose au rang d'Ini du lanceur même s'il meurt (l'entrée est indépendante de son état). Pas de minuteur, pas de nouvelle table. |
 
 ---
 
@@ -159,20 +159,34 @@ compétence de l'arme) dont la marge `mr` module le dégât, puis résolution im
 profil de zone → dégâts par cible. Il ne fait ni le lancer, ni le Test de Coordination, ni la
 dispersion, ni le différé. Ces quatre points sont 3c/3d/3e, chacun avec sa propre étape.
 
-**Conséquence d'architecture (analyse à charge de 3a, 2026-09-06)** : brancher la grenade avec des
-`if` dans `resolveAoeAssaultAction` ferait porter à ce fichier **deux** responsabilités (mono-phase
-*et* différé) → violation de « un fichier = une responsabilité ». Donc **3e = extraction + nouveau
-fichier**, pas « câbler un minuteur dans le tronc » :
+**Conséquence d'architecture — RÉVISÉE après lecture du moteur de timeline (2026-09-06, exploration
+avant 3b).** Deux constats changent le plan :
 
-1. Extraire `resolveAoeTargetDamage` / `finalizeAoeResults` (déjà génériques) hors de
-   `socketCombatAoe.js` vers un module partagé — le tronc cesse de mélanger « résolution AOE
-   générique » et « flux propre à l'action d'assaut ». Non-régression fusil à pompe + lance-flammes.
-2. Nouveau fichier `socketCombatGrenade.js` (ou équivalent) : **une** responsabilité — résoudre une
-   grenade lancée (Test de Coordination, dispersion, explosion différée, appel des helpers partagés).
-3. Persistance d'une explosion en attente (§4, dernière ligne).
+1. **L'infra de résolution différée inter-tours EXISTE déjà.** `combat_timeline_entries`
+   (`turn_number`, `phase_position`, `status: 'scheduled'`, `combat_action_id`, `resolution_snapshot`)
+   + `pickNextTimelineStep(campaignId, turnNumber)` (prend l'entrée `scheduled` de `phase_position`
+   la plus haute) + `advanceTimeline` (point d'entrée unique « fais avancer la résolution ») +
+   dispatch par `action.type` dans `socketCombatResolution.js:383+`. → **L'explosion différée (3e) =
+   « insérer, à la résolution du lancer (T1), une ligne `combat_timeline_entries` pour T+1 au
+   `phase_position` du lanceur, pointant vers un `combat_action` synthétique `type:
+   'grenade_explosion'` ».** Pas de nouveau moteur, pas de minuteur, pas de nouvelle table.
 
-Le mécanisme-stratégie `grenade_frag` reste consommé par `findAoeMechanismEntry` quel que soit
-l'orchestrateur — d'où le périmètre resserré de 3a (§7.1).
+2. **`resolveAoeAssaultAction` peut rester l'orchestrateur unique**, via des **capacités déclarées
+   par le mécanisme** (défaut = comportement actuel), pas un `if (mechanic === ...)` :
+   `needsWeaponRange` (défaut `true`), `rollsPhaseA` (défaut `true`), `decrementsAmmo` (défaut
+   `true`), `losSource` (défaut `'caster'` — déjà porté par `grenade_frag`). `grenade_frag` les
+   met toutes à `false`/`'origin'`. Même précédent que le lance-flammes (« un petit bloc » assumé) —
+   et si ça prolifère, l'extraction en helpers partagés se fait plus tard, jugement identique au
+   Segment 1.5. **L'extraction n'est PAS un prérequis** (l'analyse à charge de 3a la supposait ; la
+   lecture du dispatch montre qu'un `combat_action` synthétique emprunte naturellement le même
+   chemin).
+
+3. **`resolveAoeAssaultAction` n'a AUCUN test d'orchestration** (`socketCombatAoe.test.mjs` ne couvre
+   que les fonctions pures `filter*` / `resolveAoeAttackRoll`). Modifier ce chemin sans filet = contre
+   la priorité « rework pour stabiliser ». → **3b.0 (nouveau) : couverture d'intégration du tronc
+   AOE** (fixture monde compilé + combat, patron `combatantContextService.test.mjs` : `skip =
+   !process.env.DATABASE_URL`) — fusil à pompe + lance-flammes, cibles touchées + lignes
+   `combat_action_targets` + émissions. Son propre morceau, avant toute modification du tronc.
 
 ---
 
@@ -182,16 +196,22 @@ l'orchestrateur — d'où le périmètre resserré de 3a (§7.1).
 
 | | Contenu | Nature | Touche le combat humain ? |
 |---|---|---|---|
-| **3a** ✅ CLOS (2026-09-06, `6a4e6ad`+`1815df3`, non poussé) | `rollSignedDie`→`diceParser.js` (`6a4e6ad`) · `grenadeFrag.js` + `GRENADE_FRAG_BANDS` + 6 hooks invariants + `losSource: 'origin'` + `registry.js` + `AOE_MECHANICS` + 3 fichiers de test (`1815df3`). `node --test` AOE+shared 572, 0 échec. Enregistré, inatteignable par l'appli (orchestrateur 3b-3e + migration 3g absents). | résolution pure | non |
-| **3b** | Adaptations du tronc : un mécanisme peut déclarer qu'il ne passe pas par `runAoePhaseA` (compétence d'arme) et qu'il tire son amplitude de `aoe_profile` (pas de `ref_range`) ; `ctx.aoe` transporte le point. Non-régression fusil à pompe + lance-flammes. | tronc | oui — clôture session Saar |
-| **3c** | Déclaration « Viser un point » : payload `aoe.intendedOrigin` (`socketCombatAnnouncement.js`), aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité aux 3 fenêtres de déclaration. | payload + UI | non (déclaration seule) |
-| **3d** | **Lancer** : Test de Coordination serveur (§5 pt 2) + `resolveScatter` câblé **côté orchestrateur** → `resolvedOrigin` dévié sur échec (1D6 direction × marge). | résolution | oui |
-| **3e** | **Extraction des helpers AOE génériques + nouveau fichier orchestrateur `socketCombatGrenade.js` + explosion différée (MIN)** — action résolue au Tour suivant au rang d'Ini du lanceur, persistance §4. **Analyse à charge dédiée + recherche pattern (Foundry delayed effects, PF2e) avant tout code.** | refactor tronc + infra neuve | oui — FSM |
-| **3f** | Mode **PER** : `quand = maintenant` sur la même couture (raffinement « détonation contre un obstacle intercalé » via le LOS déjà calculé = ultérieur). | 1 param | oui |
-| **3g** | **1 migration** `aoe_profile` pour la ligne fragmentation · doc : écarts `JOURNAL8.md`, `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | migration + doc | non |
+| | Contenu | Nature | Filet |
+|---|---|---|---|
+| **3a** ✅ CLOS (2026-09-06, `6a4e6ad`+`1815df3`+`e94c51e`, non poussé) | `rollSignedDie`→`diceParser.js` · `grenadeFrag.js` (6 hooks invariants + `GRENADE_FRAG_BANDS` + `losSource: 'origin'`) + `registry.js` + `AOE_MECHANICS` + 3 fichiers de test. `node --test` AOE+shared 572/0. Inatteignable par l'appli. | résolution pure | ✅ 17 tests fixtures |
+| **3b.0** | **Couverture d'intégration du tronc AOE** — `socketCombatAoe.integration.test.mjs`, fixture monde compilé + combat (patron `combatantContextService.test.mjs`, `skip = !DATABASE_URL`). Fusil à pompe **et** lance-flammes : cibles touchées, lignes `combat_action_targets`, formes des émissions. **Aucune modif de code applicatif.** | test seul | — (c'EST le filet) |
+| **3b** | Capacités de mécanisme dans `resolveAoeAssaultAction` (défaut = comportement actuel) : `needsWeaponRange` / `rollsPhaseA` / `decrementsAmmo` / `losSource`. `grenade_frag` opte hors des 4. | tronc | 3b.0 + session Saar |
+| **3c** | Déclaration « Viser un point » : payload `aoe.intendedOrigin` (`socketCombatAnnouncement.js`), aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité aux 3 fenêtres. | payload + UI | golden-master payload + session |
+| **migration** | `aoe_profile` `grenade_frag` sur la ligne fragmentation. **Placée ici** (après 3c) : avant, `isAoeWeapon` rendrait la grenade éligible à une déclaration « direction » cassée. | migration | — |
+| **3d** | **Lancer (T1)** : `combat_action` `assault` + `modifiers.aoe.mode:'grenade'` → Test de Coordination serveur (§5 pt 2) + `resolveScatter` → `resolvedOrigin`. Insère une ligne `combat_timeline_entries` T+1 @ `phase_position` du lanceur → `combat_action` synthétique `type:'grenade_explosion'` (`resolution_snapshot` = point + formule + mechanic). Émet « grenade lancée, explose au prochain Tour ». | résolution + timeline | session Saar |
+| **3e** | **Explosion différée (T2)** : `else if (action.type === 'grenade_explosion')` dans le dispatch (`socketCombatResolution.js:383+`) → `resolveAoeAssaultAction` sur l'action synthétique (capacités 3b). Cas : lanceur mort en T2, reconnexion, répétition réseau, 0 cible. | dispatch + FSM | 3b.0 + scénario FSM + session Saar |
+| **3f** | Mode **PER** : résolution immédiate en T1 au lieu du différé (branche sur `modifiers.aoe.detonation`). Raffinement « obstacle intercalé » via LOS = ultérieur. | 1 branche | session |
+| **3g** | Doc : écarts `JOURNAL8.md` (dégression = diamètre/2, sonique, acide), `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | doc | — |
 
-Chaque sous-segment est validé avant le suivant (feedback_segment_by_file). 3a livrable sans risque
-combat. 3e est le vrai morceau (refactor + FSM).
+Chaque sous-segment validé avant le suivant (feedback_segment_by_file). **3b.0 est le vrai
+préalable** : on ne touche pas `resolveAoeAssaultAction` (combat-critique, zéro test d'orchestration)
+sans filet. 3d/3e s'appuient sur le moteur `combat_timeline_entries` existant (§5) — pas de nouvelle
+infra de différé.
 
 ### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme = un concern nouveau)
 
