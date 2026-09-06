@@ -605,25 +605,43 @@ Test de Chance sur Catastrophe → les Dommages de Choc deviennent physiques.
 - → **Segment 4**, cadrage séparé. La ligne catalogue reste un objet inerte (pas de `aoe_profile`)
   jusque-là.
 
-### 2.7 Options de grenade (MIN / PER / DRO) — analyse à charge 2026-09-06, EN ARBITRAGE
+### 2.7 Options de grenade (MIN / PER / DRO) — TRANCHÉ 2026-09-06 (jugement délégué par Saar)
 
 RAW : « toutes les grenades peuvent être dotées de l'une des options » — **universel**, donc **rien à
 seed par ligne** ; l'option est un choix au moment du lancer, pas une donnée `ref_equipment`.
 
-- **MIN** (minutée, défaut RAW) : explose au Tour suivant, au rang d'Ini du lanceur. Seule option qui
-  force l'infra nouvelle « action différée inter-tours ». **Nécessaire — v1.**
-- **PER** (percussion) : explose à l'impact, même Tour. Petit ajout une fois la couture
-  delivery/blast posée (explosion immédiate au lieu de différée), **si** le « point d'impact » se
-  résout sans moteur de trajectoire (à trancher dans le plan détaillé).
-- **DRO** (drone) : projectile autonome — plane 10 min, détecte une cible à 20 m, se déplace 40 m/Tour,
-  fonce et explose. NT V, ×10 coût. Recoupe la dette « drone autonome en combat » (`COUVERTURE_RAW.md`
-  §2, jamais construite). **Différé** — le champ `detonation_mode` acceptera `drone` structurellement
-  (rejeté à la résolution avec message clair, comme `AOE_MECHANICS` pour un mécanisme non câblé) →
-  ajout ultérieur sans migration ni refactor.
+**Décision : MIN + PER en v1, DRO différé mais structurellement réservé.**
 
-Position Claude : **couture delivery/blast explicite dès le départ ; MIN + PER en v1 ; DRO différé
-mais structurellement prêt.** Position Saar (proposée) : les 3 modes tout de suite, en miroir de
-CC/RC/RL. **À trancher avant le plan détaillé du Segment 3.**
+- **MIN** (minutée, défaut RAW) : explose au Tour suivant, au rang d'Ini du lanceur.
+- **PER** (percussion) : explose au Tour même, au point d'impact (dévié le cas échéant). v1 : « au
+  point d'impact » sans simuler la trajectoire ; la détonation prématurée contre un obstacle
+  intercalé (RAW « n'explose que si elle heurte quelque chose ») via le LOS déjà calculé = raffinement
+  ultérieur.
+- **Couture unique** `programmerExplosion(point, profil, quand)` avec `quand ∈ { maintenant,
+  TourSuivant@Ini }` — MIN et PER = deux valeurs d'un paramètre, pas deux chemins. PER en v1 sert à
+  prouver que la couture est une vraie couture et pas un trou en forme de MIN.
+- **DRO** : projectile-entité autonome (détection, homing, 10 min de vol, Tours propres, NT V, ×10
+  coût) — dépend d'un sous-système « entité autonome en combat » non construit (dette
+  `COUVERTURE_RAW.md` §2). Le construire maintenant = spéculatif ou rustine jetable, les deux
+  interdits (invariant #2). `detonation_mode = 'drone'` accepté **structurellement**, rejeté à la
+  résolution avec message clair (patron `AOE_MECHANICS`) → ajout ultérieur sans migration ni refactor.
+
+### 2.8 Découpage de Segment 3 (chaque sous-segment validé avant le suivant)
+
+| Sous-seg | Contenu | Nature |
+|---|---|---|
+| **3a** | Mécanisme `grenade_blast` : entrée du registre 1.5, forme `circle` centrée sur un point, 2 régimes (`standard` via `distanceBands` / `none` uniforme), dégression **dégâts + Choc**, 1D3 Loc au palier centre, réduction couverture partielle (−1 à −2D10). **Fonction pure, fixtures** — ni payload, ni explosion différée | résolution pure |
+| **3b** | **1 migration** `aoe_profile` pour les 9 lignes en périmètre (6 grenades + capsules napalm/explosive/acide), contrat 3a figé | migration data |
+| **3c** | Ciblage d'un **point** : payload `aoe.intendedOrigin`, aperçu cercle (`aoePreviewShape.js` + `Canvas3D.jsx`), éligibilité « Viser un point » aux 3 fenêtres de déclaration | payload + UI |
+| **3d** | **Lancer** : Test de Coordination serveur + `resolveScatter` (`aoeShapes.js`, écrit, jamais câblé) → point d'impact dévié sur échec (1D6 direction × marge) | résolution |
+| **3e** | **Explosion différée (MIN)** : couture `programmerExplosion(…, quand)` + action résolue au Tour suivant au rang d'Ini du lanceur. **Touche la FSM combat (code humain le plus testé)** → analyse à charge dédiée + recherche pattern (Foundry / PF2e delayed effects) avant tout code | **infra neuve** |
+| **3f** | Mode **PER** : `quand = maintenant` sur la même couture | 1 valeur de param |
+| **3g** | Doc : écarts `JOURNAL8.md` (sonique dégression, acide Ø 3 m), `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md` | doc |
+
+3a–3b sont livrables sans toucher au combat humain. 3e est le vrai morceau et aura son propre tour
+d'analyse à charge. Hors Segment 3 : lancer une grenade **au lance-grenades / lance-capsules** (Test
+de tir au lieu du Test de Coordination — variante de livraison, différée) ; mines ; neuro-charge
+(Segment 4).
 
 ### 2.4 Mines — sous-lot séparé, hors scope v1
 
@@ -677,7 +695,7 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 | **Segment 1.5 — registre de mécanismes AOE** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`1999ab4`, `9256e01`). CHANTIER FONCTIONNELLEMENT CLOS.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Non-régression fusil à pompe + lance-flammes confirmée par Saar. Détail §1.4bis. |
 | **Segment 2a — AOE tireur exo** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`183177e`..`f9484f3`). CHANTIER FONCTIONNELLEMENT CLOS.** Adaptateur serveur (`fetchAoeShooterWeapon`/`decrementAoeShooterAmmo`) + UI `CombatExoActionWindow`/`useExoDeclare`. 3 bugs réels trouvés en session (colonne `ref_aoe_profile` manquante côté endpoint, libellé bouton codé en dur, `useAutoMoveMode` jamais désarmé pendant la visée — collision avec le clic au sol de l'AOE). Détail §1.4bis. |
 | **Segment 2b — AOE tireur drone** | **Codé + VALIDÉ en session réelle (2026-09-05), poussé `dev/Saar` (`022de42`..`2f54eda`). CHANTIER FONCTIONNELLEMENT CLOS.** 4 commits isolés : C1 refactor `fetchDroneWeapon` (0 comportement), C2 serveur AOE drone (branche `fetchAoeShooterWeapon` + endpoint `aoe_profile`), C3 client 2 fenêtres hôtes + `DroneWeaponPanel` partagé, C4 exclusivité d'une Action de zone hoistée aux 3 plateformes de l'ANNONCE (drone/exo/humanoïde — autorité pure déjà agnostique, seul l'enforcement manquait). Débloque aussi le fusil à pompe monté sur drone. Détail §1.4bis + `JOURNAL8.md`. |
-| Segment 3 — grenades explosives + capsules | **Audit catalogue fait (2026-09-06, §2.5).** Reste : moteur `grenade_blast` (mécanisme `circle` sur le registre 1.5, régimes `standard` / `falloff:none`) + visée d'un point (`intendedOrigin`) + déviation 1D6 sur échec (`resolveScatter`) + explosion différée inter-tours + options MIN/PER/DRO (§2.7, en arbitrage) → **puis** 1 migration `aoe_profile`. RAW complet transcrit. |
+| Segment 3 — grenades explosives + capsules | **Audit catalogue fait (2026-09-06, §2.5).** Options tranchées (§2.7 : MIN+PER v1, DRO différé). **Découpage 3a–3g : §2.8** — prochaine étape = plan détaillé de 3a (mécanisme `grenade_blast`, résolution pure). Migration catalogue (3b) APRÈS le moteur, une seule fois. RAW complet transcrit. |
 | Segment 4 — grenade à neuro-charge | Différé, non cadré — mécanique de debuff de zone (§2.6). |
 | Nuages (fumigène + gaz) | Hors périmètre — chantier `docs/PLANS/PLAN_NUAGE.md`. |
 | Mines | Hors scope v1 (système entité-piège). |
