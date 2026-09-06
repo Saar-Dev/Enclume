@@ -106,7 +106,7 @@ pour trancher la dépendance elle-même.
 | Drones courants — fiche, création, programmes, armes/ordinateurs | ✅ | — **mais leur comportement EN COMBAT a des gaps réels, voir §2** (télépilotage, séquence autonome, Esquive/Interception) — ne pas confondre "le drone existe et s'équipe" avec "le drone se comporte selon la RAW en combat" |
 | Tests et équipement (p.277) | ❓ | fait, à revérifier en jeu réel |
 | Intégrité du matériel, Tests de panne, Usure et détérioration, Réparation du matériel | 🔲 | `PLANS/PLAN_USURE&INTEGRITE.md` (stub, à cadrer) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) |
-| Grenades et autres armes à aire d'effet, Explosifs | 🔲 | Audit catalogue fait (2026-09-06). Explosives + capsules : `PLANS/PLAN_ARMES_SPECIALES.md` §2 (Segment 3, moteur `grenade_blast`). Nuages (fumigène + gaz) : `PLANS/PLAN_NUAGE.md`. Neuro-charge : Segment 4 différé. RAW : `REGLES/REGLES_ARMES_SPECIALES.md` §Grenades — catalogue |
+| Grenades et autres armes à aire d'effet, Explosifs | 🕓 | Audit catalogue fait (2026-09-06), plan écrit. Explosives + capsules : `PLANS/PLAN_GRENADES.md` (Segment 3, mécanisme `grenade_frag` d'abord). Nuages (fumigène + gaz) : `PLANS/PLAN_NUAGE.md`. Neuro-charge : Segment 4 différé. RAW : `REGLES/REGLES_ARMES_SPECIALES.md` §Grenades — catalogue |
 | Champs de force portatifs, Micro-drones/nano-drones, Dégradation des armures simples | 🔲 | pas cadré, aucune dépendance connue |
 | Le marché légal, Le marché noir | 🔲 | non pertinent en l'état actuel (pas de simulation économique) selon la note de Saar, à confirmer |
 
