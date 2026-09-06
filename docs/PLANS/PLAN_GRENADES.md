@@ -371,3 +371,64 @@ mécanique munition). Aucun opt-out nécessaire en 3b sur ce point.
 
 3a–3b : refactor pur / additif, `git revert` suffit. 3e (FSM) : tag avant + sauvegarde si le risque
 le justifie, décidé à l'analyse à charge de 3e.
+
+---
+
+## 10. Dettes ouvertes & suite (annoté 2026-09-06, session à faible contexte)
+
+**État : 3a+3b+3c fonctionnellement clos, ~26 commits locaux NON poussés (`cd0c196`..).**
+Grenade à fragmentation déclarable + visée d'un point + aperçu disque ; résolution → « pas encore
+implémenté (Segment 3d) ». Migration 325 appliquée (nodemon). Testé en session Saar (déclaration OK
+après le fix `fdd613c`).
+
+### 10.1 Fix `ref_fire_mode || isAoeWeapon` — patch sûr mais symptôme (À REWORK)
+
+Commit `fdd613c` : la liste des armes de **Tir** (`CombatActionWindow` L366, `CombatGmDeclareWindow`
+L~393 + `pickedGmRanged` L~338) filtrait sur `ref_fire_mode`. La grenade `grenade_frag` = 1ʳᵉ arme
+AOE sans `fire_mode` → jamais listée. Patch = `|| isAoeWeapon(...)` : **purement additif** (seul
+nouvel item surfacé = la grenade ; Klauss/lance-flammes passaient déjà par `fire_mode`), **zéro
+régression**.
+
+**MAIS** : le discriminant `fire_mode` pour « arme de Tir » **contredit `combat.md`** (« le type
+d'une arme vient de `category === 'Arme de contact'`, jamais de `fire_mode` »). **Fix robuste** =
+filtrer `w.ref_category !== 'Arme de contact'` (miroir du filtre `meleeWeapons`), `resolveHandWeapons`/
+`isWeaponItem` gardant déjà « est-ce une arme ». Risque : surface d'autres armes sans `fire_mode`
+(arcs `Armes de trait`, `Armes de jet`, énergie…) qui **devraient** être sélectionnables au Tir de
+toute façon. → **Sa propre session** (change la liste d'armes pour tous les persos), pas fait ici
+faute de contexte.
+
+### 10.2 Aperçu multi-anneaux — dégression visible (demandé Saar, à faire — « 3c/2b-6 »)
+
+Aujourd'hui l'aperçu = **un seul disque** r=15 (`buildCircleSpan`/`projectCircleFan`, `aoePreviewShape.js`).
+Saar veut les **5 paliers RAW** visibles (rayons diamètre/2 = **1 / 2,5 / 5 / 10 / 15 m** ;
+centre/courte/moyenne/longue/extrême).
+
+**UX retenue** (réponse expert donnée à Saar) : anneaux (annuli) concentriques, **opacité graduée**
+— centre (+1D10) le plus opaque (~0,45), extrême (−3D10) le plus ténu (~0,12) ; fine ligne de bord
+plus vive à chaque transition de palier pour que les seuils soient lisibles ; **pas** de dégradé
+continu (la RAW est un palier discret) ; pas de label texte sur le sol (clutter) — au survol
+éventuellement plus tard. Garder rouge, faire varier l'opacité (pas la teinte → moins criard).
+
+**Implémentation (aggradation)** :
+1. **Sortir la table des paliers en `shared/combatRange.js`** (`GRENADE_FRAG_BANDS`, tableau simple,
+   à côté de `SHOTGUN_SPREAD_BY_BAND`). Aujourd'hui elle est locale à `server/.../grenadeFrag.js`
+   (décision 3a « un seul consommateur » — **caduque** : le client la veut aussi). `grenadeFrag.js`
+   l'importe et wrappe avec `normalizeDistanceBands`. Une seule autorité RAW.
+2. `aoePreviewShape.js` : `buildGrenadeBlastRings()` → `[{ band, innerM, outerM, opacity }]` ;
+   `projectRingQuads(ring, center, steps)` → quads d'anneau (plan X/Z, centre = point d'impact).
+   + tests (mirror `projectCircleFan`).
+3. `Canvas3D.jsx` : le bloc `aimMode === 'point'` boucle sur les anneaux (N meshes, opacité par
+   anneau) au lieu d'un seul `projectCircleFan`. Clé de remontage inchangée.
+4. `radiusM` du profil = borne du dernier anneau ; garder la cohérence avec `GRENADE_FRAG_BANDS[last]`.
+
+### 10.3 Segment 3d (prochaine grosse étape serveur)
+
+Lancer T1 : `combat_action` `modifiers.aoe.mode:'grenade'` → **Test de Coordination** serveur
+(attribut COO ? ou compétence `ARMES_DE_JET` COO/PER −3 ? — `[INCONNU]` à trancher) + `resolveScatter`
+(`shared/world/aoeShapes.js`, écrit jamais câblé) sur échec → `aoe.resolvedOrigin`. Insère
+`combat_timeline_entries` (turn_number = T+1, phase_position = Ini lanceur ×100, status 'scheduled')
+→ `combat_action` synthétique `type:'grenade_explosion'` (`resolution_snapshot` = point + formule +
+mechanic). Dispatch T2 : `else if (action.type === 'grenade_explosion')` dans
+`socketCombatResolution.js:~383` → `resolveAoeAssaultAction` (capacités de mécanisme 3b déjà en
+place). Cas : lanceur mort en T2, reco, répétition réseau, 0 cible. Le garde
+`aoe.intendedOrigin && !aoe.resolvedOrigin` (socketCombatAoe.js) est l'emplacement où 3d se branche.
