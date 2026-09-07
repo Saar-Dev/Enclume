@@ -12,11 +12,11 @@
 // `confirmMeleeDefense`/`confirmDamage`.
 //
 // M1 = déplacement PUR, zéro changement de logique — corps identiques byte-à-byte à l'original
-// (`git show` faisant foi). SEULE déviation : le mot-clé `export` ajouté à 3 fonctions qui étaient
-// internes à la god-file et sont désormais appelées depuis du code qui y reste —
-// `computeMultiAttackMalus` (resolveMeleeAction/resolveAssaultAction), `pickNextObligatoryDelayed`
-// (forceAdvanceResolution), `broadcastCurrentSubPhase` (armAwaitingDamage). Aucun effet runtime.
-// Les évolutions inter-tours (`resolve_on_turn`, report d'Initiative ≤ 0) = M2/M3.
+// (`git show` faisant foi). Déviations, sans effet runtime : `export` ajouté à des fonctions jadis
+// internes à la god-file — 3 pour un appel depuis du code qui y reste (`computeMultiAttackMalus`,
+// `pickNextObligatoryDelayed`, `broadcastCurrentSubPhase`), 3 pour la couverture de test M2a
+// (`computeSeriesPositions`, `computeActNowPosition`, `buildTimelineEntries`).
+// Les évolutions inter-tours (`resolve_on_turn`, report d'Initiative ≤ 0) = M2b/M3.
 //
 // `crypto` : global Node (Web Crypto), utilisé sans import — exactement comme dans la god-file
 // d'origine (match de comportement, pas un ajout).
@@ -184,7 +184,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
 // §1/§0.1 point 4 — reçoit ses entrées sans position (delayed_waiting), positionnées plus tard par
 // COMBAT_ACT_NOW (§6bis point 2 : Retarder porte sur le Tour entier de l'action, jamais une attaque
 // isolée d'une série — la série entière bascule ensemble).
-function computeSeriesPositions(basePosition, count) {
+export function computeSeriesPositions(basePosition, count) {
   return Array.from({ length: count }, (_, idx) => basePosition - idx * 500)
 }
 
@@ -211,7 +211,7 @@ export async function computeMultiAttackMalus(actionId) {
 // de 500 en 500 (RAW -5 Initiative par attaque supplémentaire), avec un `declaration_group_id` commun
 // utilisé à la résolution pour recompter les sœurs vivantes (computeMultiAttackMalus). Une seule
 // implémentation pour les deux mécaniques — jamais deux copies divergentes du même calcul.
-async function buildTimelineEntries(io, campaignId, turnNumber, pendingActions, roster) {
+export async function buildTimelineEntries(io, campaignId, turnNumber, pendingActions, roster) {
   const rosterByToken = new Map(roster.map(r => [r.token_id, r]))
   const rows = []
 
@@ -338,7 +338,7 @@ export async function pickNextObligatoryDelayed(campaignId, turnNumber) {
 // déclenchements « Agir maintenant » quasi simultanés (le plus rapide gagne, cohérent avec le reste du
 // moteur). +100 reste sous l'espacement ×100 entre deux Initiatives de base, jamais de collision avec
 // une entrée existante plus haute (référence = pas le plus haut restant, par construction).
-function computeActNowPosition(referencePosition, initiative) {
+export function computeActNowPosition(referencePosition, initiative) {
   return referencePosition + 100 + initiative
 }
 
