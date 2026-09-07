@@ -428,6 +428,14 @@ export async function broadcastCurrentSubPhase(io, campaignId) {
 // `combatFSM.js`) : dès qu'un pas normal existe, on le présente directement en SLOT_ACTIVE.
 // `triggerActNow` reste utilisable à tout moment pendant SLOT_ACTIVE pour un personnage en délai — le
 // RAW ne prévoit aucun minuteur, seulement une priorité sur l'action normale à la même phase.
+// Résolution AUTONOME d'une entrée d'échelle — injectée par la couche de composition
+// (`socketCombatResolution.js`) au chargement (patron registre, comme les mods/dangers). Le moteur ne
+// peut pas importer le résolveur AOE directement (cycle : combatTurnEngine → socketCombatAoe →
+// socketCombatHelpers → combatTurnEngine). Une entrée `resolution_snapshot.autoResolve === true`
+// (explosion de grenade différée, §3d ; plus tard : mines, pièges) se résout sans clic humain.
+let autonomousStepResolver = null
+export function registerAutonomousStepResolver(fn) { autonomousStepResolver = fn }
+
 export async function advanceTimeline(io, campaignId, pendingMaps) {
   try {
     const state = await db('combat_state').where({ campaign_id: campaignId }).first()
@@ -435,6 +443,13 @@ export async function advanceTimeline(io, campaignId, pendingMaps) {
 
     const step = await pickNextTimelineStep(campaignId, turnNumber)
     if (step) {
+      // Entrée autonome → le moteur la résout lui-même et continue l'échelle. Terminaison garantie :
+      // le résolveur marque l'entrée `resolved` avant tout traitement (voir socketCombatResolution.js),
+      // donc l'ensemble `scheduled` autonome décroît strictement à chaque itération.
+      if (step.kind === 'entry' && step.entry.resolution_snapshot?.autoResolve === true && autonomousStepResolver) {
+        await autonomousStepResolver(io, campaignId, step, pendingMaps)
+        return advanceTimeline(io, campaignId, pendingMaps)
+      }
       await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
       await broadcastTimelineState(io, campaignId, turnNumber, step)
       return

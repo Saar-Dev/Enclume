@@ -16,7 +16,7 @@ import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstant
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
-  triggerActNow, triggerDelayedPass,
+  triggerActNow, triggerDelayedPass, registerAutonomousStepResolver,
 } from './combatTurnEngine.js'
 import {
   resolveMeleeAction, resolveReloadAction,
@@ -35,7 +35,7 @@ async function flushEmissions(io, socket, campaignId, emissions, preloadedSocket
     if (e.to === 'room') {
       io.to(campaignId).emit(e.event, e.data)
     } else if (e.to === 'socket') {
-      socket.emit(e.event, e.data)
+      if (socket) socket.emit(e.event, e.data) // null lors d'une résolution autonome (grenade §3d) — émission privée sautée
     } else if (e.to === 'user') {
       const s = allSockets.find(s => s.user?.id === e.userId && s.campaignId === campaignId)
       if (s) {
@@ -48,6 +48,44 @@ async function flushEmissions(io, socket, campaignId, emissions, preloadedSocket
     }
   }
 }
+
+// ─── Résolution autonome d'une entrée d'échelle (PLAN_GRENADES.md §3d) ─────────────────────────────
+// Injectée dans le moteur de tour (patron registre — `combatTurnEngine.js` ne peut pas importer
+// `resolveAoeAssaultAction`, cycle). Appelée par `advanceTimeline` quand le pas courant porte
+// `resolution_snapshot.autoResolve` : explosion de grenade différée aujourd'hui, mines/pièges demain.
+// Marque l'entrée `resolved` AVANT toute résolution (même discipline que le dispatch normal L~372) —
+// une exception ne bloque jamais l'échelle, `advanceTimeline` enchaîne.
+async function resolveAutonomousStep(io, campaignId, step, pendingMaps) {
+  await db('combat_timeline_entries').where({ id: step.entry.id })
+    .update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
+  const action = await db('combat_actions').where({ id: step.entry.combat_action_id }).first()
+  if (!action) return
+  await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })
+
+  const token = await db('tokens').where({ id: action.token_id }).first()
+  const character = token?.character_id ? await db('characters').where({ id: token.character_id }).first() : null
+  if (!character) return
+
+  const sockets = await io.fetchSockets()
+  const launcherSocket = character.user_id
+    ? sockets.find(s => s.user?.id === character.user_id && s.campaignId === campaignId)
+    : null
+
+  const result = action.modifiers?.aoe
+    ? await resolveAoeAssaultAction(io, campaignId, action, null, character, pendingMaps)
+    : null
+  if (result?.emissions?.length) {
+    // Une explosion autonome n'est pas « le résultat de ton action » — pas de fenêtre reçue privée
+    // (analyse à charge #2). Les cibles voient les dégâts via COMBAT_ATTACK_RESULT (room).
+    const emissions = result.emissions.filter(e => e.event !== WS.COMBAT_ATTACK_PLAYER_RESULT)
+    emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+      i18nKey: 'session.grenadeExploded', params: { label: character.name ?? token?.label ?? '?' },
+      timestamp: new Date().toISOString(),
+    } })
+    await flushEmissions(io, launcherSocket, campaignId, emissions, sockets)
+  }
+}
+registerAutonomousStepResolver(resolveAutonomousStep)
 
 export function registerResolutionHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context

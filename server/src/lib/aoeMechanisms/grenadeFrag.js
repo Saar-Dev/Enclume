@@ -119,16 +119,17 @@ export const grenadeFragMechanism = {
   // ─── Capacités de flux (PLAN_GRENADES.md §5, Segment 3b) ─────────────────────────────────────────
   // Propriétés non-hook lues par `resolveAoeAssaultAction` avec un défaut = comportement historique.
   // Un mécanisme ne déclare QUE ce qui diffère du défaut (fusil à pompe / lance-flammes n'en ont
-  // aucune). La grenade s'écarte sur trois axes :
+  // aucune). La grenade s'écarte sur quatre axes :
   //  - `needsWeaponRange: false` — pas de colonne `ref_range` ; l'amplitude vient du mécanisme
   //    (`GRENADE_FRAG_MAX_RADIUS_M` dans `buildShape`), pas de `parseWeaponRangeBands`.
   //  - `decrementsAmmo: false` — une grenade est consommée au LANCER (T1), jamais à l'explosion.
   //  - `losSource: 'origin'` — la LOS de l'explosion part du POINT D'IMPACT, pas du lanceur : une
   //    cible masquée pour le lanceur mais à découvert du souffle EST touchée.
-  // `rollsPhaseA` (jet de compétence d'arme) : PAS déclaré ici — le Test de Coordination du lancer
-  // est câblé au Segment 3d, avec sa source de `rollResult` (jusque-là, le tronc roule un jet de
-  // compétence cosmétiquement faux mais sans effet sur le dégât, qui ignore `mr`).
+  //  - `rollsPhaseA: false` (Segment 3d) — le seul « jet » de la grenade est le Test de Coordination
+  //    du LANCER (Tour T) ; l'explosion (Tour+1) ne relance rien. `computeTargetDamage` ignore `mr`
+  //    de toute façon. Le tronc laisse `rollResult` indéfini (identité tireur via l'affichage).
   needsWeaponRange: false,
   decrementsAmmo: false,
   losSource: 'origin',
+  rollsPhaseA: false,
 }

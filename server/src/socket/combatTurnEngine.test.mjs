@@ -5,6 +5,7 @@ import db from '../db/knex.js'
 import {
   computeSeriesPositions, computeActNowPosition,
   pickNextTimelineStep, buildTimelineEntries, endTurn,
+  advanceTimeline, registerAutonomousStepResolver,
 } from './combatTurnEngine.js'
 
 // Lancement : node --env-file=server/.env --test server/src/socket/combatTurnEngine.test.mjs
@@ -345,4 +346,36 @@ test('endTurn (M2b) — une entrée différée (resolve_on_turn futur) SURVIT au
     assert.equal(cur.status, 'skipped')     // Tour courant → balayée
     assert.equal(fut.status, 'scheduled')   // Tour futur → épargnée (le débloqueur de M3/3d)
   } finally { await fx.cleanup() }
+})
+
+// ─── advanceTimeline — résolution autonome (3d : explosion de grenade différée) ────────────────────
+
+test('advanceTimeline (3d) — entrée `autoResolve` : le moteur appelle le résolveur injecté et enchaîne l\'échelle', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 3, roster: [{ baseIni: 12, ini: 12, announced: true, resolved: true }] })
+  const calls = []
+  // Dans CE process de test, socketCombatResolution.js n'est jamais importé → le résolveur réel n'est
+  // pas enregistré (null). On installe un stub, on le retire au finally.
+  registerAutonomousStepResolver(async (io2, cid, step) => {
+    calls.push(step.entry.id)
+    await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'resolved' }) // termine la récursion
+  })
+  try {
+    const { token } = fx.roster[0]
+    const aBoom = await addAction(fx.campaign.id, token.id, { turnNumber: 3 })
+    const aNormal = await addAction(fx.campaign.id, token.id, { turnNumber: 3 })
+    await db('combat_timeline_entries').insert([
+      { campaign_id: fx.campaign.id, turn_number: 3, resolve_on_turn: 3, token_id: token.id, combat_action_id: aBoom.id, phase_position: 5000, status: 'scheduled', resolution_snapshot: JSON.stringify({ autoResolve: true, resolvedOrigin: { x: 1, y: 0, z: 2 } }) },
+      { campaign_id: fx.campaign.id, turn_number: 3, resolve_on_turn: 3, token_id: token.id, combat_action_id: aNormal.id, phase_position: 1200, status: 'scheduled' },
+    ])
+
+    await advanceTimeline(io, fx.campaign.id, pendingMaps)
+
+    assert.equal(calls.length, 1)                    // le résolveur autonome a été appelé une fois
+    assert.equal(calls[0], (await db('combat_timeline_entries').where({ combat_action_id: aBoom.id }).first()).id)
+    assert.equal((await db('combat_timeline_entries').where({ combat_action_id: aBoom.id }).first()).status, 'resolved')
+    assert.equal((await db('combat_timeline_entries').where({ combat_action_id: aNormal.id }).first()).status, 'scheduled') // l'échelle a enchaîné sur l'entrée normale, pas résolue
+  } finally {
+    registerAutonomousStepResolver(null) // ne pas laisser le stub fuiter vers les autres tests
+    await fx.cleanup()
+  }
 })

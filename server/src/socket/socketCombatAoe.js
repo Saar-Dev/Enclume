@@ -331,6 +331,9 @@ async function resolveAoeTargetDamage(io, campaignId, {
 // COMBAT_ATTACK_PLAYER_RESULT agrégé (fenêtre-reçu non bloquante, §5.1). Renvoie les émissions.
 async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult, action }) {
   const emissions = []
+  // `rollResult` absent = mécanisme sans Phase A (grenade : Test de Coordination fait au lancer,
+  // §3d) — `roll`/`seuil` deviennent `null` (touché automatiquement, pas un hit/miss de jet).
+  const rr = rollResult ?? {}
   for (const ptr of perTargetResults) {
     const rowId = targetRowIdByTokenId.get(ptr.tokenId)
     if (rowId) {
@@ -342,15 +345,15 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
         tireurId: action.token_id, cibleId: ptr.tokenId,
         localisation: r.localisation, degautsBruts: r.degautsBruts, degatsNets: r.degatsNets,
         severity: r.severity, is_lethal: r.is_lethal, isSuccess: true, isPnj: isPnjResult,
-        roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: r.shockResult,
+        roll: rr.rollAttaque ?? null, chancesDeReussite: rr.seuil ?? null, shockResult: r.shockResult,
       } })
     }
   }
   if (!isPnjResult) {
     emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
       hit: perTargetResults.length > 0,
-      roll: rollResult.rollAttaque,
-      seuil: rollResult.seuil,
+      roll: rr.rollAttaque ?? null,
+      seuil: rr.seuil ?? null,
       tireurTokenId: action.token_id,
       cibleTokenId: null,
       targets: perTargetResults.map(p => ({ name: p.name, band: p.band, results: p.results })),
@@ -613,13 +616,24 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     const hitTargets = mech.filterTargets(ctx, visibility.targets)
 
     // ── Jet de tir unique (Phase A) — jamais de branche "raté" ici, voir commentaire de tête.
-    const phaseA = await runAoePhaseA({ character, weapon, confirmedModifiers })
-    if (phaseA.blocked) { emissions.push(phaseA.blocked); return { suspend: false, emissions } }
-    const { rollResult, diceEmission, tireurColor, tireurUsername } = phaseA
-    emissions.push(diceEmission)
-    await maybeTriggerCatastrophe(io, campaignId, action.token_id, rollResult.catastropheRisk, {
-      site: 'assault_aoe', actorTokenId: action.token_id, targetTokenId: null,
-    })
+    // `rollsPhaseA` (défaut `true`) : une grenade a déjà passé son Test de Coordination au LANCER
+    // (Tour T) ; l'explosion (Tour+1) ne relance rien — `grenade_frag` déclare `rollsPhaseA: false`.
+    // `rollResult` reste `undefined` en aval (les hooks `grenade_frag` ne le lisent pas ;
+    // `finalizeAoeResults` et la branche 0-cible tolèrent l'absence).
+    let rollResult, tireurColor, tireurUsername
+    if (mech.rollsPhaseA ?? true) {
+      const phaseA = await runAoePhaseA({ character, weapon, confirmedModifiers })
+      if (phaseA.blocked) { emissions.push(phaseA.blocked); return { suspend: false, emissions } }
+      ;({ rollResult, tireurColor, tireurUsername } = phaseA)
+      emissions.push(phaseA.diceEmission)
+      await maybeTriggerCatastrophe(io, campaignId, action.token_id, rollResult.catastropheRisk, {
+        site: 'assault_aoe', actorTokenId: action.token_id, targetTokenId: null,
+      })
+    } else {
+      const id = await resolveCombatantDisplayIdentity(db, character)
+      tireurUsername = id.username
+      tireurColor = id.color
+    }
 
     // Une grenade est consommée au LANCER (T1), jamais à l'explosion → `decrementsAmmo: false`.
     // Défaut `true` : fusil à pompe / lance-flammes décrémentent une cartouche par gerbe, inchangé.
@@ -640,7 +654,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       if (!isPnjResult) {
         emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
           hit: false, aoeNoTargets: true,
-          roll: rollResult.rollAttaque, seuil: rollResult.seuil,
+          roll: rollResult?.rollAttaque ?? null, seuil: rollResult?.seuil ?? null,
           tireurTokenId: action.token_id, cibleTokenId: null,
         } })
       }
