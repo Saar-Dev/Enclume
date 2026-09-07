@@ -6,7 +6,7 @@ import {
   resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantIdentity,
   resolveExoContext, resolveManeuverSkillId, isExoActorAuthorized,
 } from './combatantContextService.js'
-import { calcSkillTotal, calcEncumbrancePenalty, getModDom } from './charStats.js'
+import { calcSkillTotal, calcEncumbrancePenalty, getModDom, calcAttributeNA } from './charStats.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/combatantContextService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -115,6 +115,32 @@ test('resolveHumanoidTestContext — skillId=null : palier NA seul, pas de skill
   try {
     const ctx = await resolveHumanoidTestContext(db, fx.character, null)
     assert.deepEqual(ctx, { sheetId: fx.sheet.id, for_na: 14, con_na: 9, vol_na: 12 })
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveHumanoidTestContext — Test d\'attribut (attributeId) : skillTotal = attribut net, palier complet (effectiveMalus)', { skip }, async () => {
+  const fx = await createFixture({ COO: 13 }) // les autres attrs = 10 (défaut createFixture)
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+    const ctx = await resolveHumanoidTestContext(db, fx.character, null, { attributeId: 'COO' })
+    assert.equal(ctx.skillTotal, calcAttributeNA(attrs, 'COO', null, null)) // = 13 (aucun modificateur)
+    assert.equal(ctx.mastery, 0)
+    assert.equal(ctx.effectiveMalus, 0)         // pas de blessure / encombrement
+    assert.equal(ctx.sheetId, fx.sheet.id)
+    assert.equal(ctx.for_na, 10)                 // le palier complet reste calculé
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveCombatantTestContext — dispatcher passe attributeId (pj/pnj → chemin humanoïde)', { skip }, async () => {
+  const fx = await createFixture({ COO: 11 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+    const ctx = await resolveCombatantTestContext(db, fx.character, null, { attributeId: 'COO' })
+    assert.equal(ctx.skillTotal, calcAttributeNA(attrs, 'COO', null, null))
   } finally {
     await cleanup(fx)
   }

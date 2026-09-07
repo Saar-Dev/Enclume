@@ -41,11 +41,16 @@ import { computeExoStats } from '../../../shared/exoStats.js'
 // fetchés en plus (2 requêtes, même `Promise.all`), jamais un second fetch complet wounds/inventory/
 // settings (superflu : la Compétence limitative n'a pas besoin de son propre `effectiveMalus`/
 // `modDom`, seul son `skillTotal` sert de plafond).
-export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride, limitingSkillId } = {}) {
+// `attributeId` (PLAN_GRENADES.md §3d — Test de Coordination du lancer, RAW littéral « Test de
+// Coordination », pas une Compétence) : Test sur un ATTRIBUT. `skillId` reste `null` ; le palier
+// complet (attrs/wounds/inventaire/malus) est calculé comme pour une Compétence, mais `skillTotal` =
+// `calcAttributeNA(attrs, attributeId, …)` (le Seuil = attribut net + malus). Générique — resservira
+// pour d'autres Tests d'attribut (Chance, sauvegardes de Volonté…).
+export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride, limitingSkillId, attributeId } = {}) {
   const sheet = await db('char_sheet').where({ character_id: character.id }).first()
   if (!sheet) return null
 
-  if (skillId == null) {
+  if (skillId == null && !attributeId) {
     const { for_na, con_na, vol_na } = await fetchCibleNA(db, character.id, sheet.id)
     return { sheetId: sheet.id, for_na: forNAOverride ?? for_na, con_na, vol_na }
   }
@@ -77,6 +82,7 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
   const vol_na = calcAttributeNA(attrs, 'VOL', geno, mutationEffects)
 
   let skillTotal = refSkill ? calcSkillTotal(attrs, charSkill, refSkill, geno, mutationEffects) : 0
+  if (attributeId) skillTotal = calcAttributeNA(attrs, attributeId, geno, mutationEffects)
   const mastery = charSkill?.mastery ?? 0
 
   if (limitingSkillId) {
@@ -279,9 +285,11 @@ async function resolveExoTestContext(db, exoCharacter, skillId) {
 // pas de table (§1 du plan, doctrine Fowler déjà appliquée dans ce fichier) — seulement 2 branches
 // réelles aujourd'hui (pj/pnj traités identiquement, exo). Les drones n'appellent jamais ce point
 // d'entrée (§3.5 du plan — drone_programs.level sert directement de Seuil, aucun char_sheet impliqué).
-export async function resolveCombatantTestContext(db, character, skillId) {
+export async function resolveCombatantTestContext(db, character, skillId, opts = {}) {
+  // `opts.attributeId` (Test d'attribut, ex. Coordination du lancer de grenade) : chemin humanoïde
+  // seulement — un lanceur exo est hors périmètre (PLAN_GRENADES.md §3d, VIT ≠ COO).
   if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
-  return resolveHumanoidTestContext(db, character, skillId)
+  return resolveHumanoidTestContext(db, character, skillId, opts)
 }
 
 // Identité de l'acteur EFFECTIF derrière un combattant, sans le reste du contexte de Test — pour les
