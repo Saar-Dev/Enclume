@@ -72,7 +72,12 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
           key:           `e-${entry.id}`,
           portraitUrl:   char?.portrait_url ?? null,
           label:         token?.label ?? '?',
-          initiative:    entry.phase_position != null ? Math.round(entry.phase_position / 100) : null,
+          // M3 — entrée REPORTÉE (Initiative ≤ 0, RAW REGLESYSCOMBAT:354) : `phase_position` est une
+          // sentinelle (≈ 1 000 000, « agit en premier »). Afficher l'Initiative réelle du roster
+          // (= base_ini, remise par endTurn), jamais la sentinelle divisée par 100.
+          initiative:    entry.resolution_snapshot?.carriedFrom != null
+            ? (roster.find(r => r.token_id === entry.token_id)?.initiative ?? null)
+            : (entry.phase_position != null ? Math.round(entry.phase_position / 100) : null),
           worstSeverity: char?.worst_wound_severity ?? null,
           isPnj:         char?.type === 'pnj',
           hasAnnounced:  false,

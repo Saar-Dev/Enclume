@@ -5544,3 +5544,79 @@ ci-dessus.
 
 **Retour arrière** : 4 commits `dev/Saar` isolés (C1→C4) + 1 doc plan + 1 doc clôture. `git revert`
 dans l'ordre inverse — C4 puis C3 puis C2 puis C1 ; C1 seul est sans risque (refactor pur).
+
+---
+
+## Session (Claude) — 2026-09-07 — Moteur de tour : extraction + file roulante `resolve_on_turn` + report d'Initiative ≤ 0 — M1/M2 CLOS, M3 ⚠️ CLOS PARTIEL
+
+**Contexte** : préalable serveur aux grenades (`PLAN_GRENADES.md` §10.3, `PLAN_ARMES_SPECIALES.md` §2)
+— l'explosion « au Tour de combat suivant » exige une résolution différée inter-tours. Découverte :
+`combat_timeline_entries` était **par-Tour** (reconstruite par `buildTimelineEntries`, balayée par
+`endTurn` sans filtre), aucune infra de différé. Sert aussi un **bug RAW** indépendant.
+
+### Décision d'architecture — `combat_timeline_entries` = file roulante
+
+Pas de nouvelle table (option écartée après analyse) : **colonne `resolve_on_turn`** (migration 326,
+`INTEGER NOT NULL DEFAULT 0`, backfill `= turn_number`). Toutes les requêtes d'échelle filtrent
+`resolve_on_turn = <Tour>` ; `turn_number` conservé = provenance (Tour de création). `endTurn`
+n'épargne du wipe que `resolve_on_turn > <Tour qui se termine>` (idem pour le skip `combat_actions`).
+Une entrée insérée au Tour N pour `resolve_on_turn = N+k` survit et se résout au bon Tour.
+
+**M1** (`e0af745`) : 16 fonctions du cycle de tour extraites de `socketCombatHelpers.js` (3531 l.,
+god-file) vers `server/src/socket/combatTurnEngine.js` — module feuille (résolveurs → moteur, sens
+unique). `forceAdvanceResolution` reste côté résolveurs (appelle `confirmMeleeDefense`/`confirmDamage`
+→ cycle sinon). Déplacement PUR (byte-identité vérifiée vs `HEAD` fonction par fonction ; seule modif :
+`export` sur 6 fonctions jadis internes — 3 pour un appel depuis helpers, 3 pour la testabilité M2a).
+
+**M2a** (`9bc8956`) : `combatTurnEngine.test.mjs` — 1ʳᵉ couverture du moteur (fixture DB,
+`skip = !DATABASE_URL`, `test.after(db.destroy)`). **M2b** (`a7008e5`) : migration 326 + bascule des
+9 requêtes + `endTurn`.
+
+### Écart RAW (invariant AGENTS.md #5) — M3 : Initiative ≤ 0 → Action reportée
+
+`REGLESYSCOMBAT.md:354` : « si une Préparation réduit l'Initiative à **0 ou moins**, l'Action est
+**reportée au Tour suivant. Le personnage agit en premier** et son Action bénéficie de la
+Préparation. » L'implémentation (Lot B, `docs/Old/PLAN_COMBAT_TIMELINE.md` §6bis pt 7 / §6sexies pt 1)
+faisait `phase_position ≤ 0 → status:'lost'` : **l'Action était jetée** — violation RAW, signalée par
+Saar. M3 corrige.
+
+- `buildTimelineEntries` : `positions[0] ≤ 0` (la phase de base de la série, `initiative × 100`) →
+  toute la série est **reportée** : `resolve_on_turn = turnNumber + 1`, `phase_position =
+  CARRY_OVER_BASE (1 000 000) + base_ini × 100 - idx × 500` (sentinelle « agit en premier » sans
+  toucher au tri de `pickNextTimelineStep`), `status:'scheduled'`, `resolution_snapshot: { carriedFrom
+  }`. `declaration_group_id` conservé → `computeMultiAttackMalus` recompte -5/-7 au Tour+1.
+- **Sous-décision (jugement délégué)** : l'overflow d'une attaque *supplémentaire* d'une série
+  (`positions[idx>0] ≤ 0` mais `positions[0] > 0` : personnage assez rapide pour agir, trop lent pour
+  autant d'attaques) **reste `lost`**. Le RAW reporte « l'Action » (la série), pas une attaque bonus —
+  carrier la 3ᵉ attaque seule gonflerait l'économie d'action au Tour+1. Deux notices distinctes :
+  `session.initiativeLost` (overflow) vs `session.actionCarriedOver` (report).
+- `endTurn` : le token reporté est marqué `has_announced = true` (son Action est déjà déterminée, il
+  ne redéclare pas ; la phase ANNONCE le saute). L'action reportée (`turn_number` bumpé à T+1) reste
+  `pending` → survit au wipe **et** trouvée par le PRECHECK du Tour+1 → fenêtre de modificateurs PJ OK.
+- `CombatTimeline.jsx` : une entrée `carriedFrom` affiche l'Initiative réelle du roster
+  (= `base_ini`), jamais la sentinelle ÷ 100. Idempotence `buildTimelineEntries` (une action déjà
+  porteuse d'entrée n'en recrée pas) — inerte hors cas report.
+
+**Testé** : `node --check` + import ESM des 6 modules socket ; `combatTurnEngine.test.mjs` 16/16
+(`.env`) dont 5 M3 (report simple, série de 3 reportée, overflow reste `lost`, idempotence, `endTurn`
+→ `pickNextTimelineStep(T+1)`) ; `node --test 'shared/**'` 519/519 ; `eslint` `CombatTimeline.jsx` /
+`combatStore.js` — baseline inchangée (2 problèmes préexistants) ; `npm run build` OK ;
+`git diff --check` propre. **Run Saar M1+M2** (2026-09-07) : 2 combats complets — échelle, ordre, exo
+assault+melee, drone AOE, PNJ, défense (AWAITING_DEFENSE), STUN2, Tir Multi `multiAtk:-5`
+(`computeMultiAttackMalus` déplacé), 2 Tours. « ça a l'air bon ».
+
+**Non testé** : ⚠️ **M3 en jeu réel** — un combat où un personnage empile assez de Préparations pour
+Initiative ≤ 0, puis agit en premier au Tour suivant. Behavior-preserving en isolation (aucune entrée
+reportée créée tant que ce cas n'arrive pas).
+
+**Données** : migration 326 (`resolve_on_turn` sur `combat_timeline_entries` + backfill + index
+`idx_timeline_entries_resolve`). Appliquée par nodemon, round-trip `up`/`down` vérifié.
+
+**Retour arrière** : `git revert` dans l'ordre inverse — M3 (à venir) puis `a7008e5` `9bc8956`
+`e0af745`. La migration 326 `down()` retire la colonne sans conséquence (backfill = copie de
+`turn_number`).
+
+**Bug pré-existant noté (hors périmètre, à ticketer)** : `socket/index.js` ~L192 — resynchro du token
+joueur à la reconnexion en RÉSOLUTION cherche par `tokens.campaign_id` (colonne inexistante ;
+`tokens` porte `battlemap_id`). Introduit `795eac3`/`f344450`. « non bloquant ». Fix probable :
+`.where({ 'characters.campaign_id': campaignId, ... })`.

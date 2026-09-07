@@ -152,6 +152,89 @@ test('buildTimelineEntries — move/reload/micro ne génèrent aucune entrée', 
   } finally { await fx.cleanup() }
 })
 
+// ─── M3 — Initiative ≤ 0 → Action reportée au Tour suivant (RAW REGLESYSCOMBAT:354) ───────────────
+
+test('buildTimelineEntries (M3) — Initiative ≤ 0 → entrée reportée au Tour+1, action bumpée', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 4, roster: [{ baseIni: 12, ini: 0 }] }) // base 12, Préparations → ini 0
+  try {
+    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 4 })
+    await buildTimelineEntries(io, fx.campaign.id, 4, [a], fx.roster.map(r => r.rosterRow))
+
+    const [row] = await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id })
+    assert.equal(row.status, 'scheduled')       // pas 'lost'
+    assert.equal(row.turn_number, 4)            // provenance
+    assert.equal(row.resolve_on_turn, 5)        // reporté au Tour suivant
+    assert.equal(row.phase_position, 1_000_000 + 12 * 100) // CARRY_OVER_BASE + base_ini×100, idx 0
+    assert.deepEqual(row.resolution_snapshot, { carriedFrom: 4 })
+
+    const action = await db('combat_actions').where({ id: a.id }).first()
+    assert.equal(action.turn_number, 5)         // bumpée → survit au wipe + trouvée par le PRECHECK T+1
+    assert.equal(action.status, 'pending')
+  } finally { await fx.cleanup() }
+})
+
+test('buildTimelineEntries (M3) — série de 3 avec Initiative ≤ 0 : toute la série reportée, même groupe', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [{ baseIni: 10, ini: -2 }] })
+  try {
+    const { token } = fx.roster[0]
+    const actions = [await addAction(fx.campaign.id, token.id, { turnNumber: 2 }), await addAction(fx.campaign.id, token.id, { turnNumber: 2 }), await addAction(fx.campaign.id, token.id, { turnNumber: 2 })]
+    await buildTimelineEntries(io, fx.campaign.id, 2, actions, fx.roster.map(r => r.rosterRow))
+
+    const rows = await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id }).orderBy('phase_position', 'desc')
+    assert.equal(rows.length, 3)
+    assert.ok(rows.every(r => r.status === 'scheduled' && r.resolve_on_turn === 3))
+    assert.deepEqual(rows.map(r => r.phase_position), [1_000_000 + 1000, 1_000_000 + 500, 1_000_000]) // base 10×100 - idx×500
+    assert.equal(new Set(rows.map(r => r.declaration_group_id)).size, 1)
+  } finally { await fx.cleanup() }
+})
+
+test('buildTimelineEntries (M3) — série dont SEULE une attaque supplémentaire déborde (positions[0] > 0) → reste lost, PAS de report', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 1, roster: [{ baseIni: 5, ini: 5 }] }) // positions [500, 0, -500]
+  try {
+    const { token } = fx.roster[0]
+    const actions = [await addAction(fx.campaign.id, token.id), await addAction(fx.campaign.id, token.id), await addAction(fx.campaign.id, token.id)]
+    await buildTimelineEntries(io, fx.campaign.id, 1, actions, fx.roster.map(r => r.rosterRow))
+
+    const rows = await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id }).orderBy('phase_position', 'desc')
+    assert.deepEqual(rows.map(r => r.status), ['scheduled', 'lost', 'lost'])
+    assert.ok(rows.every(r => r.resolve_on_turn === 1 && r.resolution_snapshot == null))
+  } finally { await fx.cleanup() }
+})
+
+test('buildTimelineEntries (M3) — idempotence : une action déjà porteuse d\'entrée ne recrée rien', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 3, roster: [{ baseIni: 8, ini: 8 }] })
+  try {
+    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 3 })
+    await buildTimelineEntries(io, fx.campaign.id, 3, [a], fx.roster.map(r => r.rosterRow))
+    await buildTimelineEntries(io, fx.campaign.id, 3, [a], fx.roster.map(r => r.rosterRow)) // 2ᵉ appel
+    assert.equal((await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id })).length, 1)
+  } finally { await fx.cleanup() }
+})
+
+test('endTurn (M3) — token reporté marqué has_announced ; action reportée non skippée ; entrée survit', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 6, roster: [{ baseIni: 9, ini: 0, announced: true, resolved: true }] })
+  try {
+    const { token } = fx.roster[0]
+    const a = await addAction(fx.campaign.id, token.id, { turnNumber: 6 })
+    await buildTimelineEntries(io, fx.campaign.id, 6, [a], fx.roster.map(r => r.rosterRow)) // → entrée reportée T7, action bumpée T7
+
+    await endTurn(io, fx.campaign.id, pendingMaps)
+
+    const rosterRow = await db('combat_roster').where({ campaign_id: fx.campaign.id }).first()
+    assert.equal(rosterRow.has_announced, true) // reporté → ne redéclare pas
+    assert.equal(rosterRow.initiative, 9)       // reset base_ini quand même
+
+    assert.equal((await db('combat_actions').where({ id: a.id }).first()).status, 'pending') // pas skippée
+    assert.equal((await db('combat_timeline_entries').where({ combat_action_id: a.id }).first()).status, 'scheduled') // survit
+
+    // Tour 7 : l'entrée reportée est le pas courant, en premier
+    const step = await pickNextTimelineStep(fx.campaign.id, 7)
+    assert.equal(step?.kind, 'entry')
+    assert.equal(step.tokenId, token.id)
+    assert.ok(step.position >= 1_000_000)
+  } finally { await fx.cleanup() }
+})
+
 // ─── pickNextTimelineStep ────────────────────────────────────────────────────────────────────────
 
 test('pickNextTimelineStep — plus haute phase_position scheduled ; passe à la suivante une fois résolue', { skip }, async () => {

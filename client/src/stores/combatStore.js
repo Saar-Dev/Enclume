@@ -11,7 +11,7 @@ export const useCombatStore = create((set) => ({
   announcedActions: [], // [{ tokenId, actionType, initiative, moveTarget, attackTargetId }] — cumul du tour
 
   // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B/C) — alimentée par COMBAT_TIMELINE_UPDATED.
-  timelineEntries: [],  // [{ id, token_id, combat_action_id, declaration_group_id, phase_position, status }]
+  timelineEntries: [],  // [{ id, token_id, combat_action_id, declaration_group_id, phase_position, status, resolve_on_turn, resolution_snapshot }] — resolution_snapshot.carriedFrom : entrée reportée (M3, CombatTimeline.jsx)
   currentStep: null,    // { kind: 'entry', tokenId, entry } | { kind: 'simple', tokenId } | { kind: 'delayed_turn', tokenId, groupId } | null
 
   setCombatState: ({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({

@@ -18,9 +18,14 @@
 // (`computeSeriesPositions`, `computeActNowPosition`, `buildTimelineEntries`).
 // M2b (migration 326) — `combat_timeline_entries.resolve_on_turn` : file roulante. Toutes les
 // requêtes d'échelle filtrent `resolve_on_turn = <Tour>` (plus `turn_number`, conservé = provenance) ;
-// `endTurn` n'épargne du wipe que `resolve_on_turn > <Tour qui se termine>`. Aucune entrée différée
-// n'est encore créée (M3 = report d'Initiative ≤ 0 ; PLAN_GRENADES 3d = grenade) — comportement
-// identique tant que `resolve_on_turn == turn_number` partout.
+// `endTurn` n'épargne du wipe que `resolve_on_turn > <Tour qui se termine>`.
+//
+// M3 — 1ᵉʳ consommateur du différé : Initiative ≤ 0 (`buildTimelineEntries`, `positions[0] ≤ 0`) →
+// l'Action est REPORTÉE au Tour+1 (`resolve_on_turn = turnNumber + 1`, `phase_position` sentinelle
+// `CARRY_OVER_BASE`, `resolution_snapshot.carriedFrom`) au lieu de `status:'lost'` — RAW
+// REGLESYSCOMBAT.md:354, écart acté docs/JOURNAL8.md. `endTurn` marque le token reporté
+// `has_announced` (il ne redéclare pas) et l'action reportée (`turn_number` bumpé) survit au wipe.
+// PLAN_GRENADES 3d (grenade) = prochain consommateur.
 //
 // `crypto` : global Node (Web Crypto), utilisé sans import — exactement comme dans la god-file
 // d'origine (match de comportement, pas un ajout).
@@ -32,6 +37,13 @@ import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import * as statusService from '../lib/statusService.js'
+
+// M3 — `phase_position` d'une entrée REPORTÉE au Tour suivant (Initiative ≤ 0, RAW REGLESYSCOMBAT.md:354
+// « le personnage agit en premier »). Sentinelle très au-dessus de toute position réelle
+// (`base_ini × 100` ≈ 3000 max) : le report passe avant tout au Tour suivant sans toucher au tri de
+// `pickNextTimelineStep`. La convention ×100 est conservée (`+ base_ini × 100`) pour rester cohérent
+// avec le reste de l'échelle et permettre l'affichage. Marqueur data : `resolution_snapshot.carriedFrom`.
+const CARRY_OVER_BASE = 1_000_000
 
 // ─── Helper — démarrer les timers auto-skip pour la phase ANNONCE ─────────────
 // PC17 : skip uniquement si timerSec > 0. Exclut PNJs et tokens du GM (gmUserId).
@@ -219,8 +231,18 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
   const rosterByToken = new Map(roster.map(r => [r.token_id, r]))
   const rows = []
 
+  // Idempotence (M3) — une action REPORTÉE au Tour précédent revient dans `pendingActions` ce Tour
+  // (son `turn_number` a été bumpé) ; son entrée existe déjà, ne pas en créer une seconde. Aujourd'hui
+  // aucune entrée ne préexiste (reconstruites/wipées chaque Tour), donc no-op hors cas report.
+  const alreadyEntered = new Set(
+    await db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, resolve_on_turn: turnNumber })
+      .pluck('combat_action_id')
+  )
+
   const seriesByTokenAndType = new Map()
   for (const action of pendingActions) {
+    if (alreadyEntered.has(action.id)) continue
     // PLAN_EXOARMURE.md Lot 2bis §9.3 — 'exo_stand_up' rejoint 'melee'/'assault' ici (trouvaille
     // tardive : sans cette ligne, l'action n'aurait jamais reçu d'entrée d'échelle et n'aurait donc
     // jamais été résolue, malgré une ligne combat_actions correctement posée à l'Annonce). Toujours
@@ -232,25 +254,43 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
     if (!seriesByTokenAndType.has(key)) seriesByTokenAndType.set(key, { tokenId: action.token_id, actions: [] })
     seriesByTokenAndType.get(key).actions.push(action)
   }
+  const carriedActionIds = []
   for (const { tokenId, actions } of seriesByTokenAndType.values()) {
-    const isDelayed = rosterByToken.get(tokenId)?.state_vitesse === 'delayed'
+    const rosterEntry = rosterByToken.get(tokenId)
+    const isDelayed = rosterEntry?.state_vitesse === 'delayed'
     const groupId = crypto.randomUUID()
-    const positions = isDelayed ? null : computeSeriesPositions((rosterByToken.get(tokenId)?.initiative ?? 0) * 100, actions.length)
+    const positions = isDelayed ? null : computeSeriesPositions((rosterEntry?.initiative ?? 0) * 100, actions.length)
+    // M3 (RAW REGLESYSCOMBAT.md:354) — si les Préparations ont réduit l'Initiative à ≤ 0, la phase de
+    // base de la série (`positions[0]`) est ≤ 0 : l'Action « n'a pas eu lieu ce Tour », elle est
+    // REPORTÉE au Tour suivant et le personnage « agit en premier » (toute la série bascule, elle
+    // conserve son `declaration_group_id` → -5/-7 recompté au Tour+1). L'overflow d'une attaque
+    // SUPPLÉMENTAIRE (`positions[idx>0] ≤ 0` mais `positions[0] > 0`) reste `lost` : le RAW reporte
+    // « l'Action », pas une attaque bonus. Écart RAW acté : docs/JOURNAL8.md.
+    const carriedOver = !isDelayed && positions[0] <= 0
+    const carriedBase = CARRY_OVER_BASE + (rosterEntry?.base_ini ?? 0) * 100
     actions.forEach((action, idx) => {
+      if (carriedOver) carriedActionIds.push(action.id)
       rows.push({
         campaign_id: campaignId,
-        turn_number: turnNumber,
-        resolve_on_turn: turnNumber, // entrée normale : se résout dans son Tour de création (M2b — file roulante)
+        turn_number: turnNumber,                                   // Tour de création (provenance)
+        resolve_on_turn: carriedOver ? turnNumber + 1 : turnNumber,
         token_id: tokenId,
         combat_action_id: action.id,
         declaration_group_id: groupId,
-        phase_position: isDelayed ? null : positions[idx],
-        status: isDelayed ? 'delayed_waiting' : (positions[idx] <= 0 ? 'lost' : 'scheduled'),
+        phase_position: isDelayed ? null : (carriedOver ? carriedBase - idx * 500 : positions[idx]),
+        status: isDelayed ? 'delayed_waiting' : (carriedOver ? 'scheduled' : (positions[idx] <= 0 ? 'lost' : 'scheduled')),
+        resolution_snapshot: carriedOver ? JSON.stringify({ carriedFrom: turnNumber }) : null,
       })
     })
   }
 
   if (rows.length > 0) await db('combat_timeline_entries').insert(rows)
+  // L'action reportée doit survivre au wipe `endTurn` (`turn_number <= <fin>`) ET être trouvée par le
+  // PRECHECK du Tour+1 (`status='pending' AND turn_number = current`) pour que la fenêtre de
+  // modificateurs PJ fonctionne — d'où le bump de `turn_number`.
+  if (carriedActionIds.length > 0) {
+    await db('combat_actions').whereIn('id', carriedActionIds).update({ turn_number: turnNumber + 1, updated_at: db.fn.now() })
+  }
 
   // Alerte chat Initiative insuffisante (retour Saar, 2026-08-27 — testé pour la première fois sur
   // une exo-armure, mais générique à tout personnage, comme le reste de cette fonction) : une entrée
@@ -260,13 +300,19 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
   // entière (Tir Multi/CaC multiple) est perdue d'un coup — même position de base pour toute la
   // série, donc soit toutes perdues ensemble, soit aucune. COMBAT_SYSTEM_NOTICE (déjà utilisé pour
   // dualWieldAmmoOutOffhand/Primary, session.json) — pas CHAT_MESSAGE, pas de texte figé.
-  const lostTokenIds = [...new Set(rows.filter(r => r.status === 'lost').map(r => r.token_id))]
-  if (lostTokenIds.length > 0) {
-    const lostTokens = await db('tokens').whereIn('id', lostTokenIds).select('id', 'label')
+  // `lost` = overflow d'une attaque supplémentaire (`positions[idx>0] ≤ 0`, série trop longue pour ce
+  // Tour) → « action perdue ». Report d'Initiative ≤ 0 (`resolution_snapshot` posé) → « agit au Tour
+  // suivant » : deux messages distincts, un par token.
+  const noticeTokenIds = [...new Set(rows
+    .filter(r => r.status === 'lost' || r.resolution_snapshot != null)
+    .map(r => r.token_id))]
+  if (noticeTokenIds.length > 0) {
+    const carriedTokens = new Set(rows.filter(r => r.resolution_snapshot != null).map(r => r.token_id))
+    const noticeTokens = await db('tokens').whereIn('id', noticeTokenIds).select('id', 'label')
     const timestamp = new Date().toISOString()
-    for (const { id, label } of lostTokens) {
+    for (const { id, label } of noticeTokens) {
       io.to(campaignId).emit(WS.COMBAT_SYSTEM_NOTICE, {
-        i18nKey: 'session.initiativeLost',
+        i18nKey: carriedTokens.has(id) ? 'session.actionCarriedOver' : 'session.initiativeLost',
         params: { label: label ?? '?' },
         timestamp,
       })
@@ -539,10 +585,13 @@ export async function endTurn(io, campaignId, pendingMaps) {
         updated_at:        db.fn.now(),
       })
 
-    // Clôture explicite — seul le Tour en cours peut encore avoir des lignes 'pending' (invariant :
-    // les Tours précédents sont déjà intégralement résolus/skippés avant qu'endTurn() soit rappelé).
+    // Clôture explicite — les actions encore 'pending' du Tour qui se termine sont marquées 'skipped'
+    // (le joueur n'a pas confirmé à temps). M3 — `turn_number <= <Tour qui se termine>` : une action
+    // REPORTÉE (`turn_number` bumpé au Tour+1 par buildTimelineEntries) doit rester 'pending' pour être
+    // résolue au Tour suivant via son entrée d'échelle. Symétrique du wipe timeline ci-dessous.
     await db('combat_actions')
       .where({ campaign_id: campaignId, status: 'pending' })
+      .whereRaw('turn_number <= (select current_turn from combat_state where campaign_id = ?)', [campaignId])
       .update({ status: 'skipped', updated_at: db.fn.now() })
 
     // Filet de sécurité — advanceTimeline ne rappelle endTurn() que lorsque plus aucune entrée
@@ -594,6 +643,22 @@ export async function endTurn(io, campaignId, pendingMaps) {
           console.log(`[WS] endTurn — étourdissement expiré. token:${token_id} turn:${newTurn}`)
         }
       }
+    }
+
+    // M3 — un token dont l'Action a été REPORTÉE à ce nouveau Tour (entrée `carriedFrom`) ne déclare
+    // pas : son Action est déjà déterminée, il « agit en premier » (RAW REGLESYSCOMBAT.md:354). On le
+    // marque `has_announced` pour que la phase ANNONCE le saute — broadcastRoster + firstAnnounceSlot
+    // ci-dessous en tiennent compte. (Une entrée différée sans `carriedFrom` — grenade, 3d — ne marque
+    // rien : le lanceur agit normalement ce Tour, l'explosion est une action synthétique.)
+    const carriedTokenIds = await db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, resolve_on_turn: newTurn, status: 'scheduled' })
+      .whereRaw("resolution_snapshot->>'carriedFrom' IS NOT NULL")
+      .distinct('token_id').pluck('token_id')
+    if (carriedTokenIds.length > 0) {
+      await db('combat_roster')
+        .where({ campaign_id: campaignId })
+        .whereIn('token_id', carriedTokenIds)
+        .update({ has_announced: true, updated_at: db.fn.now() })
     }
 
     const roster = await db('combat_roster')
