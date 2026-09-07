@@ -16,7 +16,11 @@
 // internes à la god-file — 3 pour un appel depuis du code qui y reste (`computeMultiAttackMalus`,
 // `pickNextObligatoryDelayed`, `broadcastCurrentSubPhase`), 3 pour la couverture de test M2a
 // (`computeSeriesPositions`, `computeActNowPosition`, `buildTimelineEntries`).
-// Les évolutions inter-tours (`resolve_on_turn`, report d'Initiative ≤ 0) = M2b/M3.
+// M2b (migration 326) — `combat_timeline_entries.resolve_on_turn` : file roulante. Toutes les
+// requêtes d'échelle filtrent `resolve_on_turn = <Tour>` (plus `turn_number`, conservé = provenance) ;
+// `endTurn` n'épargne du wipe que `resolve_on_turn > <Tour qui se termine>`. Aucune entrée différée
+// n'est encore créée (M3 = report d'Initiative ≤ 0 ; PLAN_GRENADES 3d = grenade) — comportement
+// identique tant que `resolve_on_turn == turn_number` partout.
 //
 // `crypto` : global Node (Web Crypto), utilisé sans import — exactement comme dans la god-file
 // d'origine (match de comportement, pas un ajout).
@@ -236,6 +240,7 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
       rows.push({
         campaign_id: campaignId,
         turn_number: turnNumber,
+        resolve_on_turn: turnNumber, // entrée normale : se résout dans son Tour de création (M2b — file roulante)
         token_id: tokenId,
         combat_action_id: action.id,
         declaration_group_id: groupId,
@@ -294,12 +299,12 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
 export async function pickNextTimelineStep(campaignId, turnNumber) {
   const [nextEntry, tokensWithEntries] = await Promise.all([
     db('combat_timeline_entries')
-      .where({ campaign_id: campaignId, turn_number: turnNumber, status: 'scheduled' })
+      .where({ campaign_id: campaignId, resolve_on_turn: turnNumber, status: 'scheduled' })
       .whereNotNull('phase_position')
       .orderBy('phase_position', 'desc')
       .first(),
     db('combat_timeline_entries')
-      .where({ campaign_id: campaignId, turn_number: turnNumber })
+      .where({ campaign_id: campaignId, resolve_on_turn: turnNumber })
       .distinct('token_id').pluck('token_id'),
   ])
   const nextSimple = await db('combat_roster')
@@ -325,7 +330,7 @@ export async function pickNextObligatoryDelayed(campaignId, turnNumber) {
     .join('combat_roster as cr', function() {
       this.on('cr.campaign_id', '=', 'cte.campaign_id').andOn('cr.token_id', '=', 'cte.token_id')
     })
-    .where({ 'cte.campaign_id': campaignId, 'cte.turn_number': turnNumber, 'cte.status': 'delayed_waiting' })
+    .where({ 'cte.campaign_id': campaignId, 'cte.resolve_on_turn': turnNumber, 'cte.status': 'delayed_waiting' })
     .orderBy('cr.initiative', 'asc')
     .select('cte.token_id', 'cte.declaration_group_id')
     .first()
@@ -353,7 +358,7 @@ export function computeActNowPosition(referencePosition, initiative) {
 async function broadcastTimelineState(io, campaignId, turnNumber, currentStep) {
   const [entries, state] = await Promise.all([
     db('combat_timeline_entries')
-      .where({ campaign_id: campaignId, turn_number: turnNumber })
+      .where({ campaign_id: campaignId, resolve_on_turn: turnNumber })
       .orderBy('phase_position', 'desc'),
     db('combat_state').where({ campaign_id: campaignId }).first(),
   ])
@@ -411,7 +416,7 @@ export async function forfeitToken(campaignId, tokenId, turnNumber) {
     .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: turnNumber })
     .update({ status: 'resolved', updated_at: db.fn.now() })
   await db('combat_timeline_entries')
-    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber })
+    .where({ campaign_id: campaignId, token_id: tokenId, resolve_on_turn: turnNumber })
     .whereIn('status', ['scheduled', 'delayed_waiting'])
     .update({ status: 'lost', updated_at: db.fn.now() })
   await db('combat_roster')
@@ -428,7 +433,7 @@ export async function triggerActNow(io, campaignId, tokenId, pendingMaps) {
   const state = await db('combat_state').where({ campaign_id: campaignId }).first()
   const turnNumber = state.current_turn
   const entries = await db('combat_timeline_entries')
-    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber, status: 'delayed_waiting' })
+    .where({ campaign_id: campaignId, token_id: tokenId, resolve_on_turn: turnNumber, status: 'delayed_waiting' })
     .orderBy('created_at', 'asc')
   if (entries.length === 0) return
 
@@ -462,7 +467,7 @@ export async function triggerActNow(io, campaignId, tokenId, pendingMaps) {
     // (resolved_at, pas la plus haute position — sinon une série d'attaques multiples déjà résolue
     // plus tôt dans le Tour redeviendrait la référence au lieu de ce qui vient de se passer).
     const lastResolved = await db('combat_timeline_entries')
-      .where({ campaign_id: campaignId, turn_number: turnNumber, status: 'resolved' })
+      .where({ campaign_id: campaignId, resolve_on_turn: turnNumber, status: 'resolved' })
       .orderBy('resolved_at', 'desc')
       .first()
     base = (lastResolved?.phase_position ?? 0) - 1
@@ -496,7 +501,7 @@ export async function triggerDelayedPass(io, campaignId, tokenId, pendingMaps) {
   if (obligatoryDelayed?.token_id !== tokenId) return
 
   const updated = await db('combat_timeline_entries')
-    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber, status: 'delayed_waiting' })
+    .where({ campaign_id: campaignId, token_id: tokenId, resolve_on_turn: turnNumber, status: 'delayed_waiting' })
     .update({ status: 'skipped', updated_at: db.fn.now() })
   if (updated === 0) return
   await db('combat_roster')
@@ -541,11 +546,15 @@ export async function endTurn(io, campaignId, pendingMaps) {
       .update({ status: 'skipped', updated_at: db.fn.now() })
 
     // Filet de sécurité — advanceTimeline ne rappelle endTurn() que lorsque plus aucune entrée
-    // 'scheduled'/'delayed_waiting' ne subsiste ce Tour ; ce cas ne devrait jamais matcher de ligne,
-    // gardé pour ne jamais laisser une entrée orpheline survivre à la clôture du Tour (§6bis point 5).
+    // 'scheduled'/'delayed_waiting' ne subsiste POUR CE TOUR ; ce cas ne devrait jamais matcher de
+    // ligne, gardé pour ne jamais laisser une entrée orpheline survivre à la clôture du Tour
+    // (§6bis point 5). M2b — `resolve_on_turn <= <Tour qui se termine>` : une entrée DIFFÉRÉE
+    // (`resolve_on_turn` futur — report d'Initiative ≤ 0, grenade) doit survivre à ce wipe. Sous-requête
+    // = `current_turn` lu avant l'incrément juste en dessous.
     await db('combat_timeline_entries')
       .where({ campaign_id: campaignId })
       .whereIn('status', ['scheduled', 'delayed_waiting'])
+      .whereRaw('resolve_on_turn <= (select current_turn from combat_state where campaign_id = ?)', [campaignId])
       .update({ status: 'skipped', updated_at: db.fn.now() })
 
     // Incrémenter le tour, retour à ANNOUNCEMENT

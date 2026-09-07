@@ -180,7 +180,7 @@ const initSocket = (io) => {
               // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B) — un reconnectant doit revoir
               // l'état courant de la timeline, pas seulement roster/actions ci-dessus.
               const timelineEntries = await db('combat_timeline_entries')
-                .where({ campaign_id: campaignId, turn_number: activeCombat.current_turn })
+                .where({ campaign_id: campaignId, resolve_on_turn: activeCombat.current_turn })
                 .orderBy('phase_position', 'desc')
               const currentStep = await pickNextTimelineStep(campaignId, activeCombat.current_turn)
               socket.emit(WS.COMBAT_TIMELINE_UPDATED, {

@@ -11,10 +11,8 @@ import {
 const skip = !process.env.DATABASE_URL
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-// M2a — PREMIÈRE couverture de test du moteur de tour (extrait en M1, jamais testé jusqu'ici).
-// Caractérise le comportement ACTUEL (avant `resolve_on_turn`, M2b) : c'est le « avant » qui rendra
-// la bascule vérifiable. Les cas marqués [FLIP M2b] documentent une propriété qui CHANGE en M2b —
-// leur assertion sera inversée à ce moment-là (report d'Initiative ≤ 0 / grenade différée).
+// Couverture du moteur de tour (extrait en M1). M2a = première caractérisation ; M2b a basculé
+// `combat_timeline_entries` en file roulante (`resolve_on_turn`, migration 326) et ces tests avec.
 // Portée : le noyau requêtable (`pickNextTimelineStep`, `buildTimelineEntries`, `endTurn`) + les 2
 // purs. L'orchestration (`startResolutionPhase`/`advanceTimeline` bout en bout) reste couverte par
 // le run Saar (harnais io/mods/hazards disproportionné ici).
@@ -112,6 +110,7 @@ test('buildTimelineEntries — une entrée par action complexe, position = Initi
     assert.equal(rows[0].phase_position, 1500)
     assert.equal(rows[0].status, 'scheduled')
     assert.equal(rows[0].turn_number, 1)
+    assert.equal(rows[0].resolve_on_turn, 1) // entrée normale : résolue dans son Tour (M2b)
     assert.ok(rows[0].declaration_group_id)
     assert.equal(rows[1].phase_position, 800)
   } finally { await fx.cleanup() }
@@ -195,19 +194,20 @@ test('pickNextTimelineStep — action simple (roster annoncé, non résolu, sans
   } finally { await fx.cleanup() }
 })
 
-test('[FLIP M2b] pickNextTimelineStep — une entrée d\'un AUTRE Tour (turn_number ≠ courant) est invisible', { skip }, async () => {
-  // ACTUEL : le filtre `turn_number = turnNumber` masque toute entrée d'un autre Tour.
-  // M2b : ce filtre devient `resolve_on_turn = turnNumber` — une entrée différée (resolve_on_turn
-  // futur) reste invisible tant que son Tour n'est pas arrivé (assertion inchangée), MAIS une entrée
-  // resolve_on_turn = courant créée à un Tour antérieur DEVIENT visible (nouveau test ajouté en M2b).
+test('pickNextTimelineStep (M2b) — filtre `resolve_on_turn` : entrée différée invisible avant son Tour, visible à son Tour', { skip }, async () => {
   const fx = await createCombatFixture({ turn: 2, roster: [{ baseIni: 10, ini: 10, resolved: true }] })
   try {
-    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 2 })
+    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 1 })
+    // Entrée créée au Tour 1, programmée pour le Tour 3 (différé — ce que M3/3d produiront).
     await db('combat_timeline_entries').insert({
-      campaign_id: fx.campaign.id, turn_number: 3, token_id: fx.roster[0].token.id,
+      campaign_id: fx.campaign.id, turn_number: 1, resolve_on_turn: 3, token_id: fx.roster[0].token.id,
       combat_action_id: a.id, phase_position: 1000, status: 'scheduled',
     })
-    assert.equal(await pickNextTimelineStep(fx.campaign.id, 2), null) // Tour 2 ne voit pas l'entrée du Tour 3
+    assert.equal(await pickNextTimelineStep(fx.campaign.id, 2), null) // Tour 2 : pas encore son Tour
+
+    const step = await pickNextTimelineStep(fx.campaign.id, 3) // Tour 3 : éligible
+    assert.equal(step?.kind, 'entry')
+    assert.equal(step.position, 1000)
   } finally { await fx.cleanup() }
 })
 
@@ -221,7 +221,7 @@ test('endTurn — reset roster, actions pending → skipped, entrées scheduled 
     const { token } = fx.roster[0]
     const a = await addAction(fx.campaign.id, token.id, { turnNumber: 4 })
     await db('combat_timeline_entries').insert({
-      campaign_id: fx.campaign.id, turn_number: 4, token_id: token.id,
+      campaign_id: fx.campaign.id, turn_number: 4, resolve_on_turn: 4, token_id: token.id,
       combat_action_id: a.id, phase_position: 300, status: 'scheduled',
     })
 
@@ -244,21 +244,22 @@ test('endTurn — reset roster, actions pending → skipped, entrées scheduled 
   } finally { await fx.cleanup() }
 })
 
-test('[FLIP M2b] endTurn — une entrée scheduled d\'un Tour FUTUR est aujourd\'hui balayée (le wipe n\'a aucun filtre de Tour)', { skip }, async () => {
-  // ACTUEL : `WHERE status IN ('scheduled','delayed_waiting')` sans filtre de Tour → une entrée
-  // pré-insérée pour un Tour futur est perdue. C'est CE bug que M2b corrige (`+ AND resolve_on_turn
-  // <= <Tour qui se termine>`). En M2b cette assertion devient « survit ».
+test('endTurn (M2b) — une entrée différée (resolve_on_turn futur) SURVIT au wipe ; une entrée du Tour courant est balayée', { skip }, async () => {
   const fx = await createCombatFixture({ turn: 4, roster: [{ baseIni: 10, ini: 10, resolved: true }] })
   try {
-    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 4 })
-    await db('combat_timeline_entries').insert({
-      campaign_id: fx.campaign.id, turn_number: 5, token_id: fx.roster[0].token.id,
-      combat_action_id: a.id, phase_position: 9999, status: 'scheduled',
-    })
+    const { token } = fx.roster[0]
+    const aCur = await addAction(fx.campaign.id, token.id, { turnNumber: 4 })
+    const aFut = await addAction(fx.campaign.id, token.id, { turnNumber: 4 })
+    await db('combat_timeline_entries').insert([
+      { campaign_id: fx.campaign.id, turn_number: 4, resolve_on_turn: 4, token_id: token.id, combat_action_id: aCur.id, phase_position: 1000, status: 'scheduled' },
+      { campaign_id: fx.campaign.id, turn_number: 4, resolve_on_turn: 5, token_id: token.id, combat_action_id: aFut.id, phase_position: 9999, status: 'scheduled' },
+    ])
 
     await endTurn(io, fx.campaign.id, pendingMaps)
 
-    const future = await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id }).first()
-    assert.equal(future.status, 'skipped') // [FLIP M2b] → 'scheduled'
+    const cur = await db('combat_timeline_entries').where({ combat_action_id: aCur.id }).first()
+    const fut = await db('combat_timeline_entries').where({ combat_action_id: aFut.id }).first()
+    assert.equal(cur.status, 'skipped')     // Tour courant → balayée
+    assert.equal(fut.status, 'scheduled')   // Tour futur → épargnée (le débloqueur de M3/3d)
   } finally { await fx.cleanup() }
 })
