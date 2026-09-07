@@ -5620,3 +5620,67 @@ reportée créée tant que ce cas n'arrive pas).
 joueur à la reconnexion en RÉSOLUTION cherche par `tokens.campaign_id` (colonne inexistante ;
 `tokens` porte `battlemap_id`). Introduit `795eac3`/`f344450`. « non bloquant ». Fix probable :
 `.where({ 'characters.campaign_id': campaignId, ... })`.
+
+---
+
+## Session (Claude) — 2026-09-07 — Grenades : Segment 3d (lancer + explosion différée) — ⚠️ CLOS PARTIEL
+
+**Chantier** `PLAN_GRENADES.md` §3d. La grenade à fragmentation devient jouable de bout en bout :
+déclaration « viser un point » (3c, déjà clos) → **lancer** (Test de Coordination + dispersion, Tour T)
+→ **explosion** au rang d'Initiative normal du lanceur, Tour T+1. S'appuie sur le moteur de différé
+inter-tours (`resolve_on_turn`, chantier moteur de tour M1-M3, même session).
+
+### Décisions durables
+
+- **3d-0** — `resolveHumanoidTestContext` gagne l'option `attributeId` : un **Test d'ATTRIBUT**
+  (Seuil = attribut net + malus, palier complet). RAW littéral « Test de Coordination », pas une
+  Compétence. Générique — resservira (Chance, sauvegardes).
+- **3d-1** — Le lancer (`resolveAoeAssaultAction`, garde `aoe.intendedOrigin && !aoe.resolvedOrigin`) :
+  périmètre humanoïde (`pj`/`pnj`) ; Test de Coordination sur l'attribut **COO** via
+  `resolveAoeAttackRoll` (noyau de jet partagé — crit, Catastrophe `site: 'grenade_throw'`) ;
+  `failureMarginM = -mr` (`mr = seuil - roll` < 0 sur échec) + `d6Roll` → `resolveScatter` →
+  point d'impact réel figé maintenant ; `jsonb_set` de `modifiers.aoe.resolvedOrigin` **+
+  `weaponSnapshot`** ; `turn_number` de l'action bumpé à T+1 ; entrée `combat_timeline_entries`
+  `resolve_on_turn = T+1`, `phase_position = base_ini × 100 + 1`, `resolution_snapshot.autoResolve` ;
+  **la grenade quitte `char_inventory`** (`quantity - 1`, `DELETE` si 0).
+- **3d-2** — Capacité `rollsPhaseA` (défaut `true`, `grenade_frag` = `false`) : l'explosion ne
+  relance aucun jet (le Test a eu lieu au lancer). **Résolution autonome** (patron registre :
+  `combatTurnEngine.js` ne peut pas importer `resolveAoeAssaultAction` — cycle) : `advanceTimeline`
+  détecte `resolution_snapshot.autoResolve` et appelle un résolveur injecté au chargement par
+  `socketCombatResolution.js` → l'explosion se résout **sans clic humain** (resservira : mines,
+  pièges). Extensible : toute entrée d'échelle peut désormais être autonome.
+
+### Écarts RAW (invariant AGENTS.md #5)
+
+- **Difficulté « selon la zone visée »** (RAW : modificateurs de taille des Tests de tir) →
+  **aucun modificateur en v1**. On vise un **point au sol**, pas une partie du corps ; le raffinement
+  « viser les pieds d'une cible » (malus de taille) est différé.
+- **Le lanceur PJ ne reçoit pas de fenêtre « résultats » privée** au Tour+1 (`COMBAT_ATTACK_PLAYER_RESULT`
+  filtré) — une explosion autonome n'est pas « le résultat de ton action ». Les cibles voient les
+  dégâts via `COMBAT_ATTACK_RESULT` (room) + notice `session.grenadeExploded`.
+- **L'explosion différée ne dépend pas de l'inventaire** (grenade consommée au lancer) : les données
+  d'arme voyagent dans `modifiers.aoe.weaponSnapshot`. Décision d'architecture — la résolution
+  différée ne demande rien à un état qu'elle ne possède plus.
+
+### Hors périmètre (segments suivants)
+
+Lanceur **exo/drone** (VIT ≠ COO — message clair) ; mode **PER** (percussion — explosion immédiate
+Tour T, Segment 3f) ; **autres grenades** (concussion, sonique, incendiaire, capsules — Segment 3-bis,
+un mécanisme = une entrée de registre) ; malus de taille « viser une cible ».
+
+**Testé** : `node --check` + import ESM (7 modules socket) ;
+`combatantContextService.test.mjs` 41 (+2 `attributeId`) ; `combatTurnEngine.test.mjs` 17 (+1
+`advanceTimeline autoResolve`) ; `registry.test.mjs` (`rollsPhaseA`) ; `grenadeFrag.test.mjs` ;
+`node --test 'shared/**'` 519 ; `npm run build` client OK ; `git diff --check` propre.
+
+**Non testé** : ⚠️ **en jeu réel** — un combat complet : PJ/PNJ équipé grenade à fragmentation →
+déclare « viser un point » → Test de Coordination affiché → au Tour suivant l'explosion se résout
+seule au bon rang d'Initiative, dégression par palier appliquée, grenade retirée de l'inventaire.
+Cas à voir : échec du Test (dispersion visible), lanceur mort au Tour+1, 0 cible. Précédent : aucune
+résolution AOE (`resolveAoeAssaultAction`) n'a de test d'intégration DB — validation par session.
+
+**Données** : aucune migration (la migration 325 `aoe_profile` grenade date du Segment 3c). Effet
+runtime : une grenade lancée décrémente/supprime sa ligne `char_inventory`.
+
+**Retour arrière** : `git revert` dans l'ordre inverse — `2c7cf57` (3d-2) `4eef102` (3d-1)
+`15c0ec7` (3d-0). 3d-0 seul est inerte (option non consommée sans 3d-1).
