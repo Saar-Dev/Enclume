@@ -5616,10 +5616,10 @@ normale.
 `e0af745`. La migration 326 `down()` retire la colonne sans conséquence (backfill = copie de
 `turn_number`).
 
-**Bug pré-existant noté (hors périmètre, à ticketer)** : `socket/index.js` ~L192 — resynchro du token
-joueur à la reconnexion en RÉSOLUTION cherche par `tokens.campaign_id` (colonne inexistante ;
-`tokens` porte `battlemap_id`). Introduit `795eac3`/`f344450`. « non bloquant ». Fix probable :
-`.where({ 'characters.campaign_id': campaignId, ... })`.
+**Bug pré-existant trouvé ici → corrigé `8b0dccc`** : `socket/index.js` — resynchro du token joueur
+à la reconnexion en combat cherchait par `tokens.campaign_id` (colonne inexistante ; `tokens` porte
+`battlemap_id`). La requête levait à chaque reconnexion → toute la restauration des prompts en attente
+(surprise / damage / melee_defense / stun) était morte. Voir l'entrée dédiée 2026-09-08 ci-dessous.
 
 ---
 
@@ -5754,3 +5754,47 @@ par 3d-1). Ajout de l'asset `client/public/models/grenade.glb`.
 **Retour arrière** : `git revert` du commit 3d-3 — tout est additif (2 events, 1 champ de store, 1
 branche de rendu, `.returning('id')` + 2 émissions serveur). `grenade.glb` inoffensif si le code est
 retiré.
+
+## Session (Claude) — 2026-09-08 — Fix : reconnexion en combat — restauration des prompts en attente
+
+**Trouvé en branchant le resync des marqueurs de grenade (§3d-3).** `socket/index.js`, bloc
+« combat state sync » de `session:join` : la recherche du token du joueur reconnecté se faisait par
+`db('tokens').where({ 'tokens.campaign_id': … })` — **colonne inexistante** (un token porte
+`battlemap_id` ; c'est `characters` qui porte `campaign_id`). La requête **levait à chaque
+reconnexion en combat**, attrapée par le `try/catch` du bloc comme « non bloquant » → tout le code
+de restauration des `combat_pending` qui suit ne s'exécutait jamais : jet de surprise en ANNONCE,
+prompts `damage` / `melee_defense` / `stun` en RÉSOLUTION. Mort depuis l'introduction
+(`795eac3`/`f344450`). Le client se rattrape partiellement par d'autres canaux (`COMBAT_STATE_SYNC` +
+retry piloté par `subPhase` pour la *déclaration* d'action), mais pas pour un prompt de jet de
+dégâts / de défense déjà armé.
+
+### Décision durable — requête d'autorité canonique
+
+Pas le simple renommage de colonne. Une requête unique **`combat_roster ⋈ tokens ⋈ characters`
+filtrée sur `characters.user_id`** (même chaîne d'autorité que `socketCombatResolution.js:271`,
+`token.character_id → characters.user_id`), scellée au roster du combat, **calculée une fois** et
+partagée par les deux branches de phase. `.pluck('combat_roster.token_id')` → **tableau, pas
+`.first()`** : un joueur peut aligner plusieurs tokens dans une rencontre (son PJ **et** son drone) —
+le `.first()` en perdait un, bug latent réel pour le chantier exo/drone déjà livré. Les boucles
+d'émission passent à `.whereIn('token_id', myCombatTokenIds)` ; leur corps utilisait déjà
+`row.token_id`, inchangé. Le bloc drone (`payload->>'targetUserId'`, prompt routé vers le
+propriétaire de la *cible*) est un mécanisme distinct — non touché.
+
+### Écart connu (noté, hors périmètre)
+
+Un **MJ** qui se reconnecte ne récupère pas les prompts en attente de ses **PNJ** : le MJ ne
+possède aucune ligne `characters.user_id`, donc `myCombatTokenIds` est vide pour lui. Pré-existant
+(le `.first()` cassé ne trouvait rien non plus). Corriger demanderait d'indexer les `combat_pending`
+par « handler = MJ » (comme le bloc drone le fait déjà via `targetUserId`) — chantier séparé.
+
+**Testé** : `node --check` ; plan SQL validé contre la base locale ; colonnes vérifiées (`tokens`
+sans `campaign_id`, `characters` avec `campaign_id` + `user_id`, `combat_pending` =
+`campaign_id/token_id/type/payload/created_at/id`).
+
+**Non testé** : reconnexion réelle mid-combat en devant un jet de dégâts / une défense CaC, + le cas
+PJ + drone du même joueur. Pas de harnais de test pour `socket/index.js` (module d'enregistrement de
+handlers) → validation session.
+
+**Données** : aucune migration, aucun effet runtime (lecture seule).
+
+**Retour arrière** : `git revert 8b0dccc` — 1 fichier, purement une correction de requête.
