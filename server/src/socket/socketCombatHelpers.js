@@ -24,6 +24,7 @@ import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/comb
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
+import { resolveAttackTargetSize } from '../lib/characterSizeService.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
 import {
   resolveCombatantTestContext, resolveCombatantIdentity, resolveCombatantDisplayIdentity,
@@ -1060,7 +1061,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       || (confirmedModifiers?.situation ?? []).includes('cac_terrain_instable')
     const situationMods = (confirmedModifiers?.situation ?? []).filter(k => k !== 'cac_terrain_instable')
     const situationModComp = situationMods.reduce((sum, k) => sum + (CAC_SITUATION_MODS[k]?.mod ?? 0), 0)
-    const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne']?.mod ?? 0
+    // Taille de la cible : override MJ (confirmedModifiers.taille, déjà filtré MJ-only en amont)
+    // sinon dérivée de la fiche de la cible (docs/PLANS/PLAN_TAILLE.md).
+    const tailleCategory = await resolveAttackTargetSize(db, measurement.targetToken.character_id, confirmedModifiers)
+    const tailleMod = TAILLE_MODS[tailleCategory]?.mod ?? 0
     let terrainInstableMod = 0, acrobatieTotal = attackerSkillTotal
     if (terrainInstable) {
       // Repli sur attackerSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du
@@ -2048,7 +2052,12 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // armement_contact : portée = null → PORTEE_MOD_COMP[null]?.mod ?? 0 = 0 (contact physique, pas de modificateur portée)
     const portee = category !== 'armement_contact' ? authoritativeRangeBand : null
     let totalModComp = PORTEE_MOD_COMP[portee]?.mod ?? 0
-    if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0
+    // Taille de la cible : override MJ (confirmedModifiers.taille, déjà filtré MJ-only en amont)
+    // sinon dérivée de la fiche de la cible (docs/PLANS/PLAN_TAILLE.md).
+    const cibleCharacterIdForSize = (await db('tokens').where({ id: action.target_token_id }).select('character_id').first())?.character_id ?? null
+    const tailleCategory = await resolveAttackTargetSize(db, cibleCharacterIdForSize, confirmedModifiers)
+    const tailleMod = TAILLE_MODS[tailleCategory]?.mod ?? 0
+    totalModComp += tailleMod
     const situationMods = confirmedModifiers?.situation ?? []
     totalModComp += sumRangedSituationMods(situationMods)
     const coverageModifier  = options.coverageModifier ?? 0
@@ -2074,7 +2083,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
     // 6. Broadcast jet programme
     const porteeModDrone = PORTEE_MOD_COMP[portee]?.mod ?? 0
-    const tailleModDrone = confirmedModifiers?.taille ? (TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0) : 0
+    const tailleModDrone = tailleMod
     const breakdownDrone = [
       { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
       ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
@@ -2083,7 +2092,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
         if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
         return acc
       }, []),
-      ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),
+      ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),
       ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
@@ -2520,7 +2529,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0
     const situationModComp = sumRangedSituationMods(confirmedModifiers.situation ?? [])
-    const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0
+    // Taille de la cible : override MJ (confirmedModifiers.taille, déjà filtré MJ-only en amont)
+    // sinon dérivée de la fiche de la cible (docs/PLANS/PLAN_TAILLE.md). measurement.status === 'ok'
+    // garanti ici (return anticipé plus haut sur range.status !== 'ok').
+    const tailleCategory   = await resolveAttackTargetSize(db, measurement.targetToken.character_id, confirmedModifiers)
+    const tailleModComp    = TAILLE_MODS[tailleCategory]?.mod ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     // fire_mode_bonus_comp stocké à la Déclaration inclut déjà le bonus deux armes (client :
     // variant.bonusComp + dualWieldBonusComp) — si le tir a dégradé en tir simple (COM29,
@@ -2568,7 +2581,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
           return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
         })),
-        { label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+        { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
         { label: 'Précipitation', value: isRushedMod, type: 'malus' },
         { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
         { label: 'Couverture cible', value: coverageModifier, type: 'malus' },

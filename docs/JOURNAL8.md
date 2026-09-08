@@ -5893,3 +5893,55 @@ Saar via `migrate.latest`) ; comportement combat (S3).
 **Données** : migration `327` en attente d'application. Aucun backfill (colonne NULL partout).
 
 **Retour arrière** : `git revert` du commit S2 + `down()` de la `327` si déjà appliquée.
+
+## Session (Claude) — 2026-09-08 — Taille de cible ⇄ dimensions — S3 branchement combat
+
+Suite de S1/S2. La taille de la cible retenue pour un jet d'attaque devient **dérivée de la
+fiche de la cible** (`resolveSizeCategory`, S2) ; le choix de la fenêtre de modificateurs
+n'est retenu que **du MJ**.
+
+### Gate centralisé (raffinement vs plan)
+
+Plutôt que threader un `isGm` dans 5 signatures de résolveurs, le filtrage est **unique**, à
+la réception du payload : `socketCombatResolution.js` calcule
+`gatedModifiers = isGm ? confirmedModifiers : stripGmOnlyModifiers(confirmedModifiers)` et le
+passe à toutes les branches. `stripGmOnlyModifiers` + `GM_ONLY_CONFIRMED_MODIFIER_KEYS =
+['taille']` vivent dans `shared/combatSituationMods.js` (le client S4 lira la liste pour
+verrouiller le contrôle hors MJ). `confirmedModifiers` d'origine reste consulté pour le seul
+garde « fenêtre ouverte ou non ».
+
+### Sites branchés
+
+`characterSizeService.js` gagne `resolveAttackTargetSize(db, cibleCharacterId, confirmedModifiers)`
+→ `confirmedModifiers.taille` s'il est présent (donc MJ), sinon `resolveSizeCategory(cible).category`.
+Appelé par les **5 résolveurs à cible unique** :
+- `resolveMeleeAction` (CaC humanoïde) — `measurement.targetToken.character_id`
+- `resolveAssaultAction` (Tir humanoïde) — idem, `measurement.status==='ok'` garanti
+- `resolveDroneAssaultAction` (Tir/CaC drone) — re-fetch minimal du token cible
+- `resolveExoAssaultAction` (Tir exo) — re-fetch minimal
+- `resolveExoMeleeAction` (CaC exo) — re-fetch minimal
+
+Les labels de breakdown (`TAILLE_LABELS[...]`) suivent la catégorie résolue.
+
+### Reste à faire
+
+- **D7 (AOE sans modificateur de taille)** : `socketCombatAoe.js` est en cours d'édition par
+  un chantier parallèle (extraction `resolveGrenadeThrow`) — le retrait du read
+  `confirmedModifiers?.taille` de `runAoePhaseA` est **différé** pour ne pas entrer en
+  collision. Effet actuel sans D7 : un joueur → `taille` filtrée → contribue 0 (inoffensif) ;
+  un MJ → sa valeur de fenêtre s'applique au cône entier (comportement pré-S3 inchangé).
+- **S4** : fenêtres de combat (préselect générique + `<select>` verrouillé hors MJ).
+
+**Testé** : `node --check` (5 fichiers serveur + shared) ; `node --test 'shared/**/*.test.mjs'`
+→ 539/539 (`stripGmOnlyModifiers` : retire taille, préserve le reste, null/undefined sans throw,
+pas de mutation) ; `resolveAttackTargetSize` contre la base locale en transaction rollback
+(dérivé sans override, override MJ retenu, `taille:undefined` → dérivé, cible décor → moyenne).
+
+**Non testé** : combat réel (Saar) — Tir + CaC, cibles pj/pnj/drone/exo, joueur vs MJ résolvant,
+avec et sans override MJ ; build client (aucun fichier client touché en S3, mais
+`shared/combatSituationMods.js` modifié → à revalider en S4).
+
+**Données** : aucune. `confirmedModifiers` n'est jamais persisté (vérifié) — resserrer la
+sémantique de `taille` n'a aucun impact rejeu.
+
+**Retour arrière** : `git revert` du commit S3 (6 fichiers, aucune migration).

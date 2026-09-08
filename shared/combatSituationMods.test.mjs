@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation } from './combatSituationMods.js'
+import {
+  RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation,
+  GM_ONLY_CONFIRMED_MODIFIER_KEYS, stripGmOnlyModifiers,
+} from './combatSituationMods.js'
 
 test('sumRangedSituationMods - additionne les modificateurs connus', () => {
   assert.equal(sumRangedSituationMods(['couverture_partielle', 'obscurite_legere']), -6)
@@ -41,4 +44,22 @@ test('RANGED_SITUATION_MODS - seules les 2 clés RAW sans exception sont impossi
     .filter(([, v]) => v.impossible === true)
     .map(([k]) => k)
   assert.deepEqual(impossibleKeys.sort(), ['obscurite_totale', 'tireur_allure_maximale'])
+})
+
+test('stripGmOnlyModifiers - retire taille, conserve les autres clés', () => {
+  assert.deepEqual(GM_ONLY_CONFIRMED_MODIFIER_KEYS, ['taille'])
+  const out = stripGmOnlyModifiers({ taille: 'grande', situation: ['couverture_partielle'], portee: 'courte' })
+  assert.deepEqual(out, { situation: ['couverture_partielle'], portee: 'courte' })
+  assert.ok(!('taille' in out))
+})
+
+test('stripGmOnlyModifiers - null / undefined passent tels quels, jamais un throw', () => {
+  assert.equal(stripGmOnlyModifiers(null), null)
+  assert.equal(stripGmOnlyModifiers(undefined), undefined)
+})
+
+test('stripGmOnlyModifiers - ne mute pas l\'entrée', () => {
+  const input = { taille: 'petite', situation: [] }
+  stripGmOnlyModifiers(input)
+  assert.equal(input.taille, 'petite')
 })

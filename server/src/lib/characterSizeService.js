@@ -51,3 +51,15 @@ export async function resolveSizeCategory(db, characterOrId, preloaded = {}) {
 
   return resolveSizeCategoryFrom({ type, sizeCategory, heightM, droneTailleCm, exoCategory })
 }
+
+// Palier de taille retenu pour un jet d'attaque contre une cible.
+// `confirmedModifiers.taille` n'est présent que si l'émetteur est MJ (filtré en amont par
+// stripGmOnlyModifiers dans socketCombatResolution.js) — dans ce cas il fait foi (override MJ
+// pour ce jet). Sinon, la taille est dérivée de la fiche de la cible.
+// Retourne la clé de palier (une des 8 valeurs SIZE_CATEGORIES), directement utilisable comme
+// TAILLE_MODS[…] / TAILLE_LABELS[…].
+export async function resolveAttackTargetSize(db, targetCharacterOrId, confirmedModifiers, preloaded = {}) {
+  if (confirmedModifiers?.taille) return confirmedModifiers.taille
+  const { category } = await resolveSizeCategory(db, targetCharacterOrId, preloaded)
+  return category
+}

@@ -18,6 +18,7 @@ import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 import { buildWeaponShockDsl } from '../lib/damageService.js'
 import { resolveCombatantTestContext, resolveCombatantIdentity } from '../lib/combatantContextService.js'
+import { resolveAttackTargetSize } from '../lib/characterSizeService.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import {
   isImpossibleRangedSituation, RANGED_SITUATION_MODS, sumRangedSituationMods,
@@ -183,7 +184,11 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0
     const situationModComp = sumRangedSituationMods(confirmedModifiers?.situation ?? [])
-    const tailleModComp    = TAILLE_MODS[confirmedModifiers?.taille]?.mod ?? 0
+    // Taille de la cible : override MJ (confirmedModifiers.taille, déjà filtré MJ-only en amont)
+    // sinon dérivée de la fiche de la cible (docs/PLANS/PLAN_TAILLE.md).
+    const cibleCharacterIdForSize = (await db('tokens').where({ id: action.target_token_id }).select('character_id').first())?.character_id ?? null
+    const tailleCategory   = await resolveAttackTargetSize(db, cibleCharacterIdForSize, confirmedModifiers)
+    const tailleModComp    = TAILLE_MODS[tailleCategory]?.mod ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const coverageModifier = options.coverageModifier ?? 0
 
@@ -197,7 +202,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
           const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
           return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
         })),
-        { label: TAILLE_LABELS[confirmedModifiers?.taille] ?? confirmedModifiers?.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+        { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
         { label: 'Précipitation', value: isRushedMod, type: 'malus' },
         { label: 'Malus santé / encombrement (pilote)', value: ctxTireur.effectiveMalus, type: 'malus' },
         { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
@@ -356,7 +361,11 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
 
     const situationMods    = confirmedModifiers?.situation ?? []
     const situationModComp = situationMods.reduce((sum, k) => sum + (CAC_SITUATION_MODS[k]?.mod ?? 0), 0)
-    const tailleMod         = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne']?.mod ?? 0
+    // Taille de la cible : override MJ (confirmedModifiers.taille, déjà filtré MJ-only en amont)
+    // sinon dérivée de la fiche de la cible (docs/PLANS/PLAN_TAILLE.md).
+    const cibleCharacterIdForSize = (await db('tokens').where({ id: targetTokenId }).select('character_id').first())?.character_id ?? null
+    const tailleCategory    = await resolveAttackTargetSize(db, cibleCharacterIdForSize, confirmedModifiers)
+    const tailleMod         = TAILLE_MODS[tailleCategory]?.mod ?? 0
 
     const userRow = character.user_id
       ? await db('users').where({ id: character.user_id }).select('color', 'username').first()

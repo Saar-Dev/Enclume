@@ -1127,15 +1127,38 @@ socket.emit(WS.COMBAT_ACTION_CONFIRM, {
   confirmedModifiers: {
     portee,     // 'bout_portant' | 'courte' | 'moyenne' | 'longue' | 'extreme'
     situation,  // string[] — sitKeys sélectionnés (voir tables ci-dessous)
-    taille,     // 'minuscule' | 'tres_petite' | 'petite' | 'moyenne' | 'grande' | 'tres_grande' | 'enorme' | 'gigantesque'
+    taille,     // override MJ uniquement — voir « Taille de la cible » ci-dessous
   },
 })
 ```
 
 `confirmedModifiers.portee` est conservé dans le payload d'interface historique, mais est ignoré
 par la résolution serveur. La bande appliquée aux chances et aux dégâts est recalculée depuis la
-distance 3D réelle et `ref_equipment.range`. Les sélections situationnelles et de taille restent
-des confirmations métier distinctes.
+distance 3D réelle et `ref_equipment.range`. Les sélections situationnelles restent des
+confirmations métier libres (couverture, obscurité, situation CaC).
+
+### Taille de la cible
+
+Le modificateur « Taille de la cible » (LdB p.218, table `TAILLE_MODS` dans
+`shared/combatSituationMods.js`) n'est **plus une confirmation métier libre** : la taille est une
+**propriété de la cible**, pas un choix du tireur (`docs/PLANS/PLAN_TAILLE.md`).
+
+- **Autorité** : `characters.size_category` (explicite, une des 8 valeurs `SIZE_CATEGORIES`) si
+  renseignée, sinon **dérivée** de la fiche de la cible — `char_identity.height` (humanoïde, clamp
+  120–300 cm), `drone_sheet.taille` (drone, cm), `exo_sheet.category` (exo-armure) — via
+  `resolveSizeCategory` / `resolveSizeCategoryFrom` (`server/src/lib/characterSizeService.js` +
+  `shared/sizeCategory.js`). Défaut si aucune donnée : `moyenne`.
+- **Override MJ par jet** : `confirmedModifiers.taille` n'est retenu que si l'émetteur du
+  `COMBAT_ACTION_CONFIRM` est MJ. Filtrage centralisé à la réception (`stripGmOnlyModifiers`,
+  `socketCombatResolution.js`, liste `GM_ONLY_CONFIRMED_MODIFIER_KEYS`) — un joueur qui résout sa
+  propre attaque ne surcharge jamais la taille de la cible. Les 5 résolveurs à cible unique
+  (`resolveMeleeAction`, `resolveAssaultAction`, drone, `resolveExoAssaultAction`,
+  `resolveExoMeleeAction`) appellent `resolveAttackTargetSize(db, cibleCharacterId, confirmedModifiers)`.
+- **Zone d'effet** : aucun modificateur de taille (`runAoePhaseA`) — un jet unique couvre tout le
+  cône, il ne peut pas porter une taille par cible ; même parti que la grenade
+  (`docs/JOURNAL8.md`).
+- **Opposition CaC** : le modificateur s'applique au jet de l'attaquant → cible uniquement. Le jet
+  opposé du défenseur ne reçoit pas « taille de l'attaquant » (état pré-existant, `PLAN_TAILLE.md` §8).
 
 ### Tables de modificateurs situationnels (CombatModifiersWindow)
 
@@ -1179,7 +1202,8 @@ des confirmations métier distinctes.
 | `obscurite_importante` | -5 |
 | `obscurite_totale` | **-99 (impossible)** |
 
-**Taille cible :**
+**Taille cible :** (table de valeurs `TAILLE_MODS` ; l'origine de la clé et l'override MJ sont
+décrits dans « Taille de la cible » ci-dessus)
 | key | Mod |
 |---|---|
 | `minuscule` (~30 cm) | -10 |

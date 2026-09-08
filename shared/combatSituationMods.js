@@ -82,6 +82,23 @@ if (
   throw new Error('combatSituationMods : TAILLE_MODS et SIZE_CATEGORIES (shared/sizeCategory.js) divergent')
 }
 
+// ─── Clés de `confirmedModifiers` réservées au MJ ───────────────────────────
+// Un joueur qui résout sa propre attaque ne peut pas surcharger ces valeurs : elles sont alors
+// dérivées de l'autorité serveur. `taille` : la taille de la cible est une propriété de la cible
+// (dérivée de sa fiche, docs/PLANS/PLAN_TAILLE.md), pas un choix du tireur — contrairement à la
+// couverture / l'obscurité / la situation, qui restent des confirmations métier libres.
+// Filtrage centralisé à la réception du payload (socketCombatResolution.js), jamais dans chaque
+// résolveur. Le client (fenêtres de modificateurs) consulte cette liste pour verrouiller le
+// contrôle correspondant hors MJ.
+export const GM_ONLY_CONFIRMED_MODIFIER_KEYS = ['taille']
+
+export function stripGmOnlyModifiers(confirmedModifiers) {
+  if (!confirmedModifiers) return confirmedModifiers
+  const out = { ...confirmedModifiers }
+  for (const key of GM_ONLY_CONFIRMED_MODIFIER_KEYS) delete out[key]
+  return out
+}
+
 // ─── Portée (LdB p.226) — modificateur au Test selon le palier de portée ─────
 export const PORTEE_MOD_COMP = {
   bout_portant: { mod: 5 },

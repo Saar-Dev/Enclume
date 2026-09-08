@@ -14,6 +14,7 @@ import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryServ
 import { checkLOSForPrecheck } from '../lib/losService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+import { stripGmOnlyModifiers } from '../../../shared/combatSituationMods.js'
 import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
   triggerActNow, triggerDelayedPass, registerAutonomousStepResolver,
@@ -271,6 +272,12 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (character.user_id !== user.id) return
       }
 
+      // Taille de cible : override MJ uniquement (docs/PLANS/PLAN_TAILLE.md). Filtrée ici une
+      // fois pour toutes les branches de résolution — un joueur qui résout sa propre attaque ne
+      // surcharge jamais la taille de la cible, dérivée de sa fiche côté résolveur. Le garde
+      // `!confirmedModifiers` plus bas reste sur l'objet d'origine (fenêtre ouverte ou non).
+      const gatedModifiers = isGm ? confirmedModifiers : stripGmOnlyModifiers(confirmedModifiers)
+
       // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
       // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
@@ -445,10 +452,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               // jamais de target_token_id scalaire, elle emprunte son propre chemin de bout en bout
               // (couches 1-4, combat_action_targets) plutôt que celui à cible unique.
               const assaultResult = action.modifiers?.aoe
-                ? await resolveAoeAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+                ? await resolveAoeAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
                 : character.type === 'exo'
-                  ? await resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
-                  : await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+                  ? await resolveExoAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
+                  : await resolveAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
               if (assaultResult) {
                 await flushEmissions(io, socket, campaignId, assaultResult.emissions)
@@ -461,7 +468,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             }
           } else if (action.type === 'melee') {
             if (character.type === 'drone') {
-              const droneResult = await resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+              const droneResult = await resolveDroneAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
               if (droneResult) {
                 await flushEmissions(io, socket, campaignId, droneResult.emissions)
                 resolutionSuspended = droneResult.suspend
@@ -469,13 +476,13 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             } else if (character.type === 'exo') {
               // PLAN_EXOARMURE.md §16.4 (Option B, Saar 2026-08-26) — vraie défense active de la
               // cible, jamais l'auto-résolution simplifiée du CaC drone ci-dessus.
-              const exoMeleeResult = await resolveExoMeleeAction(io, campaignId, action, character, confirmedModifiers, pendingMaps)
+              const exoMeleeResult = await resolveExoMeleeAction(io, campaignId, action, character, gatedModifiers, pendingMaps)
               if (exoMeleeResult) {
                 await flushEmissions(io, socket, campaignId, exoMeleeResult.emissions)
                 resolutionSuspended = exoMeleeResult.suspend
               }
             } else {
-              const meleeResult = await resolveMeleeAction(io, campaignId, action, character, confirmedModifiers, pendingMaps)
+              const meleeResult = await resolveMeleeAction(io, campaignId, action, character, gatedModifiers, pendingMaps)
               if (meleeResult) {
                 await flushEmissions(io, socket, campaignId, meleeResult.emissions)
                 resolutionSuspended = meleeResult.suspend
