@@ -5865,3 +5865,31 @@ nouveau (les 2 avertissements/erreur restants pré-existent, effets non touchés
 
 **Retour arrière** : `git revert` du commit S1 — purement additif côté `shared/` + 2
 redirections d'import triviales.
+
+## Session (Claude) — 2026-09-08 — Taille de cible ⇄ dimensions — S2 colonne + service
+
+Suite de S1. Ce segment livre le stockage et l'autorité serveur, toujours sans branchement
+(le combat lira ça en S3).
+
+- **Migration `327_characters_size_category.js`** : `characters.size_category text` nullable
+  + `CHECK (IS NULL OR IN (<8 valeurs>))`. NULL = « dériver » (défaut universel). Additive,
+  rétrocompatible — aucun code déployé ne la lit encore.
+- **`server/src/lib/characterSizeService.js`** : `resolveSizeCategory(db, character, preloaded?)`
+  — couche d'accès mince (lit `char_identity.height` / `drone_sheet.taille` /
+  `exo_sheet.category` selon `characters.type`) qui délègue toute la logique à
+  `resolveSizeCategoryFrom` (`shared/sizeCategory.js`). Accepte des lignes de fiche
+  préchargées (`undefined` → fetch, `null` → « pas de fiche »).
+
+**Testé** : `node --check` (2 fichiers) ; round-trip migration en transaction rollback contre
+la base locale — up() ajoute colonne + contrainte, valeur valide acceptée, `'colossale'`
+refusée par la contrainte nommée, NULL accepté par défaut, down() retire proprement les deux,
+base finale intacte ; service testé contre la base (cascade explicite / dérivée pj-pnj-drone-exo
+/ défaut, + fetch réel `characters ⋈ char_sheet ⋈ char_identity` pour un PNJ de 2,6 m → grande,
++ explicite `minuscule` qui l'emporte).
+
+**Non testé** : application réelle de la migration (se fera au prochain démarrage serveur de
+Saar via `migrate.latest`) ; comportement combat (S3).
+
+**Données** : migration `327` en attente d'application. Aucun backfill (colonne NULL partout).
+
+**Retour arrière** : `git revert` du commit S2 + `down()` de la `327` si déjà appliquée.
