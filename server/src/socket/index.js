@@ -156,22 +156,28 @@ const initSocket = (io) => {
             const currentPreview = combatPreviews.get(campaignId)
             if (currentPreview) socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, currentPreview)
 
+            // Tokens de CE combat que l'utilisateur (re)connecté contrôle — chaîne d'autorité
+            // canonique tokens.character_id → characters.user_id (identique à
+            // socketCombatResolution.js), scellée au roster. Tableau et non `.first()` : un joueur
+            // peut aligner plusieurs tokens dans la même rencontre (son PJ + son drone), chacun
+            // pouvant avoir un prompt en attente à restaurer. Utilisé par les deux branches de phase
+            // ci-dessous.
+            const myCombatTokenIds = await db('combat_roster')
+              .join('tokens', 'combat_roster.token_id', 'tokens.id')
+              .join('characters', 'tokens.character_id', 'characters.id')
+              .where({ 'combat_roster.campaign_id': campaignId, 'characters.user_id': socket.user.id })
+              .pluck('combat_roster.token_id')
+
             // Restauration combat_pending sur reconnexion en phase ANNOUNCEMENT — jet de Réaction
             // "surprise" en attente (ticket "Blocage - Joueur surpris au premier tour", 9e7aa7d5).
             // Bloc distinct du C3 ci-dessous (RESOLUTION) : phase différente, même patron.
-            if (activeCombat.phase === 'ANNOUNCEMENT') {
-              const userToken = await db('tokens')
-                .join('characters', 'tokens.character_id', 'characters.id')
-                .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })
-                .select('tokens.id as token_id')
+            if (activeCombat.phase === 'ANNOUNCEMENT' && myCombatTokenIds.length) {
+              const pendingSurprise = await db('combat_pending')
+                .where({ campaign_id: campaignId, type: 'surprise' })
+                .whereIn('token_id', myCombatTokenIds)
                 .first()
-              if (userToken) {
-                const pendingSurprise = await db('combat_pending')
-                  .where({ campaign_id: campaignId, token_id: userToken.token_id, type: 'surprise' })
-                  .first()
-                if (pendingSurprise) {
-                  socket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: userToken.token_id })
-                }
+              if (pendingSurprise) {
+                socket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: pendingSurprise.token_id })
               }
             }
 
@@ -207,20 +213,14 @@ const initSocket = (io) => {
                 })
               }
 
-              const userToken = await db('tokens')
-                .join('characters', 'tokens.character_id', 'characters.id')
-                .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })
-                .select('tokens.id as token_id')
-                .first()
-              const userTokenId = userToken?.token_id
-
-              if (userTokenId) {
+              if (myCombatTokenIds.length) {
                 // Plusieurs entrées 'damage' peuvent désormais coexister pour le même token
                 // (docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO côté serveur, un seul prompt
                 // visible à la fois côté client : ordonner par ancienneté et ne restaurer que la plus
                 // ancienne, cohérent avec ce que COMBAT_DAMAGE_CONFIRM affiche déjà en jeu normal.
                 const rows = await db('combat_pending')
-                  .where({ campaign_id: campaignId, token_id: userTokenId })
+                  .where({ campaign_id: campaignId })
+                  .whereIn('token_id', myCombatTokenIds)
                   .orderBy('created_at', 'asc')
                 let damagePromptSent = false
                 for (const row of rows) {
