@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo, Component, Suspense } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { MapControls, Grid, Text, Billboard } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
@@ -43,6 +43,13 @@ import { useCombatStore } from '../stores/combatStore'
 const GRID_SIZE = 50
 const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
 const USE_DIORAMA_TERRAIN = true
+
+// Marqueur de grenade armée (docs/PLANS/PLAN_GRENADES.md §3d-3) — asset client fixe, servi comme les
+// dés depuis client/public/models/. La plus grande dimension du modèle est normalisée à
+// GRENADE_MARKER_SIZE_U (unités monde) : le marqueur reste lisible quelle que soit l'échelle
+// intrinsèque du GLB. Valeur à ajuster au premier rendu si besoin (patron dés / réticule).
+const GRENADE_MARKER_GLB_URL = '/models/grenade.glb'
+const GRENADE_MARKER_SIZE_U = 0.4
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
 const DRAG_THRESHOLD = 4
@@ -228,6 +235,97 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 })
           depthWrite={sceneOpacity >= 0.999}
         />
       </mesh>
+    </group>
+  )
+}
+
+// ─── Grenade armée (§3d-3) ──────────────────────────────────────────────────
+// Triangle d'avertissement (plan du Billboard, toujours face caméra). Sommets 2D partagés par le
+// remplissage et le contour.
+const GRENADE_WARNING_TRI = [[0, 0.22], [-0.2, -0.14], [0.2, -0.14]]
+const GRENADE_WARNING_VERTS = new Float32Array(GRENADE_WARNING_TRI.flatMap(([x, y]) => [x, y, 0]))
+const GRENADE_MARKER_WARNING_Y = 0.9
+
+// GLB normalisé (bbox → GRENADE_MARKER_SIZE_U) : robuste à l'échelle intrinsèque du modèle.
+function GrenadeMarkerGlbBody({ position }) {
+  const { scene } = useGLTF(GRENADE_MARKER_GLB_URL)
+  const normalized = useMemo(() => {
+    if (!scene) return null
+    const clone = SkeletonUtils.clone(scene)
+    const size = new THREE.Box3().setFromObject(clone).getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z) || 1
+    clone.scale.setScalar(GRENADE_MARKER_SIZE_U / maxDim)
+    return clone
+  }, [scene])
+  if (!normalized) return null
+  return <primitive object={normalized} position={position} />
+}
+
+// GLB en échec (404, modèle invalide) → rien : le triangle ⚠ et les anneaux portent déjà la
+// position. Jamais de fallback capsule ici (contrairement aux tokens).
+class GrenadeMarkerErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() { return this.state.hasError ? null : this.props.children }
+}
+
+// Anneaux de dégression RAW (5 paliers) — extrait de l'aperçu de visée pour être partagé avec le
+// marqueur de grenade armée (PLAN_GRENADES.md §10.2 + §3d-3). `center` = point d'impact monde
+// {x,z} ; `remountKey` force le remontage des <bufferAttribute> quand la géométrie change (aperçu :
+// clé de position au survol ; marqueur : fixe, clé = entryId).
+function GrenadeBlastRings({ center, fillY, lineY, remountKey }) {
+  return buildGrenadeBlastRings().flatMap(ring => {
+    const verts = []
+    for (const quad of projectRingQuads(ring, center)) {
+      const [a, b, c, d] = quad.corners
+      verts.push(a.x, fillY, a.z, b.x, fillY, b.z, c.x, fillY, c.z, a.x, fillY, a.z, c.x, fillY, c.z, d.x, fillY, d.z)
+    }
+    const fill = new Float32Array(verts)
+    const outline = projectCircleOutline(ring.outerM, center)
+    const edge = new Float32Array(outline.flatMap(p => [p.x, lineY, p.z]))
+    return [
+      <mesh key={`grenade-ring-${ring.band}-${remountKey}`}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" count={fill.length / 3} array={fill} itemSize={3} />
+        </bufferGeometry>
+        <meshBasicMaterial color="#ff0000" transparent opacity={ring.opacity} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>,
+      <line key={`grenade-ring-edge-${ring.band}-${remountKey}`}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" count={outline.length} array={edge} itemSize={3} />
+        </bufferGeometry>
+        <lineBasicMaterial color="#ff3030" transparent opacity={Math.min(0.9, ring.opacity + 0.35)} depthWrite={false} />
+      </line>,
+    ]
+  })
+}
+
+// Marqueur complet d'une grenade armée : modèle 3D + triangle ⚠ face caméra + anneaux de dégression.
+function GrenadeArmedMarker({ marker }) {
+  const o = marker.resolvedOrigin
+  if (!o) return null
+  return (
+    <group>
+      <Suspense fallback={null}>
+        <GrenadeMarkerErrorBoundary>
+          <GrenadeMarkerGlbBody position={[o.x, o.y, o.z]} />
+        </GrenadeMarkerErrorBoundary>
+      </Suspense>
+      <Billboard position={[o.x, o.y + GRENADE_MARKER_WARNING_Y, o.z]}>
+        <mesh>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" count={3} array={GRENADE_WARNING_VERTS} itemSize={3} />
+          </bufferGeometry>
+          <meshBasicMaterial color="#facc15" transparent opacity={0.92} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+        <lineLoop>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" count={3} array={GRENADE_WARNING_VERTS} itemSize={3} />
+          </bufferGeometry>
+          <lineBasicMaterial color="#1c1917" />
+        </lineLoop>
+      </Billboard>
+      <GrenadeBlastRings center={{ x: o.x, z: o.z }} fillY={o.y + 0.06} lineY={o.y + 0.07} remountKey={marker.entryId} />
     </group>
   )
 }
@@ -476,7 +574,7 @@ function Scene({
   const { characters, isGm } = useCharacterStore()
   const { user } = useAuthStore()
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
-  const { phase, announcedActions, activeTokenId } = useCombatStore()
+  const { phase, announcedActions, activeTokenId, grenadeMarkers } = useCombatStore()
 
   const [dragState, setDragState] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
@@ -1460,34 +1558,11 @@ function Scene({
         const ptKey = `${Math.round(displayPoint.x * 20)}_${Math.round(displayPoint.z * 20)}`
 
         // Mécanisme `grenade_frag` (PLAN_GRENADES.md §10.2) : 5 anneaux de dégression RAW du centre
-        // (le plus meurtrier, opaque) vers l'extrême (ténu) + une ligne de bord par palier pour rendre
-        // les seuils lisibles. Un mesh + une ligne par anneau (10 objets) — pas un mesh par facette.
+        // (le plus meurtrier, opaque) vers l'extrême (ténu). Même rendu que le marqueur de grenade
+        // armée (§3d-3) — composant partagé GrenadeBlastRings.
         // Toute autre arme `circle` : disque plein générique (buildCircleSpan/projectCircleFan).
         if (combatAoeTargetMode.weaponAoeProfile?.mechanic === 'grenade_frag') {
-          return buildGrenadeBlastRings().flatMap(ring => {
-            const verts = []
-            for (const quad of projectRingQuads(ring, center)) {
-              const [a, b, c, d] = quad.corners
-              verts.push(a.x, fillY, a.z, b.x, fillY, b.z, c.x, fillY, c.z, a.x, fillY, a.z, c.x, fillY, c.z, d.x, fillY, d.z)
-            }
-            const fill = new Float32Array(verts)
-            const outline = projectCircleOutline(ring.outerM, center)
-            const edge = new Float32Array(outline.flatMap(p => [p.x, lineY, p.z]))
-            return [
-              <mesh key={`aoe-ring-${ring.band}-${ptKey}`}>
-                <bufferGeometry>
-                  <bufferAttribute attach="attributes-position" count={fill.length / 3} array={fill} itemSize={3} />
-                </bufferGeometry>
-                <meshBasicMaterial color="#ff0000" transparent opacity={ring.opacity} depthWrite={false} side={THREE.DoubleSide} />
-              </mesh>,
-              <line key={`aoe-ring-edge-${ring.band}-${ptKey}`}>
-                <bufferGeometry>
-                  <bufferAttribute attach="attributes-position" count={outline.length} array={edge} itemSize={3} />
-                </bufferGeometry>
-                <lineBasicMaterial color="#ff3030" transparent opacity={Math.min(0.9, ring.opacity + 0.35)} depthWrite={false} />
-              </line>,
-            ]
-          })
+          return <GrenadeBlastRings center={center} fillY={fillY} lineY={lineY} remountKey={ptKey} />
         }
 
         const span = buildCircleSpan(combatAoeTargetMode.weaponAoeProfile?.radiusM)
@@ -1504,6 +1579,11 @@ function Scene({
           )
         })
       })()}
+
+      {/* ── Grenades armées en vol (PLAN_GRENADES.md §3d-3) — position réelle au sol entre le lancer  */}
+      {/*    (Tour T) et l'explosion autonome (Tour T+1). Alimenté par COMBAT_GRENADE_ARMED, purgé par  */}
+      {/*    COMBAT_GRENADE_EXPLODED. Modèle 3D + triangle ⚠ face caméra + anneaux de dégression.       */}
+      {grenadeMarkers.map(m => <GrenadeArmedMarker key={m.entryId} marker={m} />)}
 
       {combatAoeTargetMode && combatAoeTargetMode.aimMode !== 'point' && (() => {
         // Direction figée (clic, Valider/Changer en attente) prioritaire sur le survol en cours —

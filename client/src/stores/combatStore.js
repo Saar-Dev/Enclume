@@ -14,6 +14,10 @@ export const useCombatStore = create((set) => ({
   timelineEntries: [],  // [{ id, token_id, combat_action_id, declaration_group_id, phase_position, status, resolve_on_turn, resolution_snapshot }] — resolution_snapshot.carriedFrom : entrée reportée (M3, CombatTimeline.jsx)
   currentStep: null,    // { kind: 'entry', tokenId, entry } | { kind: 'simple', tokenId } | { kind: 'delayed_turn', tokenId, groupId } | null
 
+  // Grenades armées en vol (docs/PLANS/PLAN_GRENADES.md §3d-3) — alimenté par COMBAT_GRENADE_ARMED,
+  // purgé par COMBAT_GRENADE_EXPLODED / fin de combat / reconnexion (le serveur ré-émet ensuite).
+  grenadeMarkers: [],   // [{ entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn, scattered }]
+
   setCombatState: ({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
     phase,
     subPhase: subPhase ?? null,
@@ -68,6 +72,16 @@ export const useCombatStore = create((set) => ({
 
   resetAnnouncedActions: () => set({ announcedActions: [] }),
 
+  // Dédoublonné par entryId — la reconnexion ré-émet COMBAT_GRENADE_ARMED pour chaque grenade encore
+  // en vol, sans créer de doublon.
+  armGrenadeMarker: (marker) => set((state) => ({
+    grenadeMarkers: [...state.grenadeMarkers.filter(g => g.entryId !== marker.entryId), marker],
+  })),
+  removeGrenadeMarker: (entryId) => set((state) => ({
+    grenadeMarkers: state.grenadeMarkers.filter(g => g.entryId !== entryId),
+  })),
+  clearGrenadeMarkers: () => set({ grenadeMarkers: [] }),
+
   resetCombat: () => set({
     phase: null,
     subPhase: null,
@@ -79,5 +93,6 @@ export const useCombatStore = create((set) => ({
     announcedActions: [],
     timelineEntries: [],
     currentStep: null,
+    grenadeMarkers: [],
   }),
 }))

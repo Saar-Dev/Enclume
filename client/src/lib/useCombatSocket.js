@@ -9,6 +9,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
     setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster,
     advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, setTimelineState,
+    armGrenadeMarker, removeGrenadeMarker, clearGrenadeMarkers,
   } = useCombatStore()
   const { addMessage, setDeclareError, clearDeclareError, declareError } = useSessionStore()
   const { t } = useTranslation()
@@ -78,6 +79,10 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       onModeReset()
     }
     const onStateSync = ({ combatState, roster, actions }) => {
+      // Marqueurs de grenades : le serveur ré-émet COMBAT_GRENADE_ARMED juste après pour chaque
+      // grenade encore en vol — on repart d'une ardoise vierge pour ne pas garder un marqueur dont
+      // l'explosion a eu lieu pendant la coupure (§3d-3).
+      clearGrenadeMarkers()
       // RESOLUTION : activeTokenId n'est plus dérivable ici depuis active_slot_idx (colonne supprimée,
       // Lot B) — laissé null, corrigé immédiatement par le COMBAT_TIMELINE_UPDATED de reconnexion émis
       // juste après par le serveur (server/src/socket/index.js).
@@ -117,6 +122,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       }
     }
     const onTimelineUpdated = (payload) => { setTimelineState(payload) }
+    const onGrenadeArmed    = (marker) => { armGrenadeMarker(marker) }
+    const onGrenadeExploded = ({ entryId }) => { removeGrenadeMarker(entryId) }
     const onRosterUpdated   = ({ roster }) => { updateRoster(roster) }
     const onSurpriseRoll    = ({ tokenId }) => { setPendingSurpriseRoll({ tokenId }) }
     const onAnnouncePreview = (preview) => { setPjPreview(preview) }
@@ -193,6 +200,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_DECLARE_ERROR,         onDeclareError)
     socket.on(WS.COMBAT_RESOLVE_MOVE_BLOCKED,  onResolveMoveBlocked)
     socket.on(WS.COMBAT_TIMELINE_UPDATED,      onTimelineUpdated)
+    socket.on(WS.COMBAT_GRENADE_ARMED,         onGrenadeArmed)
+    socket.on(WS.COMBAT_GRENADE_EXPLODED,      onGrenadeExploded)
 
     return () => {
       socket.off(WS.COMBAT_RELOAD_RESULT,        onReloadResult)
@@ -216,6 +225,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_DECLARE_ERROR,        onDeclareError)
       socket.off(WS.COMBAT_RESOLVE_MOVE_BLOCKED, onResolveMoveBlocked)
       socket.off(WS.COMBAT_TIMELINE_UPDATED,     onTimelineUpdated)
+      socket.off(WS.COMBAT_GRENADE_ARMED,        onGrenadeArmed)
+      socket.off(WS.COMBAT_GRENADE_EXPLODED,     onGrenadeExploded)
     }
   }, [socket, isGm, setMode, onModeReset])
 

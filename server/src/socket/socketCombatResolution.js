@@ -58,6 +58,10 @@ async function flushEmissions(io, socket, campaignId, emissions, preloadedSocket
 async function resolveAutonomousStep(io, campaignId, step, pendingMaps) {
   await db('combat_timeline_entries').where({ id: step.entry.id })
     .update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
+  // Marqueur client (§3d-3) retiré dès que l'entrée est résolue — AVANT les sorties anticipées
+  // (`!action`, `!character`) et l'appel de résolution qui peut lever : le marqueur ne doit jamais
+  // rester collé si l'explosion échoue à se calculer.
+  io.to(campaignId).emit(WS.COMBAT_GRENADE_EXPLODED, { entryId: step.entry.id })
   const action = await db('combat_actions').where({ id: step.entry.combat_action_id }).first()
   if (!action) return
   await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })

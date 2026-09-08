@@ -146,6 +146,12 @@ export const WS = {
   COMBAT_ACT_NOW:                'combat:act_now',                 // PJ ou GM → serveur : « Agir maintenant » pour un token en delayed_waiting { tokenId }
   COMBAT_DELAYED_PASS:           'combat:delayed_pass',            // PJ ou GM → serveur : « Passer » consciemment au tour obligatoire de fin de Tour { tokenId }
 
+  // Marqueur de grenade armée (docs/PLANS/PLAN_GRENADES.md §3d-3) — le client ne connaît l'échelle
+  // que du Tour courant ; une grenade lancée au Tour T explose au Tour T+1, il faut un canal dédié
+  // pour afficher sa position au sol entre les deux. Réutilisable pour mines/pièges à `autoResolve`.
+  COMBAT_GRENADE_ARMED:          'combat:grenade_armed',           // serveur → room : grenade amorcée en vol { entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn, scattered }
+  COMBAT_GRENADE_EXPLODED:       'combat:grenade_exploded',        // serveur → room : la grenade a explosé (ou l'entrée est résolue) — retirer le marqueur { entryId }
+
   // Drones
   DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',  // serveur → room : intégrité drone mise à jour (combat)
 

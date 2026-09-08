@@ -5684,3 +5684,76 @@ runtime : une grenade lancée décrémente/supprime sa ligne `char_inventory`.
 
 **Retour arrière** : `git revert` dans l'ordre inverse — `2c7cf57` (3d-2) `4eef102` (3d-1)
 `15c0ec7` (3d-0). 3d-0 seul est inerte (option non consommée sans 3d-1).
+
+## Session (Claude) — 2026-09-08 — Grenades : Segment 3d-3 — marqueur 3D de grenade armée
+
+**Chantier** `PLAN_GRENADES.md` §3d-3. Retour Saar après le run 3d : « il manque un token 3D (ou a
+minima un symbole /!\\) pour la position de la grenade ». Le client ne connaît l'échelle que du Tour
+courant ; une grenade lancée au Tour T explose au Tour T+1 — aucune trace visuelle du point d'impact
+réel entre les deux (surtout sur dispersion).
+
+### Décisions durables
+
+- **Canal dédié, pas de détournement de `COMBAT_TIMELINE_UPDATED`** : events
+  `COMBAT_GRENADE_ARMED { entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn, scattered }` et
+  `COMBAT_GRENADE_EXPLODED { entryId }` (`shared/events.js`). Réutilisables pour tout futur mécanisme
+  `autoResolve` (mines, pièges).
+- **`COMBAT_GRENADE_EXPLODED` émis en TÊTE de `resolveAutonomousStep`**, juste après avoir marqué
+  l'entrée `resolved` — avant les `return` anticipés (`!action`, `!character`) et avant l'appel de
+  résolution AOE qui peut lever. Le marqueur = « entrée encore en vol » ; dès qu'elle est résolue il
+  est périmé, quoi qu'il advienne ensuite.
+- **Reconnexion** (`socket/index.js`, phase RESOLUTION) : ré-émet `COMBAT_GRENADE_ARMED` pour chaque
+  `combat_timeline_entries` `status:'scheduled' AND resolve_on_turn >= current_turn AND
+  resolution_snapshot->>'autoResolve' = 'true'`. La borne `resolve_on_turn` empêche une entrée
+  orpheline (crash) de ressusciter un marqueur à chaque reconnexion. Client : `onStateSync` purge
+  d'abord `grenadeMarkers` (ardoise vierge), le serveur repeuple.
+- **Client** : `combatStore.grenadeMarkers` (tableau, dédup par `entryId`, purge `resetCombat` +
+  `onStateSync`) ; `useCombatSocket` handlers ; `Canvas3D` rend `/models/grenade.glb` (asset client
+  fixe, servi comme les dés ; bounding-box normalisée à `GRENADE_MARKER_SIZE_U` = 0.4 u → robuste à
+  l'échelle intrinsèque du modèle) + un triangle d'avertissement `<Billboard>` (toujours face caméra,
+  géométrie pure — aucun glyphe texte, aucune clé i18n) + les 5 anneaux de dégression RAW.
+- **Aggradation** : le rendu des anneaux `grenade_frag` est extrait de l'IIFE d'aperçu de visée en
+  composant `GrenadeBlastRings`, partagé aperçu (§10.2) ↔ marqueur armé. `Suspense fallback={null}`
+  **local** obligatoire autour du GLB (pas de boundary locale sinon — la Suspense implicite du
+  `<Canvas>` blanchirait tout le champ de bataille pendant le chargement). Pas de `useGLTF.preload`
+  (ne pas payer 358 Ko hors combat). Mini `GrenadeMarkerErrorBoundary` → `null` sur échec GLB (le
+  triangle + les anneaux portent déjà la position ; jamais de fallback capsule ici).
+
+### Murs — aucun code
+
+Déjà géré par `grenade_frag` `losSource:'origin'` → `evaluateAoeVisibility` mode origin →
+`evaluateWorldVisibility` (LOS canonique murs/occludeurs) → cible hors LOS exclue. = « couverture
+totale » RAW. Écart connu (3a §7.6) : couverture PARTIELLE (−1 à −2D10) non consommée par aucun
+mécanisme AOE.
+
+### Observations hors périmètre (non codées — candidats tickets / durcissement 3d-2)
+
+- `advanceTimeline` avale une exception du résolveur autonome puis **stalle** (n'enchaîne pas
+  l'échelle). Pré-existant 3d-2 ; 3d-3 ne l'aggrave pas (EXPLODED en tête = plus robuste).
+- L'explosion est liée au lookup `character` : token du lanceur disparu au Tour+1 → `!character
+  return`, la grenade n'explose jamais (RAW : elle explose quand même). Pré-existant 3d-2.
+- `resolveScatter` garde le `y` du point visé sur dispersion → le marqueur peut flotter/s'enfoncer
+  légèrement si la dispersion traverse un changement de hauteur. Pré-existant 3d-1, cohérent avec
+  l'origine LOS de l'explosion elle-même.
+
+### Différé
+
+**3d-4** — animation de jet (token → `resolvedOrigin`, arcs strictement décroissants, `scale:0` au
+départ). Client pur, zéro autorité ; repli reconnexion = marqueur statique 3d-3. Son propre plan.
+
+**Testé** : `node --check` ×4 (`shared/events.js`, `socketCombatAoe.js`, `socketCombatResolution.js`,
+`socket/index.js`) ; `combatTurnEngine.test.mjs` 17/17 (moteur non touché — non-régression) ;
+`npm run lint` client (110 err / 47 warn — **identique au HEAD, 0 nouvelle**) ; `npm run build` client
+OK (20 s).
+
+**Non testé** : ⚠️ **en jeu réel** — jet de grenade → marqueur (GLB + triangle + anneaux) au point
+d'impact réel entre T et T+1 → explosion Tour+1 retire le marqueur → reconnexion en vol restaure →
+cas dispersion montre le décalage → cas mur inchangé. Le vrai `resolveAutonomousStep` n'a pas de test
+unitaire (le test moteur le stube) : EXPLODED + query reconnexion = validation session.
+
+**Données** : aucune migration. Aucun effet runtime nouveau (l'entrée `autoResolve` est déjà créée
+par 3d-1). Ajout de l'asset `client/public/models/grenade.glb`.
+
+**Retour arrière** : `git revert` du commit 3d-3 — tout est additif (2 events, 1 champ de store, 1
+branche de rendu, `.returning('id')` + 2 émissions serveur). `grenade.glb` inoffensif si le code est
+retiré.

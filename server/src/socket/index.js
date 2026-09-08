@@ -189,6 +189,24 @@ const initSocket = (io) => {
                 currentStep,
               })
 
+              // Marqueurs de grenades encore armées (§3d-3) — entrées `autoResolve` pas encore
+              // résolues, dont l'explosion tombe à ce Tour ou plus tard. La borne `resolve_on_turn`
+              // évite qu'une entrée orpheline (crash) ressuscite un marqueur à chaque reconnexion.
+              const armedGrenades = await db('combat_timeline_entries')
+                .where({ campaign_id: campaignId, status: 'scheduled' })
+                .where('resolve_on_turn', '>=', activeCombat.current_turn)
+                .whereRaw("resolution_snapshot->>'autoResolve' = 'true'")
+              for (const g of armedGrenades) {
+                if (!g.resolution_snapshot?.resolvedOrigin) continue
+                socket.emit(WS.COMBAT_GRENADE_ARMED, {
+                  entryId: g.id,
+                  tokenId: g.token_id,
+                  resolvedOrigin: g.resolution_snapshot.resolvedOrigin,
+                  explodesOnTurn: g.resolve_on_turn,
+                  scattered: g.resolution_snapshot.scattered ?? false,
+                })
+              }
+
               const userToken = await db('tokens')
                 .join('characters', 'tokens.character_id', 'characters.id')
                 .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })

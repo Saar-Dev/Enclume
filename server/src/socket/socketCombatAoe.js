@@ -544,13 +544,13 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         turn_number: currentTurn + 1, // survit au wipe endTurn (M3) + trouvé par le dispatch au Tour+1
         updated_at: db.fn.now(),
       })
-      await db('combat_timeline_entries').insert({
+      const [armedEntry] = await db('combat_timeline_entries').insert({
         campaign_id: campaignId, turn_number: currentTurn, resolve_on_turn: currentTurn + 1,
         token_id: action.token_id, combat_action_id: action.id,
         phase_position: (rosterRow?.base_ini ?? 0) * 100 + 1, // « rang d'Initiative normal », juste avant l'action propre du lanceur
         status: 'scheduled',
         resolution_snapshot: JSON.stringify({ autoResolve: true, resolvedOrigin, scattered: !coord.isSuccess, d6Roll, marginM: failureMarginM }),
-      })
+      }).returning('id')
 
       // La grenade quitte l'inventaire au lancer (RAW : amorcée puis lancée).
       if (action.weapon_inv_id) {
@@ -563,6 +563,14 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         i18nKey: 'session.grenadeArmed',
         params: { label: character.name ?? shooterToken.label ?? '?' },
         timestamp: new Date().toISOString(),
+      } })
+      // Marqueur 3D côté client (§3d-3) — position réelle au sol entre le lancer et l'explosion Tour+1.
+      emissions.push({ to: 'room', event: WS.COMBAT_GRENADE_ARMED, data: {
+        entryId: armedEntry.id,
+        tokenId: action.token_id,
+        resolvedOrigin,
+        explodesOnTurn: currentTurn + 1,
+        scattered: !coord.isSuccess,
       } })
       return { suspend: false, emissions }
     }
