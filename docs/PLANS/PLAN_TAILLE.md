@@ -203,12 +203,14 @@ Seul point d'autorité serveur ; les 5 sites combat et l'endpoint client passent
 
 ## 6. Segments (un par validation)
 
-> **Avancement 2026-09-08** : S1 (`6c3ef86`), S2 (`94da26f`), S3 (`d53b3e7`), S4 (`97b422d`)
-> codés et committés sur `dev/Saar` (non poussés). **D7 (AOE) différé** — `socketCombatAoe.js`
-> en cours d'édition par le chantier grenades parallèle. **S4 a dévié du plan** : le préselect
-> passe par le callback de `COMBAT_ACTION_PRECHECK` (le serveur y renvoie `targetSizeCategory`),
-> pas par un endpoint REST — le `router.param` de `/char-sheet` refuse à un joueur la fiche
-> d'un PNJ adverse. Reste : S5, D7, validation combat réel par Saar.
+> **Avancement 2026-09-08** : S1 (`6c3ef86`), S2 (`94da26f`), S3 (`d53b3e7`), S4 (`97b422d`),
+> S5 (`81ce06a`) codés et committés sur `dev/Saar` (non poussés). S3+S4 **validés en combat
+> réel par Saar**. **Reste D7** (AOE) — différé, `socketCombatAoe.js` en cours d'édition par le
+> chantier grenades parallèle — puis `docs/SYSTEME/TAILLE.md` + archivage de ce plan.
+>
+> Écarts vs plan : S4 préselect via le callback `COMBAT_ACTION_PRECHECK` (pas d'endpoint REST —
+> `router.param` /char-sheet refuse la fiche adverse au joueur) ; S5 sans `min`/`max` sur
+> l'input `height` (bloquerait une saisie descriptive légitime, clamp reste côté serveur).
 
 ### S1 — Socle partagé (toute la logique, pure)
 - `shared/sizeCategory.js` neuf (§5.1) — enum, breakpoints, clamp, map exo,
