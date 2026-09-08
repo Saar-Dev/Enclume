@@ -1,3 +1,24 @@
+## v228 — 2026-09-08 — Combat : grenades à fragmentation
+
+### Combat — grenades
+- [new] Une grenade à fragmentation se lance en visant un point au sol : un disque d'effet avec ses
+  5 paliers de dégression (du centre, le plus meurtrier, jusqu'à la portée extrême) suit la souris,
+  un clic le fige, puis Valider ou Changer.
+- [new] Le lancer demande un Test de Coordination. Sur un échec, la grenade dévie du point visé
+  d'autant de mètres que la marge d'échec, dans une direction tirée au hasard (1D6).
+- [new] La grenade explose au Tour de combat suivant, au rang d'Initiative normal du lanceur — sans
+  action du joueur ni du MJ. Les dégâts dépendent de la distance de chaque cible au point
+  d'explosion (5 paliers RAW) ; aux deux derniers paliers, les cibles ont droit à un Test de Chance
+  pour éviter d'être touchées.
+- [new] Entre le lancer et l'explosion, la position réelle de la grenade est marquée sur la carte
+  (modèle 3D + triangle d'avertissement) et son souffle est bloqué par les murs.
+- [new] La grenade quitte l'inventaire au lancer.
+
+### Combat — moteur de tour
+- [fix] Quand une ou plusieurs Préparations réduisent l'Initiative à 0 ou moins, l'Action n'est
+  plus perdue : elle est reportée au Tour suivant, où le personnage agit en premier (RAW). Une
+  attaque *supplémentaire* d'une rafale qui déborde en dessous de 0 reste perdue, elle.
+
 ## v227 — 2026-09-05 — Chat : commandes /heal et /t
 
 ### Chat

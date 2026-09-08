@@ -203,7 +203,7 @@ avant 3b).** Deux constats changent le plan :
 | | Contenu | Nature | Filet |
 |---|---|---|---|
 | **3a** ✅ CLOS (`6a4e6ad`+`1815df3`+`e94c51e`) | `rollSignedDie`→`diceParser.js` · `grenadeFrag.js` (6 hooks invariants + `GRENADE_FRAG_BANDS` + `losSource: 'origin'`) + `registry.js` + `AOE_MECHANICS` + 3 fichiers de test. Inatteignable par l'appli. | résolution pure | ✅ 17 tests fixtures |
-| **3b** ✅ CODÉ (2026-09-06, `92df5ed`, ⚠️ clos partiel — session Saar due) | Capacités de flux lues par `resolveAoeAssaultAction` avec défaut = comportement historique : `needsWeaponRange` / `decrementsAmmo` / `losSource`. `grenade_frag` déclare les 3 (false/false/'origin'). `rollsPhaseA` (Test de Coordination) reporté à 3d. **Inerte pour le jeu actuel** (aucune grenade seedée, aucun chemin de déclaration). Fusil à pompe / lance-flammes inchangés *par construction* (`?? défaut`). | tronc | guards à défaut + `node --test` 63/509 + **session Saar fusil à pompe + lance-flammes** |
+| **3b** ✅ CLOS (2026-09-06, `92df5ed`) | Capacités de flux lues par `resolveAoeAssaultAction` avec défaut = comportement historique : `needsWeaponRange` / `decrementsAmmo` / `losSource`. `grenade_frag` déclare les 3 (false/false/'origin'). `rollsPhaseA` (Test de Coordination) reporté à 3d. Fusil à pompe / lance-flammes inchangés *par construction* (`?? défaut`). | tronc | guards à défaut + `node --test` 63/509 ; validé jeu réel 2026-09-08 (grenade 3d) |
 | **3c/1** ✅ CODÉ (`50ee8cc`) | Payload `COMBAT_ACTION_DECLARE` : la validation AOE branche sur `aoe_profile.shape` — `circle` → `aoe.intendedOrigin` (`{x,y,z}` finis) ; cône/rayon → `aoe.direction`, inchangé. Serveur valide la forme du point seulement (portée/dispersion = 3d). Behavior-preserving, inerte (aucune arme `shape:circle` avant migration). | serveur | `node --check`, branche `else if` identique |
 | **3c/2a** ✅ CODÉ (`9cc8c81`) | `aoePreviewShape.js` : `buildCircleSpan(radiusM)` + `projectCircleFan(span, center, steps)` — frères de `buildConeSpan`/`projectConeTriangles`, mais **centrés sur le point d'impact** (pas le tireur). Aperçu = disque d'effet seul (dégression résolue serveur). Pur, 15 tests, lint OK. | client pur | ✅ tests + lint |
 | **3c/2b-1** ✅ (`187c767`) | `buildDeclarePayload.js` : `buildAoeField` → `{ intendedOrigin }` \| `{ direction }` \| null ; 3 builders basculent dessus. Golden master 79/79, chemin direction byte-identique. | client pur | ✅ tests + lint |
@@ -213,9 +213,9 @@ avant 3b).** Deux constats changent le plan :
 | **3c/2b-4b/c/d** ✅ (`1fa002c` `eae69dc` `3714806`) | Fenêtres arment le mode point + stockent `aoeIntendedOrigin` : exo · drone (2 hôtes) · humanoïde (reducer `assaultDeclaration` + action `SET_AOE_POINT`). Exclusivité 3 modes, reset slot, libellé « Viser un point ». 129 tests client, build OK, 0 erreur lint nouvelle. | client UI | tests + build |
 | **3c/2b-5** ✅ (`1fa36d6`) | **Migration 325** `aoe_profile` `{shape:'circle', mechanic:'grenade_frag', radiusM:15}` sur la SEULE ligne « Grenade à fragmentation ». Appliquée par nodemon, vérifiée en base. | migration | node --check |
 | **3d-0** ✅ (`15c0ec7`) | `resolveHumanoidTestContext` : option `attributeId` (Test d'ATTRIBUT, Seuil = attribut net + malus). RAW « Test de Coordination » = attribut, pas Compétence. Générique. | contexte de Test | 41 tests |
-| **3d-1** ✅ (`4eef102`) | **Lancer** (garde `aoe.intendedOrigin && !aoe.resolvedOrigin`) : humanoïde ; Test de Coordination sur **COO** (`resolveAoeAttackRoll`) ; `resolveScatter(marginM = -mr, d6)` → point d'impact ; `jsonb_set` `resolvedOrigin` + `weaponSnapshot` ; `turn_number` action bumpé T+1 ; entrée `resolve_on_turn = T+1` @ `base_ini×100 + 1`, `resolution_snapshot.autoResolve` ; grenade retirée de `char_inventory`. Notice `session.grenadeArmed`. Écart RAW : pas de malus « zone visée » (`JOURNAL8`). | résolution | node --check + import ; session Saar |
-| **3d-2** ✅ (`2c7cf57`) | Capacité `rollsPhaseA` (défaut `true`, `grenade_frag` = `false`). **Résolution autonome** : patron registre (`combatTurnEngine.js` `registerAutonomousStepResolver` ← injecté par `socketCombatResolution.js`) — `advanceTimeline` détecte `autoResolve`, résout **sans clic**. `finalizeAoeResults` tolère `rollResult` absent. `flushEmissions` garde null sur `to:'socket'`. PJ : `COMBAT_ATTACK_PLAYER_RESULT` filtré (écart, `JOURNAL8`) + notice `grenadeExploded`. Extensible : mines/pièges. | dispatch + moteur | 17 tests (+`autoResolve`) ; session Saar |
-| **3d-3** ✅ | **Marqueur 3D de grenade armée.** Events `COMBAT_GRENADE_ARMED { entryId, tokenId, resolvedOrigin, explodesOnTurn, scattered }` / `COMBAT_GRENADE_EXPLODED { entryId }` (`shared/events.js`). Serveur : lancer `.insert(...).returning('id')` → `emissions.push` ARMED ; `resolveAutonomousStep` émet EXPLODED **en tête** (avant les `return` anticipés + l'appel qui peut lever) ; reconnexion (`socket/index.js`) ré-émet ARMED pour `status:'scheduled' AND resolve_on_turn >= current_turn AND autoResolve`. Client : `combatStore.grenadeMarkers` (dédup entryId, purge `resetCombat` + `onStateSync`), `useCombatSocket` handlers, `Canvas3D` rend `/models/grenade.glb` (bbox normalisée → `GRENADE_MARKER_SIZE_U`) + triangle ⚠ `<Billboard>` + anneaux de dégression (composant `GrenadeBlastRings` partagé avec l'aperçu §10.2). Murs : déjà gérés (`losSource:'origin'`). | events + serveur ×3 + client ×3 + `grenade.glb` | `node --check` ×4 ; 17 tests moteur ; lint (0 nouvelle) + build ; session Saar |
+| **3d-1** ✅ (`4eef102`) | **Lancer** (garde `aoe.intendedOrigin && !aoe.resolvedOrigin`) : humanoïde ; Test de Coordination sur **COO** (`resolveAoeAttackRoll`) ; `resolveScatter(marginM = -mr, d6)` → point d'impact ; `jsonb_set` `resolvedOrigin` + `weaponSnapshot` ; `turn_number` action bumpé T+1 ; entrée `resolve_on_turn = T+1` @ `base_ini×100 + 1`, `resolution_snapshot.autoResolve` ; grenade retirée de `char_inventory`. Notice `session.grenadeArmed`. Écart RAW : pas de malus « zone visée » (`JOURNAL8`). | résolution | node --check + import ; **validé jeu réel 2026-09-08** |
+| **3d-2** ✅ (`2c7cf57`) | Capacité `rollsPhaseA` (défaut `true`, `grenade_frag` = `false`). **Résolution autonome** : patron registre (`combatTurnEngine.js` `registerAutonomousStepResolver` ← injecté par `socketCombatResolution.js`) — `advanceTimeline` détecte `autoResolve`, résout **sans clic**. `finalizeAoeResults` tolère `rollResult` absent. `flushEmissions` garde null sur `to:'socket'`. PJ : `COMBAT_ATTACK_PLAYER_RESULT` filtré (écart, `JOURNAL8`) + notice `grenadeExploded`. Extensible : mines/pièges. | dispatch + moteur | 17 tests (+`autoResolve`) ; **validé jeu réel 2026-09-08** |
+| **3d-3** ✅ | **Marqueur 3D de grenade armée.** Events `COMBAT_GRENADE_ARMED { entryId, tokenId, resolvedOrigin, explodesOnTurn, scattered }` / `COMBAT_GRENADE_EXPLODED { entryId }` (`shared/events.js`). Serveur : lancer `.insert(...).returning('id')` → `emissions.push` ARMED ; `resolveAutonomousStep` émet EXPLODED **en tête** (avant les `return` anticipés + l'appel qui peut lever) ; reconnexion (`socket/index.js`) ré-émet ARMED pour `status:'scheduled' AND resolve_on_turn >= current_turn AND autoResolve`. Client : `combatStore.grenadeMarkers` (dédup entryId, purge `resetCombat` + `onStateSync`), `useCombatSocket` handlers, `Canvas3D` rend `/models/grenade.glb` (bbox normalisée → `GRENADE_MARKER_SIZE_U`) + triangle ⚠ `<Billboard>` + anneaux de dégression (composant `GrenadeBlastRings` partagé avec l'aperçu §10.2). Murs : déjà gérés (`losSource:'origin'`). | events + serveur ×3 + client ×3 + `grenade.glb` | `node --check` ×4 ; 17 tests moteur ; lint (0 nouvelle) + build ; **validé jeu réel 2026-09-08** |
 | **3d-4** | **Animation de jet** (client pur, différé). Token → `resolvedOrigin` en 1..X arcs strictement décroissants, départ `scale:0`. Repli reconnexion = marqueur statique 3d-3. Timing calé sur `COMBAT_GRENADE_ARMED`. | client | session |
 | **3f** | Mode **PER** : résolution immédiate en T1 au lieu du différé (branche sur `modifiers.aoe.detonation`). Raffinement « obstacle intercalé » via LOS = ultérieur. | 1 branche | session |
 | **3g** | Doc : écarts `JOURNAL8.md` (dégression = diamètre/2, sonique, acide), `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | doc | — |
@@ -379,10 +379,13 @@ le justifie, décidé à l'analyse à charge de 3e.
 
 ## 10. Dettes ouvertes & suite (annoté 2026-09-06, session à faible contexte)
 
-**État : 3a+3b+3c fonctionnellement clos, ~26 commits locaux NON poussés (`cd0c196`..).**
-Grenade à fragmentation déclarable + visée d'un point + aperçu disque ; résolution → « pas encore
-implémenté (Segment 3d) ». Migration 325 appliquée (nodemon). Testé en session Saar (déclaration OK
-après le fix `fdd613c`).
+**État (2026-09-08) : 3a→3d-3 CLOS et VALIDÉS EN JEU RÉEL.** La grenade à fragmentation est jouable
+de bout en bout : déclaration « viser un point » → lancer (Test de Coordination + dispersion, Tour T)
+→ marqueur 3D au sol → explosion autonome au rang d'Initiative du lanceur, Tour T+1, dégression par
+palier. Détail des sous-segments : §6 (tableau) + `JOURNAL8.md` (2026-09-07 moteur de tour ; 2026-09-07
+grenades 3d ; 2026-09-08 grenades 3d-3). Reste : 3d-4 (anim de jet, client pur) · 3f (mode PER) ·
+3-bis (autres grenades) · 3e (FSM, si besoin). ~6 commits locaux non poussés au moment de l'annotation
+(`544744f`..`cd2a234`).
 
 ### 10.1 Fix `ref_fire_mode || isAoeWeapon` — SOUND (analyse critique 2026-09-06, mon 1ᵉʳ jet était FAUX)
 
@@ -452,14 +455,13 @@ Avant : aperçu = **un seul disque** r=15. Maintenant : **5 anneaux concentrique
 `npm run build` client OK ; eslint 0 nouvelle erreur. **Visuel = Saar** (5 anneaux à la déclaration,
 les 3 plateformes).
 
-### 10.3 Segment 3d (prochaine grosse étape serveur)
+### 10.3 Segment 3d ✅ FAIT (2026-09-07/08) — voir §6 + JOURNAL8
 
-Lancer T1 : `combat_action` `modifiers.aoe.mode:'grenade'` → **Test de Coordination** serveur
-(attribut COO ? ou compétence `ARMES_DE_JET` COO/PER −3 ? — `[INCONNU]` à trancher) + `resolveScatter`
-(`shared/world/aoeShapes.js`, écrit jamais câblé) sur échec → `aoe.resolvedOrigin`. Insère
-`combat_timeline_entries` (turn_number = T+1, phase_position = Ini lanceur ×100, status 'scheduled')
-→ `combat_action` synthétique `type:'grenade_explosion'` (`resolution_snapshot` = point + formule +
-mechanic). Dispatch T2 : `else if (action.type === 'grenade_explosion')` dans
-`socketCombatResolution.js:~383` → `resolveAoeAssaultAction` (capacités de mécanisme 3b déjà en
-place). Cas : lanceur mort en T2, reco, répétition réseau, 0 cible. Le garde
-`aoe.intendedOrigin && !aoe.resolvedOrigin` (socketCombatAoe.js) est l'emplacement où 3d se branche.
+Implémentation retenue (diffère du croquis initial : ni `mode:'grenade'`, ni `combat_action`
+synthétique) : **Test de Coordination sur l'attribut COO** (pas de compétence `ARMES_DE_JET`) via l'option `attributeId` de
+`resolveHumanoidTestContext` (3d-0). Pas de `combat_action` synthétique `grenade_explosion` : l'entrée
+`combat_timeline_entries` porte `resolution_snapshot.autoResolve` et le moteur de tour la résout
+lui-même (`registerAutonomousStepResolver`, 3d-2) en réutilisant l'`combat_action` du lancer
+(`turn_number` bumpé à T+1, `modifiers.aoe.resolvedOrigin` + `weaponSnapshot` posés par `jsonb_set`).
+`resolveScatter` câblé (3d-1). Le garde `aoe.intendedOrigin && !aoe.resolvedOrigin` (`socketCombatAoe.js`)
+est bien le point de branchement. Marqueur 3D + events `COMBAT_GRENADE_ARMED/_EXPLODED` (3d-3).

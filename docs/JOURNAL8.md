@@ -5547,7 +5547,7 @@ dans l'ordre inverse — C4 puis C3 puis C2 puis C1 ; C1 seul est sans risque (r
 
 ---
 
-## Session (Claude) — 2026-09-07 — Moteur de tour : extraction + file roulante `resolve_on_turn` + report d'Initiative ≤ 0 — M1/M2 CLOS, M3 ⚠️ CLOS PARTIEL
+## Session (Claude) — 2026-09-07 — Moteur de tour : extraction + file roulante `resolve_on_turn` + report d'Initiative ≤ 0 — M1/M2/M3 CLOS (validé jeu réel 2026-09-08)
 
 **Contexte** : préalable serveur aux grenades (`PLAN_GRENADES.md` §10.3, `PLAN_ARMES_SPECIALES.md` §2)
 — l'explosion « au Tour de combat suivant » exige une résolution différée inter-tours. Découverte :
@@ -5605,9 +5605,9 @@ Saar. M3 corrige.
 assault+melee, drone AOE, PNJ, défense (AWAITING_DEFENSE), STUN2, Tir Multi `multiAtk:-5`
 (`computeMultiAttackMalus` déplacé), 2 Tours. « ça a l'air bon ».
 
-**Non testé** : ⚠️ **M3 en jeu réel** — un combat où un personnage empile assez de Préparations pour
-Initiative ≤ 0, puis agit en premier au Tour suivant. Behavior-preserving en isolation (aucune entrée
-reportée créée tant que ce cas n'arrive pas).
+**Validé jeu réel** (Saar, 2026-09-08, batch groupé M3 + grenades 3d/3d-3) : combat complet, report
+d'Initiative ≤ 0 → Action reportée au Tour suivant, agit en premier. Aucune régression sur l'échelle
+normale.
 
 **Données** : migration 326 (`resolve_on_turn` sur `combat_timeline_entries` + backfill + index
 `idx_timeline_entries_resolve`). Appliquée par nodemon, round-trip `up`/`down` vérifié.
@@ -5623,7 +5623,7 @@ joueur à la reconnexion en RÉSOLUTION cherche par `tokens.campaign_id` (colonn
 
 ---
 
-## Session (Claude) — 2026-09-07 — Grenades : Segment 3d (lancer + explosion différée) — ⚠️ CLOS PARTIEL
+## Session (Claude) — 2026-09-07 — Grenades : Segment 3d (lancer + explosion différée) — CLOS (validé jeu réel 2026-09-08)
 
 **Chantier** `PLAN_GRENADES.md` §3d. La grenade à fragmentation devient jouable de bout en bout :
 déclaration « viser un point » (3c, déjà clos) → **lancer** (Test de Coordination + dispersion, Tour T)
@@ -5673,11 +5673,9 @@ un mécanisme = une entrée de registre) ; malus de taille « viser une cible »
 `advanceTimeline autoResolve`) ; `registry.test.mjs` (`rollsPhaseA`) ; `grenadeFrag.test.mjs` ;
 `node --test 'shared/**'` 519 ; `npm run build` client OK ; `git diff --check` propre.
 
-**Non testé** : ⚠️ **en jeu réel** — un combat complet : PJ/PNJ équipé grenade à fragmentation →
-déclare « viser un point » → Test de Coordination affiché → au Tour suivant l'explosion se résout
-seule au bon rang d'Initiative, dégression par palier appliquée, grenade retirée de l'inventaire.
-Cas à voir : échec du Test (dispersion visible), lanceur mort au Tour+1, 0 cible. Précédent : aucune
-résolution AOE (`resolveAoeAssaultAction`) n'a de test d'intégration DB — validation par session.
+**Validé jeu réel** (Saar, 2026-09-08, batch groupé) : PJ équipé grenade à fragmentation → « viser un
+point » → Test de Coordination → explosion au Tour suivant, dégression par palier, grenade retirée de
+l'inventaire. Marqueur 3D (Segment 3d-3) affiché entre les deux.
 
 **Données** : aucune migration (la migration 325 `aoe_profile` grenade date du Segment 3c). Effet
 runtime : une grenade lancée décrémente/supprime sa ligne `char_inventory`.
@@ -5685,7 +5683,7 @@ runtime : une grenade lancée décrémente/supprime sa ligne `char_inventory`.
 **Retour arrière** : `git revert` dans l'ordre inverse — `2c7cf57` (3d-2) `4eef102` (3d-1)
 `15c0ec7` (3d-0). 3d-0 seul est inerte (option non consommée sans 3d-1).
 
-## Session (Claude) — 2026-09-08 — Grenades : Segment 3d-3 — marqueur 3D de grenade armée
+## Session (Claude) — 2026-09-08 — Grenades : Segment 3d-3 — marqueur 3D de grenade armée — CLOS (validé jeu réel 2026-09-08)
 
 **Chantier** `PLAN_GRENADES.md` §3d-3. Retour Saar après le run 3d : « il manque un token 3D (ou a
 minima un symbole /!\\) pour la position de la grenade ». Le client ne connaît l'échelle que du Tour
@@ -5746,10 +5744,9 @@ départ). Client pur, zéro autorité ; repli reconnexion = marqueur statique 3d
 `npm run lint` client (110 err / 47 warn — **identique au HEAD, 0 nouvelle**) ; `npm run build` client
 OK (20 s).
 
-**Non testé** : ⚠️ **en jeu réel** — jet de grenade → marqueur (GLB + triangle + anneaux) au point
-d'impact réel entre T et T+1 → explosion Tour+1 retire le marqueur → reconnexion en vol restaure →
-cas dispersion montre le décalage → cas mur inchangé. Le vrai `resolveAutonomousStep` n'a pas de test
-unitaire (le test moteur le stube) : EXPLODED + query reconnexion = validation session.
+**Validé jeu réel** (Saar, 2026-09-08) : jet de grenade → marqueur (GLB + triangle + anneaux) au point
+d'impact réel entre T et T+1 → explosion Tour+1 retire le marqueur. Le vrai `resolveAutonomousStep`
+n'a pas de test unitaire (le test moteur le stube) — couvert par la session.
 
 **Données** : aucune migration. Aucun effet runtime nouveau (l'entrée `autoResolve` est déjà créée
 par 3d-1). Ajout de l'asset `client/public/models/grenade.glb`.
