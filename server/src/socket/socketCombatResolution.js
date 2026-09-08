@@ -12,6 +12,7 @@ import { getCharacterMovementBudget, MovementBudgetError } from '../services/mov
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { checkLOSForPrecheck } from '../lib/losService.js'
+import { resolveSizeCategory } from '../lib/characterSizeService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import { stripGmOnlyModifiers } from '../../../shared/combatSituationMods.js'
@@ -157,11 +158,16 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           return callback({ ok: false, stunned: true })
         }
       }
+      // Cible de l'action en cours de pré-vol — capturée par les checks melee/assault ci-dessous,
+      // réutilisée pour le préselect « Taille cible » de la fenêtre de modificateurs (PLAN_TAILLE.md S4).
+      let precheckTargetTokenId = null
+
       // 3. Range check CaC — colonne 'type' (cohérent L.907 serveur)
       if (actionKey === 'melee') {
         const action = await db('combat_actions')
           .where({ campaign_id: campaignId, token_id: tokenId, type: 'melee', status: 'pending', turn_number: state.current_turn })
           .first()
+        precheckTargetTokenId = action?.target_token_id ?? null
         if (action?.target_token_id) {
           // allonge XOR : weapon_inv_id (humanoïde) ou drone_weapon_inv_id (drone) — contrainte migration 76
           let referenceRange = null
@@ -200,13 +206,27 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         const action = await db('combat_actions')
           .where({ campaign_id: campaignId, token_id: tokenId, type: 'assault', status: 'pending', turn_number: state.current_turn })
           .first()
+        precheckTargetTokenId = action?.target_token_id ?? null
         if (action?.target_token_id) {
           const clear = await checkLOSForPrecheck(db, tokenId, action.target_token_id)
           if (!clear) return callback({ ok: false })
         }
       }
-      console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true`)
-      callback({ ok: true })
+
+      // Préselect « Taille cible » — dérivée de la fiche de la cible (PLAN_TAILLE.md S4). Le serveur
+      // la calcule ici pour éviter au client de lire une fiche adverse (mur d'autorisation
+      // /char-sheet). Valeur définitive re-dérivée à la résolution (resolveAttackTargetSize) ;
+      // ceci n'est qu'un pré-remplissage d'UI, l'override MJ reste possible.
+      let targetSizeCategory = null
+      if (precheckTargetTokenId) {
+        const targetTok = await db('tokens').where({ id: precheckTargetTokenId }).select('character_id').first()
+        if (targetTok?.character_id) {
+          targetSizeCategory = (await resolveSizeCategory(db, targetTok.character_id)).category
+        }
+      }
+
+      console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true taille:${targetSizeCategory ?? '—'}`)
+      callback({ ok: true, targetSizeCategory })
     } catch (err) {
       console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)
       callback({ ok: false })

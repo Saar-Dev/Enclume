@@ -466,6 +466,7 @@
     "attackerSection": "Attaquant",
     "defenderSection": "Défenseur",
     "targetSizeSection": "Taille cible",
+    "targetSizeAuto": "déterminée automatiquement",
     "rolling": "En cours…",
     "situationAtk": {
       "atkFlank": "Attaquant de côté",

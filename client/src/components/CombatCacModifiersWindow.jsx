@@ -5,7 +5,6 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
-import { sizeCategoryFromCm } from '../../../shared/sizeCategory.js'
 import { CAC_SITUATION_MODS, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
 
 // cacMod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité CaC,
@@ -45,7 +44,7 @@ const TAILLES = [
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n)    { return n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
-export default function CombatCacModifiersWindow({ socket, activeRosterEntry, isDrone }) {
+export default function CombatCacModifiersWindow({ socket, activeRosterEntry, isDrone, targetSizeCategory = null, isGm = false }) {
   const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -58,7 +57,10 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
   const [situationAtk, setSituationAtk]   = useState([])
   const [situationDef, setSituationDef]   = useState([])
-  const [taille, setTaille]               = useState('moyenne')
+  // Taille de la cible : préselect serveur (targetSizeCategory, dérivée via le PRECHECK) ;
+  // `tailleOverride` = choix manuel du MJ seulement (PLAN_TAILLE.md S4).
+  const [tailleOverride, setTailleOverride] = useState(null)
+  const taille = tailleOverride ?? targetSizeCategory ?? 'moyenne'
   const [weaponSkill, setWeaponSkill]     = useState(null)
   const [isRolling, setIsRolling]         = useState(false)
 
@@ -71,7 +73,6 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
   const attaquantToken = tokens.find(t => t.id === activeRosterEntry?.token_id)
   const cibleToken     = tokens.find(t => t.id === meleeOrAssaultAction?.target_token_id)
-  const cibleCharId    = cibleToken?.character_id ?? null
 
   // Plus de reset explicite ici (I18N-LINT3) : le parent (CombatOverlay.jsx) monte ce composant avec
   // key={meleeOrAssaultAction.id} — un nouveau slot CaC démonte/remonte le composant, tous les useState
@@ -88,21 +89,6 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
       .catch(() => {})
     return () => { cancelled = true }
   }, [meleeOrAssaultAction?.id, attaquantToken?.character_id])
-
-  // Pré-sélection taille si la cible est un drone
-  // TODO S4 — remplacer par GET /char-sheet/:id/combat-size (préselect générique, tous types)
-  useEffect(() => {
-    if (!cibleCharId) return
-    let cancelled = false
-    api.get(`/char-sheet/${cibleCharId}/drone`)
-      .then(res => {
-        if (cancelled) return
-        const tailleCm = res.data?.drone?.taille
-        if (tailleCm != null) setTaille(sizeCategoryFromCm(tailleCm).category)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [meleeOrAssaultAction?.id, cibleCharId])
 
   const handleToggleAtk = (key) => {
     setSituationAtk(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -199,18 +185,25 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
           </div>
         )}
 
-        {/* Taille cible */}
+        {/* Taille cible — préselect serveur (dérivée de la fiche de la cible) ; override MJ uniquement */}
         <div className="combat-float-section">
           <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
-          <select
-            value={taille}
-            onChange={e => setTaille(e.target.value)}
-            style={styles.select}
-          >
-            {TAILLES.map(opt => (
-              <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
-            ))}
-          </select>
+          {isGm ? (
+            <select
+              value={taille}
+              onChange={e => setTailleOverride(e.target.value)}
+              style={styles.select}
+            >
+              {TAILLES.map(opt => (
+                <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
+              ))}
+            </select>
+          ) : (
+            <div style={styles.readonlyValue}>
+              {t(TAILLES.find(o => o.key === taille)?.label ?? 'cacModifiers.tailles.moyenne')} ({fmtOpt(tailleModComp)})
+              <span style={styles.autoHint}> · {t('cacModifiers.targetSizeAuto')}</span>
+            </div>
+          )}
         </div>
 
       </div>
@@ -257,6 +250,8 @@ const styles = {
     padding: '4px 6px',
     cursor: 'pointer',
   },
+  readonlyValue: { fontSize: 11, color: '#c0c0d0', padding: '4px 6px' },
+  autoHint: { fontSize: 10, color: '#5b5b7a' },
   checkLabel: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '2px 0' },
   checkbox: { accentColor: '#f5c542', cursor: 'pointer', flexShrink: 0 },
   checkText: { fontSize: 11, color: '#c0c0d0', flex: 1, display: 'flex', justifyContent: 'space-between' },

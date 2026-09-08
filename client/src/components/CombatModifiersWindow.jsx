@@ -6,7 +6,6 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { LOC, SEVERITY } from '../lib/combatResultLabels.js'
 import api from '../lib/api.js'
-import { sizeCategoryFromCm } from '../../../shared/sizeCategory.js'
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
 
 // mod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité tir à
@@ -98,7 +97,7 @@ function calcPorteePalier(distance, rangeData) {
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n, impossible = false) { return impossible ? '✗' : n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
-export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed }) {
+export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed, targetSizeCategory = null, isGm = false }) {
   const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -114,7 +113,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const [cibleAllureOverride, setCibleAllureOverride] = useState(null)
   const [couvertures, setCouvertures] = useState([])
   const [obscurites, setObscurites] = useState([])
-  const [taille, setTaille] = useState('moyenne')
+  // Taille de la cible : préselect serveur (targetSizeCategory, dérivée de la fiche de la cible via
+  // le PRECHECK) ; `tailleOverride` = choix manuel du MJ seulement (null tant qu'il n'y touche pas),
+  // même pattern que porteeOverride/tireurAllureOverride ci-dessus (PLAN_TAILLE.md S4).
+  const [tailleOverride, setTailleOverride] = useState(null)
+  const taille = tailleOverride ?? targetSizeCategory ?? 'moyenne'
   const [weaponSkill, setWeaponSkill] = useState(null)
   const [isRolling, setIsRolling] = useState(false)
 
@@ -122,7 +125,6 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const tireurToken = tokens.find(tk => tk.id === (assaultAction?.token_id ?? attackResult?.tireurTokenId))
   const cibleToken  = tokens.find(tk => tk.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
   const tireurCharId = tireurToken?.character_id ?? null
-  const cibleCharId  = cibleToken?.character_id  ?? null
   // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — pas de cible unique, donc pas de distance
   // calculable ni de Portée pertinente : resolveAoeAssaultAction (serveur) ne lit jamais
   // confirmedModifiers.portee, elle est recalculée par cible touchée (resolveShotgunSpread). La case
@@ -136,7 +138,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     setCibleAllureOverride(null)
     setCouvertures([])
     setObscurites([])
-    setTaille('moyenne')
+    setTailleOverride(null)
     setWeaponSkill(null)
     setIsRolling(false)
   }, [assaultAction?.id])
@@ -150,21 +152,6 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       .catch(() => {})
     return () => { cancelled = true }
   }, [assaultAction?.id, tireurCharId])
-
-  // Pré-sélection taille si la cible est un drone (drone_sheet.taille en cm → palier)
-  // TODO S4 — remplacer par GET /char-sheet/:id/combat-size (préselect générique, tous types)
-  useEffect(() => {
-    if (!cibleCharId) return
-    let cancelled = false
-    api.get(`/char-sheet/${cibleCharId}/drone`)
-      .then(res => {
-        if (cancelled) return
-        const tailleCm = res.data?.drone?.taille
-        if (tailleCm != null) setTaille(sizeCategoryFromCm(tailleCm).category)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [assaultAction?.id, cibleCharId])
 
   // Détection allure tireur depuis les actions annoncées
   const detectedTireurAllure = useMemo(() => {
@@ -447,18 +434,25 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ))}
           </div>
 
-          {/* Taille cible */}
+          {/* Taille cible — préselect serveur (dérivée de la fiche de la cible) ; override MJ uniquement */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
-            <select
-              value={taille}
-              onChange={e => setTaille(e.target.value)}
-              style={styles.select}
-            >
-              {TAILLES.map(opt => (
-                <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
-              ))}
-            </select>
+            {isGm ? (
+              <select
+                value={taille}
+                onChange={e => setTailleOverride(e.target.value)}
+                style={styles.select}
+              >
+                {TAILLES.map(opt => (
+                  <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
+                ))}
+              </select>
+            ) : (
+              <div style={styles.infoValue}>
+                {t(TAILLES.find(o => o.key === taille)?.label ?? 'cacModifiers.tailles.moyenne')} ({fmtOpt(tailleModComp)})
+                <span style={styles.autoHint}> · {t('cacModifiers.targetSizeAuto')}</span>
+              </div>
+            )}
           </div>
 
         </div>
@@ -507,6 +501,7 @@ const styles = {
   infoRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' },
   infoLabel: { fontSize: 11, color: '#5b5b7a' },
   infoValue: { fontSize: 11, color: '#c0c0d0' },
+  autoHint: { fontSize: 10, color: '#5b5b7a' },
   sectionTitle: {
     fontSize: 10, fontWeight: 700, color: '#5b5b7a',
     textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4,

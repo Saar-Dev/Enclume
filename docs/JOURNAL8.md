@@ -5945,3 +5945,57 @@ avec et sans override MJ ; build client (aucun fichier client touché en S3, mai
 sémantique de `taille` n'a aucun impact rejeu.
 
 **Retour arrière** : `git revert` du commit S3 (6 fichiers, aucune migration).
+
+## Session (Claude) — 2026-09-08 — Taille de cible ⇄ dimensions — S4 fenêtres de combat
+
+Suite de S1-S3. Les fenêtres de modificateurs affichent désormais la taille **dérivée
+de la cible** ; le `<select>` 8 paliers est réservé au MJ.
+
+### Canal — le PRECHECK, pas un endpoint REST
+
+Le plan prévoyait `GET /char-sheet/:id/combat-size`. Bloqué : le `router.param` de
+`/char-sheet` refuse (403) qu'un joueur lise la fiche d'un PNJ adverse qu'il ne possède
+pas (c'est pourquoi le préselect historique était « drone seulement » — bypass drone).
+À la place, `COMBAT_ACTION_PRECHECK` (déjà émis avant l'ouverture de la fenêtre) **renvoie
+`targetSizeCategory` dans son callback** : le serveur calcule (`resolveSizeCategory`), n'expose
+jamais la fiche, marche pour joueur ET MJ.
+
+### Fenêtres — state `tailleOverride` (null), pas `taille`
+
+`CombatModifiersWindow` / `CombatCacModifiersWindow` : `taille` devient une valeur calculée
+`tailleOverride ?? targetSizeCategory ?? 'moyenne'` — même pattern que `porteeOverride` /
+`tireurAllureOverride` déjà en place. `tailleOverride` = choix manuel du MJ, `null` tant qu'il
+n'y touche pas. Effets de préselect `drone`-only supprimés (import `sizeCategoryFromCm` retiré
+des deux fenêtres). Section « Taille cible » : `<select>` si `isGm`, sinon ligne lecture seule
+« <palier> (<mod>) · déterminée automatiquement ».
+
+`CombatOverlay` : 2 états (`assaultPrecheckTargetSize`, `meleePrecheckTargetSize`) alimentés
+par les callbacks PRECHECK, passés en props `targetSizeCategory` + `isGm` aux 4 sites de rendu.
+
+### Effet net (S1→S4)
+
+- **Joueur** résout son attaque : taille affichée en lecture seule = valeur dérivée de la
+  cible (fiche `size_category` explicite, sinon dimensions, sinon « moyenne »). Ne peut pas
+  la changer ; son `confirmedModifiers.taille` est de toute façon filtré serveur (S3).
+- **MJ** résout : `<select>` pré-rempli sur la valeur dérivée, modifiable pour ce jet.
+- Zone d'effet (AOE) : `targetSizeCategory` null (pas de cible scalaire) → « moyenne » ;
+  D7 (retrait complet du modificateur AOE) toujours différé.
+
+### Reste
+
+- **D7** — `socketCombatAoe.js` (chantier grenades parallèle).
+- **S5** — UI fiches (`<select>` « Taille » 8 paliers + « auto » sur perso/drone/exo,
+  `PUT /char-sheet/:id/size` MJ-only).
+
+**Testé** : `node --check` (serveur) ; `node -e JSON.parse` (combat.json) ;
+`node --test 'shared/**/*.test.mjs'` 539/539 ; `cd client && npx eslint` sur les 3 fenêtres
+→ aucun problème nouveau (les 3 restants — 1 erreur + 2 warnings — pré-existent, effets non
+touchés) ; `cd client && npm run build` → OK.
+
+**Non testé** : combat réel (Saar) — préselect visible côté MJ, lecture seule côté joueur,
+override MJ, cibles pj/pnj/drone/exo, Tir + CaC + zone.
+
+**Données** : aucune. Le payload du callback `COMBAT_ACTION_PRECHECK` gagne un champ
+optionnel `targetSizeCategory` (ignoré par un client non mis à jour).
+
+**Retour arrière** : `git revert` du commit S4 (5 fichiers, aucune migration).

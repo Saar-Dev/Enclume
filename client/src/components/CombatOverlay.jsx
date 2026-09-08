@@ -113,16 +113,21 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   // Pre-validation CaC — REWORK-16
   const meleePrecheckId = activeMeleeAction?.id ?? playerActiveMeleeAction?.id ?? null
   const [precheckOk, setPrecheckOk] = useState(null) // null=en attente | true=ok | false=rejeté
+  // Taille de la cible renvoyée par le PRECHECK (dérivée serveur, PLAN_TAILLE.md S4) — préselect
+  // de CombatCacModifiersWindow, évite au client de lire une fiche adverse.
+  const [meleePrecheckTargetSize, setMeleePrecheckTargetSize] = useState(null)
 
   useEffect(() => {
     setPrecheckOk(null)
+    setMeleePrecheckTargetSize(null)
     if (!meleePrecheckId || !socket) return
     let cancelled = false
     const tokenId = activeMeleeAction?.token_id ?? playerActiveMeleeAction?.token_id
-    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok, awaiting } = {}) => {
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok, awaiting, targetSizeCategory } = {}) => {
       if (cancelled) return
       if (awaiting) { setPrecheckOk(null); return }
       setPrecheckOk(err ? false : (ok ?? false))
+      if (!err) setMeleePrecheckTargetSize(targetSizeCategory ?? null)
     })
     return () => { cancelled = true }
   // subPhase en dépendance (pas seulement precheckRetryKey/COMBAT_ATTACK_RESULT) : un precheck rejeté
@@ -134,16 +139,19 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   // Pre-validation assaut distance — REWORK-16 extension
   const assaultPrecheckId = activeAssaultAction?.id ?? playerActiveAssaultAction?.id ?? null
   const [assaultPrecheckOk, setAssaultPrecheckOk] = useState(null)
+  const [assaultPrecheckTargetSize, setAssaultPrecheckTargetSize] = useState(null)
 
   useEffect(() => {
     setAssaultPrecheckOk(null)
+    setAssaultPrecheckTargetSize(null)
     if (!assaultPrecheckId || !socket) return
     let cancelled = false
     const tokenId = activeAssaultAction?.token_id ?? playerActiveAssaultAction?.token_id
-    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok, stunned, awaiting } = {}) => {
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok, stunned, awaiting, targetSizeCategory } = {}) => {
       if (cancelled) return
       if (stunned || awaiting) { setAssaultPrecheckOk(null); return }
       setAssaultPrecheckOk(err ? false : (ok ?? false))
+      if (!err) setAssaultPrecheckTargetSize(targetSizeCategory ?? null)
     })
     return () => { cancelled = true }
   // subPhase en dépendance — même raison que meleePrecheckId ci-dessus.
@@ -380,6 +388,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           activeRosterEntry={playerRosterEntry}
           attackResult={attackResult}
           onAttackConfirmed={onAttackConfirmed}
+          targetSizeCategory={assaultPrecheckTargetSize}
+          isGm={isGm}
         />
       )}
 
@@ -404,6 +414,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           socket={socket}
           assaultAction={activeAssaultAction}
           activeRosterEntry={gmActiveEntry}
+          targetSizeCategory={assaultPrecheckTargetSize}
+          isGm={isGm}
         />
       )}
 
@@ -414,6 +426,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           socket={socket}
           activeRosterEntry={gmActiveEntry}
           isDrone={gmActiveCharacter?.type === 'drone'}
+          targetSizeCategory={meleePrecheckTargetSize}
+          isGm={isGm}
         />
       )}
 
@@ -424,6 +438,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           socket={socket}
           activeRosterEntry={playerRosterEntry}
           isDrone={false}
+          targetSizeCategory={meleePrecheckTargetSize}
+          isGm={isGm}
         />
       )}
 
