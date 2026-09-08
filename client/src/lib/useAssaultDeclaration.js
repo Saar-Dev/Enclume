@@ -42,6 +42,9 @@ export function useAssaultDeclaration() {
   // Zone d'effet cercle (grenade — PLAN_GRENADES.md §6 3c) : value = point `{x,y,z}` visé au sol
   // (résolu par Canvas3D), ou null pour effacer. Exclusif avec aoeDirection/targets côté reducer.
   const setAoeIntendedOrigin = useCallback((value) => dispatch({ type: 'SET_AOE_POINT', value }), [])
+  // Mode de détonation d'une grenade (PLAN_GRENADES.md §6 3f) : 'minuterie' | 'percussion'. Modifieur
+  // indépendant (n'efface aucun champ de visée) → pas de miroir stateRef, aucune cascade async ne le lit.
+  const setAoeDetonation = useCallback((value) => dispatch({ type: 'SET_AOE_DETONATION', value }), [])
   // aoeDirection ET aoeIntendedOrigin effacés dans le miroir : même exclusivité que le reducer
   // (SET_SOLE_TARGET côté assaultDeclaration.js), pour que stateRef reste fidèle au state commité.
   const setSoleTarget   = useCallback((tokenId) => {
@@ -63,7 +66,7 @@ export function useAssaultDeclaration() {
     state,
     dispatch,
     selectWeapon, clear, setCount, setBulletCount, setVariantAB, setDualWield,
-    setAimTranches, setAimedLocation, setSoleTarget, setTarget, setAoeDirection, setAoeIntendedOrigin,
+    setAimTranches, setAimedLocation, setSoleTarget, setTarget, setAoeDirection, setAoeIntendedOrigin, setAoeDetonation,
     effectiveCount:  (currentFireMode) => effectiveAssaultCount(state, currentFireMode),
     targetsFilled:   (currentFireMode) => assaultTargetsFilled(state, currentFireMode),
     targetsComplete: (currentFireMode) => assaultTargetsComplete(state, currentFireMode),

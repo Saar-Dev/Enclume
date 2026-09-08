@@ -131,7 +131,16 @@
     "aoeDirectionValue": "Direction : {{deg}}°",
     "aoePointValue": "Point d'impact visé",
     "aimAoeButton": "Viser une zone",
-    "aimAoePointButton": "Viser un point"
+    "aimAoePointButton": "Viser un point",
+    "detonationSection": "Détonation",
+    "detonationMinuterie": {
+      "label": "Minuterie",
+      "detail": "Explose au prochain Tour, à votre rang d'Initiative"
+    },
+    "detonationPercussion": {
+      "label": "Percussion",
+      "detail": "Explose immédiatement au contact du sol"
+    }
   },
   "rosterWindow": {
     "title": "ROSTER COMBAT",

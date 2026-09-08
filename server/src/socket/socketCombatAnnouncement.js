@@ -5,7 +5,7 @@ import { skipPlayer, startResolutionPhase } from './combatTurnEngine.js'
 import { forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { getAoeProfile } from '../../../shared/combatAoe.js'
+import { getAoeProfile, normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -676,6 +676,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
                 socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : point d'impact visé invalide" })
                 return
               }
+              // Mode de détonation (grenade) — normalisé AVANT persistance : le client envoie un membre
+              // de l'enum (shared/combatAoe.js), toute valeur aberrante retombe sur 'minuterie'
+              // (comportement historique). 'drone' passe ici, son rejet est à la résolution
+              // (PLAN_GRENADES.md §6 3f). Champ absent sur un cône/rayon (fusil à pompe, lance-flammes).
+              aoe.detonation = normalizeGrenadeDetonation(aoe.detonation)
             } else if (typeof aoe.direction !== 'number' || !Number.isFinite(aoe.direction)) {
               socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : direction invalide" })
               return

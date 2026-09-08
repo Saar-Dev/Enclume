@@ -645,6 +645,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       weapon, assaultTargets, effectiveAssaultCount,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
       aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
+      aoeDetonation: assaultDecl.state.aoeDetonation,
       meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
       effectiveDualWieldMelee, meleeOffhandWeapon,
       mapAction,
@@ -1007,6 +1008,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               isAoeMode={assaultDecl.isAoeMode}
               aoeDirection={assaultDecl.state.aoeDirection}
               aoeIntendedOrigin={assaultDecl.state.aoeIntendedOrigin}
+              aoeDetonation={assaultDecl.state.aoeDetonation}
+              onAoeDetonationChange={assaultDecl.setAoeDetonation}
               weaponAoeProfile={weapon?.ref_aoe_profile ?? null}
               onStartAoeDirection={handleStartAoeDirection}
             />

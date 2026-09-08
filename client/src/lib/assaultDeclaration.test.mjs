@@ -10,6 +10,7 @@ import {
   assaultIsAoeMode,
   assaultCheckInputs,
 } from './assaultDeclaration.js'
+import { GRENADE_DETONATION_DEFAULT } from '../../../shared/combatAoe.js'
 
 // --- reducer : champs simples ---------------------------------------------------------------------
 
@@ -175,6 +176,38 @@ test('SELECT_WEAPON et CLEAR remettent aoeIntendedOrigin à null', () => {
   const dirty = { ...INIT, aoeIntendedOrigin: { x: 1, y: 0, z: 1 } }
   assert.equal(reduce(dirty, { type: 'SELECT_WEAPON', weaponId: 'w2' }).aoeIntendedOrigin, null)
   assert.equal(reduce(dirty, { type: 'CLEAR' }).aoeIntendedOrigin, null)
+})
+
+// --- SET_AOE_DETONATION : mode de détonation grenade (PLAN_GRENADES.md §6 3f) ---
+// Modifieur INDÉPENDANT — contrairement aux SET_AOE_* de visée, il ne touche aucun champ de ciblage
+// et n'est jamais effacé par un SET_TARGET / SET_AOE_DIRECTION / SET_AOE_POINT.
+
+test('INIT : aoeDetonation = défaut de l\'enum partagé (minuterie)', () => {
+  assert.equal(INIT.aoeDetonation, GRENADE_DETONATION_DEFAULT)
+  assert.equal(INIT.aoeDetonation, 'minuterie')
+})
+
+test('SET_AOE_DETONATION : pose la valeur sans toucher les autres champs', () => {
+  assert.deepEqual(
+    reduce(INIT, { type: 'SET_AOE_DETONATION', value: 'percussion' }),
+    { ...INIT, aoeDetonation: 'percussion' },
+  )
+})
+
+test('SET_AOE_DETONATION : survit à la pose d\'un point de zone puis d\'une cible (modifieur indépendant)', () => {
+  let s = reduce(INIT, { type: 'SET_AOE_DETONATION', value: 'percussion' })
+  s = reduce(s, { type: 'SET_AOE_POINT', value: { x: 1, y: 0, z: 2 } })
+  assert.equal(s.aoeDetonation, 'percussion')
+  s = reduce(s, { type: 'SET_AOE_DIRECTION', value: 45 })
+  assert.equal(s.aoeDetonation, 'percussion')
+  s = reduce(s, { type: 'SET_TARGET', index: 0, tokenId: 'a', seriesLength: 1 })
+  assert.equal(s.aoeDetonation, 'percussion')
+})
+
+test('SELECT_WEAPON et CLEAR remettent aoeDetonation au défaut', () => {
+  const dirty = { ...INIT, aoeDetonation: 'percussion' }
+  assert.equal(reduce(dirty, { type: 'SELECT_WEAPON', weaponId: 'w2' }).aoeDetonation, GRENADE_DETONATION_DEFAULT)
+  assert.equal(reduce(dirty, { type: 'CLEAR' }).aoeDetonation, GRENADE_DETONATION_DEFAULT)
 })
 
 test('assaultTargetsComplete : une direction de zone posée compte comme complet, sans cible', () => {

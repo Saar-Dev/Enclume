@@ -1,6 +1,6 @@
 # PLAN_GRENADES.md — Grenades et capsules à explosion (Segment 3 du chantier armes de zone)
 
-> Rédigé 2026-09-06 (Claude/Saar) · révisé 2026-09-08 (§3d-3 marqueur 3D). Sorti de `PLAN_ARMES_SPECIALES.md` §2 (devenu trop gros — un
+> Rédigé 2026-09-06 (Claude/Saar) · révisé 2026-09-08 (§3d-3 marqueur 3D ; §3f mode Percussion recadré + analyse à charge, §6/§10.4). Sorti de `PLAN_ARMES_SPECIALES.md` §2 (devenu trop gros — un
 > chantier multi-segments mérite son document, RegleDocumentaire Règle 1). **Autorité : Livre de Base
 > Polaris > ce PLAN.** Tout écart RAW = décision écrite dans `docs/JOURNAL8.md` (invariant AGENTS.md #5).
 >
@@ -81,14 +81,22 @@ feu continu du lance-flammes) :
    du Test de Choc → question `statusService`) et **sonique** (§3 pt 3) rejoignent le **Segment 3-bis**,
    un concern nouveau chacun.
 
-2. **Options MIN / PER / DRO** : RAW « toutes les grenades peuvent être dotées de l'une des options »
+2. **Options de détonation** : RAW « toutes les grenades peuvent être dotées de l'une des options »
    → **universel, rien à seed par ligne** ; l'option est un choix au moment du lancer.
-   - **MIN + PER en v1.** Couture unique `programmerExplosion(point, profil, quand)` avec
-     `quand ∈ { maintenant, TourSuivant@Ini }` — deux valeurs d'un paramètre, pas deux chemins.
-   - **DRO différé.** Projectile-entité autonome (détection, homing, 10 min, Tours propres, NT V,
+   **Correction RAW (analyse à charge 2026-09-08)** : le RAW ne nomme que **percussion** et **drone**.
+   Le comportement par défaut (sans option) n'a pas de nom RAW — appelé ici `minuterie` (explosion au
+   Tour+1 au rang d'Initiative du lanceur, déjà codé en 3d). Enum retenu, autorité unique
+   `shared/combatAoe.js` (client + serveur) : `aoe.detonation ∈ { 'minuterie' (défaut), 'percussion',
+   'drone' }`. Champ frère de `aoe.mode` / `aoe.intendedOrigin`, pas de collision.
+   - **minuterie + percussion en v1.** Pas de `programmerExplosion` (croquis initial abandonné, cf.
+     §10.3/§10.4) : le lancer est extrait en `resolveGrenadeThrow` (Test de Coordination + dispersion
+     + retrait inventaire + snapshot, partagé) ; `resolveAoeAssaultAction` branche ensuite —
+     `minuterie` planifie l'entrée `combat_timeline_entries` T+1, `percussion` **poursuit dans le bloc
+     explosion existant** (Tour T, même appel). Un seul « lancer », deux suites. Détail §10.4.
+   - **drone différé.** Projectile-entité autonome (détection, homing, 10 min, Tours propres, NT V,
      ×10 coût) — dépend d'un sous-système « entité autonome en combat » non construit (dette
-     `COUVERTURE_RAW.md` §2). `detonation_mode = 'drone'` accepté **structurellement**, rejeté à la
-     résolution avec message clair (patron `AOE_MECHANICS`).
+     `COUVERTURE_RAW.md` §2). `aoe.detonation = 'drone'` accepté **structurellement** par l'enum,
+     rejeté à la résolution avec message clair (patron `AOE_MECHANICS`).
 
 3. **Grenade sonique = dégression standard, mais Segment 3-bis** (pas Segment 3). Le RAW ne donne
    aucune zone ; c'est une onde de choc anti-personnel avec dés de dégâts (5D10) **+ Choc (1D10)** —
@@ -217,7 +225,17 @@ avant 3b).** Deux constats changent le plan :
 | **3d-2** ✅ (`2c7cf57`) | Capacité `rollsPhaseA` (défaut `true`, `grenade_frag` = `false`). **Résolution autonome** : patron registre (`combatTurnEngine.js` `registerAutonomousStepResolver` ← injecté par `socketCombatResolution.js`) — `advanceTimeline` détecte `autoResolve`, résout **sans clic**. `finalizeAoeResults` tolère `rollResult` absent. `flushEmissions` garde null sur `to:'socket'`. PJ : `COMBAT_ATTACK_PLAYER_RESULT` filtré (écart, `JOURNAL8`) + notice `grenadeExploded`. Extensible : mines/pièges. | dispatch + moteur | 17 tests (+`autoResolve`) ; **validé jeu réel 2026-09-08** |
 | **3d-3** ✅ | **Marqueur 3D de grenade armée.** Events `COMBAT_GRENADE_ARMED { entryId, tokenId, resolvedOrigin, explodesOnTurn, scattered }` / `COMBAT_GRENADE_EXPLODED { entryId }` (`shared/events.js`). Serveur : lancer `.insert(...).returning('id')` → `emissions.push` ARMED ; `resolveAutonomousStep` émet EXPLODED **en tête** (avant les `return` anticipés + l'appel qui peut lever) ; reconnexion (`socket/index.js`) ré-émet ARMED pour `status:'scheduled' AND resolve_on_turn >= current_turn AND autoResolve`. Client : `combatStore.grenadeMarkers` (dédup entryId, purge `resetCombat` + `onStateSync`), `useCombatSocket` handlers, `Canvas3D` rend `/models/grenade.glb` (bbox normalisée → `GRENADE_MARKER_SIZE_U`) + triangle ⚠ `<Billboard>` + anneaux de dégression (composant `GrenadeBlastRings` partagé avec l'aperçu §10.2). Murs : déjà gérés (`losSource:'origin'`). | events + serveur ×3 + client ×3 + `grenade.glb` | `node --check` ×4 ; 17 tests moteur ; lint (0 nouvelle) + build ; **validé jeu réel 2026-09-08** |
 | **3d-4** | **Animation de jet** (client pur, différé). Token → `resolvedOrigin` en 1..X arcs strictement décroissants, départ `scale:0`. Repli reconnexion = marqueur statique 3d-3. Timing calé sur `COMBAT_GRENADE_ARMED`. | client | session |
-| **3f** | Mode **PER** : résolution immédiate en T1 au lieu du différé (branche sur `modifiers.aoe.detonation`). Raffinement « obstacle intercalé » via LOS = ultérieur. | 1 branche | session |
+| **3f — mode Percussion (PER)** | **Recadré 2026-09-08 (analyse à charge, §10.4).** L'estimation « 1 branche » était fausse : aucun choix de détonation n'existe dans le code (grep : zéro). Vrai livrable = **extraction du seam de lancer `resolveGrenadeThrow` + enum d'intention déclarée de bout en bout**. La branche percussion elle-même est triviale ; l'extraction est le point (chaque type de 3-bis + le futur `drone` la réutilisent). ~10 fichiers, 2 fenêtres, i18n, golden master. Sous-étapes ci-dessous, un fichier / pause (feedback_segment_by_file). | | |
+| 3f/1 | `shared/combatAoe.js` (+ `.test.mjs`) : `GRENADE_DETONATION_MODES` gelé + `GRENADE_DETONATION_DEFAULT` (`'minuterie'`) + `normalizeGrenadeDetonation(raw)` (inconnu → défaut). Autorité unique de l'enum, client + serveur. | shared pur | `node --test` |
+| 3f/2 | `socketCombatAnnouncement.js` : dans la branche `isPointAoe` (~l.671-683), `aoe.detonation = normalizeGrenadeDetonation(aoe.detonation)` **avant** persistance (l.698). Chemin `direction` (fusil à pompe / lance-flammes) non touché. *(Option forte — whitelist explicite de l'objet `modifiers.aoe` persisté — notée en dette séparée avec `weaponHasRangedAttackPath` §10.1, hors 3f.)* | serveur | `node --check` |
+| 3f/3 | `socketCombatAoe.js` : **extraction behavior-preserving** de `resolveGrenadeThrow(io, campaignId, { action, aoe, character, weapon, shooterToken, worldMetrics })` — absorbe l.496-560 (Test de Coordination + garde blessure mortelle + `resolveAoeAttackRoll` + `maybeTriggerCatastrophe` + `resolveScatter` + `weaponSnapshot` + **mutation mémoire `aoe.resolvedOrigin`/`aoe.weaponSnapshot`** + `jsonb_set` frères préservés + retrait `char_inventory`) ; retourne `{ blocked?, diceEmission, resolvedOrigin, weaponSnapshot, scattered, d6Roll, failureMarginM }` (patron `runAoePhaseA` : émission retournée, pas poussée). `minuterie` reste le **seul** chemin — bump `turn_number+1` + insert `combat_timeline_entries` + notice `grenadeArmed` + marqueur `COMBAT_GRENADE_ARMED` restent dans `resolveAoeAssaultAction`. | serveur (le tronc bouge) | `node --check` + **session non-régression** : grenade minuterie + fusil à pompe + lance-flammes |
+| 3f/4 | `socketCombatAoe.js` : `switch (normalizeGrenadeDetonation(aoe.detonation))` après `resolveGrenadeThrow` — `minuterie` → planification existante ; `percussion` → notice `session.grenadeThrownPercussion`, **pas de `return`**, fall-through vers le bloc explosion (l.578+, Tour T) ; `drone` → `COMBAT_DECLARE_ERROR` clair, `return`. **+ aggradation** : le catch du tronc (l.735) retourne `emissions` (l'accumulé) + pousse un `COMBAT_DECLARE_ERROR` au lieu de `emissions: []` — bénéficie aussi au fusil à pompe / lance-flammes (aujourd'hui : exception en cours de résolution AOE = silence total, jet déjà lancé perdu). | serveur | `node --check` + session réelle (percussion multi-cibles à paliers différents) |
+| 3f/5 | `client/src/lib/assaultDeclaration.js` (+ `.test.mjs`) : `aoeDetonation: 'minuterie'` à l'init ; case `SET_AOE_DETONATION` ; **reset dans `SELECT_WEAPON` + `CLEAR`** ; modifieur indépendant (pas touché par `SET_AOE_POINT`/`SET_AOE_DIRECTION` — ce n'est pas une exclusivité de visée). | client pur | `node --test` + eslint |
+| 3f/6 | `client/src/lib/useAssaultDeclaration.js` : `setAoeDetonation` + exposition (pas de miroir `stateRef` — champ hors ciblage/exclusivité). | client | eslint |
+| 3f/7 | `client/src/locales/combat.json` **puis** `AssaultRangedPanel.jsx` : clés i18n d'abord (`assaultPanel.detonation*`) ; segmenté `.btn-toggle` Minuterie \| Percussion (défaut Minuterie) + tooltips, **uniquement** dans la sous-branche `isAoeEligible` + `getAoeProfile(weaponAoeProfile)?.shape === 'circle'`. Invisible pour cône/rayon. | client UI | eslint + build |
+| 3f/8 | `CombatActionWindow.jsx` **ET** `CombatGmDeclareWindow.jsx` (les deux utilisent `AssaultRangedPanel` + le même `assaultDecl`) : passer `aoeDetonation` / `onAoeDetonationChange` au panneau + ajouter `aoeDetonation` aux **deux** sites de sélection payload (`CombatActionWindow.jsx:771`, `CombatGmDeclareWindow.jsx:647`). Un PNJ qui lance une percussion est un cas MJ légitime. | client (2 fenêtres) | eslint + build |
+| 3f/9 | `client/src/lib/buildDeclarePayload.js` (+ `.test.mjs`) : `buildAoeField`/`buildAttackEntries` prennent `aoeDetonation` ; chemin `intendedOrigin` → `{ intendedOrigin, detonation }`, **`detonation` TOUJOURS présent** (défaut `GRENADE_DETONATION_DEFAULT` importé de `shared/combatAoe.js` si `aoeDetonation` absent — cas exo/drone dont les builders ne le passent pas). Décision (2026-09-08, délégation Saar) : le serveur lit `aoe.detonation` **inconditionnellement** (3f/2 + 3f/4) → un champ toujours consommé est toujours présent ; l'asymétrie « parfois là » est la source de bug à éviter. Golden master des cas grenade existants gagne `detonation: 'minuterie'` (le diff documente le changement de forme, règle d'en-tête du fichier). Chemin `direction` **byte-identique**. | client pur | `node --test` |
+| 3f/10 | Doc (recouvre partiellement 3g) : `JOURNAL8.md` — (a) écart RAW : percussion = explosion immédiate Tour T = interprétation ; (b) détonation = choix au lancer, pas variante catalogue ; (c) **écart de comportement minuterie** : une explosion différée (T+1) qui lève une exception affiche désormais un `COMBAT_DECLARE_ERROR` en room (catch durci 3f/4) au lieu d'un silence total — vérifié bout en bout (`flushEmissions` gère `to:'room'` avec `socket=null`) ; (d) `[INCONNU]` noté : `isImpossibleRangedSituation` (Allure max / obscurité totale) bloque le lancer de grenade — comportement hérité (minuterie), défendable RAW (« lancer prend un Tour de combat » = Action pleine), à trancher hors 3f. `docs/SYSTEME/COMBAT.md` § résolution grenade ; `client/public/CHANGELOG.md`. | doc | — |
 | **3g** | Doc : écarts `JOURNAL8.md` (dégression = diamètre/2, sonique, acide), `docs/SYSTEME/COMBAT.md` § résolution grenade, `client/public/CHANGELOG.md`. | doc | — |
 
 Chaque sous-segment validé avant le suivant (feedback_segment_by_file). Filet proportionné (§5 pt 3) :
@@ -364,6 +382,11 @@ mécanique munition). Aucun opt-out nécessaire en 3b sur ce point.
   bouge).
 - **3c–3d** : + `buildDeclarePayload.test.mjs`, lint + build client, session réelle (viser un point,
   dispersion sur échec visible).
+- **3f** : 3f/1-3f/2 (shared + validation) = `node --test` / `node --check`. **3f/3** (extraction
+  `resolveGrenadeThrow`, le tronc bouge) = `node --check` + session non-régression grenade minuterie +
+  fusil à pompe + lance-flammes. **3f/4** (branche percussion + catch) = `node --check` + session
+  réelle percussion multi-cibles à paliers différents. 3f/5-3f/9 (client) = `node --test` golden
+  master + eslint + build. 3f/10 = doc.
 - **3e** : analyse à charge dédiée + non-régression fusil à pompe/lance-flammes (extraction des
   helpers) + scénario FSM complet (grenade lancée T1, explosion T2 au bon rang d'Ini, lanceur mort
   entre-temps, reconnexion PJ, répétition réseau).
@@ -373,7 +396,9 @@ mécanique munition). Aucun opt-out nécessaire en 3b sur ce point.
 ## 9. Retour arrière
 
 3a–3b : refactor pur / additif, `git revert` suffit. 3e (FSM) : tag avant + sauvegarde si le risque
-le justifie, décidé à l'analyse à charge de 3e.
+le justifie, décidé à l'analyse à charge de 3e. 3f : 3f/1-3f/2 + 3f/5-3f/10 = additif, `git revert`
+suffit ; **3f/3 (extraction du tronc AOE) = commit isolé, `git revert` par sous-étape** — behavior-
+preserving par construction, aucune migration, pas de tag nécessaire.
 
 ---
 
@@ -383,9 +408,10 @@ le justifie, décidé à l'analyse à charge de 3e.
 de bout en bout : déclaration « viser un point » → lancer (Test de Coordination + dispersion, Tour T)
 → marqueur 3D au sol → explosion autonome au rang d'Initiative du lanceur, Tour T+1, dégression par
 palier. Détail des sous-segments : §6 (tableau) + `JOURNAL8.md` (2026-09-07 moteur de tour ; 2026-09-07
-grenades 3d ; 2026-09-08 grenades 3d-3). Reste : 3d-4 (anim de jet, client pur) · 3f (mode PER) ·
-3-bis (autres grenades) · 3e (FSM, si besoin). ~6 commits locaux non poussés au moment de l'annotation
-(`544744f`..`cd2a234`).
+grenades 3d ; 2026-09-08 grenades 3d-3). Reste : **3f (mode Percussion — plan recadré + analysé à
+charge 2026-09-08, §6 + §10.4, prêt à coder à partir de 3f/1)** · 3d-4 (anim de jet, client pur) ·
+3-bis (autres grenades) · 3e (FSM, si besoin). ~7 commits locaux non poussés au moment de l'annotation
+(`544744f`..`852dd0c`).
 
 ### 10.1 Fix `ref_fire_mode || isAoeWeapon` — SOUND (analyse critique 2026-09-06, mon 1ᵉʳ jet était FAUX)
 
@@ -465,3 +491,49 @@ lui-même (`registerAutonomousStepResolver`, 3d-2) en réutilisant l'`combat_act
 (`turn_number` bumpé à T+1, `modifiers.aoe.resolvedOrigin` + `weaponSnapshot` posés par `jsonb_set`).
 `resolveScatter` câblé (3d-1). Le garde `aoe.intendedOrigin && !aoe.resolvedOrigin` (`socketCombatAoe.js`)
 est bien le point de branchement. Marqueur 3D + events `COMBAT_GRENADE_ARMED/_EXPLODED` (3d-3).
+
+### 10.4 Segment 3f — analyse à charge (2026-09-08, avant code)
+
+**Lecture code, pas déduite.** Le fall-through percussion vers le bloc explosion existant
+(`socketCombatAoe.js:578-734`) a été tracé ligne à ligne pour un `grenade_frag` entrant en mode
+percussion après le lancer.
+
+**[VÉRIFIÉ] Ce qui tient — le fall-through est sain :**
+
+| Point du bloc explosion | Comportement en percussion (Tour T) | Verdict |
+|---|---|---|
+| `amplitudeM` (l.583) | `needsWeaponRange:false` → sauté | ✓ |
+| `buildShape` (l.601) | lit `ctx.aoe.resolvedOrigin` — muté en mémoire par `resolveGrenadeThrow` | ✓ |
+| `evaluateAoeVisibility` `losSource:'origin'` (l.617) | depuis le point d'impact, positions **actuelles** | ✓ **plus juste que minuterie** : percussion = « heurte » = instantané, les cibles ne fuient pas (RAW-cohérent) |
+| `rollsPhaseA:false` (l.632) | `runAoePhaseA` **et son `maybeTriggerCatastrophe`** sautés | ✓ **pas de double catastrophe** — seul le jet de Coordination du lancer déclenche |
+| `decrementsAmmo:false` (l.648) | pas de re-requête `char_inventory` | ✓ |
+| `getEffectiveWeaponDamage(db, action.weapon_inv_id)` (l.710) | ligne d'inventaire **déjà supprimée au lancer** → `_fetchWeaponAndAmmo` sans `weapon_ref_id` → `return null` → repli `weapon.ref_damage_h` (l.712-714) | ✓ **exactement le mécanisme qui fait marcher minuterie** (validé 2026-09-08) — pas une régression |
+| `finalizeAoeResults({ isPnjResult:false })` (l.726) | émet `COMBAT_ATTACK_PLAYER_RESULT { targets:[...] }` agrégé → `CombatModifiersWindow` liste par cible (l.307-324) → joueur ferme via `onAttackConfirmed` | ✓ **chemin tireur-PJ du fusil à pompe, déjà validé** |
+| retour `{ suspend:false }` (l.734) | `advanceTimeline` enchaîne, pas d'`AWAITING_DAMAGE` | ✓ identique au fusil à pompe |
+
+Autres [VÉRIFIÉ] : `CombatModifiersWindow` s'ouvre déjà pour une grenade (`isAoeAction`, l.130) →
+`confirmedModifiers` peuplé, gate `isImpossibleRangedSituation` (l.417) déjà exercé par le lancer
+minuterie, PER ne change rien. Idempotence répétition réseau = chemin fusil à pompe AOE (action
+marquée `resolved` par le handler CONFIRM avant résolution, `socketCombatResolution.js:417`). Grenade
+consommée avant explosion = correct RAW (amorcée + lancée = partie).
+
+**Corrections au plan (portées dans §3 pt 2 + §6) :**
+
+1. **Le catch aveugle du tronc (`socketCombatAoe.js:735` : `return { emissions: [] }`) est un vrai
+   trou** — une exception en cours de résolution AOE efface **toutes** les émissions, y compris le
+   `DICE_RESULT` déjà lancé (fusil à pompe et lance-flammes compris). PER le rend visible (grenade
+   consommée + Test de Coordination joué, joueur voit *rien*). → **aggradation ajoutée à 3f/4** : le
+   catch retourne `emissions` (l'accumulé) + pousse un `COMBAT_DECLARE_ERROR`. Bénéficie aux 3 armes.
+2. **3f/8 touche 2 fenêtres** (`CombatActionWindow` + `CombatGmDeclareWindow`, même `AssaultRangedPanel`),
+   pas 1.
+3. **« 1 branche » sous-estimait** : aucun choix de détonation n'existe (grep : zéro). Vrai livrable =
+   seam `resolveGrenadeThrow` + enum d'intention déclarée de bout en bout (~10 fichiers).
+4. **Enum en français** aligné RAW : `'minuterie'` / `'percussion'` / `'drone'`.
+5. **Reset d'état** : `aoeDetonation` remis à `'minuterie'` dans `SELECT_WEAPON` + `CLEAR` (3f/5).
+6. **Persistance annonce (3f/2)** : normalisation en place, chemin `direction` non touché. Whitelist
+   explicite de `modifiers.aoe` = dette séparée (avec `weaponHasRangedAttackPath` §10.1), hors 3f.
+
+**Conclusion : faire.** Pas un patch — l'extraction `resolveGrenadeThrow` transforme ~95 lignes inline
+en seam nommé que chaque type de 3-bis + le futur `drone` réutilisent ; l'enum + le toggle = infra
+consommée telle quelle par 3-bis ; le catch-retourne-émissions durcit les 3 armes AOE. Percussion
+(blast sans échappatoire vs zone-denial différée) est un vrai choix tactique.

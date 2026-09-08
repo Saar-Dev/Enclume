@@ -129,6 +129,8 @@ export default function AssaultRangedPanel({
   aoeIntendedOrigin, // {x,y,z} | null — grenade (cercle), PLAN_GRENADES.md §6 3c
   weaponAoeProfile,  // ref_equipment.aoe_profile de l'arme — sa `shape` choisit le libellé
   onStartAoeDirection, // () => void — arme combatAoeTargetMode (Canvas3D)
+  aoeDetonation,       // 'minuterie' | 'percussion' — mode de détonation grenade (PLAN_GRENADES.md §6 3f) ; ignoré hors arme `shape: 'circle'`
+  onAoeDetonationChange, // (value) => void
 }) {
   const { t } = useTranslation('combat')
   const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
@@ -143,25 +145,52 @@ export default function AssaultRangedPanel({
   // Multi/Type de tir/détail CC-RC-RL/Localisation visée n'ont pas de sens pour elle et ne s'affichent
   // simplement plus, ce n'est pas une exclusivité à arbitrer (pas de bouton grisé, pas de raisons).
   if (isAoeEligible) {
+    // `circle` = grenade (point d'impact + choix de détonation) ; `cone`/`ray` = fusil à pompe /
+    // lance-flammes (direction seule, aucune option de détonation).
+    const isCircleAoe = getAoeProfile(weaponAoeProfile)?.shape === 'circle'
     return (
-      <div style={P.section}>
-        <div style={{ ...P.sectionTitle, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
-          {t('assaultPanel.aoeSection')}
-        </div>
-        {isAoeMode ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={P.targetName}>{aoeIntendedOrigin != null
-              ? t('assaultPanel.aoePointValue')
-              : t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
-            <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
+      <>
+        <div style={P.section}>
+          <div style={{ ...P.sectionTitle, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
+            {t('assaultPanel.aoeSection')}
           </div>
-        ) : (
-          <button style={{ ...P.chooseBtn, width: 'auto', alignSelf: 'flex-start' }} onClick={onStartAoeDirection}>
-            {t(getAoeProfile(weaponAoeProfile)?.shape === 'circle' ? 'assaultPanel.aimAoePointButton' : 'assaultPanel.aimAoeButton')}
-          </button>
+          {isAoeMode ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={P.targetName}>{aoeIntendedOrigin != null
+                ? t('assaultPanel.aoePointValue')
+                : t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
+              <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
+            </div>
+          ) : (
+            <button style={{ ...P.chooseBtn, width: 'auto', alignSelf: 'flex-start' }} onClick={onStartAoeDirection}>
+              {t(isCircleAoe ? 'assaultPanel.aimAoePointButton' : 'assaultPanel.aimAoeButton')}
+            </button>
+          )}
+        </div>
+
+        {/* Mode de détonation — grenade uniquement (PLAN_GRENADES.md §6 3f). Choix au lancer, universel
+            RAW (« toute grenade peut être dotée de l'une des options »). Défaut = minuterie. */}
+        {isCircleAoe && (
+          <div style={P.section}>
+            <div style={P.sectionTitle}>{t('assaultPanel.detonationSection')}</div>
+            <div style={P.option} onClick={() => onAoeDetonationChange('minuterie')}>
+              <div>
+                <div style={P.optionLabel}>{t('assaultPanel.detonationMinuterie.label')}</div>
+                <div style={P.optionSub}>{t('assaultPanel.detonationMinuterie.detail')}</div>
+              </div>
+              <span style={{ ...P.radio, ...(aoeDetonation !== 'percussion' ? P.radioActive : {}) }} />
+            </div>
+            <div style={P.option} onClick={() => onAoeDetonationChange('percussion')}>
+              <div>
+                <div style={P.optionLabel}>{t('assaultPanel.detonationPercussion.label')}</div>
+                <div style={P.optionSub}>{t('assaultPanel.detonationPercussion.detail')}</div>
+              </div>
+              <span style={{ ...P.radio, ...(aoeDetonation === 'percussion' ? P.radioActive : {}) }} />
+            </div>
+          </div>
         )}
-      </div>
+      </>
     )
   }
 

@@ -769,6 +769,7 @@ export default function CombatActionWindow({
       assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
       aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
+      aoeDetonation: assaultDecl.state.aoeDetonation,
       meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount, chargeSelection,
       effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
       reloadSelected, selectedWeapon, selectedAmmoId,
@@ -1282,6 +1283,8 @@ export default function CombatActionWindow({
               isAoeMode={assaultDecl.isAoeMode}
               aoeDirection={assaultDecl.state.aoeDirection}
               aoeIntendedOrigin={assaultDecl.state.aoeIntendedOrigin}
+              aoeDetonation={assaultDecl.state.aoeDetonation}
+              onAoeDetonationChange={assaultDecl.setAoeDetonation}
               weaponAoeProfile={selectedWeapon?.ref_aoe_profile ?? null}
               onStartAoeDirection={handleStartAoeDirection}
             />

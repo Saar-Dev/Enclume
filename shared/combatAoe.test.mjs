@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { getAoeProfile, isAoeWeapon, getAoeMechanic, AOE_MECHANICS, isKnownAoeMechanic, weaponHasRangedAttackPath } from './combatAoe.js'
+import {
+  getAoeProfile, isAoeWeapon, getAoeMechanic, AOE_MECHANICS, isKnownAoeMechanic, weaponHasRangedAttackPath,
+  GRENADE_DETONATION_MODES, GRENADE_DETONATION_DEFAULT, normalizeGrenadeDetonation,
+} from './combatAoe.js'
 
 // getAoeProfile — cadre PLAN_ARMES_SPECIALES.md §1.6, segment 0b. L'AOE-ness est une donnée
 // (ref_equipment.aoe_profile), plus un nom d'arme en dur.
@@ -106,4 +109,31 @@ test('AOE_MECHANICS / isKnownAoeMechanic — les mécanismes câblés à ce jour
   assert.equal(isKnownAoeMechanic('grenade_frag'), true)
   assert.equal(isKnownAoeMechanic('suppression'), false)
   assert.throws(() => AOE_MECHANICS.push('x'))
+})
+
+// normalizeGrenadeDetonation — mode de détonation d'une grenade (PLAN_GRENADES.md §3 pt 2 + §6 3f).
+// Autorité unique de l'enum, lue client (toggle de déclaration) ET serveur (validation + dispatch).
+
+test('GRENADE_DETONATION_MODES — les 3 modes RAW, défaut = minuterie, tableau gelé', () => {
+  assert.deepEqual([...GRENADE_DETONATION_MODES], ['minuterie', 'percussion', 'drone'])
+  assert.equal(GRENADE_DETONATION_DEFAULT, 'minuterie')
+  assert.ok(GRENADE_DETONATION_MODES.includes(GRENADE_DETONATION_DEFAULT))
+  assert.throws(() => GRENADE_DETONATION_MODES.push('x'))
+})
+
+test('normalizeGrenadeDetonation — chaque mode valide est renvoyé tel quel (drone inclus — le rejet est à la résolution, pas ici)', () => {
+  assert.equal(normalizeGrenadeDetonation('minuterie'), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation('percussion'), 'percussion')
+  assert.equal(normalizeGrenadeDetonation('drone'), 'drone')
+})
+
+test('normalizeGrenadeDetonation — absent / inconnu / mauvais type → défaut minuterie (fail-safe, jamais un throw)', () => {
+  assert.equal(normalizeGrenadeDetonation(null), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation(undefined), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation(''), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation('MINUTERIE'), 'minuterie') // exact match seulement, pas de normalisation de casse
+  assert.equal(normalizeGrenadeDetonation('timer'), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation(42), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation({ mode: 'percussion' }), 'minuterie')
+  assert.equal(normalizeGrenadeDetonation(['percussion']), 'minuterie')
 })

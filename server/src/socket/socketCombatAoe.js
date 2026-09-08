@@ -19,7 +19,7 @@ import { applyCriticalSuccessBonus, getCriticalSuccessBonus } from '../../../sha
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { parseWeaponRangeBands } from '../../../shared/combatRange.js'
-import { getAoeMechanic } from '../../../shared/combatAoe.js'
+import { getAoeMechanic, normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import * as damageService from '../lib/damageService.js'
 import * as statusService from '../lib/statusService.js'
@@ -362,6 +362,66 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
   return emissions
 }
 
+// resolveGrenadeThrow — « le lancer » d'une grenade visée « point » (RAW REGLES_ARMES_SPECIALES.md
+// § « Grenades et mines ») : gardes (humanoïde + mécanisme `grenade_frag`), Test de Coordination sur
+// l'attribut COO, dispersion 1D6 sur échec (`resolveScatter`), snapshot d'arme. NE fait AUCUN effet de
+// bord — pas d'émission, pas d'écriture DB, pas de retrait d'inventaire, pas de catastrophe : l'appelant
+// (`resolveAoeAssaultAction`) enchaîne dans l'ordre historique (DICE_RESULT, catastrophe, écritures)
+// puis la suite propre au mode de détonation (minuterie = entrée d'échelle T+1 ; percussion = §3f).
+// Extraction PLAN_GRENADES.md §6 3f — behavior-preserving, `minuterie` reste le seul chemin (3f/3).
+// Retourne `{ blocked: <emission> }` (garde échouée) OU
+// `{ coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx }`.
+async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics }) {
+  if (character.type !== 'pj' && character.type !== 'pnj') {
+    return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name, message: 'Lancer de grenade exo/drone — pas encore câblé (PLAN_GRENADES.md §3d).',
+    } } }
+  }
+  if (getAoeMechanic(weapon.ref_aoe_profile) !== 'grenade_frag') {
+    return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name, message: `${weapon.ref_name ?? 'Cette grenade'} — mécanisme de lancer pas encore implémenté.`,
+    } } }
+  }
+
+  const testCtx = await resolveCombatantTestContext(db, character, null, { attributeId: 'COO' })
+  const wounds = testCtx?.sheetId ? await db('character_wounds').where({ char_sheet_id: testCtx.sheetId }) : []
+  if (isTestBlockingWound(wounds)) {
+    return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
+    } } }
+  }
+
+  const coord = await resolveAoeAttackRoll({
+    skillTotal: testCtx?.skillTotal ?? 0,
+    skillMastery: 0,
+    contributions: [{ label: 'Malus santé / encombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' }],
+  })
+
+  const failureMarginM = coord.isSuccess ? 0 : -coord.mr // mr = seuil - roll < 0 sur échec → -mr = mètres ratés
+  const { total: d6Roll } = await parseDice('1d6')
+  const resolvedOrigin = resolveScatter({
+    throwerPosition: dbPositionToWorldPoint(shooterToken),
+    intendedOrigin: aoe.intendedOrigin, failureMarginM, d6Roll,
+  }, worldMetrics)
+
+  const weaponSnapshot = {
+    refAoeProfile: weapon.ref_aoe_profile, refDamageH: weapon.ref_damage_h,
+    refName: weapon.ref_name, equipmentId: weapon.equipment_id ?? null,
+  }
+
+  return { coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx }
+}
+
+// consumeThrownGrenade — retrait de la grenade lancée de l'inventaire (RAW : amorcée puis lancée).
+// Commun aux deux modes de détonation (minuterie / percussion). No-op si l'action ne porte pas de
+// ligne d'inventaire (tireur non-humanoïde — jamais atteint aujourd'hui, garde de `resolveGrenadeThrow`).
+async function consumeThrownGrenade(weaponInvId) {
+  if (!weaponInvId) return
+  const inv = await db('char_inventory').where({ id: weaponInvId }).first()
+  if (inv && inv.quantity > 1) await db('char_inventory').where({ id: inv.id }).update({ quantity: inv.quantity - 1, updated_at: db.fn.now() })
+  else if (inv) await db('char_inventory').where({ id: inv.id }).del()
+}
+
 // ─── Couche 4 AOE, phase B — orchestration (docs/PLANS/PLAN_AOE.md §8 + PLAN_ARMES_SPECIALES.md §1.4/§1.4bis) ─
 //
 // resolveAoeAssaultAction — tronc mince : gates → identification du mécanisme (registre,
@@ -406,8 +466,8 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
 // pompe, simplification v1 assumée plutôt qu'un branchement non testé.
 export async function resolveAoeAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   console.log(`[DBG] resolveAoeAssaultAction — début token:${action.token_id} type_perso:${character.type}`)
+  const emissions = [] // hors du try : le catch doit pouvoir renvoyer ce qui a déjà été produit
   try {
-    const emissions = []
     const aoe = action.modifiers?.aoe
     if (!aoe) return { suspend: false, emissions }
 
@@ -476,37 +536,30 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     // ── LANCER (RÉSOLUTION du Tour T) — grenade visée « point », pas encore résolue ────────────────
     // Test de Coordination (RAW REGLES_ARMES_SPECIALES.md § « Grenades et mines » : attribut COO
     // littéral) ; sur échec, dispersion à `|marge d'échec|` mètres, direction 1D6. Le point d'impact
-    // réel est figé maintenant ; l'EXPLOSION est différée au Tour+1 (entrée d'échelle `autoResolve`,
-    // résolue par le moteur — 3d-2). Écart RAW acté (JOURNAL8) : pas de modificateur de taille
-    // « zone visée » en v1 (on vise un point au sol).
+    // réel est figé maintenant. Suite selon le mode de détonation (PLAN_GRENADES.md §3 pt 2 / §6 3f) :
+    //  - `minuterie` (défaut) : explosion différée au Tour+1 au rang d'Initiative du lanceur (entrée
+    //    d'échelle `autoResolve`, résolue par le moteur — 3d-2) ;
+    //  - `percussion` : explosion IMMÉDIATE, ce Tour T, au point d'impact (fall-through vers le bloc
+    //    explosion ci-dessous) ;
+    //  - `drone` : réservé structurellement, rejeté ici (sous-système entité autonome non construit).
+    // Écart RAW acté (JOURNAL8) : pas de modificateur de taille « zone visée » en v1 (on vise un point).
     if (aoe.intendedOrigin && !aoe.resolvedOrigin) {
-      if (character.type !== 'pj' && character.type !== 'pnj') {
+      const detonation = normalizeGrenadeDetonation(aoe.detonation)
+
+      // `drone` — rejet AVANT le Test de Coordination et la consommation : la grenade reste intacte
+      // (motif de refus permanent qui ne peut pas changer, patron `findAoeMechanismEntry`).
+      if (detonation === 'drone') {
         emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name, message: 'Lancer de grenade exo/drone — pas encore câblé (PLAN_GRENADES.md §3d).',
-        } })
-        return { suspend: false, emissions }
-      }
-      if (getAoeMechanic(weapon.ref_aoe_profile) !== 'grenade_frag') {
-        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name, message: `${weapon.ref_name ?? 'Cette grenade'} — mécanisme de lancer pas encore implémenté.`,
+          username: character.name,
+          message: `${weapon.ref_name ?? 'Cette grenade'} — option « drone » pas encore câblée (sous-système entité autonome, PLAN_GRENADES.md §3 pt 2).`,
         } })
         return { suspend: false, emissions }
       }
 
-      const testCtx = await resolveCombatantTestContext(db, character, null, { attributeId: 'COO' })
-      const wounds = testCtx?.sheetId ? await db('character_wounds').where({ char_sheet_id: testCtx.sheetId }) : []
-      if (isTestBlockingWound(wounds)) {
-        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
-        } })
-        return { suspend: false, emissions }
-      }
+      const thrown = await resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics })
+      if (thrown.blocked) { emissions.push(thrown.blocked); return { suspend: false, emissions } }
+      const { coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx } = thrown
 
-      const coord = await resolveAoeAttackRoll({
-        skillTotal: testCtx?.skillTotal ?? 0,
-        skillMastery: 0,
-        contributions: [{ label: 'Malus santé / encombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' }],
-      })
       const { username: coordUsername, color: coordColor } = await resolveCombatantDisplayIdentity(db, character)
       emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: character.user_id ?? null, username: coordUsername, color: coordColor,
@@ -521,58 +574,67 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         site: 'grenade_throw', actorTokenId: action.token_id, targetTokenId: null,
       })
 
-      const failureMarginM = coord.isSuccess ? 0 : -coord.mr // mr = seuil - roll < 0 sur échec → -mr = mètres ratés
-      const { total: d6Roll } = await parseDice('1d6')
-      const resolvedOrigin = resolveScatter({
-        throwerPosition: dbPositionToWorldPoint(shooterToken),
-        intendedOrigin: aoe.intendedOrigin, failureMarginM, d6Roll,
-      }, worldMetrics)
+      // Point d'impact réel figé en mémoire — `mech.buildShape` (grenade_frag) lit `aoe.resolvedOrigin`.
+      aoe.resolvedOrigin = resolvedOrigin
+      aoe.weaponSnapshot = weaponSnapshot
 
-      const weaponSnapshot = {
-        refAoeProfile: weapon.ref_aoe_profile, refDamageH: weapon.ref_damage_h,
-        refName: weapon.ref_name, equipmentId: weapon.equipment_id ?? null,
+      if (detonation === 'percussion') {
+        // Option « à percussion » (RAW : « n'explose que si elle heurte quelque chose ») → explosion
+        // au contact = ce Tour, au point d'impact. Pas de minuterie, pas d'entrée d'échelle : on
+        // persiste le point (audit / cohérence combat_action_targets) et on POURSUIT dans le bloc
+        // explosion ci-dessous. Écart RAW acté (JOURNAL8, 3f/10) : le RAW ne précise pas le timing de
+        // la percussion — lecture retenue « au contact = ce Tour ».
+        await db('combat_actions').where({ id: action.id }).update({
+          modifiers: db.raw("jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)",
+            [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]),
+          updated_at: db.fn.now(),
+        })
+        await consumeThrownGrenade(action.weapon_inv_id)
+        emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+          i18nKey: 'session.grenadeThrownPercussion',
+          params: { label: character.name ?? shooterToken.label ?? '?' },
+          timestamp: new Date().toISOString(),
+        } })
+        // PAS de return — fall-through vers le bloc explosion (Tour T).
+      } else {
+        // `minuterie` (défaut) — comportement historique inchangé (§3d).
+        const [stateRow, rosterRow] = await Promise.all([
+          db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first(),
+          db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
+        ])
+        const currentTurn = stateRow?.current_turn ?? 1
+
+        await db('combat_actions').where({ id: action.id }).update({
+          modifiers: db.raw("jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)",
+            [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]),
+          turn_number: currentTurn + 1, // survit au wipe endTurn (M3) + trouvé par le dispatch au Tour+1
+          updated_at: db.fn.now(),
+        })
+        const [armedEntry] = await db('combat_timeline_entries').insert({
+          campaign_id: campaignId, turn_number: currentTurn, resolve_on_turn: currentTurn + 1,
+          token_id: action.token_id, combat_action_id: action.id,
+          phase_position: (rosterRow?.base_ini ?? 0) * 100 + 1, // « rang d'Initiative normal », juste avant l'action propre du lanceur
+          status: 'scheduled',
+          resolution_snapshot: JSON.stringify({ autoResolve: true, resolvedOrigin, scattered: !coord.isSuccess, d6Roll, marginM: failureMarginM }),
+        }).returning('id')
+
+        await consumeThrownGrenade(action.weapon_inv_id)
+
+        emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+          i18nKey: 'session.grenadeArmed',
+          params: { label: character.name ?? shooterToken.label ?? '?' },
+          timestamp: new Date().toISOString(),
+        } })
+        // Marqueur 3D côté client (§3d-3) — position réelle au sol entre le lancer et l'explosion Tour+1.
+        emissions.push({ to: 'room', event: WS.COMBAT_GRENADE_ARMED, data: {
+          entryId: armedEntry.id,
+          tokenId: action.token_id,
+          resolvedOrigin,
+          explodesOnTurn: currentTurn + 1,
+          scattered: !coord.isSuccess,
+        } })
+        return { suspend: false, emissions }
       }
-      const [stateRow, rosterRow] = await Promise.all([
-        db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first(),
-        db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
-      ])
-      const currentTurn = stateRow?.current_turn ?? 1
-
-      await db('combat_actions').where({ id: action.id }).update({
-        modifiers: db.raw("jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)",
-          [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]),
-        turn_number: currentTurn + 1, // survit au wipe endTurn (M3) + trouvé par le dispatch au Tour+1
-        updated_at: db.fn.now(),
-      })
-      const [armedEntry] = await db('combat_timeline_entries').insert({
-        campaign_id: campaignId, turn_number: currentTurn, resolve_on_turn: currentTurn + 1,
-        token_id: action.token_id, combat_action_id: action.id,
-        phase_position: (rosterRow?.base_ini ?? 0) * 100 + 1, // « rang d'Initiative normal », juste avant l'action propre du lanceur
-        status: 'scheduled',
-        resolution_snapshot: JSON.stringify({ autoResolve: true, resolvedOrigin, scattered: !coord.isSuccess, d6Roll, marginM: failureMarginM }),
-      }).returning('id')
-
-      // La grenade quitte l'inventaire au lancer (RAW : amorcée puis lancée).
-      if (action.weapon_inv_id) {
-        const inv = await db('char_inventory').where({ id: action.weapon_inv_id }).first()
-        if (inv && inv.quantity > 1) await db('char_inventory').where({ id: inv.id }).update({ quantity: inv.quantity - 1, updated_at: db.fn.now() })
-        else if (inv) await db('char_inventory').where({ id: inv.id }).del()
-      }
-
-      emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
-        i18nKey: 'session.grenadeArmed',
-        params: { label: character.name ?? shooterToken.label ?? '?' },
-        timestamp: new Date().toISOString(),
-      } })
-      // Marqueur 3D côté client (§3d-3) — position réelle au sol entre le lancer et l'explosion Tour+1.
-      emissions.push({ to: 'room', event: WS.COMBAT_GRENADE_ARMED, data: {
-        entryId: armedEntry.id,
-        tokenId: action.token_id,
-        resolvedOrigin,
-        explodesOnTurn: currentTurn + 1,
-        scattered: !coord.isSuccess,
-      } })
-      return { suspend: false, emissions }
     }
 
     // Amplitude de la zone = portée extrême de l'arme (fusil à pompe, lance-flammes — `ref_range`).
@@ -734,6 +796,14 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     return { suspend: false, emissions }
   } catch (err) {
     console.error('[WS] resolveAoeAssaultAction error:', err.message)
-    return { suspend: false, emissions: [] }
+    // Ne jamais perdre en silence ce qui a déjà été produit (DICE_RESULT du jet de tir / Test de
+    // Coordination, notices) — une exception en cours d'explosion AOE (fusil à pompe, lance-flammes,
+    // grenade percussion) laissait jusqu'ici le joueur sans aucun retour. Pattern
+    // socketCombatResolution.js:419-425 (« dès qu'un truc marche pas, le système doit dire pourquoi »).
+    emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name,
+      message: `Erreur interne en résolvant l'action de zone (${err.message}) — le Tour continue, résultat éventuellement incomplet, prévenez le MJ.`,
+    } })
+    return { suspend: false, emissions }
   }
 }

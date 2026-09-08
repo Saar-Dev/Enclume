@@ -11,6 +11,8 @@
 //   - shared/combatExclusiveActions.js → getAimIneligibilityReasons / getMultiShotIneligibilityReasons
 //   - client/src/lib/declareChecks.js  → assaultCheck (validité + raison de blocage)
 
+import { GRENADE_DETONATION_DEFAULT } from '../../../shared/combatAoe.js'
+
 export const ASSAULT_DECLARATION_INITIAL = {
   weaponId:      null,   // arme de tir choisie dans la liste (D5) ; null = arme primaire résolue par slots
   targets:       [],     // [tokenId, tokenId?, tokenId?] — 1 entrée par tir de la série (Tir Multi)
@@ -31,6 +33,12 @@ export const ASSAULT_DECLARATION_INITIAL = {
   // `{x,y,z}` (coordonnées monde), déjà résolu par l'appelant (Canvas3D). Exclusif avec `aoeDirection`
   // (une arme est d'une seule forme) ET avec `targets`.
   aoeIntendedOrigin: null,
+  // Mode de détonation d'une grenade (PLAN_GRENADES.md §3 pt 2 / §6 3f) — choisi au lancer, ne
+  // s'affiche que pour une arme « cercle » (grenade). N'est PAS un mode de visée : indépendant de
+  // `targets`/`aoeDirection`/`aoeIntendedOrigin`, jamais effacé par un `SET_TARGET`/`SET_AOE_*`.
+  // Défaut = `minuterie` (autorité de l'enum : `shared/combatAoe.js`). Ignoré côté payload pour toute
+  // arme non-cercle (`buildAoeField`, 3f/9). Remis au défaut par `SELECT_WEAPON`/`CLEAR` (spread INITIAL).
+  aoeDetonation: GRENADE_DETONATION_DEFAULT,
 }
 
 // Mode de ciblage "zone d'effet" actif ? Dérivé pur — les fichiers appelants (fenêtre, payload) n'ont
@@ -177,6 +185,12 @@ export function assaultDeclarationReducer(state, action) {
     // sol (coordonnées monde, déjà résolu par Canvas3D) ou `null` pour effacer. Même exclusivité.
     case 'SET_AOE_POINT':
       return { ...state, aoeIntendedOrigin: action.value, aoeDirection: null, targets: action.value != null ? [] : state.targets }
+
+    // Mode de détonation d'une grenade (PLAN_GRENADES.md §6 3f) — action.value ∈ { 'minuterie',
+    // 'percussion' }. Modifieur indépendant : ne touche AUCUN champ de visée (contrairement aux
+    // SET_AOE_* ci-dessus, mutuellement exclusifs entre eux).
+    case 'SET_AOE_DETONATION':
+      return { ...state, aoeDetonation: action.value }
 
     // Efface le sous-état Tir : nouveau tour, changement de slot actif, ou sélection d'une autre
     // action de combat (CaC) — l'exclusivité Tir ⊕ CaC est portée par la fenêtre.

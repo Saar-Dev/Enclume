@@ -18,6 +18,8 @@
 // divergences légitimes PJ/PNJ passent par le contexte (`weaponInvId`, `offhandWeaponId`, `targets`,
 // `emptyBonus`) — jamais une branche `if (profile)` dans le cœur.
 
+import { normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
+
 // --- Humain (PJ) — miroir exact de CombatActionWindow.jsx#handleDeclare, branche non-drone --------
 export function buildHumanDeclarePayload(sel) {
   // Charge (M0.4-g) : le déplacement gratuit + la cible vivent dans `sel.chargeSelection`
@@ -56,6 +58,7 @@ export function buildHumanDeclarePayload(sel) {
         ? buildAttackEntries({
             aoeDirection:          sel.aoeDirection,
             aoeIntendedOrigin:     sel.aoeIntendedOrigin,
+            aoeDetonation:         sel.aoeDetonation,
             weaponInvId:           sel.assaultWeaponId,
             targets:              sel.assaultPendingTokenIds,
             effectiveAssaultCount: sel.effectiveAssaultCount,
@@ -152,6 +155,7 @@ export function buildGmDeclarePayload(sel) {
         ? buildAttackEntries({
             aoeDirection:          sel.aoeDirection,
             aoeIntendedOrigin:     sel.aoeIntendedOrigin,
+            aoeDetonation:         sel.aoeDetonation,
             weaponInvId:           sel.weapon.inv_id,
             targets:              sel.assaultTargets,
             effectiveAssaultCount: sel.effectiveAssaultCount,
@@ -181,6 +185,8 @@ export function buildGmDeclarePayload(sel) {
 //
 // @param {object}        p
 // @param {number|null}   p.aoeDirection          direction de zone en degrés, ou null (cible unique)
+// @param {{x,y,z}|null}  p.aoeIntendedOrigin     point d'impact visé (grenade), ou null
+// @param {string}        p.aoeDetonation         mode de détonation grenade ('minuterie'|'percussion') — normalisé, défaut 'minuterie'
 // @param {string|null}   p.weaponInvId           arme de tir — `assaultWeaponId` (PJ) | `weapon.inv_id` (MJ)
 // @param {string[]}      p.targets               `assaultPendingTokenIds` (PJ) | `assaultTargets` (MJ)
 // @param {number}        p.effectiveAssaultCount nombre de tirs de la série (Tir Multi)
@@ -196,17 +202,21 @@ export function buildGmDeclarePayload(sel) {
 // @returns {object[]}
 // Champ `aoe` du payload — deux formes selon `aoe_profile.shape` de l'arme (PLAN_AOE.md §6 /
 // PLAN_GRENADES.md §6 3c) : cône/rayon (fusil à pompe, lance-flammes) → `{ direction }` en degrés ;
-// cercle (grenade `grenade_frag`) → `{ intendedOrigin }`, un point `{x,y,z}` au sol visé par le
-// lanceur. Mutuellement exclusifs — la reducer / le hook n'en pose qu'un, selon la forme de l'arme.
-// `null` si aucune visée de zone (cible unique classique).
-export function buildAoeField({ aoeDirection, aoeIntendedOrigin }) {
-  if (aoeIntendedOrigin != null) return { intendedOrigin: aoeIntendedOrigin }
+// cercle (grenade `grenade_frag`) → `{ intendedOrigin, detonation }`, un point `{x,y,z}` au sol visé
+// par le lanceur + le mode de détonation (PLAN_GRENADES.md §6 3f). Mutuellement exclusifs — la reducer
+// / le hook n'en pose qu'un, selon la forme de l'arme. `null` si aucune visée de zone (cible unique).
+// `detonation` est TOUJOURS présent sur le chemin `intendedOrigin` (défaut `minuterie` si absent — cas
+// exo/drone dont les hooks ne portent pas ce champ) : le serveur le lit inconditionnellement
+// (`normalizeGrenadeDetonation`, socketCombatAnnouncement.js + socketCombatAoe.js) — un champ toujours
+// consommé est toujours émis. Le chemin `direction` ne le porte jamais (cône/rayon = pas de grenade).
+export function buildAoeField({ aoeDirection, aoeIntendedOrigin, aoeDetonation }) {
+  if (aoeIntendedOrigin != null) return { intendedOrigin: aoeIntendedOrigin, detonation: normalizeGrenadeDetonation(aoeDetonation) }
   if (aoeDirection != null) return { direction: aoeDirection }
   return null
 }
 
 export function buildAttackEntries({
-  aoeDirection, aoeIntendedOrigin, weaponInvId, targets, effectiveAssaultCount,
+  aoeDirection, aoeIntendedOrigin, aoeDetonation, weaponInvId, targets, effectiveAssaultCount,
   isDualWield, hasTwoWeapons, sameFirMode, offhandWeaponId,
   currentVariant, dualWieldBonusComp, aimTranches, aimedLocation, emptyBonus,
 }) {
@@ -217,7 +227,7 @@ export function buildAttackEntries({
   // aoeDirection/aoeIntendedOrigin/targets le sont), et une action de zone n'a pas de cible unique ni
   // de deux armes ni de localisation visée (RAW) — les envoyer tels quels enverrait un payload
   // contradictoire au serveur.
-  const aoe = buildAoeField({ aoeDirection, aoeIntendedOrigin })
+  const aoe = buildAoeField({ aoeDirection, aoeIntendedOrigin, aoeDetonation })
   if (aoe != null) {
     return [{
       weaponInvId,

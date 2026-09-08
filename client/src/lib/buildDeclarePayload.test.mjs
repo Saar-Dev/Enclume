@@ -147,7 +147,7 @@ test('Zone d\'effet — aoeDirection à 0° (falsy) reste bien traité comme une
   assert.deepEqual(p.mapActions.attack[0].aoe, { direction: 0 })
 })
 
-test('Zone d\'effet — grenade : aoeIntendedOrigin (point) → aoe.intendedOrigin, une entrée sans cible', () => {
+test('Zone d\'effet — grenade : aoeIntendedOrigin (point) → aoe.intendedOrigin + detonation, une entrée sans cible', () => {
   const p = buildHumanDeclarePayload(baseSel({
     attackSelected: true, assaultWeaponId: 'grenade-1', aoeIntendedOrigin: { x: 3, y: 0, z: -4 },
     isDualWield: true, hasTwoWeapons: true, sameFirMode: true, aimTranches: 2, aimedLocation: 'head',
@@ -155,16 +155,30 @@ test('Zone d\'effet — grenade : aoeIntendedOrigin (point) → aoe.intendedOrig
   }))
   assert.deepEqual(p.mapActions.attack, [{
     weaponInvId: 'grenade-1', offhandWeaponInvId: null, targetTokenId: null,
-    aoe: { intendedOrigin: { x: 3, y: 0, z: -4 } },
+    // `aoeDetonation` absent du `sel` → défaut 'minuterie' (3f/9 : detonation TOUJOURS présent sur le chemin point).
+    aoe: { intendedOrigin: { x: 3, y: 0, z: -4 }, detonation: 'minuterie' },
     bulletCount: null, fireModeBonusComp: null, fireModeBonusDmg: null,
     isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
   }])
 })
 
-test('buildAoeField — intendedOrigin prioritaire, sinon direction, sinon null', () => {
-  assert.deepEqual(buildAoeField({ aoeDirection: 42, aoeIntendedOrigin: { x: 1, y: 2, z: 3 } }), { intendedOrigin: { x: 1, y: 2, z: 3 } })
+test('Zone d\'effet — grenade percussion : aoeDetonation traversé jusqu\'au payload', () => {
+  const p = buildHumanDeclarePayload(baseSel({
+    attackSelected: true, assaultWeaponId: 'grenade-1',
+    aoeIntendedOrigin: { x: 1, y: 0, z: 1 }, aoeDetonation: 'percussion',
+  }))
+  assert.deepEqual(p.mapActions.attack[0].aoe, { intendedOrigin: { x: 1, y: 0, z: 1 }, detonation: 'percussion' })
+})
+
+test('buildAoeField — intendedOrigin (+ detonation) prioritaire, sinon direction, sinon null', () => {
+  // Chemin point : detonation TOUJOURS présent, normalisé (défaut 'minuterie' si absent/aberrant).
+  assert.deepEqual(buildAoeField({ aoeDirection: 42, aoeIntendedOrigin: { x: 1, y: 2, z: 3 } }), { intendedOrigin: { x: 1, y: 2, z: 3 }, detonation: 'minuterie' })
+  assert.deepEqual(buildAoeField({ aoeIntendedOrigin: { x: 1, y: 2, z: 3 }, aoeDetonation: 'percussion' }), { intendedOrigin: { x: 1, y: 2, z: 3 }, detonation: 'percussion' })
+  assert.deepEqual(buildAoeField({ aoeIntendedOrigin: { x: 0, y: 0, z: 0 }, aoeDetonation: 'garbage' }), { intendedOrigin: { x: 0, y: 0, z: 0 }, detonation: 'minuterie' })
+  // Chemin direction : byte-identique (jamais de detonation — cône/rayon = pas de grenade).
   assert.deepEqual(buildAoeField({ aoeDirection: 0 }), { direction: 0 })
   assert.deepEqual(buildAoeField({ aoeDirection: 42 }), { direction: 42 })
+  assert.deepEqual(buildAoeField({ aoeDirection: 42, aoeDetonation: 'percussion' }), { direction: 42 })
   assert.equal(buildAoeField({}), null)
   assert.equal(buildAoeField({ aoeDirection: null, aoeIntendedOrigin: null }), null)
 })
@@ -602,12 +616,13 @@ test('drone AOE — arme de contact + aoeDirection → jamais de zone (retombe s
   assert.ok(!('attack' in r.mapActions))
 })
 
-test('drone AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin', () => {
+test('drone AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin + detonation', () => {
   const r = buildDroneMapActions(droneSel({
     selectedDroneWeaponId: 'w1', aoeIntendedOrigin: { x: 5, y: 0, z: 2 },
     droneWeapons: [{ id: 'w1', ref_category: 'Grenade', fire_mode: 'cc' }],
   }))
-  assert.deepEqual(r.mapActions.attack, [{ droneWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: 5, y: 0, z: 2 } } }])
+  // `droneSel` ne porte pas `aoeDetonation` (pas de toggle exo/drone — lancer rejeté serveur) → défaut 'minuterie'.
+  assert.deepEqual(r.mapActions.attack, [{ droneWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: 5, y: 0, z: 2 }, detonation: 'minuterie' } }])
 })
 
 // ─── Exo (buildExoMapActions) ────────────────────────────────────────────────
@@ -668,12 +683,12 @@ test('exo AOE — arme de contact + aoeDirection → jamais de zone (RAW, retomb
   assert.deepEqual(r, { melee: [{ exoWeaponInvId: 'w1', targetTokenId: 'e1' }] })
 })
 
-test('exo AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin', () => {
+test('exo AOE — grenade montée : aoeIntendedOrigin (point) → attack[] avec aoe.intendedOrigin + detonation', () => {
   const r = buildExoMapActions(exoSel({
     selectedExoWeaponId: 'w1', aoeIntendedOrigin: { x: -2, y: 0, z: 8 },
     exoWeapons: [{ id: 'w1', ref_category: 'Grenade' }],
   }))
-  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: -2, y: 0, z: 8 } } }] })
+  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'w1', targetTokenId: null, aoe: { intendedOrigin: { x: -2, y: 0, z: 8 }, detonation: 'minuterie' } }] })
 })
 
 // ─── Cœur commun buildAttackEntries / buildMeleeEntries (PLAN_RW_DECLARE_DERIVATION Étape A) ──────
