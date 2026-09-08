@@ -17,28 +17,10 @@ export function initDamages(localisationRef, woundMaxCounts) {
   }
 }
 
-export const TAILLE_CIBLE_MODS = {
-  minuscule:   -10,
-  tres_petite: -5,
-  petite:      -3,
-  moyenne:     0,
-  grande:      +3,
-  tres_grande: +5,
-  enorme:      +10,
-  gigantesque: +15,
-}
-
-// taille_cible n'est jamais stockée en base — toujours dérivée de drone_sheet.taille
-export function getTailleCible(tailleCm) {
-  if (tailleCm <= 35)  return 'minuscule'
-  if (tailleCm <= 65)  return 'tres_petite'
-  if (tailleCm <= 150) return 'petite'
-  if (tailleCm <= 250) return 'moyenne'
-  if (tailleCm <= 400) return 'grande'
-  if (tailleCm <= 600) return 'tres_grande'
-  if (tailleCm <= 850) return 'enorme'
-  return 'gigantesque'
-}
+// La taille de cible (paliers + conversion depuis une dimension en cm) vit dans
+// `shared/sizeCategory.js` (SIZE_CATEGORIES / sizeCategoryFromCm) — autorité transversale
+// Character + Combat. L'ancien doublon `TAILLE_CIBLE_MODS` + `getTailleCible` a été retiré
+// ici (docs/PLANS/PLAN_TAILLE.md S1).
 
 // Localisations affichées en lecture seule dans DroneWindow (Sprint 2)
 export const DRONE_LOCALISATION_LABELS = {

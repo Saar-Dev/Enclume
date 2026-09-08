@@ -5,7 +5,7 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
-import { getTailleCible } from '../../../shared/droneConstants.js'
+import { sizeCategoryFromCm } from '../../../shared/sizeCategory.js'
 import { CAC_SITUATION_MODS, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
 
 // cacMod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité CaC,
@@ -90,6 +90,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
   }, [meleeOrAssaultAction?.id, attaquantToken?.character_id])
 
   // Pré-sélection taille si la cible est un drone
+  // TODO S4 — remplacer par GET /char-sheet/:id/combat-size (préselect générique, tous types)
   useEffect(() => {
     if (!cibleCharId) return
     let cancelled = false
@@ -97,7 +98,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
       .then(res => {
         if (cancelled) return
         const tailleCm = res.data?.drone?.taille
-        if (tailleCm != null) setTaille(getTailleCible(tailleCm))
+        if (tailleCm != null) setTaille(sizeCategoryFromCm(tailleCm).category)
       })
       .catch(() => {})
     return () => { cancelled = true }

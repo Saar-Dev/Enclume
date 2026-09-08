@@ -12,6 +12,8 @@
 // encodée comme une valeur numérique extrême. `limitative: true` (CaC terrain instable) suit le même
 // principe : la valeur réelle est calculée par le serveur (compétence limitative Acrobatie/Équilibre,
 // Math.min), jamais une constante — mod: 0 ici pour qu'une somme naïve reste inoffensive.
+import { SIZE_CATEGORIES } from './sizeCategory.js'
+
 export const RANGED_SITUATION_MODS = {
   cible_immobile:        { mod: 3 },
   cible_allure_moyenne:  { mod: -3 },
@@ -58,6 +60,10 @@ export const CAC_SITUATION_MODS = {
 }
 
 // ─── Taille de la cible (LdB p.218) — commun CaC, Tir et drone ───────────────
+// Modificateur au Test d'attaque par palier. L'énumération des 8 paliers est l'autorité de
+// `shared/sizeCategory.js` (SIZE_CATEGORIES) ; ici on ne porte que la valeur du modificateur.
+// La garde ci-dessous casse au chargement du module si les deux listes divergent (errata LdB
+// appliqué d'un seul côté, ajout d'un palier oublié ici).
 export const TAILLE_MODS = {
   minuscule:   { mod: -10 },
   tres_petite: { mod: -5 },
@@ -67,6 +73,13 @@ export const TAILLE_MODS = {
   tres_grande: { mod: 5 },
   enorme:      { mod: 10 },
   gigantesque: { mod: 15 },
+}
+
+if (
+  Object.keys(TAILLE_MODS).length !== SIZE_CATEGORIES.length
+  || SIZE_CATEGORIES.some(c => !(c in TAILLE_MODS))
+) {
+  throw new Error('combatSituationMods : TAILLE_MODS et SIZE_CATEGORIES (shared/sizeCategory.js) divergent')
 }
 
 // ─── Portée (LdB p.226) — modificateur au Test selon le palier de portée ─────

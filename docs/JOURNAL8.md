@@ -5798,3 +5798,70 @@ handlers) → validation session.
 **Données** : aucune migration, aucun effet runtime (lecture seule).
 
 **Retour arrière** : `git revert 8b0dccc` — 1 fichier, purement une correction de requête.
+
+## Session (Claude) — 2026-09-08 — Taille de cible ⇄ dimensions — S1 socle partagé
+
+Chantier `docs/PLANS/PLAN_TAILLE.md` : lier le modificateur RAW « Taille de la cible »
+(LdB p.218) aux dimensions des combattants. Architecture déléguée à Claude par Saar,
+tranchée après deux analyses à charge. Ce segment ne livre que le socle `shared/`, sans
+effet runtime.
+
+### Décisions durables
+
+**Taille = propriété stockée de première classe**, pas dérivée live à chaque jet. Cascade
+`characters.size_category` (explicite) → dérivée par type de corps → `'moyenne'`. Le RAW
+donne la taille des drones (`REGLEDRONE.md`) et des exo-armures (`REGLEARMURE.md:18-42`)
+**comme catégorie / gabarit**, jamais un centimétrage à reconstruire. Pattern VTT pro
+(Foundry `traits.size`, PF2e).
+
+**Breakpoints cm = moyennes géométriques des repères RAW** (30·50·100·170 humain·300·500·
+700·1000), pas arithmétiques : les modificateurs Polaris (−10…+15) sont compressés près de
+l'humain et dilatés aux extrêmes, comme le *Size Modifier* logarithmique de GURPS. Valeurs :
+39 / 71 / 130 / 226 / 387 / 592 / 837. Le RAW lui-même dit « un guide, pas une loi gravée
+dans le marbre » — la frontière exacte est une house rule assumée.
+
+**Clamp humanoïde 120–300 cm** sur la dérivation auto depuis `char_identity.height` (champ
+narratif libre : protège des saisies absurdes). Ne borne jamais une `size_category`
+explicite (un PNJ colossal reçoit `'enorme'` posé à la main). « Petite » reste atteignable
+pour un humanoïde (120–130 cm).
+
+**L'AOE (zone) n'applique aucun modificateur de taille** — un jet unique pour tout le cône
+est incompatible avec une taille par cible, et une gerbe / un cône n'est pas un tir ajusté
+au sens p.218. Aligné sur la décision grenades déjà actée (« pas de modificateur de taille
+pour une zone visée »).
+
+**Modificateur attaquant → cible uniquement.** L'opposition CaC reste à moitié câblée (le
+jet opposé du défenseur ne reçoit pas « taille de l'attaquant ») — état pré-existant,
+symétriser serait une décision séparée.
+
+### Séparation de trois axes RAW voisins (à ne jamais fusionner)
+
+**Taille de la cible** (modificateur −10…+15 pour toucher) ≠ **Échelle** (`H`/`V`, pilote la
+mise à l'échelle des dégâts, `drone_sheet.echelle`) ≠ **Gabarit** (note de calibre drone).
+Ce chantier ne touche que le premier.
+
+### Livré (S1)
+
+- `shared/sizeCategory.js` neuf : `SIZE_CATEGORIES`, `TAILLE_CM_BREAKPOINTS`,
+  `HUMANOID_SIZE_CLAMP_CM`, `EXO_CATEGORY_HEIGHT_CM`, `sizeCategoryFromCm()`,
+  `resolveSizeCategoryFrom()` (cascade pure).
+- `shared/combatSituationMods.js` : `TAILLE_MODS` gardé, + garde au chargement du module
+  qui casse si l'énumération diverge de `SIZE_CATEGORIES`.
+- `shared/droneConstants.js` : suppression du doublon `TAILLE_CIBLE_MODS` + `getTailleCible`
+  (importé nulle part côté serveur ; 2 appels client redirigés).
+- `CombatModifiersWindow.jsx` / `CombatCacModifiersWindow.jsx` : préselect drone via
+  `sizeCategoryFromCm` (comportement quasi identique — les breakpoints changent aux
+  frontières, correction voulue).
+
+**Testé** : `node --check` (3 fichiers shared) ; `node --test 'shared/**/*.test.mjs'` →
+533/533 (dont 14 neufs `sizeCategory.test.mjs` : repères RAW, frontières exactes, clamp,
+entrée non finie, 4 branches de cascade) ; `npx eslint` sur les 2 fenêtres → aucun problème
+nouveau (les 2 avertissements/erreur restants pré-existent, effets non touchés) ;
+`cd client && npm run build` → OK (22 s, exit 0).
+
+**Non testé** : comportement en combat réel (relève de S3/S4 — S1 n'a aucun effet runtime).
+
+**Données** : aucune migration, aucun effet runtime.
+
+**Retour arrière** : `git revert` du commit S1 — purement additif côté `shared/` + 2
+redirections d'import triviales.

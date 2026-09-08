@@ -6,7 +6,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { LOC, SEVERITY } from '../lib/combatResultLabels.js'
 import api from '../lib/api.js'
-import { getTailleCible } from '../../../shared/droneConstants.js'
+import { sizeCategoryFromCm } from '../../../shared/sizeCategory.js'
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
 
 // mod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité tir à
@@ -151,7 +151,8 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     return () => { cancelled = true }
   }, [assaultAction?.id, tireurCharId])
 
-  // Pré-sélection taille si la cible est un drone (drone_sheet.taille en cm → clé TAILLES)
+  // Pré-sélection taille si la cible est un drone (drone_sheet.taille en cm → palier)
+  // TODO S4 — remplacer par GET /char-sheet/:id/combat-size (préselect générique, tous types)
   useEffect(() => {
     if (!cibleCharId) return
     let cancelled = false
@@ -159,7 +160,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       .then(res => {
         if (cancelled) return
         const tailleCm = res.data?.drone?.taille
-        if (tailleCm != null) setTaille(getTailleCible(tailleCm))
+        if (tailleCm != null) setTaille(sizeCategoryFromCm(tailleCm).category)
       })
       .catch(() => {})
     return () => { cancelled = true }
