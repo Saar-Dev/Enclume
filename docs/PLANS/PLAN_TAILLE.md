@@ -1,9 +1,13 @@
 # PLAN_TAILLE.md — Taille de cible ⇄ dimensions des personnages
 
-> Créé 2026-09-08. Révisé 2026-09-08 (analyse à charge #2 : corrections C1–C4, raffinements
-> R1–R4, vérifications V1–V2 tranchées). Chantier temporaire (RegleDocumentaire Règle 10) :
-> à la clôture, la doc définitive part dans `docs/SYSTEME/TAILLE.md` (mécanisme transversal :
-> Character + Combat + Tokens/Monde à venir), ce plan est archivé.
+> **⚠️ 2026-09-08 — La documentation de référence est passée dans `docs/SYSTEME/TAILLE.md`**
+> (RegleDocumentaire Règle 10). Ce plan ne conserve que le suivi de **D7** (retrait du
+> modificateur de taille en zone d'effet) — différé tant que `socketCombatAoe.js` est en
+> refonte par le chantier grenades parallèle. Quand D7 est fait : archiver ce fichier.
+>
+> S1→S5 codés et committés sur `dev/Saar` (`6c3ef86` → `81ce06a`), S3+S4+S5 validés en jeu
+> par Saar. Le reste du document est le journal de conception (analyses à charge, décisions),
+> conservé comme historique.
 >
 > Architecture déléguée à Claude par Saar (2026-09-08). Priorité : aggradation structurelle,
 > pas la vitesse.

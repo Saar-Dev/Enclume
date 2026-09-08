@@ -64,6 +64,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `SYSTEME/COMBAT_FLUX.md` | Flux de combat : initiative, tours, résolution | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/SERVICES_COMBAT.md` | Services backend pour le combat | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/DOMMAGES.md` | Distinction dommages physiques/Choc, autorités de résolution | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/TAILLE.md` | Palier de taille d'un combattant : cascade explicite→dérivée, modificateur de combat, édition MJ | ✅ Créé (2026-09-08) |
 | `SYSTEME/BLESSURES.md` | Gestion des blessures, armures, malus, inventaire médical | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/DICE.md` | Flux des dés, animation 3D, payload DICE_RESULT | 🔎 Analysé en profondeur (2026-08-26) |
 
