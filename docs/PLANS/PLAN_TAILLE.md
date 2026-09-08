@@ -203,6 +203,11 @@ Seul point d'autorité serveur ; les 5 sites combat et l'endpoint client passent
 
 ## 6. Segments (un par validation)
 
+> **Avancement 2026-09-08** : S1 (`6c3ef86`), S2 (`94da26f`), S3 (`d53b3e7`) codés et
+> committés sur `dev/Saar` (non poussés). **D7 (AOE) différé** — `socketCombatAoe.js` en
+> cours d'édition par le chantier grenades parallèle ; retrait du read taille à faire quand
+> le fichier se stabilise. Reste : S4, S5, D7, validation combat réel par Saar.
+
 ### S1 — Socle partagé (toute la logique, pure)
 - `shared/sizeCategory.js` neuf (§5.1) — enum, breakpoints, clamp, map exo,
   `sizeCategoryFromCm`, `resolveSizeCategoryFrom`.
