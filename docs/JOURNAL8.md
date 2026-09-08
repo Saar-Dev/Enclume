@@ -5999,3 +5999,50 @@ override MJ, cibles pj/pnj/drone/exo, Tir + CaC + zone.
 optionnel `targetSizeCategory` (ignoré par un client non mis à jour).
 
 **Retour arrière** : `git revert` du commit S4 (5 fichiers, aucune migration).
+
+## Session (Claude) — 2026-09-08 — Taille de cible ⇄ dimensions — S5 UI fiches
+
+Dernier segment du plan (hors D7). Le MJ peut désormais **poser une taille explicite** sur
+une fiche (perso / drone / exo) au lieu de l'override par jet — utile pour une créature hors
+gabarit (`characters.size_category` gagne enfin son UI).
+
+- **`characterSizeService.js`** : `resolveSizeCategory` gagne l'option `{ ignoreExplicit }` ;
+  `describeCharacterSize(db, id)` → `{ explicit, resolved, derived, derivedCm, source }` pour
+  l'UI (montre la valeur explicite ET ce que la dérivation donnerait — R4).
+- **`char-sheet.js`** : `GET /:id/size` (tout membre autorisé) + `PUT /:id/size` (MJ ou
+  propriétaire d'un perso Coffre) — écrit `characters.size_category` (8 valeurs ou null).
+- **`SizeCategoryField.jsx`** (neuf) : composant partagé — `<select>` « Auto » + 8 paliers si
+  MJ, sinon lecture seule ; libellés des paliers réutilisés du namespace `combat`
+  (`cacModifiers.tailles.*`, jamais recopiés — Règle 2). Monté dans `CharacterSheet` (bloc
+  identité), `DroneSheet` (stats), `ExoInfoPanel` (infos).
+- `fr.json` : `charSheet.sizeField.*` (label / auto / autoResolved / autoTag).
+
+### Écarts vs plan
+
+- Pas de `min`/`max` sur l'input `height` de `CharacterSheet` : un plafond dur bloquerait une
+  saisie descriptive légitime (enfant < 1,20 m, géant de lore). Le clamp 120–300 cm reste
+  côté serveur (dérivation seule) + `source: 'derived-clamped'` disponible pour un futur
+  avertissement UI.
+- Préselect via **le callback de `COMBAT_ACTION_PRECHECK`** (S4), pas l'endpoint REST
+  `GET /combat-size` prévu — le `router.param` de `/char-sheet` refuse à un joueur la fiche
+  d'un PNJ adverse.
+
+**Testé** : `node --check` (route + service) ; `describeCharacterSize` contre la base locale
+(pnj 2,6 m sans explicite → grande/derived ; + explicite gigantesque → resolved gigantesque,
+derived toujours grande ; exo-4 → grande) ; `node -e JSON.parse` (fr.json) ;
+`node --test 'shared/**/*.test.mjs'` 539/539 ; `cd client && npx eslint` sur les 4 fichiers
+fiche + le composant neuf → aucun problème nouveau ; `cd client && npm run build` → OK.
+
+**Non testé** : rendu réel des 3 fiches (Saar) — `<select>` MJ, lecture seule joueur, écriture
+`PUT /size`, cohérence avec l'override de combat.
+
+**Données** : aucune migration (colonne `327` déjà appliquée au démarrage serveur de Saar).
+`characters.size_category` NULL partout jusqu'à saisie MJ.
+
+**Retour arrière** : `git revert` du commit S5 (7 fichiers, 1 composant neuf).
+
+### Chantier Taille — état
+
+S1→S5 codés et committés sur `dev/Saar`. **Reste D7** (retrait du modificateur de taille en
+zone d'effet, `socketCombatAoe.js`) — différé tant que le chantier grenades parallèle édite
+ce fichier. `docs/SYSTEME/TAILLE.md` (doc SYSTEM définitive) à écrire à la clôture complète.

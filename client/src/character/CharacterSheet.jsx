@@ -32,6 +32,7 @@ import api from '../lib/api.js'
 import SkillsPanel from './SkillsPanel.jsx'
 import AdvantagesPanel from './AdvantagesPanel.jsx'
 import CollapsibleBlock from './CollapsibleBlock.jsx'
+import SizeCategoryField from './SizeCategoryField.jsx'
 import {
   calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
@@ -790,6 +791,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
               onBlur={() => saveIdentity({ weight: weight || null })}
               readOnly={!canEdit} />
           </Field>
+
+          <div style={{ gridColumn: 'span 1' }}>
+            <SizeCategoryField characterId={characterId} canEdit={isGm} />
+          </div>
 
           <Field label={t('charSheet.descSkin')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={skin}
