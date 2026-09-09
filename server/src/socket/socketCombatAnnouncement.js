@@ -18,6 +18,7 @@ import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { computeIniDelta } from '../../../shared/combatIniCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { firstFireMode, parseFireModes } from '../../../shared/fireModes.js'
 
@@ -395,6 +396,15 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
+          // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.a) — porte de panne : arme enrayée /
+          // hors d'usage → tir refusé (distinct du modificateur de palier, §7.1.b).
+          const itgBlockTir = getWeaponIntegrityBlock(weapon)
+          if (itgBlockTir) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: itgBlockTir === 'panne'
+              ? "Tir impossible — arme en panne, réparation requise"
+              : "Tir impossible — arme hors d'usage" })
+            return
+          }
           // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
           const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
           if (weapon.ref_fire_mode && !weapon.ref_fire_mode.toUpperCase().includes(fireMode)) {
@@ -742,6 +752,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const primaryWeapon = await getOwnedHandWeapon(character.id, firstMelee.weaponInvId, { slotCodes: ['MG', 'MD', '2M'], category: 'Arme de contact' })
           if (!primaryWeapon?.inHand || !primaryWeapon.categoryOk) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Corps à corps impossible — l'arme sélectionnée n'est pas en main (transférée entre-temps ?)" })
+            return
+          }
+          // Usure & Intégrité (§7.1.a) — porte de panne, comme le Tir.
+          const itgBlockCac = getWeaponIntegrityBlock(primaryWeapon)
+          if (itgBlockCac) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: itgBlockCac === 'panne'
+              ? "Corps à corps impossible — arme en panne, réparation requise"
+              : "Corps à corps impossible — arme hors d'usage" })
             return
           }
         }

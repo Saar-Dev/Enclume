@@ -67,6 +67,21 @@ export function getIntegrityModifier(current) {
   return tier ? tier.modifier : null
 }
 
+// getWeaponIntegrityBlock(weapon) — une arme ne peut PAS servir à attaquer si :
+//   - `malfunction_severity` non NULL → `'panne'` (enrayée / défaillance, réparation requise, §4.4) ;
+//   - sinon, modèle suivi ET ITG courante === 0 → `'horsdusage'` (§3.3).
+// Sinon `null` (utilisable — un éventuel modificateur de palier s'applique, cf. getIntegrityModifier).
+// Garde binaire distincte du modificateur (MANUEL §4.4 : d'abord la porte de panne, sinon le palier).
+// Tolère les deux nommages du flag catalogue : `has_integrity` (brut, integrityService) ou
+// `ref_has_integrity` (aliasé par getItemWithRef / getOwnedHandWeapon).
+export function getWeaponIntegrityBlock(weapon) {
+  if (!weapon) return null
+  if (weapon.malfunction_severity != null) return 'panne'
+  const tracked = weapon.ref_has_integrity ?? weapon.has_integrity
+  if (tracked && weapon.integrity_current === 0) return 'horsdusage'
+  return null
+}
+
 // isIntegrityUsable(current) — un objet suivi n'est utilisable que si son ITG courante est ≥ 1
 // (RAW : « 0 et − : le matériel ne fonctionne plus »). Un objet NON suivi (`current` NULL) est
 // toujours utilisable — l'appelant vérifie `has_integrity` en amont ; ce helper ne porte que la

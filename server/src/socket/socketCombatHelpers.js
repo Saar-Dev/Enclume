@@ -11,7 +11,7 @@ import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
-import { getIntegrityModifier } from '../../../shared/integrityRules.js'
+import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
@@ -882,6 +882,20 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         weapon = ownedWeapon
         damageFormula = weapon.ref_damage_h ?? null
       }
+    }
+
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.a) — porte de panne revérifiée à la Résolution
+    // (l'arme a pu s'enrayer ou tomber à 0 entre la Déclaration et ici : panne combat d'une action
+    // sœur, édition MJ). L'action est refusée, aucune ressource consommée.
+    const itgBlockMelee = getWeaponIntegrityBlock(weapon)
+    if (itgBlockMelee) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: itgBlockMelee === 'panne'
+          ? "Corps à corps impossible — arme en panne, réparation requise"
+          : "Corps à corps impossible — arme hors d'usage",
+      } })
+      return { suspend: false, emissions }
     }
 
     // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues) —
@@ -2456,6 +2470,20 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const weapon              = fires === 'offhand' ? offhandWeapon : primaryWeapon
     const installedMods       = fires === 'offhand' ? offhandMods   : primaryMods
     const effectiveWeaponInvId = fires === 'offhand' ? action.offhand_weapon_inv_id : action.weapon_inv_id
+
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.a) — porte de panne revérifiée à la Résolution
+    // (l'arme qui tire réellement, primaire ou secondaire résolue ci-dessus). Enrayée / hors d'usage
+    // → tir refusé, aucune ressource consommée.
+    const itgBlockTir = getWeaponIntegrityBlock(weapon)
+    if (itgBlockTir) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: itgBlockTir === 'panne'
+          ? "Tir impossible — arme en panne, réparation requise"
+          : "Tir impossible — arme hors d'usage",
+      } })
+      return { suspend: false, emissions }
+    }
 
     // Bouclier (docs/PLAN_BOUCLIER.md Lot B, §3.9) — RAW traite les armes de jet/trait (arcs,
     // arbalètes, lances) comme le contact pour un Bouclier : malus à l'attaquant, jamais de

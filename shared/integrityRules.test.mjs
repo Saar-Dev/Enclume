@@ -5,6 +5,7 @@ import {
   INTEGRITY_TIER_COLORS,
   getIntegrityTier,
   getIntegrityModifier,
+  getWeaponIntegrityBlock,
   isIntegrityUsable,
   QUALITY_TABLE,
   applyTemporaryLoss,
@@ -103,6 +104,18 @@ test('isIntegrityUsable — seul un entier ≤ 0 est inutilisable', () => {
   assert.equal(isIntegrityUsable(null), true) // objet non suivi — toujours utilisable
   assert.equal(isIntegrityUsable(undefined), true)
   assert.equal(isIntegrityUsable(12.5), true)
+})
+
+// ── getWeaponIntegrityBlock (MANUEL §4.4 / §3.3) ────────────────────────────
+test('getWeaponIntegrityBlock — panne prioritaire, puis hors d\'usage, sinon null', () => {
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: 'simple', ref_has_integrity: true, integrity_current: 12 }), 'panne')
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: 'critical', integrity_current: 5 }), 'panne')
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: null, ref_has_integrity: true, integrity_current: 0 }), 'horsdusage')
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: null, has_integrity: true, integrity_current: 0 }), 'horsdusage') // nommage brut
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: null, ref_has_integrity: true, integrity_current: 3 }), null) // endommagée mais utilisable
+  assert.equal(getWeaponIntegrityBlock({ malfunction_severity: null, ref_has_integrity: false, integrity_current: 0 }), null) // pas suivie
+  assert.equal(getWeaponIntegrityBlock({ integrity_current: null }), null) // arme sans ITG
+  assert.equal(getWeaponIntegrityBlock(null), null)
 })
 
 // ── QUALITY_TABLE (MANUEL §3.1) ──────────────────────────────────────────────

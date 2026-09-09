@@ -314,8 +314,16 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 >   `hasIntegrity`/`integrityCurrent`/`malfunctionSeverity` ; `CombatModifiersWindow` (Tir) **et**
 >   `CombatCacModifiersWindow` (CaC) l'ajoutent à `totalModComp` + pastille « État de l'arme -3 ».
 > - Tests : `combatAttackRoll` 29/29, `shared/**` 573/573, `vite build` OK.
-> **Reste L5b** (blocage arme en panne / HS, déclaration + résolution) **et L5c** (test de panne
-> d'arme sur échec à ITG ≤ 5).
+>
+> **L5b (§7.1.a, porte de panne) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> - `shared/integrityRules.getWeaponIntegrityBlock(weapon)` → `'panne'` (malfunction non NULL) /
+>   `'horsdusage'` (suivi + ITG 0) / `null`. Tolère `has_integrity` brut ou `ref_has_integrity` aliasé.
+> - **4 sites** : déclaration Tir + déclaration CaC (`socketCombatAnnouncement.js`), résolution
+>   `resolveMeleeAction` + `resolveAssaultAction` (`socketCombatHelpers.js`, sur l'arme qui tire
+>   réellement). Message FR en dur (dette i18n assumée). Action refusée, aucune ressource consommée.
+> - **NON fait** : grisage de l'arme dans le sélecteur de déclaration (client) — le joueur reçoit
+>   le message d'erreur à la place. À décider avec Saar.
+> **Reste L5c** (test de panne d'arme sur échec simple à ITG ∈ [1,5]).
 
 ### 7.0 Points d'insertion — vérifiés propres (2026-09-09)
 
