@@ -81,6 +81,11 @@ export const useCombatStore = create((set) => ({
     grenadeMarkers: state.grenadeMarkers.filter(g => g.entryId !== entryId),
   })),
   clearGrenadeMarkers: () => set({ grenadeMarkers: [] }),
+  // Percussion (§3f) : le marqueur `ephemeral` a explosé ce Tour, il ne survit pas au changement de
+  // Tour. Les marqueurs de minuterie restent (ils explosent T+1, effacés sur COMBAT_GRENADE_EXPLODED).
+  clearEphemeralGrenadeMarkers: () => set((state) => ({
+    grenadeMarkers: state.grenadeMarkers.filter(g => !g.ephemeral),
+  })),
 
   resetCombat: () => set({
     phase: null,

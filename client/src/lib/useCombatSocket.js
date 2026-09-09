@@ -9,7 +9,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
     setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster,
     advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, setTimelineState,
-    armGrenadeMarker, removeGrenadeMarker, clearGrenadeMarkers,
+    armGrenadeMarker, removeGrenadeMarker, clearGrenadeMarkers, clearEphemeralGrenadeMarkers,
   } = useCombatStore()
   const { addMessage, setDeclareError, clearDeclareError, declareError } = useSessionStore()
   const { t } = useTranslation()
@@ -119,6 +119,10 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         // Nouveau Tour — l'échelle du Tour précédent n'a plus lieu d'être affichée, elle sera
         // reconstruite au prochain passage en RESOLUTION (COMBAT_TIMELINE_UPDATED).
         setTimelineState({ entries: [], currentStep: null })
+        // Marqueurs de grenade éphémères (percussion, §3f) : la grenade a explosé au Tour écoulé,
+        // le marqueur ne survit pas au changement de Tour. Les marqueurs de minuterie (non `ephemeral`)
+        // survivent — ils explosent T+1 et s'effacent sur COMBAT_GRENADE_EXPLODED.
+        clearEphemeralGrenadeMarkers()
       }
     }
     const onTimelineUpdated = (payload) => { setTimelineState(payload) }

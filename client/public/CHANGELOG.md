@@ -1,3 +1,14 @@
+## v229 — 2026-09-09 — Combat : grenades — mode de détonation
+
+### Combat — grenades
+- [new] Au lancer, on choisit le mode de détonation : **Minuterie** (défaut) — la grenade explose
+  au Tour suivant, à votre rang d'Initiative — ou **Percussion** — elle explose au contact, tout de
+  suite. Le choix apparaît dans la fenêtre de déclaration dès qu'une grenade est équipée.
+- [new] En Percussion, la grenade et son disque d'effet s'affichent à l'endroit où elle a atterri,
+  en même temps que l'explosion, jusqu'à la fin du Tour.
+- [fix] Si un tir en zone (grenade, fusil à pompe, lance-flammes) rencontre une erreur interne en
+  cours de résolution, un message le signale désormais dans le chat au lieu de ne rien afficher.
+
 ## v228 — 2026-09-08 — Combat : grenades à fragmentation
 
 ### Combat — grenades

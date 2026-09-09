@@ -149,7 +149,11 @@ export const WS = {
   // Marqueur de grenade armée (docs/PLANS/PLAN_GRENADES.md §3d-3) — le client ne connaît l'échelle
   // que du Tour courant ; une grenade lancée au Tour T explose au Tour T+1, il faut un canal dédié
   // pour afficher sa position au sol entre les deux. Réutilisable pour mines/pièges à `autoResolve`.
-  COMBAT_GRENADE_ARMED:          'combat:grenade_armed',           // serveur → room : grenade amorcée en vol { entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn, scattered }
+  // `ephemeral: true` (§3f, mode percussion) : la grenade explose au contact, le même Tour — le
+  // marqueur ne fait que montrer où elle a atterri, le client l'auto-retire après ~5 s (pas de
+  // `COMBAT_GRENADE_EXPLODED` correspondant, aucune entrée d'échelle persistée, pas de ré-émission
+  // en reconnexion). `explodesOnTurn` est alors `null`.
+  COMBAT_GRENADE_ARMED:          'combat:grenade_armed',           // serveur → room : grenade amorcée en vol { entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn|null, scattered, ephemeral? }
   COMBAT_GRENADE_EXPLODED:       'combat:grenade_exploded',        // serveur → room : la grenade a explosé (ou l'entrée est résolue) — retirer le marqueur { entryId }
 
   // Drones

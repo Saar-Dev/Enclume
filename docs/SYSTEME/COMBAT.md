@@ -660,6 +660,28 @@ les dés à la place du joueur injoignable (réutilise `confirmMeleeDefense`/`co
 identité affichée = celle du personnage, pas du MJ) ; `SLOT_ACTIVE` au tour obligatoire → équivaut à
 `COMBAT_DELAYED_PASS` ; `SLOT_ACTIVE` sur un pas normal bloqué → marqué `skipped`, l'échelle avance.
 
+### Grenade — mode de détonation (`aoe.detonation`, `PLAN_GRENADES.md §3f`)
+
+Une grenade se vise sur un **point au sol** (`aoe.intendedOrigin`), pas sur une cible. Au lancer, le
+joueur choisit le mode de détonation — autorité de l'enum : `shared/combatAoe.js`
+(`GRENADE_DETONATION_MODES`, défaut `'minuterie'`). Le champ `aoe.detonation` est toujours présent
+dans le payload d'une arme `shape: 'circle'`, normalisé côté serveur (`normalizeGrenadeDetonation`,
+annonce + résolution).
+
+- **`minuterie`** (défaut) — RAW « explose au Tour de combat suivant, au rang d'Initiative normal du
+  personnage ». Le lancer (`resolveGrenadeThrow` : Test de Coordination COO + dispersion 1D6 sur
+  échec) planifie une entrée `combat_timeline_entries` `autoResolve` à T+1 ; le moteur de tour la
+  résout sans clic. Marqueur 3D (`COMBAT_GRENADE_ARMED`) du lancer jusqu'à `COMBAT_GRENADE_EXPLODED`.
+- **`percussion`** — RAW « n'explose que si elle heurte quelque chose ». Résolution **synchrone**, le
+  même Tour, au point d'impact (fall-through direct vers le bloc explosion). Marqueur 3D `ephemeral`
+  (concomitant à l'explosion), effacé au changement de Tour (`clearEphemeralGrenadeMarkers`).
+- **`drone`** — réservé structurellement par l'enum, **rejeté à la résolution** (sous-système
+  « entité autonome en combat » non construit).
+
+LOS de l'explosion depuis le **point d'impact** (`losSource: 'origin'`), jamais depuis le lanceur —
+un lancer à l'aveugle par une porte est légitime. Le Test de Coordination du lancer n'applique pas
+encore les modificateurs de difficulté (taille / situation) — ticket `GRENADE-COORD-MODS`.
+
 ---
 
 ## Découpage socketCombatHelpers.js — noyau pur / coquille (PLAN_RW_SYSCOMBAT.md, clos 2026-08-23)

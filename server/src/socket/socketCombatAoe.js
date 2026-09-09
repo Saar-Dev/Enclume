@@ -595,6 +595,17 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
           params: { label: character.name ?? shooterToken.label ?? '?' },
           timestamp: new Date().toISOString(),
         } })
+        // Marqueur 3D éphémère (§3f) — montre où la grenade a atterri, concomitant à l'explosion.
+        // `ephemeral: true` → le client l'auto-retire après ~5 s (pas d'entrée d'échelle, pas de
+        // COMBAT_GRENADE_EXPLODED, pas de ré-émission en reconnexion). `entryId` = id d'action.
+        emissions.push({ to: 'room', event: WS.COMBAT_GRENADE_ARMED, data: {
+          entryId: action.id,
+          tokenId: action.token_id,
+          resolvedOrigin,
+          explodesOnTurn: null,
+          scattered: !coord.isSuccess,
+          ephemeral: true,
+        } })
         // PAS de return — fall-through vers le bloc explosion (Tour T).
       } else {
         // `minuterie` (défaut) — comportement historique inchangé (§3d).

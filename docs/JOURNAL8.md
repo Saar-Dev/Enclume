@@ -6046,3 +6046,109 @@ fiche + le composant neuf → aucun problème nouveau ; `cd client && npm run bu
 S1→S5 codés et committés sur `dev/Saar`. **Reste D7** (retrait du modificateur de taille en
 zone d'effet, `socketCombatAoe.js`) — différé tant que le chantier grenades parallèle édite
 ce fichier. `docs/SYSTEME/TAILLE.md` (doc SYSTEM définitive) à écrire à la clôture complète.
+
+## Session (Claude) — 2026-09-09 — Grenades : Segment 3f — mode de détonation (percussion) + visuel
+
+`PLAN_GRENADES.md §3 pt 2 / §6 3f`. Une grenade se lance désormais en **minuterie** (défaut,
+explose au Tour+1 au rang d'Initiative du lanceur — comportement 3d inchangé) ou en **percussion**
+(explose au contact, ce Tour). Option **drone** réservée structurellement (enum), rejetée à la
+résolution. Commits `0f42d30` (cœur 3f) + celui-ci (marqueur percussion + révision durée + doc).
+
+### Ce qui a été fait
+
+**Autorité de l'enum** : `shared/combatAoe.js#{GRENADE_DETONATION_MODES, GRENADE_DETONATION_DEFAULT
+('minuterie'), normalizeGrenadeDetonation}` — lue client (toggle de déclaration) ET serveur
+(annonce + résolution). Champ `aoe.detonation`, frère de `aoe.mode`/`aoe.intendedOrigin`.
+
+**Serveur** (`socketCombatAoe.js`) :
+- **Extraction `resolveGrenadeThrow`** — « le lancer » (Test de Coordination COO + dispersion
+  `resolveScatter` + snapshot d'arme), **aucun effet de bord**. Le bloc de ~95 l. inline devient un
+  seam nommé + helper `consumeThrownGrenade`. Behavior-preserving (3f/3, refactor pur).
+- `switch (normalizeGrenadeDetonation(aoe.detonation))` : `minuterie` = entrée d'échelle T+1
+  inchangée ; `percussion` = pose `resolvedOrigin` en mémoire + `jsonb_set`, **pas de return**,
+  fall-through vers le bloc explosion (Tour T) ; `drone` = `COMBAT_DECLARE_ERROR` clair.
+- **Catch du tronc AOE durci** : `const emissions` hoisté hors du `try` ; le catch renvoie les
+  émissions accumulées + pousse un `COMBAT_DECLARE_ERROR` au lieu de `emissions: []`. Bénéficie au
+  fusil à pompe / lance-flammes : une exception en cours de résolution AOE n'est plus un silence
+  total (jet déjà lancé perdu). Vérifié bout en bout, y compris chemin différé (`flushEmissions`
+  gère `to:'room'` avec `socket=null`).
+- `socketCombatAnnouncement.js` : `aoe.detonation` normalisé avant persistance (branche `isPointAoe`
+  seulement — cône/rayon non touché).
+
+**Client** :
+- `assaultDeclaration.js` : champ `aoeDetonation` (défaut minuterie) + `SET_AOE_DETONATION`
+  (modifieur indépendant) ; `useAssaultDeclaration.js` : `setAoeDetonation`.
+- `AssaultRangedPanel.jsx` : section « Détonation » (Minuterie | Percussion), **visible uniquement**
+  pour une arme `shape: 'circle'` (grenade). Câblée dans les 2 fenêtres (`CombatActionWindow`,
+  `CombatGmDeclareWindow`).
+- `buildDeclarePayload.js` : `buildAoeField`/`buildAttackEntries` prennent `aoeDetonation` ; chemin
+  `intendedOrigin` → `{ intendedOrigin, detonation }`, **`detonation` TOUJOURS présent** (défaut
+  `minuterie`) — le serveur le lit inconditionnellement, un champ toujours consommé est toujours
+  émis. Chemin `direction` **byte-identique** (golden master).
+- `combat.json` / `fr.json` : clés i18n (toggle + notice `session.grenadeThrownPercussion`).
+
+**Marqueur 3D percussion** (§3f visuel — Architecture A, délégation Saar) : la résolution serveur
+percussion reste **synchrone/immédiate** (RAW « au contact »), acté. La branche percussion émet
+`COMBAT_GRENADE_ARMED { entryId: action.id, ephemeral: true }` avant le fall-through → le client
+affiche `grenade.glb` + ⚠ + anneaux de dégression à `resolvedOrigin`, **concomitant** à l'explosion
+(jet + dégâts + marqueur en même temps). **Durée = jusqu'à la fin du Tour** : `combatStore.
+clearEphemeralGrenadeMarkers` (filtre `!g.ephemeral`), appelé dans `useCombatSocket.onPhaseChanged`
+sur `phase === 'ANNOUNCEMENT'`. Un timer 5 s (« trop court ») et un clic (« fragile — 3 déclencheurs
+selon type de client PJ/MJ/spectateur ») écartés au profit du bord de Tour : déterministe, identique
+tous clients, aucun timer. Minuterie inchangé (`ephemeral` absent → survit T→T+1, effacé sur
+`COMBAT_GRENADE_EXPLODED`).
+
+### Écarts RAW (actés)
+
+- **Percussion = explosion immédiate Tour T** : le RAW (« n'explose que si elle heurte quelque
+  chose ») ne précise pas le timing — lecture retenue « au contact = ce Tour ».
+- **Détonation = choix au lancer**, universel (RAW « toute grenade peut être dotée de l'une des
+  options »), rien à seed par ligne de catalogue. Pas de variante d'objet.
+- **Explosion différée (minuterie) qui lève une exception** : affiche désormais un
+  `COMBAT_DECLARE_ERROR` en room (catch durci) au lieu d'un silence — changement de comportement
+  assumé, « mieux qu'un silence ».
+
+### Satellites → tickets `bug_tickets`
+
+Script `server/src/scripts/create_tickets_grenade_satellites.js` (à lancer par Saar) :
+- **`GRENADE-COORD-MODS`** : le Test de Coordination du lancer (`resolveGrenadeThrow`) ignore
+  `confirmedModifiers` (taille / situation). RAW : la Difficulté du lancer dépend de la taille de la
+  zone visée. Confirmé par une carte de jet réelle affichant `Dif. : —`. Écart déjà noté v1.
+- **`GRENADE-THROW-ALLURE-GATE`** : `isImpossibleRangedSituation` bloque **tout** lancer de grenade
+  (Allure max / obscurité totale) — pré-existant depuis 3d, `[INCONNU]` à trancher (défendable RAW :
+  « lancer prend un Tour de combat » = Action pleine).
+
+Item « personne dans la zone à travers une porte » (test Saar 2026-09-09) : **conforme RAW**, pas de
+ticket — le Test de Coordination a échoué (jet 16 > Seuil 12, marge −4) → dispersion de 4 m, qui
+dans deux salles minuscules pousse le point d'impact dans un mur / la porte / la salle du lanceur →
+plus de LOS vers l'adversaire depuis là. Le moteur fait ce qu'il doit ; il faut juste une carte de
+test avec de la marge.
+
+### Testé
+
+`node --check` (tous fichiers touchés) ; `node --test` : `shared/**` 539/0 · `assaultDeclaration`
+39/39 · `buildDeclarePayload` 80/80 (golden master : 4 assertions grenade + `detonation: 'minuterie'`,
++ 1 test percussion) · mécanismes AOE 44/44 ; `npx eslint` (0 nouvelle issue) ; `npm run build` OK.
+**Jeu réel (Saar)** : déclaration grenade OK ; **percussion : jet + marqueur + AOE + dégâts
+concomitants confirmés**. Le « no window » vu une fois = HMR périmé (résolu au hard refresh).
+
+### Non testé
+
+Session de non-régression complète encore à faire (le tronc AOE a bougé — extraction 3f/3, branche
+3f/4, payload 3f/9) : grenade **minuterie**, **fusil à pompe**, **lance-flammes**. Marqueur
+percussion : disparition en fin de Tour (implémentée après la dernière session Saar).
+
+### Données
+
+Les déclarations de grenade portent `aoe.detonation` dans `combat_actions.modifiers`. Aucune
+migration.
+
+### Retour arrière
+
+`git revert` de la série 3f (`0f42d30` + ce commit). Refactor pur pour 3f/3 ; aucune migration.
+
+### Reste du chantier grenades
+
+3-bis (autres types : concussion / sonique / incendiaire / étourdissante / assommante / énergie /
+capsules) · 3d-4 (anim de jet, client pur) · 3e (harnais d'intégration, optionnel — 3d/3f validés
+sans). Détail `PLAN_GRENADES.md §6`.
