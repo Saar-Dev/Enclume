@@ -18,7 +18,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 import CombatTargetRecapToast from './CombatTargetRecapToast.jsx'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, combatModifiersMode = 'auto', pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
   const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
@@ -140,18 +140,25 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const assaultPrecheckId = activeAssaultAction?.id ?? playerActiveAssaultAction?.id ?? null
   const [assaultPrecheckOk, setAssaultPrecheckOk] = useState(null)
   const [assaultPrecheckTargetSize, setAssaultPrecheckTargetSize] = useState(null)
+  // Allure tireur/cible dérivée serveur renvoyée par le PRECHECK (mode 'auto' uniquement — null
+  // en 'libre', PLAN_ALLURE.md A3 / PLAN_MODE_MODIFICATEURS_COMBAT.md M4).
+  const [assaultPrecheckAllure, setAssaultPrecheckAllure] = useState(null)
 
   useEffect(() => {
     setAssaultPrecheckOk(null)
     setAssaultPrecheckTargetSize(null)
+    setAssaultPrecheckAllure(null)
     if (!assaultPrecheckId || !socket) return
     let cancelled = false
     const tokenId = activeAssaultAction?.token_id ?? playerActiveAssaultAction?.token_id
-    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok, stunned, awaiting, targetSizeCategory } = {}) => {
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok, stunned, awaiting, targetSizeCategory, shooterAllureKey, targetAllureKey } = {}) => {
       if (cancelled) return
       if (stunned || awaiting) { setAssaultPrecheckOk(null); return }
       setAssaultPrecheckOk(err ? false : (ok ?? false))
-      if (!err) setAssaultPrecheckTargetSize(targetSizeCategory ?? null)
+      if (!err) {
+        setAssaultPrecheckTargetSize(targetSizeCategory ?? null)
+        setAssaultPrecheckAllure({ shooterAllureKey: shooterAllureKey ?? null, targetAllureKey: targetAllureKey ?? null })
+      }
     })
     return () => { cancelled = true }
   // subPhase en dépendance — même raison que meleePrecheckId ci-dessus.
@@ -389,6 +396,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           attackResult={attackResult}
           onAttackConfirmed={onAttackConfirmed}
           targetSizeCategory={assaultPrecheckTargetSize}
+          shooterAllureKey={assaultPrecheckAllure?.shooterAllureKey ?? null}
+          targetAllureKey={assaultPrecheckAllure?.targetAllureKey ?? null}
+          combatModifiersMode={combatModifiersMode}
           isGm={isGm}
         />
       )}
@@ -415,6 +425,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           assaultAction={activeAssaultAction}
           activeRosterEntry={gmActiveEntry}
           targetSizeCategory={assaultPrecheckTargetSize}
+          shooterAllureKey={assaultPrecheckAllure?.shooterAllureKey ?? null}
+          targetAllureKey={assaultPrecheckAllure?.targetAllureKey ?? null}
+          combatModifiersMode={combatModifiersMode}
           isGm={isGm}
         />
       )}
@@ -427,6 +440,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           activeRosterEntry={gmActiveEntry}
           isDrone={gmActiveCharacter?.type === 'drone'}
           targetSizeCategory={meleePrecheckTargetSize}
+          combatModifiersMode={combatModifiersMode}
           isGm={isGm}
         />
       )}
@@ -439,6 +453,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           activeRosterEntry={playerRosterEntry}
           isDrone={false}
           targetSizeCategory={meleePrecheckTargetSize}
+          combatModifiersMode={combatModifiersMode}
           isGm={isGm}
         />
       )}

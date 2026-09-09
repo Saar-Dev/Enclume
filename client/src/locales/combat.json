@@ -601,6 +601,7 @@
     "choosePlaceholder": "— choisir —",
     "tireurAllureSection": "Allure tireur",
     "cibleAllureSection": "Allure cible",
+    "allureAuto": "déterminée par le déplacement",
     "couvertureSection": "Couverture",
     "obscuriteSection": "Obscurité",
     "portees": {

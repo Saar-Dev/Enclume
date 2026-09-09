@@ -1269,6 +1269,7 @@ function SessionContent({ campaignId }) {
           user={user}
           characters={characters}
           actionTimerSec={campaign?.settings?.action_timer_sec ?? 0}
+          combatModifiersMode={campaign?.settings?.combat_modifiers_mode ?? 'auto'}
           pendingSurpriseRoll={combatSocket.pendingSurpriseRoll}
           onSurpriseRolled={handleSurpriseRolled}
           onEnterMoveMode={handleEnterMoveMode}

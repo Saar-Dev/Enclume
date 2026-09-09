@@ -134,12 +134,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Le combat a changé d'état pendant la préparation de l'action — réessaie." })
         return callback({ ok: false })
       }
+      // Réglages de campagne — lus une seule fois pour tout le handler (status_effects_mode +
+      // combat_modifiers_mode). combat_modifiers_mode 'libre' : le serveur ne pré-remplit ni la
+      // taille ni l'allure (le joueur ET le MJ choisissent tout à la main dans la fenêtre).
+      const settings = await getCampaignSettings(db, campaignId)
+      const combatModifiersAuto = settings.combat_modifiers_mode === 'auto'
+
       // 2. Guard stun — avant tout check LOS/range (STUN2)
       // Si assommé : auto-skip serveur + { ok: false, stunned: true } — débloque le pas figé
       // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const { status_effects_mode: statusEffectsModePrecheck } = await getCampaignSettings(db, campaignId)
-        const enforcedPrecheck = statusEffectsModePrecheck === 'enforced'
+        const enforcedPrecheck = settings.status_effects_mode === 'enforced'
         const stunnedStatus = enforcedPrecheck
           ? await db('token_statuses')
               .where({ token_id: tokenId })
@@ -217,29 +222,31 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
       }
 
-      // Préselect « Taille cible » — dérivée de la fiche de la cible (PLAN_TAILLE.md S4). Le serveur
-      // la calcule ici pour éviter au client de lire une fiche adverse (mur d'autorisation
-      // /char-sheet). Valeur définitive re-dérivée à la résolution (resolveAttackTargetSize) ;
-      // ceci n'est qu'un pré-remplissage d'UI, l'override MJ reste possible.
+      // Préselect « Taille cible » + « Allure tireur / cible » — UNIQUEMENT en mode `auto`
+      // (combat_modifiers_mode). En `libre`, on renvoie null : la fenêtre présente des <select>
+      // neutres, joueur ET MJ choisissent à la main.
+      //
+      // Taille : dérivée de la fiche de la cible (PLAN_TAILLE.md S4). Calculée serveur pour éviter
+      // au client de lire une fiche adverse (mur d'autorisation /char-sheet). Allure : dérivée du
+      // mouvement réel déclaré ce Tour (combat_actions.movement_gait, PLAN_ALLURE.md A3), jamais
+      // en zone d'effet (jet unique pour le cône). Valeurs définitives re-dérivées à la résolution
+      // (resolveAttackTargetSize / gate joueur) ; ceci n'est qu'un pré-remplissage d'UI, l'override
+      // MJ reste possible.
       let targetSizeCategory = null
-      if (precheckTargetTokenId) {
-        const targetTok = await db('tokens').where({ id: precheckTargetTokenId }).select('character_id').first()
-        if (targetTok?.character_id) {
-          targetSizeCategory = (await resolveSizeCategory(db, targetTok.character_id)).category
-        }
-      }
-
-      // Préselect « Allure tireur / cible » — dérivée du mouvement réel déclaré ce Tour
-      // (combat_actions.movement_gait, PLAN_ALLURE.md A3). Jamais en zone d'effet (jet unique
-      // pour le cône, pas de cible unique). Valeur définitive re-dérivée à la résolution (gate
-      // joueur plus bas) ; ceci n'est qu'un pré-remplissage d'UI — fenêtre MJ : override
-      // possible ; fenêtre joueur : lecture seule.
       let shooterAllureKey = null
       let targetAllureKey = null
-      if (actionKey === 'assault' && !precheckIsAoe) {
-        const allure = await resolveRangedAllureKeys(db, campaignId, tokenId, precheckTargetTokenId, state.current_turn)
-        shooterAllureKey = allure.shooterAllureKey
-        targetAllureKey = allure.targetAllureKey
+      if (combatModifiersAuto) {
+        if (precheckTargetTokenId) {
+          const targetTok = await db('tokens').where({ id: precheckTargetTokenId }).select('character_id').first()
+          if (targetTok?.character_id) {
+            targetSizeCategory = (await resolveSizeCategory(db, targetTok.character_id)).category
+          }
+        }
+        if (actionKey === 'assault' && !precheckIsAoe) {
+          const allure = await resolveRangedAllureKeys(db, campaignId, tokenId, precheckTargetTokenId, state.current_turn)
+          shooterAllureKey = allure.shooterAllureKey
+          targetAllureKey = allure.targetAllureKey
+        }
       }
 
       console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true taille:${targetSizeCategory ?? '—'} allure:${shooterAllureKey ?? '—'}/${targetAllureKey ?? '—'}`)
@@ -309,17 +316,23 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (character.user_id !== user.id) return
       }
 
-      // Taille de cible : override MJ uniquement (docs/PLANS/PLAN_TAILLE.md). Filtrée ici une
-      // fois pour toutes les branches de résolution — un joueur qui résout sa propre attaque ne
-      // surcharge jamais la taille de la cible, dérivée de sa fiche côté résolveur. Le garde
-      // `!confirmedModifiers` plus bas reste sur l'objet d'origine (fenêtre ouverte ou non).
-      const gatedModifiers = isGm ? confirmedModifiers : stripGmOnlyModifiers(confirmedModifiers)
+      // Réglages de campagne — lus une seule fois pour tout le handler.
+      const settings = await getCampaignSettings(db, campaignId)
+      const combatModifiersAuto = settings.combat_modifiers_mode === 'auto'
+
+      // Taille de cible : override MJ uniquement (docs/PLANS/PLAN_TAILLE.md), en mode `auto`. Filtrée
+      // ici une fois pour toutes les branches de résolution — un joueur qui résout sa propre attaque
+      // ne surcharge jamais la taille de la cible, dérivée de sa fiche côté résolveur. En `libre`,
+      // le joueur choisit sa taille librement (rien n'est retiré). Le garde `!confirmedModifiers`
+      // plus bas reste sur l'objet d'origine (fenêtre ouverte ou non).
+      const gatedModifiers = (isGm || !combatModifiersAuto)
+        ? confirmedModifiers
+        : stripGmOnlyModifiers(confirmedModifiers)
 
       // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
       // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const { status_effects_mode: statusEffectsModeConfirm } = await getCampaignSettings(db, campaignId)
-        const enforcedConfirm = statusEffectsModeConfirm === 'enforced'
+        const enforcedConfirm = settings.status_effects_mode === 'enforced'
         const stunnedStatus = enforcedConfirm
           ? await db('token_statuses')
               .where({ token_id: tokenId })
@@ -460,15 +473,16 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
         await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })
 
-        // Allure tireur / cible — dérivée du mouvement réel déclaré ce Tour
-        // (combat_actions.movement_gait), pas du tableau `situation` envoyé par le client.
-        // Autorité serveur (RAW p.226-227, PLAN_ALLURE.md A3) : un joueur ne peut ni masquer
-        // son Allure maximale (Tir impossible) ni fausser le malus. Le MJ garde la main (sa
-        // fenêtre, `gatedModifiers` non réécrit). Zone d'effet exclue (jet unique pour le
-        // cône, cf. Taille D7). Second point de transformation de `confirmedModifiers` dans ce
-        // handler après `gatedModifiers` (portée handler) — celui-ci a besoin de `action`.
+        // Allure tireur / cible — en mode `auto` seulement : dérivée du mouvement réel déclaré ce
+        // Tour (combat_actions.movement_gait), pas du tableau `situation` envoyé par le client.
+        // Autorité serveur (RAW p.226-227, PLAN_ALLURE.md A3) : un joueur ne peut ni masquer son
+        // Allure maximale (Tir impossible) ni fausser le malus. Le MJ garde la main (sa fenêtre,
+        // `gatedModifiers` non réécrit). En `libre`, aucune réécriture : joueur et MJ choisissent
+        // à la main. Zone d'effet exclue (jet unique pour le cône, cf. Taille D7). Second point de
+        // transformation de `confirmedModifiers` dans ce handler après `gatedModifiers` (portée
+        // handler) — celui-ci a besoin de `action`.
         let dispatchModifiers = gatedModifiers
-        if (!isGm && gatedModifiers && action.type === 'assault' && !action.modifiers?.aoe) {
+        if (combatModifiersAuto && !isGm && gatedModifiers && action.type === 'assault' && !action.modifiers?.aoe) {
           const allure = await resolveRangedAllureKeys(db, campaignId, action.token_id, action.target_token_id, action.turn_number)
           dispatchModifiers = {
             ...gatedModifiers,

@@ -97,7 +97,7 @@ function calcPorteePalier(distance, rangeData) {
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n, impossible = false) { return impossible ? '✗' : n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
-export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed, targetSizeCategory = null, isGm = false }) {
+export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed, targetSizeCategory = null, shooterAllureKey = null, targetAllureKey = null, combatModifiersMode = 'auto', isGm = false }) {
   const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -130,6 +130,13 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   // confirmedModifiers.portee, elle est recalculée par cible touchée (resolveShotgunSpread). La case
   // Portée de cette fenêtre est un artefact du Tir normal, pas une donnée dont l'AOE a besoin.
   const isAoeAction = !!assaultAction?.modifiers?.aoe
+  // Mode modificateurs de combat (option de campagne, PLAN_MODE_MODIFICATEURS_COMBAT.md) :
+  //   'auto'  → taille + allure dérivées serveur, joueur en lecture seule, MJ garde la main
+  //   'libre' → <select> neutres (fallback 0) pour joueur ET MJ, aucune dérivation
+  const autoMode = combatModifiersMode === 'auto'
+  // taille + allure : éditable si MJ, ou en mode libre. La zone d'effet reste toujours éditable
+  // pour l'allure (aucune autorité serveur — pas de cible unique).
+  const modifiersEditable = isGm || !autoMode
 
   // Reset quand un nouvel assaut passe en résolution
   useEffect(() => {
@@ -173,8 +180,18 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     return map[mv.action_key] ?? 'cible_immobile'
   }, [actions, assaultAction?.target_token_id])
 
-  const tireurAllureVal = tireurAllureOverride ?? detectedTireurAllure
-  const cibleAllureVal  = cibleAllureOverride  ?? detectedCibleAllure
+  // Valeur d'allure préselectionnée :
+  //   - zone d'effet : détection client depuis les actions annoncées (pas d'autorité serveur)
+  //   - mode auto (hors zone) : clé serveur du PRECHECK (dérivée du mouvement réellement déclaré)
+  //   - mode libre : neutre — joueur/MJ choisit tout à la main (fallback 0)
+  const tireurAllureBase = isAoeAction ? detectedTireurAllure
+    : autoMode ? (shooterAllureKey ?? 'immobile')
+      : 'immobile'
+  const cibleAllureBase = isAoeAction ? detectedCibleAllure
+    : autoMode ? (targetAllureKey ?? 'cible_lente')
+      : 'cible_lente'
+  const tireurAllureVal = tireurAllureOverride ?? tireurAllureBase
+  const cibleAllureVal  = cibleAllureOverride  ?? cibleAllureBase
 
   // Pré-calcul portée depuis la distance réelle (PE14 + PC35 + PC37 + PC38)
   const prefilledPortee = useMemo(() => {
@@ -366,32 +383,46 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             </div>
           )}
 
-          {/* Allure tireur */}
+          {/* Allure tireur — dérivée du mouvement en mode auto (lecture seule joueur) ; libre : select */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.tireurAllureSection')}</div>
-            <select
-              value={tireurAllureVal}
-              onChange={e => setTireurAllureOverride(e.target.value)}
-              style={styles.select}
-            >
-              {TIREUR_ALLURES.map(a => (
-                <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod, isImpossible(a.sitKey))})</option>
-              ))}
-            </select>
+            {modifiersEditable ? (
+              <select
+                value={tireurAllureVal}
+                onChange={e => setTireurAllureOverride(e.target.value)}
+                style={styles.select}
+              >
+                {TIREUR_ALLURES.map(a => (
+                  <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod, isImpossible(a.sitKey))})</option>
+                ))}
+              </select>
+            ) : (
+              <div style={styles.infoValue}>
+                {t(TIREUR_ALLURES.find(a => a.val === tireurAllureVal)?.label ?? 'modifiers.allures.immobile')} ({fmtOpt(tireurAllureMod, isImpossible(tireurAllureDef?.sitKey))})
+                <span style={styles.autoHint}> · {t('modifiers.allureAuto')}</span>
+              </div>
+            )}
           </div>
 
           {/* Allure cible */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.cibleAllureSection')}</div>
-            <select
-              value={cibleAllureVal}
-              onChange={e => setCibleAllureOverride(e.target.value)}
-              style={styles.select}
-            >
-              {CIBLE_ALLURES.map(a => (
-                <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod)})</option>
-              ))}
-            </select>
+            {modifiersEditable ? (
+              <select
+                value={cibleAllureVal}
+                onChange={e => setCibleAllureOverride(e.target.value)}
+                style={styles.select}
+              >
+                {CIBLE_ALLURES.map(a => (
+                  <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod)})</option>
+                ))}
+              </select>
+            ) : (
+              <div style={styles.infoValue}>
+                {t(CIBLE_ALLURES.find(a => a.val === cibleAllureVal)?.label ?? 'modifiers.allures.immobile')} ({fmtOpt(cibleAllureMod)})
+                <span style={styles.autoHint}> · {t('modifiers.allureAuto')}</span>
+              </div>
+            )}
           </div>
 
           {/* Couverture */}
@@ -434,10 +465,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ))}
           </div>
 
-          {/* Taille cible — préselect serveur (dérivée de la fiche de la cible) ; override MJ uniquement */}
+          {/* Taille cible — mode auto : préselect serveur (dérivée de la fiche), override MJ ;
+              mode libre : <select> neutre pour tous */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
-            {isGm ? (
+            {modifiersEditable ? (
               <select
                 value={taille}
                 onChange={e => setTailleOverride(e.target.value)}

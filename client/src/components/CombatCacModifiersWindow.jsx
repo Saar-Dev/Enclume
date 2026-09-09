@@ -44,7 +44,7 @@ const TAILLES = [
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n)    { return n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
-export default function CombatCacModifiersWindow({ socket, activeRosterEntry, isDrone, targetSizeCategory = null, isGm = false }) {
+export default function CombatCacModifiersWindow({ socket, activeRosterEntry, isDrone, targetSizeCategory = null, combatModifiersMode = 'auto', isGm = false }) {
   const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -57,8 +57,10 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
   const [situationAtk, setSituationAtk]   = useState([])
   const [situationDef, setSituationDef]   = useState([])
-  // Taille de la cible : préselect serveur (targetSizeCategory, dérivée via le PRECHECK) ;
-  // `tailleOverride` = choix manuel du MJ seulement (PLAN_TAILLE.md S4).
+  // Taille de la cible : en mode 'auto', préselect serveur (targetSizeCategory, dérivée via le
+  // PRECHECK) + override MJ ; en mode 'libre', <select> neutre pour tous (fallback moyenne).
+  // PLAN_TAILLE.md S4 / PLAN_MODE_MODIFICATEURS_COMBAT.md M4.
+  const tailleEditable = isGm || combatModifiersMode !== 'auto'
   const [tailleOverride, setTailleOverride] = useState(null)
   const taille = tailleOverride ?? targetSizeCategory ?? 'moyenne'
   const [weaponSkill, setWeaponSkill]     = useState(null)
@@ -185,10 +187,10 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
           </div>
         )}
 
-        {/* Taille cible — préselect serveur (dérivée de la fiche de la cible) ; override MJ uniquement */}
+        {/* Taille cible — mode auto : préselect serveur + override MJ ; mode libre : select neutre pour tous */}
         <div className="combat-float-section">
           <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
-          {isGm ? (
+          {tailleEditable ? (
             <select
               value={taille}
               onChange={e => setTailleOverride(e.target.value)}
