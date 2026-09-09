@@ -95,8 +95,8 @@
 | Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[VÉRIFIÉ] 2026-08-26** — `docs/REGLES/REGLEPOLARIS.md` existe et a été lu directement (la note du 25 cherchait le mauvais nom de fichier) : le cœur du mécanisme (Maîtriser/Libérer/Contrôler, Choc Polaris, Incidents 1D100) est indépendant de l'AOE et codable seul ; la majorité des pouvoirs ont réellement un paramètre Zone d'effet (confirmé, pas déduit) ; un sous-ensemble à cible unique (Contrôle mental confirmé, Dague psychique probable) ne dépend pas de l'AOE. **Premier lot réaliste sans attendre l'AOE** : cœur du mécanisme + pouvoirs à cible unique. Reste à faire avant cadrage complet : cataloguer les ~40 pouvoirs un par un (zone vs cible unique), pas fait en entier |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
 | Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02). Chantier esthétique — cohérent avec la philosophie backend-first, à cadrer mais pas prioritaire |
-| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`, jamais lu à ce jour). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **confirmé par Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Informatique/pannes ci-dessous |
-| Informatique et pannes (systèmes électroniques exo) | — (RAW transcrite : `REGLES/REGLE_ORDINATEUR.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. **Confirmé par Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Usure/Intégrité ci-dessus |
+| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` (stub) + `MANUELS/MANUEL_USURE.md` v1.5 | **Logique de jeu bouclée** : `MANUEL_USURE.md` v1.5 après 3 analyses à charge (2026-09-08/09), `REGLE_USURE&INTEGRITE.md` nettoyé, `VOCABULARY` V2.7. Reste à écrire le PLAN technique. **V1 ne mécanise aucune entrée de la table Catastrophe combat** — les entrées #2/#8 (matériel) sont un Lot 2 explicite (via `EFFECT_HANDLERS`, `MANUEL_USURE.md` §8) ; le « taper dessus » et les pièces détachées un autre Lot 2 (dépend du helper `resolveChanceTest`). **Confirmé Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Informatique ci-dessous |
+| Informatique (ordinateurs + pannes électroniques + IEM) | `PLANS/PLAN_INFORMATIQUE.md` (stub, périmètre décidé 2026-09-09) | Fusion de « Informatique et pannes » et de « Mécanique IEM » (ex-backlog §4) en un seul chantier. RAW transcrite (`REGLES/REGLE_ORDINATEUR.md`), rien cadré. **Dépend d'Usure & Intégrité** (primitive de test de panne). **Confirmé Saar (2026-08-25) : nécessaire pour finir Exo-armures** |
 | Moral | `PLANS/PLAN_MORAL.md` | Stub (`Lire @REGLE_MORAL.md`). Règle RAW optionnelle, aucune dépendance technique identifiée — priorité basse, à caser selon préférence produit plutôt que contrainte |
 
 ## 3. Bloqués
@@ -129,6 +129,22 @@
 
 ## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
 
+- **[PRIORITÉ HAUTE] `dice_config` / SectionDice — « Réussite et échec critique » contraire au RAW
+  Polaris** (trouvé 2026-09-08, analyse à charge `PLAN_USURE&INTEGRITE` / `MANUEL_USURE` §4.1). La
+  page Config campagne → « Réussite et échec critique » (`client/src/components/campaignSettings/
+  SectionDice.jsx`, i18n `settings.diceTitle`) écrit `campaigns.dice_config` (JSONB) avec un défaut
+  d20 **réussite critique = 20, échec critique = 1** — la convention D&D, **inversée** pour un Test
+  Polaris en `D20 ≤ Seuil` : réussite critique = `roll === seuil` (`shared/polarisTestResolution.js:76`),
+  échec critique = `roll === 20` (`:75`), un 1 naturel est une réussite automatique, jamais un échec.
+  Un MJ qui lit cette page en déduit une règle de critique fausse. **Portée réelle limitée** :
+  `dice_config` n'est lu que par le handler `DICE_ROLL` (`server/src/socket/socketDice.js:51-64`) —
+  les jets libres `/r` sans seuil ; les Tests de compétence / combat / macro passent tous par
+  `resolvePolarisTest` → `polarisTestResolution.js` et **ignorent `dice_config`** (le moteur de Test
+  est correct et indépendant). Le bug est donc conceptuel/pédagogique : un libellé « critique » et un
+  défaut qui enseignent l'inverse du RAW, sur une fonction qui ne décore qu'un indicateur du fil de
+  chat. **Fix** : recadrer la section en ce qu'elle fait réellement (surlignage des valeurs extrêmes
+  du dé sur les jets libres, qui n'ont pas de Seuil), ou la retirer si elle induit surtout en erreur —
+  jamais la câbler aux Tests. Peut aussi justifier un `bug_tickets`.
 - **Audit de compréhension approfondie des 31 docs `docs/SYSTEME/*.md` (2026-08-26) — CLOS**, les
   31 en statut 🔎 dans `INDEX.md` (upgrade depuis le premier passage ✅ plus superficiel du même jour,
   25/33 par sondage d'agents). Deuxième passage : lecture intégrale de chaque doc par moi-même,
