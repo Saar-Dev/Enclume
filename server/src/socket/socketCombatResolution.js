@@ -13,9 +13,10 @@ import { executeBattlemapTokenMovement } from '../services/worldMovementService.
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { checkLOSForPrecheck } from '../lib/losService.js'
 import { resolveSizeCategory } from '../lib/characterSizeService.js'
+import { resolveRangedAllureKeys } from '../lib/combatAllureService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
-import { stripGmOnlyModifiers } from '../../../shared/combatSituationMods.js'
+import { stripGmOnlyModifiers, applyDerivedAllureToSituation } from '../../../shared/combatSituationMods.js'
 import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
   triggerActNow, triggerDelayedPass, registerAutonomousStepResolver,
@@ -159,8 +160,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
       }
       // Cible de l'action en cours de pré-vol — capturée par les checks melee/assault ci-dessous,
-      // réutilisée pour le préselect « Taille cible » de la fenêtre de modificateurs (PLAN_TAILLE.md S4).
+      // réutilisée pour le préselect « Taille cible » et « Allure » de la fenêtre de modificateurs
+      // (PLAN_TAILLE.md S4, PLAN_ALLURE.md A3).
       let precheckTargetTokenId = null
+      let precheckIsAoe = false
 
       // 3. Range check CaC — colonne 'type' (cohérent L.907 serveur)
       if (actionKey === 'melee') {
@@ -207,6 +210,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           .where({ campaign_id: campaignId, token_id: tokenId, type: 'assault', status: 'pending', turn_number: state.current_turn })
           .first()
         precheckTargetTokenId = action?.target_token_id ?? null
+        precheckIsAoe = !!action?.modifiers?.aoe
         if (action?.target_token_id) {
           const clear = await checkLOSForPrecheck(db, tokenId, action.target_token_id)
           if (!clear) return callback({ ok: false })
@@ -225,8 +229,21 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
       }
 
-      console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true taille:${targetSizeCategory ?? '—'}`)
-      callback({ ok: true, targetSizeCategory })
+      // Préselect « Allure tireur / cible » — dérivée du mouvement réel déclaré ce Tour
+      // (combat_actions.movement_gait, PLAN_ALLURE.md A3). Jamais en zone d'effet (jet unique
+      // pour le cône, pas de cible unique). Valeur définitive re-dérivée à la résolution (gate
+      // joueur plus bas) ; ceci n'est qu'un pré-remplissage d'UI — fenêtre MJ : override
+      // possible ; fenêtre joueur : lecture seule.
+      let shooterAllureKey = null
+      let targetAllureKey = null
+      if (actionKey === 'assault' && !precheckIsAoe) {
+        const allure = await resolveRangedAllureKeys(db, campaignId, tokenId, precheckTargetTokenId, state.current_turn)
+        shooterAllureKey = allure.shooterAllureKey
+        targetAllureKey = allure.targetAllureKey
+      }
+
+      console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true taille:${targetSizeCategory ?? '—'} allure:${shooterAllureKey ?? '—'}/${targetAllureKey ?? '—'}`)
+      callback({ ok: true, targetSizeCategory, shooterAllureKey, targetAllureKey })
     } catch (err) {
       console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)
       callback({ ok: false })
@@ -443,6 +460,23 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
         await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })
 
+        // Allure tireur / cible — dérivée du mouvement réel déclaré ce Tour
+        // (combat_actions.movement_gait), pas du tableau `situation` envoyé par le client.
+        // Autorité serveur (RAW p.226-227, PLAN_ALLURE.md A3) : un joueur ne peut ni masquer
+        // son Allure maximale (Tir impossible) ni fausser le malus. Le MJ garde la main (sa
+        // fenêtre, `gatedModifiers` non réécrit). Zone d'effet exclue (jet unique pour le
+        // cône, cf. Taille D7). Second point de transformation de `confirmedModifiers` dans ce
+        // handler après `gatedModifiers` (portée handler) — celui-ci a besoin de `action`.
+        let dispatchModifiers = gatedModifiers
+        if (!isGm && gatedModifiers && action.type === 'assault' && !action.modifiers?.aoe) {
+          const allure = await resolveRangedAllureKeys(db, campaignId, action.token_id, action.target_token_id, action.turn_number)
+          dispatchModifiers = {
+            ...gatedModifiers,
+            situation: applyDerivedAllureToSituation(gatedModifiers.situation ?? [], allure),
+          }
+          console.log(`[DBG] CONFIRM allure token:${action.token_id} → tireur:${allure.shooterAllureKey ?? '—'} cible:${allure.targetAllureKey ?? '—'}`)
+        }
+
         // Isolé du try/catch englobant (Session 158, retour Saar) : l'entrée est déjà marquée
         // 'resolved' ci-dessus — une exception ici NE DOIT JAMAIS laisser l'échelle bloquée en
         // silence (symptôme observé : « plantage du tour de combat, aucun message d'erreur, rien » —
@@ -474,8 +508,8 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               const assaultResult = action.modifiers?.aoe
                 ? await resolveAoeAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
                 : character.type === 'exo'
-                  ? await resolveExoAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
-                  : await resolveAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
+                  ? await resolveExoAssaultAction(io, campaignId, action, dispatchModifiers, character, pendingMaps)
+                  : await resolveAssaultAction(io, campaignId, action, dispatchModifiers, character, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
               if (assaultResult) {
                 await flushEmissions(io, socket, campaignId, assaultResult.emissions)

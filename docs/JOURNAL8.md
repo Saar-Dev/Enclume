@@ -6152,3 +6152,71 @@ migration.
 3-bis (autres types : concussion / sonique / incendiaire / étourdissante / assommante / énergie /
 capsules) · 3d-4 (anim de jet, client pur) · 3e (harnais d'intégration, optionnel — 3d/3f validés
 sans). Détail `PLAN_GRENADES.md §6`.
+
+## Session (Claude) — 2026-09-09 — Allure tireur / cible ⇄ mouvement déclaré (A1–A3)
+
+`PLAN_ALLURE.md`. Le malus RAW « Cible / Tireur en déplacement » (`REGLESYSCOMBAT.md:1439-1448`
++ Écran du MJ, Tir seul) devient **dérivé du mouvement réellement déclaré** ce Tour
+(`combat_actions.movement_gait`), plus une clé libre envoyée par le client dans
+`confirmedModifiers.situation`. Même patron que la Taille (`PLAN_TAILLE.md`).
+
+### Décision — `cible immobile : +3` est RAW
+
+Absent de la table du Livre de Base (`p.226-227` ne liste que « Cible en déplacement »), mais
+**présent sur l'Écran du MJ Polaris** (produit officiel) — confirmé par Saar 2026-09-09. Donc
+règle RAW, pas une house rule : la dérivation applique `cible_immobile` (+3) dès qu'une cible
+unique ne s'est pas déplacée ce Tour. Distinct de « pas de cible » (zone d'effet → aucune clé).
+
+### Autorité serveur
+
+- **A1** `shared/combatSituationMods.js` : `rangedAllureKeyForGait(gait, role)` (pur),
+  `MOVEMENT_DERIVED_SITUATION_KEYS` (8 clés), `applyDerivedAllureToSituation` (retire l'allure
+  client, réinjecte l'allure serveur). Garde de chargement miroir de `TAILLE_MODS`. Découplé de
+  `combatMovement.js` (pas de `shared/world/` dans le bundle client) ; la dérive des 4 gaits est
+  couverte par un test.
+- **A2** `server/src/lib/combatAllureService.js` : `resolveMovementGait(db, campaignId, tokenId,
+  turnNumber)` (dernière ligne `move_short`/`move_long` non `skipped` du Tour) et
+  `resolveRangedAllureKeys(...)`. `targetTokenId == null` ⇒ `targetAllureKey: null` (jamais
+  `cible_immobile`).
+- **A3** `socketCombatResolution.js` : `COMBAT_ACTION_PRECHECK` (assault non-AOE) renvoie
+  `shooterAllureKey` / `targetAllureKey` (préselect UI). À la résolution, pour
+  `!isGm ∧ type 'assault' ∧ !aoe` : `confirmedModifiers.situation` est réécrit — clés d'allure
+  du client retirées, clés serveur injectées — **avant** les 3 résolveurs de Tir
+  (`resolveAssaultAction`, `resolveDroneAssaultAction`, `resolveExoAssaultAction`, tous
+  consomment `situation` de la même façon). Le MJ n'est jamais réécrit. Effet gratuit :
+  `isImpossibleRangedSituation` voit enfin le vrai `tireur_allure_maximale` → *Tir impossible*
+  opposable. Label `tireur_allure_maximale` ajouté à `SITUATION_LABELS`
+  (`socketCombatHelpers.js`).
+
+### Redirection Saar — option de campagne LIBRE / AUTO (A4/A5 reportés)
+
+Saar ne veut pas le champ « Taille (combat) » sur la fiche (retrait de `PLAN_TAILLE.md` S5).
+À la place : réglage de campagne `combat_modifiers_mode` (défaut **AUTO**) — AUTO = dérivé +
+préselect + joueur lecture seule ; LIBRE = tout manuel, `PRECHECK` renvoie `null`, fenêtres
+`<select>` fallback 0. Nouveau chantier `PLAN_MODE_MODIFICATEURS_COMBAT.md` : retire S5, ajoute
+le réglage, garde `PRECHECK`/résolution (taille + allure) selon le mode, finit A4, écrit A5.
+
+### Testé
+
+`node --check` (3 fichiers serveur + shared) ; `node --test` : `shared/**` 550/550 (`+23`
+`combatSituationMods`, dont 11 neufs) · `combatAllureService` 11/11 (base locale, fixture
+cleanup vérifié) · `combatTurnEngine` 17/17 · `socketCombatAoe` + `combatantContextService`
+72/72 — aucune régression. `git diff --check` propre.
+**Jeu réel (Saar) 2026-09-09** : `PRECHECK … allure:tireur_allure_lente/cible_allure_rapide` →
+`CONFIRM … situation:["tireur_allure_lente","cible_allure_rapide"]` au résolveur. « Sinon
+fonctionnel ».
+
+### Non testé
+
+Tir joueur (non-MJ) résolu de bout en bout : refus réel sur `move_max` + tir ; breakdown avec
+allure tireur ET cible. Fenêtres client (A4). AOE : `cible_immobile` (+3) en dur reste envoyé
+par le client (`target_token_id` null) — **pré-existant**, ticket à ouvrir, résolu avec D7.
+
+### Données
+
+Aucune. `confirmedModifiers` n'est jamais persisté.
+
+### Retour arrière
+
+`git revert` du commit A1–A3 (6 fichiers, aucune migration). `combatAllureService.js` +
+`combatSituationMods.js` nouveaux exports : aucun autre consommateur.

@@ -45,6 +45,67 @@ export function isImpossibleRangedSituation(situationKeys = []) {
   return situationKeys.some(k => RANGED_SITUATION_MODS[k]?.impossible === true)
 }
 
+// ─── Allure tireur / cible dérivée du mouvement réel (LdB p.226-227 + Écran du MJ) ──
+// L'allure n'est PAS une confirmation libre (comme couverture/obscurité) : c'est la
+// conséquence mécanique du `movement_gait` déclaré. Le serveur la dérive de
+// `combat_actions.movement_gait` (server/src/lib/combatAllureService.js) et réécrit
+// `confirmedModifiers.situation` pour un joueur (socketCombatResolution.js) — un joueur
+// ne choisit jamais sa propre allure ; le MJ garde la main via la fenêtre de modificateurs.
+// gait ∈ 'lente' | 'moyenne' | 'rapide' | 'max' | null  (null = aucun déplacement ce Tour).
+// Les 4 valeurs sont l'énumération de shared/combatMovement.js#COMBAT_MOVEMENT_GAITS, non
+// importée ici pour ne pas tirer shared/world/ dans le bundle client — la divergence est
+// couverte par combatSituationMods.test.mjs.
+const SHOOTER_ALLURE_KEY_BY_GAIT = {
+  lente:   'tireur_allure_lente',
+  moyenne: 'tireur_allure_moyenne',
+  rapide:  'tireur_allure_rapide',
+  max:     'tireur_allure_maximale',
+}
+
+// Cible : la table RAW ne la pénalise qu'à partir de l'Allure moyenne ('lente' → aucune clé).
+// gait null (aucun déplacement) → `cible_immobile` (+3, cible fixe, Écran du MJ) — jamais
+// l'inverse : sur ce chemin il y a toujours une cible unique (l'AOE est exclue en amont).
+const TARGET_ALLURE_KEY_BY_GAIT = {
+  lente:   null,
+  moyenne: 'cible_allure_moyenne',
+  rapide:  'cible_allure_rapide',
+  max:     'cible_allure_maximale',
+}
+
+// role ∈ 'shooter' | 'target' → clé de RANGED_SITUATION_MODS, ou null (aucun modificateur).
+export function rangedAllureKeyForGait(gait, role) {
+  if (role === 'shooter') return gait ? (SHOOTER_ALLURE_KEY_BY_GAIT[gait] ?? null) : null
+  if (role === 'target')  return gait ? (TARGET_ALLURE_KEY_BY_GAIT[gait] ?? null) : 'cible_immobile'
+  throw new Error(`rangedAllureKeyForGait : rôle inconnu "${role}"`)
+}
+
+// Toutes les clés de situation dérivées du mouvement (jamais une confirmation libre). Le gate
+// joueur (socketCombatResolution.js) les retire du tableau client avant de réinjecter celles
+// calculées par le serveur.
+export const MOVEMENT_DERIVED_SITUATION_KEYS = [
+  'tireur_allure_lente', 'tireur_allure_moyenne', 'tireur_allure_rapide', 'tireur_allure_maximale',
+  'cible_immobile', 'cible_allure_moyenne', 'cible_allure_rapide', 'cible_allure_maximale',
+]
+
+// Garde de chargement — miroir de la garde TAILLE_MODS : casse si une clé d'allure (liste ou
+// mapping) n'existe pas dans la table de valeurs (typo, palier retiré d'un seul côté).
+for (const k of [
+  ...MOVEMENT_DERIVED_SITUATION_KEYS,
+  ...Object.values(SHOOTER_ALLURE_KEY_BY_GAIT),
+  ...Object.values(TARGET_ALLURE_KEY_BY_GAIT),
+].filter(Boolean)) {
+  if (!(k in RANGED_SITUATION_MODS)) {
+    throw new Error(`combatSituationMods : clé d'allure "${k}" absente de RANGED_SITUATION_MODS`)
+  }
+}
+
+// Applique l'allure dérivée serveur à un tableau `confirmedModifiers.situation` : retire toute
+// clé d'allure fournie par le client, réinjecte celles du serveur (filtre les null). Pure.
+export function applyDerivedAllureToSituation(situation = [], { shooterAllureKey = null, targetAllureKey = null } = {}) {
+  const kept = (situation ?? []).filter(k => !MOVEMENT_DERIVED_SITUATION_KEYS.includes(k))
+  return [...kept, shooterAllureKey, targetAllureKey].filter(Boolean)
+}
+
 // ─── CaC §6.2 — modificateurs de situation attaquant (LdB p.217-218) ─────────
 // cac_terrain_instable : compétence limitative (Acrobatie/Équilibre, Math.min côté serveur) — voir
 // `limitative` dans l'en-tête. Le client l'affiche sans valeur fixe, le serveur le retire de la somme

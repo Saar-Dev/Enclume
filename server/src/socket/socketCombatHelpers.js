@@ -61,6 +61,7 @@ export const SITUATION_LABELS = {
   tireur_allure_lente:   'Tireur allure lente',
   tireur_allure_moyenne: 'Tireur allure moyenne',
   tireur_allure_rapide:  'Tireur allure rapide',
+  tireur_allure_maximale: 'Tireur allure maximale',
   couverture_partielle:  'Couverture partielle (50%)',
   couverture_importante: 'Couverture importante (75%)',
   obscurite_legere:      'Obscurité légère',
