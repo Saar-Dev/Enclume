@@ -432,6 +432,15 @@ Renommage `GmReviewPanel.jsx` optionnel (touche les imports).
 
 ## 9. L7 — Usure manuelle + « Usage intensif »
 
+> **L7 fait le 2026-09-09.** Usure/perte définitive manuelle = déjà couvert par l'éditeur L4.
+> **Bouton « Usage intensif »** : route `POST …/inventory/:itemId/panne-test` (GM) — lit
+> `integrity_current`, branche `≤ 5` → `applyPanneSystematic` (sans jet) / sinon → `runPanneTest`
+> (1D20 sous l'ITG). Émet `INVENTORY_UPDATED` ; renvoie `{ item, panne }` (détail du jet au MJ).
+> Bouton « Usage intensif » dans l'éditeur `IntegritySegment` (si `isGm`), mutation `intensiveUseTest`.
+> `runPanneTest` / `applyPanneSystematic` acceptent `characterId` dans les options (scoping
+> `lockInventoryRow`, comme `rollOccasionIntegrity`). Pas de carte `DICE_RESULT` (le patron dé de
+> combat est traité en L5). Tests : +1 `integrityService.test.mjs` (scoping). **Prochain : L5.**
+
 - **Usure / perte définitive manuelle** : couvert par L4 (champs éditables). Le système ne détecte
   rien automatiquement (`MANUEL_USURE.md` §6).
 - **Bouton « Usage intensif »** (GM, sur un item) :

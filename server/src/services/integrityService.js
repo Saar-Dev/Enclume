@@ -89,9 +89,9 @@ async function applyPanneLoss(trx, row, { loss, severity }) {
 // Échec simple → −1 ITG, `malfunction_severity = 'simple'`. Catastrophe → −1D6 ITG,
 // `malfunction_severity = 'critical'`. N'annule jamais l'action en cours (la panne est postérieure).
 // `reason` : trace libre reportée dans le retour (`'combat_low_itg'`, `'intensive'`, catastrophe #8…).
-export async function runPanneTest(invId, { reason } = {}, trxOpt) {
+export async function runPanneTest(invId, { reason, characterId } = {}, trxOpt) {
   const run = async (trx) => {
-    const row = await lockInventoryRow(trx, invId)
+    const row = await lockInventoryRow(trx, invId, characterId)
     if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
     if (!row.has_integrity || row.integrity_current == null) {
       return { panne: 'skipped', reason: reason ?? null, skippedBecause: 'no_integrity' }
@@ -126,9 +126,9 @@ export async function runPanneTest(invId, { reason } = {}, trxOpt) {
 // intensif ou non conventionnel (MANUEL §4.2). −1 ITG, `malfunction_severity = 'simple'`. Le caller
 // (L7, bouton « Usage intensif ») garantit `integrity_current <= 5` ; au-dessus il route vers
 // `runPanneTest`.
-export async function applyPanneSystematic(invId, { reason } = {}, trxOpt) {
+export async function applyPanneSystematic(invId, { reason, characterId } = {}, trxOpt) {
   const run = async (trx) => {
-    const row = await lockInventoryRow(trx, invId)
+    const row = await lockInventoryRow(trx, invId, characterId)
     if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
     if (!row.has_integrity || row.integrity_current == null) {
       return { panne: 'skipped', reason: reason ?? null, skippedBecause: 'no_integrity' }

@@ -170,6 +170,20 @@ test('runPanneTest — objet sans ITG → skipped', { skip }, async () => {
   }
 })
 
+test('runPanneTest / applyPanneSystematic — scoping characterId (L7) : mauvais perso → 404', { skip }, async () => {
+  const fx = await createFixture({ current: 4, max: 10 })
+  const bad = '00000000-0000-0000-0000-000000000000'
+  try {
+    await assert.rejects(() => runPanneTest(fx.item.id, { characterId: bad }), (e) => e instanceof AppError && e.statusCode === 404)
+    await assert.rejects(() => applyPanneSystematic(fx.item.id, { characterId: bad }), (e) => e instanceof AppError && e.statusCode === 404)
+    // bon perso : passe
+    const ok = await applyPanneSystematic(fx.item.id, { characterId: fx.owner.id })
+    assert.equal(ok.panne, 'simple')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
 // ── Concurrence — .forUpdate() sérialise ─────────────────────────────────────
 test('concurrence — deux applyPanneSystematic simultanés : perte cumulée, pas de lost-update', { skip }, async () => {
   const fx = await createFixture({ current: 10, max: 15 })

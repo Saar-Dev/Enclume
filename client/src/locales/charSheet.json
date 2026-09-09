@@ -129,6 +129,8 @@
       "editState": "État",
       "rollOccasion": "Occasion",
       "rollOccasionTooltip": "Lancer une ITG d'occasion (max de la qualité, courante tirée au sort)",
+      "intensiveUse": "Usage intensif",
+      "intensiveUseTooltip": "Utilisation intensive ou non conventionnelle : test de panne (panne systématique si ITG ≤ 5)",
       "stateOperational": "Opérationnel",
       "stateSimple": "Réparation simple",
       "stateCritical": "Réparation en atelier",

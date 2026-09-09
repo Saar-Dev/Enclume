@@ -1205,6 +1205,26 @@ router.post('/:characterId/inventory/:itemId/roll-integrity', async (req, res, n
   } catch (err) { next(err) }
 })
 
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/panne-test ───────────
+// PLAN_USURE&INTEGRITE.md §9 (L7) — bouton « Usage intensif » (MJ). MANUEL §4.2 : ITG ≤ 5 → panne
+// systématique (sans jet) ; au-dessus → test de panne normal (1D20 sous l'ITG).
+router.post('/:characterId/inventory/:itemId/panne-test', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    const { characterId, itemId } = req.params
+    const row = await db('char_inventory').where({ id: itemId, character_id: characterId }).first('integrity_current')
+    if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
+    const opts = { reason: 'intensive', characterId }
+    const panne = (row.integrity_current != null && row.integrity_current <= 5)
+      ? await integrityService.applyPanneSystematic(itemId, opts)
+      : await integrityService.runPanneTest(itemId, opts)
+    const item = await inventoryService.getItemWithRef(itemId)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item })
+    res.json({ item, panne })
+  } catch (err) { next(err) }
+})
+
 // ─── DELETE /api/char-sheet/:characterId/inventory/:itemId ────────────────────
 router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
   try {

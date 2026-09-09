@@ -62,3 +62,11 @@ export async function rollItemOccasionIntegrity(characterId, itemId) {
   useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
   return res.data.item
 }
+
+// PLAN_USURE&INTEGRITE.md §9 — bouton « Usage intensif » (MJ only) : ITG <= 5 → panne systématique,
+// au-dessus → test de panne (1D20 sous l'ITG). Renvoie { item, panne }.
+export async function intensiveUseTest(characterId, itemId) {
+  const res = await api.post(`/char-sheet/${characterId}/inventory/${itemId}/panne-test`)
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
+  return res.data
+}
