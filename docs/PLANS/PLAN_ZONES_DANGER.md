@@ -988,6 +988,9 @@ sauf si Usure & Intégrité est prêt) · réconciliation `PLAN_ENVIRONNEMENT_MI
 | **Z6** | Joueur — avertissement de déclaration + rendu (§7.9) | client annonce : chemin déclaré traverse une zone visible → avertissement **non bloquant** ; zones `cachée` masquées aux joueurs | non | un joueur voit les zones et est prévenu s'il déclare une traversée |
 
 **Noyau v1 = Z0 → Z4.** Z5 / Z6 = la couche UX MJ / joueur, peuvent suivre ou se paralléliser.
+**⚠️ Découpage révisé par l'analyse à charge §8bis : 9 incréments Z0a→Z7, `modificateur` déplacé vers
+`activeMalusRegistry` (pas le tick).** La table ci-dessous est conservée pour l'historique ; suivre
+§8bis.
 
 **Validation** (proportionnée, `AGENTS.md` clôture) : Z0 = `node --check` + tests purs ; Z1–Z4 =
 combat + monde + migration → **scénario réel Saar** + build client à chaque incrément ; Z5–Z6 = build
@@ -995,6 +998,79 @@ client + validation visuelle Saar.
 
 **Ordre vs autres chantiers** : Z2/Z4 réutilisent `circleGrenade.js` (chantier grenades GELÉ, reprend
 là). L'éditeur de volume (§4.7) est un sous-chantier parallèle, non bloquant pour Z0–Z4.
+
+## 8bis. Analyse à charge du plan §8 (2026-09-09)
+
+Faite à la demande de Saar avant de passer au plan détaillé de Z0.
+
+### Ce qui cloche
+
+**1. Z0 confond « le schéma » et « la généralisation de la résolution ».**
+- Le schéma (`normalizeHook` v2) vit dans `shared/`, importé client **et** serveur — se tromper de
+  forme se propage partout. C'est un incrément à part.
+- « Généraliser le registre hazard » = coupler `environmentalHazardService` (par token, par campagne)
+  à `worldEffectService` (par battlemap), et **ajouter un 3ᵉ rôle** à `resolveEnvironmentalHazardTicks`
+  alors que ses propres commentaires disent « deux registres séparés, jamais fusionnés ». → **le tick
+  de zone ne doit pas entrer dans `resolveEnvironmentalHazardTicks`** : un `resolveZoneTick` **frère**
+  dans `startResolutionPhase`, qui **réutilise** `resolveTargetHit` / `statusService`. Garder les 3
+  codes hazard legacy tels quels.
+
+**2. `[VÉRIFIÉ]` La ligne `modificateur` n'est PAS le même chemin que `dégât` / `statut`.**
+Un malus passif « −3 à tous les Tests tant qu'on est dedans » se branche dans
+`server/src/lib/activeMalusRegistry.js` — registre déclaratif, une entrée `compute(ctx)` par source,
+lu à **chaque** résolution de Test. C'est le patron établi (Froid Lot 5, Maladies Lot 7, Drogues Lot
+8). Une zone `modificateur` = **une nouvelle entrée `ACTIVE_MALUS_SOURCES`**, pas le tick. Le plan
+§8 les regroupe à tort en « v1, même chemin ».
+
+**3. La preuve de Z1 est en l'air.** « MJ pose une zone `fire` » — via quoi ? L'UI de pose en session
+est Z5. La vraie preuve utilisateur bout-en-bout = **Z2** (la grenade pose la zone). Z1 se prouve par
+un **insert manuel / seam de debug**. À restater.
+
+**4. `rémanence` minimale nécessaire dès Z1.** Z1 pose des conditions ; sans le mode `rien` (efface à
+la sortie) il **pose sans jamais retirer proprement**. Le `rien` + `conditionnelle` vont en Z1 ; les
+modes `décroissance` / `persistanceFixe` en Z4.
+
+**5. Z4 est sous-dimensionné.** L'escalade (+1/Tour) et la décroissance = **écriture mutable dans
+`token_statuses.data` à chaque tick**, que le tick hazard ne fait pas aujourd'hui (il lit, jette,
+résout). C'est la « mini-FSM d'occupant » de §7.2. Z4 ≈ 2 incréments (l'accumulateur + l'entrée
+`activeMalusRegistry` qui lit la valeur).
+
+**6. `chaînage` (feu → fumée) n'est dans aucun incrément** ni dans la liste v2. → l'ajouter en v2
+différé, explicitement.
+
+**7. Limites v1 à écrire noir sur blanc :**
+- règle de recouvrement `centreDedans` seule ⟹ **le geyser de Saar (§4.9) ne marche pas en v1**
+  (il lui faut `toutRecouvrement`) ;
+- AABB non mur/sol-conscient ⟹ une zone plus haute qu'un étage **déborde** au-dessus/dessous. Le MJ
+  doit dimensionner à un étage.
+
+**8. Z2 / Z5-gaz dé-gèlent le chantier grenades** (`circleGrenade.js`, GELÉ 2026-09-09). C'est *la*
+manière prévue qu'il reprenne — mais mettre à jour `PLAN_GRENADES.md` §6 quand Z2 démarre.
+
+**9. Back-compat du builtin `fire`.** Les `world_effect_instances` existantes (Saar, Kiwi) pointent
+sur l'ancien `fire` (`amountPerIntensity: 1`, pas la formule RAW). Passer `fire` au nouveau schéma =
+changement de comportement — migration / valeur par défaut à définir dans Z0a.
+
+**10. Rythme réel.** Z1→Z5 = à chaque fois code → **session Saar réelle** → retour. ~5 rondes gatées.
+Le plan se lit plus compact qu'il ne se vivra. Pas un défaut — un attendu à poser.
+
+### Découpage révisé
+
+| # | But | Intégration |
+|---|---|---|
+| **Z0a** | Schéma de ligne — `shared/world/worldEffects.js` : `normalizeHook` v2 (`dégât` · `statut` + `déclencheur` + `rémanence {rien\|conditionnelle}`). Back-compat `fire`. | pur `shared/`, tests purs |
+| **Z0b** | `resolveZoneTick` **frère** du tick hazard dans `startResolutionPhase` (réutilise `resolveTargetHit` / `statusService`) + `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans`) | serveur, **pas** de fusion avec `resolveEnvironmentalHazardTicks` |
+| **Z1** | Balayage de présence + cycle de vie : `startResolutionPhase` (balayage → `resolveZoneTick`) ; `endTurn` (`duration_rounds` → `expired`) ; `rémanence: rien` à l'`exit`. **Preuve : insert manuel zone `fire` → brûle + s'éteint en sortant** | serveur |
+| **Z2** | Grenade incendiaire — spawn réel depuis le combat, sur `circleGrenade.js`. **Preuve utilisateur #1.** Dé-gèle le chantier grenades | serveur + migration `ref_equipment` |
+| **Z3** | Ligne `modificateur` — nouvelle entrée `ACTIVE_MALUS_SOURCES` alimentée par une zone/condition | serveur, `activeMalusRegistry.js` |
+| **Z4** | Escalade + décroissance — accumulateur mutable dans `token_statuses.data` au tick + `rémanence: décroissance` (la mini-FSM) | serveur |
+| **Z5** | Gaz simple = Z3 + Z4 assemblés (`modificateur −3` + escalade + décroissance). **Preuve utilisateur #2.** Test CON du gaz = v2 | serveur + migration |
+| **Z6** | UI MJ — form lignes d'effet + pose/retrait + rendu mesh translucide | client |
+| **Z7** | Joueur — avertissement de traversée à la déclaration + rendu des zones cachées | client |
+
+**Noyau v1 = Z0a → Z5.** Verdict : le plan **tient**, mais §8 sous-découpe (7 → 9 incréments) et
+place mal `modificateur`. Pas de « ne pas faire » — le cadrage reste solide, l'ambition v1 reste
+justifiée.
 
 ## 9. Historique
 
