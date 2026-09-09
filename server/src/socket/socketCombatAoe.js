@@ -363,23 +363,23 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
 }
 
 // resolveGrenadeThrow — « le lancer » d'une grenade visée « point » (RAW REGLES_ARMES_SPECIALES.md
-// § « Grenades et mines ») : gardes (humanoïde + mécanisme `grenade_frag`), Test de Coordination sur
-// l'attribut COO, dispersion 1D6 sur échec (`resolveScatter`), snapshot d'arme. NE fait AUCUN effet de
-// bord — pas d'émission, pas d'écriture DB, pas de retrait d'inventaire, pas de catastrophe : l'appelant
-// (`resolveAoeAssaultAction`) enchaîne dans l'ordre historique (DICE_RESULT, catastrophe, écritures)
-// puis la suite propre au mode de détonation (minuterie = entrée d'échelle T+1 ; percussion = §3f).
-// Extraction PLAN_GRENADES.md §6 3f — behavior-preserving, `minuterie` reste le seul chemin (3f/3).
-// Retourne `{ blocked: <emission> }` (garde échouée) OU
-// `{ coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx }`.
+// § « Grenades et mines »), commun à TOUT mécanisme AOE `shape: 'circle'` (Segment 3-bis) : garde
+// humanoïde, Test de Coordination sur l'attribut COO, dispersion 1D6 sur échec (`resolveScatter`),
+// snapshot d'arme. NE fait AUCUN effet de bord — pas d'émission, pas d'écriture DB, pas de retrait
+// d'inventaire, pas de catastrophe : l'appelant (`resolveAoeAssaultAction`) enchaîne dans l'ordre
+// historique (DICE_RESULT, catastrophe, écritures) puis la suite propre au mode de détonation
+// (minuterie = entrée d'échelle T+1 ; percussion = §3f).
+// Extraction PLAN_GRENADES.md §6 3f — behavior-preserving. Retourne `{ blocked: <emission> }` (garde
+// échouée) OU `{ coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx }`.
+//
+// PAS de garde sur le `mechanic` ici (3-bis/0) : deux invariants amont le couvrent déjà —
+//  1. `resolveAoeAssaultAction` a vérifié `findAoeMechanismEntry(mechanic)` existe (message clair sinon) ;
+//  2. `aoe.intendedOrigin` en base ⟹ l'annonce a validé `shape: 'circle'` (seule forme qui produit un
+//     point visé). Un name-check redondant à mettre à jour par type = l'anti-pattern que le registre tue.
 async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics }) {
   if (character.type !== 'pj' && character.type !== 'pnj') {
     return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
       username: character.name, message: 'Lancer de grenade exo/drone — pas encore câblé (PLAN_GRENADES.md §3d).',
-    } } }
-  }
-  if (getAoeMechanic(weapon.ref_aoe_profile) !== 'grenade_frag') {
-    return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-      username: character.name, message: `${weapon.ref_name ?? 'Cette grenade'} — mécanisme de lancer pas encore implémenté.`,
     } } }
   }
 
@@ -574,7 +574,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         site: 'grenade_throw', actorTokenId: action.token_id, targetTokenId: null,
       })
 
-      // Point d'impact réel figé en mémoire — `mech.buildShape` (grenade_frag) lit `aoe.resolvedOrigin`.
+      // Point d'impact réel figé en mémoire — le `buildShape` d'un mécanisme cercle lit `aoe.resolvedOrigin`.
       aoe.resolvedOrigin = resolvedOrigin
       aoe.weaponSnapshot = weaponSnapshot
 

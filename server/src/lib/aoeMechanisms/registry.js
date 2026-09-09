@@ -26,15 +26,16 @@
 import { shotgunSpreadMechanism } from './shotgunSpread.js'
 import { flamethrowerMechanism } from './flamethrower.js'
 import { grenadeFragMechanism } from './grenadeFrag.js'
+import { grenadeEnergyMechanism } from './grenadeEnergy.js'
 
 export const AOE_MECHANISM_REGISTRY = [
   { key: 'shotgun_spread', ...shotgunSpreadMechanism },
   { key: 'flamethrower', ...flamethrowerMechanism },
-  // grenade à fragmentation (PLAN_GRENADES.md §7, Segment 3). Résolution de l'explosion seule ; le
-  // lancer / Test de Coordination / dispersion / différé sont l'orchestrateur (3b-3e), pas encore
-  // câblé — une grenade déclarée aujourd'hui serait rejetée en amont (aucune ligne `aoe_profile`
-  // `grenade_frag` au catalogue avant la migration 3g).
+  // grenade à fragmentation (PLAN_GRENADES.md §7, Segment 3) — dégression par palier + éclats.
   { key: 'grenade_frag', ...grenadeFragMechanism },
+  // grenade à énergie (PLAN_GRENADES.md §6, Segment 3-bis) — champ d'énergie uniforme, rayon fixe,
+  // pas de dégression / Choc / statut. Squelette cercle partagé : circleGrenade.js.
+  { key: 'grenade_energy', ...grenadeEnergyMechanism },
 ]
 
 // mechanic inconnu → undefined, jamais une erreur ici — le tronc décide seul du message d'erreur

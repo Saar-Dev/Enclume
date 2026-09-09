@@ -246,19 +246,32 @@ nouvelle infra de différé.
 
 ### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme = un concern nouveau)
 
-| Mécanisme | Grenades / capsules | Concern nouveau vs `grenade_frag` |
-|---|---|---|
-| `grenade_frag` + flag `concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) |
-| `grenade_sonic` (ou `grenade_frag` + param Choc) | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) |
-| `grenade_incendiary` | grenade incendiaire · capsule napalm | feu court (`exposeToHazard({ durationDice })`, durée fixe) |
-| `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — applique le statut « étourdi » 1D6 Tours, Test de Réaction d'anticipation |
-| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) |
-| `grenade_energy` | grenade à énergie | rayon fixe uniforme |
-| `capsule_explosive` | capsule explosive | rayon fixe 2 m, « pas d'effet de souffle » |
-| `capsule_acide` | capsule acide | DoT acide 1D10/Tour × 2D6 Tours, matières organiques |
+**Fondation (2026-09-09, avant le 1ᵉʳ type)** :
+- **3-bis/0** ✅ — retrait du garde `!== 'grenade_frag'` dans `resolveGrenadeThrow` (redondant : 2
+  invariants amont — `findAoeMechanismEntry` + annonce valide `shape:'circle'`). Le lancer est
+  désormais commun à tout mécanisme cercle. *(commit + validé jeu réel Saar)*
+- **3-bis/1a** ✅ — `aoeMechanisms/circleGrenade.js` (neuf) : squelette partagé des grenades cercle
+  (`buildCircleShape` · `filterCircleHitTargets` LOS + in-zone sans enrichissement · `CIRCLE_GRENADE_FLOW`
+  = 4 capacités gelées · no-ops nommés). **Décision archi (analyse à charge)** : extraire maintenant
+  (N=2, 6 consommateurs nommés, la forme a déjà bougé en 3f) plutôt que copier — pas proactif,
+  `feedback_aggradation_criterion`. *(commit + validé)*
+- **3-bis/1b** ✅ — `grenadeFrag.js` refondu pour consommer `circleGrenade.js` (behavior-preserving,
+  17 tests fixtures inchangés + session frag = filet). *(commit)*
 
-Chacun = une entrée de registre + sa ligne de migration, pipeline 3b–3f inchangé (le différé et le
-ciblage d'un point sont déjà là).
+| Mécanisme | Grenades / capsules | Concern nouveau vs `grenade_frag` | État |
+|---|---|---|---|
+| `grenade_energy` | grenade à énergie | rayon fixe uniforme (Ø 5 → r 2,5 m), 6D10, pas de dégression/Choc/statut | ✅ **3-bis/1** (migration 328, validé jeu réel) |
+| `capsule_explosive` | capsule explosive | rayon fixe 2 m, « pas d'effet de souffle » | à faire |
+| `grenade_incendiary` | grenade incendiaire · capsule napalm | feu court (`exposeToHazard({ durationDice })`, durée fixe) | à faire |
+| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) | à faire |
+| `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — applique le statut « étourdi » 1D6 Tours, Test de Réaction d'anticipation | à faire |
+| `capsule_acide` | capsule acide | DoT acide 1D10/Tour × 2D6 Tours, matières organiques | à faire |
+| `grenade_frag` + flag `concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) | à faire |
+| `grenade_sonic` (ou `grenade_frag` + param Choc) | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) — le seul dur | à faire |
+
+Chacun = une entrée de registre (`grenade<X>.js` sur le squelette `circleGrenade.js`) + sa ligne de
+migration, pipeline inchangé. **Écart RAW noté** (`grenade_energy`, 3g) : un « champ d'énergie » est-il
+arrêté par une armure physique ? RAW silencieux → `armorReductionFactor: 1` par défaut, à confirmer.
 
 ### Segment 4 — grenade à neuro-charge
 

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { AOE_MECHANISM_REGISTRY, findAoeMechanismEntry } from './registry.js'
 
 test('findAoeMechanismEntry — les mécanismes câblés sont enregistrés, chacun avec les 6 hooks', () => {
-  for (const key of ['shotgun_spread', 'flamethrower', 'grenade_frag']) {
+  for (const key of ['shotgun_spread', 'flamethrower', 'grenade_frag', 'grenade_energy']) {
     const entry = findAoeMechanismEntry(key)
     assert.ok(entry, `entrée "${key}" absente du registre`)
     assert.equal(entry.key, key)
@@ -23,18 +23,20 @@ test('findAoeMechanismEntry — mécanisme inconnu → undefined, jamais un thro
   assert.equal(findAoeMechanismEntry(undefined), undefined)
 })
 
-test('AOE_MECHANISM_REGISTRY — 3 entrées, clés uniques (fusil à pompe + lance-flammes + grenade à fragmentation)', () => {
-  assert.equal(AOE_MECHANISM_REGISTRY.length, 3)
+test('AOE_MECHANISM_REGISTRY — 4 entrées, clés uniques (fusil à pompe + lance-flammes + grenade frag + grenade énergie)', () => {
+  assert.equal(AOE_MECHANISM_REGISTRY.length, 4)
   const keys = AOE_MECHANISM_REGISTRY.map(e => e.key)
   assert.equal(new Set(keys).size, keys.length)
 })
 
-test('capacités de flux — grenade_frag s\'écarte des défauts (needsWeaponRange/decrementsAmmo/losSource/rollsPhaseA), les cônes/rayons non', () => {
-  const g = findAoeMechanismEntry('grenade_frag')
-  assert.equal(g.needsWeaponRange, false) // amplitude depuis le mécanisme, pas ref_range
-  assert.equal(g.decrementsAmmo, false)   // consommée au lancer, pas à l'explosion
-  assert.equal(g.losSource, 'origin')     // LOS depuis le point d'impact
-  assert.equal(g.rollsPhaseA, false)      // Test de Coordination fait au LANCER (§3d), pas à l'explosion
+test('capacités de flux — les grenades cercle s\'écartent des défauts (needsWeaponRange/decrementsAmmo/losSource/rollsPhaseA), les cônes/rayons non', () => {
+  for (const key of ['grenade_frag', 'grenade_energy']) {
+    const g = findAoeMechanismEntry(key)
+    assert.equal(g.needsWeaponRange, false, `${key} : amplitude depuis le mécanisme, pas ref_range`)
+    assert.equal(g.decrementsAmmo, false, `${key} : consommée au lancer, pas à l'explosion`)
+    assert.equal(g.losSource, 'origin', `${key} : LOS depuis le point d'impact`)
+    assert.equal(g.rollsPhaseA, false, `${key} : Test de Coordination fait au LANCER (§3d), pas à l'explosion`)
+  }
 
   for (const key of ['shotgun_spread', 'flamethrower']) {
     const m = findAoeMechanismEntry(key)
