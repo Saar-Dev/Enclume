@@ -6293,3 +6293,68 @@ sans consommateur). Colonne 327 conservée dans tous les cas.
 - **Ticket AOE** : `cible_immobile` (+3) en dur pour un tir de zone (`target_token_id` null) ;
   `isAoeAction` truthy pour un tir de zone en cible unique. À nettoyer avec D7 / refacto
   `socketCombatAoe.js`.
+
+## Session (Claude) — 2026-09-09 — Grenades 3-bis (fondation cercle + énergie) + gel du chantier + trouvaille « zones dangereuses »
+
+Suite du chantier grenades après 3f (percussion). Poussé : `7f3e9f7` (3-bis/0 + `circleGrenade.js`
++ `grenadeEnergy.js` + migration 328) + `0a7eac4` (refonte `grenadeFrag.js` sur le squelette).
+
+### 3-bis — ce qui est fait
+
+- **3-bis/0** — retrait du garde `getAoeMechanic(...) !== 'grenade_frag'` dans `resolveGrenadeThrow`.
+  Redondant : `findAoeMechanismEntry` a déjà validé le mécanisme en amont ; `aoe.intendedOrigin` en
+  base ⟹ l'annonce a validé `shape:'circle'`. Le lancer est désormais commun à tout mécanisme cercle.
+- **`aoeMechanisms/circleGrenade.js`** (neuf) — squelette partagé : `buildCircleShape` ·
+  `filterCircleHitTargets` (LOS + in-zone, sans enrichissement) · `CIRCLE_GRENADE_FLOW` (4 capacités
+  gelées) · `noExtraTargets`/`noTargetRowModifier`/`noPostResolve`. **Décision d'archi (analyse à
+  charge)** : extraire à N=2 (6 consommateurs nommés dans le plan, la géométrie a déjà bougé une fois
+  en 3f) plutôt que copier — pas proactif au sens `feedback_aggradation_criterion`. Ne casse pas la
+  philosophie du registre (le tronc dispatche toujours via `findAoeMechanismEntry`).
+- **`grenadeEnergy.js`** — mécanisme `grenade_energy` : dégât UNIFORME (`baseRaw` = jet de 6D10 tel
+  quel), 1 Localisation, armure normale. Migration 328 (`radiusM: 2.5`). Écart RAW acté : « diamètre
+  5 m » → rayon 2,5 m. `[INCONNU]` : champ d'énergie ↔ armure physique — `armorReductionFactor: 1`
+  par défaut (RAW silencieux), à confirmer.
+- **`grenadeFrag.js`** refondu pour consommer `circleGrenade.js` — behavior-preserving, 17 tests
+  fixtures inchangés + session frag comme filet.
+- Client : **zéro code** (éligibilité + aperçu disque automatiques via `AOE_MECHANICS` / `mechanic !==
+  'grenade_frag'`).
+
+**Validé jeu réel Saar** : grenade à énergie (minuterie + percussion) + non-régression frag.
+
+### Décision Saar — chantier grenades GELÉ
+
+Point de pause propre. Reprise (`PLAN_GRENADES.md` §6) : 4 types « à statut » prêts sur le squelette
+(`grenade_stun` → `flashbang` → `concussion` → `sonic`) ; les types « à zone » (incendiaire, gaz,
+capsules) attendent la fondation ci-dessous. Suite de la séquence principale = **Usure & Intégrité**
+(agent parallèle lancé, plan doc bouclé).
+
+### Trouvaille — la mécanique « zones dangereuses » est un échafaudage
+
+Exploration menée sur demande de Saar (« pourquoi ne pas réutiliser la mécanique de zone dangereuse
+pour l'incendiaire, se rapprocher du RAW ? »). Verdict [VÉRIFIÉ lecture code] :
+`world_effect_instances` + `shared/world/worldEffects.js` **fonctionnent** pour : le modèle de données
+volumique, les définitions builtin (`fire`/`gas`/`flooded`/`oil`/`unstable` — `fire` a même un hook
+`turnStart` `damage`), le coût de déplacement à travers une zone, l'occlusion LOS (fumée).
+**Ne fonctionnent PAS** : aucune application de dégâts (le mouvement calcule/persiste les events
+`enter`/`traverse`/`exit` mais n'appelle jamais `resolveTargetHit` ; aucune boucle `turnStart`),
+`duration_rounds` jamais décrémenté, rien ne crée d'instance depuis la résolution de combat.
+
+→ Construire cette couche = **chantier de fondation** (`PLAN_ZONES_DANGER.md` à écrire, ROADMAP §2).
+Débloque : grenade incendiaire, `PLAN_NUAGE` (fumigène + 6 gaz), capsules, **tir de suppression**
+(la « zone persistante inter-tours » est 1 de ses 2 bloqueurs), zones dangereuses MJ (posables mais
+inertes aujourd'hui). Décision Saar : cadrer en parallèle (basse urgence), prêt quand les armes
+spéciales reprendront.
+
+### Cleanup — collision migration 328
+
+`328_characters_clear_size_category.js` (chantier Mode modificateurs, `e95c9d4`) et
+`328_ref_equipment_grenade_energy_aoe_profile.js` (celle-ci, `7f3e9f7`) coexistent sur `dev/Saar`,
+toutes deux poussées + appliquées. Fonctionnellement OK (tables distinctes, idempotentes, knex les
+traite comme 2 migrations par nom complet). **Ne pas renommer** (poussées + appliquées, P54).
+Prochaine migration = 329+, vérifier `knex_migrations` avant. Ticket léger `MIGRATION-328-COLLISION`.
+
+**Testé** : `node --check` ; `node --test` mécanismes AOE 46/0, sweep `shared/**` + tronc + moteur de
+tour 587 (572 pass / 15 skip DB / 0 fail) ; migration vérifiée contre le seed.
+**Non testé** : les 4 types 3-bis « à statut » (pas commencés).
+**Données** : migration 328 (`grenade_energy` `aoe_profile`, idempotente).
+**Retour arrière** : `git revert` de `7f3e9f7` + `0a7eac4` ; `down` migration 328.

@@ -246,7 +246,29 @@ nouvelle infra de différé.
 
 ### Segment 3-bis — autres grenades/capsules à explosion (après Segment 3, un mécanisme = un concern nouveau)
 
-**Fondation (2026-09-09, avant le 1ᵉʳ type)** :
+> **CHANTIER GRENADES GELÉ 2026-09-09 à ce point.** Décision Saar : point de pause propre (socle 3a-3f
+> livré + validé, squelette 3-bis + 1ᵉʳ type livrés). Suite de la séquence établie = Usure & Intégrité
+> (agent parallèle). Reprise des grenades :
+> - **Sans nouvelle dépendance, ~1 incrément chacun sur `circleGrenade.js`** : `grenade_stun` →
+>   `grenade_flashbang` → `grenade_concussion` → `grenade_sonic` (le seul dur : dégression du Choc).
+> - **Bloqués sur la fondation « zones dangereuses persistantes »** : `grenade_incendiary`, gaz/fumigène
+>   (`PLAN_NUAGE.md`), **toutes les capsules** (napalm/gaz/fumigène/explosive/acide — en plus, les
+>   capsules sont des munitions de lance-capsules, livraison hors-périmètre v1, cf. §3).
+>
+> **Fondation « zones dangereuses » — trouvaille 2026-09-09** : `world_effect_instances` +
+> `shared/world/worldEffects.js` sont un **échafaudage**, pas une mécanique. Fonctionne : modèle de
+> données volumique, définitions builtin (`fire`/`gas`/`flooded`/`oil`/`unstable`, `fire` a un hook
+> `turnStart` `damage`), coût de déplacement à travers une zone, occlusion LOS (fumée). **Ne
+> fonctionne PAS** : application de dégâts (ni traverser — le mouvement calcule/persiste les events
+> `enter`/`traverse`/`exit` mais n'appelle aucun `resolveTargetHit` —, ni `turnStart` — aucune boucle),
+> `duration_rounds` jamais décrémenté, rien ne crée d'instance depuis le combat. À construire =
+> `PLAN_ZONES_DANGER.md` (cadrage à faire) : boucle au Tour dans `combatTurnEngine` + pont hook
+> déclaratif → formule réelle + expiration `duration_rounds` + `createWorldEffectInstance` depuis la
+> résolution de combat (+ idéalement dégâts au mouvement-à-travers). Débloque aussi le **tir de
+> suppression** (`PLAN_AOE.md §5`, « zone persistante inter-tours » = 1 de ses 2 bloqueurs) et les
+> zones dangereuses MJ (posables mais inertes aujourd'hui).
+
+**Fondation cercle (2026-09-09, avant le 1ᵉʳ type)** :
 - **3-bis/0** ✅ — retrait du garde `!== 'grenade_frag'` dans `resolveGrenadeThrow` (redondant : 2
   invariants amont — `findAoeMechanismEntry` + annonce valide `shape:'circle'`). Le lancer est
   désormais commun à tout mécanisme cercle. *(commit + validé jeu réel Saar)*
@@ -261,17 +283,25 @@ nouvelle infra de différé.
 | Mécanisme | Grenades / capsules | Concern nouveau vs `grenade_frag` | État |
 |---|---|---|---|
 | `grenade_energy` | grenade à énergie | rayon fixe uniforme (Ø 5 → r 2,5 m), 6D10, pas de dégression/Choc/statut | ✅ **3-bis/1** (migration 328, validé jeu réel) |
-| `capsule_explosive` | capsule explosive | rayon fixe 2 m, « pas d'effet de souffle » | à faire |
-| `grenade_incendiary` | grenade incendiaire · capsule napalm | feu court (`exposeToHazard({ durationDice })`, durée fixe) | à faire |
-| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) | à faire |
-| `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — applique le statut « étourdi » 1D6 Tours, Test de Réaction d'anticipation | à faire |
-| `capsule_acide` | capsule acide | DoT acide 1D10/Tour × 2D6 Tours, matières organiques | à faire |
-| `grenade_frag` + flag `concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) | à faire |
-| `grenade_sonic` (ou `grenade_frag` + param Choc) | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) — le seul dur | à faire |
+| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) | prêt — reprise 1 |
+| `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — statut « étourdi » 1D6 Tours + Test de Réaction d'anticipation | prêt — reprise 2 |
+| `grenade_concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) | prêt — reprise 3 |
+| `grenade_sonic` | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) — le seul dur | prêt — reprise 4 |
+| `grenade_incendiary` | grenade incendiaire | feu de zone 1 Tour | ⛔ bloqué — fondation zones dangereuses |
+| capsules (napalm/gaz/fumigène/explosive/acide) | — | + livraison lance-capsules (hors v1, §3) | ⛔ bloqué — fondation zones + livraison |
+| gaz / fumigène | — | nuage volumétrique | → `PLAN_NUAGE.md` (+ fondation zones) |
 
-Chacun = une entrée de registre (`grenade<X>.js` sur le squelette `circleGrenade.js`) + sa ligne de
-migration, pipeline inchangé. **Écart RAW noté** (`grenade_energy`, 3g) : un « champ d'énergie » est-il
-arrêté par une armure physique ? RAW silencieux → `armorReductionFactor: 1` par défaut, à confirmer.
+Chacun (des 4 « prêts ») = une entrée de registre (`grenade<X>.js` sur le squelette `circleGrenade.js`) +
+une ligne de migration (**≥ 329**, cf. collision 328 ci-dessous), pipeline inchangé.
+**Écart RAW noté** (`grenade_energy`, 3g) : un « champ d'énergie » est-il arrêté par une armure
+physique ? RAW silencieux → `armorReductionFactor: 1` par défaut, à confirmer.
+
+> **Collision migration 328** (2026-09-09) : `328_characters_clear_size_category.js` (chantier Mode
+> modificateurs) et `328_ref_equipment_grenade_energy_aoe_profile.js` (celle-ci) coexistent sur
+> `dev/Saar`, toutes deux poussées + appliquées. Fonctionnellement OK (tables distinctes, idempotentes,
+> knex les traite comme 2 migrations par nom complet). **Ne pas renommer** (poussées + appliquées, P54).
+> Convention P55 violée par le travail parallèle. Prochaine migration = **329+**, vérifier
+> `knex_migrations` avant. Ticket léger `MIGRATION-328-COLLISION`.
 
 ### Segment 4 — grenade à neuro-charge
 

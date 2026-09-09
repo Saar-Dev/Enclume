@@ -11,58 +11,24 @@
 > (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. **État RAW chapitre par chapitre** : `docs/SYSTEME/COUVERTURE_RAW.md`.
 > Les trois se référencent mutuellement, aucun ne duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
 >
-> **Approche actuelle de Saar (2026-08-25, peut évoluer)** : couverture RAW complète (backend) avant
-> esthétique/frontend, tant que des mécaniques entières manquent encore côté serveur — **pas un
-> invariant** (retiré de `docs/FOUNDATION.md` pour cette raison), une priorité de travail assumée.
+> **Approche de travail (peut évoluer)** : couverture RAW complète (backend) avant esthétique/frontend,
+> tant que des mécaniques entières manquent côté serveur. Priorité assumée, pas un invariant.
 >
-> **Ordre établi avec Saar (2026-08-26)** — remplace la correction du 25 ci-dessous (conservée pour
-> l'historique de pourquoi un premier ordre déduit seul avait été retiré) : **AOE → Portes → Exo
-> Étape A/B → Usure/Intégrité + Informatique/pannes exo → Drones (télépilotage etc.) → Armes spéciales
-> + Tir de suppression (débloqués par l'AOE) → Force Polaris (Lot 1 : cœur + pouvoirs à cible unique)
-> → Arts martiaux/Moral (sans contrainte d'ordre entre eux)**. AOE en tête sur préférence explicite de
-> Saar (meilleur rendement : débloque 3 chantiers de contenu en une seule brique). Portes et Exo
-> restent mutuellement indépendants d'AOE — l'ordre entre les trois est un choix de priorité assumé,
-> pas une dépendance technique. **Hors de cette séquence, casables en parallèle sans dépendance** :
-> Milieu par pièce, Silhouette exo UI, i18n Lot 5, Fatigue Lot 4 (tous déjà "prêts" en §1 ci-dessous,
-> omis une première fois de la discussion de séquence — analyse à charge du 2026-08-26). Détail des
-> dépendances réelles vs priorités : `docs/SYSTEME/COUVERTURE_RAW.md` (section "Ordre").
+> **Séquence principale** : AOE → Portes → Exo A/B → **Usure/Intégrité + Informatique/pannes exo** →
+> Drones (télépilotage) → Armes spéciales + Tir de suppression → Force Polaris (cœur + pouvoirs à cible
+> unique) → Arts martiaux / Moral. Détail des dépendances réelles vs priorités : `docs/SYSTEME/COUVERTURE_RAW.md`
+> (section « Ordre »). Casables en parallèle sans dépendance : Milieu par pièce, Silhouette exo UI,
+> i18n Lot 5, Fatigue Lot 4 (§1).
 >
-> **Avancement au 2026-09-08** : **AOE fusil à pompe** clos (PNJ + PJ) ; **Portes** clos ; **Exo
-> Étape A/B** clos. **Armes spéciales — lance-flammes clos** (PJ/PNJ/exo/drone), socle AOE
-> data-driven + registre de mécanismes en place (Segments 0-1.5), **tireur exo (2a) et tireur drone
-> (2b) clos** — l'exclusivité d'une Action de zone est désormais câblée aux 3 plateformes.
-> **Grenade à fragmentation close et validée en jeu réel (2026-09-08)** : lancer (Test de
-> Coordination + dispersion), explosion autonome au Tour+1, marqueur 3D, dégression par palier —
-> incluant le **moteur de différé inter-tours** (`combat_timeline_entries.resolve_on_turn` + moteur
-> de tour extrait) qui corrige aussi le bug RAW « Initiative ≤ 0 → Action reportée ». Reste côté
-> grenades : anim de jet (3d-4), mode PER (3f), autres types (concussion/sonique/… 3-bis). Reste
-> bloqué : **tir de suppression** (chantier Chance + zone persistante). Suite de la séquence
-> principale : Usure/Intégrité + Informatique/pannes exo, puis Drones. Voir §2, lignes AOE et Armes
-> spéciales.
->
-> **Correction (2026-08-25, analyse à charge, historique)** : l'ordre de séquencement proposé plus bas
-> (Usure/Intégrité → AOE → Armes spéciales → ...) avait été retiré une première fois — construit par
-> déduction de dépendances techniques (grep, fichiers qui se référencent), pas par une compréhension
-> réelle du jeu ni de ce qui compte pour Saar. L'ordre ci-dessus, du 26, a été établi différemment :
-> discuté explicitement avec Saar, dépendances réelles vérifiées par lecture RAW directe (AOE↔Force
-> Polaris confirmé, pas déduit d'un nom de sommaire) plutôt que par grep de code.
-> **Refondu le 2026-08-25** (Claude/Saar) — l'ancienne version accumulait un historique daté en tête
-> (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
-> `docs/PLANS/*.md` n'y apparaissaient nulle part** (`PLAN_ADMIN_BACKUP`, `PLAN_COMBAT_MODE_AMBIANT`,
-> `PLAN_DECALS`, `PLAN_ENVIRONNEMENT_MILIEUX`, `PLAN_INTERACTIONS_CONNECTEURS`, `PLAN_RW_EXPORT`,
-> `PLAN_RW_MATERIAUX`, `PLAN_RW_TOKEN`). Historique préservé, mais **pas uniquement dans
-> `docs/JOURNAL8.md`** comme annoncé initialement ici (correction, 2026-08-25 : vérifié après coup —
-> ex. le détail des 5 Lots de la PWA fiche hors-ligne a 0 occurrence dans JOURNAL8.md ; il vit dans
-> le PLAN archivé lui-même, `docs/Old/PLAN_FICHE_HORSLIGNE.md`, comme le veut la Règle 10). La bonne
-> formulation : l'historique vit dans JOURNAL8.md **et/ou** dans le PLAN archivé concerné — jamais
-> perdu, mais pas dans un seul endroit prévisible. Ce document ne garde désormais que l'état courant,
-> un chantier = une ligne ou un bloc, jamais un journal de qui a décidé quoi et quand.
->
-> **Correction le jour même** : `PLAN_COMBAT_MODE_AMBIANT.md`, listé ci-dessus comme absent de ce
-> document, était en fait un plan déjà entièrement implémenté et confirmé en jeu (4 bugs clos entre
-> le 2026-08-04 et le 2026-08-22) — sa présence dans `docs/PLANS/` était elle-même l'anomalie, pas son
-> absence d'ici. Archivé vers `docs/Old/` (Règle 10), commit `d653313`. Ne figure donc plus au §1
-> ci-dessous.
+> **Avancement (2026-09-09)** : AOE / Portes / Exo A/B **clos**. Armes spéciales — fusil à pompe +
+> lance-flammes clos (PJ/PNJ/exo/drone), socle AOE data-driven + registre de mécanismes. **Grenades :
+> frag + lancer/dispersion + explosion différée T+1 + marqueur 3D + mode percussion/minuterie clos et
+> validés** ; squelette 3-bis (`circleGrenade.js`) + grenade à énergie livrés. **Chantier grenades gelé
+> au 2026-09-09** à un point de pause propre (`docs/PLANS/PLAN_GRENADES.md` §6) — reprise : 4 types « à
+> statut » prêts (`grenade_stun`/`flashbang`/`concussion`/`sonic`), puis les types « à zone »
+> (incendiaire, gaz, capsules) qui attendent la fondation ci-dessous. **En cours (agent parallèle)** :
+> Usure & Intégrité (plan doc bouclé, phase code). Bloqué : tir de suppression (chantier Chance +
+> fondation zones dangereuses).
 
 ---
 
@@ -89,8 +55,9 @@
 
 | Chantier | Doc(s) | Ce qui manque |
 |---|---|---|
-| Armes spéciales (fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | **Plan rédigé + analyse critique 2026-09-03** (recherche code + RAW + réf. pro Foundry dnd5e). Prérequis AOE levé — fusil à pompe clos (PNJ + PJ). **Segment 0 — Socle de résolution AOE : cadré, soutenu par Saar, pas commencé** (§1.4/§1.6) : 0a extraction `socketCombatAoe.js` du god-file · 0b `ref_equipment.aoe_profile` JSONB (l'AOE-ness devient une donnée, plus de `ref_name ===` en dur) · 0c `damage_modifier` nullable · 0d tronc + résolution par arme = fonction pure testable + refonte agrégat étape 10 · 0e primitive `resolveTargetLocations`. Non-régression fusil à pompe (PNJ+PJ) = sessions Saar. **Lot 1 — lance-flammes** : décisions A-G tranchées, bloqué par le socle ; après = ligne de seed `aoe_profile` + migration `shock_mechanism='pure'` + `exposeToHazard` param + aperçu cône + `resolveFlamethrowerTargets` (~40 l.). **Lot 2 — grenades : à fragmentation CLOSE et validée jeu réel (2026-09-08)** (`PLAN_GRENADES.md`) — migration 325 (`aoe_profile`) + `intendedOrigin` + moteur de différé inter-tours (`resolve_on_turn`) + lancer/explosion/marqueur 3D. Reste : anim de jet (3d-4), mode PER (3f), autres types (concussion/sonique/incendiaire/capsules — 3-bis, 1 mécanisme = 1 entrée de registre ; neuro-charge/sonique attendent 2 pages RAW de Saar). Mines : hors scope v1. Fouets/chaînes : → Arts martiaux. |
-| **Résolution de zone d'effet (AOE)** | `PLANS/PLAN_AOE.md` (v11, §12 tient l'avancement réel à jour) | **Rafraîchi 2026-09-03 (analyse code, pas déduit).** **CLOS** : **fusil à pompe jouable de bout en bout, tireur PNJ ET PJ** (validé session réelle Saar). PNJ : étapes 1-9, commit `117b18a`. **Tireur PJ : clos 2026-09-03** (§8 étape 10 + JOURNAL8) — deux plans intermédiaires écartés après conception ((1) « rework de séparation des fenêtres » : dépendance inexistante ; (2) « N `armAwaitingDamage` FIFO » : le pipeline différé + le hook client supposent 1 cible, N pending d'un seul appel corrompt l'UI). Design retenu : résolution immédiate, tireur PJ = même boucle que le PNJ + un `COMBAT_ATTACK_PLAYER_RESULT { targets: [...] }` agrégé, liste par cible dans `CombatModifiersWindow` ; ne touche aucun code différé partagé. **Tir de suppression — doublement bloqué**, plus lourd qu'il n'y paraît : (i) toute la résolution repose sur un Test de Chance, absent du schéma (chantier Chance différé, §4) ; (ii) c'est une zone **persistante inter-tours** qui contraint le déplacement — il faut un objet zone vivant dans `combat_state` que `planCombatWorldMovement` consulte (les zones AOE actuelles sont ponctuelles). Attend le chantier Chance a minima. **Grenade à fragmentation CLOSE et validée jeu réel (2026-09-08)** : lancer un point → déviation 1D6 à l'échec → explosion au Tour suivant au rang d'Ini du lanceur (résolue par le moteur de tour, sans clic) + marqueur 3D. Voir `PLAN_GRENADES.md` §6. | Prochain pas AOE : suite grenades (mode PER 3f, autres types 3-bis — neuro-charge/sonique attendent 2 pages RAW de Saar). Fusil à pompe + lance-flammes + grenade frag jouables de bout en bout. Tir de suppression reste bloqué (chantier Chance), pas une tâche à reprendre en l'état |
+| Armes spéciales (fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | **Plan rédigé + analyse critique 2026-09-03** (recherche code + RAW + réf. pro Foundry dnd5e). Prérequis AOE levé — fusil à pompe clos (PNJ + PJ). **Segment 0 — Socle de résolution AOE : cadré, soutenu par Saar, pas commencé** (§1.4/§1.6) : 0a extraction `socketCombatAoe.js` du god-file · 0b `ref_equipment.aoe_profile` JSONB (l'AOE-ness devient une donnée, plus de `ref_name ===` en dur) · 0c `damage_modifier` nullable · 0d tronc + résolution par arme = fonction pure testable + refonte agrégat étape 10 · 0e primitive `resolveTargetLocations`. Non-régression fusil à pompe (PNJ+PJ) = sessions Saar. **Lot 1 — lance-flammes** : décisions A-G tranchées, bloqué par le socle ; après = ligne de seed `aoe_profile` + migration `shock_mechanism='pure'` + `exposeToHazard` param + aperçu cône + `resolveFlamethrowerTargets` (~40 l.). **Lot 2 — grenades : `PLAN_GRENADES.md` (chantier GELÉ 2026-09-09 à un point de pause propre)** — frag + lancer/dispersion + explosion différée T+1 + marqueur 3D + mode percussion/minuterie (§3f) **clos et validés** ; squelette 3-bis `circleGrenade.js` + grenade à énergie livrés. Reprise : 4 types « à statut » prêts (`grenade_stun`/`flashbang`/`concussion`/`sonic`, ~1 incrément chacun), puis les types « à zone » (incendiaire, gaz, capsules) qui attendent la **fondation zones dangereuses** (ligne dédiée ci-dessous). 3d-4 (anim jet) différé. Mines : hors scope v1. Neuro-charge : Segment 4. Fouets/chaînes : → Arts martiaux. |
+| **Résolution de zone d'effet (AOE)** | `PLANS/PLAN_AOE.md` (v11, §12 tient l'avancement réel à jour) | **Rafraîchi 2026-09-03 (analyse code, pas déduit).** **CLOS** : **fusil à pompe jouable de bout en bout, tireur PNJ ET PJ** (validé session réelle Saar). PNJ : étapes 1-9, commit `117b18a`. **Tireur PJ : clos 2026-09-03** (§8 étape 10 + JOURNAL8) — deux plans intermédiaires écartés après conception ((1) « rework de séparation des fenêtres » : dépendance inexistante ; (2) « N `armAwaitingDamage` FIFO » : le pipeline différé + le hook client supposent 1 cible, N pending d'un seul appel corrompt l'UI). Design retenu : résolution immédiate, tireur PJ = même boucle que le PNJ + un `COMBAT_ATTACK_PLAYER_RESULT { targets: [...] }` agrégé, liste par cible dans `CombatModifiersWindow` ; ne touche aucun code différé partagé. **Tir de suppression — doublement bloqué**, plus lourd qu'il n'y paraît : (i) toute la résolution repose sur un Test de Chance, absent du schéma (chantier Chance différé, §4) ; (ii) c'est une zone **persistante inter-tours** qui contraint le déplacement — il faut un objet zone vivant dans `combat_state` que `planCombatWorldMovement` consulte (les zones AOE actuelles sont ponctuelles). Attend le chantier Chance a minima. **Grenade à fragmentation CLOSE et validée jeu réel (2026-09-08)** : lancer un point → déviation 1D6 à l'échec → explosion au Tour suivant au rang d'Ini du lanceur (résolue par le moteur de tour, sans clic) + marqueur 3D. Voir `PLAN_GRENADES.md` §6. | Prochain pas AOE : les 4 grenades « à statut » restantes (3-bis, sur `circleGrenade.js`), quand le chantier grenades reprendra. Tir de suppression reste bloqué (chantier Chance **+ fondation zones dangereuses**). |
+| **Fondation « zones dangereuses persistantes »** | `PLANS/PLAN_ZONES_DANGER.md` (à écrire) | **Trouvaille 2026-09-09** : `world_effect_instances` + `shared/world/worldEffects.js` = échafaudage. Fonctionne : modèle de données volumique, définitions builtin (`fire`/`gas`/`flooded`/`oil`/`unstable`), coût de déplacement à travers, occlusion LOS. **Ne fonctionne PAS** : application de dégâts (ni traverser — events calculés/persistés, aucun `resolveTargetHit` —, ni `turnStart` — aucune boucle), `duration_rounds` jamais décrémenté, rien ne crée d'instance depuis le combat. À construire : boucle au Tour (`combatTurnEngine`) + pont hook déclaratif → formule réelle + expiration + `createWorldEffectInstance` depuis la résolution + (idéal) dégâts au mouvement-à-travers. **Débloque** : grenade incendiaire + gaz/fumigène (`PLAN_NUAGE.md`) + capsules + **tir de suppression** (zone persistante = 1 de ses 2 bloqueurs) + zones dangereuses MJ (posables mais inertes). Cadrage seul d'abord. |
 | Corps à corps avancé / Arts martiaux (techniques offensives/défensives, Saisie/Lutte) | — (RAW transcrite : `REGLES/REGLECACARTMARTIAUX.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Indépendant d'AOE/Usure — peut être cadré en parallèle |
 | Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[VÉRIFIÉ] 2026-08-26** — `docs/REGLES/REGLEPOLARIS.md` existe et a été lu directement (la note du 25 cherchait le mauvais nom de fichier) : le cœur du mécanisme (Maîtriser/Libérer/Contrôler, Choc Polaris, Incidents 1D100) est indépendant de l'AOE et codable seul ; la majorité des pouvoirs ont réellement un paramètre Zone d'effet (confirmé, pas déduit) ; un sous-ensemble à cible unique (Contrôle mental confirmé, Dague psychique probable) ne dépend pas de l'AOE. **Premier lot réaliste sans attendre l'AOE** : cœur du mécanisme + pouvoirs à cible unique. Reste à faire avant cadrage complet : cataloguer les ~40 pouvoirs un par un (zone vs cible unique), pas fait en entier |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
