@@ -2,12 +2,9 @@
 //
 // Mécanisme AOE « grenade_frag » (grenade à fragmentation) — objet stratégie consommé par le registre
 // (registry.js), lui-même dispatché par l'orchestrateur AOE. Segment 3 du chantier grenades
-// (docs/PLANS/PLAN_GRENADES.md §7). Frère de shotgunSpread.js / flamethrower.js — même forme de hooks.
-//
-// PÉRIMÈTRE 3a : ce fichier ne modélise QUE l'explosion — origine (point d'impact) donnée, profil de
-// zone → dégâts par cible avec dégression par palier. Il ne fait NI le lancer, NI le Test de
-// Coordination, NI la dispersion (`resolveScatter`), NI le différé inter-tours. Ces points sont
-// 3c/3d/3e, chacun avec sa propre étape (PLAN_GRENADES.md §5/§6).
+// (docs/PLANS/PLAN_GRENADES.md §7). Grenade `shape: 'circle'` : le squelette commun (géométrie du
+// cercle, filtre LOS + in-zone, capacités de flux, hooks no-op) vit dans circleGrenade.js — ce
+// fichier ne porte QUE ce qui est propre à la fragmentation : la dégression par palier.
 //
 // SÉMANTIQUE : fragmentation SEULE — pas de Choc (`Choc: -` au catalogue), pas de feu, pas de statut.
 // concussion (extension d'étourdissement), sonique (dégression du Choc), rayons fixes = Segment 3-bis,
@@ -15,16 +12,16 @@
 //
 // HOOKS INVARIANTS À L'ORCHESTRATEUR (PLAN_GRENADES.md §7.1) : aucun hook ne lit `ctx.rollResult`,
 // `ctx.weapon.ref_range`, la position de `ctx.shooterToken`, ni `ctx.metrics` autrement qu'en
-// passe-plat vers `isPointInAoeShape`. Le mécanisme reste bon que l'orchestrateur runtime (3e) soit
-// `resolveAoeAssaultAction` bardé de branches OU un nouveau `socketCombatGrenade.js`.
+// passe-plat vers le filtre géométrique.
 
 import { parseDice, rollSignedDie } from '../diceParser.js'
-import { normalizeAoeShape, isPointInAoeShape } from '../../../../shared/world/aoeShapes.js'
+import {
+  buildCircleShape, filterCircleHitTargets, CIRCLE_GRENADE_FLOW, noExtraTargets, noPostResolve,
+} from './circleGrenade.js'
 
 // Table de dégression RAW + son accès : `shared/combatRange.js` (déplacés là au §10.2 — l'aperçu client
 // dessine les anneaux concentriques et lit la MÊME table que ce résolveur, jamais une copie qui dérive ;
-// même raison que `SHOTGUN_SPREAD_BY_BAND`, importé de là aussi par `shotgunSpread.js`). Le RAW,
-// l'hypothèse « diamètre → rayon » et la charge utile par palier sont documentés à la source.
+// même raison que `SHOTGUN_SPREAD_BY_BAND`, importé de là aussi par `shotgunSpread.js`).
 // Re-export : `GRENADE_FRAG_MAX_RADIUS_M` / `resolveGrenadeBand` faisaient partie de l'API publique de
 // ce module (tests, appelants) — surface inchangée.
 import { GRENADE_FRAG_MAX_RADIUS_M, resolveGrenadeBand } from '../../../../shared/combatRange.js'
@@ -32,64 +29,38 @@ export { GRENADE_FRAG_MAX_RADIUS_M, resolveGrenadeBand }
 
 // ─── Ciblage — PURE (frère de filterShotgunHitTargets / filterFlamethrowerHitTargets) ──────────────
 //
-// Plus simple que le fusil à pompe (pas de couloir grossier à re-tester par palier) : le cercle testé
-// ICI est la forme finale. On re-teste quand même `isPointInAoeShape` pour que la fonction soit
-// auto-suffisante et testable sans faire confiance au pré-filtrage de l'appelant (même discipline que
-// la passe 2 du fusil à pompe et le cône du lance-flammes).
-//
-// Le lanceur N'EST PAS exclu : une grenade qui dévie (dispersion, 3d) peut retomber sur lui, RAW —
-// PLAN_AOE.md §5.5, « pas d'exclusion silencieuse du lanceur ». Contrairement au cône du lance-flammes
-// (origine = position du tireur, toujours dedans), ici l'origine est le point d'impact : le lanceur
-// n'est un candidat que si le souffle l'atteint géométriquement.
+// Le filtre géométrique commun (LOS clair + dans le cercle, cercle reconstruit depuis origin+amplitude
+// pour l'auto-suffisance) est `filterCircleHitTargets` (circleGrenade.js). La fragmentation ajoute par
+// cible son palier de dégression (`resolveGrenadeBand` sur la distance au point d'impact ; borne
+// 15 m = `GRENADE_FRAG_MAX_RADIUS_M`, au-delà « rien n'est affecté » — RAW). Le lanceur n'est jamais
+// exclu : une grenade déviée (dispersion, 3d) peut retomber sur lui (RAW, PLAN_AOE.md §5.5).
 export function filterGrenadeFragHitTargets({ visibilityTargets, origin, amplitudeM = GRENADE_FRAG_MAX_RADIUS_M, metrics }) {
-  const circle = normalizeAoeShape({ shape: 'circle', origin, amplitudeM })
-  const hitTargets = []
-  for (const candidate of visibilityTargets) {
-    if (!candidate.hasLineOfSight) continue
-    if (!isPointInAoeShape(candidate.position, circle, metrics)) continue
-    const frag = resolveGrenadeBand(candidate.distanceToOriginM)
-    hitTargets.push({ ...candidate, band: frag.name, frag })
-  }
-  return hitTargets
+  return filterCircleHitTargets({ visibilityTargets, origin, amplitudeM, metrics })
+    .map((candidate) => {
+      const frag = resolveGrenadeBand(candidate.distanceToOriginM)
+      return { ...candidate, band: frag.name, frag }
+    })
 }
 
 // ─── Hooks du registre ────────────────────────────────────────────────────────────────────────────
 
-// Rayon d'effet = `aoe_profile.radiusM` de l'arme (donnée catalogue, autorité unique — comme
-// `angleDeg` pour le cône du lance-flammes ; l'aperçu client lit la même valeur). Repli
-// `GRENADE_FRAG_MAX_RADIUS_M` pour les fixtures / une ligne catalogue sans `radiusM` (jamais en prod
-// une fois la migration passée). Pour `grenade_frag`, `radiusM` doit valoir la borne du dernier
-// palier de dégression (`GRENADE_FRAG_BANDS`) — au-delà, RAW « rien n'est affecté ».
-function aoeRadiusM(ctx) {
-  return ctx.weapon?.ref_aoe_profile?.radiusM ?? GRENADE_FRAG_MAX_RADIUS_M
-}
-
 // Cercle centré sur le POINT D'IMPACT déjà résolu (`ctx.aoe.resolvedOrigin` — posé par l'orchestrateur
-// en 3d, après le Test de Coordination et l'éventuelle dispersion ; en fixtures, fourni directement).
-// `resolveScatter` N'EST PAS appelé ici : il a besoin de la marge du Test, domaine combat, pas
-// géométrie de forme. Strict : pas de repli sur `intendedOrigin` — l'orchestrateur pose toujours
-// `resolvedOrigin` (= intended si le jet réussit).
+// après le Test de Coordination et l'éventuelle dispersion ; en fixtures, fourni directement).
+// `resolveScatter` n'est PAS appelé ici (il a besoin de la marge du Test, domaine combat). Rayon =
+// `aoe_profile.radiusM` de l'arme (catalogue), repli `GRENADE_FRAG_MAX_RADIUS_M` pour les fixtures —
+// pour grenade_frag il DOIT valoir la borne du dernier palier de dégression. `buildCircleShape` :
+// circleGrenade.js.
 function buildShape(ctx) {
-  return normalizeAoeShape({
-    shape: 'circle',
-    origin: ctx.aoe.resolvedOrigin,
-    amplitudeM: aoeRadiusM(ctx),
-  })
+  return buildCircleShape(ctx, GRENADE_FRAG_MAX_RADIUS_M)
 }
 
 function filterTargets(ctx, visibilityTargets) {
   return filterGrenadeFragHitTargets({
     visibilityTargets,
     origin: ctx.aoeShape.origin,
-    amplitudeM: ctx.aoeShape.amplitudeM, // = aoeRadiusM(ctx), figé par buildShape — une seule source
+    amplitudeM: ctx.aoeShape.amplitudeM, // = rayon figé par buildShape — une seule source
     metrics: ctx.metrics,
   })
-}
-
-// Aucune pseudo-cible : le lanceur pris dans le souffle est déjà une cible normale via `filterTargets`
-// (contrairement à l'auto-éclaboussure < 3 m du lance-flammes, contrôle séparé).
-function extraTargets() {
-  return []
 }
 
 // Persistance (§3 PLAN_AOE) : palier + dé de dégression propres à CETTE cible — miroir exact de
@@ -109,27 +80,14 @@ async function computeTargetDamage(ctx, ht, { baseRaw }) {
   return { degautsBruts, locationsCount, armorReductionFactor: 1 }
 }
 
-// Fragmentation pure : aucun effet post-résolution (concussion / feu / statut = Segment 3-bis).
-function postResolve() {
-  return []
-}
-
 export const grenadeFragMechanism = {
-  buildShape, filterTargets, extraTargets, targetRowModifier, computeTargetDamage, postResolve,
-  // ─── Capacités de flux (PLAN_GRENADES.md §5, Segment 3b) ─────────────────────────────────────────
-  // Propriétés non-hook lues par `resolveAoeAssaultAction` avec un défaut = comportement historique.
-  // Un mécanisme ne déclare QUE ce qui diffère du défaut (fusil à pompe / lance-flammes n'en ont
-  // aucune). La grenade s'écarte sur quatre axes :
-  //  - `needsWeaponRange: false` — pas de colonne `ref_range` ; l'amplitude vient du mécanisme
-  //    (`GRENADE_FRAG_MAX_RADIUS_M` dans `buildShape`), pas de `parseWeaponRangeBands`.
-  //  - `decrementsAmmo: false` — une grenade est consommée au LANCER (T1), jamais à l'explosion.
-  //  - `losSource: 'origin'` — la LOS de l'explosion part du POINT D'IMPACT, pas du lanceur : une
-  //    cible masquée pour le lanceur mais à découvert du souffle EST touchée.
-  //  - `rollsPhaseA: false` (Segment 3d) — le seul « jet » de la grenade est le Test de Coordination
-  //    du LANCER (Tour T) ; l'explosion (Tour+1) ne relance rien. `computeTargetDamage` ignore `mr`
-  //    de toute façon. Le tronc laisse `rollResult` indéfini (identité tireur via l'affichage).
-  needsWeaponRange: false,
-  decrementsAmmo: false,
-  losSource: 'origin',
-  rollsPhaseA: false,
+  buildShape,
+  filterTargets,
+  extraTargets: noExtraTargets,
+  targetRowModifier,
+  computeTargetDamage,
+  postResolve: noPostResolve,
+  // Capacités de flux communes aux grenades cercle — voir circleGrenade.js#CIRCLE_GRENADE_FLOW
+  // (amplitude depuis le mécanisme, consommée au lancer, LOS depuis le point d'impact, pas de Phase A).
+  ...CIRCLE_GRENADE_FLOW,
 }
