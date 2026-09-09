@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import api from '../lib/api.js'
-import SizeCategoryField from './SizeCategoryField.jsx'
 
 const toRoman = n => (['I','II','III','IV','V','VI','VII','VIII'][n - 1] ?? '—')
 
@@ -375,7 +374,6 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
         </h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
           <StatField label={t('drone.fieldTaille')}        value={drone.taille}           field="taille"           isGm={canEdit} onSave={handleSave} />
-          <SizeCategoryField characterId={characterId} canEdit={canEdit} />
           <StatField label={t('drone.fieldPoids')}         value={drone.poids}            field="poids"            isGm={canEdit} onSave={handleSave} />
           <StatField label={t('drone.fieldVitesse')}       value={drone.vitesse}          field="vitesse"          isGm={canEdit} onSave={handleSave} />
           <StatField label={t('drone.fieldNt')}            value={drone.nt}               display={toRoman(drone.nt)} field="nt" isGm={canEdit} onSave={handleSave} />

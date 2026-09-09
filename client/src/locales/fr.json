@@ -789,12 +789,6 @@
     "attrChance": "Chance",
     "descHeight": "Taille (m)",
     "descWeight": "Poids (kg)",
-    "sizeField": {
-      "label": "Taille (combat)",
-      "auto": "Auto (selon la fiche)",
-      "autoResolved": "auto → {{value}}",
-      "autoTag": "auto"
-    },
     "descSkin": "Peau",
     "descBuild": "Corpulence",
     "descEyes": "Yeux",

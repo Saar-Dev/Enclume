@@ -19,8 +19,6 @@
  *   GET    /api/char-sheet/:characterId              — fiche complète (toutes tables)
  *   POST   /api/char-sheet/:characterId              — crée une fiche vide
  *   PUT    /api/char-sheet/:characterId/identity     — sauvegarde identité
- *   GET    /api/char-sheet/:characterId/size         — palier de taille { explicit, resolved, derived, … }
- *   PUT    /api/char-sheet/:characterId/size         — pose/retire characters.size_category (MJ)
  *   PUT    /api/char-sheet/:characterId/archetype    — sauvegarde archétype
  *   PUT    /api/char-sheet/:characterId/attributes   — sauvegarde attributs (bulk upsert, GM uniquement)
  *   POST   /api/char-sheet/:characterId/attributes/buy — dépense 5 XP pour +1 modificateur PC (plafond 5)
@@ -66,8 +64,6 @@ import { cloneToVault } from '../../services/vaultService.js'
 import { createEmptySheet } from '../../services/charSheetService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
-import { describeCharacterSize } from '../../lib/characterSizeService.js'
-import { SIZE_CATEGORIES } from '../../../../shared/sizeCategory.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
@@ -237,36 +233,6 @@ router.put('/:characterId/identity', async (req, res, next) => {
       .returning('*')
 
     res.json({ identity: updated })
-  } catch (err) {
-    next(err)
-  }
-})
-
-// ─── GET / PUT /api/char-sheet/:characterId/size ─────────────────────────────
-// Palier de taille de la cible en combat (PLAN_TAILLE.md S5). GET : tout membre autorisé
-// (router.param) — { explicit, resolved, derived, derivedCm, source }. PUT : MJ (ou
-// propriétaire d'un personnage Coffre, espace personnel sans MJ) — écrit
-// characters.size_category, une des 8 valeurs SIZE_CATEGORIES ou null (repasse en dérivation
-// automatique depuis les dimensions de la fiche).
-router.get('/:characterId/size', async (req, res, next) => {
-  try {
-    res.json(await describeCharacterSize(db, req.params.characterId))
-  } catch (err) {
-    next(err)
-  }
-})
-
-router.put('/:characterId/size', async (req, res, next) => {
-  try {
-    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
-    const { size_category } = req.body
-    if (size_category !== null && !SIZE_CATEGORIES.includes(size_category)) {
-      throw new AppError(400, 'size_category invalide')
-    }
-    await db('characters')
-      .where({ id: req.params.characterId })
-      .update({ size_category, updated_at: db.fn.now() })
-    res.json(await describeCharacterSize(db, req.params.characterId))
   } catch (err) {
     next(err)
   }

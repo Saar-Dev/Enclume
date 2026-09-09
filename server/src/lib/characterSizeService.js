@@ -15,18 +15,16 @@ import { resolveSizeCategoryFrom } from '../../../shared/sizeCategory.js'
 // ou son id. opts :
 //   - charIdentity / droneSheet / exoSheet : lignes de fiche déjà en main pour éviter un re-fetch
 //     (patron « re-fetch minimal » du combat) — `null` signifie « pas de fiche », absent → fetch.
-//   - ignoreExplicit : ignorer characters.size_category et forcer la dérivation (pour l'UI de fiche
-//     qui affiche « ce que la dérivation donnerait » à côté de la valeur explicite, PLAN_TAILLE.md R4).
 // Retour : { cm, category, source } — voir resolveSizeCategoryFrom.
 export async function resolveSizeCategory(db, characterOrId, opts = {}) {
-  const { charIdentity, droneSheet, exoSheet, ignoreExplicit = false } = opts
+  const { charIdentity, droneSheet, exoSheet } = opts
   const character = typeof characterOrId === 'string'
     ? await db('characters').where({ id: characterOrId }).first()
     : characterOrId
   if (!character) return { cm: null, category: 'moyenne', source: 'default' }
 
   const type = character.type
-  const sizeCategory = ignoreExplicit ? null : (character.size_category ?? null)
+  const sizeCategory = character.size_category ?? null
 
   let heightM
   let droneTailleCm
@@ -53,31 +51,6 @@ export async function resolveSizeCategory(db, characterOrId, opts = {}) {
   }
 
   return resolveSizeCategoryFrom({ type, sizeCategory, heightM, droneTailleCm, exoCategory })
-}
-
-// Résumé pour l'UI de fiche (route GET /char-sheet/:id/size, PLAN_TAILLE.md S5).
-// { explicit, resolved, derived, derivedCm, source } :
-//   explicit  — characters.size_category posé à la main (ou null)
-//   resolved  — la taille effective (cascade complète : explicit sinon dérivée sinon 'moyenne')
-//   derived   — ce que la dérivation seule donnerait (utile quand explicit est posé : R4)
-//   derivedCm — la dimension résolue de la dérivation (cm), pour un futur usage échelle des tokens
-//   source    — 'explicit' | 'derived' | 'derived-clamped' | 'default'
-export async function describeCharacterSize(db, characterOrId) {
-  const character = typeof characterOrId === 'string'
-    ? await db('characters').where({ id: characterOrId }).first()
-    : characterOrId
-  if (!character) return { explicit: null, resolved: 'moyenne', derived: 'moyenne', derivedCm: null, source: 'default' }
-  const [resolved, derived] = await Promise.all([
-    resolveSizeCategory(db, character),
-    resolveSizeCategory(db, character, { ignoreExplicit: true }),
-  ])
-  return {
-    explicit: character.size_category ?? null,
-    resolved: resolved.category,
-    derived: derived.category,
-    derivedCm: derived.cm,
-    source: resolved.source,
-  }
 }
 
 // Palier de taille retenu pour un jet d'attaque contre une cible.

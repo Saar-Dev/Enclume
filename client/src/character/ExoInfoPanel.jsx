@@ -16,7 +16,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
-import SizeCategoryField from './SizeCategoryField.jsx'
 import { EXO_CATEGORY_ORDER, EXO_GRAPPLE_MALUS_TABLE, EXO_PRONE_RECOVERY_TABLE } from '../../../shared/exoConstants.js'
 
 const NUMBER_FIELDS = ['depth_operational', 'depth_limit', 'depth_crush']
@@ -134,7 +133,6 @@ export default function ExoInfoPanel({ characterId, exo, canEdit, onExoUpdate })
         </div>
         {textRow('tech_level', 'exo.fieldTechLevel', { width: '80px' })}
         {textRow('taille', 'exo.fieldTaille')}
-        <SizeCategoryField characterId={characterId} canEdit={canEdit} />
         {textRow('type_batterie', 'exo.fieldTypeBatterie')}
         {numberRow('depth_operational', 'exo.fieldDepthOperational')}
         {numberRow('depth_limit', 'exo.fieldDepthLimit')}
