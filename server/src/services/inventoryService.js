@@ -11,6 +11,7 @@ import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { canStack } from '../lib/inventoryRules.js'
+import * as integrityService from './integrityService.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
 
@@ -112,6 +113,13 @@ export async function getItemWithRef(itemId) {
       'char_inventory.custom_desc',
       'char_inventory.notes',
       'char_inventory.custom_props',
+      // Usure & Intégrité (PLAN_USURE&INTEGRITE.md L4) — état de l'objet physique. NULL pour un item
+      // sans ITG. `ref_has_integrity` = éligibilité du MODÈLE, `ref_quality` = qualité de fabrication.
+      'char_inventory.integrity_current',
+      'char_inventory.integrity_max',
+      'char_inventory.malfunction_severity',
+      'ref_equipment.has_integrity as ref_has_integrity',
+      'ref_equipment.quality as ref_quality',
       'ref_equipment.name as ref_name',
       'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.family as ref_family',
@@ -227,6 +235,12 @@ export async function getInventory(characterId, campaignId) {
       'char_inventory.custom_desc',
       'char_inventory.notes',
       'char_inventory.custom_props',
+      // Usure & Intégrité (PLAN_USURE&INTEGRITE.md L4) — voir getItemWithRef.
+      'char_inventory.integrity_current',
+      'char_inventory.integrity_max',
+      'char_inventory.malfunction_severity',
+      'ref_equipment.has_integrity as ref_has_integrity',
+      'ref_equipment.quality as ref_quality',
       'ref_equipment.name as ref_name',
       'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.family as ref_family',
@@ -540,6 +554,16 @@ export async function updateItem(characterId, itemId, payload) {
 
   const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo, validated_by_gm, confirmEmptyContainer } = payload
   const updates = {}
+
+  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §6, D3 — MJ et propriétaire) : les 3 champs d'ITG ne
+  // sont JAMAIS écrits en direct sur char_inventory ici — ils passent par integrityService.adjustIntegrity
+  // (autorité d'écriture unique, validation de cohérence, verrou). Chaque champ absent du payload =
+  // inchangé (`'x' in payload`, pas `!== undefined`, pour pouvoir remettre malfunction à null).
+  const integrityChanges = {}
+  if ('integrity_current' in payload)    integrityChanges.current = payload.integrity_current
+  if ('integrity_max' in payload)        integrityChanges.max = payload.integrity_max
+  if ('malfunction_severity' in payload) integrityChanges.malfunction = payload.malfunction_severity
+  const hasIntegrityChange = Object.keys(integrityChanges).length > 0
   // Déséquipement d'un Sac à dos/Ceinture dont le bac contient encore des objets (INV1) — renseigné
   // plus bas, appliqué dans la même transaction que l'update principal.
   let cascadeToCoffre = null
@@ -574,7 +598,7 @@ export async function updateItem(characterId, itemId, payload) {
   }
 
   // P13 — guard avant updated_at
-  if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+  if (Object.keys(updates).length === 0 && !hasIntegrityChange) throw new AppError(400, 'No valid fields to update')
 
   // Validation slot
   if (updates.slot !== undefined && updates.slot !== null) {
@@ -746,18 +770,22 @@ export async function updateItem(characterId, itemId, payload) {
     if (autoAmmo !== null) updates.ammo_remaining = autoAmmo
   }
 
-  // P13 — updated_at APRÈS le guard
-  updates.updated_at = db.fn.now()
-
   // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : `slot` n'est plus une colonne — utilisé ci-dessus pour
   // toute la validation, retiré juste avant l'update, appliqué à part via _writeSlots.
   const slotToWrite  = updates.slot
   const slotProvided = updates.slot !== undefined
   delete updates.slot
 
+  // P13 — updated_at APRÈS le guard. Un payload UNIQUEMENT ITG passe entièrement par
+  // adjustIntegrity (qui pose son propre updated_at) → pas d'écriture directe ni de bump ici.
+  // Un changement de slot bumpe toujours updated_at (comportement historique préservé).
+  const hasDirectUpdate = Object.keys(updates).length > 0 || slotProvided
+  if (hasDirectUpdate) updates.updated_at = db.fn.now()
+
   await db.transaction(async (trx) => {
     if (chargeOnValidate > 0) await _chargeSols(trx, characterId, chargeOnValidate)
-    await trx('char_inventory').where({ id: itemId }).update(updates)
+    if (hasIntegrityChange) await integrityService.adjustIntegrity(itemId, integrityChanges, trx)
+    if (hasDirectUpdate) await trx('char_inventory').where({ id: itemId }).update(updates)
     if (slotProvided) {
       await _writeSlots(trx, itemId, characterId, slotToWrite)
     }

@@ -309,4 +309,64 @@ test('updateItem — quantity ≠ 1 sur un item has_integrity : rejet 400, aucun
   }
 })
 
+// ── L4 Usure — édition d'ITG via PUT (route vers integrityService.adjustIntegrity) ────────────
+// updateItem n'écrit JAMAIS integrity_* en direct : il délègue. Ces tests couvrent le routage +
+// le fait que les autres champs continuent de passer par le chemin normal.
+
+test('updateItem — pose integrity_current + integrity_max sur un item has_integrity', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    const { item: updated } = await updateItem(fx.owner.id, item.id, { integrity_current: 12, integrity_max: 20 })
+    assert.equal(updated.integrity_current, 12)
+    assert.equal(updated.integrity_max, 20)
+
+    // malfunction : simple puis retour à Opérationnel (null)
+    await updateItem(fx.owner.id, item.id, { malfunction_severity: 'simple' })
+    assert.equal((await db('char_inventory').where({ id: item.id }).first()).malfunction_severity, 'simple')
+    await updateItem(fx.owner.id, item.id, { malfunction_severity: null })
+    assert.equal((await db('char_inventory').where({ id: item.id }).first()).malfunction_severity, null)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — ITG incohérente (courante > max) → 400, rien écrit', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    await assert.rejects(
+      () => updateItem(fx.owner.id, item.id, { integrity_current: 30, integrity_max: 20 }),
+      (e) => e instanceof AppError && e.statusCode === 400,
+    )
+    const row = await db('char_inventory').where({ id: item.id }).first()
+    assert.equal(row.integrity_current, null, 'aucune écriture partielle')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — ITG sur un item sans has_integrity → 400', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    await assert.rejects(
+      () => updateItem(fx.owner.id, item.id, { integrity_current: 10, integrity_max: 15 }),
+      (e) => e instanceof AppError && e.statusCode === 400,
+    )
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — payload vide → 400 (garde inchangée)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    await assert.rejects(() => updateItem(fx.owner.id, item.id, {}), (e) => e instanceof AppError && e.statusCode === 400)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
 test.after(async () => { await db.destroy() })
