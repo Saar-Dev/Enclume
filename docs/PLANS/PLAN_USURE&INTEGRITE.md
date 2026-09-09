@@ -6,7 +6,12 @@
 > l'informatique cible `category = 'Ordinateur'` (6 lignes) et non `tech_level >= 2` — le `tech_level`
 > de cette famille vaut uniformément 1 dans le seed. Backfill total : 236 lignes `ref_equipment`.
 > Le wipe des inventaires reste à lancer par Saar (hors chemin critique).
-> **L1 fait le 2026-09-09** (`canStack`, 4 sites, tests verts — détail §3). **Prochain : L2.**
+> **L1 fait le 2026-09-09** (`canStack`, 4 sites, tests verts — détail §3).
+> **Curation L0 (migration 332) faite le 2026-09-09** : les 7 « Traitements, patchs et produits
+> pharmaceutiques » (consommables NT IV+ flaggés à tort par 329) repassent hors ITG. Implants,
+> grenades, armes de jet : gardés.
+> **L2 (module pur `shared/integrityRules.js`) fait le 2026-09-09** : 8 exports, 22 tests, `node --test
+> shared/**` 572/572. `integrityService.js` (couche jet/mutation) = cycle suivant. **Prochain : L2-service.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.
@@ -162,8 +167,21 @@ prennent que `location`/`price`/…).
 
 ## 4. L2 — Primitive ITG partagée (`shared/integrityRules.js`, neuf, pur, testé)
 
-Aucun I/O, aucun jet de dé. Testé par `shared/integrityRules.test.mjs` (patron
-`polarisTestResolution.test.mjs`).
+> **Module pur fait le 2026-09-09.** `shared/integrityRules.js` + `.test.mjs` (22 tests, patron
+> `polarisTestResolution.test.mjs` — méta-test « aucun trou », les 26 entiers 0→25, les cas M4).
+> Exports : `INTEGRITY_TIERS`, `getIntegrityTier`, `getIntegrityModifier` (**`null` pour hors
+> d'usage, comme écrit**), `isIntegrityUsable(current)` (**ajouté** — `current >= 1` ; §7.1.a en a
+> besoin explicitement), `QUALITY_TABLE`, `applyTemporaryLoss`, `applyRepair`, `interpretPanneOutcome`.
+> Zéro import, zéro I/O — importable client (G1). **`integrityService.js` = cycle suivant** (jets +
+> mutations + événements, patron concurrence Blessures — M5).
+>
+> **Précisions M4 (analyse à charge — géométrie des paliers)** : avec des paliers larges de 5,
+> `loss >= 5` franchit **toujours** au moins un palier → la pénalité « perte ≥ 5 » n'est jamais
+> strictement supérieure à « paliers franchis » ; le `max(…)` du MANUEL §3.4 est conservé par
+> fidélité et robustesse mais se réduit de fait à `tiersCrossed`. De même, pour une entrée
+> cohérente (`current <= max`), `newCurrentRaw <= newMax` toujours → le clamp final de `newCurrent`
+> est défensif (matérialise la règle §3.4, testé via une entrée `current > max` interdite par le
+> CHECK L0). Aucun impact code : les deux règles MANUEL sont implémentées telles quelles.
 
 | Fonction | Rôle | Renvoie |
 |---|---|---|
