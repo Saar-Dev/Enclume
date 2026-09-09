@@ -30,6 +30,13 @@ async function createFixture() {
   const meleeRef = await db('ref_equipment').where({ category: 'Arme de contact' }).first()
   const shieldRef = await db('ref_equipment').where({ category: 'Bouclier' }).first()
   const pricedRef = await db('ref_equipment').where('price', '>', 0).first()
+  // L1 Usure : un item `has_integrity` NON équipable (ordinateur / accessoire, location NULL) — le
+  // cas que `canStack` ajoute par rapport à `isEquippableLocation` seul.
+  const integrityRef = await db('ref_equipment')
+    .where({ has_integrity: true }).whereNull('location').where('price', '>', 0).first()
+  // Non équipable ET non suivi : doit continuer à stacker (non-régression).
+  const stackableRef = await db('ref_equipment')
+    .where({ family: 'Munitions' }).whereNull('location').first()
 
   // INV2 (docs/EN_COURS.md) — char_sheet.sols, requis par _chargeSols (owner.id). 100000 : largement
   // au-dessus du prix de pricedRef pour les tests "sols suffisants", ajusté au cas par cas pour les
@@ -51,7 +58,7 @@ async function createFixture() {
     .returning('*')
   await db('char_inventory_slots').insert({ char_inventory_id: shieldInHand.id, character_id: owner.id, slot_code: 'MD' })
 
-  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, meleeInHand, meleeStored, shieldInHand }
+  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, meleeInHand, meleeStored, shieldInHand }
 }
 
 async function cleanup({ campaign, gm }) {
@@ -247,6 +254,56 @@ test('updateItem — validation MJ avec sols insuffisants : rejette, reste en at
     assert.equal(after.sols, fx.pricedRef.price - 1, 'aucun débit')
     const stillPending = await db('char_inventory').where({ id: pending.id }).first('validated_by_gm')
     assert.equal(stillPending.validated_by_gm, false, 'reste en attente — la transaction doit être annulée')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// ── L1 Usure — non-stacking des items has_integrity (PLAN_USURE&INTEGRITE.md §3) ──────────────
+// L'ITG est la propriété d'un objet physique unique : une valeur unique sur une pile de N serait
+// indéfinie. `canStack` (inventoryRules.js) étend la garde « équipable ne stacke pas » au flag
+// `ref_equipment.has_integrity`, y compris pour un item NON équipable (ordinateur, accessoire).
+
+test('addItem — item has_integrity non équipable, quantity 3 : 3 lignes quantity=1, jamais un stack', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.integrityRef, 'fixture : un ref_equipment has_integrity non équipable doit exister (backfill migration 329)')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.equal(res.type, 'multi')
+    assert.equal(res.items.length, 3)
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.integrityRef.id })
+    assert.equal(rows.length, 3, 'trois lignes distinctes')
+    assert.ok(rows.every(r => r.quantity === 1), 'chaque ligne à quantity=1')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — item ni équipable ni suivi (munition), quantity 3 : 1 seule ligne quantity=3 (non-régression)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.stackableRef, 'fixture : une munition doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.stackableRef.id })
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — quantity ≠ 1 sur un item has_integrity : rejet 400, aucune écriture', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const res = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    const line = res.items ? res.items[0] : res.item
+    await assert.rejects(
+      () => updateItem(fx.owner.id, line.id, { quantity: 2 }),
+      (e) => e instanceof AppError && e.statusCode === 400,
+    )
+    const after = await db('char_inventory').where({ id: line.id }).first('quantity')
+    assert.equal(after.quantity, 1, 'quantity inchangée — la garde rejette avant toute écriture')
   } finally {
     await cleanup(fx)
   }

@@ -5,7 +5,8 @@
 > round-trip validé contre `enclumeBD`, batch 22). Écart tranché : le backfill `has_integrity` de
 > l'informatique cible `category = 'Ordinateur'` (6 lignes) et non `tech_level >= 2` — le `tech_level`
 > de cette famille vaut uniformément 1 dans le seed. Backfill total : 236 lignes `ref_equipment`.
-> Le wipe des inventaires reste à lancer par Saar (hors chemin critique). **Prochain : L1.**
+> Le wipe des inventaires reste à lancer par Saar (hors chemin critique).
+> **L1 fait le 2026-09-09** (`canStack`, 4 sites, tests verts — détail §3). **Prochain : L2.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.
@@ -124,6 +125,20 @@ vend du **neuf** (ITG courante = ITG max) ; les autres vendent de l'**occasion**
 ---
 
 ## 3. L1 — Non-stacking des items `has_integrity`
+
+> **L1 fait le 2026-09-09.** `canStack(ref)` ajouté à `inventoryRules.js`. **4 sites** basculés (le
+> plan en listait 3 — 4ᵉ trouvé à l'exploration : `modingService.js` `returnModToInventory`, qui
+> fusionnait un mod swappé dans un stack Coffre). Décision Saar : les accessoires d'armes gardent
+> `has_integrity` et cessent de stacker (pas de migration 332). `isEquippableLocation` n'avait aucun
+> autre appelant → les 3 imports de service passent à `canStack` (point d'entrée unique) ; la
+> fonction reste exportée (dépendance interne de `canStack`). `returnModToInventory` exporté pour
+> test. Bonus : le merge sans `.forUpdate()` de `returnModToInventory` (lost-update latent) disparaît
+> pour les items suivis. Tests : `inventoryRules.test.mjs` (neuf, pur), +3 dans
+> `inventoryService.test.mjs`, `modingService.test.mjs` + `tradeService.test.mjs` (neufs). **27
+> assertions vertes.** Note L2 : `vaultService.cloneInventoryWithSlots` devra remettre
+> `integrity_current = integrity_max` + effacer `malfunction_severity` (comme `cloneExoSheet`).
+> Grenades `has_integrity` (`location='M'`, déjà non-stackables) : question « ITG sur consommable »
+> à trancher avant L5.
 
 `server/src/lib/inventoryRules.js` — ajouter, **sans** modifier `isEquippableLocation` (encore utilisé
 pour la logique de slot) :

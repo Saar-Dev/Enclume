@@ -8,6 +8,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { resolveRefField, localizeRefAliased } from '../lib/refI18n.js'
 import { WEAPON_FAMILY, MOD_CATEGORY, removeItem } from './inventoryService.js'
+import { canStack } from '../lib/inventoryRules.js'
 
 // GET .../moding/state — armes du personnage (avec mods installés) + mods installables.
 export async function getModingState(characterId, trxOrDb = db) {
@@ -45,27 +46,32 @@ export async function getModingState(characterId, trxOrDb = db) {
 }
 
 // Retourne un mod swappé (remplacé par un nouveau du même slot) en inventaire — même logique de
-// stacking que addItem (P57 : aucun de ces accessoires n'est équipable, ref_equipment.location
-// toujours NULL pour cette catégorie, vérifié en base réelle 2026-07-12). Container Coffre :
+// stacking que addItem : fusion sur un stack Coffre existant SEULEMENT si l'accessoire est
+// stackable (canStack). Depuis L1 Usure, ces accessoires portent `has_integrity` (backfill
+// migration 329, décision Saar : les accessoires d'armes ne doivent pas stacker) → chaque
+// exemplaire retourné devient sa propre ligne quantity=1, jamais un incrément. Container Coffre :
 // toujours disponible (isContainerAvailable), pas de dépendance à un Sac déjà équipé.
-async function returnModToInventory(characterId, equipmentId, trx) {
+export async function returnModToInventory(characterId, equipmentId, trx) {
   // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : char_inventory.slot retiré — ces accessoires ne sont
   // jamais équipables (aucune ligne char_inventory_slots possible pour eux), whereNotExists remplace
   // whereNull('slot').
-  const existing = await trx('char_inventory')
-    .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })
-    .whereNotExists(function () {
-      this.select(1).from('char_inventory_slots').whereRaw('char_inventory_id = char_inventory.id')
-    })
-    .first()
-  if (existing) {
-    await trx('char_inventory').where({ id: existing.id })
-      .update({ quantity: existing.quantity + 1, updated_at: trx.fn.now() })
-  } else {
-    await trx('char_inventory').insert({
-      character_id: characterId, equipment_id: equipmentId, container: 'Coffre', quantity: 1,
-    })
+  const ref = await trx('ref_equipment').where({ id: equipmentId }).select('location', 'has_integrity').first()
+  if (canStack(ref)) {
+    const existing = await trx('char_inventory')
+      .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })
+      .whereNotExists(function () {
+        this.select(1).from('char_inventory_slots').whereRaw('char_inventory_id = char_inventory.id')
+      })
+      .first()
+    if (existing) {
+      await trx('char_inventory').where({ id: existing.id })
+        .update({ quantity: existing.quantity + 1, updated_at: trx.fn.now() })
+      return
+    }
   }
+  await trx('char_inventory').insert({
+    character_id: characterId, equipment_id: equipmentId, container: 'Coffre', quantity: 1,
+  })
 }
 
 // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — bonus fixe au Test de tir. L'exclusivité de slot étant

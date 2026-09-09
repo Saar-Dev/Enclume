@@ -10,7 +10,7 @@ import { localizeRefAliased, resolveRefField } from '../lib/refI18n.js'
 import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { isEquippableLocation } from '../lib/inventoryRules.js'
+import { canStack } from '../lib/inventoryRules.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
 
@@ -389,7 +389,7 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   }
 
   const equipRef = equipment_id
-    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat', 'price').first()
+    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat', 'price', 'has_integrity').first()
     : null
 
   // INV2 — un MJ qui ajoute (ou fusionne sur un stack) ne débite jamais : geste privilégié, comme
@@ -399,7 +399,8 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   // (autoValidate faux) n'est jamais débité ici : le débit a lieu à la validation MJ (updateItem).
   const chargeAtAdd = autoValidate && !isGm
   const totalPrice = (equipRef?.price ?? 0) * quantity
-  const equippable = isEquippableLocation(equipRef?.location ?? null)
+  // L1 Usure : un item équipable OU `has_integrity` ne stacke jamais (canStack, inventoryRules.js).
+  const stackable = canStack(equipRef)
 
   const resolvedSlot = slot ?? null
   // Équiper le Sac à dos/la Ceinture (slot D/Ce) est justement l'action qui rend ce container
@@ -464,8 +465,9 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   }
 
   // Stacking : même equipment_id + même container + non équipé (aucune ligne char_inventory_slots).
-  // Jamais pour un item équipable (P57) — chaque exemplaire reste une ligne indépendante.
-  if (equipment_id && resolvedSlot === null && !equippable) {
+  // Jamais pour un item équipable (P57) ni `has_integrity` (L1 Usure) — chaque exemplaire reste une
+  // ligne indépendante (état de munition propre pour les armes, ITG propre pour le matériel suivi).
+  if (equipment_id && resolvedSlot === null && stackable) {
     const existing = await db('char_inventory')
       .where({ character_id: characterId, equipment_id, container })
       .whereNotExists(function () {
@@ -502,11 +504,12 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
     if (autoAmmo !== null) insertData.ammo_remaining = autoAmmo
   }
 
-  // P57 : un item équipable n'a jamais quantity > 1 — chaque exemplaire devient sa
-  // propre ligne (seul le 1er reçoit le slot demandé, les suivants restent non équipés). Lot C
-  // (docs/PLAN_INVENTORY_SLOTS.md) : le slot voulu par ligne n'existe plus en colonne — porté à
-  // part (`intendedSlots`, même ordre que `rows`) puis appliqué via `_writeSlots` après l'insert.
-  if (equippable && quantity > 1) {
+  // P57 / L1 Usure : un item équipable ou `has_integrity` n'a jamais quantity > 1 — chaque
+  // exemplaire devient sa propre ligne (seul le 1er reçoit le slot demandé, les suivants restent
+  // non équipés ; un item `has_integrity` non équipable, ex. ordinateur, n'a pas de slot du tout).
+  // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : le slot voulu par ligne n'existe plus en colonne — porté
+  // à part (`intendedSlots`, même ordre que `rows`) puis appliqué via `_writeSlots` après l'insert.
+  if (!stackable && quantity > 1) {
     const rows = Array.from({ length: quantity }, () => ({ ...insertData, quantity: 1 }))
     const intendedSlots = Array.from({ length: quantity }, (_, i) => i === 0 ? resolvedSlot : null)
     const inserted = await db.transaction(async (trx) => {
@@ -716,12 +719,12 @@ export async function updateItem(characterId, itemId, payload) {
     if (!Number.isInteger(updates.quantity) || updates.quantity < 1) {
       throw new AppError(400, 'quantity doit être un entier positif')
     }
-    // P57 : un item équipable ne stacke jamais — quantity reste toujours 1.
+    // P57 / L1 Usure : un item équipable ou `has_integrity` ne stacke jamais — quantity reste 1.
     const ref = existing.equipment_id
-      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('location').first()
+      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('location', 'has_integrity').first()
       : null
-    if (isEquippableLocation(ref?.location ?? null) && updates.quantity !== 1) {
-      throw new AppError(400, 'Un item équipable ne peut pas avoir une quantité différente de 1')
+    if (!canStack(ref) && updates.quantity !== 1) {
+      throw new AppError(400, 'Un item équipable ou suivi en intégrité ne peut pas avoir une quantité différente de 1')
     }
   }
 
