@@ -22,14 +22,16 @@
 > `node --test shared/**` 572/572 + service 9/9.
 > **L4a (serveur) fait le 2026-09-09** : `getItemWithRef`/`getInventory` portent les 4 champs d'ITG ;
 > `updateItem` route les 3 champs vers `integrityService.adjustIntegrity` (jamais d'écriture directe).
-> **L4-client fait le 2026-09-09** (⚠️ validation visuelle Saar en attente) : `IntegritySegment` dans
-> `InventoryPanel.jsx` — pastille colorée `courante/max` (couleur du palier via custom property
-> `--itg-color`, `.itg-pill` dans `index.css`, miroir de `--wound-*`), badge « Enrayé »/« Atelier »
-> prioritaire, éditeur inline (courante/max + sélecteur Opérationnel/Réparation simple/Atelier) gaté
-> par `canEdit` (D3). `INTEGRITY_TIER_COLORS` ajouté à `shared/integrityRules.js` (patron
+> **L4-client fait le 2026-09-09** (base validée jeu réel « test ok » ; itération visuelle Saar
+> 2026-09-09) : `IntegritySegment` dans `InventoryPanel.jsx` — **pictogramme bouclier**
+> (`IntegrityIcon.jsx`, tracé de `docs/PLANS/integrite.svg`, `fill=currentColor`) coloré par le
+> palier (custom property `--itg-color`, tokens `--itg-*` dans `index.css` miroir de `--wound-*`) ;
+> chiffres `courante/max` au-dessus ; **blanc** si ITG non définie OU objet en panne ; **« ! »** en
+> coin (rouge = atelier, ambre = réparation simple). Clic (si `canEdit`, D3) → éditeur inline
+> (courante/max + sélecteur d'état). `INTEGRITY_TIER_COLORS` dans `shared/integrityRules.js` (patron
 > `woundConstants.SEVERITY_COLORS`). `setItemIntegrity` dans `inventoryMutations.js`. `vite build` OK,
-> lint OK, `node --test shared/**` 573/573. Dette pré-existante notée : `InventoryPanel.jsx` est
-> intégralement en styles inline (antérieur à ce lot). **Prochain : L3.**
+> lint OK, `node --test shared/**` 573/573. Dette notée : `InventoryPanel.jsx` = styles inline
+> (antérieur à ce lot) ; le neuf visuel de L4 est en CSS + SVG inline. **Prochain : L3.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.

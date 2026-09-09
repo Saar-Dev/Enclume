@@ -9,6 +9,7 @@ import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
 import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity } from '../lib/inventoryMutations.js'
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
+import IntegrityIcon from './IntegrityIcon.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
 
@@ -588,41 +589,40 @@ function IntegritySegment({ item, canEdit, onSetIntegrity }) {
     )
   }
 
-  const pillTooltip = !hasItg
-    ? null
-    : modifier == null
-      ? t('inventoryPanel.integrity.unusableTooltip')
-      : modifier === 0
-        ? t('inventoryPanel.integrity.modifierNone', { tier: tierLabel })
-        : t('inventoryPanel.integrity.modifierTooltip', { tier: tierLabel, modifier: modifier > 0 ? `+${modifier}` : `${modifier}` })
+  const fractionSuffix = hasItg ? ` (${item.integrity_current}/${item.integrity_max})` : ''
+  const tooltip = broken
+    ? (item.malfunction_severity === 'critical'
+        ? t('inventoryPanel.integrity.atelierTooltip')
+        : t('inventoryPanel.integrity.panneTooltip')) + fractionSuffix
+    : !hasItg
+      ? t('inventoryPanel.integrity.undefinedTooltip')
+      : modifier == null
+        ? t('inventoryPanel.integrity.unusableTooltip')
+        : modifier === 0
+          ? t('inventoryPanel.integrity.modifierNone', { tier: tierLabel })
+          : t('inventoryPanel.integrity.modifierTooltip', { tier: tierLabel, modifier: modifier > 0 ? `+${modifier}` : `${modifier}` })
+
+  // Couleur du pictogramme : le palier si l'ITG est connue et l'objet fonctionnel, blanc sinon
+  // (non définie OU en panne — Saar 2026-09-09).
+  const iconColor = !broken && hasItg ? INTEGRITY_TIER_COLORS[tierKey] : '#ffffff'
+  const wrapClass = [
+    'itg-icon-wrap', 'has-tooltip',
+    broken ? 'itg-broken' : '',
+    broken && item.malfunction_severity === 'simple' ? 'itg-panne-simple' : '',
+    canEdit ? 'itg-editable' : '',
+  ].filter(Boolean).join(' ')
 
   return (
-    <span style={s.itgSegment}>
-      {broken && (
-        <span
-          className={`badge badge-compact has-tooltip ${item.malfunction_severity === 'critical' ? 'badge-atelier' : 'badge-panne'}`}
-          data-tooltip={item.malfunction_severity === 'critical' ? t('inventoryPanel.integrity.atelierTooltip') : t('inventoryPanel.integrity.panneTooltip')}
-          style={s.itemDamageBadge}
-        >
-          {item.malfunction_severity === 'critical' ? t('inventoryPanel.integrity.atelierBadge') : t('inventoryPanel.integrity.panneBadge')}
-        </span>
-      )}
-      {hasItg && (
-        <span
-          className={`itg-pill has-tooltip${broken ? ' itg-broken' : ''}${canEdit ? ' itg-editable' : ''}`}
-          style={{ '--itg-color': INTEGRITY_TIER_COLORS[tierKey] }}
-          data-tooltip={pillTooltip}
-          onClick={canEdit ? openEdit : undefined}
-          role={canEdit ? 'button' : undefined}
-        >
-          {item.integrity_current}/{item.integrity_max}
-        </span>
-      )}
-      {!hasItg && canEdit && (
-        <button className="btn btn-ghost" onClick={openEdit} style={s.itgBtn}>
-          {t('inventoryPanel.integrity.editTooltip')}
-        </button>
-      )}
+    <span
+      className={wrapClass}
+      style={{ '--itg-color': iconColor }}
+      data-tooltip={tooltip}
+      onClick={canEdit ? openEdit : undefined}
+      role={canEdit ? 'button' : undefined}
+    >
+      <span className="itg-icon-top">{hasItg ? `${item.integrity_current}/${item.integrity_max}` : ''}</span>
+      <IntegrityIcon size={20} className="itg-icon" />
+      {broken && <span className="itg-bang">!</span>}
     </span>
   )
 }
@@ -772,9 +772,8 @@ const s = {
   itemSlot:   { color: '#5b8dee' },
   itemDamageBadge: { flexShrink: 0 },
   itemWeight: { color: '#4a4a60', fontSize: 11, flexShrink: 0 },
-  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §6) — layout uniquement, la couleur du palier vient
-  // de la classe .itg-pill + custom property --itg-color (index.css).
-  itgSegment:  { display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 },
+  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §6) — l'affichage (pictogramme + couleur du palier)
+  // est en CSS (.itg-icon-wrap + custom property --itg-color) ; ici, layout de l'éditeur inline.
   itgEditRow:  { display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, flexWrap: 'wrap' },
   itgInput:    { width: 40, background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4, color: '#c0c0d0', fontSize: 11, padding: '1px 3px', outline: 'none' },
   itgSlash:    { color: '#4a4a60' },
