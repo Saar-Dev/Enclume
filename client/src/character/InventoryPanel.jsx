@@ -7,7 +7,8 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, validateItem } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity } from '../lib/inventoryMutations.js'
+import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
 
@@ -118,6 +119,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
       console.error('Erreur suppression item :', err)
     }
   }, [characterId])
+
+  // PLAN_USURE&INTEGRITE.md §6 — édition d'ITG (MJ ou propriétaire). L'IntegritySegment gère son
+  // propre message d'erreur inline ; on relaie juste le rejet pour qu'il l'attrape.
+  const handleSetIntegrity = useCallback((itemId, changes) => setItemIntegrity(characterId, itemId, changes), [characterId])
 
   // INV2 (docs/EN_COURS.md) — la validation MJ peut désormais être refusée par le serveur (Sols
   // insuffisants chez le joueur, inventoryService.js#_chargeSols) : un console.error silencieux
@@ -317,6 +322,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 onEquip={handleEquip}
                 onDelete={handleDelete}
                 onValidate={handleValidate}
+                onSetIntegrity={handleSetIntegrity}
               />
             ))}
           </div>
@@ -354,6 +360,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               onSendToVault={handleSendToVault}
               onEquip={handleEquip}
               onDelete={handleDelete}
+              onSetIntegrity={handleSetIntegrity}
             />
           ))
         ) : (
@@ -510,7 +517,117 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
+// PLAN_USURE&INTEGRITE.md §6 — pastille d'état d'Intégrité + badge de panne + édition inline
+// (MJ/propriétaire via `canEdit`). Rendu uniquement si le MODÈLE suit l'ITG (`ref_has_integrity`).
+// Interprétation : `shared/integrityRules.js` (pur, importé client). Couleur du palier posée en
+// custom property `--itg-color` (react.md : valeur visuelle dynamique = custom property).
+function IntegritySegment({ item, canEdit, onSetIntegrity }) {
+  const { t } = useTranslation('charSheet')
+  const [editing, setEditing] = useState(false)
+  const [cur, setCur] = useState('')
+  const [max, setMax] = useState('')
+  const [state, setState] = useState('')
+  const [err, setErr] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  if (!item.ref_has_integrity) return null
+
+  const hasItg = item.integrity_current != null && item.integrity_max != null
+  const tier = hasItg ? getIntegrityTier(item.integrity_current) : null
+  const modifier = hasItg ? getIntegrityModifier(item.integrity_current) : null
+  const broken = item.malfunction_severity != null
+  const tierKey = tier?.key ?? null
+  const tierLabel = tierKey ? t(`inventoryPanel.integrity.tier.${tierKey}`) : null
+
+  const openEdit = () => {
+    setCur(item.integrity_current ?? '')
+    setMax(item.integrity_max ?? '')
+    setState(item.malfunction_severity ?? '')
+    setErr(null)
+    setEditing(true)
+  }
+  const save = async () => {
+    setSaving(true)
+    setErr(null)
+    try {
+      await onSetIntegrity(item.id, {
+        integrity_current: cur === '' ? null : Number(cur),
+        integrity_max: max === '' ? null : Number(max),
+        malfunction_severity: state === '' ? null : state,
+      })
+      setEditing(false)
+    } catch (e) {
+      setErr(e.response?.data?.error?.message || t('inventoryPanel.integrity.editTooltip'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <span style={s.itgEditRow}>
+        <input type="number" min="0" max="25" value={cur} onChange={e => setCur(e.target.value)}
+          style={s.itgInput} aria-label={t('inventoryPanel.integrity.editCurrent')} />
+        <span style={s.itgSlash}>/</span>
+        <input type="number" min="1" max="25" value={max} onChange={e => setMax(e.target.value)}
+          style={s.itgInput} aria-label={t('inventoryPanel.integrity.editMax')} />
+        <select value={state} onChange={e => setState(e.target.value)} style={s.itgSelect}
+          aria-label={t('inventoryPanel.integrity.editState')}>
+          <option value="">{t('inventoryPanel.integrity.stateOperational')}</option>
+          <option value="simple">{t('inventoryPanel.integrity.stateSimple')}</option>
+          <option value="critical">{t('inventoryPanel.integrity.stateCritical')}</option>
+        </select>
+        <button className="btn btn-ghost" onClick={save} disabled={saving} style={s.itgBtn}>
+          {t('inventoryPanel.integrity.save')}
+        </button>
+        <button className="btn btn-ghost" onClick={() => setEditing(false)} style={s.itgBtn}>
+          {t('inventoryPanel.integrity.cancel')}
+        </button>
+        {err && <span style={s.equipError}>{err}</span>}
+      </span>
+    )
+  }
+
+  const pillTooltip = !hasItg
+    ? null
+    : modifier == null
+      ? t('inventoryPanel.integrity.unusableTooltip')
+      : modifier === 0
+        ? t('inventoryPanel.integrity.modifierNone', { tier: tierLabel })
+        : t('inventoryPanel.integrity.modifierTooltip', { tier: tierLabel, modifier: modifier > 0 ? `+${modifier}` : `${modifier}` })
+
+  return (
+    <span style={s.itgSegment}>
+      {broken && (
+        <span
+          className={`badge badge-compact has-tooltip ${item.malfunction_severity === 'critical' ? 'badge-atelier' : 'badge-panne'}`}
+          data-tooltip={item.malfunction_severity === 'critical' ? t('inventoryPanel.integrity.atelierTooltip') : t('inventoryPanel.integrity.panneTooltip')}
+          style={s.itemDamageBadge}
+        >
+          {item.malfunction_severity === 'critical' ? t('inventoryPanel.integrity.atelierBadge') : t('inventoryPanel.integrity.panneBadge')}
+        </span>
+      )}
+      {hasItg && (
+        <span
+          className={`itg-pill has-tooltip${broken ? ' itg-broken' : ''}${canEdit ? ' itg-editable' : ''}`}
+          style={{ '--itg-color': INTEGRITY_TIER_COLORS[tierKey] }}
+          data-tooltip={pillTooltip}
+          onClick={canEdit ? openEdit : undefined}
+          role={canEdit ? 'button' : undefined}
+        >
+          {item.integrity_current}/{item.integrity_max}
+        </span>
+      )}
+      {!hasItg && canEdit && (
+        <button className="btn btn-ghost" onClick={openEdit} style={s.itgBtn}>
+          {t('inventoryPanel.integrity.editTooltip')}
+        </button>
+      )}
+    </span>
+  )
+}
+
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onSetIntegrity }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -566,6 +683,7 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
       {item.ref_price != null && (
         <span style={s.itemWeight}>{item.ref_price} S</span>
       )}
+      <IntegritySegment item={item} canEdit={canEdit} onSetIntegrity={onSetIntegrity} />
       {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
           attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
           MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur).
@@ -654,6 +772,14 @@ const s = {
   itemSlot:   { color: '#5b8dee' },
   itemDamageBadge: { flexShrink: 0 },
   itemWeight: { color: '#4a4a60', fontSize: 11, flexShrink: 0 },
+  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §6) — layout uniquement, la couleur du palier vient
+  // de la classe .itg-pill + custom property --itg-color (index.css).
+  itgSegment:  { display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 },
+  itgEditRow:  { display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, flexWrap: 'wrap' },
+  itgInput:    { width: 40, background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4, color: '#c0c0d0', fontSize: 11, padding: '1px 3px', outline: 'none' },
+  itgSlash:    { color: '#4a4a60' },
+  itgSelect:   { background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4, color: '#9090a8', fontSize: 11, padding: '1px 3px' },
+  itgBtn:      { fontSize: 10, padding: '1px 6px', flexShrink: 0 },
   selectSmall: {
     background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4,
     color: '#9090a8', fontSize: 11, padding: '1px 4px', cursor: 'pointer', flexShrink: 0,

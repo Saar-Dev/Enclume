@@ -43,3 +43,14 @@ export async function validateItem(characterId, itemId) {
   useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
   return res.data.item
 }
+
+// PLAN_USURE&INTEGRITE.md §6 — édition d'ITG (MJ ou propriétaire, D3). La route PUT route les 3
+// champs (`integrity_current` / `integrity_max` / `malfunction_severity`) vers
+// `integrityService.adjustIntegrity` (autorité serveur, verrou, validation de cohérence).
+// `changes` : sous-ensemble de ces 3 clés — `malfunction_severity: null` remet « Opérationnel ».
+// Poids porté non affecté (l'ITG ne change pas la masse) → pas de refreshDerivedTotals.
+export async function setItemIntegrity(characterId, itemId, changes) {
+  const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, changes)
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
+  return res.data.item
+}

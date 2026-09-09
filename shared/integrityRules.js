@@ -33,6 +33,18 @@ export const INTEGRITY_TIERS = [
   { key: 'horsdusage', min: null, max: 0,    modifier: null },
 ]
 
+// Couleur d'affichage par palier (patron `shared/woundConstants.js` SEVERITY_COLORS — le fichier
+// de constantes d'un domaine porte aussi ses couleurs). Consommée par `InventoryPanel` (pastille
+// d'état) via une CSS custom property `--itg-color`.
+export const INTEGRITY_TIER_COLORS = {
+  excellent:  '#4CAF77',
+  bon:        '#8BC34A',
+  moyen:      '#FFC107',
+  usage:      '#FF9800',
+  endommage:  '#FF5252',
+  horsdusage: '#8B0000',
+}
+
 function tierIndexOf(current) {
   return INTEGRITY_TIERS.findIndex(
     (t) => (t.min === null || current >= t.min) && (t.max === null || current <= t.max),

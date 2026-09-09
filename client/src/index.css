@@ -119,6 +119,14 @@ background: var(--bg-app);
 --wound-critique: #FF0000;
 --wound-mortelle: #8B0000;
 
+/* === INTÉGRITÉ MATÉRIEL (Polaris LdB : excellent → hors d'usage) — miroir de shared/integrityRules.js INTEGRITY_TIER_COLORS === */
+--itg-excellent:  #4CAF77;
+--itg-bon:        #8BC34A;
+--itg-moyen:      #FFC107;
+--itg-usage:      #FF9800;
+--itg-endommage:  #FF5252;
+--itg-horsdusage: #8B0000;
+
 /* === STATUS ICON ACCENTS (hexagonal HUD badges) === */
 --status-dot:        #d84838;   /* dégâts continus */
 --status-env:        #38a8c8;   /* environnement / bio */
@@ -990,6 +998,36 @@ Convention :
   border-radius: 4px;
 }
 .badge .num { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; }
+
+/* ── .itg-pill — état d'Intégrité d'un objet (InventoryPanel, PLAN_USURE&INTEGRITE.md §6) ──
+   La couleur du palier arrive par la custom property `--itg-color` posée en style inline
+   (react.md : valeur visuelle dynamique = custom property, jamais dans style={}). */
+.itg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 700 10px/1 var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--itg-color, var(--text-session-mid));
+  background: color-mix(in srgb, var(--itg-color, #888888) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--itg-color, #888888) 45%, transparent);
+}
+.itg-pill.itg-broken { opacity: .5; }
+.itg-pill.itg-editable { cursor: pointer; }
+.itg-pill.itg-editable:hover { background: color-mix(in srgb, var(--itg-color, #888888) 24%, transparent); }
+
+/* ── .badge.badge-panne / .badge.badge-atelier — objet en panne (prioritaire sur la pastille) ── */
+.badge.badge-panne {
+  color: var(--color-warning);
+  background: rgba(216,168,56,0.14);
+  border: 1px solid rgba(216,168,56,0.5);
+}
+.badge.badge-atelier {
+  color: var(--color-danger);
+  background: rgba(216,72,56,0.14);
+  border: 1px solid rgba(216,72,56,0.5);
+}
 
 /* ── .ticket-priority-chip — barre de criticité (AdminTicketsPage) ─── */
 .ticket-priority-chip {

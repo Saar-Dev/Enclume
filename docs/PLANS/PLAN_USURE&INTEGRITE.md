@@ -19,7 +19,17 @@
 >   frais dans la transaction — le « jeton `updated_at` optimiste, patron Blessures » de M5 **n'existe
 >   pas dans le code** ; `.forUpdate()` EST le patron du projet (`tradeService`, `worldEffectService`)
 >   et atteint le même but. `trxOpt` optionnel en dernier paramètre (convention `mutationService`).
-> `node --test shared/**` 572/572 + service 9/9. **Prochain : L4.**
+> `node --test shared/**` 572/572 + service 9/9.
+> **L4a (serveur) fait le 2026-09-09** : `getItemWithRef`/`getInventory` portent les 4 champs d'ITG ;
+> `updateItem` route les 3 champs vers `integrityService.adjustIntegrity` (jamais d'écriture directe).
+> **L4-client fait le 2026-09-09** (⚠️ validation visuelle Saar en attente) : `IntegritySegment` dans
+> `InventoryPanel.jsx` — pastille colorée `courante/max` (couleur du palier via custom property
+> `--itg-color`, `.itg-pill` dans `index.css`, miroir de `--wound-*`), badge « Enrayé »/« Atelier »
+> prioritaire, éditeur inline (courante/max + sélecteur Opérationnel/Réparation simple/Atelier) gaté
+> par `canEdit` (D3). `INTEGRITY_TIER_COLORS` ajouté à `shared/integrityRules.js` (patron
+> `woundConstants.SEVERITY_COLORS`). `setItemIntegrity` dans `inventoryMutations.js`. `vite build` OK,
+> lint OK, `node --test shared/**` 573/573. Dette pré-existante notée : `InventoryPanel.jsx` est
+> intégralement en styles inline (antérieur à ce lot). **Prochain : L3.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.

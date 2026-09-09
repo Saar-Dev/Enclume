@@ -116,6 +116,33 @@
     "validateButton": "Validé",
     "validateTooltip": "Valider cet objet",
     "validatedBadge": "Validé",
+    "integrity": {
+      "fractionTooltip": "Intégrité {{current}}/{{max}} — {{tier}}",
+      "modifierTooltip": "État {{tier}} : {{modifier}} aux Tests d'utilisation",
+      "modifierNone": "État {{tier}} : aucun modificateur",
+      "unusableTooltip": "Hors d'usage — inutilisable",
+      "editTooltip": "Modifier l'Intégrité",
+      "panneBadge": "Enrayé",
+      "panneTooltip": "En panne — réparation requise",
+      "atelierBadge": "Atelier",
+      "atelierTooltip": "Panne critique — réparation en atelier",
+      "editCurrent": "Courante",
+      "editMax": "Max",
+      "editState": "État",
+      "stateOperational": "Opérationnel",
+      "stateSimple": "Réparation simple",
+      "stateCritical": "Réparation en atelier",
+      "save": "OK",
+      "cancel": "Annuler",
+      "tier": {
+        "excellent": "Excellent état",
+        "bon": "Bon état",
+        "moyen": "État moyen",
+        "usage": "Usagé",
+        "endommage": "Endommagé",
+        "horsdusage": "Hors d'usage"
+      }
+    },
     "container": {
       "Sac": "Sac",
       "Ceinture": "Ceinture",

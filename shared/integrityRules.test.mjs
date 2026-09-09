@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   INTEGRITY_TIERS,
+  INTEGRITY_TIER_COLORS,
   getIntegrityTier,
   getIntegrityModifier,
   isIntegrityUsable,
@@ -20,6 +21,13 @@ test('INTEGRITY_TIERS — 6 paliers, clés uniques, ordre meilleur → pire', ()
   const keys = INTEGRITY_TIERS.map((t) => t.key)
   assert.deepEqual(keys, ['excellent', 'bon', 'moyen', 'usage', 'endommage', 'horsdusage'])
   assert.equal(new Set(keys).size, 6)
+})
+
+test('INTEGRITY_TIER_COLORS — une couleur hex par palier, mêmes clés que INTEGRITY_TIERS', () => {
+  assert.deepEqual(Object.keys(INTEGRITY_TIER_COLORS).sort(), INTEGRITY_TIERS.map((t) => t.key).sort())
+  for (const [key, color] of Object.entries(INTEGRITY_TIER_COLORS)) {
+    assert.match(color, /^#[0-9A-Fa-f]{6}$/, `${key} : couleur hex`)
+  }
 })
 
 test('INTEGRITY_TIERS — aucun trou ni recouvrement entre paliers consécutifs', () => {
