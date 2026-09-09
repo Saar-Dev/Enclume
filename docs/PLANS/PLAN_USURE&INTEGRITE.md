@@ -1,6 +1,11 @@
 # PLAN_USURE&INTEGRITE.md — Plan technique : usure et intégrité du matériel
 
-> Statut : **rédigé le 2026-09-09**, non commencé. Squelette + décisions D1-D7 validés Saar (§13).
+> Statut : rédigé le 2026-09-09. Squelette + décisions D1-D7 validés Saar (§13).
+> **L0 fait le 2026-09-09** (migrations 329-331 + script `wipe_inventories_for_integrity.js`,
+> round-trip validé contre `enclumeBD`, batch 22). Écart tranché : le backfill `has_integrity` de
+> l'informatique cible `category = 'Ordinateur'` (6 lignes) et non `tech_level >= 2` — le `tech_level`
+> de cette famille vaut uniformément 1 dans le seed. Backfill total : 236 lignes `ref_equipment`.
+> Le wipe des inventaires reste à lancer par Saar (hors chemin critique). **Prochain : L1.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.
