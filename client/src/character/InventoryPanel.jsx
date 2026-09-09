@@ -621,7 +621,7 @@ function IntegritySegment({ item, canEdit, onSetIntegrity }) {
       role={canEdit ? 'button' : undefined}
     >
       <span className="itg-icon-top">{hasItg ? `${item.integrity_current}/${item.integrity_max}` : ''}</span>
-      <IntegrityIcon size={20} className="itg-icon" />
+      <IntegrityIcon size={18} className="itg-icon" />
       {broken && <span className="itg-bang">!</span>}
     </span>
   )
