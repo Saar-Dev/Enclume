@@ -1,6 +1,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { canStack } from '../lib/inventoryRules.js'
+import { computeAcquisitionIntegrity } from './integrityService.js'
 import { removeItem } from './inventoryService.js'
 import { localizeRef } from '../lib/refI18n.js'
 
@@ -166,7 +167,7 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     const equipmentIds = [...new Set(items.map(i => i.equipmentId))]
     const equipmentRows = await trx('ref_equipment')
       .whereIn('id', equipmentIds)
-      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity')
+      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity', 'quality')
 
     const rules = Array.isArray(merchant.rules) ? merchant.rules : JSON.parse(merchant.rules || '[]')
     const modGlobal = merchant.mod_global ?? 0
@@ -201,19 +202,30 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     // P57 / L1 Usure : un item équipable ou `has_integrity` ne stacke jamais — qty devient qty
     // lignes quantity=1 (chaque arme/protection/matériel suivi reste un exemplaire indépendant,
     // équipable et suivi séparément).
+    // L3 Usure (PLAN §5.1) : chaque exemplaire `has_integrity` reçoit son ITG à l'achat —
+    // marché noir (`is_black_market`) → neuf ; marché légal → jet d'occasion PROPRE à l'exemplaire.
     for (const { equipmentId, qty = 1 } of items) {
       const eq = equipmentRows.find(e => e.id === equipmentId)
       const stackable = canStack(eq)
       const rowCount = stackable ? 1 : qty
       const rowQty   = stackable ? qty : 1
-      const rows = Array.from({ length: rowCount }, () => ({
-        character_id: charId,
-        equipment_id: equipmentId,
-        quantity:     rowQty,
-        container:    'Coffre',
-        created_at:   new Date(),
-        updated_at:   new Date(),
-      }))
+      const rows = []
+      for (let i = 0; i < rowCount; i++) {
+        const row = {
+          character_id: charId,
+          equipment_id: equipmentId,
+          quantity:     rowQty,
+          container:    'Coffre',
+          created_at:   new Date(),
+          updated_at:   new Date(),
+        }
+        if (eq.has_integrity) {
+          Object.assign(row, await computeAcquisitionIntegrity({
+            quality: eq.quality, isBlackMarket: merchant.is_black_market,
+          }))
+        }
+        rows.push(row)
+      }
       await trx('char_inventory').insert(rows)
     }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem } from './inventoryService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem, quickEquip } from './inventoryService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/inventoryService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -37,6 +37,9 @@ async function createFixture() {
   // Non équipable ET non suivi : doit continuer à stacker (non-régression).
   const stackableRef = await db('ref_equipment')
     .where({ family: 'Munitions' }).whereNull('location').first()
+  // Arme has_integrity équipable (L3 : quick-equip MJ → 15/15).
+  const weaponIntegrityRef = await db('ref_equipment')
+    .where({ family: 'Armes', has_integrity: true, location: 'M' }).first()
 
   // INV2 (docs/EN_COURS.md) — char_sheet.sols, requis par _chargeSols (owner.id). 100000 : largement
   // au-dessus du prix de pricedRef pour les tests "sols suffisants", ajusté au cas par cas pour les
@@ -58,7 +61,7 @@ async function createFixture() {
     .returning('*')
   await db('char_inventory_slots').insert({ char_inventory_id: shieldInHand.id, character_id: owner.id, slot_code: 'MD' })
 
-  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, meleeInHand, meleeStored, shieldInHand }
+  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, weaponIntegrityRef, meleeInHand, meleeStored, shieldInHand }
 }
 
 async function cleanup({ campaign, gm }) {
@@ -334,7 +337,8 @@ test('updateItem — pose integrity_current + integrity_max sur un item has_inte
 test('updateItem — ITG incohérente (courante > max) → 400, rien écrit', { skip }, async () => {
   const fx = await createFixture()
   try {
-    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    // ajout joueur → ITG NULL au départ (L3 : seul le geste MJ pose 15/15)
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, false, false)
     await assert.rejects(
       () => updateItem(fx.owner.id, item.id, { integrity_current: 30, integrity_max: 20 }),
       (e) => e instanceof AppError && e.statusCode === 400,
@@ -364,6 +368,57 @@ test('updateItem — payload vide → 400 (garde inchangée)', { skip }, async (
   try {
     const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
     await assert.rejects(() => updateItem(fx.owner.id, item.id, {}), (e) => e instanceof AppError && e.statusCode === 400)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// ── L3 Usure — ITG à l'acquisition (PLAN §5.2) ───────────────────────────────
+test('addItem — geste MJ (isGm) sur un item has_integrity : ITG 15/15 par défaut', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    assert.equal(item.integrity_current, 15)
+    assert.equal(item.integrity_max, 15)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — ajout joueur (isGm=false) sur un item has_integrity : ITG NULL (le MJ la fixe)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 1 }, false, false)
+    assert.equal(item.integrity_current, null)
+    assert.equal(item.integrity_max, null)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — MJ, item has_integrity ×2 : chaque exemplaire à 15/15', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const res = await addItem(fx.owner.id, { equipment_id: fx.integrityRef.id, container: 'Coffre', quantity: 2 }, true, true)
+    assert.equal(res.type, 'multi')
+    for (const it of res.items) {
+      assert.equal(it.integrity_current, 15)
+      assert.equal(it.integrity_max, 15)
+    }
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('quickEquip — arme has_integrity équipée par le MJ : ITG 15/15', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.weaponIntegrityRef, 'fixture : une arme has_integrity équipable doit exister')
+    // la fixture équipe déjà meleeInHand en MG et shieldInHand en MD — on libère MG.
+    await db('char_inventory_slots').where({ char_inventory_id: fx.meleeInHand.id }).del()
+    const item = await quickEquip(fx.owner.id, fx.weaponIntegrityRef.id, 'MG')
+    assert.equal(item.integrity_current, 15)
+    assert.equal(item.integrity_max, 15)
   } finally {
     await cleanup(fx)
   }

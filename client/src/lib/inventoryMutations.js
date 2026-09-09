@@ -54,3 +54,11 @@ export async function setItemIntegrity(characterId, itemId, changes) {
   useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
   return res.data.item
 }
+
+// PLAN_USURE&INTEGRITE.md §5.3 — « Lancer ITG occasion » (MJ only côté serveur) : réétablit l'ITG
+// comme un achat d'occasion (ITG max de la qualité, courante = jet de la formule d'occasion).
+export async function rollItemOccasionIntegrity(characterId, itemId) {
+  const res = await api.post(`/char-sheet/${characterId}/inventory/${itemId}/roll-integrity`)
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
+  return res.data.item
+}

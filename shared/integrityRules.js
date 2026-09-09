@@ -91,6 +91,14 @@ export const QUALITY_TABLE = {
   excellente:    { itgMax: 25, occasionFormula: '3D6+5' },
 }
 
+// Qualité par défaut d'un objet `has_integrity` sans qualité renseignée (backfill 329 : toute
+// ligne suivie démarre `bonne_qualite`). Sert de repli à toute lecture de `QUALITY_TABLE`.
+export const DEFAULT_QUALITY = 'bonne_qualite'
+
+// ITG par défaut d'un objet trouvé sur le terrain / donné par le MJ (MANUEL §3.2 : courante = max
+// = 15, ajustable). L'achat chez un Marchand suit une autre voie (formule d'occasion, PLAN §5.1).
+export const DEFAULT_ACQUISITION_INTEGRITY = 15
+
 // ── Pertes ───────────────────────────────────────────────────────────────────────────────────
 // applyTemporaryLoss(current, max, loss) — applique une perte temporaire d'ITG courante et calcule
 // la perte DÉFINITIVE d'ITG max qu'elle déclenche (MANUEL §3.4).

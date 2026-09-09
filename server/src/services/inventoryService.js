@@ -11,6 +11,7 @@ import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { canStack } from '../lib/inventoryRules.js'
+import { DEFAULT_ACQUISITION_INTEGRITY } from '../../../shared/integrityRules.js'
 import * as integrityService from './integrityService.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
@@ -367,6 +368,12 @@ export async function quickEquip(characterId, equipment_id, slot) {
   const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', quantity: 1, validated_by_gm: true }
   const autoAmmo = await resolveAmmoInit(equipment_id, slot)
   if (autoAmmo !== null) quickInsertData.ammo_remaining = autoAmmo
+  // L3 Usure (PLAN §5.2) : geste MJ → ITG à 15/15 par défaut si le modèle est suivi.
+  const quickRef = await db('ref_equipment').where({ id: equipment_id }).select('has_integrity').first()
+  if (quickRef?.has_integrity) {
+    quickInsertData.integrity_current = DEFAULT_ACQUISITION_INTEGRITY
+    quickInsertData.integrity_max = DEFAULT_ACQUISITION_INTEGRITY
+  }
 
   const inserted = await db.transaction(async (trx) => {
     const [row] = await trx('char_inventory').insert(quickInsertData).returning('*')
@@ -507,6 +514,13 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
     container,
     quantity,
     validated_by_gm: autoValidate,
+  }
+  // L3 Usure (PLAN §5.2) : un item `has_integrity` donné par le MJ (quick-equip / POST inventory
+  // GM) démarre à 15/15 (MANUEL §3.2, ajustable via L4). Un ajout joueur ou Coffre-native laisse
+  // l'ITG NULL — le MJ la fixe ensuite (ou « Lancer ITG occasion »).
+  if (equipRef?.has_integrity && isGm) {
+    insertData.integrity_current = DEFAULT_ACQUISITION_INTEGRITY
+    insertData.integrity_max = DEFAULT_ACQUISITION_INTEGRITY
   }
   if (custom_name !== undefined) insertData.custom_name = custom_name
   if (custom_desc !== undefined) insertData.custom_desc = custom_desc

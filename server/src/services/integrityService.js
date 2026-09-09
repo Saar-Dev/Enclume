@@ -24,20 +24,35 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { parseDice } from '../lib/diceParser.js'
-import { applyTemporaryLoss, interpretPanneOutcome } from '../../../shared/integrityRules.js'
+import { applyTemporaryLoss, interpretPanneOutcome, QUALITY_TABLE, DEFAULT_QUALITY } from '../../../shared/integrityRules.js'
 
 const SEVERITY_VALUES = ['simple', 'critical']
+
+// computeAcquisitionIntegrity({ quality, isBlackMarket }) — ITG d'un objet `has_integrity` acheté
+// chez un Marchand (PLAN §5.1). Marché noir → NEUF (courante = ITG max de la qualité). Marché
+// légal → OCCASION (jet de la formule d'occasion de la qualité, plafonné au max). `quality` NULL
+// → `bonne_qualite` (MANUEL §3.1). Renvoie `{ integrity_current, integrity_max }`. Pas d'I/O DB
+// (seulement `parseDice`) — appelable HORS transaction, une fois par exemplaire physique.
+export async function computeAcquisitionIntegrity({ quality, isBlackMarket } = {}) {
+  const q = QUALITY_TABLE[quality] ?? QUALITY_TABLE[DEFAULT_QUALITY]
+  const integrity_max = q.itgMax
+  const integrity_current = isBlackMarket
+    ? integrity_max
+    : Math.min(integrity_max, (await parseDice(q.occasionFormula)).total)
+  return { integrity_current, integrity_max }
+}
 
 // Verrouille la ligne d'inventaire (`.forUpdate()` — uniquement `char_inventory`, jamais le
 // catalogue partagé `ref_equipment`) et lui adjoint `has_integrity` lu à part sur `ref_equipment`
 // (le flag vit sur le MODÈLE, pas l'instance — même lecture séparée que `inventoryService`).
-async function lockInventoryRow(trx, invId) {
-  const row = await trx('char_inventory').where({ id: invId }).forUpdate().first()
+async function lockInventoryRow(trx, invId, characterId) {
+  const where = characterId ? { id: invId, character_id: characterId } : { id: invId }
+  const row = await trx('char_inventory').where(where).forUpdate().first()
   if (!row) return null
   const ref = row.equipment_id
-    ? await trx('ref_equipment').where({ id: row.equipment_id }).first('has_integrity')
+    ? await trx('ref_equipment').where({ id: row.equipment_id }).first('has_integrity', 'quality')
     : null
-  return { ...row, has_integrity: Boolean(ref?.has_integrity) }
+  return { ...row, has_integrity: Boolean(ref?.has_integrity), quality: ref?.quality ?? null }
 }
 
 function snapshot(row) {
@@ -175,6 +190,28 @@ export async function adjustIntegrity(invId, changes = {}, trxOpt) {
     await trx('char_inventory').where({ id: invId }).update(updates)
     const fresh = await trx('char_inventory').where({ id: invId }).first()
     return { before, after: snapshot(fresh) }
+  }
+  return trxOpt ? run(trxOpt) : db.transaction(run)
+}
+
+// rollOccasionIntegrity(invId, trxOpt) — bouton « Lancer ITG occasion » (MJ, PLAN §5.3). Réétablit
+// l'ITG de l'objet comme un achat d'OCCASION : ITG max = celle de sa qualité, courante = jet de la
+// formule d'occasion (plafonné). Écrase les valeurs en place. Émet `INVENTORY_UPDATED` (la route).
+export async function rollOccasionIntegrity(characterId, invId, trxOpt) {
+  const run = async (trx) => {
+    const row = await lockInventoryRow(trx, invId, characterId)
+    if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
+    if (!row.has_integrity) {
+      throw new AppError(400, 'Cet objet ne suit pas l\'Intégrité (le flag se règle sur le catalogue)')
+    }
+    const before = snapshot(row)
+    const { integrity_current, integrity_max } = await computeAcquisitionIntegrity({
+      quality: row.quality, isBlackMarket: false,
+    })
+    await trx('char_inventory').where({ id: invId }).update({
+      integrity_current, integrity_max, updated_at: trx.fn.now(),
+    })
+    return { before, after: { current: integrity_current, max: integrity_max, malfunction_severity: row.malfunction_severity } }
   }
   return trxOpt ? run(trxOpt) : db.transaction(run)
 }

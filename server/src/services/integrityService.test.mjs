@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { runPanneTest, applyPanneSystematic, adjustIntegrity } from './integrityService.js'
+import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity } from './integrityService.js'
+import { QUALITY_TABLE } from '../../../shared/integrityRules.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/integrityService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -179,6 +180,56 @@ test('concurrence — deux applyPanneSystematic simultanés : perte cumulée, pa
     ])
     const row = await readItem(fx.item.id)
     assert.equal(row.integrity_current, 8, 'deux fois −1, jamais une seule (le verrou a sérialisé)')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// ── L3 — ITG à l'acquisition ────────────────────────────────────────────────
+test('computeAcquisitionIntegrity — marché noir : neuf (courante = max de la qualité)', async () => {
+  const r = await computeAcquisitionIntegrity({ quality: 'standard', isBlackMarket: true })
+  assert.deepEqual(r, { integrity_current: 15, integrity_max: 15 })
+  const r2 = await computeAcquisitionIntegrity({ quality: 'excellente', isBlackMarket: true })
+  assert.deepEqual(r2, { integrity_current: 25, integrity_max: 25 })
+})
+
+test('computeAcquisitionIntegrity — marché légal : occasion (jet plafonné au max)', async () => {
+  for (const [key, q] of Object.entries(QUALITY_TABLE)) {
+    for (let i = 0; i < 20; i++) {
+      const r = await computeAcquisitionIntegrity({ quality: key, isBlackMarket: false })
+      assert.equal(r.integrity_max, q.itgMax, key)
+      assert.ok(r.integrity_current >= 1 && r.integrity_current <= q.itgMax, `${key} courante ${r.integrity_current}`)
+    }
+  }
+})
+
+test('computeAcquisitionIntegrity — qualité NULL → bonne_qualite (max 20)', async () => {
+  const r = await computeAcquisitionIntegrity({ quality: null, isBlackMarket: true })
+  assert.deepEqual(r, { integrity_current: 20, integrity_max: 20 })
+})
+
+test('rollOccasionIntegrity — pose max de la qualité + courante d\'occasion', { skip }, async () => {
+  const fx = await createFixture({ current: null, max: null, hasIntegrity: true })
+  try {
+    // pas d'ITG au départ (createFixture avec current/max null n'insère pas les colonnes)
+    const r = await rollOccasionIntegrity(fx.owner.id, fx.item.id)
+    const q = QUALITY_TABLE[fx.ref.quality] ?? QUALITY_TABLE.bonne_qualite
+    assert.equal(r.after.max, q.itgMax)
+    assert.ok(r.after.current >= 1 && r.after.current <= q.itgMax)
+    const row = await readItem(fx.item.id)
+    assert.equal(row.integrity_max, q.itgMax)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('rollOccasionIntegrity — mauvais characterId → 404', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await assert.rejects(
+      () => rollOccasionIntegrity('00000000-0000-0000-0000-000000000000', fx.item.id),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
   } finally {
     await cleanup(fx)
   }

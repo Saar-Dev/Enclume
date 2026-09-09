@@ -7,7 +7,7 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity } from '../lib/inventoryMutations.js'
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
@@ -124,6 +124,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   // PLAN_USURE&INTEGRITE.md §6 — édition d'ITG (MJ ou propriétaire). L'IntegritySegment gère son
   // propre message d'erreur inline ; on relaie juste le rejet pour qu'il l'attrape.
   const handleSetIntegrity = useCallback((itemId, changes) => setItemIntegrity(characterId, itemId, changes), [characterId])
+  const handleRollOccasion = useCallback((itemId) => rollItemOccasionIntegrity(characterId, itemId), [characterId])
 
   // INV2 (docs/EN_COURS.md) — la validation MJ peut désormais être refusée par le serveur (Sols
   // insuffisants chez le joueur, inventoryService.js#_chargeSols) : un console.error silencieux
@@ -324,6 +325,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 onDelete={handleDelete}
                 onValidate={handleValidate}
                 onSetIntegrity={handleSetIntegrity}
+                onRollOccasion={handleRollOccasion}
               />
             ))}
           </div>
@@ -354,6 +356,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               key={item.id}
               item={item}
               canEdit={canEdit}
+              isGm={isGm}
               hasCampaign={hasCampaign}
               inWizard={inWizard}
               availableContainers={availableContainers}
@@ -362,6 +365,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               onEquip={handleEquip}
               onDelete={handleDelete}
               onSetIntegrity={handleSetIntegrity}
+              onRollOccasion={handleRollOccasion}
             />
           ))
         ) : (
@@ -522,7 +526,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
 // (MJ/propriétaire via `canEdit`). Rendu uniquement si le MODÈLE suit l'ITG (`ref_has_integrity`).
 // Interprétation : `shared/integrityRules.js` (pur, importé client). Couleur du palier posée en
 // custom property `--itg-color` (react.md : valeur visuelle dynamique = custom property).
-function IntegritySegment({ item, canEdit, onSetIntegrity }) {
+function IntegritySegment({ item, canEdit, isGm = false, onSetIntegrity, onRollOccasion }) {
   const { t } = useTranslation('charSheet')
   const [editing, setEditing] = useState(false)
   const [cur, setCur] = useState('')
@@ -578,6 +582,22 @@ function IntegritySegment({ item, canEdit, onSetIntegrity }) {
           <option value="simple">{t('inventoryPanel.integrity.stateSimple')}</option>
           <option value="critical">{t('inventoryPanel.integrity.stateCritical')}</option>
         </select>
+        {isGm && onRollOccasion && (
+          <button
+            className="btn btn-ghost has-tooltip"
+            data-tooltip={t('inventoryPanel.integrity.rollOccasionTooltip')}
+            onClick={async () => {
+              setSaving(true); setErr(null)
+              try { await onRollOccasion(item.id); setEditing(false) }
+              catch (e) { setErr(e.response?.data?.error?.message || t('inventoryPanel.integrity.rollOccasion')) }
+              finally { setSaving(false) }
+            }}
+            disabled={saving}
+            style={s.itgBtn}
+          >
+            {t('inventoryPanel.integrity.rollOccasion')}
+          </button>
+        )}
         <button className="btn btn-ghost" onClick={save} disabled={saving} style={s.itgBtn}>
           {t('inventoryPanel.integrity.save')}
         </button>
@@ -627,7 +647,7 @@ function IntegritySegment({ item, canEdit, onSetIntegrity }) {
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onSetIntegrity }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onSetIntegrity, onRollOccasion }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -683,7 +703,7 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
       {item.ref_price != null && (
         <span style={s.itemWeight}>{item.ref_price} S</span>
       )}
-      <IntegritySegment item={item} canEdit={canEdit} onSetIntegrity={onSetIntegrity} />
+      <IntegritySegment item={item} canEdit={canEdit} isGm={isGm} onSetIntegrity={onSetIntegrity} onRollOccasion={onRollOccasion} />
       {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
           attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
           MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur).

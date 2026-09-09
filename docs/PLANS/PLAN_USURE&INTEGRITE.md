@@ -246,6 +246,20 @@ Le **jet** de test de panne reste côté serveur (`integrityService.js`) via `re
 
 ## 5. L3 — ITG à l'acquisition
 
+> **L3 fait le 2026-09-09.**
+> - **§5.1 achat Marchand** : `integrityService.computeAcquisitionIntegrity({ quality, isBlackMarket })`
+>   (pur, `parseDice` seul) — marché noir → neuf (courante = max de la qualité), marché légal → jet
+>   d'occasion PROPRE à chaque exemplaire, plafonné. Appelé par `tradeService.buyFromMerchant` par
+>   ligne insérée (`eq` SELECT + `quality`, `merchant.is_black_market` déjà chargé).
+> - **§5.2 don MJ** : `addItem` (`isGm` vrai) et `quickEquip` → `DEFAULT_ACQUISITION_INTEGRITY` (15/15,
+>   `shared/integrityRules.js`). Ajout **joueur** / Coffre-native → ITG NULL (le MJ la fixe via L4).
+> - **§5.3 « Lancer ITG occasion »** : `integrityService.rollOccasionIntegrity(characterId, invId)` +
+>   route `POST …/inventory/:itemId/roll-integrity` (GM, émet `INVENTORY_UPDATED`) + bouton
+>   « Occasion » dans l'éditeur d'ITG (`IntegritySegment`, visible si `isGm`), mutation
+>   `rollItemOccasionIntegrity`.
+> Tests : +5 `integrityService.test.mjs`, +3 `tradeService.test.mjs`, +4 `inventoryService.test.mjs`.
+> `node --test shared/**` 573/573, `vite build` OK. **Prochain : L7.**
+
 ### 5.1 Achat chez un Marchand (`tradeService.js`)
 Point d'accroche (vérifié 2026-09-09) : `tradeService.js` construit `rows` puis `await
 trx('char_inventory').insert(rows)` (~l.200-216), en transaction, `eq` (ligne catalogue) déjà chargé.

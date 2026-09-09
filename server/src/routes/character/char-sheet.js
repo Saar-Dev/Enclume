@@ -74,6 +74,7 @@ import {
 import { computeOrdinateurStats } from '../../../../shared/computerStats.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
+import * as integrityService from '../../services/integrityService.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES, isTestBlockingWound,
@@ -1186,6 +1187,21 @@ router.post('/:characterId/inventory/:itemId/reload', async (req, res, next) => 
     }
     emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: result.weapon })
     res.json({ item: result.weapon })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/roll-integrity ───────
+// PLAN_USURE&INTEGRITE.md §5.3 — « Lancer ITG occasion » (MJ) : réétablit l'ITG de l'objet comme
+// un achat d'occasion (ITG max de la qualité, courante = jet de la formule d'occasion).
+router.post('/:characterId/inventory/:itemId/roll-integrity', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    const { characterId, itemId } = req.params
+    const result = await integrityService.rollOccasionIntegrity(characterId, itemId)
+    const item = await inventoryService.getItemWithRef(itemId)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item })
+    res.json({ item, integrity: result })
   } catch (err) { next(err) }
 })
 
