@@ -585,11 +585,127 @@ accrochage, garde anti-auto-sécance) — **le gros morceau du sous-chantier.**
   autonome. Si Saar le veut d'emblée, c'est jouable — juste dimensionner le sous-chantier en
   conséquence.
 
+### 4.8 Schéma consolidé — synthèse des 5 cas (2026-09-09)
+
+Les bullets de §4 accrétés sur 5 cas, remis en **schéma typé** (= « lignes d'effet typées + préréglages »
+de §5.5.5). Extension de l'actuel `world_effect_definitions` (`key`/`label`/`category`/`stacking`/
+`modifiers`/`hooks`) et `world_effect_instances` (`definitionKey`/`targetKind`/`volume`/`intensity`/
+`duration_rounds`/`state`).
+
+#### Définition de zone (réutilisable — builtin ou custom campagne)
+
+```
+{
+  key, label, category, icon,
+  effets: [ <ligne d'effet>, ... ],          // 0..N, une zone en cumule
+  atténuations: [ <règle d'atténuation>, ... ],
+  cycleDeVieParDéfaut: <cycle de vie>,
+  visibilitéParDéfaut: 'affichée' | 'cachée' | 'cachée_jusqu_détection',
+  chaînage: [ { engendre: <key>, délai, condition } ],   // ex. feu -> fumée si lieu clos
+}
+```
+
+#### Ligne d'effet (le cœur — ~8 types, un `type` + params)
+
+| `type` | Params | v1 ? | Cas |
+|---|---|---|---|
+| `dégât` | `formule` · `nbLoc` (nb\|dés) · `modeLoc` (exposée\|aléatoire\|forcée) · `locForcée` · `typeDégât` · `facteurArmure` | **v1** | feu, acide, décompression |
+| `statut` | `statusCode` · `rémanence` (voir ci-dessous) | **v1** | brûlé, aveuglé, trempé |
+| `modificateur` | `cible` (actions\|déplacement\|vision) · `valeur` | **v1** | terrain, gaz irritant −3 |
+| `test` | `compétence`\|`attribut` · `difficulté` (val \| `depuisIntensité`) · `surÉchec`: `<ligne d'effet>` | v2 | gaz (Test CON/Tour) |
+| `drainRessource` | `ressource` (`souffle`) · `tauxDepuis` (`activité`) · `àZéro`: `<cascade>` | v2 | submersion, vide, gaz retenu |
+| `substitutionCompétence` | `remplace` · `par` · `plafonne`: [...] | v2 | sous-marin, 0G |
+| `mouvementForcé` | `vecteur` · `magnitude` | v2 | courant |
+| `perteCarac` | `carac` · `montant` · `définitiv-sur-échec-de-Chance` ? | v2 | gaz suffocant/neurotoxique |
+
+Propriétés transverses d'une ligne :
+- `déclencheur` : `entrée` (one-shot) · `présence_au_Tour` · `sortie` · `traversée`.
+- `conditionGéométrique` : `toujours` · `seuilFranchi` (taille token vs profondeur — submersion)
+  **+ règle de recouvrement** (§4.9) : `toutRecouvrement` (geyser, brûlure au frôlement) ·
+  `centreDedans` (défaut) · `seuilVertical` (tête sous l'eau).
+- `escalade` : `{ parTour: +X, plafond }` — réutilisable par `test` / `modificateur` / `statut`.
+- `rémanence` (ce que devient l'effet à la sortie) : `rien` · `persistanceFixe {tours}` ·
+  `décroissance {parX, tousLesN}` · `conditionnelle {condition d'arrêt nommée}`.
+  → tout mode ≠ `rien` ⟹ **la zone pose un `token_status`** (patron spawner, §5.2).
+- `cibleDeLEffet` : `personnage` · `équipement {matériau}` (route `char_inventory` / Intégrité) ·
+  `géométrie`.
+
+#### Règle d'atténuation
+
+```
+{ par: 'équipement' | 'trait' | 'comportement' | 'barrière',
+  tag: 'masque_gaz' | 'branchies' | 'retenir_souffle' | ...,
+  canal: 'gas' | 'water',                 // pour 'barrière'
+  réduit: 'totale' | 'partielle',
+  portéePartielle: ['peau'] }              // vésicant + masque = peau seulement
+```
+
+#### Cycle de vie (instance)
+
+```
+{ mode: 'permanent' | 'timerFixe {tours}' | 'timerDés {formule}' | 'conditionnel {aération}'
+       | 'oneShot',
+  extinctionAnticipée: <condition nommée> }   // MJ, immersion sur feu, neutralisant sur acide
+```
+
+#### Géométrie (instance)
+
+```
+{ mode: 'volume' | 'compartiment',
+  forme: 'boîte' | 'prisme' | ... ,        // §4.7 non tranché
+  volume: <AABB | polygone+z>,
+  compartiments: [...],
+  murConscient: bool,                       // §4.7 question 2
+  animation: null | 'remplissage {axe, taux}'   // §4.9 — eau qui monte
+          | 'dérive {vecteur}'                  // nuage mobile
+          | 'propagation {canal}' }             // gaz de pièce en pièce
+```
+
+#### Ce que ça résout / expose
+
+- **Résout §7.7** : le vocabulaire *est* fini (8 types de ligne + 4 blocs), pas une grammaire. La
+  question « colonnes vs JSONB » : les `effets` / `atténuations` / `chaînage` vivent en JSONB validé
+  (comme `hooks` aujourd'hui), l'extension de `normalizeHook` = valider ces 8 types.
+- **v1 = 3 types de ligne** (`dégât` / `statut` / `modificateur`) + atténuation équipement + cycle de
+  vie + visibilité affichée/cachée. Le reste (Souffle, compétence, courant, cascade de test) = v2,
+  chacun = 1 type de ligne en plus, additif.
+- **Préréglages** builtin : `fire` / `gas` / `acid` / `flooded` = des définitions à `effets`
+  pré-remplis ; le MJ compose des lignes pour du custom.
+- **Expose** : la « puissance du gaz » (§3.7) = probablement `difficulté: depuisIntensité` +
+  `escalade` — à confirmer sur le RAW gaz.
+
+### 4.9 Test du schéma §4.8 — 4 scénarios (Saar, 2026-09-09)
+
+| Scénario | Le schéma colle ? | Détail |
+|---|---|---|
+| **Sol instable / couvert de déchets** | ✅ **cas dégénéré, colle bien** | 1 ligne `modificateur` (`cible: déplacement`) + 1 ligne `test` sur `traversée` (Équilibre) + option `modificateur` `cible: actions` (malus combat « terrain instable », RAW) + option `+1D10 Dommages de chute`. Cycle de vie `permanent`, aucun tick, aucun état d'occupant. La zone la plus légère — le schéma **dégrade proprement**. |
+| **Salle qui s'emplit d'eau** (cale sèche, sas) | ⚠️ **effets OK, géométrie non** | Effets : `modificateur` (déplacement) + `test` (nage) + `conditionGéométrique: seuilFranchi` → `drainRessource` Souffle quand la tête passe sous l'eau (= §4.2 submersion, exactement le cas prévu). `mode: compartiment` + `murConscient` → l'eau s'arrête aux murs du sas. **Manque** : `géométrie.animation = remplissage {axe: Y, taux}` — le niveau qui monte le long de Y. `dérive` (nuage) est horizontal, pas ça. |
+| **Geyser de flamme sur un tuyau** (fuite de gaz enflammé, ultra-localisé) | ✅ **colle**, expose une sous-question | `mode: volume`, `forme: cylindre` très fin, position fixe, `murConscient: false`. 1 ligne `dégât` (`déclencheur: traversée` **et** `présence_au_Tour`), formule feu moyen/grand. Cycle `conditionnel` (`extinctionAnticipée: fermer la vanne`). **Expose** : `conditionGéométrique` doit porter une **règle de recouvrement** — le jet fait 0,5 m, le token 1,5 m → « tout recouvrement = exposé » vs « centre dedans » vs « seuil vertical ». Pas binaire. |
+| **Chambre froide** | ✅ **colle, mais quasi-inerte** par fidélité RAW | Le Froid RAW (§3.5) est à l'**échelle heure** (Test de Fatigue toutes les 2 h, dégâts après 1 h). En combat (échelle seconde) il ne mord presque pas. Une chambre froide = danger sur la **durée** = hors combat = **HORS SCOPE** (décision Saar). Le MJ narre. *Sauf* version « cryo-flash instantané » = piège `oneShot` (`dégât` type `froid` ou `statut: gelé`) — ça, ça colle. |
+
+**Ce que ces 4 scénarios ajoutent au schéma :**
+
+1. **`géométrie.animation`** = un axe manquant, ≥ 3 modes : `remplissage {axe}` (eau qui monte) ·
+   `dérive {vecteur}` (nuage) · `propagation {canal}` (gaz de pièce en pièce). Tous « géométrie
+   dynamique » v2 (déjà signalé §4.6). La salle qui s'emplit = `remplissage`.
+2. **`conditionGéométrique` n'est pas binaire** — il faut une **règle de recouvrement** :
+   `toutRecouvrement` (geyser, brûlure au frôlement) · `centreDedans` (défaut) · `seuilVertical`
+   (tête sous l'eau — submersion). À ajouter à §4.8.
+3. Le schéma **dégrade proprement** vers le cas trivial (terrain = `modificateur` seul, pas de tick).
+   Bon signe.
+4. **Le scope combat-only rend certains « lieux dangereux » classiques quasi-inertes** (chambre
+   froide, suffocation lente) — par conception, fidèle au RAW, le MJ narre. À noter pour que ce ne
+   soit pas relu comme un trou.
+5. Le cycle de vie **`conditionnel` + condition d'arrêt nommée** est porteur : fermer la vanne
+   (geyser), pomper / fermer le sas (eau), éteindre (feu), neutraliser (acide).
+
 ### Interface MJ sans code
 
 À réfléchir une fois les champs stabilisés — cases à cocher + champs numériques + listes déroulantes,
 zéro script. Point d'attention : exprimer « malus +1 / Tour, −1 / Tour après sortie, sauf masque »
-sans que ça devienne un langage.
+sans que ça devienne un langage. → le schéma §4.8 y répond : chaque ligne d'effet = un bloc de
+formulaire (menu `type` → champs du type), `escalade` / `rémanence` / `atténuation` = sous-blocs
+repliés. Pas de texte libre sauf les libellés et la formule de dés.
 
 ## 5. Références pro — recherche 2026-09-09
 
@@ -673,9 +789,9 @@ Sources : `foundryvtt.com/article/scene-regions/` · `foundryvtt.com/packages/en
 2. **État par occupant** : validé « sur la créature » (§5.5.4) — `token_statuses.data` +
    `expires_at_turn`. La cascade Souffle RAW (§3.8) reste plus riche qu'un compteur (mini-FSM) —
    à loger dans `data`.
-3. Jusqu'où va le déclaratif : **cadré par §5.3 / §5.5.5** — lignes d'effet typées (patron Active
-   Effects) + catalogue de préréglages, **pas** de grammaire libre. Reste à écrire le vocabulaire
-   exact (extension de `normalizeHook`).
+3. ~~Jusqu'où va le déclaratif~~ **Tranché — §4.8** : schéma consolidé, 8 types de ligne d'effet +
+   4 blocs de définition, JSONB validé. Reste l'écriture fine du validateur (`normalizeHook` v2),
+   pas une décision ouverte.
 4. ~~`PLAN_NUAGE` : absorbé ici ou reste spec de consommateur ?~~ **Tranché 2026-09-09 (§4.6)** :
    intégré — `PLAN_NUAGE` = spec de consommateur, apporte au socle la capacité « géométrie
    dynamique » (mobile / dérivante), mutualisée avec « eau qui monte ». Hors socle minimal.
@@ -729,12 +845,51 @@ chaque Tour. Restent à traiter proprement : le test **vertical** (tête sous l'
 seuls événements de franchissement, pas en boucle par Tour. Le test vertical reste réel (world
 builder 3D, §4.7) — pas la bande Z simplifiée de Foundry.
 
-### 7.5 Timing dans le moteur de tour — non esquissé
+### 7.5 Timing dans le moteur de tour — **esquissé 2026-09-09** (`[VÉRIFIÉ` lecture `combatTurnEngine.js]`)
 
-Quand le tick de zone se déclenche-t-il exactement dans `combatTurnEngine` ? Avant / après la
-résolution du mouvement ? Une zone posée ce Tour tick-t-elle ce Tour ou au suivant ? Interaction
-avec la file `resolve_on_turn`, avec le report d'Initiative ≤ 0, avec la purge de fin de Tour
-(`expires_at_turn <= newTurn`). C'est du vrai design dans le moteur de tour.
+**Structure du Tour Polaris** (rappel — pas de tour par créature) : phase ANNONCE (déclarations
+simultanées) → `startResolutionPhase` → `advanceTimeline` (marche unique dans l'échelle d'Initiative,
+pas-à-pas ; steps autonomes possibles) → `endTurn` (wipe, `current_turn++`, purge universelle des
+statuts `expires_at_turn <= newTurn`).
+
+`startResolutionPhase` fait déjà, **avant la marche**, dans l'ordre : `buildTimelineEntries` → **tick
+des mods** (`onTurnStart`) → **tick des dangers environnementaux** (`combat_roster ⋈ token_statuses
+WHERE status_code IN hazardCodes` → `resolveEnvironmentalHazardTicks`) → broadcast → `advanceTimeline`.
+
+**Design proposé (colle au patron spawner, §5.2) :**
+
+1. **`startResolutionPhase` gagne un « balayage de présence »**, juste **avant** le tick hazard :
+   pour chaque zone active, pour chaque token du roster **géométriquement dedans**, appliquer /
+   rafraîchir (idempotent) la condition `token_status` correspondante. Puis le **tick hazard
+   généralisé** (aujourd'hui 3 codes en dur → registre de zone) résout toutes les conditions, y
+   compris celles qui viennent d'être posées. Ordre : balayage → tick. C'est le seul endroit où
+   « qui est dans la zone » se calcule — **une fois par Tour**, roster × zones (§7.4 borné).
+2. **Entrée en cours de résolution** (step de mouvement, `worldMovementService` émet `enter`) :
+   - ligne `présence_au_Tour` → **poser la condition maintenant, résoudre au `startResolutionPhase`
+     suivant** (tu entres ce Tour, tu encaisses le 1er tick au Tour d'après — RAW « mesuré en Tours »,
+     cohérent avec la grenade et le `+1` de `turnsFromNow`) ;
+   - ligne `entrée` / `traversée` **one-shot** (piège, geyser traversé) → **résoudre inline** pendant
+     le step de mouvement.
+3. **Zone posée ce Tour** (grenade incendiaire, pose MJ) → **tick au Tour suivant**. La grenade :
+   l'explosion différée est **déjà un step autonome** à Tour+1 (`resolution_snapshot.autoResolve`) ;
+   elle appellera `createWorldEffectInstance` ; le 1er tick de la zone = le `startResolutionPhase`
+   d'après.
+4. **Cycle de vie** : décrément de `duration_rounds` sur les zones actives dans **`endTurn`**, à côté
+   de la purge universelle. À 0 → `state = 'expired'`, plus de condition posée, `WORLD_RUNTIME_
+   UPDATED`. Les conditions déjà posées portent leur propre `expires_at_turn` → purgées par la purge
+   universelle existante (donc `rémanence: rien` s'éteint tout seul ; `conditionnelle` persiste,
+   nettoyée à part).
+5. **File `resolve_on_turn` / report Ini ≤ 0 / échelle** : **aucune interaction** — le tick de zone
+   est une opération **de masse pré-marche**, comme les ticks mods et hazard le sont déjà. Il ne crée
+   **pas** d'entrée d'échelle. Seul lien : grenade→zone, où l'explosion (déjà une entrée autonome)
+   crée l'instance.
+6. **`endTurn` vs `startResolutionPhase`** : garder le tick à `startResolutionPhase`, **unifié avec le
+   tick hazard existant** — ne pas scinder la logique. Un token tué en cours de résolution aura pris
+   son tick de zone au début : RAW-neutre.
+
+**Reste à vérifier** : réutiliser la machinerie `exposeToHazard` / `turnsFromNow` pour les conditions
+posées par zone (hériter du `+1` de compensation de purge) ; le balayage de présence doit ignorer les
+tokens `unconscious` / hors-combat comme le fait déjà le tick hazard.
 
 ### 7.6 Interaction zone × zone — signalée 3×, jamais cadrée
 
@@ -752,8 +907,12 @@ validé).
 **Post-recherche § 5.3 / 5.5.5** : direction retenue = **lignes d'effet typées** (patron *Active
 Effects* de D&D 5e : `clé / mode / valeur`) **+ un catalogue de préréglages** (feu / acide / gaz
 livrés en préréglages ; le MJ compose des lignes pour du custom). **Pas** de grammaire libre à la
-Fantasy Grounds (`SAVEO:`…). Reste à écrire le vocabulaire exact des lignes — mais le principe est
-cadré, ce n'est plus un verrou ouvert.
+Fantasy Grounds (`SAVEO:`…).
+**Résolu (§4.8, 2026-09-09)** : schéma consolidé écrit — **8 types de ligne d'effet** (dégât · statut ·
+modificateur · test · drainRessource · substitutionCompétence · mouvementForcé · perteCarac) + 4 blocs
+de définition (atténuations · cycleDeVie · visibilité · chaînage). Vocabulaire fini, pas une grammaire.
+Stockage : JSONB validé (comme `hooks`), l'extension de `normalizeHook` = valider ces 8 types.
+Plus un verrou.
 
 ### 7.8 La preuve « feu » est probablement trop mince pour dérisquer l'archi
 
@@ -762,11 +921,13 @@ Il n'exerce **pas** : l'état d'occupant (7.2), les Tests, le spawn de statut pe
 volume, le hors-combat, l'interaction de zones. « Le feu marche » ne validerait presque rien pour le
 reste. Envisager **feu + un gaz** comme preuve, pour toucher la FSM d'occupant.
 
-### 7.9 Rendu joueur / UX de déclaration — absent
+### 7.9 Rendu joueur / UX de déclaration — cadré dans l'incrément Z6 (§8)
 
-Comment un joueur sait-il qu'il entre dans une zone dangereuse ? La voit-il rendue (feu / eau oui,
-gaz incolore non par choix MJ) ? Est-il averti à la phase d'annonce s'il déclare un mouvement à
-travers ? `combat.md` : l'annonce ne refuse jamais — mais l'info doit remonter.
+Un joueur doit **voir** la zone (rendue en volume translucide, couleur par catégorie ; une zone
+`cachée` — gaz incolore — visible du MJ seul) et être **averti sans être bloqué** si son chemin
+déclaré la traverse (`combat.md` : l'annonce ne refuse jamais). Le client a déjà `effectRegion`
+(`Canvas3D.jsx`) + `worldRuntimeStore` + le brouillard `sightOpacity`. Manque : un mesh de volume par
+instance active + l'avertissement de traversée à l'annonce. → **incrément Z6**.
 
 ### 7.10 Réconciliation avec `PLAN_ENVIRONNEMENT_MILIEUX`
 
@@ -797,11 +958,45 @@ un chantier sérieux mais **plus un pont conditionnel** :
 - **pas** d'interaction zone × zone (MJ arbitre) ;
 - preuve = **feu + un gaz simple** (pas le feu seul — §7.8).
 
-**Restent vraiment ouverts** : le timing dans le moteur de tour (§7.5), le rendu joueur (§7.9),
-l'audit Souffle (Q6.6), le vocabulaire exact des lignes d'effet.
+**Restent vraiment ouverts** : ~~le timing dans le moteur de tour (§7.5)~~ **esquissé** (balayage de
+présence + tick à `startResolutionPhase`, unifié avec le tick hazard) ; le rendu joueur (§7.9) ;
+l'audit Souffle (Q6.6) ; les formes de volume (§4.7) ; interaction zone × zone (§7.6, différée).
 L'éditeur de volume (§4.7) reste un sous-chantier indépendant.
 
-## 8. Historique
+## 8. Plan d'implémentation v1 (esquisse 2026-09-09)
+
+**Périmètre v1** (§7 conclusion) : combat-only · patron spawner · lignes `dégât` / `statut` /
+`modificateur` seulement · géométrie AABB `volume` + mode `compartiment` existants · pas
+d'interaction zone × zone · preuve = **feu + un gaz simple**.
+
+**Différé v2, explicitement hors v1** : lignes `test` / `drainRessource` (Souffle) /
+`substitutionCompétence` / `mouvementForcé` / `perteCarac` · `géométrie.animation` (eau qui monte,
+nuage qui dérive, propagation) · formes de volume non-AABB (§4.7, sous-chantier) · interaction
+zone × zone · `cachée jusqu'à détection` (pièges) · routage du dégât matériel (acide → `char_inventory`,
+sauf si Usure & Intégrité est prêt) · réconciliation `PLAN_ENVIRONNEMENT_MILIEUX`.
+
+### Incréments (séquencés)
+
+| # | But | Fichiers principaux | Migration | Preuve établie |
+|---|---|---|---|---|
+| **Z0** | Schéma de ligne d'effet + généralisation du registre hazard | `shared/world/worldEffects.js` (`normalizeHook` v2 : `dégât`/`statut`/`modificateur` + `déclencheur`/`rémanence`/`escalade`) ; `shared/` registre de zone (dérive `getAllHazardCodes` des définitions actives + les 3 legacy) ; `environmentalHazardService.js` (passe `armorReductionFactor` depuis `data`, applique `statut`) | non (JSONB) | non-régression `burning`/`acid` identiques ; tests purs `worldEffects.test.mjs` |
+| **Z1** | Boucle de présence + cycle de vie au Tour | `combatTurnEngine.startResolutionPhase` (balayage présence avant le tick hazard) ; `combatTurnEngine.endTurn` (décrément `duration_rounds` → `expired`) ; `worldEffectService.sweepZonePresence` ; `worldSpatialQueryService.tokensInsideEffectVolume` (règle `centreDedans` v1) | non | **MJ pose une zone `fire` → un token dedans encaisse le dégât RAW chaque Tour** (test combat DB + session Saar) |
+| **Z2** | Spawn depuis le combat — grenade incendiaire | `aoeMechanisms/grenade_incendiary.js` (sur `circleGrenade.js`) ; step autonome Tour+1 → `createWorldEffectInstance` ; `PLAN_GRENADES.md` | `ref_equipment` + `aoe_profile` (miroir 322/328) | **lancer incendiaire → zone de feu au Tour suivant → brûle les tokens dedans** (preuve noyau #1) |
+| **Z3** | Ligne `statut` + `enter`/`exit` au mouvement + rémanence | `worldMovementService` (`enter` → pose condition différée ; `exit` → applique `rémanence`) ; `worldEffectService` | non | mouvement-à-travers pose un statut ; `rémanence: rien` s'efface à la sortie, `conditionnelle` persiste |
+| **Z4** | Gaz simple (2ᵉ consommateur-preuve) | définition `gas` : ligne `modificateur` (`cible: actions`, −3) + `escalade` (+1/Tour) + `rémanence: décroissance` ; `aoeMechanisms/grenade_gas_irritant.js` | `ref_equipment` grenade gaz | **zone de gaz : malus qui monte en présence, décroît après la sortie** (preuve noyau #2 — exerce l'état d'occupant / escalade / décroissance). Écart RAW acté : le Test de Constitution du gaz irritant = v2 |
+| **Z5** | UI MJ — définitions en lignes d'effet + pose / retrait + rendu | `SurfaceEditorPanel.jsx` (form `type` → champs) ; liste des instances actives + suppression ; `Canvas3D.jsx` (mesh de volume translucide par instance, couleur par catégorie, respect `visibilité`) ; i18n | non | le MJ compose + pose + voit + retire une zone custom |
+| **Z6** | Joueur — avertissement de déclaration + rendu (§7.9) | client annonce : chemin déclaré traverse une zone visible → avertissement **non bloquant** ; zones `cachée` masquées aux joueurs | non | un joueur voit les zones et est prévenu s'il déclare une traversée |
+
+**Noyau v1 = Z0 → Z4.** Z5 / Z6 = la couche UX MJ / joueur, peuvent suivre ou se paralléliser.
+
+**Validation** (proportionnée, `AGENTS.md` clôture) : Z0 = `node --check` + tests purs ; Z1–Z4 =
+combat + monde + migration → **scénario réel Saar** + build client à chaque incrément ; Z5–Z6 = build
+client + validation visuelle Saar.
+
+**Ordre vs autres chantiers** : Z2/Z4 réutilisent `circleGrenade.js` (chantier grenades GELÉ, reprend
+là). L'éditeur de volume (§4.7) est un sous-chantier parallèle, non bloquant pour Z0–Z4.
+
+## 9. Historique
 
 - **2026-09-09** — Trouvaille pendant le chantier grenades 3-bis (`docs/JOURNAL8.md`,
   `PLAN_GRENADES.md` §6) : la mécanique « zones dangereuses » est un échafaudage. Cadrage ouvert
@@ -833,3 +1028,28 @@ L'éditeur de volume (§4.7) reste un sous-chantier indépendant.
   milieu d'arête (standard) ; `[VÉRIFIÉ]` aucun éditeur de sommets dans le client (tout est peint à
   la cellule) → nouveau paradigme d'interaction = le gros du sous-chantier. Phasage : v1 boîte +
   « copier la salle » ; v2 sculpteur de polygone (~60 %).
+- **2026-09-09 (schéma consolidé)** — §4.8 : les bullets de §4 accrétés sur 5 cas remis en schéma
+  typé. **8 types de ligne d'effet** (dégât · statut · modificateur v1 ; test · drainRessource ·
+  substitutionCompétence · mouvementForcé · perteCarac v2) + 4 blocs de définition (atténuations,
+  cycleDeVie, visibilité, chaînage). Ferme Q6.3 / §7.7. v1 = 3 types de ligne. Préréglages builtin
+  fire/gas/acid/flooded. Toujours rien codé.
+- **2026-09-09 (test du schéma)** — §4.9 : 4 scénarios Saar (sol instable · salle qui s'emplit d'eau ·
+  geyser de flamme · chambre froide). Ajouts au schéma : `géométrie.animation` (remplissage / dérive /
+  propagation) ; `conditionGéométrique` porte une **règle de recouvrement** (toutRecouvrement /
+  centreDedans / seuilVertical). Constats : le schéma dégrade proprement vers le terrain ; le scope
+  combat-only rend la chambre froide quasi-inerte (RAW = échelle heure) — par conception.
+- **2026-09-09 (chasse aux cas — convergence)** — revue des cas restants (irradiation, électricité,
+  brouillage, soin, obscurité, sonique) : tous mappent sur les 8 types de ligne, parfois avec une
+  nouvelle valeur de `modificateur.cible`. Aucun structurellement neuf → **arrêt de la chasse aux
+  cas**, décision Saar.
+- **2026-09-09 (timing moteur de tour)** — §7.5 esquissé, `combatTurnEngine.js` lu. Design :
+  **balayage de présence** (roster × zones, 1×/Tour) puis **tick à `startResolutionPhase`, unifié
+  avec le tick hazard existant** ; entrée en cours de résolution → condition posée, résolue au Tour
+  suivant (one-shot pièges/geyser = inline) ; `duration_rounds` décrémenté dans `endTurn` ; **aucune
+  interaction avec l'échelle `resolve_on_turn`** (opération de masse pré-marche). Toujours rien codé.
+- **2026-09-09 (plan d'implémentation v1)** — §8 : 7 incréments séquencés Z0→Z6. Noyau = Z0→Z4
+  (schéma de ligne · boucle de présence + cycle de vie · grenade incendiaire · gaz simple), 2
+  preuves. Z5 (UI MJ) / Z6 (joueur) = couche UX. Différé v2 explicité (test/Souffle/compétence/
+  mouvement forcé, animation géométrique, formes non-AABB, interaction zone × zone, pièges).
+  §7.9 (rendu joueur) rabattu sur Z6. **Cadrage terminé — prêt à passer au plan détaillé de Z0 puis
+  au code, sur validation Saar.** Toujours rien codé.
