@@ -324,19 +324,31 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 > - Grisage de l'arme dans le sélecteur client : **abandonné (Saar 2026-09-09 : « aucun intérêt »)** —
 >   le message d'erreur suffit.
 >
-> **Reste L5c — PAS COMMENCÉ.** Test de panne d'arme sur échec simple à ITG ∈ [1,5].
-> Emplacement : dans `resolveMeleeAction` / `resolveAssaultAction` (`socketCombatHelpers.js`), APRÈS
-> que l'issue du jet d'attaque est connue (`attaqueOutcome` / `assaultOutcome`), si
-> `!isSuccess && !catastropheRisk && weapon?.ref_has_integrity && weapon.integrity_current ∈ [1,5]` :
-> `await integrityService.runPanneTest(effectiveWeaponInvId, { reason: 'combat_low_itg', characterId: character.id })`
-> (ouvre sa propre transaction — la résolution de combat n'en est pas une). N'annule PAS l'attaque
-> déjà résolue. Émettre : une carte `DICE_RESULT` via `emissions.push` (patron minimal
-> `socketDice.js:321` WOUND_INFECTION_ROLL — `formula`, `rolls:[roll]`, `total`, `isCriticalFail`,
-> `seed`, `secret:false`) + un `INVENTORY_UPDATED` avec l'item frais (l'icône ITG doit se mettre à
-> jour pour tous). `runPanneTest` renvoie déjà `{ panne, roll, threshold, loss, before, after,
-> definitiveLoss, tiersCrossed, criticalFailReroll }` — **ajouter `seed: outcome.seed` à son retour**
-> (absent aujourd'hui). Melee : `weapon` + `weaponInvId`. Assault : `weapon` + `effectiveWeaponInvId`.
-> Le libellé du jet reste FR en dur (dette i18n assumée).
+> **L5c (§7.1.c, test de panne d'arme) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> - `integrityService.runPanneTest` : ajout de `seed` + `isCriticalFail` à son retour (repris de
+>   `resolvePolarisTest`, pour une carte `DICE_RESULT` reproductible). `applyPanneSystematic` (sans
+>   jet) non concerné. +2 assertions `integrityService.test.mjs` (15/15).
+> - `socketCombatHelpers.js` : helper module-level **`runCombatWeaponPanne({ weapon, weaponInvId,
+>   characterId, userId, username, color, outcome, emissions })`** — garde `weapon?.ref_has_integrity
+>   && integrity_current ∈ [1,5] && !outcome.isSuccess && !outcome.catastropheRisk` → `runPanneTest`
+>   (sa propre transaction). Émet, **via `emissions`** (flush post-retour, ordre garanti) : carte
+>   `DICE_RESULT` dès qu'un test a eu lieu (même réussi — transparence) ; puis `INVENTORY_UPDATED`
+>   avec l'**item complet** (`getItemWithRef`) seulement si l'arme s'enraye/casse (le store client
+>   `upsertInventoryItem` REMPLACE l'objet — un patch partiel effacerait la ligne).
+> - **2 sites d'appel**, juste après `maybeTriggerCatastrophe` : `resolveMeleeAction` (`weapon` +
+>   `weaponInvId`, avant le branchement défenseur) et `resolveAssaultAction` (`weapon` +
+>   `effectiveWeaponInvId`, avant décompte munitions). En dual-wield seul le tir primaire est testé
+>   (miroir de L5a, même limite RAW assumée).
+> - Clé sur le **jet d'attaque** (`attaqueOutcome.isSuccess`), pas sur « touché » : une attaque bien
+>   lancée mais parée n'enraye pas l'arme (RAW §7.1.c : « après la résolution du jet d'attaque »).
+> - Libellé du jet FR en dur (`1d20 (Test de panne — arme)`, dette i18n L5 assumée).
+> - Note : le loader assault passe en fait par `getOwnedHandWeapon` (→ `getItemWithRef`) — la note
+>   « loader propre à étendre » de §7.0/§7.1 était périmée, rien à étendre.
+> - Tests : `node --check` OK, import smoke OK (pas de cycle), `integrityService` 15/15,
+>   `combatAttackRoll` 29/29, `combatTurnEngine`+`socketCombatAoe` 37/37, `shared/**` 574/574.
+> - **Non testé** : scénario combat réel (arme à ITG 3/15, tir/CaC raté sans Catastrophe →
+>   carte de panne + icône ITG rafraîchie). `⚠️ clos partiel` jusqu'à validation Saar.
+> **→ L5 terminé (sous réserve validation jeu réel L5a/L5b/L5c). Prochain : L6.**
 
 ### 7.0 Points d'insertion — vérifiés propres (2026-09-09)
 

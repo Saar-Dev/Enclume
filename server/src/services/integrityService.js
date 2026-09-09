@@ -106,6 +106,12 @@ export async function runPanneTest(invId, { reason, characterId } = {}, trxOpt) 
       reason: reason ?? null,
       roll: outcome.roll,
       threshold: row.integrity_current,
+      // `seed` / `isCriticalFail` : repris tels quels de `resolvePolarisTest` pour que l'appelant
+      // puisse émettre une carte `DICE_RESULT` reproductible (L5c — test de panne d'arme en combat,
+      // patron `socketDice.js` WOUND_INFECTION_ROLL). Sans lecteur pour `applyPanneSystematic` (pas de
+      // jet), ils ne vivent que sur ce retour.
+      seed: outcome.seed,
+      isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       criticalFailReroll: outcome.criticalFailReroll ?? null,
       before,

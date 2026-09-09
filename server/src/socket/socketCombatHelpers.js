@@ -10,8 +10,9 @@ import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } fro
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
+import { runPanneTest } from '../services/integrityService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
@@ -849,6 +850,47 @@ export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
   return false
 }
 
+// ─── USURE & INTÉGRITÉ — TEST DE PANNE D'ARME EN COMBAT (L5c) ───────────────
+// PLAN_USURE&INTEGRITE.md §7.1.c / MANUEL_USURE.md §4.2. Une arme SUIVIE en Intégrité dont la
+// courante est ∈ [1,5] et qui RATE son jet d'attaque SANS Catastrophe subit un Test de panne (1D20
+// sous l'ITG courante, aucun modificateur — `integrityService.runPanneTest`, qui ouvre sa propre
+// transaction : la résolution de combat n'en est pas une, §7.1.c). Le test n'annule JAMAIS l'attaque
+// déjà résolue — la panne est une conséquence postérieure. Appelé une seule fois par résolution, sur
+// l'arme qui a réellement frappé/tiré (primaire ou secondaire résolue). En dual-wield seul le tir
+// primaire est testé (miroir du modificateur d'état L5a, même limite RAW assumée).
+// Émissions (via `emissions`, flush après le retour du résolveur — patron `flushEmissions`) :
+//   - carte `DICE_RESULT` du jet dès qu'un test a eu lieu, même réussi (transparence des dés, patron
+//     `socketDice.js` WOUND_INFECTION_ROLL). Libellé FR en dur (dette i18n L5 assumée).
+//   - `INVENTORY_UPDATED` avec l'item COMPLET (`getItemWithRef`) uniquement si l'arme s'est enrayée
+//     ou cassée : `characterStore.upsertInventoryItem` REMPLACE l'objet entier, un patch partiel
+//     effacerait le reste de la ligne.
+// La porte de blocage (arme déjà en panne / hors d'usage) est traitée en amont (§7.1.a, L5b) —
+// quand on arrive ici l'arme est opérationnelle.
+async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, userId, username, color, outcome, emissions }) {
+  if (!weapon?.ref_has_integrity || !weaponInvId) return
+  if (outcome.isSuccess || outcome.catastropheRisk) return
+  const itg = weapon.integrity_current
+  if (!Number.isInteger(itg) || itg < 1 || itg > 5) return
+
+  const res = await runPanneTest(weaponInvId, { reason: 'combat_low_itg', characterId })
+  if (res.panne === 'skipped') return
+
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId, username, color,
+    formula: '1d20 (Test de panne — arme)',
+    rolls: [res.roll], total: res.roll,
+    isCriticalSuccess: false, isCriticalFail: res.isCriticalFail,
+    seed: res.seed, timestamp: new Date().toISOString(), secret: false,
+  } })
+
+  if (res.panne === 'ok') return
+
+  const freshItem = await getItemWithRef(weaponInvId)
+  if (freshItem) {
+    emissions.push({ to: 'room', event: WS.INVENTORY_UPDATED, data: { characterId, item: freshItem } })
+  }
+}
+
 // ─── RÉSOLUTION CORPS À CORPS ───────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM (une seule entrée de l'échelle à la fois, Lot B) quand
 // action.type==='melee'. Retourne { suspend: true } si le défenseur est un PJ (attend
@@ -1161,6 +1203,14 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
     await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
       site: 'melee_attack', actorTokenId: action.token_id, targetTokenId,
+    })
+
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.c) — arme suivie à ITG ∈ [1,5] qui rate sans
+    // Catastrophe : Test de panne. N'annule pas l'attaque, se résout avant le branchement défenseur.
+    await runCombatWeaponPanne({
+      weapon, weaponInvId, characterId: character.id,
+      userId: character.user_id, username: attackerUsername, color: attackerColor,
+      outcome: attaqueOutcome, emissions,
     })
 
     // ── 2. Cible ──────────────────────────────────────────────────────────────
@@ -2662,6 +2712,14 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
     await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
       site: 'assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
+
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.c) — arme qui tire réellement (primaire/secondaire
+    // résolue) suivie à ITG ∈ [1,5] et tir raté sans Catastrophe : Test de panne. N'annule pas le tir.
+    await runCombatWeaponPanne({
+      weapon, weaponInvId: effectiveWeaponInvId, characterId: character.id,
+      userId: character.user_id, username: tireurUsername, color: tireurColor,
+      outcome: assaultOutcome, emissions,
     })
 
     // Tir à deux armes dégradé (COM29) — notice système privée, uniquement pour le propriétaire du

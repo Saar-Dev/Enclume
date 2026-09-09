@@ -127,6 +127,9 @@ test('runPanneTest — ITG 25 : 1D20 ≤ 25 toujours → réussite, aucune écri
     assert.equal(r.panne, 'ok')
     assert.equal(r.loss, 0)
     assert.deepEqual(r.after, r.before)
+    // L5c — le retour porte de quoi émettre une carte DICE_RESULT reproductible, y compris sur 'ok'.
+    assert.ok(r.seed != null && r.seed !== '', 'seed présent')
+    assert.equal(typeof r.isCriticalFail, 'boolean')
     const row = await readItem(fx.item.id)
     assert.equal(row.integrity_current, 25)
     assert.equal(row.malfunction_severity, null)
@@ -143,6 +146,8 @@ test('runPanneTest — ITG basse : invariants sur 40 tirages', { skip }, async (
       const r = await runPanneTest(fx.item.id, { reason: 'combat_low_itg' })
       assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
       assert.ok(r.roll >= 1 && r.roll <= 20)
+      assert.ok(r.seed != null && r.seed !== '', 'seed présent (carte DICE_RESULT L5c)')
+      assert.equal(typeof r.isCriticalFail, 'boolean')
       assert.ok(r.after.current <= r.before.current, 'ITG ne remonte jamais')
       assert.ok(r.after.current >= 0 && r.after.current <= r.after.max)
       if (r.panne === 'ok') {
