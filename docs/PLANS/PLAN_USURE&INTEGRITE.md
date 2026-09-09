@@ -10,8 +10,16 @@
 > **Curation L0 (migration 332) faite le 2026-09-09** : les 7 « Traitements, patchs et produits
 > pharmaceutiques » (consommables NT IV+ flaggés à tort par 329) repassent hors ITG. Implants,
 > grenades, armes de jet : gardés.
-> **L2 (module pur `shared/integrityRules.js`) fait le 2026-09-09** : 8 exports, 22 tests, `node --test
-> shared/**` 572/572. `integrityService.js` (couche jet/mutation) = cycle suivant. **Prochain : L2-service.**
+> **L2 fait le 2026-09-09** — deux volets :
+> - module pur `shared/integrityRules.js` (8 exports, 22 tests) ;
+> - **service `server/src/services/integrityService.js`** (`runPanneTest` / `applyPanneSystematic` /
+>   `adjustIntegrity`, 9 tests dont concurrence). Placé dans `services/` et non `lib/` (le PLAN §4
+>   disait `lib/` — un service avec transactions/verrous/écritures va dans `services/`, comme
+>   `inventoryService`/`tradeService`). Concurrence : verrou pessimiste `.forUpdate()` + relecture à
+>   frais dans la transaction — le « jeton `updated_at` optimiste, patron Blessures » de M5 **n'existe
+>   pas dans le code** ; `.forUpdate()` EST le patron du projet (`tradeService`, `worldEffectService`)
+>   et atteint le même but. `trxOpt` optionnel en dernier paramètre (convention `mutationService`).
+> `node --test shared/**` 572/572 + service 9/9. **Prochain : L4.**
 > Révisé le 2026-09-09 après analyse à charge : gaps G1-G4 et précisions M1-M7 intégrés (voir §14).
 > Le « L5-pre » (rework dispatch combat) a été inscrit puis **retiré** après vérification (§7.0) — les
 > points d'insertion combat sont propres sans lui.
