@@ -2,12 +2,16 @@
 
 > **⚠️ 2026-09-08 — La documentation de référence est passée dans `docs/SYSTEME/TAILLE.md`**
 > (RegleDocumentaire Règle 10). Ce plan ne conserve que le suivi de **D7** (retrait du
-> modificateur de taille en zone d'effet) — différé tant que `socketCombatAoe.js` est en
-> refonte par le chantier grenades parallèle. Quand D7 est fait : archiver ce fichier.
+> modificateur de taille en zone d'effet). Quand D7 est fait : archiver ce fichier.
 >
-> S1→S5 codés et committés sur `dev/Saar` (`6c3ef86` → `81ce06a`), S3+S4+S5 validés en jeu
-> par Saar. Le reste du document est le journal de conception (analyses à charge, décisions),
-> conservé comme historique.
+> **⚠️ 2026-09-09 — S5 (champ « Taille (combat) » sur la fiche) ANNULÉ.** Redirection Saar :
+> l'automatisation se pilote au niveau campagne (`settings.combat_modifiers_mode` LIBRE/AUTO,
+> `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`). Retiré par M2 (`e95c9d4`) : `SizeCategoryField.jsx`,
+> routes `GET|PUT /char-sheet/:id/size`, `describeCharacterSize`. S1→S4 intacts (colonne 327,
+> cascade, service, préselect PRECHECK). Migration `328` a remis `size_category` à NULL.
+>
+> S1→S4 committés sur `dev/Saar` (`6c3ef86` → `97b422d`), S3+S4 validés en jeu par Saar. Le reste
+> du document est le journal de conception (analyses à charge, décisions), conservé comme historique.
 >
 > Architecture déléguée à Claude par Saar (2026-09-08). Priorité : aggradation structurelle,
 > pas la vitesse.

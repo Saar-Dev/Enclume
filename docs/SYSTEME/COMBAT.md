@@ -1149,7 +1149,7 @@ socket.emit(WS.COMBAT_ACTION_CONFIRM, {
   confirmedModifiers: {
     portee,     // 'bout_portant' | 'courte' | 'moyenne' | 'longue' | 'extreme'
     situation,  // string[] — sitKeys sélectionnés (voir tables ci-dessous)
-    taille,     // override MJ uniquement — voir « Taille de la cible » ci-dessous
+    taille,     // palier de taille de la cible — voir « Modificateurs de combat » ci-dessous
   },
 })
 ```
@@ -1159,28 +1159,42 @@ par la résolution serveur. La bande appliquée aux chances et aux dégâts est 
 distance 3D réelle et `ref_equipment.range`. Les sélections situationnelles restent des
 confirmations métier libres (couverture, obscurité, situation CaC).
 
-### Taille de la cible
+### Modificateurs de combat — mode LIBRE / AUTO
 
-Le modificateur « Taille de la cible » (LdB p.218, table `TAILLE_MODS` dans
-`shared/combatSituationMods.js`) n'est **plus une confirmation métier libre** : la taille est une
-**propriété de la cible**, pas un choix du tireur (`docs/PLANS/PLAN_TAILLE.md`).
+Deux modificateurs sont **dérivés d'un état de jeu autoritaire** plutôt que choisis librement :
+la **taille de la cible** (propriété de la cible) et l'**allure** tireur / cible (conséquence du
+mouvement déclaré ce Tour). L'option de campagne `settings.combat_modifiers_mode` (défaut `auto`,
+`docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`) décide qui pilote :
 
-- **Autorité** : `characters.size_category` (explicite, une des 8 valeurs `SIZE_CATEGORIES`) si
-  renseignée, sinon **dérivée** de la fiche de la cible — `char_identity.height` (humanoïde, clamp
-  120–300 cm), `drone_sheet.taille` (drone, cm), `exo_sheet.category` (exo-armure) — via
-  `resolveSizeCategory` / `resolveSizeCategoryFrom` (`server/src/lib/characterSizeService.js` +
-  `shared/sizeCategory.js`). Défaut si aucune donnée : `moyenne`.
-- **Override MJ par jet** : `confirmedModifiers.taille` n'est retenu que si l'émetteur du
-  `COMBAT_ACTION_CONFIRM` est MJ. Filtrage centralisé à la réception (`stripGmOnlyModifiers`,
-  `socketCombatResolution.js`, liste `GM_ONLY_CONFIRMED_MODIFIER_KEYS`) — un joueur qui résout sa
-  propre attaque ne surcharge jamais la taille de la cible. Les 5 résolveurs à cible unique
-  (`resolveMeleeAction`, `resolveAssaultAction`, drone, `resolveExoAssaultAction`,
-  `resolveExoMeleeAction`) appellent `resolveAttackTargetSize(db, cibleCharacterId, confirmedModifiers)`.
-- **Zone d'effet** : aucun modificateur de taille (`runAoePhaseA`) — un jet unique couvre tout le
-  cône, il ne peut pas porter une taille par cible ; même parti que la grenade
-  (`docs/JOURNAL8.md`).
-- **Opposition CaC** : le modificateur s'applique au jet de l'attaquant → cible uniquement. Le jet
-  opposé du défenseur ne reçoit pas « taille de l'attaquant » (état pré-existant, `PLAN_TAILLE.md` §8).
+| | `auto` (défaut) | `libre` |
+|---|---|---|
+| Taille + allure | dérivées serveur, préselect fenêtre, **joueur lecture seule**, MJ garde le `<select>` | `<select>` neutre (fallback 0) **pour joueur ET MJ**, aucune dérivation, aucun blocage automatique |
+| `PRECHECK` renvoie | `targetSizeCategory`, `shooterAllureKey`, `targetAllureKey` | les 3 = `null` |
+| `stripGmOnlyModifiers` (taille) | strip pour non-MJ | pas de strip |
+| Réécriture allure (résolution) | oui (non-MJ) | non |
+
+La **portée** n'est pas concernée : elle est toujours recalculée serveur depuis la distance 3D
+réelle (`authoritativeRangeBand`), le `<select>` de la fenêtre reste un aperçu dans les deux modes.
+
+**Taille de la cible** (LdB p.218, `TAILLE_MODS` dans `shared/combatSituationMods.js`) :
+- **Autorité** (mode `auto`) : `characters.size_category` (explicite, 8 valeurs `SIZE_CATEGORIES`)
+  si renseignée — **plus aucune UI ne l'écrit** depuis le retrait du champ de fiche, elle reste NULL
+  et sert de 1er cran de cascade —, sinon **dérivée** de la fiche : `char_identity.height`
+  (humanoïde, clamp 120–300 cm), `drone_sheet.taille` (drone, cm), `exo_sheet.category` (exo) via
+  `resolveSizeCategory` / `resolveSizeCategoryFrom`. Défaut : `moyenne`.
+- Les 5 résolveurs à cible unique appellent `resolveAttackTargetSize(db, cibleCharacterId,
+  confirmedModifiers)` → `confirmedModifiers.taille` s'il est présent (MJ en `auto`, ou n'importe
+  qui en `libre`), sinon dérivée.
+- **Zone d'effet** : `runAoePhaseA` lit `confirmedModifiers.situation` mais D7 (retrait du modif de
+  taille en AOE) reste à faire — cf. ticket AOE.
+- **Opposition CaC** : modificateur attaquant → cible uniquement (le défenseur ne reçoit pas
+  « taille de l'attaquant » — état pré-existant).
+
+**Allure tireur / cible** (LdB p.226-227 + Écran du MJ, **Tir seul**) — mode `auto` : dérivée de
+`combat_actions.movement_gait` du Tour (`server/src/lib/combatAllureService.js` →
+`resolveRangedAllureKeys`), réécrite dans `confirmedModifiers.situation` pour un joueur avant les 3
+résolveurs de Tir (`socketCombatResolution.js`). `tireur_allure_maximale` = Tir impossible devient
+opposable. En `libre` : aucune dérivation ni réécriture.
 
 ### Tables de modificateurs situationnels (CombatModifiersWindow)
 
@@ -1193,16 +1207,16 @@ Le modificateur « Taille de la cible » (LdB p.218, table `TAILLE_MODS` dans
 | `longue` | -10 |
 | `extreme` | -15 |
 
-**Allure tireur (sitKey / mod) :**
+**Allure tireur (sitKey / mod)** — dérivée du `movement_gait` en mode `auto` :
 | val | sitKey | Mod |
 |---|---|---|
 | `immobile` | null | 0 |
 | `tireur_allure_lente` | `tireur_allure_lente` | -3 |
 | `tireur_allure_moyenne` | `tireur_allure_moyenne` | -5 |
 | `tireur_allure_rapide` | `tireur_allure_rapide` | -7 |
-| `tireur_allure_maximale` | `tireur_allure_maximale` | **-99 (impossible)** |
+| `tireur_allure_maximale` | `tireur_allure_maximale` | `{ mod: 0, impossible: true }` — Tir impossible |
 
-**Allure cible :**
+**Allure cible** — `cible_immobile` (+3) = RAW (Écran du MJ) :
 | val | sitKey | Mod |
 |---|---|---|
 | `cible_immobile` | `cible_immobile` | +3 |
@@ -1222,10 +1236,10 @@ Le modificateur « Taille de la cible » (LdB p.218, table `TAILLE_MODS` dans
 |---|---|
 | `obscurite_legere` | -3 |
 | `obscurite_importante` | -5 |
-| `obscurite_totale` | **-99 (impossible)** |
+| `obscurite_totale` | `{ mod: 0, impossible: true }` — Tir impossible |
 
-**Taille cible :** (table de valeurs `TAILLE_MODS` ; l'origine de la clé et l'override MJ sont
-décrits dans « Taille de la cible » ci-dessus)
+**Taille cible :** (table de valeurs `TAILLE_MODS` ; l'autorité et le mode LIBRE/AUTO sont
+décrits dans « Modificateurs de combat » ci-dessus)
 | key | Mod |
 |---|---|
 | `minuscule` (~30 cm) | -10 |
@@ -1237,7 +1251,10 @@ décrits dans « Taille de la cible » ci-dessus)
 | `enorme` (~7 m) | +10 |
 | `gigantesque` (10 m+) | +15 |
 
-**Détection allure auto :** si tireur/cible a une action `move_lente/move_moyenne/move_rapide/move_max` dans le store actions → allure pré-remplie. Les valeurs sont overridables manuellement.
+**Détection allure :** mode `auto` — le serveur dérive du `movement_gait` réel déclaré ce Tour
+(`resolveRangedAllureKeys`) et renvoie `shooterAllureKey`/`targetAllureKey` via `PRECHECK` ;
+joueur en lecture seule, MJ peut surcharger. Mode `libre` — `<select>` neutre. La zone d'effet
+garde une détection client depuis le store `actions` (pas d'autorité serveur).
 
 **hasTirImpossible :** `tireurAllureMod === -99 || obscurites.includes('obscurite_totale')` — désactive le bouton "Lancer les dés".
 

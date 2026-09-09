@@ -281,11 +281,14 @@ Si !needsDefenseWait → avance dans combat_timeline_entries (pickNextTimelineSt
     effectiveMalus = calcWoundPenalty(wounds) - calcEncumbrancePenalty(weight, FOR)
 
 [6] Modificateurs
-    porteeModComp    = PORTEE_MOD_COMP[portee]
+    // taille + allure : dérivées serveur en mode settings.combat_modifiers_mode='auto'
+    // (joueur lecture seule) ; <select> libre pour tous en 'libre'. PLAN_MODE_MODIFICATEURS_COMBAT.md
+    porteeModComp    = PORTEE_MOD_COMP[portee]   // toujours autoritaire serveur (distance 3D), les 2 modes
                        bout_portant(+5) / courte(0) / moyenne(-5) / longue(-10) / extreme(-15)
     situationModComp = Σ SITUATION_MODS[k]
                        cible_immobile(+3) / cible_allure_moyenne(-3) / _rapide(-5) / _maximale(-7)
                        tireur_allure_lente(-3) / _moyenne(-5) / _rapide(-7) / _maximale(bloqué)
+                       (allure dérivée de combat_actions.movement_gait en mode 'auto')
                        couverture_partielle(-3) / _importante(-5)
                        obscurite_legere(-3) / _importante(-5) / _totale(bloqué)
     tailleModComp    = TAILLE_MODS[taille]

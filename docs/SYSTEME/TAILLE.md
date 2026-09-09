@@ -1,7 +1,8 @@
 # SYSTEME/TAILLE.md — Taille d'un combattant
 
-> Créé 2026-09-08 (chantier `docs/PLANS/PLAN_TAILLE.md`, S1→S5). Statut : **actif**.
-> Reste D7 (voir §6).
+> Créé 2026-09-08 (`docs/PLANS/PLAN_TAILLE.md`). Révisé 2026-09-09 — S5 (champ de fiche) retiré,
+> remplacé par l'option de campagne `combat_modifiers_mode` (`docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`).
+> Statut : **actif**. Reste D7 (AOE, voir §6).
 >
 > Lire pour : tout code qui a besoin de la taille physique d'un personnage — modificateur
 > de combat pour toucher, et à terme mise à l'échelle des tokens / occupation monde.
@@ -9,8 +10,9 @@
 Documents associés :
 - `docs/REGLES/REGLESYSCOMBAT.md:1382-1390` — table RAW « Taille de la cible ».
 - `docs/REGLES/REGLEDRONE.md` / `docs/REGLES/REGLEARMURE.md:18-42` — taille RAW des drones / exo-armures.
-- `docs/SYSTEME/COMBAT.md` § « Taille de la cible » — l'usage combat (override MJ, gate, AOE).
-- `docs/JOURNAL8.md` (2026-09-08) — décisions durables (breakpoints, clamp, AOE).
+- `docs/SYSTEME/COMBAT.md` § « Modificateurs de combat » — l'usage combat (mode LIBRE/AUTO, gate, AOE).
+- `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md` — l'option de campagne qui pilote taille + allure.
+- `docs/JOURNAL8.md` (2026-09-08 / -09) — décisions durables (breakpoints, clamp, AOE, mode).
 
 ---
 
@@ -71,15 +73,17 @@ main. « Petite » reste atteignable pour un humanoïde (120–130 cm).
 |---|---|---|
 | Énumération + math (pur, testé sans base) | `shared/sizeCategory.js` | `SIZE_CATEGORIES`, `TAILLE_CM_BREAKPOINTS`, `HUMANOID_SIZE_CLAMP_CM`, `EXO_CATEGORY_HEIGHT_CM`, `sizeCategoryFromCm`, `resolveSizeCategoryFrom` (la cascade) |
 | Modificateur de combat | `shared/combatSituationMods.js` | `TAILLE_MODS` (palier → mod) + garde de chargement qui casse si l'énumération diverge ; `GM_ONLY_CONFIRMED_MODIFIER_KEYS` / `stripGmOnlyModifiers` |
-| Accès base (serveur) | `server/src/lib/characterSizeService.js` | `resolveSizeCategory(db, char, opts)` → `{ cm, category, source }` ; `resolveAttackTargetSize(db, cibleId, confirmedModifiers)` (combat) ; `describeCharacterSize(db, id)` → `{ explicit, resolved, derived, derivedCm, source }` (UI) |
-| Colonne | migration `327_characters_size_category.js` | `characters.size_category text` nullable + CHECK 8 valeurs |
-| Route | `server/src/routes/character/char-sheet.js` | `GET /:id/size` (tout membre autorisé) · `PUT /:id/size` (MJ ou propriétaire Coffre) |
-| UI fiche | `client/src/character/SizeCategoryField.jsx` | composant partagé, monté dans `CharacterSheet` / `DroneSheet` / `ExoInfoPanel` |
-| UI combat | `CombatModifiersWindow.jsx` / `CombatCacModifiersWindow.jsx` | `<select>` si MJ, sinon lecture seule |
+| Accès base (serveur) | `server/src/lib/characterSizeService.js` | `resolveSizeCategory(db, char, opts)` → `{ cm, category, source }` ; `resolveAttackTargetSize(db, cibleId, confirmedModifiers)` (combat) |
+| Colonne | migration `327_characters_size_category.js` | `characters.size_category text` nullable + CHECK 8 valeurs. **Plus aucune UI ne l'écrit** (champ de fiche retiré, migration `328` l'a remise à NULL) — conservée comme 1er cran de la cascade `explicit ?? derived` |
+| UI combat | `CombatModifiersWindow.jsx` / `CombatCacModifiersWindow.jsx` | selon `settings.combat_modifiers_mode` : `auto` → `<select>` si MJ sinon lecture seule ; `libre` → `<select>` pour tous. Voir `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md` |
 
 ---
 
 ## 4. Flux combat
+
+> Tout ce qui suit décrit le mode **`auto`** (défaut). En `libre`, le serveur ne dérive rien
+> (PRECHECK renvoie `null`), ne strippe pas `taille`, et la fenêtre présente un `<select>` neutre
+> à tous — `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`.
 
 1. **PRECHECK** — avant d'ouvrir la fenêtre de modificateurs, le client émet
    `COMBAT_ACTION_PRECHECK`. Le serveur (`socketCombatResolution.js`) y calcule
@@ -104,16 +108,16 @@ serait une décision JOURNAL8 séparée).
 
 ## 5. Édition MJ
 
-Fiche perso / drone / exo → champ **« Taille (combat) »** :
-- « Auto (selon la fiche) » → `size_category` NULL, la taille est dérivée ; l'UI affiche
-  `auto → <palier dérivé>`.
-- un des 8 paliers → `size_category` posé, autoritaire (`PUT /char-sheet/:id/size`).
+**Il n'y a pas de champ « taille » sur la fiche** (retiré 2026-09-09 — redirection Saar). La
+taille est **toujours dérivée** de la fiche (`char_identity.height` / `drone_sheet.taille` /
+`exo_sheet.category`). Le champ `char_identity.height` (« Taille (m) », descriptif) reste libre —
+seule la *dérivation* est clampée 120–300 cm.
 
-Le champ `char_identity.height` (« Taille (m) », descriptif joueur) reste libre — il n'est
-pas borné à l'UI ; seule la *dérivation* est clampée 120–300 cm.
+En mode `auto`, le MJ surcharge par jet dans la fenêtre de modificateurs (`<select>` 8 paliers,
+éphémère, non persisté). En `libre`, joueur et MJ choisissent le palier à la main.
 
-En combat, le MJ peut aussi surcharger par jet dans la fenêtre de modificateurs (éphémère,
-non persisté).
+`characters.size_category` (colonne + CHECK conservées) resterait autoritaire si elle était
+renseignée, mais plus aucune UI ne l'écrit (cascade prête pour un futur pilotage explicite).
 
 ---
 

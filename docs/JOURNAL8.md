@@ -6220,3 +6220,76 @@ Aucune. `confirmedModifiers` n'est jamais persisté.
 
 `git revert` du commit A1–A3 (6 fichiers, aucune migration). `combatAllureService.js` +
 `combatSituationMods.js` nouveaux exports : aucun autre consommateur.
+
+## Session (Claude) — 2026-09-09 — Mode modificateurs de combat LIBRE / AUTO (option de campagne)
+
+`PLAN_MODE_MODIFICATEURS_COMBAT.md`. Redirection Saar : il ne veut pas de champ « Taille (combat) »
+sur la fiche de personnage ([[PLAN_TAILLE.md]] S5, livré la veille). À la place, une **option de
+campagne** `settings.combat_modifiers_mode ∈ { libre, auto }` (défaut `auto`) qui pilote toute
+l'automatisation des modificateurs dérivables : **taille de la cible** + **allure** tireur/cible.
+Absorbe [[PLAN_ALLURE.md]] A4/A5.
+
+### Décisions
+
+- **2 modes** (pas 3). `auto` = dérivé + préselect + joueur lecture seule, MJ garde la main.
+  `libre` = `<select>` neutre (fallback 0) pour joueur ET MJ, aucune dérivation.
+- **`libre` = aucun verrou caché** : `tireur_allure_maximale` = Tir impossible n'est PAS forcé
+  quand personne ne le sélectionne ; seul un choix explicite de l'option dans le menu déclenche
+  le refus (comme `obscurite_totale`). Décision Saar explicite.
+- **Portée hors périmètre** : `authoritativeRangeBand` est déjà seul juge côté serveur
+  (`confirmedModifiers.portee` mort). « Portée libre » serait cosmétique ou franchirait
+  l'invariant 3 → `PLAN_PORTEE_NARRATIVE.md` si un jour. `[VÉRIFIÉ]` : tous les usages serveur
+  pointent sur `authoritativeRangeBand`.
+- Défaut `auto` : « le fonctionnement souhaité d'Enclume est l'automatisation, on prévoit juste
+  pour ceux à qui ça ne convient pas » (Saar).
+- Colonne `characters.size_category` + CHECK 327 **conservées** (1er cran cascade
+  `explicit ?? derived`, patron canonique Foundry/PF2e). Migration `328` a remis les valeurs à
+  NULL (0 ligne sur la base de dev — le `<select>` S5 n'a jamais servi).
+
+### Implémentation
+
+- **M1** (`6552716`, inerte) : `SETTINGS_SCHEMA` +`combat_modifiers_mode` ; `SectionGameRules.jsx`
+  bascule 2 boutons. Propagation live confirmée (`WS.CAMPAIGN_SETTINGS_UPDATED`).
+- **M2** (`e95c9d4`) : retrait `SizeCategoryField.jsx` + 3 montages, routes `GET|PUT
+  /char-sheet/:id/size`, `describeCharacterSize` + option `ignoreExplicit`. Migration `328`
+  NULL-out. Piège : supprimer un fichier du graphe Vite dev → écran blanc « no default export »
+  → `Remove-Item -Recurse client\node_modules\.vite` + restart + hard refresh.
+- **M3+M4** : `socketCombatResolution.js` — `getCampaignSettings` hoisté par handler, PRECHECK +
+  CONFIRM gatés sur `combatModifiersAuto` (en `libre` : PRECHECK renvoie `null`, pas de
+  `stripGmOnlyModifiers`, pas de réécriture allure). `SessionPage`→`CombatOverlay`
+  (`combatModifiersMode` + `assaultPrecheckAllure`) → 4 fenêtres. `CombatModifiersWindow` /
+  `CombatCacModifiersWindow` : `modifiersEditable = isGm || !autoMode` gouverne taille ET allure.
+- Correctif post-test : `allureEditable = modifiersEditable || isAoeAction` retiré — un tir de
+  zone en cible unique porte `modifiers.aoe` (profil AOE) truthy → l'allure restait éditable pour
+  le joueur en `auto`. En `auto` le joueur ne touche à rien, zone comprise.
+
+### Testé
+
+`node --check` ; `node --test` : `campaignSettingsService` 6/6 · `combatAllureService` 11/11 ·
+combat serveur (`combatTurnEngine` + `socketCombatAoe`) sans régression · `shared/**` 550/550.
+`npx eslint` (0 nouvelle erreur — 1 `set-state-in-effect` préexiste dans `CombatModifiersWindow`).
+`npm run build`. **Jeu réel (Saar)** : M2 (fiches OK, 0 régression) ; M3+M4 « fonctionnel »,
+puis correctif allure éditable validé.
+
+### Non testé
+
+Combat réel en mode `libre` de bout en bout (Tir + CaC, joueur choisit ses malus) — la
+non-régression `auto` est validée, `libre` reste à éprouver en session.
+
+### Données
+
+Migration `328` (`characters.size_category` → NULL). Réglage `combat_modifiers_mode` : clé JSONB,
+défaut `auto` appliqué à la lecture — campagnes existantes inchangées.
+
+### Retour arrière
+
+`git revert` de la série M1→M5. Migration `328.down` = no-op (valeurs effacées non restaurables,
+sans consommateur). Colonne 327 conservée dans tous les cas.
+
+### Reste
+
+- **D7** (`PLAN_TAILLE.md`) : retrait du modif de taille en AOE — `socketCombatAoe.js` n'est plus
+  contended (grenades 3f poussé).
+- **Ticket AOE** : `cible_immobile` (+3) en dur pour un tir de zone (`target_token_id` null) ;
+  `isAoeAction` truthy pour un tir de zone en cible unique. À nettoyer avec D7 / refacto
+  `socketCombatAoe.js`.

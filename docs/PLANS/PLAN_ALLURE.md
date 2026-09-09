@@ -1,8 +1,8 @@
 # PLAN_ALLURE — Allure tireur / cible ⇄ mouvement déclaré
 
-> Créé 2026-09-09. Statut : **A1–A3 faits** (mécanisme serveur, validé jeu réel).
-> A4–A5 **absorbés** par le chantier `PLAN_MODE_MODIFICATEURS_COMBAT.md` (option de
-> campagne LIBRE / AUTO — décision Saar 2026-09-09, cf. §5).
+> Créé 2026-09-09. Statut : **CLOS**. A1–A3 (mécanisme serveur) commit `12c12e1`, validé jeu réel.
+> A4 (fenêtre joueur lecture seule) + A5 (doc) faits dans `PLAN_MODE_MODIFICATEURS_COMBAT.md`
+> M3/M4/M5 — l'allure n'est dérivée/lecture-seule qu'en mode `auto`, `<select>` libre en `libre`.
 
 ## 1. Objectif
 
