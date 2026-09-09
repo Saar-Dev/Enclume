@@ -26,6 +26,13 @@ test('mergeWithDefaults — clé parasite (schéma passé, JSONB jamais purgé) 
   assert.deepEqual(Object.keys(merged).sort(), Object.keys(SETTINGS_SCHEMA).sort())
 })
 
+test('mergeWithDefaults — combat_modifiers_mode : défaut auto, valeur stockée respectée', () => {
+  assert.equal(SETTINGS_SCHEMA.combat_modifiers_mode.default, 'auto')
+  assert.deepEqual(SETTINGS_SCHEMA.combat_modifiers_mode.enum, ['libre', 'auto'])
+  assert.equal(mergeWithDefaults(undefined).combat_modifiers_mode, 'auto')
+  assert.equal(mergeWithDefaults({ combat_modifiers_mode: 'libre' }).combat_modifiers_mode, 'libre')
+})
+
 test('mergeWithDefaults — falsy valide (false) sur une clé dont le défaut est true reste false (piège ?? vs ||)', () => {
   // shock_auto_stun/random_mutations ont un défaut `true` — si le code utilisait `||` au lieu de
   // `??`, ce test échouerait (false || true → true, silencieusement écrasé).

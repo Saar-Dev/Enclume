@@ -32,6 +32,12 @@ export const SETTINGS_SCHEMA = {
   // condition sur toutes les campagnes existantes, un défaut différent changerait silencieusement
   // leur comportement (même raisonnement que encumbrance_enabled ci-dessus).
   status_effects_mode:   { type: 'string',  default: 'enforced', enum: ['off', 'icon_only', 'enforced'] },
+  // Modificateurs de combat (taille de la cible + allure tireur/cible). Défaut `auto` : Enclume
+  // automatise (taille dérivée de la fiche cible, allure du mouvement déclaré ; joueur en lecture
+  // seule, MJ garde la main). `libre` : joueur ET MJ choisissent tout à la main, fallback neutre
+  // (0), aucune dérivation, aucun blocage automatique. La portée n'est PAS concernée (toujours
+  // autoritaire serveur depuis la distance des tokens). docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md.
+  combat_modifiers_mode: { type: 'string',  default: 'auto', enum: ['libre', 'auto'] },
   // Encombrement (règle maison, docs/PLAN_MUTATION2.md Lot 1) — défauts à true/3 : la mécanique
   // est déjà active sans aucun gate aujourd'hui, un défaut différent changerait silencieusement
   // le comportement de toutes les campagnes existantes.

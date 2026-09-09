@@ -11,6 +11,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [actionTimerSec, setActionTimerSec] = useState(initialData.action_timer_sec ?? 0)
   const [shockAutoStun, setShockAutoStun] = useState(initialData.shock_auto_stun ?? true)
   const [statusEffectsMode, setStatusEffectsMode] = useState(initialData.status_effects_mode ?? 'enforced')
+  const [combatModifiersMode, setCombatModifiersMode] = useState(initialData.combat_modifiers_mode ?? 'auto')
   const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
   const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
   const [fatigueEnabled, setFatigueEnabled] = useState(initialData.fatigue_enabled ?? false)
@@ -23,6 +24,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleActionTimerSec = (val) => { setActionTimerSec(val); onChange({ action_timer_sec: val }) }
   const handleShockAutoStun = (val) => { setShockAutoStun(val); onChange({ shock_auto_stun: val }) }
   const handleStatusEffectsMode = (val) => { setStatusEffectsMode(val); onChange({ status_effects_mode: val }) }
+  const handleCombatModifiersMode = (val) => { setCombatModifiersMode(val); onChange({ combat_modifiers_mode: val }) }
   const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
   const handleFatigueEnabled = (val) => { setFatigueEnabled(val); onChange({ fatigue_enabled: val }) }
@@ -97,6 +99,25 @@ export default function SectionGameRules({ initialData, onChange }) {
               onClick={() => handleStatusEffectsMode(mode)}
             >
               {t(`settings.statusEffectsMode${mode === 'off' ? 'Off' : mode === 'icon_only' ? 'IconOnly' : 'Enforced'}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.combatModifiersModeLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.combatModifiersModeHint')}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          {['auto', 'libre'].map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className="btn-toggle"
+              data-active={combatModifiersMode === mode}
+              style={{ flex: '0 0 auto', padding: '8px 18px' }}
+              onClick={() => handleCombatModifiersMode(mode)}
+            >
+              {t(`settings.combatModifiersMode${mode === 'auto' ? 'Auto' : 'Libre'}`)}
             </button>
           ))}
         </div>
