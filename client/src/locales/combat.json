@@ -580,6 +580,7 @@
     "header": "{{shooter}} — Tir — {{target}}",
     "headerAoe": "{{shooter}} — Zone d'effet",
     "impossibleShot": "Tir impossible",
+    "weaponState": "État de l'arme {{mod}}",
     "dmgTag": "Dmg {{mod}}",
     "attackBanner": {
       "hit": "✓ Touché !",

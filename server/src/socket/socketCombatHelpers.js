@@ -11,6 +11,7 @@ import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { getIntegrityModifier } from '../../../shared/integrityRules.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
@@ -1089,6 +1090,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const attackerColor    = userRow?.color    ?? '#c86030'
     const attackerUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b) — modificateur d'état de l'arme (+2 / -3 /
+    // -5 selon le palier, MANUEL §3.3). Seulement si le modèle suit l'ITG et que la courante ≥ 1
+    // (une arme à 0 ou en panne est bloquée en amont par L5b, jamais un modificateur ici). 0 pour
+    // les paliers Bon/Moyen → filtré par le noyau.
+    const itgAtkMod = weapon?.ref_has_integrity && weapon.integrity_current >= 1
+      ? (getIntegrityModifier(weapon.integrity_current) ?? 0) : 0
+
     // Seuil + breakdown — noyau pur (PLAN_RW_SYSCOMBAT.md Lot 1, clos après session de jeu shadow
     // sans écart). La coquille assemble la liste ordonnée des contributions (l'ordre de la liste EST
     // l'ordre d'affichage client) ; le noyau somme, filtre les zéros et assemble le breakdown.
@@ -1097,6 +1105,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
         { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
+        { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
         { label: 'Précipitation', value: isRushedMod, type: 'malus' },
         { label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' },
         { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
@@ -2566,9 +2575,16 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // agrégée weaponModComp !== 0 : masquer les mods d'arme en bloc quand leur total est nul est une
     // décision d'assemblage coquille, pas un filtre du noyau (RV2, PLAN_RW_SYSCOMBAT.md §7).
     // Ajouter un modificateur Tir = ajouter une entrée ici, jamais toucher au noyau.
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b) — voir resolveMeleeAction. `weapon` =
+    // l'arme qui tire réellement (primaire ou secondaire, résolu plus haut). Arme à 0 / en panne
+    // bloquée en amont (L5b).
+    const itgAtkMod = weapon?.ref_has_integrity && weapon.integrity_current >= 1
+      ? (getIntegrityModifier(weapon.integrity_current) ?? 0) : 0
+
     const assaultOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
+        { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
         { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
         { label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' },
         { label: 'Deux armes', value: dualWieldComp, type: 'bonus' },

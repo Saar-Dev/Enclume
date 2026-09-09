@@ -1008,16 +1008,27 @@ router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => 
       .first()
     if (!weaponItem) return res.json(empty)
 
+    // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b/G1) — le client affiche le modificateur
+    // d'état de l'arme AVANT le jet (le serveur reste l'autorité sur la valeur appliquée).
+    const weaponRef = weaponItem.equipment_id
+      ? await db('ref_equipment').where({ id: weaponItem.equipment_id }).first('has_integrity')
+      : null
+    const integrity = {
+      hasIntegrity: Boolean(weaponRef?.has_integrity),
+      integrityCurrent: weaponItem.integrity_current,
+      malfunctionSeverity: weaponItem.malfunction_severity,
+    }
+
     const skillAssoc = await db('ref_equipment_skill_assoc')
       .where({ item_id: weaponItem.equipment_id })
       .first()
-    if (!skillAssoc) return res.json(empty)
+    if (!skillAssoc) return res.json({ ...empty, ...integrity })
 
     const refSkill = await db('ref_skills').where({ id: skillAssoc.skill_id }).first()
-    if (!refSkill) return res.json(empty)
+    if (!refSkill) return res.json({ ...empty, ...integrity })
 
     const sheet = await db('char_sheet').where({ character_id: characterId }).first()
-    if (!sheet) return res.json(empty)
+    if (!sheet) return res.json({ ...empty, ...integrity })
 
     const [attrs, charSkill, archetype, mutationEffects] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
@@ -1032,7 +1043,7 @@ router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => 
 
     const skillTotal = calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
 
-    res.json({ skillId: refSkill.id, skillLabel: refSkill.label, skillTotal })
+    res.json({ skillId: refSkill.id, skillLabel: refSkill.label, skillTotal, ...integrity })
   } catch (err) { next(err) }
 })
 

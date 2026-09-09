@@ -301,7 +301,21 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 
 ## 7. L5 — Combat (modificateur + porte de panne + test de panne d'arme)
 
-**Périmètre : humanoïde PJ + PNJ.** Exo/drone = Intégrité propre, hors-scope.
+**Périmètre : humanoïde PJ + PNJ.** Exo/drone = Intégrité propre, hors-scope. **Armes de jet
+(Grenade + « Armes de jet ») : hors ITG** (migration 333) — L5 ne les concerne pas.
+
+> **L5a (§7.1.b, modificateur) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> - Serveur (autorité) : `getIntegrityModifier(weapon.integrity_current)` poussé dans le tableau
+>   `contributions` de `resolveMeleeAction` ET `resolveAssaultAction` (`socketCombatHelpers.js`) —
+>   `weapon` = l'arme qui tire réellement (primaire/secondaire résolu). `null`/0/panne : aucun
+>   modificateur (0 filtré par le noyau ; le blocage arme HS = L5b). `getOwnedHandWeapon` porte déjà
+>   l'ITG (L4a) — rien à étendre.
+> - Client (G1, avant le jet) : route `/weapon-skill/:weaponInvId` renvoie
+>   `hasIntegrity`/`integrityCurrent`/`malfunctionSeverity` ; `CombatModifiersWindow` (Tir) **et**
+>   `CombatCacModifiersWindow` (CaC) l'ajoutent à `totalModComp` + pastille « État de l'arme -3 ».
+> - Tests : `combatAttackRoll` 29/29, `shared/**` 573/573, `vite build` OK.
+> **Reste L5b** (blocage arme en panne / HS, déclaration + résolution) **et L5c** (test de panne
+> d'arme sur échec à ITG ≤ 5).
 
 ### 7.0 Points d'insertion — vérifiés propres (2026-09-09)
 

@@ -6,6 +6,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import { CAC_SITUATION_MODS, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
+import { getIntegrityModifier } from '../../../shared/integrityRules.js'
 
 // cacMod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité CaC,
 // PLAN_RW_SYSCOMBAT.md Lot 0 — même pattern que mod() dans CombatModifiersWindow.jsx pour le Tir).
@@ -106,7 +107,10 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
   const tailleDef = TAILLES.find(t => t.key === taille)
   const tailleModComp = tailleDef?.mod ?? 0
   const hasTerrainInstableAtk = situationAtk.includes('cac_terrain_instable')
-  const totalModComp = atkFixedMod + tailleModComp
+  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b/G1) — état de l'arme, affiché avant le jet.
+  const itgWeaponMod = weaponSkill?.hasIntegrity && weaponSkill.integrityCurrent >= 1
+    ? (getIntegrityModifier(weaponSkill.integrityCurrent) ?? 0) : 0
+  const totalModComp = atkFixedMod + tailleModComp + itgWeaponMod
 
   const handleLancer = () => {
     if (isRolling || !activeRosterEntry) return
@@ -141,6 +145,11 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
             }
             {hasTerrainInstableAtk && <span style={{ marginLeft: 4, opacity: 0.7 }}>{t('cacModifiers.acroTag')}</span>}
           </span>
+          {itgWeaponMod !== 0 && (
+            <span style={{ ...styles.pill, background: '#2a2a1a', color: itgWeaponMod < 0 ? '#ca9d6d' : '#6dca6d' }}>
+              {t('modifiers.weaponState', { mod: formatMod(itgWeaponMod) })}
+            </span>
+          )}
         </div>
       </div>
 

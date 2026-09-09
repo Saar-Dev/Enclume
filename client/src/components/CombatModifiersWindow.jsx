@@ -7,6 +7,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import { LOC, SEVERITY } from '../lib/combatResultLabels.js'
 import api from '../lib/api.js'
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
+import { getIntegrityModifier } from '../../../shared/integrityRules.js'
 
 // mod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité tir à
 // distance, TIRIMP docs/BUGIDENTIFIE.md). Un `sitKey` absent (val 'immobile'/'cible_lente') signifie
@@ -216,7 +217,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const couvertureMod   = couvertures.reduce((sum, k) => sum + (COUVERTURES.find(c => c.key === k)?.mod ?? 0), 0)
   const obscuriteMod    = obscurites.reduce((sum, k) => sum + (OBSCURITES.find(o => o.key === k)?.mod ?? 0), 0)
   const tailleModComp   = TAILLES.find(t => t.key === taille)?.mod ?? 0
-  const totalModComp    = porteeModComp + tireurAllureMod + cibleAllureMod + couvertureMod + obscuriteMod + tailleModComp + (isRushed ? -5 : 0)
+  // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b/G1) — modificateur d'état de l'arme, affiché
+  // AVANT le jet. Le serveur reste l'autorité sur la valeur réellement appliquée.
+  const itgWeaponMod = weaponSkill?.hasIntegrity && weaponSkill.integrityCurrent >= 1
+    ? (getIntegrityModifier(weaponSkill.integrityCurrent) ?? 0) : 0
+  const totalModComp    = porteeModComp + tireurAllureMod + cibleAllureMod + couvertureMod + obscuriteMod + tailleModComp + itgWeaponMod + (isRushed ? -5 : 0)
   const bonusDmg        = assaultAction?.fire_mode_bonus_dmg ?? 0
 
   // Situation courante (mêmes clés que celles envoyées au serveur) — construite une seule fois,
@@ -277,6 +282,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
                 : t('cacModifiers.compFallback', { mod: formatMod(totalModComp) })
             }
           </span>
+          {itgWeaponMod !== 0 && (
+            <span style={{ ...styles.pill, background: '#2a2a1a', color: itgWeaponMod < 0 ? '#ca9d6d' : '#6dca6d' }}>
+              {t('modifiers.weaponState', { mod: formatMod(itgWeaponMod) })}
+            </span>
+          )}
           {bonusDmg !== 0 && (
             <span style={{ ...styles.pill, background: '#3a2a10', color: '#f5a842' }}>
               {t('modifiers.dmgTag', { mod: formatMod(bonusDmg) })}
