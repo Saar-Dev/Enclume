@@ -321,9 +321,22 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 > - **4 sites** : déclaration Tir + déclaration CaC (`socketCombatAnnouncement.js`), résolution
 >   `resolveMeleeAction` + `resolveAssaultAction` (`socketCombatHelpers.js`, sur l'arme qui tire
 >   réellement). Message FR en dur (dette i18n assumée). Action refusée, aucune ressource consommée.
-> - **NON fait** : grisage de l'arme dans le sélecteur de déclaration (client) — le joueur reçoit
->   le message d'erreur à la place. À décider avec Saar.
-> **Reste L5c** (test de panne d'arme sur échec simple à ITG ∈ [1,5]).
+> - Grisage de l'arme dans le sélecteur client : **abandonné (Saar 2026-09-09 : « aucun intérêt »)** —
+>   le message d'erreur suffit.
+>
+> **Reste L5c — PAS COMMENCÉ.** Test de panne d'arme sur échec simple à ITG ∈ [1,5].
+> Emplacement : dans `resolveMeleeAction` / `resolveAssaultAction` (`socketCombatHelpers.js`), APRÈS
+> que l'issue du jet d'attaque est connue (`attaqueOutcome` / `assaultOutcome`), si
+> `!isSuccess && !catastropheRisk && weapon?.ref_has_integrity && weapon.integrity_current ∈ [1,5]` :
+> `await integrityService.runPanneTest(effectiveWeaponInvId, { reason: 'combat_low_itg', characterId: character.id })`
+> (ouvre sa propre transaction — la résolution de combat n'en est pas une). N'annule PAS l'attaque
+> déjà résolue. Émettre : une carte `DICE_RESULT` via `emissions.push` (patron minimal
+> `socketDice.js:321` WOUND_INFECTION_ROLL — `formula`, `rolls:[roll]`, `total`, `isCriticalFail`,
+> `seed`, `secret:false`) + un `INVENTORY_UPDATED` avec l'item frais (l'icône ITG doit se mettre à
+> jour pour tous). `runPanneTest` renvoie déjà `{ panne, roll, threshold, loss, before, after,
+> definitiveLoss, tiersCrossed, criticalFailReroll }` — **ajouter `seed: outcome.seed` à son retour**
+> (absent aujourd'hui). Melee : `weapon` + `weaponInvId`. Assault : `weapon` + `effectiveWeaponInvId`.
+> Le libellé du jet reste FR en dur (dette i18n assumée).
 
 ### 7.0 Points d'insertion — vérifiés propres (2026-09-09)
 
