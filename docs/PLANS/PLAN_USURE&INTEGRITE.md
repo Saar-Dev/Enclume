@@ -456,7 +456,48 @@ L4 rend le palier lisible sur chaque item.
 >   (MJ) + `GET …/my-pending-rolls` **concatène** blessure + réparation (chaque domaine sa requête —
 >   `woundReviewService` PAS généralisé). +6 tests.
 >
-> **L6c (client) — PAS COMMENCÉ. Plan corrigé après analyse à charge (2026-09-10) :**
+> **L6c — REPLAN 2026-09-10 après rejet de L6c-1 (client) par Saar.**
+> L6c-1 client (`9e994e3`) rejeté : panneau MJ flottant maison + enfilade de boutons inline + texte
+> joueur figé. **Le projet a déjà le bon pattern** : `MessageRendererRegistry.jsx:35-96` — carte
+> d'action dans le chat (`sidebar-msg-action`), `[Accepter]/[Auto]/[Refuser]`, badge « à traiter »
+> sur l'onglet chat, TTL — utilisée par `entity_action` (`useEntitySocket.js`) et le crochetage de
+> connecteur (`socketConnector.js`). C'est le « cf. Marchand / vente d'objet » de Saar.
+> **Backend L6a/L6b + serveur L6c-1 CONSERVÉS** (échéance `equipment_repair`, `applyRepairOutcome`,
+> `computeRepairThreshold`, route `repair-preview`, `advance_driven`, `repair-decision`).
+> **À jeter** : `EquipmentRepairReviewPanel.jsx`, le bouton « 🔧 Réparer » adjacent, l'éditeur inline.
+> **Replan** :
+> 1. Supprimer `EquipmentRepairReviewPanel.jsx`.
+> 2. `repair-request` émet `EQUIPMENT_REPAIR_REQUESTED` → carte d'action dans le chat du MJ
+>    (`addMessage({ type: 'repair_request', gmOnly: true, requestId: echeanceId, playerName, itemName,
+>    skillId, skillLabel, threshold })`, patron `useEntitySocket.onEntityActionPending`). Re-dérivée à
+>    la reconnexion via `GET repair-requests` (conservé, repurposé). Badge via `pendingActionCount`.
+> 3. Carte : `[Approuver]` (+ `<select>` compétence, `repairSkillOptions`) / `[Refuser]` → route
+>    `repair-decision`. Résolution → `EQUIPMENT_REPAIR_UPDATED` → carte retirée.
+> 4. Joueur lance depuis « Jets en attente » (`PendingRollsPanel` dispatch, conservé de L6c-1).
+> 5. **Pop-up ITG à deux visages** (patron `SkillInfoPopover.jsx`, état `{popoverItemId,x,y}` dans
+>    `InventoryPanel`, `position: fixed`) — remplace l'enfilade inline ET le bouton adjacent.
+>    - **MJ, bloc « État initial »** (presets = paliers RAW, cf. MANUEL §3.3) : `[Neuf]` (courante=max=
+>      ITG max de la qualité), `[Occasion]` (jet, route existante), `[État moyen]` (courante=13),
+>      `[Endommagé]` (courante=3), `[Hors d'usage]` (courante=0 + atelier) + 2 champs courante/max.
+>    - **MJ, bloc « Statut »** : 3 boutons `[Opérationnel]`/`[Requiert une réparation]`/`[Requiert un
+>      atelier]` (fini le `<select>`).
+>    - **MJ, bloc « Actions »** : `[Usage intensif]` (corrigé — hors ligne draggable dans la pop-up,
+>      le clic passe ; la route `panne-test` est saine).
+>    - **Joueur** : lecture d'état + selon `repair_request_status` : rien → « Armurerie : 8 · NT V −5
+>      · Seuil : 3 » (via `repair-preview`) + `[Faire réparer par un pro]` (grisé V1) + `[Réparer
+>      soi-même]` ; `pending_mj_review` → « En attente du MJ » + `[Annuler ma demande]` ;
+>      `awaiting_player_roll` → « Approuvée — lancez votre jet ».
+> 6. **Icône** : `getInventory`/`getItemWithRef` gagnent `repair_request_status` (sous-requête
+>    `game_echeances`). Routes de réparation émettent `INVENTORY_UPDATED` (item frais) → le store se met
+>    à jour, l'icône reçoit `itg-repair-pending` (**liseré bleu discret**) + infobulle. Retour normal
+>    auto à la résolution/refus.
+> **Décisions Saar (2026-09-10)** : annulation joueur = même logique que la revente (pop-up chat,
+>  acceptation) ; MJ n'a PAS de section « réparer pour un absent » (il a la carte) ; liseré bleu OK.
+>
+> **Reste après replan** : analyse à charge du replan, puis code (probable découpage : carte MJ + suppression du panneau / pop-up ITG / icône status).
+>
+> ---
+> **[ARCHIVE] Plan L6c corrigé après 2ᵉ analyse à charge (2026-09-10) — superseded par le replan ci-dessus :**
 > - **Le client ne calcule AUCUNE stat** (invariant #3). Route `GET …/inventory/:itemId/repair-preview`
 >   (`?echeanceId=` optionnel : sans → compétence dérivée de l'item ; avec → compétence finale du
 >   payload) → `{ skillLabel, skillTotal, ntMalus, threshold }`. Le serveur extrait `computeRepairThreshold`
