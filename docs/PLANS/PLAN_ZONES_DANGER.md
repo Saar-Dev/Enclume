@@ -559,8 +559,8 @@ consommateur du rework world builder, §12).
 
 ## 10. Reste à faire (aucun code dans la conversation de cadrage)
 
-1. **Plan détaillé Z0** = §13 (fait 2026-09-10). **Plan détaillé Z1** = à écrire (le rework le plus
-   risqué : refonte du système « dangers environnementaux » sans régression).
+1. **Plans détaillés Z0 (§13) et Z1 (§14)** = faits 2026-09-10. Chacun a une liste de points pour
+   son propre tour d'analyse à charge (§13.7, §14.8) — à faire au moment de coder, pas maintenant.
 2. **Validation Saar** de §5 (RAW) — surtout §5.3 gaz (déjà vérifié) et §5.5 Souffle (inférence).
 3. **Pas de `PLAN_ZONES_DANGER_EDITEUR.md` à ce stade.** L'éditeur E-v1 tient dans §7.2 (incrément
    Z6). Le sculpteur de volume E-v2 sera cadré dans le sillage du rework world builder — conversation
@@ -586,7 +586,9 @@ consommateur du rework world builder, §12).
   re-confirmé (écart avec l'ancien preset `inferno locations:1` noté §5.1). `locationMode` mappé sur
   la précédence existante (§3).
 - **2026-09-10** — stub `PLAN_WORLD_BUILDER_REWORK.md` (le primitif d'édition 2D est partagé) ;
-  renvoi `PLAN_FATIGUE_DOMMAGES` §9 → §2.B ; ROADMAP rafraîchie. **Plan détaillé Z0 écrit (§13).**
+  renvoi `PLAN_FATIGUE_DOMMAGES` §9 → §2.B ; ROADMAP rafraîchie. **Plans détaillés Z0 (§13) et Z1
+  (§14) écrits** — Z1 découpé en 4 sous-étapes (registre / bascule du tick / absorption presets +
+  résolveurs / migration `ref_equipment`).
 
 ---
 
@@ -700,3 +702,99 @@ comportement de jeu ne change. `git diff --check`.
 6. `dangerCatalog.js` : une clé par intensité (`feu:petit`…) confirmée vs une définition paramétrée.
 7. Catalogue : figer les noms de familles `category` (`feu`/`acide`/`gaz`/`radiation`/…) — ils
    servent au `stackingPolicy` « par catégorie » et à la dérivation de `getAllHazardCodes()` en Z1.
+
+---
+
+## 14. Plan détaillé — incrément Z1
+
+> **Statut : plan, pas de code.** L'incrément **le plus risqué** : il remplace un système en
+> production (dangers environnementaux, Lot 3) par le dispatch générique, **sans régression**.
+> Découpé en 4 sous-étapes indépendamment testables (méthode `AGENTS.md` : un plan = un problème).
+
+### 14.1 Objectif
+
+Brancher le **registre** `effectLineResolverRegistry` + `resolveActiveEffects`, y **refondre** le
+système Lot 3 (§2.B), livrer les résolveurs `damage` / `status` / `note` / `modifier` (base).
+**Toujours pas de spatial** (le balayage de zone = Z2) : à la fin de Z1, la seule source de
+conditions reste `exposeToHazard` (feeder token), mais la **résolution** passe par le nouveau chemin.
+
+**Le risque** : `burning` / `acid` / `decompression` sont testés en session réelle et ont des tests
+purs `deepEqual`. Toute déviation de dégât, de Localisation, de timing de purge, de linger Acide ou
+d'émission `COMBAT_ATTACK_RESULT` est une régression.
+
+### 14.2 Sous-étape Z1.1 — le registre + le résolveur `damage`, **sans branchement**
+
+| Fichier | Nature | Contenu |
+|---|---|---|
+| `shared/world/effectLineResolverRegistry.js` | neuf (shared = contrat) | `EFFECT_LINE_RESOLVERS` : une entrée par `type` — `{ type, phase, validateParams }` (le `resolve` est serveur). Miroir de `weaponModRegistry` (`findModRegistryEntry`) / `environmentalHazardRegistry`. `findEffectLineResolver(type)` → `undefined` si absent, **jamais un throw** (patron maison). |
+| `server/src/services/effectLineResolverService.js` | neuf | Les `resolve(ctx)` serveur. **Z1.1 n'enregistre que `damage`**. `resolveDamageLine(ctx)` : lit `formula` / `locations` / `locationMode` / `forcedLocation` de la ligne + `puissance` (défaut 0) → `parseDice` → boucle Localisation → `resolveTargetHit` → `COMBAT_ATTACK_RESULT`. **Copie fidèle de `resolveEnvironmentalHazardTicks` (lignes 147-188)** — mêmes champs d'événement, même `isPnj:true`, même absence d'`armorReductionFactor`. `applicableResolvers` + un `RESOLVERS` map comme `weaponModService`. |
+| `*.test.mjs` | neuf | Le registre expose `damage` ; `findEffectLineResolver('inconnu')` → `undefined` ; `validateParams` de `damage` accepte/rejette. Résolveur `damage` = test d'intégration serveur (base) sur un token, compare le hit à l'ancien chemin. |
+
+**Rien n'appelle ce service à la fin de Z1.1.** `node --check` + tests.
+
+### 14.3 Sous-étape Z1.2 — `resolveActiveEffects` + **la bascule** du tick
+
+| Fichier | Changement |
+|---|---|
+| `server/src/services/effectLineResolverService.js` | `resolveActiveEffects(io, db, campaignId, rows)` : pour chaque ligne `token_statuses` active, résout la/les ligne(s) d'effet de sa **définition catalogue** via le registre. Pour Z1.2, ne traite que les définitions à ligne `damage` `phase:'onTurn'`. |
+| `server/src/socket/combatTurnEngine.js` (≈171-173) | **remplace** `resolveEnvironmentalHazardTicks(...)` par `resolveActiveEffects(...)`. La jointure `combat_roster ⋈ token_statuses` filtrée par `getAllHazardCodes()` **reste** (Z2 ajoutera le balayage de zone à côté). |
+| `server/src/lib/environmentalHazardService.js` | `resolveEnvironmentalHazardTicks` **supprimé** (plus aucun appelant). `getAllHazardCodes` **conservé** mais **dérivé du catalogue** (§14.4). `exposeToHazard` / `clearHazard` / `turnsFromNow` **inchangés**. |
+| `server/src/socket/socketCombatHelpers.js:18` | **import mort supprimé** (`resolveEnvironmentalHazardTicks, getAllHazardCodes` importés, jamais utilisés — vérifié). |
+
+**C'est le moment de non-régression.** Preuve : session Saar — exposer `burning` / `acid` (linger) /
+`decompression` sur un token, dérouler 3 Tours, comparer dégâts + Localisation + expiration au
+comportement d'avant. Les tests service Lot 3 doivent passer (ou être portés à `resolveActiveEffects`).
+
+### 14.4 Sous-étape Z1.3 — absorption presets + dérivation registre + résolveurs `status`/`note`/`modifier`
+
+| Fichier | Changement |
+|---|---|
+| `shared/world/dangerCatalog.js` | Les entrées `feu:*` / `acide:capsule` / `decompression` deviennent **la** source des chiffres. `feu:brasier` = `3d10` / `locations:0` / `locationMode:'all'` (décision B3). |
+| `shared/environmentalHazardPresets.js` | **supprimé** — ou réduit à `export { BURNING_PRESETS } from './world/dangerCatalog.js'` (dérivé) le temps de migrer `TokenStatusPanel.jsx`. `inferno` **change** (`locations:1` → sémantique brasier). |
+| `shared/environmentalHazardRegistry.js` | `ENVIRONMENTAL_HAZARD_REGISTRY` **dérivé** : `listDangerDefinitions().filter(d => d.category ∈ FAMILLES_HAZARD).map(d => ({ code: d.hazardCode, forcedLocation: d.forcedLocation ?? null }))`. `findHazardRegistryEntry` inchangé en surface. |
+| `shared/environmentalHazardPresets.test.mjs` | **mis à jour, pas porté verbatim** : `small`/`medium`/`large` + décompression inchangés ; la ligne `inferno` reflète la nouvelle sémantique. |
+| `shared/environmentalHazardRegistry.test.mjs` | **porté** : l'assertion « 3 codes, décompression `forcedLocation:'corps'` » doit tenir sur le résultat **dérivé**. |
+| `server/src/services/effectLineResolverService.js` | enregistre `note` (émet une note MJ/chat — patron `type:'note'` de `worldEffects`), `status` (pose un `token_status` via `statusService.applyModStatus` — valide le code contre `shared/statusCodes.js`, **créé ici** = aggradation, cf. Z0 §13.7 pt 5), `modifier` **base** (pose/rafraîchit un `token_status` portant la valeur ; le branchement dans `calcActiveMalus` via une entrée `ACTIVE_MALUS_SOURCES` = **Z4**, avec escalade + `decay`). |
+
+### 14.5 Sous-étape Z1.4 — migration `ref_equipment`
+
+Migration Knex (`.claude/rules/migrations.md` : jamais d'`id` en dur, matcher par clé métier `name`) :
+**vide** les 6 valeurs corrompues (§5.4) — `Grenade/Capsule à gaz — décomposants` (`nation`),
+`— vésicants` (`nation`), `— assommants` (`damage_h`), et vérifier les 3 autres lignes gaz. La donnée
+vit dans `dangerCatalog.js`. Pas de nouvelle colonne (le `dangerKey` dans `aoe_profile` JSONB = Z3).
+`down()` : ré-écrit les valeurs (documentées dans la migration).
+
+### 14.6 Callers & non-régression — inventaire complet `[VÉRIFIÉ grep]`
+
+| Site | Impact Z1 |
+|---|---|
+| `combatTurnEngine.js:168-173` | bascule tick (Z1.2) |
+| `socketCombatHelpers.js:18` | import mort → retrait (Z1.2) |
+| `routes/campaigns.js:572-588` (`/hazards/:code/expose\|clear`) | **inchangé** — `exposeToHazard`/`clearHazard` conservés |
+| `aoeMechanisms/flamethrower.js:70` (`exposeToHazard('burning', …, durationDice:'2D6')`) | **inchangé** — le feeder token marche pareil |
+| `coldExposureService.js:183` / `fallDamageService.js:100` (commentaires « même patron ») | aucun code, commentaires à jour éventuels |
+| `client/TokenStatusPanel.jsx` | consomme `BURNING_PRESETS` — **inchangé** si on garde le ré-export ; sinon migrer l'import vers le catalogue |
+| Tests : `environmentalHazardRegistry.test.mjs`, `environmentalHazardPresets.test.mjs` + tests service Lot 3 | portés / mis à jour (§14.4) |
+
+**Validation Z1** (`AGENTS.md` — migration + combat) : `node --test 'shared/**/*.test.mjs'` + tests
+serveur ciblés + **build client** + **session Saar** : brûler / acide (linger) / décompresser un
+token = identique à avant ; un `feu:brasier` exposé manuellement tue en 1 Tour.
+
+### 14.7 Hors Z1
+
+Balayage de présence spatial (**Z2**) · `puissance` sur l'instance / migration (**Z2**) · `escalation`
++ `remanence:'decay'` + entrée `ACTIVE_MALUS_SOURCES` (**Z4**) · `protections` JSONB (**Z1b**) ·
+`dangerKey` dans `aoe_profile` (**Z3**) · les 9 résolveurs v2.
+
+### 14.8 Points pour l'analyse à charge (tour dédié)
+
+1. `resolveActiveEffects` : itère les `token_statuses` **ou** reçoit les `rows` de l'appelant (comme
+   `resolveEnvironmentalHazardTicks` aujourd'hui) ? Cohérence avec le futur balayage Z2.
+2. `shared/statusCodes.js` : périmètre exact (fusionner `VALID_STATUS_CODES` + hazards + mod statuses ?)
+   — risque de casser `socketToken.js` si mal cadré. Peut-être un incrément séparé avant Z1.
+3. `modifier` base en Z1 vs tout en Z4 : est-ce que « poser le `token_status` sans le lire » a une
+   valeur, ou Z1 s'arrête à `damage`/`status`/`note` ?
+4. Tests service Lot 3 : localiser (`server/src/**/*hazard*.test` — aucun trouvé au grep initial ;
+   vérifier `combatTurnEngine` / intégration).
+5. `getAllHazardCodes()` dérivé : ordre des codes (le test `deepEqual` est sensible à l'ordre).
+6. Le `down()` de la migration `ref_equipment` : re-vérifier les 6 valeurs exactes avant d'écrire.
