@@ -1058,11 +1058,10 @@ Le plan se lit plus compact qu'il ne se vivra. Pas un défaut — un attendu à 
 
 | # | But | Intégration |
 |---|---|---|
-| **Z0a** | Schéma de ligne — `shared/world/worldEffects.js` : `normalizeHook` v2 (`dégât` · `statut` + `déclencheur` + `rémanence {rien\|conditionnelle}`). Back-compat `fire`. | pur `shared/`, tests purs |
-| **Z0b** | `resolveZoneTick` **frère** du tick hazard dans `startResolutionPhase` (réutilise `resolveTargetHit` / `statusService`) + `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans`) | serveur, **pas** de fusion avec `resolveEnvironmentalHazardTicks` |
+| **Z0** *(ex-Z0a+Z0b, fusionnés — cf. §9.Z0a analyse à charge)* | Schéma `shared/world/worldEffects.js` : `normalizeHook` v2 (`dégât` enrichi + `statut` ; `rémanence {rien\|conditionnelle}` ; **pas** `modifier` — reporté en Z3) **+** `resolveZoneTick` **frère** du tick hazard dans `startResolutionPhase` (réutilise `resolveTargetHit` / `statusService`) + `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans`) | pur `shared/` + serveur, **pas** de fusion avec `resolveEnvironmentalHazardTicks`, aucune migration, tests unitaires |
 | **Z1** | Balayage de présence + cycle de vie : `startResolutionPhase` (balayage → `resolveZoneTick`) ; `endTurn` (`duration_rounds` → `expired`) ; `rémanence: rien` à l'`exit`. **Preuve : insert manuel zone `fire` → brûle + s'éteint en sortant** | serveur |
 | **Z2** | Grenade incendiaire — spawn réel depuis le combat, sur `circleGrenade.js`. **Preuve utilisateur #1.** Dé-gèle le chantier grenades | serveur + migration `ref_equipment` |
-| **Z3** | Ligne `modificateur` — nouvelle entrée `ACTIVE_MALUS_SOURCES` alimentée par une zone/condition | serveur, `activeMalusRegistry.js` |
+| **Z3** | Ligne `modificateur` — **ajout du type `modifier` à `normalizeHook`** (reporté de Z0) + nouvelle entrée `ACTIVE_MALUS_SOURCES` alimentée par une zone/condition | `shared/` + serveur, `activeMalusRegistry.js` |
 | **Z4** | Escalade + décroissance — accumulateur mutable dans `token_statuses.data` au tick + `rémanence: décroissance` (la mini-FSM) | serveur |
 | **Z5** | Gaz simple = Z3 + Z4 assemblés (`modificateur −3` + escalade + décroissance). **Preuve utilisateur #2.** Test CON du gaz = v2 | serveur + migration |
 | **Z6** | UI MJ — form lignes d'effet + pose/retrait + rendu mesh translucide | client |
@@ -1072,7 +1071,88 @@ Le plan se lit plus compact qu'il ne se vivra. Pas un défaut — un attendu à 
 place mal `modificateur`. Pas de « ne pas faire » — le cadrage reste solide, l'ambition v1 reste
 justifiée.
 
-## 9. Historique
+## 9. Plans détaillés par incrément
+
+### 9.Z0a — Schéma de ligne d'effet (`shared/world/worldEffects.js`)
+
+> Plan présenté 2026-09-09. **Pur `shared/`, zéro migration, zéro serveur, zéro client.** Aucun effet
+> jeu observable (Z0a ne branche rien — la résolution est Z0b / Z3).
+
+**Objectif** : étendre le vocabulaire déclaratif des `hooks` pour porter les lignes d'effet `dégât`
+(enrichie) et `statut` (neuve), + `modifier` comme **descripteur** (résolu en Z3 via
+`activeMalusRegistry`, pas ici), sans casser l'existant.
+
+**Fichier unique : `shared/world/worldEffects.js`**
+
+1. `HOOK_TYPES` → `+ 'status'` `+ 'modifier'` (les 4 actuels restent).
+2. `normalizeHook`, par type :
+   - **`damage`** (enrichi, rétro-compatible) :
+     - `formula` : `string | null` (forme dés regex ; validation fine = serveur ; `null` ⟹ l'instance
+       fournit via `metadata.formula`) ;
+     - `locations` : `number` (clamp 1–20) **ou** `string` dés — défaut `1` ;
+     - `locationMode` : `'exposed' | 'random'` — défaut `'random'` ;
+     - `forcedLocation` : `string | null` (clé `LOCATION_TO_SLOT`, validée serveur) ;
+     - `armorFactor` : clamp 0–1, défaut `1` ;
+     - `amountPerIntensity` : **conservé** (clamp 0–1000), déprécié — filet legacy `fire` ;
+     - `damageType` : inchangé.
+   - **`status`** (neuf) : `statusCode` (slug, obligatoire) · `remanence` ∈ `'none' | 'conditional'`
+     (v1 ; `decay` / `fixed` **rejetés** en Z0a, ajoutés Z4) · `remanenceCondition` (libellé ≤ 128).
+   - **`modifier`** (neuf, descripteur seul) : `modifierTarget: 'actions'` (v1) · `value` clamp
+     −20…0. **Consommé par rien en Z0a.**
+   - `note` / `test` / `restriction` : **inchangés**.
+3. `HOOK_EVENTS` : **inchangé**. Mapping §4.8 : `entrée`→`enter` · `présence_au_Tour`→`turnStart` ·
+   `sortie`→`exit` · `traversée`→`traverse`.
+4. `BUILTIN_DEFINITIONS.fire` : hook `damage` →
+   `{ event:'turnStart', type:'damage', damageType:'fire', formula:null, locations:1, locationMode:'exposed', amountPerIntensity:1 }`.
+   `amountPerIntensity:1` gardé = filet : une instance `fire` existante sans `metadata.formula`
+   continue à 1×intensité au lieu de planter. `gas` / `flooded` / `oil` / `unstable` : inchangés.
+5. `normalizeEffectDefinition` : inchangé (mappe déjà `hooks.map(normalizeHook)`).
+6. `compileEffectRegions` / `collect*` : **inchangés** — filtrent par `event`, agnostiques du `type`.
+   Vérifier qu'aucun ne présuppose les 4 types actuels.
+
+**Invariants** : « une définition custom n'exécute jamais de code » (les 2 types neufs = descripteurs
+validés) · `shared/` pur (aucune importation serveur) · rétro-compat (tout hook ancienne forme reste
+valide).
+
+**Hors-périmètre Z0a** : la résolution (Z0b `resolveZoneTick` + Z3 `activeMalusRegistry`) ·
+`remanence: decay|fixed`, `escalation` (Z4) · les blocs `géométrie` / `atténuations` / `cycleDeVie` /
+`chaînage` de §4.8 · toute migration (JSONB déjà) · client / UI.
+
+**Tests (`shared/world/worldEffects.test.mjs`)** : hook `status` valide / `statusCode` absent rejeté /
+`remanence:'decay'` rejeté · hook `modifier` valide / `value` > 0 → 0 · `damage` ancienne forme
+acceptée · `damage` nouvelle forme acceptée · `BUILTIN_WORLD_EFFECTS.fire` forme enrichie ·
+non-régression des tests existants.
+
+**Validation** : `node --check` + `node --test 'shared/**/*.test.mjs'`. Pas de session Saar.
+
+### 9.Z0a — Analyse à charge (2026-09-10) → **le plan devient « Z0 » (fusion Z0a + Z0b)**
+
+1. **`modifier` sort de Z0a.** Schéma mort (rien ne le consomme avant Z3). Z0a ne porte que
+   `damage` enrichi + `status`. Le type `modifier` sera ajouté **avec** Z3 (`activeMalusRegistry`),
+   où son consommateur existe et où son ncommage se tranche.
+2. **Fusion Z0a + Z0b → un seul incrément « Z0 ».** Un schéma sans consommateur peut churner ; le
+   prouver immédiatement par `resolveZoneTick` évite un tour à vide. Z0 finit sur un **résolveur
+   testable unitairement** (toujours pas de session Saar — c'est Z1).
+3. **`[VÉRIFIÉ DB locale]` `world_effect_definitions` = 0 ligne, `world_effect_instances` = 0 ligne.**
+   Aucune rétro-compat de données stockées. `amountPerIntensity` reste **accepté** (validation du
+   builtin + toute entrée ancienne forme) mais **sans prétention de repli fonctionnel** : `resolveZoneTick`
+   **exige** une `formula` (hook ou instance) ; une instance `fire` sans formule = **mal configurée →
+   loggée + sautée**, jamais un silencieux 1×intensité.
+4. **Formule de dés** : regex dans `shared/`, mais la validation **autoritaire** (`parseDice` /
+   `isValidDiceFormula`) tourne à la **création** de la définition / de l'instance côté serveur —
+   **jamais différée au tick** (même discipline que `exposeToHazard`, `environmentalHazardService.js`).
+5. **Champs du hook = valeurs par défaut ; le `metadata` de l'instance surcharge.** À acter pour que
+   la résolution Z0 soit sans ambiguïté (miroir du `data.formula` par instance actuel).
+6. **`remanence: 'conditional'` en v1** = le statut **persiste à la sortie + le MJ le retire à la
+   main**. `remanenceCondition` = **libellé d'affichage seul** en v1. Les conditions d'arrêt
+   automatiques (submersion éteint le feu, neutralisant, medkit) = v2.
+7. **`[VÉRIFIÉ code]` `worldEffectService.serializeDefinition` / `definitionFromRow` = pass-through
+   pour `hooks`** → **aucun changement serveur pour le schéma**. Le seul ajout serveur de Z0 est
+   `resolveZoneTick`.
+
+**Verdict** : plan sain. Resserré à `damage` + `status`, Z0a et Z0b fusionnés. Pas de « ne pas faire ».
+
+## 10. Historique
 
 - **2026-09-09** — Trouvaille pendant le chantier grenades 3-bis (`docs/JOURNAL8.md`,
   `PLAN_GRENADES.md` §6) : la mécanique « zones dangereuses » est un échafaudage. Cadrage ouvert
@@ -1129,3 +1209,12 @@ justifiée.
   mouvement forcé, animation géométrique, formes non-AABB, interaction zone × zone, pièges).
   §7.9 (rendu joueur) rabattu sur Z6. **Cadrage terminé — prêt à passer au plan détaillé de Z0 puis
   au code, sur validation Saar.** Toujours rien codé.
+- **2026-09-09 (analyse à charge du plan §8)** — §8bis : 10 constats. Le tick de zone ne fusionne pas
+  avec `resolveEnvironmentalHazardTicks` ; `modificateur` passe par `activeMalusRegistry` ; Z4
+  sous-dimensionné (mini-FSM) ; limites v1 explicitées. Découpage → 9 incréments Z0a→Z7.
+- **2026-09-10 (plan détaillé Z0 + analyse à charge)** — §9.Z0a : plan du schéma
+  (`normalizeHook` v2 : `damage` enrichi + `status`). Analyse à charge : `modifier` reporté en Z3
+  (schéma mort) ; **Z0a + Z0b fusionnés en « Z0 »** (schéma prouvé par son résolveur, pas de tour à
+  vide) ; `[VÉRIFIÉ DB]` 0 ligne `world_effect_*` → aucune rétro-compat de données ; validation dés
+  autoritaire à la création, jamais au tick ; `remanence:conditional` v1 = persiste + retrait MJ
+  manuel. Prêt à coder Z0. Toujours rien codé.
