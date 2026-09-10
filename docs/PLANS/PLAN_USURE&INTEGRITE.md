@@ -341,7 +341,11 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 >   (miroir de L5a, même limite RAW assumée).
 > - Clé sur le **jet d'attaque** (`attaqueOutcome.isSuccess`), pas sur « touché » : une attaque bien
 >   lancée mais parée n'enraye pas l'arme (RAW §7.1.c : « après la résolution du jet d'attaque »).
-> - Libellé du jet FR en dur (`1d20 (Test de panne — arme)`, dette i18n L5 assumée).
+> - **Affichage (commit `f2452ec`)** : carte `DICE_RESULT` `formula: '1d20'` NU (un `formula`
+>   parenthésé sans `skillLabel` fait replier l'animation 3D sur un d6 — `useSessionSocket.js:85` /
+>   `DiceMesh.jsx:199`) ; carte `1d6` en plus sur panne **critique** (perte −1D6, sinon −1 fixe sans
+>   dé) ; **message explicatif chat** `COMBAT_SYSTEM_NOTICE` (clés `combat:integrityPanne.held|jammed|
+>   broken`). Le Test reste **automatique** (Saar : pas d'interactif qui suspendrait la FSM).
 > - Note : le loader assault passe en fait par `getOwnedHandWeapon` (→ `getItemWithRef`) — la note
 >   « loader propre à étendre » de §7.0/§7.1 était périmée, rien à étendre.
 > - Tests : `node --check` OK, import smoke OK (pas de cycle), `integrityService` 15/15,
