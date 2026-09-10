@@ -159,3 +159,63 @@ export function interpretPanneOutcome(outcome) {
   if (outcome?.isSuccess) return 'ok'
   return outcome?.catastropheRisk ? 'critical' : 'simple'
 }
+
+// ── Réparation complète (MANUEL §5.1 / PLAN §8) ───────────────────────────────────────────────
+// Compétence de réparation suggérée par famille de catalogue (D4 — [INFÉRÉ], pas une table RAW ;
+// le RAW ne cite que des exemples : Armurerie, Artisanat, Mécanique, Électronique). De toute façon
+// surchargeable par le MJ à l'approbation. `MECANIQUE` n'a aucune famille de catalogue à mapper en
+// V1 (aucun « objet mécanique lourd / véhicule » dans le seed) — le MJ la choisit à la main si
+// besoin. Distincte de la compétence D'USAGE (`ref_equipment_skill_assoc`) qui servira au bricolage
+// en combat (Lot 2).
+export const REPAIR_SKILL_BY_FAMILY = {
+  'Armes':                                  'ARMURERIE',
+  'Protections':                            'ARMURERIE',
+  'Équipement informatique et logiciels':   'ELECTRONIQUE',
+  'Équipement médical':                     'ART_ARTISANAT',
+  'Equipement Général':                     'ART_ARTISANAT',
+  'Vie quotidienne':                        'ART_ARTISANAT',
+}
+export const DEFAULT_REPAIR_SKILL = 'ART_ARTISANAT'
+
+export function getRepairSkillId(family) {
+  return REPAIR_SKILL_BY_FAMILY[family] ?? DEFAULT_REPAIR_SKILL
+}
+
+// computeRepairNtMalus(techLevel) — malus au Test de compétence de réparation selon le Niveau
+// Technologique (MANUEL §5.1 / §2.2) : NT VI → −7, NT V → −5, NT ≤ IV → 0. NT VII n'est pas
+// chiffré (objet non réparable — écarté en amont par `isRepairable`). `techLevel` NULL = non NT I
+// mais surtout non NT V+, donc 0. Renvoie un entier ≤ 0.
+export function computeRepairNtMalus(techLevel) {
+  if (!Number.isInteger(techLevel)) return 0
+  if (techLevel >= 6) return -7
+  if (techLevel >= 5) return -5
+  return 0
+}
+
+// isRepairable(item) — un exemplaire physique peut faire l'objet d'une demande de réparation
+// complète (MANUEL §5.1) si :
+//   - le modèle est suivi en ITG (`has_integrity` / `ref_has_integrity`) et l'instance a une ITG ;
+//   - il n'est PAS en panne critique (`'critical'` = atelier, hors V1 — MJ manuel) ;
+//   - son NT est réparable (< VII) ;
+//   - il y a quelque chose à réparer : ITG courante < ITG max, OU une panne simple à débloquer.
+export function isRepairable(item) {
+  if (!item) return false
+  const tracked = item.ref_has_integrity ?? item.has_integrity
+  if (!tracked) return false
+  const { integrity_current: current, integrity_max: max, malfunction_severity: malfunction } = item
+  if (!Number.isInteger(current) || !Number.isInteger(max)) return false
+  if (malfunction === 'critical') return false
+  if (Number.isInteger(item.tech_level) && item.tech_level >= 7) return false
+  return current < max || malfunction != null
+}
+
+// interpretRepairOutcome(outcome) — traduit l'issue d'un `resolvePolarisTest(skillTotal + ntMalus)`
+// en résultat de réparation (MANUEL §5.1). Même contrat que `interpretPanneOutcome` : ne lit que
+// `isSuccess` et `catastropheRisk`.
+//   réussite     → 'success'    (la Marge de réussite `mr` = points d'ITG récupérés, `applyRepair`)
+//   échec simple → 'failure'    (rien : l'objet reste dans son état, temps/ressources perdus)
+//   Catastrophe  → 'catastrophe' (−1 ITG max définitif, l'objet reste en panne)
+export function interpretRepairOutcome(outcome) {
+  if (outcome?.isSuccess) return 'success'
+  return outcome?.catastropheRisk ? 'catastrophe' : 'failure'
+}

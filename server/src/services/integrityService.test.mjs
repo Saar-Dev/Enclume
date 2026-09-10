@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity } from './integrityService.js'
+import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity, applyRepairOutcome } from './integrityService.js'
 import { QUALITY_TABLE } from '../../../shared/integrityRules.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/integrityService.test.mjs
@@ -187,6 +187,73 @@ test('runPanneTest / applyPanneSystematic — scoping characterId (L7) : mauvais
   } finally {
     await cleanup(fx)
   }
+})
+
+// ── applyRepairOutcome (MANUEL §5.1, L6) ────────────────────────────────────
+test('applyRepairOutcome — réussite : ITG courante += MR (plafonné), lève une panne simple', { skip }, async () => {
+  const fx = await createFixture({ current: 10, max: 15 })
+  try {
+    await db('char_inventory').where({ id: fx.item.id }).update({ malfunction_severity: 'simple' })
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: true, mr: 4, roll: 8, threshold: 12, seed: 's' } })
+    assert.equal(r.repair, 'success')
+    assert.equal(r.points, 4)
+    assert.equal(r.after.current, 14)
+    assert.equal(r.after.max, 15)
+    assert.equal(r.after.malfunction_severity, null, 'panne simple levée')
+  } finally { await cleanup(fx) }
+})
+
+test('applyRepairOutcome — réussite plafonnée au max, panne critique NON levée par ce chemin', { skip }, async () => {
+  const fx = await createFixture({ current: 12, max: 15 })
+  try {
+    await db('char_inventory').where({ id: fx.item.id }).update({ malfunction_severity: 'critical' })
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: true, mr: 10 } })
+    assert.equal(r.after.current, 15, 'plafonné')
+    assert.equal(r.after.malfunction_severity, 'critical', 'critical reste (atelier, hors ce flux)')
+  } finally { await cleanup(fx) }
+})
+
+test('applyRepairOutcome — échec simple : aucun changement', { skip }, async () => {
+  const fx = await createFixture({ current: 9, max: 15 })
+  try {
+    await db('char_inventory').where({ id: fx.item.id }).update({ malfunction_severity: 'simple' })
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: false, catastropheRisk: false } })
+    assert.equal(r.repair, 'failure')
+    assert.deepEqual(r.after, r.before)
+    const row = await readItem(fx.item.id)
+    assert.equal(row.integrity_current, 9)
+    assert.equal(row.malfunction_severity, 'simple')
+  } finally { await cleanup(fx) }
+})
+
+test('applyRepairOutcome — Catastrophe : −1 ITG max, courante ramenée sous le max, panne inchangée', { skip }, async () => {
+  const fx = await createFixture({ current: 15, max: 15 })
+  try {
+    await db('char_inventory').where({ id: fx.item.id }).update({ malfunction_severity: 'simple' })
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: false, catastropheRisk: true } })
+    assert.equal(r.repair, 'catastrophe')
+    assert.equal(r.definitiveLoss, 1)
+    assert.equal(r.after.max, 14)
+    assert.equal(r.after.current, 14, 'courante clampée au nouveau max')
+    assert.equal(r.after.malfunction_severity, 'simple', 'RAW « reste en panne » = inchangé')
+  } finally { await cleanup(fx) }
+})
+
+test('applyRepairOutcome — Catastrophe plancher : ITG max ne descend pas sous 1', { skip }, async () => {
+  const fx = await createFixture({ current: 1, max: 1 })
+  try {
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: false, catastropheRisk: true } })
+    assert.equal(r.after.max, 1)
+    assert.equal(r.after.current, 1)
+  } finally { await cleanup(fx) }
+})
+
+test('applyRepairOutcome — objet sans ITG → skipped', { skip }, async () => {
+  const fx = await createFixture({ hasIntegrity: false })
+  try {
+    const r = await applyRepairOutcome(fx.item.id, { outcome: { isSuccess: true, mr: 3 } })
+    assert.equal(r.repair, 'skipped')
+  } finally { await cleanup(fx) }
 })
 
 // ── Concurrence — .forUpdate() sérialise ─────────────────────────────────────

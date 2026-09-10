@@ -24,6 +24,13 @@ export const WS = {
   // contre l'Infection, seuil calculé et jet effectué côté serveur (jamais un simple DICE_ROLL
   // d'affichage, mute character_wounds via resolveEcheanceNow).
   WOUND_INFECTION_ROLL: 'wound:infection_roll',
+  // docs/PLANS/PLAN_USURE&INTEGRITE.md §8 (L6) : joueur/GM → serveur, { echeanceId } — Test de
+  // compétence de réparation complète (seuil = compétence + malus NT, jet côté serveur, mute
+  // char_inventory via resolveEcheanceNow). Patron WOUND_INFECTION_ROLL.
+  EQUIPMENT_REPAIR_ROLL: 'equipment_repair:roll',
+  // serveur → room : signal léger « le flux de réparation a bougé » (demande créée, approuvée,
+  // refusée, ou jet résolu) — les panneaux MJ / joueur rechargent. Pas le détail.
+  EQUIPMENT_REPAIR_UPDATED: 'equipment_repair:updated',
   // docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4 : serveur → room, résultat d'un Test de Fatigue (jet,
   // seuil, issue, nouveau palier/case) — diffusion visible MJ + joueur (patron MACRO_ROLL_RESULT),
   // pas seulement un retour HTTP au MJ qui a déclenché le Test.

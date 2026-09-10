@@ -24,7 +24,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { parseDice } from '../lib/diceParser.js'
-import { applyTemporaryLoss, interpretPanneOutcome, QUALITY_TABLE, DEFAULT_QUALITY } from '../../../shared/integrityRules.js'
+import { applyTemporaryLoss, applyRepair, interpretPanneOutcome, interpretRepairOutcome, QUALITY_TABLE, DEFAULT_QUALITY } from '../../../shared/integrityRules.js'
 
 const SEVERITY_VALUES = ['simple', 'critical']
 
@@ -218,6 +218,66 @@ export async function rollOccasionIntegrity(characterId, invId, trxOpt) {
       integrity_current, integrity_max, updated_at: trx.fn.now(),
     })
     return { before, after: { current: integrity_current, max: integrity_max, malfunction_severity: row.malfunction_severity } }
+  }
+  return trxOpt ? run(trxOpt) : db.transaction(run)
+}
+
+// applyRepairOutcome(invId, { outcome, characterId }, trxOpt) — applique l'issue d'un jet de
+// réparation complète (MANUEL §5.1). `outcome` = le retour d'un `resolvePolarisTest(skillTotal +
+// ntMalus)` DÉJÀ tiré par l'appelant (socket EQUIPMENT_REPAIR_ROLL) — cette fonction ne lance aucun
+// dé, elle interprète et écrit (invariant #3 : autorité d'écriture unique de `char_inventory`).
+//   - 'success'     : ITG courante += Marge de réussite (`outcome.mr`), plafonnée au max ; une panne
+//                     SIMPLE est levée (`malfunction_severity` → NULL) ; une panne critique ne peut
+//                     pas être ici (écartée par `isRepairable`).
+//   - 'failure'     : rien — l'objet reste dans son état, aucune perte supplémentaire.
+//   - 'catastrophe' : −1 ITG max définitif (plancher 1), courante ramenée sous le nouveau max si
+//                     besoin ; `malfunction_severity` INCHANGÉ (RAW « l'objet reste en panne » —
+//                     décision Saar 2026-09-10 : on ne bascule pas un objet sain vers l'enrayage).
+// Appelée depuis le savepoint d'`equipmentRepairHandler` (trxOpt fourni). Renvoie le détail pour
+// l'événement et les `undoEntries` du handler.
+export async function applyRepairOutcome(invId, { outcome, characterId } = {}, trxOpt) {
+  const run = async (trx) => {
+    const row = await lockInventoryRow(trx, invId, characterId)
+    if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
+    if (!row.has_integrity || row.integrity_current == null) {
+      return { repair: 'skipped', skippedBecause: 'no_integrity' }
+    }
+
+    const before = snapshot(row)
+    const result = interpretRepairOutcome(outcome) // 'success' | 'failure' | 'catastrophe'
+    const common = {
+      repair: result,
+      roll: outcome?.roll ?? null,
+      threshold: outcome?.threshold ?? null,
+      mr: outcome?.mr ?? null,
+      seed: outcome?.seed ?? null,
+      isCriticalFail: outcome?.isCriticalFail ?? null,
+      catastropheRisk: Boolean(outcome?.catastropheRisk),
+      before,
+    }
+
+    if (result === 'failure') {
+      return { ...common, points: 0, definitiveLoss: 0, after: before }
+    }
+
+    const updates = { updated_at: trx.fn.now() }
+    let points = 0
+    let definitiveLoss = 0
+
+    if (result === 'success') {
+      points = Math.max(0, outcome?.mr ?? 0)
+      updates.integrity_current = applyRepair(row.integrity_current, row.integrity_max, points)
+      if (row.malfunction_severity === 'simple') updates.malfunction_severity = null
+    } else { // 'catastrophe'
+      definitiveLoss = 1
+      const newMax = Math.max(1, row.integrity_max - 1)
+      updates.integrity_max = newMax
+      updates.integrity_current = Math.min(row.integrity_current, newMax)
+    }
+
+    await trx('char_inventory').where({ id: invId }).update(updates)
+    const fresh = await trx('char_inventory').where({ id: invId }).first()
+    return { ...common, points, definitiveLoss, after: snapshot(fresh) }
   }
   return trxOpt ? run(trxOpt) : db.transaction(run)
 }

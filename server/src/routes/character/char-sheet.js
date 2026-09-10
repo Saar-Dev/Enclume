@@ -79,8 +79,15 @@ import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES, isTestBlockingWound,
 } from '../../../../shared/woundConstants.js'
+import { isRepairable, getRepairSkillId, computeRepairNtMalus } from '../../../../shared/integrityRules.js'
+import { createEcheance } from '../../lib/echeanceService.js'
+import { isCombatActive } from '../../lib/catastropheService.js'
 
 const router = Router()
+
+// Champs d'Intégrité éditables uniquement par le MJ (révision D3, L6) — le joueur passe désormais
+// par « Demander une réparation » (échéance validée par le MJ), jamais par une édition directe.
+const INTEGRITY_FIELDS = ['integrity_current', 'integrity_max', 'malfunction_severity']
 
 // ─── Auth + Ownership automatique sur toutes les routes /:characterId ──────────
 router.use(requireAuth)
@@ -1167,6 +1174,11 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     if (req.body.validated_by_gm !== undefined && !req.isGm) {
       throw new AppError(403, 'Seul le MJ peut valider un item')
     }
+    // Révision D3 (L6) : l'édition brute de l'Intégrité est un outil de dépannage MJ. Le joueur
+    // répare via POST .../repair-request (échéance validée par le MJ), jamais en direct.
+    if (!req.isGm && INTEGRITY_FIELDS.some((f) => f in req.body)) {
+      throw new AppError(403, 'L\'Intégrité ne s\'édite pas directement — utilisez « Demander une réparation »')
+    }
     const { item, cascadedItems } = await inventoryService.updateItem(characterId, itemId, req.body)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
@@ -1233,6 +1245,61 @@ router.post('/:characterId/inventory/:itemId/panne-test', async (req, res, next)
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
     emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item })
     res.json({ item, panne })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/repair-request ───────
+// PLAN_USURE&INTEGRITE.md §8 (L6) — le joueur (ou le MJ pour lui) demande une réparation complète.
+// Crée une échéance `equipment_repair` en attente de revue MJ (`advance_driven: false` — sans
+// rapport avec l'horloge). Le MJ approuve/refuse via
+// POST /campaigns/:id/game-echeances/:echeanceId/repair-decision, puis le joueur lance son dé
+// (socket EQUIPMENT_REPAIR_ROLL). Auth = router.param (propriétaire ou MJ, comme updateItem).
+router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+    const campaignId = req.character.campaign_id
+    if (!campaignId) throw new AppError(400, 'Réparation indisponible hors campagne')
+    // MANUEL §5.1 : la réparation complète est un geste HORS combat (le bricolage rapide en combat
+    // est un lot ultérieur).
+    if (await isCombatActive(campaignId)) {
+      throw new AppError(409, 'Réparation complète impossible pendant un combat')
+    }
+
+    const item = await inventoryService.getItemWithRef(itemId)
+    if (!item || item.character_id !== characterId) throw new AppError(404, 'Objet d\'inventaire introuvable')
+    const ref = await db('ref_equipment').where({ id: item.equipment_id }).first('family', 'tech_level')
+    if (!isRepairable({ ...item, tech_level: ref?.tech_level ?? null })) {
+      throw new AppError(400, 'Cet objet ne peut pas être réparé (rien à réparer, panne en atelier, ou NT trop élevé)')
+    }
+
+    // Une seule demande vivante à la fois pour un même objet.
+    const existing = await db('game_echeances')
+      .where({ campaign_id: campaignId, condition_type: 'equipment_repair' })
+      .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
+      .whereRaw("payload->>'itemId' = ?", [itemId])
+      .first()
+    if (existing) throw new AppError(409, 'Une demande de réparation est déjà en cours pour cet objet')
+
+    const campaign = await db('campaigns').where({ id: campaignId }).first('game_time_minutes')
+    const echeance = await db.transaction((trx) => createEcheance(trx, {
+      campaignId, characterId, conditionType: 'equipment_repair',
+      payload: {
+        itemId,
+        itemName: item.custom_name || item.ref_name || 'Objet',
+        skillId: getRepairSkillId(item.ref_family ?? ref?.family ?? null),
+        ntMalus: computeRepairNtMalus(ref?.tech_level ?? null),
+        integrityBefore: {
+          current: item.integrity_current, max: item.integrity_max, malfunction: item.malfunction_severity,
+        },
+      },
+      // `next_due_minutes` NOT NULL mais sans objet pour une échéance à la demande — on y met l'heure
+      // narrative courante (« demandé à ce moment »), jamais lue par le flux d'horloge.
+      nextDueMinutes: campaign?.game_time_minutes ?? 0,
+      status: 'pending_mj_review',
+    }))
+
+    req.app.get('io').to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
+    res.status(201).json({ echeance: { id: echeance.id, status: echeance.status } })
   } catch (err) { next(err) }
 })
 

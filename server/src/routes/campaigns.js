@@ -477,6 +477,45 @@ router.post('/:id/game-echeances/:echeanceId/infection-mode', requireAuth, requi
   res.json({ status: 'resolved', rollResult })
 })
 
+// POST /api/campaigns/:id/game-echeances/:echeanceId/repair-decision — GM uniquement.
+// docs/PLANS/PLAN_USURE&INTEGRITE.md §8 (L6). body { decision: 'approve' | 'reject', skillId? }.
+//   - 'approve' : (option) remplace `payload.skillId`, statut → 'awaiting_player_roll'. Le jet réel
+//     arrive via le socket EQUIPMENT_REPAIR_ROLL, pas par cette route.
+//   - 'reject'  : statut → 'cancelled' (outillage / pièces / temps manquants — MANUEL §5.1). Aucune
+//     mutation d'inventaire.
+// Ni l'un ni l'autre n'appelle le handler (il ne tourne qu'au jet) — de simples changements d'état.
+router.post('/:id/game-echeances/:echeanceId/repair-decision', requireAuth, requireRole('gm'), async (req, res, next) => {
+  try {
+    const { decision, skillId } = req.body
+    if (!['approve', 'reject'].includes(decision)) throw new AppError(400, `decision invalide : ${decision}`)
+
+    const echeance = await db('game_echeances').where({ id: req.params.echeanceId, campaign_id: req.params.id }).first()
+    if (!echeance) throw new AppError(404, 'Échéance introuvable pour cette campagne')
+    if (echeance.condition_type !== 'equipment_repair') throw new AppError(400, 'Cette échéance n\'est pas une réparation')
+    if (echeance.status !== 'pending_mj_review') {
+      throw new AppError(409, `Cette demande n'est plus en attente de revue (statut : ${echeance.status})`)
+    }
+
+    if (decision === 'reject') {
+      await db('game_echeances').where({ id: echeance.id }).update({ status: 'cancelled', updated_at: db.fn.now() })
+    } else {
+      const patch = skillId ? { skillId } : null
+      await db.transaction(async (trx) => {
+        if (patch) {
+          // Fusion atomique du payload — même patron que healing-choice / pending_advance_undo_log.
+          await trx('game_echeances').where({ id: echeance.id })
+            .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify(patch)]) })
+        }
+        await trx('game_echeances').where({ id: echeance.id })
+          .update({ status: 'awaiting_player_roll', updated_at: trx.fn.now() })
+      })
+    }
+
+    req.app.get('io').to(req.params.id).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId: req.params.id })
+    res.json({ status: decision === 'reject' ? 'cancelled' : 'awaiting_player_roll' })
+  } catch (err) { next(err) }
+})
+
 // ─── Lot 3 — Dommages environnementaux de combat (docs/PLAN_FATIGUE_DOMMAGES.md §9) ───────────────
 // resolveCampaignToken — vérifie qu'un token appartient bien à cette campagne (tokens.battlemap_id ->
 // battlemaps.campaign_id, tokens n'a pas de campaign_id propre) avant toute mutation ; utilisé par

@@ -11,6 +11,11 @@ import {
   applyTemporaryLoss,
   applyRepair,
   interpretPanneOutcome,
+  REPAIR_SKILL_BY_FAMILY,
+  getRepairSkillId,
+  computeRepairNtMalus,
+  isRepairable,
+  interpretRepairOutcome,
 } from './integrityRules.js'
 
 // Lancement manuel : node --test shared/integrityRules.test.mjs
@@ -196,4 +201,50 @@ test('interpretPanneOutcome — lit uniquement isSuccess et catastropheRisk', ()
   assert.equal(interpretPanneOutcome({ isSuccess: false, catastropheRisk: true }), 'critical')
   // isSuccess prime (combinaison impossible depuis resolvePolarisTest, mais contrat défensif)
   assert.equal(interpretPanneOutcome({ isSuccess: true, catastropheRisk: true }), 'ok')
+})
+
+// ── Réparation complète (MANUEL §5.1) ──────────────────────────────────────
+
+test('REPAIR_SKILL_BY_FAMILY / getRepairSkillId — mapping D4 + repli ART_ARTISANAT', () => {
+  assert.equal(getRepairSkillId('Armes'), 'ARMURERIE')
+  assert.equal(getRepairSkillId('Protections'), 'ARMURERIE')
+  assert.equal(getRepairSkillId('Équipement informatique et logiciels'), 'ELECTRONIQUE')
+  assert.equal(getRepairSkillId('Équipement médical'), 'ART_ARTISANAT')
+  assert.equal(getRepairSkillId('Famille inconnue'), 'ART_ARTISANAT')
+  assert.equal(getRepairSkillId(null), 'ART_ARTISANAT')
+  // toutes les valeurs de la table sont des skill_id du seed (283_ref_skills_seed)
+  for (const skill of Object.values(REPAIR_SKILL_BY_FAMILY)) {
+    assert.match(skill, /^[A-Z_]+$/)
+  }
+})
+
+test('computeRepairNtMalus — NT VI → -7, NT V → -5, NT ≤ IV → 0', () => {
+  assert.equal(computeRepairNtMalus(7), -7) // NT VII : jamais atteint (isRepairable écarte), défensif
+  assert.equal(computeRepairNtMalus(6), -7)
+  assert.equal(computeRepairNtMalus(5), -5)
+  assert.equal(computeRepairNtMalus(4), 0)
+  assert.equal(computeRepairNtMalus(1), 0)
+  assert.equal(computeRepairNtMalus(null), 0)
+  assert.equal(computeRepairNtMalus(undefined), 0)
+})
+
+test('isRepairable — modèle suivi + ITG posée + pas critical + NT < VII + quelque chose à réparer', () => {
+  const base = { ref_has_integrity: true, integrity_current: 10, integrity_max: 15, malfunction_severity: null, tech_level: 3 }
+  assert.equal(isRepairable(base), true, 'ITG < max')
+  assert.equal(isRepairable({ ...base, integrity_current: 15 }), false, 'rien à réparer (ITG = max, pas de panne)')
+  assert.equal(isRepairable({ ...base, integrity_current: 15, malfunction_severity: 'simple' }), true, 'panne simple à débloquer même à ITG max')
+  assert.equal(isRepairable({ ...base, malfunction_severity: 'critical' }), false, 'panne critique = atelier, hors V1')
+  assert.equal(isRepairable({ ...base, tech_level: 7 }), false, 'NT VII non réparable')
+  assert.equal(isRepairable({ ...base, tech_level: null }), true, 'NT inconnu = réparable')
+  assert.equal(isRepairable({ ...base, ref_has_integrity: false }), false, 'modèle non suivi')
+  assert.equal(isRepairable({ has_integrity: true, integrity_current: 5, integrity_max: 20, malfunction_severity: null, tech_level: 2 }), true, 'nommage brut has_integrity')
+  assert.equal(isRepairable({ ref_has_integrity: true, integrity_current: null, integrity_max: null }), false, 'ITG non posée')
+  assert.equal(isRepairable(null), false)
+})
+
+test('interpretRepairOutcome — success / failure / catastrophe', () => {
+  assert.equal(interpretRepairOutcome({ isSuccess: true }), 'success')
+  assert.equal(interpretRepairOutcome({ isSuccess: false, catastropheRisk: false }), 'failure')
+  assert.equal(interpretRepairOutcome({ isSuccess: false, catastropheRisk: true }), 'catastrophe')
+  assert.equal(interpretRepairOutcome({ isSuccess: true, catastropheRisk: true }), 'success')
 })
