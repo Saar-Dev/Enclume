@@ -1,3 +1,37 @@
+## v230 — 2026-09-10 — Usure & Intégrité du matériel
+
+### Inventaire
+- [new] Les armes, protections et matériel technique portent désormais une **Intégrité** (une jauge
+  courante / max) qui reflète leur état. Un pictogramme coloré sur chaque objet concerné indique le
+  palier : excellent, bon, moyen, usagé, endommagé, hors d'usage.
+- [new] Un clic sur ce pictogramme ouvre une fenêtre dédiée. Le joueur y voit l'état de l'objet, et
+  s'il est abîmé : la compétence et le Seuil du Test de réparation, un bouton **Réparer soi-même**
+  (envoie une demande au MJ) et, une fois la demande envoyée, un bouton **Annuler ma demande**.
+- [new] Côté MJ, la même fenêtre permet de fixer l'état initial d'un objet (Neuf, Occasion, État
+  moyen, Endommagé, Hors d'usage), d'ajuster les valeurs à la main, de changer le statut
+  (opérationnel / réparation simple / réparation en atelier) et de déclencher un test d'**usage
+  intensif**.
+- [new] Un objet suivi en Intégrité ne s'empile plus avec ses semblables (chaque exemplaire a son
+  propre état).
+- [new] À l'achat chez un marchand, le matériel d'occasion arrive avec une Intégrité tirée au sort ;
+  un marchand « marché noir » vend du neuf.
+
+### Combat
+- [new] L'état d'une arme modifie le jet d'attaque (bonus en excellent état, malus quand elle est
+  usée) — visible dans le récapitulatif avant le jet et dans le détail après.
+- [new] Une arme en panne ou hors d'usage ne peut plus être utilisée : la déclaration est refusée
+  avec un message explicite.
+- [new] Une arme en mauvais état (Intégrité ≤ 5) qui rate une attaque subit un **test de panne**
+  automatique : le résultat s'affiche dans le chat, et si elle s'enraye ou casse, un message
+  l'explique.
+
+### Réparation
+- [new] Quand un joueur demande une réparation, une **carte apparaît dans le chat du MJ** avec le
+  choix de la compétence et les boutons Approuver / Refuser. Une fois approuvée, le joueur lance son
+  Test depuis le panneau « Jets en attente ». Une réussite restaure de l'Intégrité ; une catastrophe
+  abîme définitivement l'objet.
+- [new] Le pictogramme d'un objet en attente de réparation est entouré d'un liseré bleu.
+
 ## v229 — 2026-09-09 — Combat : grenades — mode de détonation
 
 ### Combat — grenades
