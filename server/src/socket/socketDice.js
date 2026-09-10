@@ -16,6 +16,7 @@ import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { getItemWithRef } from '../services/inventoryService.js'
 import { interpretRepairOutcome } from '../../../shared/integrityRules.js'
+import { computeRepairThreshold } from '../lib/equipmentRepairService.js'
 import { sendMessage as sendChatMessage } from '../chat/chatService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 
@@ -360,19 +361,17 @@ export function registerDiceHandlers(io, socket, context) {
       }
 
       const { skillId, ntMalus = 0, itemId, itemName } = echeance.payload ?? {}
-      const ctx = await loadCharacterTestContext(db, campaignId, echeance.character_id)
-      if (!ctx) { socket.emit('error', { message: 'Fiche du personnage introuvable' }); return }
-      const [charSkill, refSkill] = await Promise.all([
-        db('char_skills').where({ char_sheet_id: ctx.sheet.id, skill_id: skillId }).first(),
-        db('ref_skills').where({ id: skillId }).first(),
-      ])
-      if (!refSkill) { socket.emit('error', { message: 'Compétence de réparation invalide' }); return }
-
-      // Seuil = compétence + malus NT (§5.1) + malus actifs (blessures/fatigue/encombrement — comme
-      // tout Test de compétence, MACRO_ROLL). ntMalus et activeMalus sont ≤ 0.
-      const skillTotal = calcSkillTotal(ctx.attrs, charSkill, refSkill, ctx.genotypeRow, ctx.mutationEffects)
-      const diffMod = (ntMalus ?? 0) + ctx.activeMalus
-      const threshold = skillTotal + diffMod
+      // Seuil via l'autorité unique — même fonction que la route repair-preview (le Seuil affiché au
+      // joueur = celui lancé). Compétence + malus NT + malus actifs (blessures/fatigue/encombrement).
+      let seuilInfo
+      try {
+        seuilInfo = await computeRepairThreshold(echeance.character_id, campaignId, { skillId, ntMalus })
+      } catch (e) {
+        socket.emit('error', { message: e.message || 'Impossible de calculer le Seuil de réparation' })
+        return
+      }
+      const { skillTotal, threshold, skillLabel } = seuilInfo
+      const diffMod = seuilInfo.ntMalus + seuilInfo.activeMalus
 
       const rollResult = await db.transaction(async (trx) => {
         const roll = await resolvePolarisTest(threshold)
@@ -395,7 +394,7 @@ export function registerDiceHandlers(io, socket, context) {
       io.to(campaignId).emit(WS.DICE_RESULT, {
         userId: character.user_id, username: user.username, color,
         formula: '1d20', rolls: [rollResult.roll], total: rollResult.roll,
-        skillLabel: `${refSkill.label} — Réparation${itemName ? ` : ${itemName}` : ''}`,
+        skillLabel: `${skillLabel} — Réparation${itemName ? ` : ${itemName}` : ''}`,
         mechanicalTotal: skillTotal,
         diffLabel: diffMod >= 0 ? `+${diffMod}` : `${diffMod}`,
         chancesDeReussite: threshold,

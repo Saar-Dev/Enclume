@@ -177,6 +177,11 @@ export const REPAIR_SKILL_BY_FAMILY = {
 }
 export const DEFAULT_REPAIR_SKILL = 'ART_ARTISANAT'
 
+// Choix proposés au MJ dans le `<select>` de changement de compétence (panneau de revue) — les 4
+// exemples RAW, ordonnés du plus courant au plus spécialisé. Les libellés viennent de `ref_skills`
+// (le serveur les joint), jamais dupliqués côté client.
+export const REPAIR_SKILL_IDS = ['ARMURERIE', 'ELECTRONIQUE', 'ART_ARTISANAT', 'MECANIQUE']
+
 export function getRepairSkillId(family) {
   return REPAIR_SKILL_BY_FAMILY[family] ?? DEFAULT_REPAIR_SKILL
 }
@@ -205,7 +210,10 @@ export function isRepairable(item) {
   const { integrity_current: current, integrity_max: max, malfunction_severity: malfunction } = item
   if (!Number.isInteger(current) || !Number.isInteger(max)) return false
   if (malfunction === 'critical') return false
-  if (Number.isInteger(item.tech_level) && item.tech_level >= 7) return false
+  // Tolère les deux nommages du NT catalogue : `tech_level` brut (integrityService / route serveur)
+  // ou `ref_tech_level` aliasé (getItemWithRef / getInventory côté client).
+  const nt = item.tech_level ?? item.ref_tech_level
+  if (Number.isInteger(nt) && nt >= 7) return false
   return current < max || malfunction != null
 }
 

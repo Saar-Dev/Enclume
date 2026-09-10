@@ -121,6 +121,8 @@ export async function getItemWithRef(itemId) {
       'char_inventory.malfunction_severity',
       'ref_equipment.has_integrity as ref_has_integrity',
       'ref_equipment.quality as ref_quality',
+      // Niveau Technologique — `isRepairable` (client, L6) écarte le NT VII.
+      'ref_equipment.tech_level as ref_tech_level',
       'ref_equipment.name as ref_name',
       'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.family as ref_family',

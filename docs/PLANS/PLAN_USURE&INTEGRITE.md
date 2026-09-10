@@ -461,7 +461,7 @@ L4 rend le palier lisible sur chaque item.
 >   (`?echeanceId=` optionnel : sans → compétence dérivée de l'item ; avec → compétence finale du
 >   payload) → `{ skillLabel, skillTotal, ntMalus, threshold }`. Le serveur extrait `computeRepairThreshold`
 >   du handler socket L6b et l'appelle des deux côtés → Seuil affiché = Seuil lancé, toujours.
->   `SkillsPanel` **pas touché**. `getRepairRollsForPlayer` gagne `threshold` dans son enrichissement.
+>   `SkillsPanel` **pas touché**.
 > - **`IntegritySegment` → fenêtre ancrée à l'icône** (patron `SkillInfoPopover.jsx`) : l'état
 >   `{ popoverItemId, x, y }` vit dans **`InventoryPanel`** (une instance, un listener clic-dehors), pas
 >   par segment. `IntegritySegment` = déclencheur seul ; nouveau `IntegrityPopover` porte le contenu.
@@ -470,16 +470,42 @@ L4 rend le palier lisible sur chaque item.
 >   (via `repair-preview`) + `[Faire réparer par un pro]` (grisé V1, infobulle) + `[Réparer soi-même]`
 >   + statut après demande. **Sort toute l'info réparation de la ligne d'inventaire.**
 > - `PendingRollsPanel.jsx` : dispatch par `conditionType` (émet `EQUIPMENT_REPAIR_ROLL` vs
->   `WOUND_INFECTION_ROLL`, rend `e.item` vs `e.wound`) + écoute `EQUIPMENT_REPAIR_UPDATED`.
+>   `WOUND_INFECTION_ROLL`, rend `e.item` vs `e.wound`) + écoute `EQUIPMENT_REPAIR_UPDATED`. **Affiche
+>   juste nom d'objet + Lancer** (le Seuil est dans la carte de résultat L6b — pas de calcul par ligne).
 > - `EquipmentRepairReviewPanel.jsx` **autonome** (pas de généralisation de `BlessuresReviewPanel` —
 >   N=2, un consommateur fragile ; coquille `GmReviewShell` à extraire au 3ᵉ, L9). Classes CSS **neuves**
 >   (react.md), pas la copie de l'objet `styles` inline de `BlessuresReviewPanel`. Monté `Sidebar.jsx`.
-> - **Découpage** : **L6c-1** (bas risque, flux testable) = `repair-preview` + panneaux + `Sidebar` +
->   `inventoryMutations.repairRequest` + i18n + trigger minimal (masquer champs bruts aux non-MJ =
->   nettoyage D3 + bouton « 🔧 Réparer » adjacent si `isRepairable`). **L6c-2** (risque moyen, isolé) =
->   la vraie fenêtre à deux visages `IntegrityPopover` qui consolide tout + bouton « Neuf ».
-> - Détail ouvert : positionnement des 3 panneaux `position: fixed` (Blessures / Réparation / Jets) —
->   à régler à l'implémentation.
+>
+> **Resserrements après 2ᵉ analyse à charge (2026-09-10) :**
+> 1. **Pas de `threshold` dans `getRepairRollsForPlayer`** — le calculer par ligne = `loadCharacterTestContext`
+>    (~8 requêtes) × N jets, à chaque montage du panneau. Inutile (le joueur l'a vu à la demande, la
+>    carte de résultat l'affiche après le jet).
+> 2. **`repair-preview` = dérivé de l'item, sans `?echeanceId`.** Seule la fenêtre l'appelle, une fois,
+>    avant la demande. `computeRepairThreshold` partagé avec le socket = même *fonction*, entrées
+>    différentes (socket lit `payload.skillId` ; preview dérive de la famille).
+> 3. **`GET repair-requests` renvoie `{ echeances, repairSkillOptions: [{id,label}] }`** — les 4
+>    compétences de réparation + labels lus **une fois** de `ref_skills` pour le `<select>` du MJ
+>    (pas de labels dupliqués côté client, pas de répétition par ligne). `shared/integrityRules.js`
+>    exporte `REPAIR_SKILL_IDS` (liste ordonnée).
+> 4. **`ref_equipment.tech_level as ref_tech_level` ajouté aux SELECT `getItemWithRef` / `getInventory`**
+>    (comme L4a a ajouté les 4 champs d'ITG). `isRepairable` tolère `item.tech_level ?? item.ref_tech_level`.
+>    Sinon le client proposerait « Réparer » sur un NT VII → 400 moche.
+> 5. **`position: fixed` de la fenêtre confirmé sûr** : `CharacterWindow` positionne via `left`/`top`
+>    (pas `transform`), `SkillInfoPopover` fonctionne déjà dans ce conteneur. Pas de portal.
+> 6. Fermeture au clic-dehors : on l'accepte pendant un `saving` (le `INVENTORY_UPDATED` rafraîchit).
+> 7. Fenêtre vs modale : on garde la fenêtre ancrée ; escalade vers petite modale seulement si le
+>    contenu à deux visages est à l'étroit (jugement à l'implémentation).
+>
+> **Découpage** :
+> - **L6c-1** (bas risque, flux testable) : `computeRepairThreshold` extrait + route `repair-preview`
+>   + `ref_tech_level` aux SELECT + `isRepairable` tolérant + `REPAIR_SKILL_IDS` + `repairSkillOptions`
+>   dans la réponse `repair-requests` + `EquipmentRepairReviewPanel` + `Sidebar` + `PendingRollsPanel`
+>   dispatch + `inventoryMutations.repairRequest` + i18n. **Trigger minimal** dans `IntegritySegment` :
+>   masquer les champs bruts aux non-MJ (nettoyage D3, déjà cassé serveur) + bouton « 🔧 Réparer »
+>   adjacent à l'icône si `isRepairable` (owner). Tests + build. Testable jeu réel.
+> - **L6c-2** (risque moyen, isolé) : la vraie fenêtre à deux visages `IntegrityPopover` qui consolide
+>   tout (outils MJ + réparation) et retire le bouton adjacent + les champs inline. + bouton « Neuf ».
+> - Détail ouvert : positionnement des 3 panneaux `position: fixed` (Blessures / Réparation / Jets).
 
 Sous-système d'échéance. **Presque tout existe déjà** (G3, vérifié 2026-09-09) :
 - `game_echeances.status` CHECK inclut `pending_mj_review` et `awaiting_player_roll` ;

@@ -14,7 +14,7 @@ import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
-import { getRepairRequestsForGm, getRepairRollsForPlayer } from '../lib/equipmentRepairReviewService.js'
+import { getRepairRequestsForGm, getRepairRollsForPlayer, getRepairSkillOptions } from '../lib/equipmentRepairReviewService.js'
 import { resolveFall } from '../lib/fallDamageService.js'
 import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
 import { applyStunWithDuration } from '../lib/statusService.js'
@@ -398,8 +398,11 @@ router.get('/:id/game-echeances/pending-review', requireAuth, requireRole('gm'),
 // demandes de réparation (échéances À LA DEMANDE, sans rapport avec l'horloge — panneau MJ autonome,
 // distinct de pending-review qui est couplé au flux d'avance de temps). PLAN §8.4.
 router.get('/:id/game-echeances/repair-requests', requireAuth, requireRole('gm'), async (req, res) => {
-  const echeances = await getRepairRequestsForGm(req.params.id)
-  res.json({ echeances })
+  const [echeances, repairSkillOptions] = await Promise.all([
+    getRepairRequestsForGm(req.params.id),
+    getRepairSkillOptions(),
+  ])
+  res.json({ echeances, repairSkillOptions })
 })
 
 // GET /api/campaigns/:id/game-echeances/my-pending-rolls — tout membre. Un joueur ne voit que les

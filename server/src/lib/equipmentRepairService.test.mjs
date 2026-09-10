@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import db from '../db/knex.js'
 import { ECHEANCE_TYPE_REGISTRY } from '../../../shared/echeanceTypeRegistry.js'
 import { createEcheance, resolveEcheanceNow } from './echeanceService.js'
-import { equipmentRepairHandler } from './equipmentRepairService.js'
-import { getRepairRequestsForGm, getRepairRollsForPlayer } from './equipmentRepairReviewService.js'
+import { equipmentRepairHandler, computeRepairThreshold } from './equipmentRepairService.js'
+import { getRepairRequestsForGm, getRepairRollsForPlayer, getRepairSkillOptions } from './equipmentRepairReviewService.js'
+import { AppError } from './AppError.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/equipmentRepairService.test.mjs
 // Les fonctions de revue lisent via `db` → patron "committe puis nettoie", pas le rollback.
@@ -141,6 +142,43 @@ test('getRepairRollsForPlayer — un joueur ne voit que ses jets, un GM voit tou
     const asGm = await getRepairRollsForPlayer(fx.campaign.id, fx.gm.id, { isGm: true })
     assert.equal(asGm.length, 1, 'le GM voit tous les jets en attente')
   } finally { await cleanup(fx) }
+})
+
+// ── computeRepairThreshold ──────────────────────────────────────────────────
+
+test('computeRepairThreshold — seuil = compétence + ntMalus + activeMalus, forme complète', { skip }, async () => {
+  const fx = await createRealFixture()
+  try {
+    const r = await computeRepairThreshold(fx.character.id, fx.campaign.id, { skillId: 'ARMURERIE', ntMalus: -5 })
+    assert.equal(r.skillId, 'ARMURERIE')
+    assert.equal(r.skillLabel, 'Armurerie')
+    assert.equal(typeof r.skillTotal, 'number')
+    assert.equal(r.ntMalus, -5)
+    assert.equal(typeof r.activeMalus, 'number')
+    assert.equal(r.threshold, r.skillTotal + r.ntMalus + r.activeMalus, 'arithmétique du seuil')
+  } finally { await cleanup(fx) }
+})
+
+test('computeRepairThreshold — compétence inconnue → 400 ; ntMalus par défaut 0', { skip }, async () => {
+  const fx = await createRealFixture()
+  try {
+    await assert.rejects(
+      () => computeRepairThreshold(fx.character.id, fx.campaign.id, { skillId: 'PAS_UNE_COMPETENCE' }),
+      (e) => e instanceof AppError && e.statusCode === 400,
+    )
+    const r = await computeRepairThreshold(fx.character.id, fx.campaign.id, { skillId: 'ART_ARTISANAT' })
+    assert.equal(r.ntMalus, 0)
+  } finally { await cleanup(fx) }
+})
+
+// ── getRepairSkillOptions ──────────────────────────────────────────────────
+
+test('getRepairSkillOptions — 4 compétences ordonnées avec libellés de ref_skills', { skip }, async () => {
+  const opts = await getRepairSkillOptions()
+  assert.deepEqual(opts.map((o) => o.id), ['ARMURERIE', 'ELECTRONIQUE', 'ART_ARTISANAT', 'MECANIQUE'])
+  assert.equal(opts[0].label, 'Armurerie')
+  assert.equal(opts[1].label, 'Électronique')
+  for (const o of opts) assert.ok(o.label && o.label !== o.id, `libellé résolu pour ${o.id}`)
 })
 
 test.after(async () => { await db.destroy() })

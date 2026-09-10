@@ -81,6 +81,7 @@ import {
 } from '../../../../shared/woundConstants.js'
 import { isRepairable, getRepairSkillId, computeRepairNtMalus } from '../../../../shared/integrityRules.js'
 import { createEcheance } from '../../lib/echeanceService.js'
+import { computeRepairThreshold } from '../../lib/equipmentRepairService.js'
 import { isCombatActive } from '../../lib/catastropheService.js'
 
 const router = Router()
@@ -1267,8 +1268,8 @@ router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, n
 
     const item = await inventoryService.getItemWithRef(itemId)
     if (!item || item.character_id !== characterId) throw new AppError(404, 'Objet d\'inventaire introuvable')
-    const ref = await db('ref_equipment').where({ id: item.equipment_id }).first('family', 'tech_level')
-    if (!isRepairable({ ...item, tech_level: ref?.tech_level ?? null })) {
+    // `getItemWithRef` porte désormais `ref_tech_level` / `ref_family` (L6c-1) — plus de fetch séparé.
+    if (!isRepairable(item)) {
       throw new AppError(400, 'Cet objet ne peut pas être réparé (rien à réparer, panne en atelier, ou NT trop élevé)')
     }
 
@@ -1286,8 +1287,8 @@ router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, n
       payload: {
         itemId,
         itemName: item.custom_name || item.ref_name || 'Objet',
-        skillId: getRepairSkillId(item.ref_family ?? ref?.family ?? null),
-        ntMalus: computeRepairNtMalus(ref?.tech_level ?? null),
+        skillId: getRepairSkillId(item.ref_family ?? null),
+        ntMalus: computeRepairNtMalus(item.ref_tech_level ?? null),
         integrityBefore: {
           current: item.integrity_current, max: item.integrity_max, malfunction: item.malfunction_severity,
         },
@@ -1300,6 +1301,27 @@ router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, n
 
     req.app.get('io').to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
     res.status(201).json({ echeance: { id: echeance.id, status: echeance.status } })
+  } catch (err) { next(err) }
+})
+
+// ─── GET /api/char-sheet/:characterId/inventory/:itemId/repair-preview ────────
+// L6c — Seuil prévisionnel d'une réparation soi-même, affiché dans la fenêtre d'Intégrité AVANT que
+// le joueur ne demande. Autorité unique `computeRepairThreshold` (même fonction que le jet réel,
+// socket EQUIPMENT_REPAIR_ROLL) → le Seuil montré est celui qui sera lancé. Compétence dérivée de la
+// famille de l'objet (le MJ peut la changer ensuite ; ce n'est qu'un aperçu). Auth = router.param.
+router.get('/:characterId/inventory/:itemId/repair-preview', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+    const campaignId = req.character.campaign_id
+    if (!campaignId) throw new AppError(400, 'Réparation indisponible hors campagne')
+    const item = await inventoryService.getItemWithRef(itemId)
+    if (!item || item.character_id !== characterId) throw new AppError(404, 'Objet d\'inventaire introuvable')
+    if (!isRepairable(item)) throw new AppError(400, 'Cet objet ne peut pas être réparé')
+
+    const skillId = getRepairSkillId(item.ref_family ?? null)
+    const ntMalus = computeRepairNtMalus(item.ref_tech_level ?? null)
+    const preview = await computeRepairThreshold(characterId, campaignId, { skillId, ntMalus })
+    res.json(preview)
   } catch (err) { next(err) }
 })
 

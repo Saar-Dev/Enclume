@@ -12,6 +12,7 @@ import {
   applyRepair,
   interpretPanneOutcome,
   REPAIR_SKILL_BY_FAMILY,
+  REPAIR_SKILL_IDS,
   getRepairSkillId,
   computeRepairNtMalus,
   isRepairable,
@@ -216,6 +217,12 @@ test('REPAIR_SKILL_BY_FAMILY / getRepairSkillId — mapping D4 + repli ART_ARTIS
   for (const skill of Object.values(REPAIR_SKILL_BY_FAMILY)) {
     assert.match(skill, /^[A-Z_]+$/)
   }
+  // REPAIR_SKILL_IDS couvre la table + MECANIQUE, sans doublon
+  assert.equal(new Set(REPAIR_SKILL_IDS).size, REPAIR_SKILL_IDS.length)
+  for (const skill of Object.values(REPAIR_SKILL_BY_FAMILY)) {
+    assert.ok(REPAIR_SKILL_IDS.includes(skill), `${skill} dans REPAIR_SKILL_IDS`)
+  }
+  assert.ok(REPAIR_SKILL_IDS.includes('MECANIQUE'))
 })
 
 test('computeRepairNtMalus — NT VI → -7, NT V → -5, NT ≤ IV → 0', () => {
@@ -235,6 +242,7 @@ test('isRepairable — modèle suivi + ITG posée + pas critical + NT < VII + qu
   assert.equal(isRepairable({ ...base, integrity_current: 15, malfunction_severity: 'simple' }), true, 'panne simple à débloquer même à ITG max')
   assert.equal(isRepairable({ ...base, malfunction_severity: 'critical' }), false, 'panne critique = atelier, hors V1')
   assert.equal(isRepairable({ ...base, tech_level: 7 }), false, 'NT VII non réparable')
+  assert.equal(isRepairable({ ...base, tech_level: undefined, ref_tech_level: 7 }), false, 'NT VII via ref_tech_level aliasé (client)')
   assert.equal(isRepairable({ ...base, tech_level: null }), true, 'NT inconnu = réparable')
   assert.equal(isRepairable({ ...base, ref_has_integrity: false }), false, 'modèle non suivi')
   assert.equal(isRepairable({ has_integrity: true, integrity_current: 5, integrity_max: 20, malfunction_severity: null, tech_level: 2 }), true, 'nommage brut has_integrity')

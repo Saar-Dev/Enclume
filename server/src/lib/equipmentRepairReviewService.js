@@ -9,6 +9,16 @@
 // `game_time_resolved_minutes`).
 
 import db from '../db/knex.js'
+import { REPAIR_SKILL_IDS } from '../../../shared/integrityRules.js'
+
+// Les 4 compétences de réparation (RAW) + leurs libellés, pour le `<select>` de changement de
+// compétence du panneau de revue MJ. Libellés lus une fois de `ref_skills` — jamais dupliqués côté
+// client. Ordre = `REPAIR_SKILL_IDS`.
+export async function getRepairSkillOptions() {
+  const rows = await db('ref_skills').whereIn('id', REPAIR_SKILL_IDS).select('id', 'label')
+  const labelById = Object.fromEntries(rows.map((r) => [r.id, r.label]))
+  return REPAIR_SKILL_IDS.map((id) => ({ id, label: labelById[id] ?? id }))
+}
 
 // Enrichit un lot de lignes `game_echeances` (condition_type = 'equipment_repair') avec le nom du
 // personnage, l'objet (nom + ITG FRAÎCHE — le payload ne porte qu'un instantané de la demande) et la
