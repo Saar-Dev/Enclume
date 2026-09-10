@@ -559,8 +559,8 @@ consommateur du rework world builder, §12).
 
 ## 10. Reste à faire (aucun code dans la conversation de cadrage)
 
-1. **Plans détaillés Z0 et Z1** (Z1 = le rework le plus risqué : refonte `environmentalHazardService`
-   sans régression).
+1. **Plan détaillé Z0** = §13 (fait 2026-09-10). **Plan détaillé Z1** = à écrire (le rework le plus
+   risqué : refonte du système « dangers environnementaux » sans régression).
 2. **Validation Saar** de §5 (RAW) — surtout §5.3 gaz (déjà vérifié) et §5.5 Souffle (inférence).
 3. **Pas de `PLAN_ZONES_DANGER_EDITEUR.md` à ce stade.** L'éditeur E-v1 tient dans §7.2 (incrément
    Z6). Le sculpteur de volume E-v2 sera cadré dans le sillage du rework world builder — conversation
@@ -585,6 +585,8 @@ consommateur du rework world builder, §12).
   presets / dérivation registre / remplacement du tick codé en dur). Brasier `3D10` toutes Loc
   re-confirmé (écart avec l'ancien preset `inferno locations:1` noté §5.1). `locationMode` mappé sur
   la précédence existante (§3).
+- **2026-09-10** — stub `PLAN_WORLD_BUILDER_REWORK.md` (le primitif d'édition 2D est partagé) ;
+  renvoi `PLAN_FATIGUE_DOMMAGES` §9 → §2.B ; ROADMAP rafraîchie. **Plan détaillé Z0 écrit (§13).**
 
 ---
 
@@ -604,3 +606,97 @@ sculpteur de volume de danger (E-v2, §7.3). **On ne le construit pas deux fois.
 compartiments, wallAware }`, §3) : E-v1 en remplit un sous-ensemble (`mode:'compartiment'` |
 rectangle AABB), E-v2 le complète (`shape:'polygon'|'ellipse'`) **sans le changer**. Aucun des trois
 chantiers ne bloque le contrat ; seul l'ordre 2 → 3 est contraint.
+
+---
+
+## 13. Plan détaillé — incrément Z0
+
+> **Statut : plan, pas de code.** À exécuter par l'agent d'implémentation après validation Saar,
+> en respectant la méthode `AGENTS.md` (explorer → plan → analyse à charge → coder, un tour chacun).
+
+### 13.1 Objectif et périmètre
+
+`shared/` **uniquement**. Livrer le **contrat complet** (schéma de définition + schéma de ligne
+d'effet, les 13 types **validés**) et **`shared/world/dangerCatalog.js`** (toutes les définitions
+builtin, chaque chiffre sourcé RAW en commentaire), avec des **tests purs**.
+
+**Purement additif** : nouveaux exports, champs **optionnels** sur `normalizeEffectDefinition`.
+Zéro migration, zéro serveur, zéro client. **Rien ne consomme `dangerCatalog.js`** à la fin de Z0 —
+c'est Z1 qui branche le registre et la refonte. Aucun comportement de jeu ne change.
+
+### 13.2 Fichiers
+
+| Fichier | Nature | Contenu |
+|---|---|---|
+| `shared/world/dangerEffectLines.js` | **neuf** | `normalizeEffectLine(line, index)` — valide les 13 `type` (`EFFECT_LINE_TYPES`), la `phase` (`EFFECT_LINE_PHASES` = `onEnter`/`onExit`/`onTraverse`/`onTurn`), et les params **typés par type** (voir 13.3). Pur ; jette `TypeError`/`RangeError` comme `worldEffects.js`. Exporte aussi les deux Sets. |
+| `shared/world/worldEffects.js` | **extension additive** | `normalizeEffectDefinition` accepte 8 blocs **optionnels** (`tags`, `durationPolicy`+`durationParams`, `stackingPolicy`, `effects[]` — validées via `normalizeEffectLine` —, `attenuations[]`, `chaining[]`, `corrodes[]`, `source`), tous **défaut vide/neutre**. Les 5 builtins legacy (`fire`/`flooded`/`gas`/`oil`/`unstable`) et les 6 consommateurs **ne passent aucun de ces blocs** → sortie inchangée + champs à défaut. `hooks[]` legacy **conservé** tel quel (coexiste avec `effects[]` ; retiré quand les builtins migrent, Z6). **Aucune suppression, aucun renommage.** |
+| `shared/world/dangerCatalog.js` | **neuf** | Patron `armorConstants.js` / `environmentalHazardPresets.js`. Toutes les définitions (§4 + §5), chacune passée par `normalizeEffectDefinition`. **Citation RAW en commentaire au-dessus de chaque chiffre.** Exporte `DANGER_CATALOG` (Map gelée), `listDangerDefinitions()`, `getDangerDefinition(key)`. Porte les **chaînes** de formule (`'2d10'`) + commentaire « consommé par `server/src/lib/diceParser.js#parseDice` » — **ne valide pas les dés** (convention `fallDamageConstants.js` ; `diceParser` est serveur-only). |
+| `shared/world/dangerEffectLines.test.mjs` | **neuf** | Par type : params valides acceptés ; params manquants / hors bornes rejetés ; `phase` invalide rejetée ; `type` inconnu rejeté. |
+| `shared/world/dangerCatalog.test.mjs` | **neuf** | Le catalogue se charge sans jeter ; chaque entrée a une `source` non vide et une `key` conforme `EFFECT_KEY_RE` ; `feu:*` = 4 entrées dont `feu:brasier` `locations:0`/`locationMode:'all'` ; les 6 gaz présents ; `radiation:*` ×3 ; `corrodes` ⊂ matériaux connus ; `burning`/`acid`/`decompression` présents (alias/équivalents pour la refonte Z1). |
+| `shared/world/worldEffects.test.mjs` | **compléter** | Non-régression : les 5 builtins legacy produisent **exactement** la même sortie qu'avant. + un cas « définition avec blocs danger » round-trip. |
+
+**Question d'analyse à charge** : `dangerEffectLines.js` fichier séparé **ou** fusion dans
+`worldEffects.js` ? Argument séparé : `worldEffects.js` fait déjà 418 l. et mêle registre + géométrie
++ propagation ; une ligne d'effet est de la **résolution de règle**, pas de la géométrie. Argument
+fusion : un seul point d'entrée de normalisation. → trancher au tour d'analyse à charge (proposition :
+**séparé**, même dossier, importé par `worldEffects.js`).
+
+### 13.3 Contrat de ligne d'effet — détail figé en Z0
+
+| `type` | Params | v1 |
+|---|---|---|
+| `damage` | `formula` (str), `locations` (int\|str dés), `locationMode` (`random`\|`exposed`\|`all`), `forcedLocation` (clé `LOCATION_TO_SLOT`\|null), `damageType` (str), `armorFactor` (num, défaut 1), `escalation` (`null`\|`{perTurn,cap}`), `remanence`, `remanenceParams` | **résolu** |
+| `status` | `statusCode` (slug — **existence vérifiée en Z1**, pas en Z0), `escalation`, `remanence`, `remanenceParams` | **résolu** |
+| `modifier` | `target` (`actions`\|…), `value` (int signé), `escalation`, `remanence`, `remanenceParams` | **résolu** |
+| `note` | `label` (str), `text` (str) | **résolu** |
+| `test` | `skill`/`attribute` (str), `difficulty` (int), `onFail` (ligne imbriquée) | validé, résolveur **v2** |
+| `statLoss` | `stat` (str), `amount` (int\|dés), `recovery` (str) | validé, **v2** |
+| `chance` | `onSuccess`/`onFail` (lignes) | validé, **v2** |
+| `drainResource` | `resource` (`souffle`\|…), `rate` (int\|dérivé), `onEmpty` (ligne) | validé, **v2** |
+| `skillOverride` | `skill` (str), `mode` (`disable`\|`swap`), `swapTo` (str) | validé, **v2** |
+| `forcedMove` | `direction` (str\|`awayFromCenter`), `distance` (num\|dés) | validé, **v2** |
+| `accumulateLevel` | `track` (`irradiation`\|…), `formula` (str) | validé, **v2** |
+| `corrodeEquipment` | `slotMode` (`hit`\|`worn`\|`all`), `amount` (int\|dés) | validé, **v2** |
+| `chain` | `engendre` (key catalogue), `délai` (int Tours), `condition` (str), `géométrie` (str) | validé, **v2** |
+
+Champs de définition transverses (déjà en §3) : `durationPolicy` ∈ `permanent`\|`timerFixed`\|
+`timerDice`\|`conditional`\|`oneShot` ; `stackingPolicy` ∈ `max`\|`independent` (v1) + `stackCount`\|
+`refreshDuration` (déclarés, non résolus) ; `remanence` ∈ `none`\|`conditional`\|`decay`\|`fixed`.
+
+### 13.4 Hors Z0 (rappel)
+
+Aucun résolveur · aucune modif base (`world_effect_definitions`/`_instances`) · `puissance` sur
+l'instance = champ **Z2** (migration) · nettoyage des 6 lignes `ref_equipment` = **Z1** ·
+absorption réelle de `environmentalHazardPresets.js` = **Z1** (Z0 met juste les entrées équivalentes
+dans le catalogue) · `dangerCatalog.js` importé par un service = **Z1**.
+
+### 13.5 Invariants
+
+- **Inv. 3** (autorité unique) : `normalizeEffectLine` = seule validation de forme d'une ligne
+  d'effet, `shared/`, réutilisée telle quelle par le serveur en Z1.
+- **Inv. 2** : extension de `normalizeEffectDefinition`, **pas** un second normaliseur ; `dangerCatalog.js`
+  ne duplique pas `environmentalHazardPresets.js` — il le **remplacera** (Z1).
+- **`world.md`** : les volumes/rayons du catalogue sont en **mètres** (`WorldMetrics`), jamais en cases.
+- **Règle RAW 5** : chaque chiffre du catalogue porte sa citation ; tout écart (ex. brasier vs RAW muet)
+  → déjà tracé §5, à recopier en commentaire.
+
+### 13.6 Validation Z0
+
+`node --check` sur les 3 `.js` ; `node --test shared/world/dangerEffectLines.test.mjs
+shared/world/dangerCatalog.test.mjs shared/world/worldEffects.test.mjs` ; `node --test 'shared/**/*.test.mjs'`
+(non-régression large). **Pas** de build client, **pas** de serveur, **pas** de session Saar — aucun
+comportement de jeu ne change. `git diff --check`.
+
+### 13.7 Points pour l'analyse à charge (tour dédié avant code)
+
+1. `dangerEffectLines.js` séparé vs fusion `worldEffects.js`.
+2. Nom du bloc : `effects` vs `effectLines` vs `lines` dans la définition.
+3. `hooks[]` legacy vs `effects[]` : confirmer la coexistence en Z0, planifier le retrait en Z6.
+4. `formula` : regex de forme locale (dupliquée de `diceParser.DICE_REGEX` avec commentaire pointeur)
+   vs aucune validation. Recenser : `NdX`, `NdX±M`, `dX`, `1d3` pour `locations`.
+5. `type:'status'` : pas de liste de `status_code` autoritaire unique aujourd'hui (éclatée entre
+   `socketToken.VALID_STATUS_CODES`, `weaponModRegistry`, `environmentalHazardRegistry`). Décider si
+   Z1 crée un `shared/statusCodes.js` (aggradation probable) — **hors Z0**, mais à acter.
+6. `dangerCatalog.js` : une clé par intensité (`feu:petit`…) confirmée vs une définition paramétrée.
+7. Catalogue : figer les noms de familles `category` (`feu`/`acide`/`gaz`/`radiation`/…) — ils
+   servent au `stackingPolicy` « par catégorie » et à la dérivation de `getAllHazardCodes()` en Z1.
