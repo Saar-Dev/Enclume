@@ -87,6 +87,13 @@ indépendantes (§10). **Hors combat = HORS SCOPE** (décision Saar — aligné 
 
 `shared/` = contrat + validation pure ; serveur = résolveurs. Une entrée par **type de ligne d'effet** :
 
+> **Précision de patron** : la *forme* du dispatcher (map `RESOLVERS` + `applicableResolvers`) vient de
+> `weaponModService`, mais la *sémantique* est un **lookup par `type`** (patron `echeanceTypeRegistry`
+> / `environmentalHazardRegistry`), **pas** l'agrégation multi-sources de `resolveModHooks`. L'invariant
+> Lot 3 est préservé : **zéro agrégation entre plusieurs dangers d'un même token** — chaque ligne
+> `token_statuses` se résout indépendamment via un seul lookup.
+
+
 ```
 { type,                          // 'damage' | 'status' | 'modifier' | 'note' | 'test' | 'statLoss'
                                  //  | 'chance' | 'drainResource' | 'skillOverride' | 'forcedMove'
@@ -130,7 +137,7 @@ décompresser un token comme avant la refonte).
 |---|---|---|
 | **Définition** | code (`dangerCatalog.js`) pour les builtin ; `world_effect_definitions` (DB) pour les custom MJ | immuable : `key`, `label`, `category`, `tags`, `durationPolicy`, `stackingPolicy`, `modifiers`, `effects[]`, `attenuations[]`, `chaining[]`, `corrodes[]`, `source` (citation RAW) |
 | **Instance** | `world_effect_instances` (DB) | `definitionKey`, `geometry`, `puissance` (§2.E), `durationOverride`, `metadata`, `source.kind`, `state` |
-| **Runtime par occupant** | `token_statuses.data` | durée restante, malus accumulé (escalade), Souffle courant, état de cascade |
+| **Runtime par occupant** | `token_statuses.data` | durée restante · malus accumulé (escalade, Z4) · *(v2 : Souffle courant, état de cascade — n'existent pas encore, §5.5)* |
 
 Le lookup `definitionKey` → catalogue (code) **puis** `world_effect_definitions` (DB).
 
@@ -213,6 +220,12 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
 
 ```
 { key: 'feu:grand', label, category: 'feu', tags: ['hazard:fire'], icon, builtin: true,
+  hazardCode: 'burning',                // status_code de la condition token_statuses que cette famille
+                                        //   pose (feu:*→burning · acide:*→acid · decompression→decompression).
+                                        //   Sert à DÉRIVER environmentalHazardRegistry en Z1 (§14.4).
+                                        //   null = définition non postable comme condition « token ».
+  forcedLocation: null,                 // clé LOCATION_TO_SLOT forcée au niveau DÉFINITION
+                                        //   (décompression → 'corps'). Prime sur l'instance ET sur locationMode.
   durationPolicy: 'permanent',          // permanent | timerFixed | timerDice | conditional | oneShot
   durationParams: {},                   // ex. conditional -> { condition: 'aération' }
   stackingPolicy: 'max',                // v1 : 'max' (par catégorie) | 'independent'
@@ -258,14 +271,20 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
 
 ```
 { id, battlemapId, definitionKey,
-  geometry: { mode: 'volume'|'compartiment', shape, volume: {min,max}, compartiments: [], wallAware,
+  geometry: { mode: 'volume'|'compartment', shape, volume: {min,max}, compartments: [], wallAware,
               animation: null },        // animation (remplissage/dérive) = v2
-  puissance: 0,                         // §2.E
+  puissance: 0,                         // §2.E (champ + migration = Z2)
   durationOverride: null,               // la grenade pose { policy:'timerDice', turns:'2d6' }
   metadata: {},                         // "Personnalisé" : formulaOverride…
   source: { kind: 'mj'|'grenade'|'flamethrower' },
   state: 'active' }
 ```
+
+> **Réconciliation avec l'existant (à trancher en Z2)** : `normalizeEffectInstance` (`worldEffects.js`)
+> a déjà `targetKind ∈ volume|support|feature|compartment|entity|token` + `volume` (AABB) + `targetId`.
+> Le bloc `geometry` ci-dessus est une **proposition de restructuration** ; l'alternative est de garder
+> `targetKind`/`volume`/`targetId` tels quels et de n'ajouter que `puissance` + `durationOverride`.
+> Orthographe **`compartment`** (celle du code), pas « compartiment ».
 
 ---
 
@@ -289,7 +308,9 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
 { key:'feu:grand', ... formula:'2d10', locations:'1d3', locationMode:'random' ... }
 
 // ── feu:brasier ── 3D10/Tour, TOUTES les Localisations — mort garantie en 1 Tour (Saar B3)
-{ key:'feu:brasier', ... formula:'3d10', locations:0, locationMode:'all' ... }
+{ key:'feu:brasier', category:'feu', hazardCode:'burning', ...
+  effects:[ { type:'damage', phase:'onTurn', formula:'3d10', locations:null, locationMode:'all',
+              damageType:'fire', armorFactor:1, remanence:'none' } ] }
 
 // ── acide:capsule ── §Acide + catalogue Capsule acide (1D10) ; persistance 1D6 Tours
 { key:'acide:capsule', category:'acide', tags:['hazard:acid'], durationPolicy:'permanent',
@@ -331,9 +352,12 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
   effects:[ { type:'accumulateLevel', phase:'onEnter', track:'irradiation', formula:'3d6' } ] }
 //   résolveur accumulateLevel = v2 (bloqué sur PLAN_FATIGUE_DOMMAGES « Radiations Lot 9 »)
 
-// ── burning / acid / decompression (refonte §2.B) ──
-//   burning -> alias/équivalent des préréglages feu ; acid -> acide:capsule ;
-//   decompression -> { type:'damage', formula:'1d10', locationMode:'exposed', forcedLocation:'corps' }
+// ── decompression (refonte §2.B) ── forcedLocation au niveau DÉFINITION (RAW : toujours le Corps)
+{ key:'decompression', category:'decompression', hazardCode:'decompression', forcedLocation:'corps',
+  durationPolicy:'permanent', stackingPolicy:'max',
+  effects:[ { type:'damage', phase:'onTurn', formula:'1d10', damageType:'decompression',
+              armorFactor:1, remanence:'none' } ] }   // locationMode ignoré : forcedLocation prime
+//   burning  -> famille feu:* (hazardCode:'burning') ; acid -> acide:capsule (hazardCode:'acid')
 ```
 
 ### Flux « grenade incendiaire » (preuve utilisateur #1)
@@ -361,8 +385,8 @@ re-confirmée 2026-09-10 : mort garantie en 1 Tour).
 
 > **Écart à corriger en Z1** : `shared/environmentalHazardPresets.js` a `inferno … locations:1`
 > (écrit avant B3, commentaire « RAW ne précise pas, 1 par défaut »). Quand ce fichier est absorbé
-> par `dangerCatalog.js` (§2.B), `feu:brasier` fige `locations:0` / `locationMode:'all'` — le catalogue
-> l'emporte, l'ancien `1` disparaît. Ne pas recopier le `1`.
+> par `dangerCatalog.js` (§2.B), `feu:brasier` fige `locationMode:'all'` (`locations` ignoré) — le
+> catalogue l'emporte, l'ancien `1` disparaît. Ne pas recopier le `1`.
 
 **Ignifugé** : le
 RAW dit « réduit considérablement » mais **ne liste aucun équipement ni aucun chiffre** → colonne
@@ -416,9 +440,8 @@ Perte selon l'**activité dérivée** (décision Saar E1) :
 `arme au clair ? −4 : (déplacement ? mapping gait [lent→−2, rapide/max→−3] : −1)`.
 *(À vérifier au moment de coder : le moteur distingue-t-il « arme dégainée » de « possédée » ? sinon
 proxy = « a déclaré une action de combat ce Tour ».)*
-Souffle épuisé → cascade de Tests d'Athlétisme → noyade / asphyxie / effet du gaz. `surprised` →
-Souffle max ÷ 2. `calcSouffle` (`shared/polarisUtils.js`) = un **plafond** ; **aucun Souffle courant
-runtime**. Résolveur `drainResource` + la mini-FSM = **v2**.
+`calcSouffle` (`shared/polarisUtils.js`) = un **plafond** ; **aucun Souffle courant runtime**
+aujourd'hui. Résolveur `drainResource` + la mini-FSM de cascade = **v2**.
 
 ### 5.6 Décompression — `FATIGUE&DOMMAGES.md` §Décompression
 
@@ -453,14 +476,14 @@ zone × zone. **Le catalogue est complet dès Z0** ; seuls les résolveurs sont 
 
 | # | But | Nature | Preuve |
 |---|---|---|---|
-| **Z0** | `shared/world/worldEffects.js` : schéma de ligne **complet** (tous les types validés, `phase`, params typés) + blocs de définition (`tags` / `durationPolicy` / `stackingPolicy` / `corrodes` / `attenuations` / `chaining`). **`shared/world/dangerCatalog.js`** : toutes les définitions, sourcées RAW. Tests purs. | `shared/`, aucune migration | `node --test shared/**` |
-| **Z1** | `effectLineResolverRegistry` (patron `resolveModHooks`) ; `resolveActiveEffects` ; **refonte système dangers environnementaux** (§2.B) : `environmentalHazardPresets.js` **absorbé** dans `dangerCatalog.js`, `environmentalHazardRegistry.js` **dérivé** du catalogue, `resolveEnvironmentalHazardTicks` remplacé par le dispatch ; `exposeToHazard`/`clearHazard`/`turnsFromNow` conservés (feeder token). Résolveurs `damage` + `status` + `note` + `modifier` de base. Migration : **supprime les 6 valeurs `ref_equipment` corrompues** (§5.4). Non-régression stricte. | serveur, **rework**, migration | tests Lot 3 portés 1-pour-1 + **session Saar** (brûler / acide / décompresser comme avant) |
+| **Z0** | `shared/world/dangerEffectLines.js` (neuf) : schéma de ligne **complet** (13 types validés, `phase`, params typés). Extension **additive** de `worldEffects.js:normalizeEffectDefinition` (8 blocs optionnels dont `hazardCode` / `forcedLocation`). **`shared/world/dangerCatalog.js`** (neuf) : toutes les définitions, sourcées RAW. Tests purs + non-régression des 5 builtins. **Détail §13.** | `shared/`, aucune migration, additif | `node --test shared/**` |
+| **Z1** | `effectLineResolverRegistry` (dispatcher `weaponModService` + lookup par type §2.A) ; `resolveActiveEffects` ; **refonte système dangers environnementaux** (§2.B) : `environmentalHazardPresets.js` **absorbé** dans `dangerCatalog.js`, `environmentalHazardRegistry.js` **dérivé** (`hazardCode`), `resolveEnvironmentalHazardTicks` remplacé par le dispatch ; `exposeToHazard`/`clearHazard`/`turnsFromNow` conservés (feeder token). Résolveurs `damage` + `status` + `note` + `modifier` de base. Migration : **supprime les 6 valeurs `ref_equipment` corrompues** (§5.4). **4 sous-étapes, détail §14.** | serveur, **rework**, migration | tests Lot 3 portés / mis à jour + **session Saar** (brûler / acide / décompresser comme avant) |
 | **Z1b** | `ref_equipment.protections` JSONB (§2.G) ; `waterproof` s'y replie (migration + retrait colonne) ; outil admin / `equipmentMapping.js` / `inventoryService` / `diff_equip.mjs` adaptés ; résolveur `attenuation` lit `protections`. | serveur + client admin, **rework**, migration | build + session Saar |
 | **Z2** | balayage roster × zones dans `startResolutionPhase` → `resolveActiveEffects` ; `durationPolicy` dans `endTurn` ; `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans`) ; `remanence:'none'` à l'`exit` ; champ instance `puissance` (migration) branché dans les résolveurs. | serveur, migration | **insert manuel zone `feu:grand` → un token dedans brûle chaque Tour + s'éteint en sortant** |
 | **Z3** | `aoeMechanisms/grenade_incendiary.js` sur `circleGrenade.js` ; explosion Tour+1 → `createWorldEffectInstance`. **Dé-gèle le chantier grenades** (maj `PLAN_GRENADES.md` §6). | serveur + migration `ref_equipment` | **preuve utilisateur #1** — lancer incendiaire → zone de feu au Tour suivant |
 | **Z4** | résolveur `modifier` complet (entrée `ACTIVE_MALUS_SOURCES` alimentée par les zones) ; `escalation` = accumulateur mutable dans `token_statuses.data` ; `remanence:'decay'` (tique hors zone via `resolveActiveEffects`). | serveur | zone de gaz : malus qui monte en présence, décroît après la sortie |
 | **Z5** | `gaz:irritant` (`modifier −3` + `decay`) **et** `gaz:décomposant` (`damage 1D6` + `escalade +2` + `decay`) — les 2 entièrement RAW en v1 ; atténuation `behavior` « retenir sa respiration » = ½ ; `aoeMechanisms/grenade_gas_*.js`. | serveur + migration | **preuve utilisateur #2** |
-| **Z6** | **Éditeur E-v1** (§7.2) — porter l'outil effet sur le plateau de session (`Canvas3D.jsx`, aujourd'hui Editor3D seulement), MJ-only, aperçu optimiste + confirmation serveur ; flux catégorie → préréglage → géométrie ; 2 modes de géométrie : « remplir un compartiment » (`targetKind:'compartiment'`, zéro géométrie neuve) + rectangle + hauteur (existant) ; « Personnalisé » ; bascule visibilité MJ/joueur ; mesh translucide par catégorie ; i18n. **Pas de polygone (E-v2, §12).** | client | build + session Saar |
+| **Z6** | **Éditeur E-v1** (§7.2) — porter l'outil effet sur le plateau de session (`Canvas3D.jsx`, aujourd'hui Editor3D seulement), MJ-only, aperçu optimiste + confirmation serveur ; flux catégorie → préréglage → géométrie ; 2 modes de géométrie : « remplir un compartiment » (`targetKind:'compartment'`, zéro géométrie neuve) + rectangle + hauteur (existant) ; « Personnalisé » ; bascule visibilité MJ/joueur ; mesh translucide par catégorie ; i18n. **Pas de polygone (E-v2, §12).** | client | build + session Saar |
 | **Z7** | Joueur — avertissement **non bloquant** si le chemin déclaré traverse une zone visible ; zones `cachée` masquées aux joueurs. | client | build + session Saar |
 
 **Noyau v1 = Z0 → Z5.**
@@ -494,7 +517,7 @@ critique du noyau.**
   que **rendre** les régions (`runtimeEffectRegions`), aucun handler de création.
 - **Flux** : bouton par **catégorie** (feu · eau · acide · gaz · …) → **préréglage** (chaque `key`
   du catalogue = un bouton : braise · petit · grand · brasier) → **géométrie**, **deux modes** :
-  - **« Remplir un compartiment »** — `targetKind:'compartiment'`. **Zéro géométrie neuve** :
+  - **« Remplir un compartiment »** — `targetKind:'compartment'`. **Zéro géométrie neuve** :
     `worldEffects.instanceBounds()` unionne déjà les AABB de la pièce ciblée et
     `compileEffectRegions` la sort déjà. Couvre « la salle est en feu », « le sas se remplit de
     gaz » — la majorité des cas MJ.
@@ -596,6 +619,13 @@ consommateur du rework world builder, §12).
   renvoi `PLAN_FATIGUE_DOMMAGES` §9 → §2.B ; ROADMAP rafraîchie. **Plans détaillés Z0 (§13) et Z1
   (§14) écrits** — Z1 découpé en 4 sous-étapes (registre / bascule du tick / absorption presets +
   résolveurs / migration `ref_equipment`).
+- **2026-09-10** — analyse à charge du plan complet (Saar). Corrections : `hazardCode` +
+  `forcedLocation` niveau **définition** ajoutés au contrat (§3, §13.3) — sans eux Z1.4 ne pouvait pas
+  dériver `environmentalHazardRegistry` ; convention `locations` clarifiée (pas de `0` magique,
+  `locationMode:'all'` ⟹ `locations` ignoré) ; §2.A précise que `effectLineResolverRegistry` = *forme*
+  `weaponModService` mais *sémantique* lookup-par-type sans agrégation (invariant Lot 3 préservé) ;
+  §5.5 dédupliqué ; instance `geometry` vs `targetKind` existant = réconciliation explicitement
+  reportée à Z2, orthographe `compartment` ; INDEX.md §6 complété.
 
 ---
 
@@ -612,7 +642,7 @@ sculpteur de volume de danger (E-v2, §7.3). **On ne le construit pas deux fois.
 | **3** | **Éditeur de volume de danger E-v2** — polygone / ellipse / rectangle pivoté / poignées sur canvas / « tracer depuis les murs » | séparée, **après** 2 | le primitif d'édition 2D livré par 2 |
 
 **Le contrat géométrie de l'instance est stable dès maintenant** (`geometry: { mode, shape, volume,
-compartiments, wallAware }`, §3) : E-v1 en remplit un sous-ensemble (`mode:'compartiment'` |
+compartments, wallAware }`, §3) : E-v1 en remplit un sous-ensemble (`mode:'compartment'` |
 rectangle AABB), E-v2 le complète (`shape:'polygon'|'ellipse'`) **sans le changer**. Aucun des trois
 chantiers ne bloque le contrat ; seul l'ordre 2 → 3 est contraint.
 
@@ -641,7 +671,7 @@ c'est Z1 qui branche le registre et la refonte. Aucun comportement de jeu ne cha
 | `shared/world/worldEffects.js` | **extension additive** | `normalizeEffectDefinition` accepte 8 blocs **optionnels** (`tags`, `durationPolicy`+`durationParams`, `stackingPolicy`, `effects[]` — validées via `normalizeEffectLine` —, `attenuations[]`, `chaining[]`, `corrodes[]`, `source`), tous **défaut vide/neutre**. Les 5 builtins legacy (`fire`/`flooded`/`gas`/`oil`/`unstable`) et les 6 consommateurs **ne passent aucun de ces blocs** → sortie inchangée + champs à défaut. `hooks[]` legacy **conservé** tel quel (coexiste avec `effects[]` ; retiré quand les builtins migrent, Z6). **Aucune suppression, aucun renommage.** |
 | `shared/world/dangerCatalog.js` | **neuf** | Patron `armorConstants.js` / `environmentalHazardPresets.js`. Toutes les définitions (§4 + §5), chacune passée par `normalizeEffectDefinition`. **Citation RAW en commentaire au-dessus de chaque chiffre.** Exporte `DANGER_CATALOG` (Map gelée), `listDangerDefinitions()`, `getDangerDefinition(key)`. Porte les **chaînes** de formule (`'2d10'`) + commentaire « consommé par `server/src/lib/diceParser.js#parseDice` » — **ne valide pas les dés** (convention `fallDamageConstants.js` ; `diceParser` est serveur-only). |
 | `shared/world/dangerEffectLines.test.mjs` | **neuf** | Par type : params valides acceptés ; params manquants / hors bornes rejetés ; `phase` invalide rejetée ; `type` inconnu rejeté. |
-| `shared/world/dangerCatalog.test.mjs` | **neuf** | Le catalogue se charge sans jeter ; chaque entrée a une `source` non vide et une `key` conforme `EFFECT_KEY_RE` ; `feu:*` = 4 entrées dont `feu:brasier` `locations:0`/`locationMode:'all'` ; les 6 gaz présents ; `radiation:*` ×3 ; `corrodes` ⊂ matériaux connus ; `burning`/`acid`/`decompression` présents (alias/équivalents pour la refonte Z1). |
+| `shared/world/dangerCatalog.test.mjs` | **neuf** | Le catalogue se charge sans jeter ; chaque entrée a une `source` non vide et une `key` conforme `EFFECT_KEY_RE` ; `feu:*` = 4 entrées dont `feu:brasier` `locationMode:'all'` / `locations:null` ; les 6 gaz présents ; `radiation:*` ×3 ; `corrodes` ⊂ matériaux connus ; **chaque famille de danger a un `hazardCode`** ; `decompression` porte `forcedLocation:'corps'` (niveau définition) ; la dérivation `hazardCode` → 3 codes `acid`/`decompression`/`burning` (pour Z1.4). |
 | `shared/world/worldEffects.test.mjs` | **compléter** | Non-régression : les 5 builtins legacy produisent **exactement** la même sortie qu'avant. + un cas « définition avec blocs danger » round-trip. |
 
 **Question d'analyse à charge** : `dangerEffectLines.js` fichier séparé **ou** fusion dans
@@ -668,9 +698,15 @@ fusion : un seul point d'entrée de normalisation. → trancher au tour d'analys
 | `corrodeEquipment` | `slotMode` (`hit`\|`worn`\|`all`), `amount` (int\|dés) | validé, **v2** |
 | `chain` | `engendre` (key catalogue), `délai` (int Tours), `condition` (str), `géométrie` (str) | validé, **v2** |
 
-Champs de définition transverses (déjà en §3) : `durationPolicy` ∈ `permanent`\|`timerFixed`\|
-`timerDice`\|`conditional`\|`oneShot` ; `stackingPolicy` ∈ `max`\|`independent` (v1) + `stackCount`\|
-`refreshDuration` (déclarés, non résolus) ; `remanence` ∈ `none`\|`conditional`\|`decay`\|`fixed`.
+Champs de définition transverses (§3) : `hazardCode` (`str`\|`null` — `status_code` posé, sert la
+dérivation du registre en Z1) ; `forcedLocation` (clé `LOCATION_TO_SLOT`\|`null`, niveau définition,
+prime sur tout) ; `durationPolicy` ∈ `permanent`\|`timerFixed`\|`timerDice`\|`conditional`\|`oneShot` ;
+`stackingPolicy` ∈ `max`\|`independent` (v1) + `stackCount`\|`refreshDuration` (déclarés, non résolus) ;
+`remanence` ∈ `none`\|`conditional`\|`decay`\|`fixed`.
+
+**Convention `locations`** : entier (`1`) ou formule (`'1d3'`) = nombre de Localisations tirées ;
+`locationMode:'all'` ⟹ `locations` **ignoré** (toutes les Localisations). Pas de valeur magique `0` —
+`feu:brasier` porte `locationMode:'all'` et `locations:null`.
 
 ### 13.4 Hors Z0 (rappel)
 
@@ -756,9 +792,9 @@ comportement d'avant. Les tests service Lot 3 doivent passer (ou être portés �
 
 | Fichier | Changement |
 |---|---|
-| `shared/world/dangerCatalog.js` | Les entrées `feu:*` / `acide:capsule` / `decompression` deviennent **la** source des chiffres. `feu:brasier` = `3d10` / `locations:0` / `locationMode:'all'` (décision B3). |
+| `shared/world/dangerCatalog.js` | Les entrées `feu:*` / `acide:capsule` / `decompression` deviennent **la** source des chiffres. `feu:brasier` = `3d10` / `locationMode:'all'` (décision B3). |
 | `shared/environmentalHazardPresets.js` | **supprimé** — ou réduit à `export { BURNING_PRESETS } from './world/dangerCatalog.js'` (dérivé) le temps de migrer `TokenStatusPanel.jsx`. `inferno` **change** (`locations:1` → sémantique brasier). |
-| `shared/environmentalHazardRegistry.js` | `ENVIRONMENTAL_HAZARD_REGISTRY` **dérivé** : `listDangerDefinitions().filter(d => d.category ∈ FAMILLES_HAZARD).map(d => ({ code: d.hazardCode, forcedLocation: d.forcedLocation ?? null }))`. `findHazardRegistryEntry` inchangé en surface. |
+| `shared/environmentalHazardRegistry.js` | `ENVIRONMENTAL_HAZARD_REGISTRY` **dérivé** : les `hazardCode` **distincts** du catalogue (`feu:*`→`burning` dédupliqué), chacun avec le `forcedLocation` de sa définition. Résultat = `[{acid,null},{decompression,'corps'},{burning,null}]`. **Ordre figé** (le test est `deepEqual`) → trier explicitement. `findHazardRegistryEntry` / `getAllHazardCodes` inchangés en surface. |
 | `shared/environmentalHazardPresets.test.mjs` | **mis à jour, pas porté verbatim** : `small`/`medium`/`large` + décompression inchangés ; la ligne `inferno` reflète la nouvelle sémantique. |
 | `shared/environmentalHazardRegistry.test.mjs` | **porté** : l'assertion « 3 codes, décompression `forcedLocation:'corps'` » doit tenir sur le résultat **dérivé**. |
 | `server/src/services/effectLineResolverService.js` | enregistre `note` (émet une note MJ/chat — patron `type:'note'` de `worldEffects`), `status` (pose un `token_status` via `statusService.applyModStatus` — valide le code contre `shared/statusCodes.js`, **créé ici** = aggradation, cf. Z0 §13.7 pt 5), `modifier` **base** (pose/rafraîchit un `token_status` portant la valeur ; le branchement dans `calcActiveMalus` via une entrée `ACTIVE_MALUS_SOURCES` = **Z4**, avec escalade + `decay`). |

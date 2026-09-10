@@ -188,6 +188,8 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique de l'instance |
 | `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap en illustration/tokens 2D |
 | `PLANS/PLAN_AOE.md` | Résolution de zone d'effet (AOE) — architecture en couches, prérequis Armes spéciales + Tir de suppression + Force Polaris |
+| `PLANS/PLAN_ZONES_DANGER.md` | Fondation « zones dangereuses » — comment une zone d'effet runtime est résolue tour par tour ; registre `effectLineResolverRegistry` + refonte du système « dangers environnementaux » + `dangerCatalog.js` |
+| `PLANS/PLAN_WORLD_BUILDER_REWORK.md` | Rework de l'édition de forme des salles (dessiner + éditer les arêtes) ; livre le primitif d'édition 2D partagé avec l'éditeur de zones dangereuses |
 
 ---
 
