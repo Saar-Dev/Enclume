@@ -872,13 +872,16 @@ export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
 // La porte de blocage (arme déjà en panne / hors d'usage) est traitée en amont (§7.1.a, L5b) —
 // quand on arrive ici l'arme est opérationnelle.
 async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, characterName, userId, username, color, outcome, emissions }) {
-  if (!weapon?.ref_has_integrity || !weaponInvId) return
-  if (outcome.isSuccess || outcome.catastropheRisk) return
-  const itg = weapon.integrity_current
-  if (!Number.isInteger(itg) || itg < 1 || itg > 5) return
+  const itg = weapon?.integrity_current
+  const eligible = Boolean(weapon?.ref_has_integrity) && Boolean(weaponInvId)
+    && !outcome.isSuccess && !outcome.catastropheRisk
+    && Number.isInteger(itg) && itg >= 1 && itg <= 5
+  console.log(`[DBG] test de panne d'arme — ${characterName} : suivi:${Boolean(weapon?.ref_has_integrity)} ITG:${itg ?? '—'} attaqueRéussie:${outcome.isSuccess} catastrophe:${Boolean(outcome.catastropheRisk)} → ${eligible ? 'TEST' : 'ignoré'}`)
+  if (!eligible) return
 
   const res = await runPanneTest(weaponInvId, { reason: 'combat_low_itg', characterId })
   if (res.panne === 'skipped') return
+  console.log(`[WS] test de panne d'arme — ${characterName} : roll:${res.roll}/${res.threshold} → ${res.panne}${res.panne === 'simple' ? ' (-1 ITG)' : res.panne === 'critical' ? ` (-${res.loss} ITG)` : ''}`)
   const ts = new Date().toISOString()
 
   // 1. Le Test de panne (1d20 sous l'ITG courante).
