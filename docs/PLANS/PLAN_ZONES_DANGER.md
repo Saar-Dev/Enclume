@@ -37,16 +37,34 @@ crée d'instance depuis le combat**.
 `[VÉRIFIÉ base locale]` : `world_effect_definitions` = **0 ligne**, `world_effect_instances` = **0
 ligne**. Aucune rétro-compat de données.
 
-### 1.2 `environmentalHazardService.js` (statuts périodiques par token)
+### 1.2 Le système « dangers environnementaux » (Lot 3, `PLAN_FATIGUE_DOMMAGES` §9) — **plus complet qu'il n'y paraît**
 
-**Fait** : `token_statuses` avec `data:{formula,locations,forcedLocation}` + `expires_at_turn` ; tick
-à `combatTurnEngine.startResolutionPhase` (jointure `combat_roster ⋈ token_statuses` filtrée par
-`getAllHazardCodes()` → `resolveEnvironmentalHazardTicks` → `resolveTargetHit` par Localisation →
-`COMBAT_ATTACK_RESULT`) ; `exposeToHazard` / `clearHazard` (linger Acide 1D6 Tours) ; purge
-universelle fin de Tour (`expires_at_turn <= newTurn`). 3 codes en dur : `burning` / `acid` /
-`decompression`.
+Quatre fichiers, en production, **RAW-vérifiés contre Polaris 3ᵉ éd. p.242-243** :
 
-**Pas fait** : rien de spatial. Le MJ pose ça à la main, token par token.
+- **`shared/environmentalHazardRegistry.js`** — `ENVIRONMENTAL_HAZARD_REGISTRY = [{acid}, {decompression,
+  forcedLocation:'corps'}, {burning}]`. Patron `echeanceTypeRegistry` : **un lookup par ligne, zéro
+  agrégation entre dangers** d'un même token (choix délibéré, ≠ `resolveModHooks`). `findHazardRegistryEntry`,
+  `getAllHazardCodes()`.
+- **`shared/environmentalHazardPresets.js`** — `BURNING_PRESETS` (`small` 1d6 · `medium` 1d10 · `large`
+  2d10 / `1d3` Loc · `inferno` 3d10 / **`locations:1`** — écrit avant la décision Saar B3, cf. §5.1) ·
+  `DECOMPRESSION_PRESETS` (`normal` 1d10 · `severe` 2d10). Pré-remplit le formulaire MJ, jamais imposé.
+  **Ne valide rien** — porte des chaînes, comme `fallDamageConstants.js`.
+- **`server/src/lib/environmentalHazardService.js`** — `exposeToHazard(…, {formula, locations,
+  forcedLocation, durationDice})` (pose une ligne `token_statuses`, `data:{formula,locations,forcedLocation}`,
+  `durationDice` = durée finie optionnelle : lance-flammes « 2D6 Tours ») ; `clearHazard(…, {linger})`
+  (linger Acide 1D6, **réservé à `acid` par le RAW**) ; `resolveEnvironmentalHazardTicks` (roll `data.formula`
+  → `resolveTargetHit` par Localisation → `COMBAT_ATTACK_RESULT` ; **aucun `armorReductionFactor`** — RAW) ;
+  `turnsFromNow` (`current_turn + roll + 1`, le `+1` compense la purge de fin de Tour). Tick appelé depuis
+  `combatTurnEngine.startResolutionPhase` (jointure `combat_roster ⋈ token_statuses` filtrée par
+  `getAllHazardCodes()`). **Commentaire dans le code : « un vrai stacking serait une refonte du système
+  de dangers — hors périmètre ».** ← c'est cette refonte (§2.B).
+- **`client/.../TokenStatusPanel.jsx`** — l'UI MJ d'exposition. **Le feeder « exposition manuelle » du
+  §2.B existe déjà.** Codes `burning`/`acid`/`decompression` : catégorie `dot`, assets `/assets/status/*.svg`,
+  clés i18n `status.*` déjà là.
+
+**Pas fait** : **rien de spatial** — le MJ pose ça à la main, token par token. Pas de catalogue unique
+(les chiffres sont éclatés entre `environmentalHazardPresets.js` et le RAW). Pas de stacking. Le tick
+est un résolveur codé en dur (roll → `resolveTargetHit`), pas un dispatch par type de ligne.
 
 ### 1.3 Le chantier = le pont — patron *spawner*
 
@@ -85,16 +103,26 @@ indépendantes (§10). **Hors combat = HORS SCOPE** (décision Saar — aligné 
 - **v2 = ajouter une entrée au registre.** Zéro changement du dispatcher, du schéma stocké, de la
   boucle de Tour. C'est ça, « adaptatif ».
 
-### 2.B — Refonte de `environmentalHazardService`
+### 2.B — Refonte du système « dangers environnementaux » (Lot 3 → catalogue)
 
-`burning` / `acid` / `decompression` deviennent des **définitions du catalogue** (§4). Le tick actuel
-(`resolveEnvironmentalHazardTicks`) disparaît au profit de `resolveActiveEffects`. **Deux
-alimentateurs, une résolution** :
-- exposition MJ à la main sur un token (`exposeToHazard`) → pose une instance `targetKind:'token'` ;
-- balayage de présence d'une zone → pose des conditions sur les occupants.
+Ce qui existe (§1.2) est **absorbé**, pas doublé :
 
-→ **autorité unique de l'invariant 2 enfin respectée.** Non-régression stricte exigée (tests
-existants + session Saar).
+| Aujourd'hui | Après refonte |
+|---|---|
+| `environmentalHazardPresets.js` (`BURNING_PRESETS`, `DECOMPRESSION_PRESETS`) | **fondu dans `dangerCatalog.js`** : `feu:petit/moyen/grand/brasier`, `decompression`. Le fichier de presets disparaît (ou devient un ré-export mince du catalogue le temps de migrer les imports). |
+| `environmentalHazardRegistry.js` (`[{acid},{decompression},{burning}]`) | **dérivé du catalogue** : « la liste des `status_code` de danger » = les clés du catalogue dont la `category` est une famille de danger. `getAllHazardCodes()` lit le catalogue. `forcedLocation:'corps'` de la décompression = un champ de la définition catalogue. |
+| `resolveEnvironmentalHazardTicks` (roll `data.formula` → `resolveTargetHit`, **codé en dur**) | **remplacé** par `resolveActiveEffects` : la définition catalogue porte `effects:[{type:'damage', formula, locations, …}]`, dispatché via `effectLineResolverRegistry` (§2.A). Le résolveur `damage` réutilise `resolveTargetHit` — même sortie `COMBAT_ATTACK_RESULT`. |
+| `exposeToHazard` / `clearHazard` / `turnsFromNow` / `durationDice` / linger Acide | **conservés** comme l'un des deux alimentateurs (pose une instance `targetKind:'token'`). `turnsFromNow` (+1 purge) reste la primitive de durée. |
+
+**Deux alimentateurs, une résolution** :
+- exposition MJ à la main sur un token (`exposeToHazard`, UI `TokenStatusPanel.jsx`) → instance `targetKind:'token'` ;
+- balayage de présence d'une zone → conditions sur les occupants.
+
+→ **invariant 2 enfin respecté** : plus de résolveur de dégât codé en dur à côté du registre, plus de
+chiffres RAW éclatés entre un fichier de presets et le catalogue. Non-régression stricte exigée (les
+tests Lot 3 existants — `environmentalHazardRegistry.test.mjs`, `environmentalHazardPresets.test.mjs`,
+tests service — **doivent passer inchangés ou être portés 1-pour-1** + session Saar : brûler / acide /
+décompresser un token comme avant la refonte).
 
 ### 2.C — Flyweight
 
@@ -218,6 +246,14 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
 `statLoss`, `chance`, `drainResource`, `skillOverride`, `forcedMove`, `accumulateLevel`,
 `corrodeEquipment`, `chain` = **dans le contrat (validés), résolveur = v2**.
 
+> **`locationMode` se mappe sur la précédence existante, il ne la remplace pas** (§2.B). Le résolveur
+> `damage` de Lot 3 applique déjà : `entry.forcedLocation` (registre) `??` `data.forcedLocation`
+> (instance, choix MJ) `??` aléatoire `1D20`. Traduction en Z1 : `locationMode:'all'` → toutes les
+> Localisations ; `'exposed'` → lit `data.forcedLocation` de l'instance, sinon aléatoire ; `'random'`
+> → aléatoire. Le champ `forcedLocation` de la **définition** (décompression → `'corps'`) prime sur
+> tout. Aucun nouveau code de résolution de Localisation — on branche le vocabulaire du catalogue sur
+> `resolveTargetHit(forcedSlotCode)`.
+
 ### Instance (`world_effect_instances`)
 
 ```
@@ -320,7 +356,15 @@ marche** : `buildTimelineEntries` → tick des mods → tick des dangers → `ad
 ### 5.1 Feu — `FATIGUE&DOMMAGES.md` §Feu
 
 4 intensités (`1D6`/`1D10`/`2D10`/`3D10`). Localisations : petite+moyen = « exposée » (désignée MJ) ;
-grand = `1D3` ; **brasier = toutes** (RAW muet → décision Saar : mort garantie). **Ignifugé** : le
+grand = `1D3` ; **brasier = 3D10 sur TOUTES les Localisations** (RAW muet → décision Saar B3
+re-confirmée 2026-09-10 : mort garantie en 1 Tour).
+
+> **Écart à corriger en Z1** : `shared/environmentalHazardPresets.js` a `inferno … locations:1`
+> (écrit avant B3, commentaire « RAW ne précise pas, 1 par défaut »). Quand ce fichier est absorbé
+> par `dangerCatalog.js` (§2.B), `feu:brasier` fige `locations:0` / `locationMode:'all'` — le catalogue
+> l'emporte, l'ancien `1` disparaît. Ne pas recopier le `1`.
+
+**Ignifugé** : le
 RAW dit « réduit considérablement » mais **ne liste aucun équipement ni aucun chiffre** → colonne
 `protections['hazard:fire']` (peuplée MJ, aucun seed) + `attenuation` `arbitrate` (note MJ, aucune
 réduction auto). « Vêtements qui prennent feu » (le feu suit hors zone) = **v1 : non modélisé**
@@ -405,7 +449,7 @@ zone × zone. **Le catalogue est complet dès Z0** ; seuls les résolveurs sont 
 | # | But | Nature | Preuve |
 |---|---|---|---|
 | **Z0** | `shared/world/worldEffects.js` : schéma de ligne **complet** (tous les types validés, `phase`, params typés) + blocs de définition (`tags` / `durationPolicy` / `stackingPolicy` / `corrodes` / `attenuations` / `chaining`). **`shared/world/dangerCatalog.js`** : toutes les définitions, sourcées RAW. Tests purs. | `shared/`, aucune migration | `node --test shared/**` |
-| **Z1** | `effectLineResolverRegistry` (patron `resolveModHooks`) ; `resolveActiveEffects` ; **refonte `environmentalHazardService`** (`burning`/`acid`/`decompression` → catalogue) ; résolveurs `damage` + `status` + `note` + `modifier` de base. Migration : **supprime les 6 valeurs `ref_equipment` corrompues** (§5.4). Non-régression stricte. | serveur, **rework**, migration | tests existants + **session Saar** (non-régression `burning`/`acid`) |
+| **Z1** | `effectLineResolverRegistry` (patron `resolveModHooks`) ; `resolveActiveEffects` ; **refonte système dangers environnementaux** (§2.B) : `environmentalHazardPresets.js` **absorbé** dans `dangerCatalog.js`, `environmentalHazardRegistry.js` **dérivé** du catalogue, `resolveEnvironmentalHazardTicks` remplacé par le dispatch ; `exposeToHazard`/`clearHazard`/`turnsFromNow` conservés (feeder token). Résolveurs `damage` + `status` + `note` + `modifier` de base. Migration : **supprime les 6 valeurs `ref_equipment` corrompues** (§5.4). Non-régression stricte. | serveur, **rework**, migration | tests Lot 3 portés 1-pour-1 + **session Saar** (brûler / acide / décompresser comme avant) |
 | **Z1b** | `ref_equipment.protections` JSONB (§2.G) ; `waterproof` s'y replie (migration + retrait colonne) ; outil admin / `equipmentMapping.js` / `inventoryService` / `diff_equip.mjs` adaptés ; résolveur `attenuation` lit `protections`. | serveur + client admin, **rework**, migration | build + session Saar |
 | **Z2** | balayage roster × zones dans `startResolutionPhase` → `resolveActiveEffects` ; `durationPolicy` dans `endTurn` ; `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans`) ; `remanence:'none'` à l'`exit` ; champ instance `puissance` (migration) branché dans les résolveurs. | serveur, migration | **insert manuel zone `feu:grand` → un token dedans brûle chaque Tour + s'éteint en sortant** |
 | **Z3** | `aoeMechanisms/grenade_incendiary.js` sur `circleGrenade.js` ; explosion Tour+1 → `createWorldEffectInstance`. **Dé-gèle le chantier grenades** (maj `PLAN_GRENADES.md` §6). | serveur + migration `ref_equipment` | **preuve utilisateur #1** — lancer incendiaire → zone de feu au Tour suivant |
@@ -536,6 +580,11 @@ consommateur du rework world builder, §12).
   reconnaissance du code client. Constat : l'éditeur de volume polygone partage son primitif avec le
   rework world builder à venir → resserrement (§7 scindé E-v1 / E-v2, §12 séquencement, abandon d'un
   `PLAN_ZONES_DANGER_EDITEUR.md` autonome).
+- **2026-09-10** — recon du système « dangers environnementaux » (Lot 3) : `environmentalHazardRegistry.js`
+  + `environmentalHazardPresets.js` + `TokenStatusPanel.jsx` recensés (§1.2). §2.B précisé (absorption
+  presets / dérivation registre / remplacement du tick codé en dur). Brasier `3D10` toutes Loc
+  re-confirmé (écart avec l'ancien preset `inferno locations:1` noté §5.1). `locationMode` mappé sur
+  la précédence existante (§3).
 
 ---
 
