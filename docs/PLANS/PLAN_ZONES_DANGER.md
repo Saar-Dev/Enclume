@@ -1,8 +1,9 @@
 # PLAN_ZONES_DANGER.md — Fondation « zones dangereuses persistantes »
 
-> Rédigé 2026-09-09 (Claude/Saar). **Cadrage — pas un plan d'implémentation.** Seule la §1 (Constat)
-> est `[VÉRIFIÉ]` et stable ; les §3 à §6 sont **NON FIGÉES** — matière d'exploration à rouvrir à
-> chaque reprise. Aucune ligne de code tant que la liste de champs (§4) n'est pas arrêtée avec Saar.
+> Rédigé 2026-09-09 (Claude/Saar), révisé 2026-09-10. **Section faisant autorité : §10** (révision
+> architecture après recherche approfondie). §1–§9 = cadrage et raisonnement, conservés ; §8 / §8bis /
+> §9.Z0a sont **supplantés par §10**. Aucun code : reste §10.7 (validations Saar + plan Z0 détaillé +
+> extraction de l'éditeur de volume).
 >
 > Responsabilité unique (`docs/RegleDocumentaire.md` R1) : *comment une zone d'effet runtime, une
 > fois posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle
@@ -122,6 +123,19 @@ d'entrée / sortie, ni de compteur d'exposition.
 > aveuglantes**, **chaleur intense**, **raréfaction de l'O₂ en lieu clos**, **stress** (hybrides,
 > animaux → fuite).
 
+**4 préréglages livrés (définitions builtin) + « Personnalisé »** (Saar A1, §4.10) :
+
+| Préréglage | Formule / Tour | Localisations | Mode |
+|---|---|---|---|
+| `feu:braise` / `feu:petit` | `1D6` | 1 | `exposed` (le MJ désigne) |
+| `feu:moyen` | `1D10` | 1 | `exposed` |
+| `feu:grand` | `2D10` | `1D3` | `random` |
+| `feu:brasier` | `3D10` | **toutes** (`all`) | — · **mort garantie en 1 Tour** (Saar B3) |
+
+**Atténuation ignifugée (Saar B1/B2)** : colonne `ref_equipment.fireproof` (booléen, miroir de
+`waterproof`, aucun seed) + ligne `note` « réduction RAW à arbitrer par le MJ ». Pas de réduction
+automatique — le RAW ne liste aucun équipement ni aucun chiffre.
+
 *Déjà modélisé (par token, pas par zone)* `[VÉRIFIÉ 2026-09-09]` :
 - `burning` dans `environmentalHazardRegistry` (`forcedLocation: null`) + hook builtin `fire`
   (`modifiers` `movementMultiplier:1` / `sightOpacity:0.12` ; hook `turnStart` / `damage`
@@ -149,6 +163,15 @@ Analyse du cas complète en §4.1.
 > chair, etc. — **préciser la cible matérielle**.
 
 *Déjà modélisé* : `acid` + `clearHazard(linger:true)` = 1D6 Tours RAW.
+`Capsule acide` (catalogue) = `damage_h "1D10"` — seul point d'ancrage chiffré.
+
+**Tranché (Saar, 2026-09-10)** :
+- **C1** — pas d'échelle « puissance ». L'acide = **double champ MJ à la pose : dégât + durée**
+  (`linger`). Préréglage `acide:capsule` (`1D10` / Tour, `1D6` Tours de persistance). Résolveur =
+  celui du feu (A3).
+- **C2** — v1 : **dégât au personnage seulement**. Le contrat porte `corrodes:[...]` +
+  `cibleDeLEffet:'équipement'` **dès Z0** ; le résolveur `corrodeEquipment` (→
+  `integrityService.adjustIntegrity`) = **v2**, quand l'intégration combat d'Usure (L5) est stable.
 
 ### 3.3 Décompression — `FATIGUE&DOMMAGES.md` §Décompression
 
@@ -174,19 +197,68 @@ Dommages physiques 1D10 croissant d'1D10 / heure à partir de « Glacial » (Bra
 + Tête). **Immersion / vêtements mouillés : tous les temps ÷ 2.** Combinaison grand froid : annule
 (jusqu'à un seuil). Hybrides : insensibles sous l'eau.
 
-### 3.6 Radiations — `FATIGUE&DOMMAGES.md` §Radiations  *(hors périmètre, référence)*
+### 3.6 Radiations — `FATIGUE&DOMMAGES.md` §Irradiations (p.249-250) `[VÉRIFIÉ — texte complet déjà transcrit]`
 
-Niveau d'irradiation à seuils (5 / 10 / 15 / 20 / 25 / 30) → pertes temporaires de CON + Fatigue ;
-+1 point **permanent** à chaque seuil franchi ; **« rester dans une zone irradiée fait re-subir les
-dégâts »** (≈ tick de zone), échelle non-combat.
+- **Gain** selon la source : `1D6` (légères — fuites) · `2D6` (importantes — incident labo/centrale) ·
+  `3D6` (massives — bombe / réacteur). Ajouté au **niveau d'irradiation** du personnage.
+- **Seuils** 5 / 10 / 15 / 20 / 25 / 30 → pertes **temporaires** de CON (2 / 3 / 5 / 7 / 10 / 10) +
+  Fatigue croissante ; à partir du seuil 20, aussi des pertes **permanentes** de CON ; **+1 point
+  d'irradiation permanent à chaque seuil franchi** (jamais soignable).
+- **Re-exposition** : « rester dans une zone irradiée fait re-subir les dégâts de base » — mais à
+  intervalle **mensuel** (légères) / **hebdomadaire** (importantes) / **quotidien** (massives).
+  **Aucun re-tick à l'échelle du Tour de combat.**
+- Traitement : hôpital spécialisé uniquement, −1 niveau / 3 jours.
 
-### 3.7 Gaz de combat (6 types) — verbatim dans `PLAN_NUAGE.md` §3
+**Rôle d'une `zone:radiation` (tranché Saar 2026-09-10)** : ligne `accumulateLevel {track:'irradiation',
+trigger:'enter', formula:'1d6'|'2d6'|'3d6'}` — gain **une fois à l'entrée**, rien par Tour. Le « niveau
+→ effets » appartient à `PLAN_FATIGUE_DOMMAGES` (« Radiations Lot 9 », **non construit**). →
+**définition dans le catalogue dès Z0, résolveur = v2** (bloqué sur Fatigue&Dommages Lot 9).
 
-Assommant / décomposant / irritant / neurotoxique / suffocant / vésicant. Patrons récurrents :
-Test (Constitution ou résistance au Choc) **par Tour de présence** ; malus **+1 par Tour** dans la
-zone ; **décroissance** en sortie (−1 / Tour, ou −1 / 2 Tours) ; « **puissance du gaz** » = Difficulté
-des Tests (origine de la valeur `[INCONNU]`) ; immunité masque / NBC / pressurisé (parfois partielle :
-masque = peau seulement pour le vésicant) ; « retenir sa respiration » = ½ intensité.
+### 3.7 Gaz de combat — `[VÉRIFIÉ Livre de Base, Saar 2026-09-10]`
+
+Les 6 descriptions de `PLAN_NUAGE.md` §3 (assommant · décomposant · irritant · neurotoxique ·
+suffocant · vésicant) sont **fidèles au Livre de Base** — confirmé par Saar sur le texte source
+(§Gaz p.309-310). **Le préambule §Gaz, lui, n'était pas capté** — il porte des mécaniques
+structurantes :
+
+- **Propagation = INSTANTANÉE.** « Les gaz se répandent **instantanément** dans la zone dans laquelle
+  ils sont utilisés et y stagnent jusqu'à ce qu'ils soient dispersés. » → pas de m³/Tour progressif ;
+  la zone se remplit d'un coup.
+- **Dissipation = conditionnelle (vent), pas un timer.** « …jusqu'à ce qu'ils soient dispersés (par
+  le vent, par exemple) ». → `durationPolicy: conditional`, pas `timerDés`.
+- **Volume par vecteur** : capsule ≈ 10 m³ · grenade ≈ 30 m³ · obus ≈ 1 000 m³ — « indications
+  approximatives, dépend de la concentration ».
+- **Rémanence universelle** : « les victimes présentes sur les lieux… même si elles quittent la zone
+  d'effet, sont **encore intoxiquées** ». → aucun gaz n'a `remanence: none`. Modes RAW observés :
+  `decay` (irritant −1/Tour ; suffocant −1 tous les 2 Tours ; décomposant −1/Tour) ·
+  `conditional` (vésicant : jusqu'à la solution neutralisante ; neurotoxique : jusqu'à MR ≥ 15 ou
+  atropine + Test de Chance — **agit même hors zone**).
+- **Immunité = protection parfaitement isolée et étanche seulement.** « Aucune armure, même
+  naturelle, ne protège… sauf les protections parfaitement isolées et étanches. » Nuances par gaz :
+  - vésicant : NBC / armure pressurisée = immunité ; **masque à gaz seul = dégâts à la peau
+    uniquement** (poumons / yeux protégés) ;
+  - neurotoxique : **seule** une tenue pressurisée ou NBC — **le masque à gaz ne suffit pas** ;
+  - suffocant / irritant / assommant : masque à gaz **ou** NBC **ou** équipement isolé/pressurisé.
+- **« Puissance du gaz »** = « concentration » ; « les dommages indiqués ne concernent que des
+  concentrations normales ». C'est le curseur d'intensité — sa valeur reste une décision MJ
+  (§10.8-D1).
+- **« Retenir sa respiration »** : assommant → « réduire de moitié l'**intensité** » ; suffocant →
+  « réduire de moitié les **effets** ». (§10.8-D3.)
+
+**Effets par Tour, RAW verbatim :**
+
+| Gaz | Effet / Tour de présence | Escalade | Rémanence en sortie |
+|---|---|---|---|
+| **vésicant** | `1D6` Dommages sur `1D3` Loc. ; ½ chances de réussite ; quasi-aveugle | +1 Dommage / Tour | `conditional` — jusqu'à solution neutralisante |
+| **suffocant** | Test CON (malus = puissance) → échec : −1 CON (perte définitive sauf Test de Chance) ; ½ chances | — | `decay` −1 malus / 2 Tours |
+| **irritant** | malus base **−3** ; Test CON → échec : malus supplémentaire cumulatif = modif. d'échec | via l'échec du Test | `decay` −1 / Tour |
+| **neurotoxique** | Test CON → échec : −1 Résistance (**même hors zone**) ; mort sauf MR ≥ 15 / atropine + Chance | — | `conditional` — jusqu'à MR ≥ 15 ou atropine |
+| **décomposant** | `1D6` Dommages / Tour ; blessures « comme le feu » | +2 Dommages / Tour | `decay` −1 / Tour |
+| **assommant** | Test de résistance au Choc (malus = puissance) | +1 malus / Tour | *(RAW muet — `decay` par défaut)* |
+
+→ **Le « gaz simple » de v1 (§10.8-D4)** = l'**irritant** : c'est le seul dont l'effet de base
+(`modifier −3`) ne dépend **pas** d'un Test (le Test irritant n'ajoute qu'un *supplément*). Idéal
+pour prouver `modifier` + `escalade` + `decay` sans le type `test`.
 
 ### 3.8 Eau / immersion — `REGLEBLESSURES.md` §§ Souffle, Froid, Noyade/Asphyxie, Décompression ; `REGLECOMPETENCE.md` (Athlétisme, Manœuvres sous-marines)
 
@@ -222,10 +294,14 @@ que `FATIGUE&DOMMAGES.md`, avec le §Souffle en entier). **Ce que l'eau fait ré
   fluide dans `REGLECOMPETENCE.md` ; phénomène « Modification de la pression » (± 100 m / point) dans
   `REGLEPOLARIS.md` (incident de Force). À reconfirmer sur le PDF avant tout chantier profond.
 
-**Unification RAW à retenir** : immersion, **vide spatial** et **gaz nocif** partagent la même
-colonne vertébrale — « atmosphère non respirable » → on retient son souffle → Souffle décroît selon
-l'activité → cascade de Tests d'Athlétisme → noyade / asphyxie / effet du gaz. Une seule mécanique
-pour trois familles de zones.
+**Unification RAW — version corrigée (Saar A2, 2026-09-10)** : **pas** une seule mécanique. Le
+**Souffle est un *timer de blocage respiratoire* commun** à l'immersion, au vide et aux gaz : on
+retient sa respiration, on perd `−1` (immobile) à `−4`/Tour (combat), épuisé → cascade de Tests
+d'Athlétisme → « commence à se noyer / s'asphyxier / subir l'effet du gaz ». **Mais chaque menace
+garde son effet propre par Tour** — noyade (eau), asphyxie (vide), effet spécifique (les 6 gaz,
+§3.7). « Retenir sa respiration » **consomme le Souffle** et **divise l'effet de la menace par 2**.
+→ côté moteur : **un** sous-système `holdBreath` / Souffle + **N** effets de menace (résolveurs
+distincts), pas un `drainResource` unique.
 
 ### 3.9 Vide spatial / apesanteur / atmosphère hostile — `REGLEBLESSURES.md` (Souffle, Décompression, Froid), `REGLECOMPETENCE.md` §Manœuvres 0G, `REGLEARMURE.md`
 
@@ -281,10 +357,13 @@ vide. Premier jet des colonnes qu'une définition de zone devra porter, à valid
   (porte fermée coupe le canal).
 - **Cycle de vie** : `duration_rounds` fixe · timer de dés · conditionnel (aération / vent) ·
   permanent jusqu'au retrait MJ · one-shot puis disparaît.
-- **Géométrie** : volume fixe · compartiment(s) · forme AOE · se propage (m³ / Tour) ·
+- **Géométrie** : volume fixe · compartiment(s) · forme AOE ·
   **mobile / dérivante** (nuage déplacé par le MJ ou par un vecteur de vent — §4.6) ·
   (plus tard) change de volume (eau qui monte). → « mobile » et « change de volume » = la même
   capacité *géométrie dynamique* sous deux angles, à mutualiser.
+  **NB `[VÉRIFIÉ RAW §3.7]`** : le gaz se répand **instantanément** dans sa zone (pas de m³/Tour
+  progressif) puis stagne jusqu'à dispersion par le vent — donc pas de mode « propagation lente »
+  pour les gaz.
 - **Chaînage** : engendre une autre zone (feu → fumée / air vicié) — décalage / délai ? condition
   (lieu clos) ?
 - **Visibilité joueurs** : affichée · cachée (bascule MJ) · **cachée jusqu'à détection** (piège :
@@ -699,13 +778,34 @@ Propriétés transverses d'une ligne :
 5. Le cycle de vie **`conditionnel` + condition d'arrêt nommée** est porteur : fermer la vanne
    (geyser), pomper / fermer le sas (eau), éteindre (feu), neutraliser (acide).
 
-### Interface MJ sans code
+### 4.10 Principe d'interface MJ (Saar, 2026-09-10)
 
-À réfléchir une fois les champs stabilisés — cases à cocher + champs numériques + listes déroulantes,
-zéro script. Point d'attention : exprimer « malus +1 / Tour, −1 / Tour après sortie, sauf masque »
-sans que ça devienne un langage. → le schéma §4.8 y répond : chaque ligne d'effet = un bloc de
-formulaire (menu `type` → champs du type), `escalade` / `rémanence` / `atténuation` = sous-blocs
-repliés. Pas de texte libre sauf les libellés et la formule de dés.
+> **Le MJ a beaucoup de préparation par battlemap.** Créer la carte **et** ses conditions
+> spécifiques doit être **rapide, peu de clics, peu de temps**. Concevoir pour les **90 %** (des
+> préréglages tout prêts) + l'**exception** (un mode « Personnalisé » complet).
+
+**Flux de pose d'une zone (vision Saar)** :
+1. une fenêtre → un bouton par **catégorie** (feu · eau · acide · gaz · débris · …) ;
+2. sélection d'un **préréglage** de la catégorie (feu : braise · petit feu · grand feu · brasier) ;
+3. un bouton **« Personnalisé »** → fenêtre dédiée, tous les champs du contrat §4.8 ;
+4. puis la **géométrie** (§4.7 — sous-chantier).
+
+Poser une zone standard = **catégorie → préréglage → géométrie → fini** (~3 interactions).
+
+**Conséquence pour le contrat** : un préréglage = une **définition builtin complète** (`formula` /
+`locations` / `remanence` / `attenuations` pré-remplis d'après le RAW). « Personnalisé » = une
+**définition custom** (`world_effect_definitions`). Le contrat porte déjà les deux (builtin vs
+custom) — **le catalogue de préréglages fait partie de la livraison**, pas juste le moteur.
+
+**Sur « le déclaratif ne doit pas devenir un langage »** (§4.8) : la fenêtre « Personnalisé » = un
+bloc de formulaire par ligne d'effet (menu `type` → champs du type), `escalade` / `remanence` /
+`attenuations` en sous-blocs repliés. Pas de texte libre sauf les libellés et la formule de dés.
+Mais **90 % des MJ ne l'ouvriront jamais** — ils cliquent un préréglage.
+
+**Catalogue de préréglages v1** (définitions builtin à livrer avec le noyau) :
+`feu:braise` (1D6, Loc. exposée) · `feu:petit` (1D6) · `feu:grand` (2D10, 1D3 Loc.) · `feu:brasier`
+(3D10, 1D3 Loc.) · `acide:faible` · `acide:fort` · `gaz:irritant` (le « gaz simple » de Z5) ·
+*(fumigène / débris / eau peu profonde = selon avancement des types de ligne)*.
 
 ## 5. Références pro — recherche 2026-09-09
 
@@ -1152,7 +1252,304 @@ non-régression des tests existants.
 
 **Verdict** : plan sain. Resserré à `damage` + `status`, Z0a et Z0b fusionnés. Pas de « ne pas faire ».
 
-## 10. Historique
+## 10. Révision architecture — recherche approfondie (2026-09-10)
+
+> Demande de Saar : prise de recul, on est allé trop vite. Mandat : qualité structurelle >>>
+> vitesse, aggradation de l'architecture, se documenter / s'inspirer des pros, ne jamais coder de
+> zéro, s'assurer que l'archi est **pérenne** (robuste) **et adaptative**.
+>
+> **Cette section prime sur §8 / §8bis / §9.Z0a** (conservés pour l'historique du raisonnement).
+
+### 10.1 Recherche — comment les pros modélisent un système d'effets généraliste et adaptatif
+
+| Source | Ce qu'on en retient |
+|---|---|
+| **Unreal Gameplay Ability System — `GameplayEffect`** (`dev.epicgames.com/documentation/.../gameplay-effects-...`) | Effet = **asset data-only**. 3 politiques de durée : `instant` / `durational` / `infinite`. **Périodique** = tique à chaque `period` (à la fois « Added » et « Executed »). Modifiers `Add`/`Multiply`/`Override` sur un attribut nommé. **`ExecutionCalculation`** = échappatoire pour les calculs qu'un modifier ne couvre pas — **un type d'exécution enregistré, pas du script libre**. **Depuis UE 5.3 : `GameplayEffectComponents`** — l'effet est un **sac de composants enfichables**, chacun enregistre des callbacks, **aucun switch central**. On ajoute un comportement en ajoutant un composant. |
+| **Unity GAS (sjai013, open-source documenté)** (`github.com/sjai013/unity-gameplay-ability-system`) | Même modèle en plus lisible : `GameplayEffect` ScriptableObject + `Modifier {attribut, opérateur, magnitude}` + **GameplayTags hiérarchiques** à 3 usages : *Application Requirements* (l'effet peut-il s'appliquer), *Ongoing Requirements* (suspendu ou actif), *Removal Requirements* (retrait anticipé). Extension = sous-classe `AbstractAbilityScriptableObject` (data) + `AbstractAbilitySpec` (exécution). |
+| **« A Framework for Status Effects » (Stray Pixels)** + **« RPG Status Effect and Cooldown Architecture »** | **Flyweight** : définition statique immuable (durée, tick rate, stacking, icône) **vs** instance runtime légère (réf. définition, durée restante, stacks, source). **Tick centralisé** (une boucle, pas N boucles). **Événementiel** : le manager émet `OnApplied` / `OnTicked` / `OnRemoved`, l'UI/audio/vfx s'abonnent — l'effet **ne touche jamais la présentation**. Bitmask par catégorie pour les requêtes O(1) (« peut-il agir ? »). |
+| **Caves of Qud** (ECS « parts » + effets XML moddables) | Effet porte un **type en bit-vector** (`Poison`, `Fire`, `Mental`…) utilisé pour l'immunité et les cure-all. Tout est reconfigurable **au niveau du blueprint XML, sans script**. |
+| **Divinity: Original Sin 2 — surfaces / nuages** (le maître-étalon des « zones adaptatives qui interagissent ») | Surfaces (sol) + nuages (air), chacun un **type**. Interactions = **règles data** (« feu + huile → plus de feu », « eau + électricité → électrifié », « feu maudit évapore l'eau »). **Pas une matrice N×N codée en dur** — une liste de règles clés par (type, type). `blessed` / `cursed` = un **état modificateur orthogonal** posé par-dessus le type de surface. |
+
+### 10.2 Constat : la maison a déjà le patron
+
+`activeMalusRegistry.js` (son en-tête le dit mot pour mot), `weaponModRegistry` + `resolveModHooks`
+(`RESOLVERS[hookName]` + `applicableHandlers`, `[VÉRIFIÉ code]`), `echeanceTypeRegistry`,
+`environmentalHazardRegistry` : **le projet applique déjà partout le patron « registre déclaratif +
+dispatcher générique, jamais un switch central qui grossit »**. C'est *exactement* le modèle
+`GameplayEffectComponents` d'UE 5.3. L'architecture adaptative que Saar veut **est le style maison** —
+il faut juste l'appliquer aux lignes d'effet de zone, et **y refondre `environmentalHazardService`**
+au lieu de bricoler une 2ᵉ boucle à côté.
+
+### 10.3 Architecture recommandée
+
+**(A) Un registre unique `effectLineResolverRegistry`** (`shared/` = contrat + validation ;
+serveur = résolveurs). Une entrée par `type` de ligne d'effet :
+
+```
+{ type: 'damage' | 'status' | 'modifier' | 'test' | 'drainResource' | 'skillOverride'
+       | 'forcedMove' | 'statLoss' | ... ,
+  phase: 'onEnter' | 'onExit' | 'onTraverse' | 'onTurn',   // quand le résolveur tourne
+  validateParams(params),                                   // shared, pur
+  resolve(ctx) }                                            // serveur — réutilise resolveTargetHit /
+                                                            //   gmArbitratedTestService / statusService / …
+```
+
+`resolveActiveEffects` (une passe, dans `startResolutionPhase`) **dispatche via ce registre**.
+- **v1 enregistre `damage` + `status`.** Les autres types **valident** (le contrat est complet — Saar :
+  « prévoir la suite ») mais **n'ont pas de résolveur** → log « type non résolu (v2) », no-op.
+- **v2 = ajouter une entrée au registre.** Zéro changement du dispatcher, du schéma stocké, de la
+  boucle de Tour. C'est ça, « adaptatif ».
+
+**(B) `environmentalHazardService` est refondu dans ce registre.** `burning` / `acid` /
+`decompression` deviennent des **définitions d'effet** (une ligne `damage`, `forcedLocation` pour la
+décompression). Le tick hazard actuel disparaît au profit de `resolveActiveEffects`. **Deux
+alimentateurs, une résolution** :
+- exposition MJ à la main sur un token (l'actuel `exposeToHazard`) → pose une instance `targetKind:'token'` ;
+- balayage de présence d'une zone → pose des conditions sur les occupants.
+→ **l'autorité unique de l'invariant 2 est enfin respectée** (aujourd'hui `resolveEnvironmentalHazardTicks`
+est déjà un mini-moteur ; on ne veut pas d'un 2ᵉ, on veut *le* moteur).
+
+**(C) Flyweight explicite.** Définition (`world_effect_definitions`) = immuable : `tags` (Set —
+`hazard:fire`, `atmosphere:gas`…), `durationPolicy`, `stackingPolicy`, lignes d'effet ordonnées,
+`attenuations`, `chaining`. Instance (`world_effect_instances`) = géométrie + intensité + overrides.
+Runtime par occupant = `token_statuses` (durée restante, stacks, malus accumulé, état de cascade).
+
+**(D) Interaction & immunité par *tags*, jamais par matrice** (patron DOS2 + GAS) :
+- `attenuations: [{ by:'equipmentTag'|'trait'|'behavior', tag, effect:'immune'|'halve'|'partial', scopeTags:[...] }]`
+  — une tenue NBC = `immune` à `atmosphere:*` ;
+- `zoneInteractionRules: [{ whenTag, meetsTag, action:'remove'|'convert'|'amplify', toKey? }]`
+  — v1 en livre 0 ou 1 (`terrain:water` retire `hazard:fire`), **la forme existe** ;
+- `blessed`/`cursed` de DOS2 = validation externe de notre idée « intensité / état modificateur
+  orthogonal » — à garder en tête, pas en v1.
+
+**(E) Découplage présentation** : les résolveurs émettent des événements (`COMBAT_ATTACK_RESULT`,
+`WORLD_RUNTIME_UPDATED`, une notice système) — **jamais de rendu ni de texte FR figé** (déjà la
+règle, `i18n.md` / `core.md`).
+
+**(F) Tick centralisé** dans `startResolutionPhase` (§7.5 inchangé sur ce point), purge dans
+`endTurn`. Échelle table → pas de min-heap, une simple requête.
+
+**(G) `shared/world/dangerCatalog.js` — la « bible » RAW (proposition Saar, 2026-09-10).**
+Un module de référence unique, patron `polarisUtils.js` / `armorConstants.js` / `fatigueConstants.js` :
+**TOUTES les définitions de danger builtin** (4 préréglages feu, `acide:capsule`, **les 6 gaz**,
+`zone:radiation`, décompression, terrain…), chacune = le contrat §10.3(C) instancié, **avec la
+citation RAW en commentaire** au-dessus de chaque chiffre.
+- **Le catalogue est complet dès Z0. La *résolution* est incrémentale** (décision Saar D4) : une
+  définition dont une ligne utilise un type sans résolveur v1 (`test`, `statLoss`, `accumulateLevel`,
+  `corrodeEquipment`) **existe quand même** — cette ligne no-ope + log jusqu'à v2. Un MJ peut poser
+  une zone `gaz:vésicant` en v1 : la ligne `damage` s'applique, le reste attend.
+- **Source de vérité unique.** Les lignes `ref_equipment` (grenades / capsules) ne portent **plus
+  aucune mécanique** — juste `aoe_profile` (volume) + une **clé** de catalogue.
+- `world_effect_definitions` (DB) = **uniquement** les définitions **custom** MJ. Les builtins sont
+  du code, versionnés, testés, sourcés.
+- Répond à « les effets sont-ils clairs à coder ? » : **un seul fichier** où tout est spécifié,
+  chiffré, sourcé.
+- Le nettoyage `ref_equipment` = **supprimer** les valeurs corrompues (§10.8-C3), pas les migrer.
+
+**(H) Facteur de puissance — patron « SetByCaller Magnitude » (UE GAS), décision Saar D1.**
+Un scalaire **`puissance`** sur l'instance = « ce danger est-il fort ? », curseur unique que le MJ
+comprend, **appliqué à toutes les familles** :
+- **gaz / acide** : le RAW le *demande* (« malus / dégât **dépendant de la puissance** ») ;
+- **feu** : réglage fin **optionnel** par-dessus un préréglage (défaut neutre — le préréglage EST
+  l'intensité) ;
+- **radiations** : `puissance` = le choix `1D6` / `2D6` / `3D6`.
+Chaque **résolveur** décide comment `puissance` s'applique à sa ligne (un `damage` : `+ puissance`
+au jet ou `× puissance` ; un `test` : `difficulté − puissance` ; un `modifier` : `value − puissance`).
+**À concevoir en détail** : réutiliser `world_effect_instances.intensity` (multiplicatif, défaut 1,
+sert déjà `movementMultiplier` / `sightOpacity`) **vs** ajouter `puissance` (additif, défaut 0) —
+tranche : `intensity` reste le curseur **géométrie/ambiance**, `puissance` (neuf, défaut 0) est le
+curseur **magnitude d'effet**. Deux axes distincts, pas de collision.
+
+**(I) `ref_equipment.protections` JSONB — décision Saar D6.** Remplace la prolifération de colonnes
+booléennes (`waterproof`, + `fireproof`, `gas_mask`, `nbc_suit`, `pressurized`…) par **un champ
+structuré** :
+```
+protections: {
+  'terrain:water':   { degree: 'full' },
+  'atmosphere:gas':  { degree: 'partial', scope: ['peau'], except: ['neurotoxique'] },  // masque à gaz
+  'hazard:fire':     { degree: 'partial' },                                             // ignifugé
+}
+```
+Les `attenuations` du catalogue référencent ces clés (= les `tags` de catégorie de danger).
+**Rework assumé** (priorités Saar) : `waterproof` (colonne existante — outil admin, seed
+`equipmentMapping.js`, `inventoryService`, `diff_equip.mjs`) se replie dedans (migration
+`waterproof:true → protections:{'terrain:water':{degree:'full'}}`, puis retrait de la colonne).
+→ **incrément dédié**, séquencé tôt (avec ou juste après Z1).
+
+### 10.4 Ce que ça change vs §8 / §8bis
+
+- **§8bis « `resolveZoneTick` frère » → abandonné.** Remplacé par (B) : **refonte** de
+  `environmentalHazardService` en `resolveActiveEffects` + registre. C'est plus de travail, c'est
+  l'aggradation que Saar demande explicitement.
+- **§9.Z0a `normalizeHook` v2 → élargi** : le contrat porte **tous** les types de ligne (validation),
+  pas seulement `damage` + `status`. Seule la *résolution* est incrémentale.
+- **§4.8 confirmé** comme le contrat — c'est la bonne intuition, la recherche la valide (GAS
+  Modifiers + Executions + Tags = nos lignes typées + le registre).
+
+### 10.5 Plan d'implémentation révisé (contre le contrat complet)
+
+| # | But | Nature |
+|---|---|---|
+| **Z0 — Contrat + bible** | `shared/world/worldEffects.js` : schéma de ligne d'effet **complet** (tous les types validés : `damage` · `status` · `modifier` · `note` · `test` · `statLoss` · `chance` · `drainResource` · `skillOverride` · `forcedMove` · `accumulateLevel` · `corrodeEquipment` · `chain` ; `phase`, `params` typés) + `tags` / `durationPolicy` / `stackingPolicy` / `puissance` (§10.3-H) / `corrodes` / `attenuations` / `chaining` sur la définition. **`shared/world/dangerCatalog.js`** : **toutes** les définitions builtin, complètes et sourcées RAW (4 préréglages feu · `acide:capsule` · **les 6 gaz** · `zone:radiation` × 3 · `décompression` · terrain). Tests purs. | `shared/`, aucune migration |
+| **Z1 — Registre + refonte hazard + nettoyage `ref_equipment`** | `effectLineResolverRegistry` (dispatcher générique, patron `resolveModHooks`) ; `resolveActiveEffects` ; **`environmentalHazardService` refondu** : `burning`/`acid`/`decompression` → définitions du catalogue ; non-régression stricte (tests existants + session Saar). Résolveurs `damage` + `status` + `note`. `ref_equipment` : **supprime les 6 valeurs corrompues** (§10.8-C3), ajoute un lien vers la clé de catalogue. | serveur, **rework**, migration |
+| **Z1b — `ref_equipment.protections` JSONB** | §10.3-I : champ `protections` structuré ; `waterproof` s'y replie (migration + retrait de colonne) ; outil admin / `equipmentMapping.js` / `inventoryService` / `diff_equip.mjs` adaptés ; le résolveur `attenuation` lit `protections`. | serveur + client (outil admin), **rework**, migration |
+| **Z2 — Présence + cycle de vie + `puissance`** | balayage roster × zones dans `startResolutionPhase` → `resolveActiveEffects` ; `duration_rounds` / `durationPolicy` dans `endTurn` ; `worldSpatialQueryService.tokensInsideEffectVolume` (`centreDedans` v1) ; `rémanence:none` à l'`exit` ; le scalaire `puissance` (nouveau champ instance) branché dans les résolveurs. **Preuve : insert manuel zone `fire` → brûle + s'éteint en sortant.** | serveur, migration (colonne `puissance`) |
+| **Z3 — Grenade incendiaire** | `aoeMechanisms/grenade_incendiary.js` sur `circleGrenade.js` ; explosion Tour+1 → `createWorldEffectInstance`. **Preuve utilisateur #1.** Dé-gèle le chantier grenades. | serveur + migration `ref_equipment` |
+| **Z4 — `modifier` + escalade + décroissance** | résolveur `modifier` (entrée `ACTIVE_MALUS_SOURCES` alimentée par les zones) ; `stackingPolicy` + accumulateur mutable dans `token_statuses.data` ; `rémanence:decay`. | serveur |
+| **Z5 — Gaz (preuve #2)** | `gaz:irritant` (`modifier −3` + `decay`) **et** `gaz:décomposant` (`damage 1D6` + `escalade +2` + `decay`) — les 2 entièrement RAW en v1 ; atténuation `behavior` « retenir sa respiration » = ½ ; `aoeMechanisms/grenade_gas_*.js`. **Preuve utilisateur #2.** | serveur + migration |
+| **Z6 — UI MJ** · **Z7 — Joueur** | inchangés vs §8bis (fenêtre catégorie → préréglage → « Personnalisé » (§4.10) + rendu mesh ; avertissement de traversée à la déclaration). | client |
+
+**Noyau v1 = Z0 → Z5.** **Le catalogue est complet dès Z0** ; ce qui est différé = **les résolveurs**
+(chacun = 1 entrée de registre en plus, contrat déjà en place) : `test` (Test CON des gaz),
+`statLoss` (suffocant / neurotoxique), `chance` (Test de Chance), `drainResource` (Souffle + cascade
+Athlétisme), `skillOverride` (sous-marin / 0G), `forcedMove` (courant), `accumulateLevel` (radiations
+→ Fatigue&Dommages Lot 9), `corrodeEquipment` (acide → Usure L5), `chain` (feu → fumée),
+`géométrie.animation` (eau qui monte, nuage qui dérive), `zoneInteractionRules` étendues, pièges.
+
+### 10.6 Ce qui sort de ce document
+
+- **L'éditeur de volume MJ** (§4.7 / 4.7bis) → doc dédié `PLAN_ZONES_DANGER_EDITEUR.md` à créer. Le
+  **contrat géométrie** (`world_effect_instances.volume` / `compartiment` / formes / `animation`)
+  reste ici ; le **build UI + interaction** part. RegleDocumentaire R1 (une responsabilité par doc).
+- **Validation des lectures RAW** (§3 + unification Souffle) par Saar — **prérequis** avant de figer
+  la moindre mécanique de jeu (`AGENTS.md` clôture : une règle de jeu exige une validation Saar).
+
+### 10.7 Package de reprise — reste à produire (aucun code dans cette conversation)
+
+**Objectif de la conversation de cadrage : l'agent qui reprend a tout pour bien travailler.**
+
+1. **§10.8 — Décisions requises de Saar** ✅ *(rédigé — voir ci-dessous ; Saar tranche au fil de l'eau)*.
+2. **§10.9 — Exemple travaillé** : la définition `grenade incendiaire` remplie contre le contrat
+   §10 (prouve aussi que le contrat est saisissable en formulaire).
+3. **§10.10 — Prérequis données** : nettoyage `ref_equipment` (lignes acide + gaz malformées) scopé.
+4. **§10.11 — Plans détaillés Z0 et Z1** (Z1 = refonte `environmentalHazardService`, l'incrément le
+   plus risqué).
+5. **`PLAN_ZONES_DANGER_EDITEUR.md`** : extraction §4.7 (éditeur de volume MJ).
+
+### 10.8 Décisions requises de Saar
+
+Chaque point : le trou, puis **[DÉFAUT PROPOSÉ]** — Saar répond « ok » ou donne sa valeur. Tant
+qu'un point n'est pas tranché, l'agent applique le défaut **et le marque `[DÉFAUT NON VALIDÉ]` dans
+le code + un ticket**.
+
+#### A. Validation des lectures RAW — **TRANCHÉ (Saar, 2026-09-10)**
+
+- **A1. ✅ RÉSOLU** — **4 préréglages RAW livrés** (braise / petit feu / grand feu / brasier, formule
+  + Localisations pré-remplies) **+ « Personnalisé »** (fenêtre dédiée, tous les champs). Philosophie
+  générale : concevoir pour les **90 %** (préréglages) + l'**exception** (libre) ; la pose d'une zone
+  doit être **rapide, peu de clics** (le MJ a beaucoup de prép par battlemap). Techniquement : les 4
+  préréglages = des **définitions builtin** (`formula` baked-in, pas `null`) ; « Personnalisé » = une
+  définition custom. Voir §4.10 (principe d'interface).
+- **A2. ✅ RÉSOLU (modèle corrigé)** — pas d'unification totale. **Le Souffle = un *timer de blocage
+  respiratoire* commun** (eau / vide / gaz) : `−1` (immobile) à `−4`/Tour (combat), épuisé → Tests
+  d'Athlétisme. **Chaque menace garde son effet propre par Tour** (noyade / asphyxie / effet du gaz).
+  « Retenir sa respiration » consomme le Souffle et **divise l'effet par 2**. → §3.8 à corriger dans
+  ce sens.
+- **A3. ✅ RÉSOLU** — feu et acide partagent le **résolveur `damage`** (formule / Tour + Localisations
+  + persistance à la sortie). RAW littéral « comme le feu ».
+- **A4. ✅ RÉSOLU** — les 6 descriptions de `PLAN_NUAGE.md` §3 sont **fidèles au Livre de Base**
+  (Saar a fourni le texte source). **Le préambule §Gaz manquait** — ajouté à §3.7 : propagation
+  **instantanée** (pas m³/Tour), dissipation **conditionnelle (vent)**, rémanence **universelle**
+  (aucun gaz `remanence: none`), immunité = **protection étanche seulement** (nuances par gaz —
+  masque insuffisant contre le neurotoxique). Tableau des 6 effets/Tour verbatim en §3.7.
+
+#### B. Feu — trous RAW — **TRANCHÉ (Saar, 2026-09-10)**
+
+- **B1 + B2. ✅ RÉSOLU** — le RAW dit « certaines tenues ignifugées réduisent considérablement » mais
+  **ne liste aucun équipement, nulle part** (omission de l'auteur) et **ne donne aucun chiffre**. Rien
+  à seeder. →
+  - **`ref_equipment.protections['hazard:fire']`** (via le champ JSONB `protections`, §10.3-I —
+    remplace l'idée d'une colonne `fireproof` isolée). `null` partout par défaut, **aucun seed**,
+    peuplé **par le MJ** au cas par cas.
+  - **Aucune atténuation automatique.** La définition feu porte une ligne **`note`** : cible protégée
+    `hazard:fire` touchée → « réduction RAW à arbitrer » dans le résultat. Seul endroit où le
+    « réduit considérablement » du RAW existe. `[recommandé Claude, Saar non explicitement tranché —
+    à confirmer, coût ~nul, réversible]`.
+  - Une réduction automatique (ex. `degree:'partial'` → ÷ 2) = **une ligne `attenuation` à ajouter**
+    plus tard, le slot est prévu.
+- **B3. ✅ RÉSOLU (Saar)** — brasier = **`3D10` / Tour × TOUTES les Localisations** (`locationMode:
+  'all'`), rien ne réduit. **Mort garantie en 1 Tour, aucun jet de survie** — « personne ne survit
+  6 secondes dans un haut-fourneau ». Assumé.
+
+#### C. Acide + données `ref_equipment` — **TRANCHÉ (Saar, 2026-09-10)**
+
+- **C1. ✅ RÉSOLU** — pas d'échelle RAW, un seul point d'ancrage catalogue (`Capsule acide` =
+  `damage_h "1D10"`). → l'acide = **double champ MJ à la pose : dégât + durée**. Pas de « puissance »
+  abstraite. Préréglage `acide:capsule` (`1D10` / Tour, `1D6` Tours de persistance à la sortie).
+- **C2. ✅ RÉSOLU — v2, mais prévu dès le contrat.** v1 = l'acide brûle **le personnage seulement**.
+  Le contrat porte **dès Z0** : `corrodes: ['chair' | 'métal' | 'plastique' | …]` sur la définition
+  + `cibleDeLEffet: 'équipement'` sur la ligne. Le **résolveur** `corrodeEquipment` (appelle
+  `integrityService.adjustIntegrity`, déjà là — Usure L2) = un incrément v2, quand l'intégration
+  combat d'Usure (L5) est stable. Jamais « on verra ».
+- **C3. ✅ RÉSOLU — remplacé par le catalogue (proposition Saar, voir §10.3-G).** `[VÉRIFIÉ base]` :
+  6 lignes `ref_equipment` corrompues — gaz **décomposants** + **vésicants** (Grenade + Capsule) ont
+  une formule dans `nation` ; gaz **assommants** (×2) ont `"Test Résistance au Choc"` dans `damage_h`.
+  Les lignes irritant / neuro / suffocant (×2) sont **vides** (mécanique en prose dans `description`).
+  Lignes acide : **propres**. → La migration de nettoyage **supprime** les valeurs corrompues (ne les
+  migre nulle part) ; la vraie donnée vit dans `shared/world/dangerCatalog.js` ; `ref_equipment` ne
+  garde qu'`aoe_profile` (volume) + une **clé** de catalogue. Fait avec Z1.
+
+#### D. Gaz — **TRANCHÉ (Saar, 2026-09-10)**
+
+- **D1. ✅ RÉSOLU — généralisé.** « Puissance du gaz » = le **facteur `puissance` unifié** (§10.3-H,
+  patron GAS SetByCaller). Le MJ saisit **un** scalaire à la pose (défaut neutre), qui scale
+  l'effet — gaz, acide (RAW le *demande*), feu (réglage fin optionnel), radiations. Fin des champs
+  ad-hoc « le MJ tape un nombre » par famille.
+- **D2. ✅ RÉSOLU (Saar)** — **pas de plafond**. L'effet aggrave chaque Tour jusqu'à la sortie
+  (décroissance) ou la mort. Fidèle au RAW.
+- **D3. ✅ RÉSOLU** — « retenir sa respiration » = **½ de l'effet par Tour** (dégât ou malus),
+  arrondi au supérieur, pendant que le Souffle tient (`−1` à `−4`/Tour, A2). Uniforme tous gaz.
+  = atténuation `by: 'behavior'`, `effect: 'halve'`, coût en Souffle.
+- **D4. ✅ RÉSOLU (Saar) — le catalogue contient les 6 gaz dès Z0** (D4 : « on a le RAW, on convertit
+  au format »). Résolution incrémentale : v1 résout `damage` + `modifier` + `remanence` →
+  `gaz:irritant` (`modifier −3` + `decay`) et `gaz:décomposant` (`damage 1D6` + `escalade +2` +
+  `decay`) marchent en entier. `gaz:assommant` / `suffocant` / `neurotoxique` / `vésicant` sont dans
+  le catalogue avec leurs lignes `damage` (résolues) + `test` / `statLoss` / `chance` (no-op + log
+  jusqu'à v2). Tableau des 6 effets verbatim = §3.7. **Preuve utilisateur #2** = poser un
+  `gaz:décomposant` ou `gaz:irritant` (les deux entièrement RAW en v1).
+- **D5. ✅ RÉSOLU** — voir §10.8-C3 : migration = **suppression** des valeurs corrompues, la donnée
+  vit dans `dangerCatalog.js`.
+- **D6 (nouveau). ✅ RÉSOLU** — immunité gaz : champ `ref_equipment.protections` JSONB (§10.3-I).
+  Contrairement à `fireproof`, **il y a de la donnée RAW** : `Masque à gaz`, `Cartouche Masque à gaz`
+  existent dans le catalogue ; NBC / pressurisé nommés par gaz. → à taguer :
+  `protections['atmosphere:gas']` = `{degree:'partial', scope:['peau'], except:['neurotoxique']}`
+  (masque) · `{degree:'full'}` (NBC / pressurisé). Fait dans l'incrément `protections` (§10.5).
+
+#### E. Souffle (v2 — flaggé, pas bloquant pour le noyau)
+
+- **E1.** « Rythme de perte selon l'**activité de l'occupant** » (immobile −1 … combat −4). En
+  combat, un token est-il **toujours « combat » (−4)**, ou dérivé de l'action déclarée (se déplacer
+  prudemment = modérée −2) ? → **[DÉFAUT : −4/Tour en combat, point ; l'action déclarée n'entre pas
+  en compte en v2]**.
+- **E2.** « Surpris → Souffle ÷ 2 » se branche sur le statut `surprised` existant. → ok ?
+
+#### F. Conventions techniques (Claude tranche sauf objection)
+
+- **F1.** `stackingPolicy` (patron GAS, 4 valeurs) : v1 livre `'max'` (le pire l'emporte, comme
+  `effectMovementFactorsForSegment` aujourd'hui) + `'independent'` (instances séparées). `'stackCount'`
+  et `'refreshDuration'` = déclarés, non implémentés v1.
+- **F2.** `chaining` : forme `{ engendre: <key>, délai: <Tours>, condition: <tag> | null, géométrie:
+  'même' | 'grandit_ici' }`. v1 : **déclaré, non résolu** (aucun chaînage en v1).
+- **F3.** `zoneInteractionRules` : v1 livre **0 règle** (le MJ arbitre feu+eau à la main). La forme
+  `{ whenTag, meetsTag, action }` existe dans le contrat.
+- **F4.** Règle de recouvrement (§4.9) : v1 = **`centreDedans` seul**. Conséquence assumée : **le
+  geyser de flamme ultra-localisé ne « mord » que si le token a son centre dans le volume**. →
+  acceptable en v1, ou on livre aussi `toutRecouvrement` ?
+- **F5.** `remanence: 'conditional'` en v1 = le statut **persiste à la sortie + le MJ le retire à la
+  main** (`remanenceCondition` = libellé d'affichage seul ; extinction auto par immersion/neutralisant
+  = v2). → ok ?
+- **F6.** Milieu (sous-marin / 0G) porté par la **zone** ou la **salle** (`PLAN_ENVIRONNEMENT_
+  MILIEUX`) — v2, mais direction : **défaut sur la salle, override par zone** (patron PF2e). À acter
+  dans les deux docs quand `skillOverride` arrivera.
+
+#### G. Coordination inter-chantiers
+
+- **G1.** Z3 / Z5 **dé-gèlent le chantier grenades** (`circleGrenade.js`). → mettre à jour
+  `PLAN_GRENADES.md` §6 au démarrage de Z3. ok ?
+- **G2.** Grenade à énergie — `armorReductionFactor: 1` par défaut (champ d'énergie ↔ armure
+  physique, RAW muet) — déjà noté, à confirmer avec le reste.
+
+## 11. Historique
 
 - **2026-09-09** — Trouvaille pendant le chantier grenades 3-bis (`docs/JOURNAL8.md`,
   `PLAN_GRENADES.md` §6) : la mécanique « zones dangereuses » est un échafaudage. Cadrage ouvert
@@ -1218,3 +1615,23 @@ non-régression des tests existants.
   vide) ; `[VÉRIFIÉ DB]` 0 ligne `world_effect_*` → aucune rétro-compat de données ; validation dés
   autoritaire à la création, jamais au tick ; `remanence:conditional` v1 = persiste + retrait MJ
   manuel. Prêt à coder Z0. Toujours rien codé.
+- **2026-09-10 (groupes A–D des décisions Saar)** — §10.8 : A (RAW) + B (feu) + C (acide) + D (gaz)
+  tranchés. Généralisations décidées : **facteur `puissance` unifié** (patron GAS SetByCaller,
+  §10.3-H) — un curseur MJ pour toutes les familles ; **`ref_equipment.protections` JSONB** (§10.3-I)
+  — remplace `waterproof`/`fireproof`/… , rework assumé, incrément Z1b ; **`dangerCatalog.js`
+  contient TOUTES les définitions dès Z0**, résolution incrémentale (les 6 gaz, radiations, tout).
+  RAW gaz vérifié par Saar (fidèle) + préambule §Gaz ajouté (§3.7). RAW radiations : déjà transcrit
+  (`FATIGUE&DOMMAGES.md`), non-combat, zone = `accumulateLevel` à l'entrée, résolveur v2.
+  §3.1/§3.2/§3.6/§3.7 enrichis, §10.5 plan révisé (Z0→Z7 + Z1b).
+- **2026-09-10 (prise de recul + recherche architecture)** — Saar : « on est allé trop vite ».
+  Recherche approfondie (UE GAS `GameplayEffectComponents`, Unity GAS open-source, 2 writeups
+  status-effects, Caves of Qud, Divinity OS2 surfaces). **§10** créé, fait autorité : le patron
+  « registre déclaratif + dispatcher générique » (déjà le style maison — `activeMalusRegistry`,
+  `resolveModHooks`) EST l'archi adaptative visée. Reco : **un `effectLineResolverRegistry` unique** ;
+  **refonte de `environmentalHazardService` dedans** (`burning`/`acid`/`decompression` deviennent des
+  définitions) ; interaction & immunité **par tags, jamais par matrice** (patron DOS2). §8bis
+  « resolveZoneTick frère » abandonné. Contrat = tous les types de ligne validés dès Z0, résolution
+  incrémentale. Plan révisé Z0→Z7. **Décision Saar : cette conversation ne produira aucun code** — son
+  but = package de reprise complet. **§10.8 « Décisions requises de Saar »** rédigée (28 points,
+  chacun avec un défaut proposé). Reste : §10.9 (exemple travaillé) · §10.10 (nettoyage `ref_equipment`)
+  · §10.11 (plans Z0/Z1) · `PLAN_ZONES_DANGER_EDITEUR.md`.
