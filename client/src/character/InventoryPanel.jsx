@@ -7,8 +7,8 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest } from '../lib/inventoryMutations.js'
-import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
+import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair } from '../lib/inventoryMutations.js'
+import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS, isRepairable } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
@@ -126,6 +126,9 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const handleSetIntegrity = useCallback((itemId, changes) => setItemIntegrity(characterId, itemId, changes), [characterId])
   const handleRollOccasion = useCallback((itemId) => rollItemOccasionIntegrity(characterId, itemId), [characterId])
   const handleIntensiveUse = useCallback((itemId) => intensiveUseTest(characterId, itemId), [characterId])
+  // PLAN_USURE&INTEGRITE.md §8 (L6) — « Réparer soi-même » (propriétaire) : crée une demande en
+  // attente de validation MJ. IntegritySegment relaie le rejet (409 = déjà en cours).
+  const handleRepairRequest = useCallback((itemId) => requestRepair(characterId, itemId), [characterId])
 
   // INV2 (docs/EN_COURS.md) — la validation MJ peut désormais être refusée par le serveur (Sols
   // insuffisants chez le joueur, inventoryService.js#_chargeSols) : un console.error silencieux
@@ -328,6 +331,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 onSetIntegrity={handleSetIntegrity}
                 onRollOccasion={handleRollOccasion}
                 onIntensiveUse={handleIntensiveUse}
+                onRepairRequest={handleRepairRequest}
               />
             ))}
           </div>
@@ -369,6 +373,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               onSetIntegrity={handleSetIntegrity}
               onRollOccasion={handleRollOccasion}
                 onIntensiveUse={handleIntensiveUse}
+                onRepairRequest={handleRepairRequest}
             />
           ))
         ) : (
@@ -525,11 +530,12 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   )
 }
 
-// PLAN_USURE&INTEGRITE.md §6 — pastille d'état d'Intégrité + badge de panne + édition inline
-// (MJ/propriétaire via `canEdit`). Rendu uniquement si le MODÈLE suit l'ITG (`ref_has_integrity`).
-// Interprétation : `shared/integrityRules.js` (pur, importé client). Couleur du palier posée en
-// custom property `--itg-color` (react.md : valeur visuelle dynamique = custom property).
-function IntegritySegment({ item, canEdit, isGm = false, onSetIntegrity, onRollOccasion, onIntensiveUse }) {
+// PLAN_USURE&INTEGRITE.md §6 / §8 — pictogramme d'état d'Intégrité + badge de panne. Rendu si le
+// MODÈLE suit l'ITG (`ref_has_integrity`). Interprétation : `shared/integrityRules.js` (pur).
+// Édition brute (courante/max/état + outils MJ) = **MJ uniquement** (révision D3, L6) : clic sur
+// l'icône → éditeur inline si `isGm`. Le propriétaire non-MJ n'édite plus en direct — il a un bouton
+// « Réparer » qui crée une demande validée par le MJ (L6c-1 ; consolidé dans une vraie fenêtre en L6c-2).
+function IntegritySegment({ item, canEdit, isGm = false, onSetIntegrity, onRollOccasion, onIntensiveUse, onRepairRequest }) {
   const { t } = useTranslation('charSheet')
   const [editing, setEditing] = useState(false)
   const [cur, setCur] = useState('')
@@ -537,8 +543,20 @@ function IntegritySegment({ item, canEdit, isGm = false, onSetIntegrity, onRollO
   const [state, setState] = useState('')
   const [err, setErr] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [repairState, setRepairState] = useState(null) // null | 'sending' | 'sent' | message d'erreur
 
   if (!item.ref_has_integrity) return null
+
+  const canRequestRepair = !isGm && canEdit && !!onRepairRequest && isRepairable(item)
+  const requestRepairNow = async () => {
+    setRepairState('sending')
+    try {
+      await onRepairRequest(item.id)
+      setRepairState('sent')
+    } catch (e) {
+      setRepairState(e.response?.data?.error?.message || t('inventoryPanel.integrity.repairRequestError'))
+    }
+  }
 
   const hasItg = item.integrity_current != null && item.integrity_max != null
   const tier = hasItg ? getIntegrityTier(item.integrity_current) : null
@@ -627,25 +645,37 @@ function IntegritySegment({ item, canEdit, isGm = false, onSetIntegrity, onRollO
     'itg-icon-wrap', 'has-tooltip',
     broken ? 'itg-broken' : '',
     broken && item.malfunction_severity === 'simple' ? 'itg-panne-simple' : '',
-    canEdit ? 'itg-editable' : '',
+    isGm ? 'itg-editable' : '',
   ].filter(Boolean).join(' ')
 
   return (
-    <span
-      className={wrapClass}
-      style={{ '--itg-color': iconColor }}
-      data-tooltip={tooltip}
-      onClick={canEdit ? openEdit : undefined}
-      role={canEdit ? 'button' : undefined}
-    >
-      <span className="itg-icon-top">{hasItg ? `${item.integrity_current}/${item.integrity_max}` : ''}</span>
-      <IntegrityIcon size={18} className="itg-icon" />
-      {broken && <span className="itg-bang">!</span>}
+    <span style={s.itgWrap}>
+      <span
+        className={wrapClass}
+        style={{ '--itg-color': iconColor }}
+        data-tooltip={tooltip}
+        onClick={isGm ? openEdit : undefined}
+        role={isGm ? 'button' : undefined}
+      >
+        <span className="itg-icon-top">{hasItg ? `${item.integrity_current}/${item.integrity_max}` : ''}</span>
+        <IntegrityIcon size={18} className="itg-icon" />
+        {broken && <span className="itg-bang">!</span>}
+      </span>
+      {canRequestRepair && (
+        repairState === 'sent'
+          ? <span style={s.itgRepairSent}>{t('inventoryPanel.integrity.repairRequested')}</span>
+          : <button type="button" className="btn btn-ghost has-tooltip" style={s.itgBtn}
+              disabled={repairState === 'sending'}
+              data-tooltip={typeof repairState === 'string' && repairState !== 'sending' ? repairState : t('inventoryPanel.integrity.repairRequestTooltip')}
+              onClick={requestRepairNow}>
+              🔧 {t('inventoryPanel.integrity.repairRequest')}
+            </button>
+      )}
     </span>
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onSetIntegrity, onRollOccasion, onIntensiveUse }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onSetIntegrity, onRollOccasion, onIntensiveUse, onRepairRequest }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -701,7 +731,7 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
       {item.ref_price != null && (
         <span style={s.itemWeight}>{item.ref_price} S</span>
       )}
-      <IntegritySegment item={item} canEdit={canEdit} isGm={isGm} onSetIntegrity={onSetIntegrity} onRollOccasion={onRollOccasion} onIntensiveUse={onIntensiveUse} />
+      <IntegritySegment item={item} canEdit={canEdit} isGm={isGm} onSetIntegrity={onSetIntegrity} onRollOccasion={onRollOccasion} onIntensiveUse={onIntensiveUse} onRepairRequest={onRepairRequest} />
       {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
           attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
           MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur).
@@ -797,6 +827,8 @@ const s = {
   itgSlash:    { color: '#4a4a60' },
   itgSelect:   { background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4, color: '#9090a8', fontSize: 11, padding: '1px 3px' },
   itgBtn:      { fontSize: 10, padding: '1px 6px', flexShrink: 0 },
+  itgWrap:       { display: 'inline-flex', alignItems: 'center', gap: 6 },
+  itgRepairSent: { fontSize: 10, color: '#8090b0', fontStyle: 'italic' },
   selectSmall: {
     background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4,
     color: '#9090a8', fontSize: 11, padding: '1px 4px', cursor: 'pointer', flexShrink: 0,

@@ -231,6 +231,17 @@
     "pendingRollsTitle": "Jets en attente",
     "pendingRollsEmpty": "Aucun jet en attente",
     "rollInfectionFor": "Test de Constitution — {{location}}",
+    "repairReviewTitle": "Demandes de réparation",
+    "repairRollLabel": "Réparer {{item}}",
+    "repairAwaitingPlayer": "En attente du jet de {{character}}",
+    "repairSkill": "Compétence",
+    "repairNtMalus": "NT {{mod}}",
+    "repairApprove": "Approuver",
+    "repairReject": "Refuser",
+    "repairPanne": {
+      "simple": "réparation simple",
+      "critical": "atelier"
+    },
     "commerce": "Commerce",
     "userJoined": "{{username}} a rejoint la session",
     "userLeft": "{{username}} a quitté la session",

@@ -5,10 +5,10 @@ import { WS } from '../../../shared/events.js'
 import { useSocket } from '../lib/SocketContext'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 
-// docs/PLAN_BLESSURES_GUERISON.md §6.1 — panneau joueur "Jets en attente" (Infection uniquement,
-// Guérison ne jette jamais de dé). Toujours monté, se peuple lui-même (GET my-pending-rolls au
-// montage + événements) — un joueur qui se (re)connecte après qu'un jet lui a été demandé le
-// découvre ici, pas seulement via un événement raté entre-temps.
+// docs/PLAN_BLESSURES_GUERISON.md §6.1 + PLAN_USURE&INTEGRITE.md §8 — panneau joueur "Jets en
+// attente" : Infection de blessure (Guérison ne jette jamais de dé) ET réparation d'équipement.
+// Toujours monté, se peuple lui-même (GET my-pending-rolls au montage + événements) — un joueur qui
+// se (re)connecte après qu'un jet lui a été demandé le découvre ici. Dispatch par `conditionType`.
 export default function PendingRollsPanel({ campaignId }) {
   const { t } = useTranslation()
   const { t: tChar } = useTranslation('charSheet')
@@ -45,10 +45,12 @@ export default function PendingRollsPanel({ campaignId }) {
     // de moyen de savoir QUELLE échéance a échoué depuis un event générique, donc on débloque tout.
     const onError = () => setRollingIds(new Set())
     socket.on(WS.CAMPAIGN_ADVANCE_PENDING, onPending)
+    socket.on(WS.EQUIPMENT_REPAIR_UPDATED, onPending)
     socket.on(WS.GAME_ECHEANCE_RESOLVED, onResolved)
     socket.on('error', onError)
     return () => {
       socket.off(WS.CAMPAIGN_ADVANCE_PENDING, onPending)
+      socket.off(WS.EQUIPMENT_REPAIR_UPDATED, onPending)
       socket.off(WS.GAME_ECHEANCE_RESOLVED, onResolved)
       socket.off('error', onError)
     }
@@ -57,23 +59,29 @@ export default function PendingRollsPanel({ campaignId }) {
   if (echeances.length === 0) return null
 
   // Un par un ou tous d'un coup (choix du joueur, décidé Saar §6) — le clic déclenche simplement
-  // l'événement pour chaque échéance choisie, le serveur reste seul autoritaire sur le jet.
-  const rollOne = (echeanceId) => {
+  // l'événement (par type), le serveur reste seul autoritaire sur le jet.
+  const rollOne = (e) => {
     if (!socket) return
-    setRollingIds(prev => new Set(prev).add(echeanceId))
-    socket.emit(WS.WOUND_INFECTION_ROLL, { echeanceId })
+    setRollingIds(prev => new Set(prev).add(e.id))
+    const event = e.conditionType === 'equipment_repair' ? WS.EQUIPMENT_REPAIR_ROLL : WS.WOUND_INFECTION_ROLL
+    socket.emit(event, { echeanceId: e.id })
   }
-  const rollAll = () => echeances.forEach(e => rollOne(e.id))
+  const rollAll = () => echeances.forEach(rollOne)
+
+  const rowLabel = (e) => {
+    if (e.conditionType === 'equipment_repair') {
+      return `${e.characterName} — ${t('session.repairRollLabel', { item: e.item?.name ?? '' })}`
+    }
+    return `${e.characterName} — ${e.wound ? `${tChar(LOCATION_I18N_KEYS[e.wound.location])} (${tChar(`locationPanel.severityShort.${e.wound.severity}`)})` : ''}`
+  }
 
   return (
     <div style={styles.panel}>
       <div style={styles.title}>{t('session.pendingRollsTitle')}</div>
       {echeances.map(e => (
         <div key={e.id} style={styles.row}>
-          <span>
-            {e.characterName} — {e.wound ? `${tChar(LOCATION_I18N_KEYS[e.wound.location])} (${tChar(`locationPanel.severityShort.${e.wound.severity}`)})` : ''}
-          </span>
-          <button type="button" className="btn btn-tool" disabled={rollingIds.has(e.id)} onClick={() => rollOne(e.id)}>
+          <span>{rowLabel(e)}</span>
+          <button type="button" className="btn btn-tool" disabled={rollingIds.has(e.id)} onClick={() => rollOne(e)}>
             {t('dice.roll')}
           </button>
         </div>

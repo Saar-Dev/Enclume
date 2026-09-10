@@ -2647,6 +2647,61 @@ Convention :
   margin-bottom: 4px;
 }
 
+/* ── .gm-review-panel — boîte de réception MJ des demandes de réparation ────────
+   PLAN_USURE&INTEGRITE.md §8 (L6). Panneau flottant autonome (EquipmentRepairReviewPanel.jsx),
+   sans pied « confirmer l'avance » (une réparation est ad-hoc). Classes neuves, react.md :
+   BlessuresReviewPanel garde son objet styles inline pour l'instant ; on convergera vers ces
+   classes en extrayant la coquille commune quand un 3ᵉ panneau apparaîtra (L9). Position : à
+   gauche du créneau de BlessuresReviewPanel (top:60/right:16, largeur 360) — les deux ne se
+   chevauchent jamais. */
+.gm-review-panel {
+  position: fixed;
+  top: 60px;
+  right: 392px;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #16162a;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 200;
+}
+.gm-review-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.gm-review-row {
+  border-top: 1px solid #2a2a3e;
+  padding: 8px 0;
+}
+.gm-review-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.gm-review-name { font-weight: 700; }
+.gm-review-meta { opacity: 0.8; font-size: 11px; }
+.gm-review-await { font-size: 11px; opacity: 0.75; font-style: italic; }
+.gm-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.gm-review-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+.gm-review-field select { font-size: 11px; }
+
 /* ── .has-tooltip ─────────────────────────────────────────────────── */
 /* usage : <el class="has-tooltip" data-tooltip="texte"> */
 .has-tooltip { position: relative; }

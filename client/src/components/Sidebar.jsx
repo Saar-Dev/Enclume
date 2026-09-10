@@ -6,6 +6,7 @@ import { WS } from '../../../shared/events.js'
 import LibraryPanel from './LibraryPanel.jsx'
 import GameTimeWidget from './GameTimeWidget.jsx'
 import BlessuresReviewPanel from './BlessuresReviewPanel.jsx'
+import EquipmentRepairReviewPanel from './EquipmentRepairReviewPanel.jsx'
 import PendingRollsPanel from './PendingRollsPanel.jsx'
 import {
   IconEdit, IconPlay, IconEye, IconEyeOff, IconRuler, IconPlus,
@@ -147,6 +148,9 @@ export default function Sidebar({
       {/* Jamais masqués par le mode — une revue/un jet déjà ouvert avant un changement de mode reste
           actionnable ; contrairement à l'horloge, rien ici n'en déclenche de nouveaux depuis ces modes. */}
       <BlessuresReviewPanel campaignId={campaignId} />
+      {/* Réparation d'équipement (PLAN_USURE&INTEGRITE.md §8, L6) — demandes ad-hoc, panneau MJ
+          autonome (sans pied d'avance d'horloge). PendingRollsPanel liste aussi les jets de réparation. */}
+      <EquipmentRepairReviewPanel campaignId={campaignId} />
       <PendingRollsPanel campaignId={campaignId} />
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}

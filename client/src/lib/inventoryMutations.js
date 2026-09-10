@@ -70,3 +70,18 @@ export async function intensiveUseTest(characterId, itemId) {
   useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
   return res.data
 }
+
+// PLAN_USURE&INTEGRITE.md §8 (L6) — « Réparer soi-même » : crée une demande de réparation en attente
+// de validation MJ. Ne change pas l'item (l'ITG bougera au jet, après approbation) → pas d'upsert.
+// Renvoie { echeance: { id, status } }.
+export async function requestRepair(characterId, itemId) {
+  const res = await api.post(`/char-sheet/${characterId}/inventory/${itemId}/repair-request`)
+  return res.data
+}
+
+// L6c — Seuil prévisionnel d'une réparation soi-même (affiché avant la demande). Read-only.
+// Renvoie { skillLabel, skillTotal, ntMalus, activeMalus, threshold }.
+export async function fetchRepairPreview(characterId, itemId) {
+  const res = await api.get(`/char-sheet/${characterId}/inventory/${itemId}/repair-preview`)
+  return res.data
+}
