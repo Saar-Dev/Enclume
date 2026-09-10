@@ -735,6 +735,13 @@ opaque :
 
 ## 9. Lot 3 — Dommages environnementaux de combat (Chute, Acide, Décompression, Feu)
 
+> **2026-09-10 — rework piloté ailleurs** : Acide / Décompression / Feu deviennent des définitions du
+> catalogue `shared/world/dangerCatalog.js` et leur résolution passe par le registre unique
+> d'`effectLineResolverRegistry`. Ce rework (absorption de `environmentalHazardPresets.js`, dérivation
+> de `environmentalHazardRegistry.js`, remplacement de `resolveEnvironmentalHazardTicks`) est **le Z1
+> de `docs/PLANS/PLAN_ZONES_DANGER.md` §2.B** — pas de duplication ici. La Chute (`fallDamageService.js`)
+> n'est pas concernée. Le contenu ci-dessous décrit le Lot 3 tel que livré (2026-07-30 → 2026-08).
+
 > **2026-07-30 — cadrage détaillé** (après le §9 initial trop court) : exploration du code réel
 > (`resolveTargetHit`, `statusService`, `startResolutionPhase`, `polarisTestService`) avant d'écrire quoi
 > que ce soit — RAW verbatim relue dans `docs/REGLES/FATIGUE&DOMMAGES.md` p.242-243. **6 points ouverts

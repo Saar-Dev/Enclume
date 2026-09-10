@@ -597,7 +597,7 @@ sculpteur de volume de danger (E-v2, §7.3). **On ne le construit pas deux fois.
 | Ordre | Chantier | Conversation | Dépend de |
 |---|---|---|---|
 | **1** | **Zones dangereuses — noyau Z0→Z5** (ce plan) + éditeur **E-v1** (Z6 : rectangle + « remplir un compartiment », porté sur le plateau de session) | celle-ci → agent d'implémentation | rien |
-| **2** | **Rework world builder** — géométrie de salle non rectangulaire + **primitif d'édition d'arêtes 2D** dans `shared/world` (le vrai manque : `aoeShapes.js` ne couvre que circle/cone/ray, les salles sont des empreintes de cases) | **séparée, dédiée** — cadrage complet à faire | rien (parallélisable avec 1) |
+| **2** | **Rework world builder** — `docs/PLANS/PLAN_WORLD_BUILDER_REWORK.md` (stub, cadrage à faire) : UX d'édition de forme de salle + **primitif d'édition d'arêtes 2D agnostique** dans `shared/world` (le modèle de salle est déjà multipolygone ; c'est l'UX qui peint des cases) | **séparée, dédiée** — cadrage complet à faire | rien (parallélisable avec 1) |
 | **3** | **Éditeur de volume de danger E-v2** — polygone / ellipse / rectangle pivoté / poignées sur canvas / « tracer depuis les murs » | séparée, **après** 2 | le primitif d'édition 2D livré par 2 |
 
 **Le contrat géométrie de l'instance est stable dès maintenant** (`geometry: { mode, shape, volume,
