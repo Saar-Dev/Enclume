@@ -14,6 +14,8 @@ import {
 import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { getItemWithRef } from '../services/inventoryService.js'
+import { interpretRepairOutcome } from '../../../shared/integrityRules.js'
 import { sendMessage as sendChatMessage } from '../chat/chatService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 
@@ -332,6 +334,80 @@ export function registerDiceHandlers(io, socket, context) {
       // désactivé indéfiniment sur tout échec après les gardes explicites ci-dessus (ex. double clic
       // concurrent → resolveEcheanceNow rejette en AppError 409, jamais catché avant ce bloc) —
       // trouvé en analyse à charge du chantier, pas au premier passage.
+      socket.emit('error', { message: 'Le jet a échoué, réessayez' })
+    }
+  })
+
+  // ─── EQUIPMENT_REPAIR:ROLL ────────────────────────────────────────────────
+  // Payload : { echeanceId } — docs/PLANS/PLAN_USURE&INTEGRITE.md §8 (L6). Gabarit
+  // WOUND_INFECTION_ROLL : calcule le seuil (compétence de réparation + malus NT + malus actifs),
+  // lance le dé, résout l'échéance (mute char_inventory via resolveEcheanceNow →
+  // equipmentRepairHandler → integrityService.applyRepairOutcome), notifie.
+  socket.on(WS.EQUIPMENT_REPAIR_ROLL, async ({ echeanceId }) => {
+    if (!campaignId) return
+    try {
+      const echeance = await db('game_echeances').where({ id: echeanceId, campaign_id: campaignId }).first()
+      if (!echeance || echeance.condition_type !== 'equipment_repair' || echeance.status !== 'awaiting_player_roll') {
+        socket.emit('error', { message: 'Demande de réparation introuvable ou déjà résolue' })
+        return
+      }
+
+      const character = await db('characters').where({ id: echeance.character_id }).first()
+      const isOwner = character?.user_id === user.id
+      if (!character || (!isOwner && !isGm)) {
+        socket.emit('error', { message: 'Ce jet ne vous appartient pas' })
+        return
+      }
+
+      const { skillId, ntMalus = 0, itemId, itemName } = echeance.payload ?? {}
+      const ctx = await loadCharacterTestContext(db, campaignId, echeance.character_id)
+      if (!ctx) { socket.emit('error', { message: 'Fiche du personnage introuvable' }); return }
+      const [charSkill, refSkill] = await Promise.all([
+        db('char_skills').where({ char_sheet_id: ctx.sheet.id, skill_id: skillId }).first(),
+        db('ref_skills').where({ id: skillId }).first(),
+      ])
+      if (!refSkill) { socket.emit('error', { message: 'Compétence de réparation invalide' }); return }
+
+      // Seuil = compétence + malus NT (§5.1) + malus actifs (blessures/fatigue/encombrement — comme
+      // tout Test de compétence, MACRO_ROLL). ntMalus et activeMalus sont ≤ 0.
+      const skillTotal = calcSkillTotal(ctx.attrs, charSkill, refSkill, ctx.genotypeRow, ctx.mutationEffects)
+      const diffMod = (ntMalus ?? 0) + ctx.activeMalus
+      const threshold = skillTotal + diffMod
+
+      const rollResult = await db.transaction(async (trx) => {
+        const roll = await resolvePolarisTest(threshold)
+        await trx('game_echeances').where({ id: echeance.id })
+          .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify({ rollResult: roll })]) })
+        await resolveEcheanceNow(trx, echeance.id)
+        return roll
+      })
+
+      io.to(campaignId).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
+      io.to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
+
+      const freshItem = itemId ? await getItemWithRef(itemId) : null
+      if (freshItem) {
+        io.to(campaignId).emit(WS.INVENTORY_UPDATED, { characterId: echeance.character_id, item: freshItem })
+      }
+
+      const outcome = interpretRepairOutcome(rollResult)
+      const color = await getUserColor(db, user.id)
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId: character.user_id, username: user.username, color,
+        formula: '1d20', rolls: [rollResult.roll], total: rollResult.roll,
+        skillLabel: `${refSkill.label} — Réparation${itemName ? ` : ${itemName}` : ''}`,
+        mechanicalTotal: skillTotal,
+        diffLabel: diffMod >= 0 ? `+${diffMod}` : `${diffMod}`,
+        chancesDeReussite: threshold,
+        isSuccess: rollResult.isSuccess,
+        isCriticalSuccess: rollResult.isCriticalSuccess, isCriticalFail: rollResult.isCriticalFail,
+        catastropheRisk: rollResult.catastropheRisk,
+        seed: rollResult.seed, timestamp: new Date().toISOString(), secret: false,
+      })
+
+      console.log(`[WS] equipment_repair:roll — ${user.username} : ${rollResult.roll}/${threshold} (compétence ${skillTotal}, dif ${diffMod}) → ${outcome}`)
+    } catch (err) {
+      console.error(`[WS] equipment_repair:roll error (${user.username}) : ${err.message}`)
       socket.emit('error', { message: 'Le jet a échoué, réessayez' })
     }
   })

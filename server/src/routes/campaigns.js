@@ -14,6 +14,7 @@ import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { getRepairRequestsForGm, getRepairRollsForPlayer } from '../lib/equipmentRepairReviewService.js'
 import { resolveFall } from '../lib/fallDamageService.js'
 import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
 import { applyStunWithDuration } from '../lib/statusService.js'
@@ -393,13 +394,27 @@ router.get('/:id/game-echeances/pending-review', requireAuth, requireRole('gm'),
   res.json({ echeances })
 })
 
+// GET /api/campaigns/:id/game-echeances/repair-requests — GM uniquement. Boîte de réception des
+// demandes de réparation (échéances À LA DEMANDE, sans rapport avec l'horloge — panneau MJ autonome,
+// distinct de pending-review qui est couplé au flux d'avance de temps). PLAN §8.4.
+router.get('/:id/game-echeances/repair-requests', requireAuth, requireRole('gm'), async (req, res) => {
+  const echeances = await getRepairRequestsForGm(req.params.id)
+  res.json({ echeances })
+})
+
 // GET /api/campaigns/:id/game-echeances/my-pending-rolls — tout membre. Un joueur ne voit que les
-// jets de ses propres personnages ; un GM voit tous les jets en attente de la campagne.
+// jets de ses propres personnages ; un GM voit tous les jets en attente de la campagne. Chaque
+// domaine (blessure / réparation) fait sa propre requête + enrichissement, la route ne fait que
+// concaténer (PLAN §8.4 — pas de généralisation forcée de woundReviewService).
 router.get('/:id/game-echeances/my-pending-rolls', requireAuth, async (req, res) => {
   const member = await db('campaign_members').where({ campaign_id: req.params.id, user_id: req.user.id }).first()
   if (!member) throw new AppError(403, 'You are not a member of this campaign')
-  const echeances = await getPendingRollsForPlayer(req.params.id, req.user.id, { isGm: member.role === 'gm' })
-  res.json({ echeances })
+  const opts = { isGm: member.role === 'gm' }
+  const [woundRolls, repairRolls] = await Promise.all([
+    getPendingRollsForPlayer(req.params.id, req.user.id, opts),
+    getRepairRollsForPlayer(req.params.id, req.user.id, opts),
+  ])
+  res.json({ echeances: [...woundRolls, ...repairRolls] })
 })
 
 // POST /api/campaigns/:id/game-echeances/:echeanceId/healing-choice — GM uniquement.
