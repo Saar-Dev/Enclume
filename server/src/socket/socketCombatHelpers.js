@@ -961,6 +961,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // sœur, édition MJ). L'action est refusée, aucune ressource consommée.
     const itgBlockMelee = getWeaponIntegrityBlock(weapon)
     if (itgBlockMelee) {
+      console.log(`[WS] résolution CaC refusée (Intégrité) — ${character.name} : ${itgBlockMelee}`)
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
         message: itgBlockMelee === 'panne'
@@ -2556,6 +2557,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // → tir refusé, aucune ressource consommée.
     const itgBlockTir = getWeaponIntegrityBlock(weapon)
     if (itgBlockTir) {
+      console.log(`[WS] résolution Tir refusée (Intégrité) — ${character.name} : ${itgBlockTir}`)
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
         message: itgBlockTir === 'panne'

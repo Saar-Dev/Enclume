@@ -399,6 +399,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.a) — porte de panne : arme enrayée /
           // hors d'usage → tir refusé (distinct du modificateur de palier, §7.1.b).
           const itgBlockTir = getWeaponIntegrityBlock(weapon)
+          console.log(`[DBG] déclaration Tir — ${character.name} : arme ITG:${weapon.integrity_current ?? '—'} panne:${weapon.malfunction_severity ?? '—'} → ${itgBlockTir ? `REFUS (${itgBlockTir})` : 'ok'}`)
           if (itgBlockTir) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: itgBlockTir === 'panne'
               ? "Tir impossible — arme en panne, réparation requise"
@@ -756,6 +757,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
           // Usure & Intégrité (§7.1.a) — porte de panne, comme le Tir.
           const itgBlockCac = getWeaponIntegrityBlock(primaryWeapon)
+          console.log(`[DBG] déclaration CaC — ${character.name} : arme ITG:${primaryWeapon.integrity_current ?? '—'} panne:${primaryWeapon.malfunction_severity ?? '—'} → ${itgBlockCac ? `REFUS (${itgBlockCac})` : 'ok'}`)
           if (itgBlockCac) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: itgBlockCac === 'panne'
               ? "Corps à corps impossible — arme en panne, réparation requise"
