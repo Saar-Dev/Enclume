@@ -859,14 +859,19 @@ export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
 // l'arme qui a réellement frappé/tiré (primaire ou secondaire résolue). En dual-wield seul le tir
 // primaire est testé (miroir du modificateur d'état L5a, même limite RAW assumée).
 // Émissions (via `emissions`, flush après le retour du résolveur — patron `flushEmissions`) :
-//   - carte `DICE_RESULT` du jet dès qu'un test a eu lieu, même réussi (transparence des dés, patron
-//     `socketDice.js` WOUND_INFECTION_ROLL). Libellé FR en dur (dette i18n L5 assumée).
-//   - `INVENTORY_UPDATED` avec l'item COMPLET (`getItemWithRef`) uniquement si l'arme s'est enrayée
-//     ou cassée : `characterStore.upsertInventoryItem` REMPLACE l'objet entier, un patch partiel
-//     effacerait le reste de la ligne.
+//   - carte `DICE_RESULT` du Test lui-même. **Sans `skillLabel`** et avec `formula: '1d20'` NU :
+//     `useSessionSocket.js` déduit le dé de l'animation 3D depuis `formula` quand `skillLabel` est
+//     absent — un `formula` parenthésé ("1d20 (…)") ne matche aucune géométrie → repli d6 (bug vécu
+//     2026-09-09). La carte reste un "jet brut" volontairement : le sens est porté par la notice.
+//   - carte `DICE_RESULT` du `-1D6` **uniquement sur panne critique** (`formula: '1d6'` nu ; sur panne
+//     simple la perte est -1 fixe, aucun dé).
+//   - `COMBAT_SYSTEM_NOTICE` explicatif en chat (clé i18n `combat:integrityPanne.*`, résolue client) —
+//     c'est LUI qui dit au joueur ce qui se passe (arme tient / s'enraye / panne critique).
+//   - `INVENTORY_UPDATED` avec l'item COMPLET (`getItemWithRef`) si l'arme s'est enrayée / cassée :
+//     `characterStore.upsertInventoryItem` REMPLACE l'objet entier, un patch partiel effacerait la ligne.
 // La porte de blocage (arme déjà en panne / hors d'usage) est traitée en amont (§7.1.a, L5b) —
 // quand on arrive ici l'arme est opérationnelle.
-async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, userId, username, color, outcome, emissions }) {
+async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, characterName, userId, username, color, outcome, emissions }) {
   if (!weapon?.ref_has_integrity || !weaponInvId) return
   if (outcome.isSuccess || outcome.catastropheRisk) return
   const itg = weapon.integrity_current
@@ -874,17 +879,39 @@ async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, userId, 
 
   const res = await runPanneTest(weaponInvId, { reason: 'combat_low_itg', characterId })
   if (res.panne === 'skipped') return
+  const ts = new Date().toISOString()
 
+  // 1. Le Test de panne (1d20 sous l'ITG courante).
   emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
     userId, username, color,
-    formula: '1d20 (Test de panne — arme)',
-    rolls: [res.roll], total: res.roll,
+    formula: '1d20', rolls: [res.roll], total: res.roll,
     isCriticalSuccess: false, isCriticalFail: res.isCriticalFail,
-    seed: res.seed, timestamp: new Date().toISOString(), secret: false,
+    seed: res.seed, timestamp: ts, secret: false,
+  } })
+
+  // 2. Sur panne critique, la perte d'Intégrité est un 1D6 (panne simple = -1 fixe, aucun dé).
+  if (res.panne === 'critical') {
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId, username, color,
+      formula: '1d6', rolls: [res.loss], total: res.loss,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: res.loss, timestamp: ts, secret: false,
+    } })
+  }
+
+  // 3. Message explicatif en chat — le serveur n'envoie que la clé i18n + les params.
+  const noticeKey = res.panne === 'ok'
+    ? 'combat:integrityPanne.held'
+    : res.panne === 'critical' ? 'combat:integrityPanne.broken' : 'combat:integrityPanne.jammed'
+  emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+    i18nKey: noticeKey,
+    params: { name: characterName, itg: res.threshold, loss: res.loss },
+    timestamp: ts,
   } })
 
   if (res.panne === 'ok') return
 
+  // 4. Nouvel état de l'arme pour tous les clients (icône ITG, badge panne).
   const freshItem = await getItemWithRef(weaponInvId)
   if (freshItem) {
     emissions.push({ to: 'room', event: WS.INVENTORY_UPDATED, data: { characterId, item: freshItem } })
@@ -1208,7 +1235,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.c) — arme suivie à ITG ∈ [1,5] qui rate sans
     // Catastrophe : Test de panne. N'annule pas l'attaque, se résout avant le branchement défenseur.
     await runCombatWeaponPanne({
-      weapon, weaponInvId, characterId: character.id,
+      weapon, weaponInvId, characterId: character.id, characterName: character.name,
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       outcome: attaqueOutcome, emissions,
     })
@@ -2717,7 +2744,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.c) — arme qui tire réellement (primaire/secondaire
     // résolue) suivie à ITG ∈ [1,5] et tir raté sans Catastrophe : Test de panne. N'annule pas le tir.
     await runCombatWeaponPanne({
-      weapon, weaponInvId: effectiveWeaponInvId, characterId: character.id,
+      weapon, weaponInvId: effectiveWeaponInvId, characterId: character.id, characterName: character.name,
       userId: character.user_id, username: tireurUsername, color: tireurColor,
       outcome: assaultOutcome, emissions,
     })

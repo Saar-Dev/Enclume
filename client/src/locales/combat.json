@@ -576,6 +576,11 @@
       "fromPrefix": "de "
     }
   },
+  "integrityPanne": {
+    "held": "L'arme de {{name}} est usée (Intégrité {{itg}}) : elle subit un test de panne après cette attaque ratée — réussi, l'arme tient.",
+    "jammed": "L'arme de {{name}} (Intégrité {{itg}}) s'enraye après cette attaque ratée : −1 Intégrité, une réparation simple est nécessaire pour la débloquer avant de pouvoir la réutiliser.",
+    "broken": "Panne critique de l'arme de {{name}} (Intégrité {{itg}}) après cette attaque ratée : −{{loss}} Intégrité d'un coup. L'arme est gravement endommagée — réparation en atelier requise."
+  },
   "modifiers": {
     "header": "{{shooter}} — Tir — {{target}}",
     "headerAoe": "{{shooter}} — Zone d'effet",
