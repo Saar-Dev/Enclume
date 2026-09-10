@@ -404,10 +404,15 @@ zone)"`. `— vésicants` : `nation` contient `"1D6/Tour ×1D3 Loc (+1/Tour en z
 vit dans `dangerCatalog.js`). Les lignes irritant/neuro/suffocant sont `null` partout (normal, prose
 dans `description`). Lignes acide : propres.
 
-### 5.5 Souffle — `REGLEBLESSURES.md` §Souffle `[VÉRIFIÉ]`  *(v2, ne bloque pas le noyau)*
+### 5.5 Souffle — `REGLEBLESSURES.md` §Souffle  *(v2, ne bloque pas le noyau)*
 
-**Timer de blocage respiratoire commun** (immersion / vide / gaz — pas une unification totale : chaque
-menace garde son effet propre). Perte selon l'**activité dérivée** :
+`[RAW VÉRIFIÉ]` : les paliers de perte (−1 immobile / −2 modérée / −3 intense / −4 combat), Souffle
+épuisé → cascade de Tests d'Athlétisme → noyade / asphyxie / effet du gaz, `surprised` → Souffle
+max ÷ 2. `[INFÉRENCE de cadrage, acceptée par Saar via E1/E2 §8]` : traiter immersion / vide / gaz
+comme **un seul timer de blocage respiratoire** (chaque menace garde son effet propre — pas une
+mécanique unique).
+
+Perte selon l'**activité dérivée** (décision Saar E1) :
 `arme au clair ? −4 : (déplacement ? mapping gait [lent→−2, rapide/max→−3] : −1)`.
 *(À vérifier au moment de coder : le moteur distingue-t-il « arme dégainée » de « possédée » ? sinon
 proxy = « a déclaré une action de combat ce Tour ».)*
@@ -561,7 +566,9 @@ consommateur du rework world builder, §12).
 
 1. **Plans détaillés Z0 (§13) et Z1 (§14)** = faits 2026-09-10. Chacun a une liste de points pour
    son propre tour d'analyse à charge (§13.7, §14.8) — à faire au moment de coder, pas maintenant.
-2. **Validation Saar** de §5 (RAW) — surtout §5.3 gaz (déjà vérifié) et §5.5 Souffle (inférence).
+2. **Validation Saar de §5 (RAW)** — §5.3 gaz déjà vérifié ; §5.5 Souffle : le cadre « timer commun »
+   est une inférence mais **acceptée de fait** via les décisions E1/E2 (§8), et c'est du v2. Rien
+   d'ouvert qui bloque.
 3. **Pas de `PLAN_ZONES_DANGER_EDITEUR.md` à ce stade.** L'éditeur E-v1 tient dans §7.2 (incrément
    Z6). Le sculpteur de volume E-v2 sera cadré dans le sillage du rework world builder — conversation
    séparée, voir §12.
