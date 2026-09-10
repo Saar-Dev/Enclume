@@ -8,7 +8,8 @@
 > posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle naît /
 > expire.* **Hors responsabilité** : classification d'un espace (sous-marin / surface / spatial) →
 > `PLAN_ENVIRONNEMENT_MILIEUX.md` ; géométrie du monde compilé → `.claude/rules/world.md` ;
-> **éditeur de volume MJ** → `PLAN_ZONES_DANGER_EDITEUR.md` (sous-chantier UX indépendant, à créer).
+> **éditeur de volume MJ** : E-v1 (rectangle + « remplir une pièce ») = §7 de ce plan ; le
+> **sculpteur polygone** (E-v2) est un consommateur du rework world builder → §12, chantier séparé.
 >
 > **Autorité RAW** : *Livre de Base Polaris* > ce document.
 > **Historique du raisonnement** : commits `fe0235e`..`47f3df7` sur `dev/Saar` + conversation de
@@ -410,7 +411,7 @@ zone × zone. **Le catalogue est complet dès Z0** ; seuls les résolveurs sont 
 | **Z3** | `aoeMechanisms/grenade_incendiary.js` sur `circleGrenade.js` ; explosion Tour+1 → `createWorldEffectInstance`. **Dé-gèle le chantier grenades** (maj `PLAN_GRENADES.md` §6). | serveur + migration `ref_equipment` | **preuve utilisateur #1** — lancer incendiaire → zone de feu au Tour suivant |
 | **Z4** | résolveur `modifier` complet (entrée `ACTIVE_MALUS_SOURCES` alimentée par les zones) ; `escalation` = accumulateur mutable dans `token_statuses.data` ; `remanence:'decay'` (tique hors zone via `resolveActiveEffects`). | serveur | zone de gaz : malus qui monte en présence, décroît après la sortie |
 | **Z5** | `gaz:irritant` (`modifier −3` + `decay`) **et** `gaz:décomposant` (`damage 1D6` + `escalade +2` + `decay`) — les 2 entièrement RAW en v1 ; atténuation `behavior` « retenir sa respiration » = ½ ; `aoeMechanisms/grenade_gas_*.js`. | serveur + migration | **preuve utilisateur #2** |
-| **Z6** | UI MJ — fenêtre catégorie → préréglage → « Personnalisé » (§7) ; liste des instances actives + retrait ; `Canvas3D.jsx` : mesh de volume translucide par instance, couleur par catégorie, respect `visibilité` ; i18n. | client | build + session Saar |
+| **Z6** | **Éditeur E-v1** (§7.2) — porter l'outil effet sur le plateau de session (`Canvas3D.jsx`, aujourd'hui Editor3D seulement), MJ-only, aperçu optimiste + confirmation serveur ; flux catégorie → préréglage → géométrie ; 2 modes de géométrie : « remplir un compartiment » (`targetKind:'compartiment'`, zéro géométrie neuve) + rectangle + hauteur (existant) ; « Personnalisé » ; bascule visibilité MJ/joueur ; mesh translucide par catégorie ; i18n. **Pas de polygone (E-v2, §12).** | client | build + session Saar |
 | **Z7** | Joueur — avertissement **non bloquant** si le chemin déclaré traverse une zone visible ; zones `cachée` masquées aux joueurs. | client | build + session Saar |
 
 **Noyau v1 = Z0 → Z5.**
@@ -427,16 +428,43 @@ centre du token est dans le volume ; `toutRecouvrement` = v2 si le jeu réel le 
 ## 7. Interface MJ
 
 > **Principe (Saar)** : le MJ a beaucoup de prép par battlemap. Poser une zone doit être **rapide,
-> peu de clics**. Concevoir pour les **90 %** (préréglages) + l'**exception** (« Personnalisé »).
+> peu de clics**. Concevoir pour les **90 %** (préréglages + « remplir une pièce ») + l'**exception**
+> (« Personnalisé »).
 
-**Flux** : fenêtre → bouton par **catégorie** (feu · eau · acide · gaz · …) → **préréglage** (feu :
-braise · petit · grand · brasier) → **géométrie** (§`PLAN_ZONES_DANGER_EDITEUR.md`) → fini.
-Bouton **« Personnalisé »** → fenêtre dédiée, tous les champs du contrat (§3) → produit une
-**définition custom** (`world_effect_definitions`) + son instance.
+### 7.1 Le noyau (Z0→Z5) n'exige **presque aucun** travail d'éditeur
 
-Chaque `key` de catalogue = un bouton préréglage. « Personnalisé » = un bloc de formulaire par ligne
-d'effet (menu `type` → champs du type), `escalade` / `remanence` / `attenuations` en sous-blocs
-repliés. Pas de texte libre sauf libellés et formule de dés. **90 % ne l'ouvriront jamais.**
+Preuve Z2 = **insert manuel** d'une instance. Z3 (grenade) **crée l'instance depuis le combat**,
+sans éditeur. L'outil effet **existant** de l'Editor3D (glisser un rectangle + hauteur → une AABB
+`world-effects/instances`) suffit à tout valider. **Aucun travail d'éditeur n'est sur le chemin
+critique du noyau.**
+
+### 7.2 Éditeur E-v1 (incrément Z6) — petit, sans géométrie neuve
+
+- **Porter l'outil sur le plateau de session** (`Canvas3D.jsx`) : MJ-only, aperçu optimiste +
+  confirmation serveur. Aujourd'hui il n'existe que dans l'Editor3D de prépa ; `Canvas3D` ne fait
+  que **rendre** les régions (`runtimeEffectRegions`), aucun handler de création.
+- **Flux** : bouton par **catégorie** (feu · eau · acide · gaz · …) → **préréglage** (chaque `key`
+  du catalogue = un bouton : braise · petit · grand · brasier) → **géométrie**, **deux modes** :
+  - **« Remplir un compartiment »** — `targetKind:'compartiment'`. **Zéro géométrie neuve** :
+    `worldEffects.instanceBounds()` unionne déjà les AABB de la pièce ciblée et
+    `compileEffectRegions` la sort déjà. Couvre « la salle est en feu », « le sas se remplit de
+    gaz » — la majorité des cas MJ.
+  - **Rectangle + hauteur** — l'outil actuel (`normalizeCellSelection` → AABB, `baseY + effectHeight`),
+    tel quel.
+- **Bouton « Personnalisé »** → fenêtre dédiée, tous les champs du contrat (§3) → **définition
+  custom** (`world_effect_definitions`) + son instance. Un bloc de formulaire par ligne d'effet
+  (menu `type` → champs du type), `escalade` / `remanence` / `attenuations` en sous-blocs repliés.
+  Pas de texte libre sauf libellés et formule de dés. **90 % ne l'ouvriront jamais.**
+- **Bascule aperçu MJ ⇄ joueur** + respect d'un flag `cachée` (instance masquée aux joueurs).
+
+### 7.3 Éditeur E-v2 — le sculpteur de volume (**hors de ce plan**, cf. §12)
+
+Ellipse · rectangle pivoté · **polygone** (formes ordonnées, ajout/soustraction de trous,
+point-dans-région) · poignées sur canvas (déplacer / redimensionner / pivoter) · « tracer depuis
+les murs ». Exige une **géométrie 2D de région dans `shared/world` qui n'existe pas**
+(`aoeShapes.js` = circle/cone/ray transitoire ; les salles compilées sont des empreintes de cases).
+**Ce primitif est celui du rework du world builder** — le construire ici = un second moteur
+d'édition de forme (invariant 2). E-v2 est un **consommateur** du rework world builder. Voir §12.
 
 ---
 
@@ -468,7 +496,7 @@ repliés. Pas de texte libre sauf libellés et formule de dés. **90 % ne l'ouvr
 | **F4 recouvrement** | `centreDedans` seul v1 |
 | **F5 remanence conditional** | persiste + retrait MJ manuel |
 | **F6 milieu sous-marin/0G** | v2 ; défaut salle + override zone |
-| **Éditeur de volume** | doc séparé `PLAN_ZONES_DANGER_EDITEUR.md` |
+| **Éditeur de volume** | E-v1 = Z6 (rectangle + « remplir un compartiment », plateau de session) ; sculpteur polygone E-v2 = après le rework world builder (§12) |
 
 ---
 
@@ -480,18 +508,19 @@ repliés. Pas de texte libre sauf libellés et formule de dés. **90 % ne l'ouvr
 Dommages Lot 9) · `corrodeEquipment` (acide → équipement, Usure L5) · `chain` (feu → fumée / air
 vicié) · `géométrie.animation` (eau qui monte, nuage qui dérive) · `zoneInteractionRules` non vides ·
 pièges (`cachée jusqu'à détection` + désamorçage) · `toutRecouvrement` · « enflamme la cible »
-(feu qui suit hors zone) · préréglages UI riches.
+(feu qui suit hors zone) · préréglages UI riches · **éditeur E-v2** (sculpteur de volume polygone —
+consommateur du rework world builder, §12).
 
 ---
 
 ## 10. Reste à faire (aucun code dans la conversation de cadrage)
 
-1. **`PLAN_ZONES_DANGER_EDITEUR.md`** — extraction de l'éditeur de volume MJ (contrat géométrie ici,
-   build UI là-bas). Options de forme non tranchées ; modèle = empreinte extrudée (polygone +
-   hauteur) ; aucun éditeur de sommets n'existe dans le client.
-2. **Plans détaillés Z0 et Z1** (Z1 = le rework le plus risqué : refonte `environmentalHazardService`
+1. **Plans détaillés Z0 et Z1** (Z1 = le rework le plus risqué : refonte `environmentalHazardService`
    sans régression).
-3. **Validation Saar** de §5 (RAW) — surtout §5.3 gaz (déjà vérifié) et §5.5 Souffle (inférence).
+2. **Validation Saar** de §5 (RAW) — surtout §5.3 gaz (déjà vérifié) et §5.5 Souffle (inférence).
+3. **Pas de `PLAN_ZONES_DANGER_EDITEUR.md` à ce stade.** L'éditeur E-v1 tient dans §7.2 (incrément
+   Z6). Le sculpteur de volume E-v2 sera cadré dans le sillage du rework world builder — conversation
+   séparée, voir §12.
 
 ---
 
@@ -503,3 +532,26 @@ pièges (`cachée jusqu'à détection` + désamorçage) · `toutRecouvrement` ·
   Grounds, GAS, DOS2, Caves of Qud) + 3 analyses à charge. Décisions A→G tranchées avec Saar.
 - **2026-09-10** — réécriture propre de ce document (consolidation). Trail détaillé : commits
   `fe0235e`..`47f3df7` sur `dev/Saar`.
+- **2026-09-10** — recherche éditeurs de région pro (Foundry Scene Regions, Owlbear Fog, Talespire) +
+  reconnaissance du code client. Constat : l'éditeur de volume polygone partage son primitif avec le
+  rework world builder à venir → resserrement (§7 scindé E-v1 / E-v2, §12 séquencement, abandon d'un
+  `PLAN_ZONES_DANGER_EDITEUR.md` autonome).
+
+---
+
+## 12. Séquencement global — chantiers liés
+
+Saar rework le **world builder** : de « salles purement rectangulaires » à « dessiner un volume et le
+modifier en tirant / ajoutant des arêtes ». C'est **le même primitif d'édition de forme 2D** que le
+sculpteur de volume de danger (E-v2, §7.3). **On ne le construit pas deux fois.**
+
+| Ordre | Chantier | Conversation | Dépend de |
+|---|---|---|---|
+| **1** | **Zones dangereuses — noyau Z0→Z5** (ce plan) + éditeur **E-v1** (Z6 : rectangle + « remplir un compartiment », porté sur le plateau de session) | celle-ci → agent d'implémentation | rien |
+| **2** | **Rework world builder** — géométrie de salle non rectangulaire + **primitif d'édition d'arêtes 2D** dans `shared/world` (le vrai manque : `aoeShapes.js` ne couvre que circle/cone/ray, les salles sont des empreintes de cases) | **séparée, dédiée** — cadrage complet à faire | rien (parallélisable avec 1) |
+| **3** | **Éditeur de volume de danger E-v2** — polygone / ellipse / rectangle pivoté / poignées sur canvas / « tracer depuis les murs » | séparée, **après** 2 | le primitif d'édition 2D livré par 2 |
+
+**Le contrat géométrie de l'instance est stable dès maintenant** (`geometry: { mode, shape, volume,
+compartiments, wallAware }`, §3) : E-v1 en remplit un sous-ensemble (`mode:'compartiment'` |
+rectangle AABB), E-v2 le complète (`shape:'polygon'|'ellipse'`) **sans le changer**. Aucun des trois
+chantiers ne bloque le contrat ; seul l'ordre 2 → 3 est contraint.
