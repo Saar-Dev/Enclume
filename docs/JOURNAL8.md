@@ -6358,3 +6358,87 @@ tour 587 (572 pass / 15 skip DB / 0 fail) ; migration vérifiée contre le seed.
 **Non testé** : les 4 types 3-bis « à statut » (pas commencés).
 **Données** : migration 328 (`grenade_energy` `aoe_profile`, idempotente).
 **Retour arrière** : `git revert` de `7f3e9f7` + `0a7eac4` ; `down` migration 328.
+
+---
+
+## Session (Claude) — 2026-09-10 — Usure & Intégrité du matériel — V1 lots L0→L5 (validés jeu réel)
+
+Chantier `PLAN_USURE&INTEGRITE.md` (ROADMAP §2), phase V1. Autorité de jeu : `MANUELS/MANUEL_USURE.md`
+v1.5. Une pièce d'équipement porte une **Intégrité** (ITG, courante / max), dégradée par l'usage, qui
+module le combat et peut tomber en panne. ~18 commits sur `dev/Saar` (`597fe53` → `2f85200`), non
+poussés au moment de l'écriture.
+
+**L0 — schéma** (migrations 329-333). `ref_equipment.has_integrity` (bool, défaut OFF) + `quality`
+(CHECK 5 valeurs) ; `char_inventory.integrity_current` / `_max` / `malfunction_severity` (+ 3 CHECK de
+cohérence) ; `merchants.is_black_market`. Backfill `has_integrity` par famille + NT (210 lignes après
+curation) : armes/protections NT II+, ordinateurs, objets NT IV+ ; **retirés** : pharma (332), armes de
+jet & grenades (333, décision Saar « pas d'usure pour les consommables »). L'informatique est gatée sur
+`category = 'Ordinateur'` — `tech_level` vaut 1 pour toute la famille dans le seed (ne PAS s'en servir
+comme NT ailleurs). Script one-shot `wipe_inventories_for_integrity.js` (découplé, lancé par Saar).
+
+**L1 — non-stacking.** `inventoryRules.canStack(ref)` = `!isEquippableLocation && !has_integrity`.
+4 sites (`addItem`, garde `PUT quantity!=1`, `tradeService`, `modingService.returnModToInventory` —
+4ᵉ trouvé à l'exploration). Un objet suivi en ITG = toujours `quantity 1`.
+
+**L2 — primitives.** `shared/integrityRules.js` (pur, importable client) : `INTEGRITY_TIERS` (6 paliers
+MANUEL §3.3), `getIntegrityModifier` (+2/0/-3/-5/**null** hors d'usage), `QUALITY_TABLE`,
+`applyTemporaryLoss` (perte définitive de max = **la plus grande** des deux pénalités, jamais la somme),
+`getWeaponIntegrityBlock`, `interpretPanneOutcome`. `server/src/services/integrityService.js` = autorité
+d'écriture unique de `char_inventory.integrity_*` (verrou `.forUpdate()` + relecture à frais ;
+`runPanneTest` = `resolvePolarisTest(integrity_current)`, aucun moteur maison).
+
+**L3 — acquisition.** Achat Marchand : `computeAcquisitionIntegrity` — marché noir → neuf, marché légal
+→ jet d'occasion par exemplaire (formule de la qualité). Don MJ (`addItem` GM / `quickEquip`) → 15/15.
+Ajout joueur → ITG NULL (le MJ fixe). Bouton MJ « Lancer ITG occasion ».
+
+**L4 — inventaire.** `IntegrityIcon.jsx` (pictogramme bouclier, `docs/PLANS/integrite.svg`) coloré par
+palier (`INTEGRITY_TIER_COLORS`, tokens `--itg-*` miroir `--wound-*`), chiffres courante/max, badge
+« ! » (rouge atelier / ambre simple), blanc si non défini. Éditeur inline (courante/max + état) gaté
+propriétaire-ou-MJ. `getItemWithRef`/`getInventory` portent les 4 champs ; `updateItem` route vers
+`adjustIntegrity`, jamais d'écriture directe. **Validé « parfait » par Saar.**
+
+**L5 — combat** (humanoïde PJ+PNJ ; exo/drone hors scope, armes de jet exclues).
+- **L5a modificateur d'état** : `getIntegrityModifier(integrity_current)` poussé dans `contributions`
+  de `resolveMeleeAction` + `resolveAssaultAction` (`socketCombatHelpers.js`) sur l'arme qui frappe
+  réellement. Client (pré-jet) : `/weapon-skill/:id` renvoie `hasIntegrity`/`integrityCurrent`/
+  `malfunctionSeverity`, pastille « État de l'arme » dans `CombatModifiersWindow` + `CombatCacModifiersWindow`.
+- **L5b porte de panne** : `getWeaponIntegrityBlock` aux 4 sites (déclaration + résolution × Tir + CaC)
+  → arme enrayée (`malfunction_severity`) ou hors d'usage (ITG 0) → action refusée,
+  `COMBAT_DECLARE_ERROR`, aucune ressource consommée. Grisage du sélecteur d'arme **abandonné**
+  (Saar : « aucun intérêt »).
+- **L5c test de panne** : une arme suivie à ITG ∈ [1,5] qui **rate son jet d'attaque sans Catastrophe**
+  subit un Test de panne (1D20 sous l'ITG, `runPanneTest`), sans annuler l'attaque. Helper
+  `runCombatWeaponPanne` (1 site melee + 1 assault, après `maybeTriggerCatastrophe`) → carte
+  `DICE_RESULT` d20 + (sur panne critique) carte 1d6 de la perte + message chat `COMBAT_SYSTEM_NOTICE`
+  (`combat:integrityPanne.*`) + `INVENTORY_UPDATED` (item complet). Dual-wield → primaire seul (miroir
+  L5a). Le Test reste **automatique** (conséquence, pas un choix — décision Saar).
+- Correctifs en cours de validation jeu réel : la carte du Test s'animait en **d6** (`formula`
+  parenthésé sans `skillLabel` → `useSessionSocket.js:85` / `DiceMesh.js` replie sur d6) → `formula:
+  '1d20'` nu ; logs `[DBG]`/`[WS]` ajoutés aux portes de panne (déclaration + résolution).
+
+**L7 — usage manuel.** Bouton MJ « Usage intensif » : `POST …/panne-test` → `applyPanneSystematic`
+(ITG ≤ 5, sans jet) ou `runPanneTest`.
+
+**Décisions RAW / écarts** (tous dans `MANUEL_USURE.md`) : test de panne = moteur de Test complet
+(`resolvePolarisTest`, Catastrophe = marge d'échec ≥ 15) ; perte définitive = max des deux pénalités ;
+marché noir = neuf ; édition ITG = MJ **et** propriétaire (raccourci assumé, la réparation validée
+reste la voie normale) ; events WS réutilisés (`INVENTORY_UPDATED` / `DICE_RESULT` / `COMBAT_SYSTEM_NOTICE`).
+
+**Reste (non journalisé ici — chantier non clos)** : **L6** (réparation complète — sous-système
+d'échéance `equipment_repair`, panneau de revue MJ généralisé), puis **validation V1 en jeu par Saar**,
+puis **Lot 2** (L8 « MAIS TU VAS MARCHER » + pièces détachées via `resolveChanceTest` ; L9 entrées #2/#8
+de la table CATASTROPHES EN COMBAT). Dette i18n assumée : messages combat Usure en FR dur
+(`COMBAT_DECLARE_ERROR`), cohérent avec le reste des sockets combat.
+
+**Testé** : `node --check` + smoke import (aucun cycle) ; `shared/**` 574/574 ;
+`integrityService` 15/15 ; `combatAttackRoll` 29/29 ; `combatTurnEngine` + `socketCombatAoe` 37/37 ;
+`inventoryService` / `tradeService` / `modingService` / `inventoryRules` verts ; `build client` OK.
+Jeu réel Saar : L4 « parfait » ; L5a « ça m'a l'air OK » ; L5b arme enrayée → déclaration refusée
+avec message ; L5c arme à ITG 2 rate → Test de panne (roll 10/2) → −1 ITG + `malfunction_severity`.
+**Non testé** : L6 (pas commencé) ; cycle de vie complet d'une arme cassée sur une longue session ;
+`DeprecationWarning` pg vue une fois au niveau `resolveExoMeleeAction` (pas L5, `[INCONNU]`, à
+instrumenter si ça persiste).
+**Données** : migrations 329-333 (additives, idempotentes, backfill par clé métier). Script
+`wipe_inventories_for_integrity.js` à lancer par Saar quand il veut des inventaires propres (non
+bloquant).
+**Retour arrière** : `git revert` par commit (chacun atomique) ; `down` des migrations 329-333.

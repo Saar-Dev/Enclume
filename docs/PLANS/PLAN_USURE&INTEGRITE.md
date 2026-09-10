@@ -304,7 +304,7 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 **Périmètre : humanoïde PJ + PNJ.** Exo/drone = Intégrité propre, hors-scope. **Armes de jet
 (Grenade + « Armes de jet ») : hors ITG** (migration 333) — L5 ne les concerne pas.
 
-> **L5a (§7.1.b, modificateur) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> **L5a (§7.1.b, modificateur) fait le 2026-09-09 — validé jeu réel Saar le 2026-09-10.**
 > - Serveur (autorité) : `getIntegrityModifier(weapon.integrity_current)` poussé dans le tableau
 >   `contributions` de `resolveMeleeAction` ET `resolveAssaultAction` (`socketCombatHelpers.js`) —
 >   `weapon` = l'arme qui tire réellement (primaire/secondaire résolu). `null`/0/panne : aucun
@@ -315,7 +315,7 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 >   `CombatCacModifiersWindow` (CaC) l'ajoutent à `totalModComp` + pastille « État de l'arme -3 ».
 > - Tests : `combatAttackRoll` 29/29, `shared/**` 573/573, `vite build` OK.
 >
-> **L5b (§7.1.a, porte de panne) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> **L5b (§7.1.a, porte de panne) fait le 2026-09-09 — validé jeu réel Saar le 2026-09-10.**
 > - `shared/integrityRules.getWeaponIntegrityBlock(weapon)` → `'panne'` (malfunction non NULL) /
 >   `'horsdusage'` (suivi + ITG 0) / `null`. Tolère `has_integrity` brut ou `ref_has_integrity` aliasé.
 > - **4 sites** : déclaration Tir + déclaration CaC (`socketCombatAnnouncement.js`), résolution
@@ -324,7 +324,7 @@ style inline (`.claude/rules/react.md`). Relire une pastille sœur avant d'écri
 > - Grisage de l'arme dans le sélecteur client : **abandonné (Saar 2026-09-09 : « aucun intérêt »)** —
 >   le message d'erreur suffit.
 >
-> **L5c (§7.1.c, test de panne d'arme) fait le 2026-09-09 — ⚠️ validation jeu réel Saar en attente.**
+> **L5c (§7.1.c, test de panne d'arme) fait le 2026-09-09 — validé jeu réel Saar le 2026-09-10.**
 > - `integrityService.runPanneTest` : ajout de `seed` + `isCriticalFail` à son retour (repris de
 >   `resolvePolarisTest`, pour une carte `DICE_RESULT` reproductible). `applyPanneSystematic` (sans
 >   jet) non concerné. +2 assertions `integrityService.test.mjs` (15/15).
