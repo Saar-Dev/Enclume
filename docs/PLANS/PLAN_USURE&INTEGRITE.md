@@ -423,6 +423,64 @@ L4 rend le palier lisible sur chaque item.
 
 ## 8. L6 — Réparation complète (le plus gros lot)
 
+> **L6a (cœur serveur) fait le 2026-09-10 — 2 commits, non poussés.**
+> - **L6a-1 `1c3626c`** — migration **334** `game_echeances.advance_driven boolean NOT NULL DEFAULT true`
+>   (dénormalisé à la création comme `interactive`). Trois requêtes de `gameTimeService`/`echeanceService`
+>   balayaient TOUTES les échéances `pending_mj_review`/`awaiting_player_roll` sans filtrer — correctes
+>   par accident tant que les blessures étaient le seul type interactif. Corrigées :
+>   `confirmPendingAdvance` (ne bloque plus l'avance sur une réparation en attente),
+>   `cancelPendingAdvance` (ne clobbe plus une réparation), `resolveEcheanceNow` (n'alimente
+>   `pending_advance_undo_log` que si `advance_driven` → une réparation résolue hors avance n'est plus
+>   défaite par une annulation ultérieure). + `requestGameTimeAdvance` remet le journal à null en
+>   ouverture. Round-trip migration validé. +4 tests. **Une échéance À LA DEMANDE = `advanceDriven: false`.**
+> - **L6a-2 `ec2e241`** — `shared/integrityRules.js` : `getRepairSkillId` (table §8.3 + repli
+>   `ART_ARTISANAT`), `computeRepairNtMalus` (NT VI −7 / NT V −5), `isRepairable(item)`,
+>   `interpretRepairOutcome`. `integrityService.applyRepairOutcome(invId, {outcome}, trxOpt)` : applique
+>   une issue déjà tirée (réussite → `applyRepair(current,max,mr)` + lève panne `'simple'` ; échec → rien ;
+>   Catastrophe → `integrity_max -= 1` plancher 1 + clamp courante, `malfunction_severity` **inchangé**).
+>   `equipmentRepairService.equipmentRepairHandler` (neuf, parallèle à `woundEvolutionService`).
+>   Registre : `{ key:'equipment_repair', interactive:true, advanceDriven:false }`. Routes
+>   `POST …/inventory/:itemId/repair-request` (owner/MJ ; refus si combat actif, `!isRepairable`, doublon)
+>   + `POST …/game-echeances/:eid/repair-decision` (MJ : `approve` option `skillId` → `awaiting_player_roll` ;
+>   `reject` → `cancelled`). **Révision D3** : `PUT inventory` refuse les 3 champs d'ITG à un non-MJ.
+>   `shared/events.js` : `EQUIPMENT_REPAIR_ROLL` + `EQUIPMENT_REPAIR_UPDATED`. +10 tests.
+>
+> **L6b (jet + lectures) fait le 2026-09-10 — `f199f12`, non poussé.**
+> - Socket `EQUIPMENT_REPAIR_ROLL` (`socketDice.js`, gabarit `WOUND_INFECTION_ROLL`) : seuil =
+>   `calcSkillTotal + ntMalus + activeMalus` (malus blessures/fatigue/encombrement inclus, comme tout
+>   Test) ; `resolvePolarisTest` ; fusion `payload.rollResult` ; `resolveEcheanceNow`. Émet
+>   `GAME_ECHEANCE_RESOLVED` + `EQUIPMENT_REPAIR_UPDATED` + `INVENTORY_UPDATED` (item frais) + `DICE_RESULT`
+>   (carte d20 propre : `skillLabel`, `mechanicalTotal`=compétence, `diffLabel`=malus, `isSuccess`).
+> - `equipmentRepairReviewService.js` (neuf, parallèle à `woundReviewService`) : `getRepairRequestsForGm`
+>   (boîte MJ) + `getRepairRollsForPlayer` (jets joueur). Routes `GET …/game-echeances/repair-requests`
+>   (MJ) + `GET …/my-pending-rolls` **concatène** blessure + réparation (chaque domaine sa requête —
+>   `woundReviewService` PAS généralisé). +6 tests.
+>
+> **L6c (client) — PAS COMMENCÉ. Plan corrigé après analyse à charge (2026-09-10) :**
+> - **Le client ne calcule AUCUNE stat** (invariant #3). Route `GET …/inventory/:itemId/repair-preview`
+>   (`?echeanceId=` optionnel : sans → compétence dérivée de l'item ; avec → compétence finale du
+>   payload) → `{ skillLabel, skillTotal, ntMalus, threshold }`. Le serveur extrait `computeRepairThreshold`
+>   du handler socket L6b et l'appelle des deux côtés → Seuil affiché = Seuil lancé, toujours.
+>   `SkillsPanel` **pas touché**. `getRepairRollsForPlayer` gagne `threshold` dans son enrichissement.
+> - **`IntegritySegment` → fenêtre ancrée à l'icône** (patron `SkillInfoPopover.jsx`) : l'état
+>   `{ popoverItemId, x, y }` vit dans **`InventoryPanel`** (une instance, un listener clic-dehors), pas
+>   par segment. `IntegritySegment` = déclencheur seul ; nouveau `IntegrityPopover` porte le contenu.
+>   Deux visages : **MJ** = outils de mise en service (courante/max/état + Occasion + Usage intensif +
+>   Neuf) PUIS section réparation ; **Joueur** = lecture d'état + « Armurerie : 8 · NT V −5 · Seuil : 3 »
+>   (via `repair-preview`) + `[Faire réparer par un pro]` (grisé V1, infobulle) + `[Réparer soi-même]`
+>   + statut après demande. **Sort toute l'info réparation de la ligne d'inventaire.**
+> - `PendingRollsPanel.jsx` : dispatch par `conditionType` (émet `EQUIPMENT_REPAIR_ROLL` vs
+>   `WOUND_INFECTION_ROLL`, rend `e.item` vs `e.wound`) + écoute `EQUIPMENT_REPAIR_UPDATED`.
+> - `EquipmentRepairReviewPanel.jsx` **autonome** (pas de généralisation de `BlessuresReviewPanel` —
+>   N=2, un consommateur fragile ; coquille `GmReviewShell` à extraire au 3ᵉ, L9). Classes CSS **neuves**
+>   (react.md), pas la copie de l'objet `styles` inline de `BlessuresReviewPanel`. Monté `Sidebar.jsx`.
+> - **Découpage** : **L6c-1** (bas risque, flux testable) = `repair-preview` + panneaux + `Sidebar` +
+>   `inventoryMutations.repairRequest` + i18n + trigger minimal (masquer champs bruts aux non-MJ =
+>   nettoyage D3 + bouton « 🔧 Réparer » adjacent si `isRepairable`). **L6c-2** (risque moyen, isolé) =
+>   la vraie fenêtre à deux visages `IntegrityPopover` qui consolide tout + bouton « Neuf ».
+> - Détail ouvert : positionnement des 3 panneaux `position: fixed` (Blessures / Réparation / Jets) —
+>   à régler à l'implémentation.
+
 Sous-système d'échéance. **Presque tout existe déjà** (G3, vérifié 2026-09-09) :
 - `game_echeances.status` CHECK inclut `pending_mj_review` et `awaiting_player_roll` ;
 - la transition **`pending_mj_review → awaiting_player_roll` est déjà codée** : route `infection-mode`
