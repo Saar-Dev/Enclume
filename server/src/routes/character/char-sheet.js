@@ -1282,12 +1282,14 @@ router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, n
     if (existing) throw new AppError(409, 'Une demande de réparation est déjà en cours pour cet objet')
 
     const campaign = await db('campaigns').where({ id: campaignId }).first('game_time_minutes')
+    const suggestedSkillId = getRepairSkillId(item.ref_family ?? null)
+    const itemName = item.custom_name || item.ref_name || 'Objet'
     const echeance = await db.transaction((trx) => createEcheance(trx, {
       campaignId, characterId, conditionType: 'equipment_repair',
       payload: {
         itemId,
-        itemName: item.custom_name || item.ref_name || 'Objet',
-        skillId: getRepairSkillId(item.ref_family ?? null),
+        itemName,
+        skillId: suggestedSkillId,
         ntMalus: computeRepairNtMalus(item.ref_tech_level ?? null),
         integrityBefore: {
           current: item.integrity_current, max: item.integrity_max, malfunction: item.malfunction_severity,
@@ -1299,8 +1301,58 @@ router.post('/:characterId/inventory/:itemId/repair-request', async (req, res, n
       status: 'pending_mj_review',
     }))
 
-    req.app.get('io').to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
+    const io = req.app.get('io')
+    // Signal générique de refetch (panneaux joueur, icônes d'inventaire).
+    io.to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
+    // Carte d'action ciblée au(x) MJ connecté(s) — payload enrichi (patron ENTITY_ACTION_PENDING /
+    // TRADE_SELL_REQUEST). Un MJ qui se (re)connecte après coup re-dérive la carte via
+    // GET .../game-echeances/repair-requests (useRepairRequestSocket).
+    const skillRow = await db('ref_skills').where({ id: suggestedSkillId }).first('label')
+    const roomSockets = await io.in(campaignId).fetchSockets()
+    const requestedPayload = {
+      echeanceId: echeance.id,
+      campaignId,
+      characterId,
+      playerName: req.character.name,
+      itemName,
+      suggestedSkillId,
+      suggestedSkillLabel: skillRow?.label ?? suggestedSkillId,
+    }
+    const gmSockets = roomSockets.filter((s) => s.data.role === 'gm')
+    for (const s of gmSockets) s.emit(WS.EQUIPMENT_REPAIR_REQUESTED, requestedPayload)
+    console.log(`[DBG] repair-request — échéance ${echeance.id} créée (${itemName}), ${gmSockets.length}/${roomSockets.length} socket(s) MJ notifié(s)`)
+    // Rafraîchit l'objet dans le store client (repair_request_status → 'pending_mj_review') : le
+    // visage joueur du pop-up d'ITG et le liseré de l'icône se mettent à jour sans refetch.
+    const room = await resolveInventoryBroadcastRoom(characterId, campaignId)
+    emitInventoryEvent(io, room, WS.INVENTORY_UPDATED, { characterId, item: await inventoryService.getItemWithRef(itemId) })
     res.status(201).json({ echeance: { id: echeance.id, status: echeance.status } })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/repair-cancel ────────
+// L6c-B — le joueur (ou le MJ) annule une demande de réparation encore vivante. Même logique que
+// l'annulation d'une offre de revente (TRADE_TRANSFER_CANCELLED) : l'échéance passe 'cancelled',
+// aucune mutation d'inventaire. Auth = router.param (propriétaire ou MJ).
+router.post('/:characterId/inventory/:itemId/repair-cancel', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+    const campaignId = req.character.campaign_id
+    if (!campaignId) throw new AppError(400, 'Réparation indisponible hors campagne')
+
+    const echeance = await db('game_echeances')
+      .where({ campaign_id: campaignId, condition_type: 'equipment_repair', character_id: characterId })
+      .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
+      .whereRaw("payload->>'itemId' = ?", [itemId])
+      .first()
+    if (!echeance) throw new AppError(404, 'Aucune demande de réparation en cours pour cet objet')
+
+    await db('game_echeances').where({ id: echeance.id }).update({ status: 'cancelled', updated_at: db.fn.now() })
+
+    const io = req.app.get('io')
+    io.to(campaignId).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId })
+    const room = await resolveInventoryBroadcastRoom(characterId, campaignId)
+    emitInventoryEvent(io, room, WS.INVENTORY_UPDATED, { characterId, item: await inventoryService.getItemWithRef(itemId) })
+    res.json({ status: 'cancelled' })
   } catch (err) { next(err) }
 })
 

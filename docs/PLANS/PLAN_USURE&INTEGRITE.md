@@ -456,45 +456,107 @@ L4 rend le palier lisible sur chaque item.
 >   (MJ) + `GET …/my-pending-rolls` **concatène** blessure + réparation (chaque domaine sa requête —
 >   `woundReviewService` PAS généralisé). +6 tests.
 >
-> **L6c — REPLAN 2026-09-10 après rejet de L6c-1 (client) par Saar.**
+> **L6c — REPLAN 2026-09-10, amendé après analyse à charge du replan (Saar « ok pour moi »).**
 > L6c-1 client (`9e994e3`) rejeté : panneau MJ flottant maison + enfilade de boutons inline + texte
 > joueur figé. **Le projet a déjà le bon pattern** : `MessageRendererRegistry.jsx:35-96` — carte
-> d'action dans le chat (`sidebar-msg-action`), `[Accepter]/[Auto]/[Refuser]`, badge « à traiter »
-> sur l'onglet chat, TTL — utilisée par `entity_action` (`useEntitySocket.js`) et le crochetage de
-> connecteur (`socketConnector.js`). C'est le « cf. Marchand / vente d'objet » de Saar.
+> d'action dans le chat (`sidebar-msg-action`), `[Accepter]/[Auto]/[Refuser]`, badge `pendingActionCount`
+> sur l'onglet chat — utilisée par `entity_action` (`useEntitySocket.js`), le crochetage de connecteur
+> (`useConnectorSocket.js`) et la revente (`sell_request`, `socketTrade.js`). C'est le « cf. Marchand »
+> de Saar.
 > **Backend L6a/L6b + serveur L6c-1 CONSERVÉS** (échéance `equipment_repair`, `applyRepairOutcome`,
 > `computeRepairThreshold`, route `repair-preview`, `advance_driven`, `repair-decision`).
 > **À jeter** : `EquipmentRepairReviewPanel.jsx`, le bouton « 🔧 Réparer » adjacent, l'éditeur inline.
-> **Replan** :
-> 1. Supprimer `EquipmentRepairReviewPanel.jsx`.
-> 2. `repair-request` émet `EQUIPMENT_REPAIR_REQUESTED` → carte d'action dans le chat du MJ
->    (`addMessage({ type: 'repair_request', gmOnly: true, requestId: echeanceId, playerName, itemName,
->    skillId, skillLabel, threshold })`, patron `useEntitySocket.onEntityActionPending`). Re-dérivée à
->    la reconnexion via `GET repair-requests` (conservé, repurposé). Badge via `pendingActionCount`.
-> 3. Carte : `[Approuver]` (+ `<select>` compétence, `repairSkillOptions`) / `[Refuser]` → route
->    `repair-decision`. Résolution → `EQUIPMENT_REPAIR_UPDATED` → carte retirée.
-> 4. Joueur lance depuis « Jets en attente » (`PendingRollsPanel` dispatch, conservé de L6c-1).
-> 5. **Pop-up ITG à deux visages** (patron `SkillInfoPopover.jsx`, état `{popoverItemId,x,y}` dans
->    `InventoryPanel`, `position: fixed`) — remplace l'enfilade inline ET le bouton adjacent.
->    - **MJ, bloc « État initial »** (presets = paliers RAW, cf. MANUEL §3.3) : `[Neuf]` (courante=max=
->      ITG max de la qualité), `[Occasion]` (jet, route existante), `[État moyen]` (courante=13),
->      `[Endommagé]` (courante=3), `[Hors d'usage]` (courante=0 + atelier) + 2 champs courante/max.
->    - **MJ, bloc « Statut »** : 3 boutons `[Opérationnel]`/`[Requiert une réparation]`/`[Requiert un
->      atelier]` (fini le `<select>`).
->    - **MJ, bloc « Actions »** : `[Usage intensif]` (corrigé — hors ligne draggable dans la pop-up,
->      le clic passe ; la route `panne-test` est saine).
->    - **Joueur** : lecture d'état + selon `repair_request_status` : rien → « Armurerie : 8 · NT V −5
->      · Seuil : 3 » (via `repair-preview`) + `[Faire réparer par un pro]` (grisé V1) + `[Réparer
->      soi-même]` ; `pending_mj_review` → « En attente du MJ » + `[Annuler ma demande]` ;
->      `awaiting_player_roll` → « Approuvée — lancez votre jet ».
-> 6. **Icône** : `getInventory`/`getItemWithRef` gagnent `repair_request_status` (sous-requête
->    `game_echeances`). Routes de réparation émettent `INVENTORY_UPDATED` (item frais) → le store se met
->    à jour, l'icône reçoit `itg-repair-pending` (**liseré bleu discret**) + infobulle. Retour normal
->    auto à la résolution/refus.
-> **Décisions Saar (2026-09-10)** : annulation joueur = même logique que la revente (pop-up chat,
->  acceptation) ; MJ n'a PAS de section « réparer pour un absent » (il a la carte) ; liseré bleu OK.
 >
-> **Reste après replan** : analyse à charge du replan, puis code (probable découpage : carte MJ + suppression du panneau / pop-up ITG / icône status).
+> **Constats de l'analyse à charge (9 points, actés Saar 2026-09-10)** :
+> 1. **Carte = vrai composant, pas un renderer-fonction.** `renderEntityAction` & co sont appelées
+>    `renderer(msg, ctx)` dans un `.map()` — aucun hook. Le `<select>` compétence exige un `useState`.
+>    → registre `repair_request: (msg, ctx) => <RepairRequestCard msg={msg} ctx={ctx} key={msg.id}/>`.
+> 2. **Pas de TTL.** `entity_action` a un `setTimeout` serveur car il suspend le jeu quelques secondes ;
+>    une demande de réparation attend le MJ indéfiniment (hors combat, entre sessions). La carte ne
+>    disparaît que sur `repair-decision` (approve/reject) ou annulation joueur.
+> 3. **Re-dérivation reconnexion MJ = nouveau hook.** `sell_request` ne se re-dérive pas (filet =
+>    `TradeWindow` persistante) ; ici le panneau supprimé = plus de filet. → `useRepairRequestSocket`
+>    (GM, toujours monté, patron `useEntitySocket`) : au montage `GET repair-requests` → `addMessage`
+>    par demande `pending_mj_review` (dédup par `id` = reconnexion idempotente) ; écoute
+>    `EQUIPMENT_REPAIR_REQUESTED` → `addMessage` ; `EQUIPMENT_REPAIR_UPDATED` + `GAME_ECHEANCE_RESOLVED`
+>    → `removeMessage`. Retrait de carte à la résolution = **aggradation** vs `entity_action`/`sell_request`.
+> 4. **Événement enrichi.** `repair-request` émet aujourd'hui `EQUIPMENT_REPAIR_UPDATED {campaignId}`
+>    (signal refetch nu). Ajouter `EQUIPMENT_REPAIR_REQUESTED` (`shared/events.js`) avec
+>    `{ echeanceId, campaignId, characterId, playerName, itemName, suggestedSkillId, suggestedSkillLabel }`,
+>    émis au(x) socket(s) MJ depuis la route REST via `io.in(campaignId).fetchSockets()` filtré
+>    `s.data.role === 'gm'` (patron `socketTrade.findGmSocket`). `EQUIPMENT_REPAIR_UPDATED` reste le
+>    signal générique de refetch/retrait.
+> 5. **Pas de `threshold` dans la carte.** Il dépend de la compétence — faux dès que le MJ change le
+>    `<select>` ; le MJ décide sur critère narratif (temps/outils/pièces, MANUEL §5.1). Le joueur, lui,
+>    l'a vu via `repair-preview` avant de demander. Évite aussi `computeRepairThreshold` (~8 requêtes) à
+>    chaque demande.
+> 6. **`repair_request_status` = sous-requête `game_echeances` + index.** `payload->>'itemId'` non
+>    indexé (le check de doublon a déjà ce coût), `game_echeances` ~59 lignes → OK V1. Ajouter un index
+>    partiel `(campaign_id, condition_type, status)`. Dénormaliser en colonne `char_inventory` seulement
+>    si le coût se voit (la sous-requête évite le risque de désync).
+> 7. **Surface de régression L4/L7 « parfait ».** Le pop-up MJ doit préserver **strictement**
+>    courante/max/état + Occasion (§5.3) + Usage intensif (L7), et **corrige** « Usage intensif ne fait
+>    rien » (bouton hors ligne draggable, `CharacterWindow.jsx:33`). Incrément dédié, parité stricte + le fix.
+> 8. **`getRepairRequestsForGm` renvoie `pending_mj_review` ET `awaiting_player_roll`** — la re-dérivation
+>    de cartes ne prend que `pending_mj_review` (filtrer côté hook).
+> 9. **Clic icône devient universel** (aujourd'hui `onClick={isGm ? openEdit : undefined}`) : ouvre le
+>    pop-up pour tous, le **contenu** est gaté MJ/joueur. Revoir `role="button"` + accessibilité.
+>
+> **Contenu du pop-up ITG à deux visages** (patron `SkillInfoPopover.jsx` = « dumb popover », état
+> `{ popoverItemId, x, y }` dans `InventoryPanel` — 1 instance, 1 listener clic-dehors ;
+> `position: fixed` sûr : `CharacterWindow` positionne en `left/top`). **CSS en classes neuves**
+> (`react.md`), pas la copie des styles inline de `SkillInfoPopover`.
+> - **MJ, bloc « État initial »** (presets = paliers RAW, MANUEL §3.3) : `[Neuf]` (courante = max = ITG
+>   max de la qualité), `[Occasion]` (jet, route `roll-integrity` existante), `[État moyen]` (courante
+>   = 13), `[Endommagé]` (courante = 3), `[Hors d'usage]` (courante = 0 + atelier) + 2 champs courante/max.
+> - **MJ, bloc « Statut »** : 3 boutons `[Opérationnel]` / `[Requiert une réparation]` / `[Requiert un
+>   atelier]` (fini le `<select>`).
+> - **MJ, bloc « Actions »** : `[Usage intensif]` (route `panne-test`, corrigé par le contexte non-draggable).
+> - **Joueur** : lecture d'état + selon `repair_request_status` : rien → « Armurerie : 8 · NT V −5 ·
+>   Seuil : 3 » (via `repair-preview`) + `[Faire réparer par un pro]` (grisé V1, infobulle) + `[Réparer
+>   soi-même]` (→ `repair-request`) ; `pending_mj_review` → « En attente du MJ » + `[Annuler ma demande]`
+>   (nouvelle route `repair-cancel`, échéance → `cancelled`, patron `TRADE_TRANSFER_CANCELLED`) ;
+>   `awaiting_player_roll` → « Approuvée — lancez votre jet » (le jet est dans « Jets en attente »).
+>
+> **Icône** : `getInventory`/`getItemWithRef` gagnent `repair_request_status` (sous-requête, point 6).
+> Routes de réparation émettent `INVENTORY_UPDATED` (item frais) → l'icône reçoit `itg-repair-pending`
+> (**liseré bleu discret**, classe `index.css`) + infobulle. Reset auto à résolution/refus/annulation.
+>
+> **Décisions Saar (2026-09-10)** : annulation joueur = même logique que la revente ; MJ n'a PAS de
+> section « réparer pour un absent » (il a la carte) ; liseré bleu OK ; presets = paliers RAW.
+>
+> **Découpage (3 incréments testables) :**
+> - **L6c-A — carte d'action chat — FAIT + VALIDÉ NAVIGATEUR (Saar « la carte est ok » 2026-09-10).**
+>   `EQUIPMENT_REPAIR_REQUESTED` enrichi émis aux sockets MJ, `RepairRequestCard.jsx` (composant,
+>   `<select>` compétence + Approuver/Refuser → `repair-decision`), `useRepairRequestSocket.js` (hook
+>   MJ : re-dérive au montage via `GET repair-requests`, retire la carte à la résolution), badge
+>   `pendingActionCount`. `EquipmentRepairReviewPanel.jsx` + CSS `.gm-review-*` supprimés. Logs debug
+>   `[repair-cards]` / `[DBG] repair-request` laissés (à trimmer au commit final L6c).
+> - **L6c-B — pop-up ITG à deux visages — FAIT (⚠️ validation navigateur en attente).** 8 fichiers :
+>   sous-requête `repair_request_status` aux SELECT `getItemWithRef`/`getInventory` ; route
+>   `POST .../inventory/:itemId/repair-cancel` ; `repair-request` + `repair-decision` émettent
+>   `INVENTORY_UPDATED` (item frais) ; `cancelRepairRequest` (mutations) ; `IntegrityPopover.jsx`
+>   (dumb popover, patron SkillInfoPopover, monté conditionnel, item re-dérivé du store) — MJ : « État
+>   initial » (Neuf/Occasion/Moyen 13/Endommagé 3/Hors d'usage 0+critical, bornés au max) + champs
+>   bruts + « Statut » (3 boutons) + « Usage intensif » ; joueur : preview Seuil + `[Réparer
+>   soi-même]`/`[Annuler ma demande]` selon `repair_request_status` ; `InventoryPanel` : `IntegritySegment`
+>   réduit à un déclencheur (clic MJ + joueur), **éditeur inline + bouton 🔧 supprimés**, état pop-up +
+>   clic-dehors ; `.itg-pop*` (index.css, classes neuves) ; i18n `inventoryPanel.integrity.popover.*`.
+> - ~~L6c-A détail~~ : suppr. `EquipmentRepairReviewPanel.jsx` + son montage `Sidebar.jsx`
+>   + CSS `.gm-review-*` ; `EQUIPMENT_REPAIR_REQUESTED` (`shared/events.js`) ; `repair-request` enrichit
+>   + émet au MJ ; `RepairRequestCard.jsx` (composant, `<select>` `repairSkillOptions`, `[Approuver]`/
+>   `[Refuser]` → `repair-decision`) + entrée registre `repair_request` ; `useRepairRequestSocket.js`
+>   (re-dérive + retrait) monté `SessionPage.jsx` ; ctx `renderMessage` (`onRepairDecision`) ; badge
+>   (`useSidebarPendingActionsBadge` : +`repair_request`) ; i18n. Bouton « 🔧 Réparer » actuel **gardé
+>   provisoirement** comme déclencheur. Test : joueur 🔧 → carte MJ → approuve/refuse → jet joueur.
+> - **L6c-B — pop-up ITG à deux visages** : `IntegrityPopover.jsx` + état dans `InventoryPanel` ;
+>   retire l'éditeur inline **et** le bouton 🔧 adjacent ; visage MJ (parité L4/L7 stricte + fix Usage
+>   intensif + presets paliers) + visage joueur (`repair-preview`, `[Réparer soi-même]`, `[Annuler]`) ;
+>   route `repair-cancel` ; CSS classes neuves ; i18n.
+> - **L6c-C — icône statut** : migration index partiel `game_echeances` ; `repair_request_status` aux
+>   SELECT `getInventory`/`getItemWithRef` ; `INVENTORY_UPDATED` (item frais) sur les 3 routes de
+>   réparation (`repair-request`/`repair-decision`/`repair-cancel` + socket roll) ; classe
+>   `itg-repair-pending` (liseré bleu) + infobulle ; reset auto.
 >
 > ---
 > **[ARCHIVE] Plan L6c corrigé après 2ᵉ analyse à charge (2026-09-10) — superseded par le replan ci-dessus :**

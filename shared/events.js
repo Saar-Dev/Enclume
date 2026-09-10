@@ -31,6 +31,11 @@ export const WS = {
   // serveur → room : signal léger « le flux de réparation a bougé » (demande créée, approuvée,
   // refusée, ou jet résolu) — les panneaux MJ / joueur rechargent. Pas le détail.
   EQUIPMENT_REPAIR_UPDATED: 'equipment_repair:updated',
+  // serveur → sockets MJ : nouvelle demande de réparation à arbitrer, payload enrichi pour la carte
+  // d'action du chat (patron TRADE_SELL_REQUEST / ENTITY_ACTION_PENDING) —
+  // { echeanceId, campaignId, characterId, playerName, itemName, suggestedSkillId, suggestedSkillLabel }.
+  // La re-dérivation à la reconnexion MJ passe par GET .../game-echeances/repair-requests.
+  EQUIPMENT_REPAIR_REQUESTED: 'equipment_repair:requested',
   // docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4 : serveur → room, résultat d'un Test de Fatigue (jet,
   // seuil, issue, nouveau palier/case) — diffusion visible MJ + joueur (patron MACRO_ROLL_RESULT),
   // pas seulement un retour HTTP au MJ qui a déclenché le Test.

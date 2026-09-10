@@ -6442,3 +6442,66 @@ instrumenter si ça persiste).
 `wipe_inventories_for_integrity.js` à lancer par Saar quand il veut des inventaires propres (non
 bloquant).
 **Retour arrière** : `git revert` par commit (chacun atomique) ; `down` des migrations 329-333.
+
+---
+
+## Session (Claude) — 2026-09-10 — Usure & Intégrité — L6 réparation (échéances + carte chat + pop-up ITG)
+
+Suite du chantier `PLAN_USURE&INTEGRITE.md` §8. La réparation complète : le joueur déclare l'intention,
+le MJ approuve/refuse, le joueur lance un Test de compétence, l'ITG remonte (ou baisse sur Catastrophe).
+Aucune gestion du temps par le système (le MJ bouge l'horloge s'il veut). Non poussé au moment de l'écriture.
+
+**L6a — socle serveur.** Migration **334** `game_echeances.advance_driven` (bool, défaut true,
+dénormalisé à la création comme `interactive`). Cause : 3 requêtes de `gameTimeService` /
+`echeanceService` balayaient TOUTES les échéances interactives sans filtrer — correct par accident tant
+que les blessures étaient le seul type interactif. Une échéance **à la demande** (`equipment_repair`,
+`advanceDriven: false`) ne bloque plus l'avance de temps, n'est plus clobbée par une annulation, ne
+pollue plus le journal d'undo. `shared/integrityRules.js` : `getRepairSkillId` (table famille→compétence
+[INFÉRÉ] — le RAW ne donne que des exemples), `computeRepairNtMalus` (NT VI −7 / NT V −5),
+`isRepairable`, `interpretRepairOutcome`. `integrityService.applyRepairOutcome` (issue déjà tirée →
+`applyRepair` + lève panne `simple` / rien / Catastrophe : `integrity_max -= 1`, malfunction inchangé).
+Handler `equipmentRepairService.equipmentRepairHandler`. **Révision D3** : le joueur PERD l'édition brute
+d'ITG (`PUT inventory` refuse les 3 champs à un non-MJ) — il passe par « Demander une réparation ».
+
+**L6b — jet + lectures.** Socket `EQUIPMENT_REPAIR_ROLL` (gabarit `WOUND_INFECTION_ROLL`) : Seuil =
+`calcSkillTotal + ntMalus + activeMalus` (autorité unique `computeRepairThreshold`, partagée avec la
+route d'aperçu), `resolvePolarisTest`, `resolveEcheanceNow`. `equipmentRepairReviewService.js` :
+`getRepairRequestsForGm` + `getRepairRollsForPlayer` (chaque domaine sa requête — `woundReviewService`
+PAS généralisé). Route `repair-preview` (Seuil prévisionnel = Seuil lancé).
+
+**L6c-A — carte d'action dans le chat du MJ** (validé jeu réel). Après une 1ʳᵉ implémentation rejetée
+(panneau flottant maison), bascule sur le **patron établi du projet** : `sidebar-msg-action` (cf.
+`entity_action` / `sell_request`). `repair-request` émet `EQUIPMENT_REPAIR_REQUESTED` enrichi aux
+sockets MJ ; `RepairRequestCard.jsx` (composant : `<select>` compétence + `[Approuver]` / `[Refuser]`
+→ route `repair-decision`) ; `useRepairRequestSocket.js` (hook MJ toujours monté : re-dérive les cartes
+au montage via `GET repair-requests`, les **retire** à la résolution via `removeMessage` — aggradation
+vs `entity_action` / `sell_request` qui laissent une carte morte). Badge `pendingActionCount`.
+`EquipmentRepairReviewPanel.jsx` supprimé.
+
+**L6c-B — pop-up ITG à deux visages** (validé jeu réel). Clic sur l'icône d'Intégrité (MJ **ou** joueur)
+→ `IntegrityPopover.jsx` (patron `SkillInfoPopover` : composant « dumb », état + clic-dehors dans
+`InventoryPanel`, item re-dérivé du store). **MJ** : « État initial » (presets = paliers RAW :
+Neuf / Occasion / Moyen 13 / Endommagé 3 / Hors d'usage 0+atelier, bornés au max) + champs bruts
+courante/max ; « Statut » (3 boutons) ; « Usage intensif » (corrigé — hors de la ligne draggable, le
+clic passe enfin). **Joueur** : Seuil prévisionnel (`repair-preview`) + `[Réparer soi-même]` /
+`[Annuler ma demande]` (route `repair-cancel`, patron revente) selon `repair_request_status`
+(sous-requête `game_echeances` ajoutée aux SELECT `getItemWithRef` / `getInventory`). L'ancien éditeur
+inline (« enfilade de boutons ») et le bouton « 🔧 Réparer » adjacent sont **supprimés**.
+
+**Décisions / écarts** (dans `MANUEL_USURE.md` / PLAN §13) : compétence de réparation = mapping
+famille→compétence [INFÉRÉ] surchargeable par le MJ à l'approbation ; annulation joueur = logique revente ;
+Catastrophe de réparation → l'objet reste en panne (RAW) ; pas de pièces détachées en V1 ;
+`repair-request` refusé pendant un combat (MANUEL §5.1 : geste hors combat).
+
+**Testé** : `node --check` serveur ; `node --test shared/**` 578/578 ; serveur réparation + inventaire
++ échéances 35/35 ; smoke import routes (aucun cycle) ; SQL de la sous-requête `repair_request_status`
+testé live contre `enclumeBD` ; eslint client 0 erreur ; `vite build` OK. Jeu réel Saar : L6c-A « la
+carte est ok » ; L6c-B « test concluant, parfait » (presets, statut, Usage intensif, circuit joueur
+demande → attente → annulation).
+**Non testé** : cycle complet demande → approbation → jet → ITG remontée sur une vraie session ;
+reconnexion MJ avec demande en attente (re-dérivation de carte) éprouvée en isolé, pas en session longue.
+**Données** : migration **334** (additive, idempotente, round-trip validé, 59 lignes existantes → `true`).
+Aucun backfill d'inventaire.
+**Retour arrière** : `git revert` du commit ; `down` de la migration 334.
+**Reste** : L6c-C (liseré bleu sur l'icône ITG quand une demande est en cours + index partiel sur
+`game_echeances`), puis **validation V1 complète en jeu**, puis **Lot 2** (L8 / L9).

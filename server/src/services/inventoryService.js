@@ -152,6 +152,11 @@ export async function getItemWithRef(itemId) {
       // Profil de zone d'effet (segment 0b, shared/combatAoe.js) — éligibilité « Viser une zone »
       // (3 fenêtres de déclaration) + exclusivité lance-flammes + résolution AOE. null = arme non-AOE.
       'ref_equipment.aoe_profile as ref_aoe_profile',
+      // Réparation (PLAN_USURE&INTEGRITE.md §8, L6c-B) — statut de la demande vivante pour cet objet :
+      // 'pending_mj_review' | 'awaiting_player_roll' | null. Une seule demande vivante à la fois
+      // (garde de la route repair-request) → LIMIT 1 sûr. Alimente le visage joueur du pop-up d'ITG
+      // et (L6c-C) le liseré bleu de l'icône.
+      db.raw(`(SELECT status FROM game_echeances WHERE condition_type = 'equipment_repair' AND status IN ('pending_mj_review', 'awaiting_player_roll') AND payload->>'itemId' = char_inventory.id::text LIMIT 1) as repair_request_status`),
     )
     .first()
   return row == null
@@ -328,6 +333,8 @@ export async function getInventory(characterId, campaignId) {
         WHERE rea.item_id = char_inventory.equipment_id
         LIMIT 1
       ) as skill_label_i18n`),
+      // Réparation (PLAN_USURE&INTEGRITE.md §8, L6c-B) — statut de la demande vivante : voir getItemWithRef.
+      db.raw(`(SELECT status FROM game_echeances WHERE condition_type = 'equipment_repair' AND status IN ('pending_mj_review', 'awaiting_player_roll') AND payload->>'itemId' = char_inventory.id::text LIMIT 1) as repair_request_status`),
     )
     .orderBy('char_inventory.created_at', 'asc')
 

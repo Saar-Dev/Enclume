@@ -8,20 +8,24 @@ export function useSidebarPendingActionsBadge(messages, isGm) {
   const prevEntityActionCountRef = useRef(0)
   const prevSellRequestCountRef    = useRef(0)
   const prevExchangeOfferCountRef  = useRef(0)
+  const prevRepairRequestCountRef  = useRef(0)
 
   useEffect(() => {
     if (!isGm) return
     const entityCount = messages.filter(m => m.type === 'entity_action').length
     const sellCount     = messages.filter(m => m.type === 'sell_request').length
     const exchangeCount = messages.filter(m => m.type === 'exchange_offer').length
+    const repairCount   = messages.filter(m => m.type === 'repair_request').length
     let delta = 0
     if (entityCount   > prevEntityActionCountRef.current)  delta += entityCount   - prevEntityActionCountRef.current
     if (sellCount     > prevSellRequestCountRef.current)   delta += sellCount     - prevSellRequestCountRef.current
     if (exchangeCount > prevExchangeOfferCountRef.current) delta += exchangeCount - prevExchangeOfferCountRef.current
+    if (repairCount   > prevRepairRequestCountRef.current) delta += repairCount   - prevRepairRequestCountRef.current
     if (delta > 0) setPendingActionCount(prev => prev + delta)
     prevEntityActionCountRef.current   = entityCount
     prevSellRequestCountRef.current    = sellCount
     prevExchangeOfferCountRef.current  = exchangeCount
+    prevRepairRequestCountRef.current  = repairCount
   }, [messages, isGm])
 
   return { pendingActionCount, setPendingActionCount }

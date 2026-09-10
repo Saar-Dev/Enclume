@@ -85,3 +85,11 @@ export async function fetchRepairPreview(characterId, itemId) {
   const res = await api.get(`/char-sheet/${characterId}/inventory/${itemId}/repair-preview`)
   return res.data
 }
+
+// PLAN_USURE&INTEGRITE.md §8 (L6c-B) — « Annuler ma demande » : l'échéance de réparation encore
+// vivante passe 'cancelled' (même logique que l'annulation d'une offre de revente). Le serveur émet
+// INVENTORY_UPDATED (repair_request_status → null) → pas d'upsert local ici.
+export async function cancelRepairRequest(characterId, itemId) {
+  const res = await api.post(`/char-sheet/${characterId}/inventory/${itemId}/repair-cancel`)
+  return res.data
+}

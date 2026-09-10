@@ -1,6 +1,7 @@
 import { styles } from './Sidebar.styles.js'
 import { IconDice } from './SidebarIcons.jsx'
 import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
+import RepairRequestCard from './RepairRequestCard.jsx'
 
 // Extrait de Sidebar.jsx (PLAN_CHAT.md §8.3, Phase 3d) — remplace la cascade if/else de rendu des
 // messages. Déplacement fidèle du JSX existant (comportement inchangé pour tous les types déjà en
@@ -15,7 +16,8 @@ import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
 //
 // ctx (dépendances non portées par le message lui-même, fournies par le composant appelant) :
 //   t, tCombat, isGm, animatingDiceId, breakdownPopoverMsgId, onOpenBreakdown,
-//   setPendingActionCount, onEntityActionResolve, onConnectorActionResolve, onOpenTrade, onOpenExchange
+//   setPendingActionCount, onEntityActionResolve, onConnectorActionResolve, onOpenTrade, onOpenExchange,
+//   onRepairDecision
 
 const formatTime = (iso) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 
@@ -439,6 +441,7 @@ function renderSystemPersisted(msg, ctx) {
 const registry = {
   entity_action: renderEntityAction,
   connector_action: renderConnectorAction,
+  repair_request: (msg, ctx) => <RepairRequestCard msg={msg} ctx={ctx} key={msg.id} />,
   sell_request: renderSellRequest,
   exchange_offer: renderExchangeOffer,
   declare_error: renderDeclareError,

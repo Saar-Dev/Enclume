@@ -15,6 +15,7 @@ import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { getRepairRequestsForGm, getRepairRollsForPlayer, getRepairSkillOptions } from '../lib/equipmentRepairReviewService.js'
+import * as inventoryService from '../services/inventoryService.js'
 import { resolveFall } from '../lib/fallDamageService.js'
 import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
 import { applyStunWithDuration } from '../lib/statusService.js'
@@ -529,7 +530,14 @@ router.post('/:id/game-echeances/:echeanceId/repair-decision', requireAuth, requ
       })
     }
 
-    req.app.get('io').to(req.params.id).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId: req.params.id })
+    const io = req.app.get('io')
+    io.to(req.params.id).emit(WS.EQUIPMENT_REPAIR_UPDATED, { campaignId: req.params.id })
+    // Rafraîchit l'objet côté client (repair_request_status → 'awaiting_player_roll' ou null après
+    // refus) : le visage joueur du pop-up d'ITG et le liseré de l'icône suivent (L6c-B).
+    if (echeance.payload?.itemId) {
+      const item = await inventoryService.getItemWithRef(echeance.payload.itemId)
+      if (item) io.to(req.params.id).emit(WS.INVENTORY_UPDATED, { characterId: item.character_id, item })
+    }
     res.json({ status: decision === 'reject' ? 'cancelled' : 'awaiting_player_roll' })
   } catch (err) { next(err) }
 })

@@ -16,6 +16,7 @@ import api from '../lib/api'
 import { useTokenSocket } from '../lib/useTokenSocket'
 import { useEntitySocket } from '../lib/useEntitySocket'
 import { useConnectorSocket } from '../lib/useConnectorSocket'
+import { useRepairRequestSocket } from '../lib/useRepairRequestSocket'
 import { useCombatSocket } from '../lib/useCombatSocket'
 import { useSessionSocket } from '../lib/useSessionSocket'
 import { useCharacterSocket } from '../lib/useCharacterSocket'
@@ -397,6 +398,8 @@ function SessionContent({ campaignId }) {
   useTokenSocket()
   useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBanner })
   useConnectorSocket()
+  // PLAN_USURE&INTEGRITE.md §8 (L6c-A) — cartes d'action « demande de réparation » dans le chat du MJ.
+  useRepairRequestSocket({ campaignId, isGm })
   // useCombatUIState AVANT useCombatSocket — handleModeReset passé comme onModeReset (P-R14-1)
   const {
     combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, targetRecap, combatCameraCenter,
@@ -572,6 +575,14 @@ function SessionContent({ campaignId }) {
   const handleConnectorActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
     socket?.emit(WS.CONNECTOR_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
   }, [socket])
+
+  // ─── Décision MJ sur une demande de réparation (carte de chat → route REST) ────────
+  // La carte est retirée par useRepairRequestSocket sur EQUIPMENT_REPAIR_UPDATED (statut serveur).
+  const handleRepairDecision = useCallback((echeanceId, decision, skillId) => {
+    api.post(`/campaigns/${campaignId}/game-echeances/${echeanceId}/repair-decision`, {
+      decision, ...(skillId ? { skillId } : null),
+    }).catch(err => console.error('[repair-decision]', err.message))
+  }, [campaignId])
 
   const handleTokenSetRotation = useCallback((tokenId, r) => {
     socket?.emit(WS.TOKEN_SET_ROTATION, { tokenId, r })
@@ -789,6 +800,7 @@ function SessionContent({ campaignId }) {
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
           onConnectorActionResolve={handleConnectorActionResolve}
+          onRepairDecision={handleRepairDecision}
           onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
           onOpenExchange={(ctx) => { setExchangeContext(ctx ?? null); setExchangeWindowOpen(true) }}
         />
