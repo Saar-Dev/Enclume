@@ -100,7 +100,12 @@ export async function requestGameTimeAdvance(campaignId, deltaMinutes) {
       return { pending: false, ...result }
     }
 
-    await trx('campaigns').where({ id: campaignId }).update({ pending_advance_delta_minutes: deltaMinutes })
+    // pending_advance_undo_log remis à null en même temps que l'ouverture de l'avance (ceinture-
+    // bretelles L6, 2026-09-10) : confirmPendingAdvance / cancelPendingAdvance le nettoient déjà en
+    // clôture, mais repartir explicitement d'un journal vide garantit qu'aucune entrée orpheline
+    // (bug, ou append futur mal gardé) ne se fait rejouer par une annulation de CETTE avance.
+    await trx('campaigns').where({ id: campaignId })
+      .update({ pending_advance_delta_minutes: deltaMinutes, pending_advance_undo_log: null })
     const ids = dueInteractive.map((e) => e.id)
     // pending_mj_review par défaut pour toutes — aucun consommateur actuel ne demande encore le
     // contournement "awaiting_player_roll direct" évoqué au plan (§8) ; à ajouter via le registre
@@ -131,8 +136,11 @@ export async function confirmPendingAdvance(campaignId) {
       throw new AppError(409, 'Aucune avance de temps en attente pour cette campagne')
     }
 
+    // `advance_driven` seulement (migration 334) : une échéance À LA DEMANDE (ex. equipment_repair,
+    // demande de réparation d'un joueur) est en `pending_mj_review` sans rapport avec cette avance —
+    // elle ne doit jamais empêcher le MJ de faire avancer le temps.
     const stillUnresolved = await trx('game_echeances')
-      .where({ campaign_id: campaignId })
+      .where({ campaign_id: campaignId, advance_driven: true })
       .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
       .select('id')
     if (stillUnresolved.length > 0) {
@@ -201,8 +209,12 @@ export async function cancelPendingAdvance(campaignId) {
       await replayUndoEntry(trx, entry)
     }
 
+    // `advance_driven` seulement (migration 334) : seules les échéances programmées ont été mises en
+    // revue PAR cette avance et doivent revenir à `active`. Une échéance À LA DEMANDE en
+    // `pending_mj_review` (demande de réparation) est indépendante de l'horloge — la repasser à
+    // `active` la sortirait de sa boîte de réception MJ et la rendrait balayable à tort.
     await trx('game_echeances')
-      .where({ campaign_id: campaignId })
+      .where({ campaign_id: campaignId, advance_driven: true })
       .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
       .update({ status: 'active' })
 

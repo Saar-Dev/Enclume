@@ -6,11 +6,14 @@ import { AppError } from './AppError.js'
 import db from '../db/knex.js'
 import { findEcheanceRegistryEntry } from '../../../shared/echeanceTypeRegistry.js'
 
-// interactive toujours résolu depuis le registre à la création — jamais fourni par l'appelant
-// (source unique, voir shared/echeanceTypeRegistry.js).
+// interactive / advance_driven toujours résolus depuis le registre à la création — jamais fournis
+// par l'appelant (source unique, voir shared/echeanceTypeRegistry.js).
+// `status` optionnel (défaut 'active') : une échéance PROGRAMMÉE naît 'active' et devient
+// 'pending_mj_review' quand l'horloge la franchit ; une échéance À LA DEMANDE (advanceDriven: false,
+// ex. equipment_repair) naît directement 'pending_mj_review' — l'appelant le passe explicitement.
 export async function createEcheance(trx, {
   campaignId, characterId, conditionType, payload = {},
-  nextDueMinutes, intervalMinutes = null, occurrencesRemaining = null,
+  nextDueMinutes, intervalMinutes = null, occurrencesRemaining = null, status = 'active',
 }) {
   const registryEntry = findEcheanceRegistryEntry(conditionType)
   if (!registryEntry) {
@@ -22,10 +25,12 @@ export async function createEcheance(trx, {
       character_id: characterId,
       condition_type: conditionType,
       interactive: registryEntry.interactive,
+      advance_driven: registryEntry.advanceDriven ?? true,
       payload,
       next_due_minutes: nextDueMinutes,
       interval_minutes: intervalMinutes,
       occurrences_remaining: occurrencesRemaining,
+      status,
     })
     .returning('*')
   return echeance
@@ -163,7 +168,12 @@ export async function resolveEcheanceNow(trx, echeanceId) {
   if (handlerResult.resolved === false) return { resolved: false }
 
   const undoEntries = handlerResult.undoEntries ?? []
-  if (undoEntries.length > 0) {
+  // Le journal d'annulation n'existe QUE pour défaire une avance d'horloge (cancelPendingAdvance).
+  // Une échéance À LA DEMANDE (advance_driven: false, ex. equipment_repair) est résolue hors de tout
+  // contexte d'avance : y écrire ses undoEntries polluerait le journal — une annulation d'avance
+  // ultérieure sans rapport rejouerait alors ces entrées et défairait la réparation (analyse à
+  // charge L6, 2026-09-10). Ses effets restent réversibles par la voie de son domaine (éditeur ITG).
+  if (undoEntries.length > 0 && echeance.advance_driven) {
     // Append atomique en une seule instruction SQL — jamais lire-puis-écrire en JS (analyse à charge
     // combinée des deux plans, 2026-07-30, point 10) : plusieurs joueurs peuvent répondre à des
     // échéances distinctes à quelques millisecondes d'écart, un lire-puis-écrire séparé perdrait

@@ -250,6 +250,54 @@ test('resolveEcheanceNow : résout, applique reschedule, append atomique de undo
   )
 })
 
+test('createEcheance : status optionnel + advance_driven dénormalisé depuis le registre', { skip }, async () => {
+  await withRegistryEntry(
+    { key: 'test_on_demand', interactive: true, advanceDriven: false, handler: async () => ({ resolved: true, reschedule: null, spawn: [], undoEntries: [] }) },
+    () => assert.rejects(db.transaction(async (trx) => {
+      const { campaign, character } = await createFixture(trx)
+      const echeance = await createEcheance(trx, {
+        campaignId: campaign.id, characterId: character.id, conditionType: 'test_on_demand',
+        nextDueMinutes: 0, status: 'pending_mj_review',
+      })
+      assert.equal(echeance.status, 'pending_mj_review', 'naît directement en revue MJ')
+      assert.equal(echeance.advance_driven, false, 'advance_driven résolu depuis registryEntry.advanceDriven')
+      assert.equal(echeance.interactive, true)
+      throw new Error('ROLLBACK_ECHEANCE_TEST')
+    }), /ROLLBACK_ECHEANCE_TEST/),
+  )
+})
+
+test('resolveEcheanceNow : une échéance À LA DEMANDE (advance_driven: false) ne pollue jamais pending_advance_undo_log', { skip }, async () => {
+  await withRegistryEntry(
+    {
+      key: 'test_on_demand_resolve',
+      interactive: true,
+      advanceDriven: false,
+      handler: async () => ({
+        resolved: true, reschedule: null, spawn: [],
+        undoEntries: [{ table: 'char_inventory', rowId: 'fake-id', previousValues: { integrity_current: 3 } }],
+      }),
+    },
+    () => assert.rejects(db.transaction(async (trx) => {
+      const { campaign, character } = await createFixture(trx)
+      const echeance = await createEcheance(trx, {
+        campaignId: campaign.id, characterId: character.id, conditionType: 'test_on_demand_resolve',
+        nextDueMinutes: 0, status: 'pending_mj_review',
+      })
+
+      const result = await resolveEcheanceNow(trx, echeance.id)
+      assert.equal(result.resolved, true)
+      assert.equal((await trx('game_echeances').where({ id: echeance.id }).first()).status, 'completed')
+
+      // Le handler a bien renvoyé des undoEntries, mais advance_driven: false → RIEN dans le journal :
+      // une annulation d'avance ultérieure sans rapport ne doit jamais défaire cette résolution.
+      const campaignAfter = await trx('campaigns').where({ id: campaign.id }).first()
+      assert.equal(campaignAfter.pending_advance_undo_log, null)
+      throw new Error('ROLLBACK_ECHEANCE_TEST')
+    }), /ROLLBACK_ECHEANCE_TEST/),
+  )
+})
+
 test('resolveEcheanceNow : refuse une échéance qui n\'est pas en attente de résolution', { skip }, async () => {
   await withRegistryEntry(
     { key: 'test_not_pending', interactive: true, handler: async () => ({ resolved: true, reschedule: null, spawn: [], undoEntries: [] }) },

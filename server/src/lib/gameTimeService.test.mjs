@@ -200,6 +200,77 @@ test('requestGameTimeAdvance : échéance interactive due -> pose l\'attente, n\
   )
 })
 
+// ─── advance_driven : les échéances À LA DEMANDE (ex. equipment_repair) sont isolées du flux d'horloge (L6, migration 334) ───
+
+test('advance_driven: false — une échéance en revue MJ ne bloque pas confirmPendingAdvance et n\'est pas touchée', { skip }, async () => {
+  await withRegistryEntry(
+    { key: 'test_ad_wound', interactive: true, handler: async () => ({ resolved: true, reschedule: null, spawn: [], undoEntries: [] }) },
+    () => withRegistryEntry(
+      { key: 'test_ad_repair', interactive: true, advanceDriven: false, handler: async () => ({ resolved: true, reschedule: null, spawn: [], undoEntries: [] }) },
+      async () => {
+        const fixture = await createRealFixture({ displayed: 1000, resolved: 1000 })
+        try {
+          const wound = await createEcheance(db, {
+            campaignId: fixture.campaign.id, characterId: fixture.character.id,
+            conditionType: 'test_ad_wound', nextDueMinutes: 1200,
+          })
+          // Demande de réparation ad-hoc : naît directement en revue MJ, sans rapport avec l'horloge.
+          const repair = await createEcheance(db, {
+            campaignId: fixture.campaign.id, characterId: fixture.character.id,
+            conditionType: 'test_ad_repair', nextDueMinutes: 0, status: 'pending_mj_review',
+          })
+
+          await requestGameTimeAdvance(fixture.campaign.id, 500) // wound devient pending_mj_review
+
+          // Refusé : c'est `wound` (advance_driven) qui n'est pas résolue — jamais `repair`.
+          await assert.rejects(confirmPendingAdvance(fixture.campaign.id), (e) => e instanceof AppError && e.statusCode === 409)
+
+          await db.transaction((trx) => resolveEcheanceNow(trx, wound.id))
+
+          // Maintenant confirmé : la demande de réparation en revue MJ ne compte PAS.
+          const result = await confirmPendingAdvance(fixture.campaign.id)
+          assert.ok(result, 'avance confirmée malgré la réparation en attente')
+
+          assert.equal((await db('game_echeances').where({ id: repair.id }).first()).status, 'pending_mj_review', 'la réparation reste intacte dans la boîte MJ')
+          assert.equal((await getCampaign(fixture.campaign.id)).game_time_minutes, 1500)
+        } finally {
+          await cleanup(fixture)
+        }
+      },
+    ),
+  )
+})
+
+test('advance_driven: false — cancelPendingAdvance ne repasse pas la réparation à active', { skip }, async () => {
+  await withRegistryEntry(
+    { key: 'test_ad_wound2', interactive: true, handler: async () => ({ resolved: false }) },
+    () => withRegistryEntry(
+      { key: 'test_ad_repair2', interactive: true, advanceDriven: false, handler: async () => ({ resolved: true, reschedule: null, spawn: [], undoEntries: [] }) },
+      async () => {
+        const fixture = await createRealFixture({ displayed: 1000, resolved: 1000 })
+        try {
+          const wound = await createEcheance(db, {
+            campaignId: fixture.campaign.id, characterId: fixture.character.id,
+            conditionType: 'test_ad_wound2', nextDueMinutes: 1200,
+          })
+          const repair = await createEcheance(db, {
+            campaignId: fixture.campaign.id, characterId: fixture.character.id,
+            conditionType: 'test_ad_repair2', nextDueMinutes: 0, status: 'pending_mj_review',
+          })
+
+          await requestGameTimeAdvance(fixture.campaign.id, 500)
+          await cancelPendingAdvance(fixture.campaign.id)
+
+          assert.equal((await db('game_echeances').where({ id: wound.id }).first()).status, 'active', 'la blessure revient à active')
+          assert.equal((await db('game_echeances').where({ id: repair.id }).first()).status, 'pending_mj_review', 'la réparation n\'est pas clobberée')
+        } finally {
+          await cleanup(fixture)
+        }
+      },
+    ),
+  )
+})
+
 // ─── confirmPendingAdvance ───────────────────────────────────────────────────────────────────────
 
 test('confirmPendingAdvance : refuse sans avance en attente', { skip }, async () => {
