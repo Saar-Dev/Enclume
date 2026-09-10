@@ -1550,6 +1550,176 @@ le code + un ticket**.
   physique : `[à confirmer]`, non tranché par Saar, reste sur `1` par défaut. Suivi côté chantier
   grenades, pas ici.
 
+### 10.9 Exemple travaillé — le contrat instancié
+
+> But : prouver que le contrat §10.3 est **complet** (tout s'exprime) **et saisissable** (un
+> préréglage = une entrée de données). Référence à copier pour l'agent qui code Z0.
+> **Formes indicatives** — les noms de champs exacts se figent en écrivant Z0.
+
+### Forme d'une entrée de `dangerCatalog.js`
+
+```
+{
+  key: 'feu:grand',
+  label: 'Grand feu',              // i18nKey en vrai
+  category: 'feu',                 // groupe de boutons dans l'UI (§4.10)
+  tags: ['hazard:fire'],           // pour attenuations + zoneInteractionRules
+  icon: 'fire',
+  builtin: true,
+
+  durationPolicy: 'permanent',     // permanent | timerFixed | timerDice | conditional | oneShot
+  durationParams: {},              // ex. conditional -> { condition: 'aération' }
+  stackingPolicy: 'max',
+
+  modifiers: { movementMultiplier: 1, sightOpacity: 0.12 },   // passif géométrie/ambiance (existant)
+
+  effects: [ <ligne d'effet>, ... ],
+  attenuations: [ <règle>, ... ],
+  chaining: [],                    // v1 : vide
+
+  corrodes: [],                    // acide v2
+
+  source: "FATIGUE&DOMMAGES.md §Feu — grand feu : 2D10/Tour sur 1D3 Localisations",
+}
+```
+
+**Ligne d'effet** — `type` + `phase` + params du type + champs transverses :
+```
+{
+  type: 'damage',                  // registre §10.3-A
+  phase: 'onTurn',                 // onEnter | onExit | onTraverse | onTurn
+  formula: '2d10',
+  puissanceMode: 'multiply',       // comment `puissance` scale cette ligne : add | multiply | none
+  locations: '1d3',                // number | formule de dés
+  locationMode: 'random',          // random | exposed | all
+  forcedLocation: null,
+  damageType: 'fire',
+  armorFactor: 1,
+  escalation: null,                // | { perTurn: 2, cap: null }
+  remanence: 'none',               // none | conditional | decay | fixed
+  remanenceParams: {},
+}
+```
+
+### Quatre entrées complètes (v1 entièrement résolubles)
+
+```
+// ─── feu:grand ── FATIGUE&DOMMAGES.md §Feu
+{ key:'feu:grand', category:'feu', tags:['hazard:fire'],
+  durationPolicy:'permanent', stackingPolicy:'max',
+  modifiers:{ movementMultiplier:1, sightOpacity:0.12 },
+  effects:[
+    { type:'damage', phase:'onTurn', formula:'2d10', puissanceMode:'multiply',
+      locations:'1d3', locationMode:'random', damageType:'fire', armorFactor:1,
+      remanence:'none' } ],
+  attenuations:[ { by:'protectionKey', key:'hazard:fire', effect:'arbitrate' } ],
+  source:"grand feu : 2D10/Tour, 1D3 Localisations" }
+
+// ─── feu:brasier ── mort garantie (Saar B3)
+{ key:'feu:brasier', category:'feu', tags:['hazard:fire'],
+  durationPolicy:'permanent', stackingPolicy:'max',
+  effects:[
+    { type:'damage', phase:'onTurn', formula:'3d10', puissanceMode:'multiply',
+      locations:0, locationMode:'all', damageType:'fire', armorFactor:1, remanence:'none' } ],
+  attenuations:[ { by:'protectionKey', key:'hazard:fire', effect:'arbitrate' } ],
+  source:"brasier : 3D10/Tour ; Localisations non précisées RAW -> toutes (Saar)" }
+
+// ─── acide:capsule ── FATIGUE&DOMMAGES.md §Acide + catalogue (1D10)
+{ key:'acide:capsule', category:'acide', tags:['hazard:acid'],
+  durationPolicy:'permanent', stackingPolicy:'max',
+  corrodes:['chair'],             // 'métal' ajoutable en v2 (résolveur corrodeEquipment)
+  effects:[
+    { type:'damage', phase:'onTurn', formula:'1d10', puissanceMode:'add',
+      locations:1, locationMode:'random', damageType:'acid', armorFactor:1,
+      remanence:'fixed', remanenceParams:{ turns:'1d6', earlyStop:'neutralisant' } } ],
+  source:"acide : dégâts progressifs comme le feu, persistance 1D6 Tours à la sortie" }
+
+// ─── gaz:irritant ── Livre de Base §Gaz irritants (p.310)
+{ key:'gaz:irritant', category:'gaz', tags:['atmosphere:gas','atmosphere:gas:irritant'],
+  durationPolicy:'conditional', durationParams:{ condition:'aération' }, stackingPolicy:'max',
+  modifiers:{ sightOpacity:0.2 },
+  effects:[
+    { type:'modifier', phase:'onTurn', target:'actions', value:-3, puissanceMode:'add',
+      remanence:'decay', remanenceParams:{ perTurn:1 } },
+    // ci-dessous = v2, présent dans le catalogue, no-op + log jusqu'au résolveur `test`
+    { type:'test', phase:'onTurn', skill:'CON', difficulty:0, puissanceMode:'add',
+      onFail:{ type:'modifier', target:'actions', valueFromFailMargin:true, cumulative:true } } ],
+  attenuations:[
+    { by:'protectionKey', key:'atmosphere:gas', effect:'immune' },
+    { by:'behavior', tag:'holdBreath', effect:'halve', cost:'souffle' } ],
+  source:"malus de base -3 ; Test CON/Tour -> malus supplémentaire cumulatif ; -1/Tour hors zone" }
+
+// ─── gaz:décomposant ── Livre de Base §Gaz décomposants (p.310)
+{ key:'gaz:décomposant', category:'gaz', tags:['atmosphere:gas','atmosphere:gas:decomposing'],
+  durationPolicy:'conditional', durationParams:{ condition:'aération' }, stackingPolicy:'max',
+  effects:[
+    { type:'damage', phase:'onTurn', formula:'1d6', puissanceMode:'add',
+      locations:1, locationMode:'random', damageType:'fire',   // "blessures comme le feu"
+      escalation:{ perTurn:2, cap:null }, remanence:'decay', remanenceParams:{ perTurn:1 } } ],
+  attenuations:[ { by:'protectionKey', key:'atmosphere:gas', effect:'immune' } ],
+  source:"1D6/Tour, +2/Tour en zone, -1/Tour hors zone, blessures comme le feu" }
+```
+
+### Une entrée avec des lignes v2 (montre la résolution incrémentale)
+
+```
+// ─── gaz:vésicant ── Livre de Base §Gaz vésicants
+{ key:'gaz:vésicant', category:'gaz', tags:['atmosphere:gas','atmosphere:gas:blister'],
+  durationPolicy:'conditional', stackingPolicy:'max',
+  effects:[
+    { type:'damage', phase:'onTurn', formula:'1d6', locations:'1d3', locationMode:'random',
+      damageType:'fire', escalation:{ perTurn:1 },
+      remanence:'conditional', remanenceParams:{ label:'jusqu\'à solution neutralisante' } },  // v1 OK
+    { type:'status', phase:'onTurn', statusCode:'quasi-aveugle', remanence:'conditional' },     // v1 OK
+    { type:'modifier', phase:'onTurn', target:'successChances', mode:'halve' },                 // v2 (variante modifier)
+    { type:'chance', phase:'onCriticalWound', location:'tête',
+      onFail:{ type:'statLoss', stat:'vue', permanent:true } } ],                               // v2 (résolveur `chance`)
+  attenuations:[
+    { by:'protectionKey', key:'atmosphere:gas', effect:'immune',  when:{ degree:'full' } },     // NBC/pressurisé
+    { by:'protectionKey', key:'atmosphere:gas', effect:'partial', scope:['peau'],
+      when:{ degree:'partial' } } ] }                                                           // masque = peau seule
+```
+→ En v1, poser une zone `gaz:vésicant` : les lignes `damage` et `status` s'appliquent ; `modifier`
+(variante) et `chance` **loguent « type non résolu (v2) »**. La définition est **correcte et sourcée**
+dès Z0.
+
+### Forme d'une instance (ce que produit le MJ ou la grenade)
+
+```
+{ id, battlemapId,
+  definitionKey: 'feu:grand',
+  geometry: { mode:'volume', shape:'box', volume:{min:{x,y,z},max:{x,y,z}}, wallAware:false },
+  puissance: 0,                    // curseur MJ, défaut 0 = neutre (§10.3-H)
+  durationOverride: null,          // la grenade pose { policy:'timerDice', turns:'2d6' }
+  metadata: {},                    // "Personnalisé" : formulaOverride, etc.
+  source: { kind:'mj' },           // mj | grenade | flamethrower
+  state: 'active' }
+```
+
+### Flux « grenade incendiaire » de bout en bout
+
+1. **Annonce** (Tour N) — le joueur déclare `grenade incendiaire` sur un point (identique à la frag).
+2. **Résolution du lancer** (Tour N) — Test de Coordination COO + dispersion `1D6` à l'échec →
+   point d'impact final (réutilise `resolveGrenadeThrow` / `circleGrenade.js`, chantier grenades).
+3. Une **entrée d'échelle autonome** est planifiée pour **Tour N+1** au rang d'Ini du lanceur
+   (`resolution_snapshot.autoResolve`, comme la frag).
+4. **Tour N+1**, à ce rang — le step autonome appelle
+   `createWorldEffectInstance({ definitionKey:'feu:grand', geometry:{ … centre=impact,
+   rayon=aoe_profile.radiusM (→ AABB) }, durationOverride:{ policy:'timerDice', turns:'2d6' },
+   source:{ kind:'grenade' } })` + marqueur 3D.
+5. **À partir de `startResolutionPhase` de Tour N+2** — le balayage de présence trouve les tokens
+   dans le volume → pose une condition `token_status` → `resolveActiveEffects` résout la ligne
+   `damage` (`2D10`, `1D3` Loc.) → `COMBAT_ATTACK_RESULT`.
+6. **`endTurn`** décrémente le timer `2D6` ; à 0 → `state:'expired'`, plus de condition posée,
+   `WORLD_RUNTIME_UPDATED`.
+
+### Mapping UI (§4.10)
+
+Chaque `key` de catalogue = **un bouton préréglage** sous sa `category`. `feu:grand` → bouton
+« Grand feu », clic → instance avec tous les champs pré-remplis, il ne reste que la géométrie.
+« Personnalisé » → formulaire qui produit une **définition custom** (`world_effect_definitions`) +
+son instance.
+
 ## 11. Historique
 
 - **2026-09-09** — Trouvaille pendant le chantier grenades 3-bis (`docs/JOURNAL8.md`,
