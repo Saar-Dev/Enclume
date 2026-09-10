@@ -1515,39 +1515,40 @@ le code + un ticket**.
   `protections['atmosphere:gas']` = `{degree:'partial', scope:['peau'], except:['neurotoxique']}`
   (masque) · `{degree:'full'}` (NBC / pressurisé). Fait dans l'incrément `protections` (§10.5).
 
-#### E. Souffle (v2 — flaggé, pas bloquant pour le noyau)
+#### E. Souffle (v2 — flaggé, pas bloquant pour le noyau) — **TRANCHÉ (Saar, 2026-09-10)**
 
-- **E1.** « Rythme de perte selon l'**activité de l'occupant** » (immobile −1 … combat −4). En
-  combat, un token est-il **toujours « combat » (−4)**, ou dérivé de l'action déclarée (se déplacer
-  prudemment = modérée −2) ? → **[DÉFAUT : −4/Tour en combat, point ; l'action déclarée n'entre pas
-  en compte en v2]**.
-- **E2.** « Surpris → Souffle ÷ 2 » se branche sur le statut `surprised` existant. → ok ?
+- **E1. ✅ RÉSOLU** — activité **dérivée** (la donnée existe) :
+  `arme au clair ? −4 : (déplacement ce Tour ? mapping gait [lent→−2, rapide/max→−3] : −1)`.
+  Le « mode combat » du moteur = compteur de Tours, pas un indicateur d'activité.
+  **À vérifier au moment de coder** : le moteur distingue-t-il « arme dégainée » de « arme
+  possédée » ? Sinon proxy = « a déclaré une action de combat ce Tour ». L'agent qui code E1
+  tranche avec le code sous les yeux.
+- **E2. ✅ RÉSOLU** — `surprised` → Souffle max effectif = `calcSouffle` ÷ 2.
 
-#### F. Conventions techniques (Claude tranche sauf objection)
+#### F. Conventions techniques — **TRANCHÉ (Saar « on teste comme ça, on modifiera si besoin »)**
 
-- **F1.** `stackingPolicy` (patron GAS, 4 valeurs) : v1 livre `'max'` (le pire l'emporte, comme
-  `effectMovementFactorsForSegment` aujourd'hui) + `'independent'` (instances séparées). `'stackCount'`
-  et `'refreshDuration'` = déclarés, non implémentés v1.
-- **F2.** `chaining` : forme `{ engendre: <key>, délai: <Tours>, condition: <tag> | null, géométrie:
-  'même' | 'grandit_ici' }`. v1 : **déclaré, non résolu** (aucun chaînage en v1).
-- **F3.** `zoneInteractionRules` : v1 livre **0 règle** (le MJ arbitre feu+eau à la main). La forme
-  `{ whenTag, meetsTag, action }` existe dans le contrat.
-- **F4.** Règle de recouvrement (§4.9) : v1 = **`centreDedans` seul**. Conséquence assumée : **le
-  geyser de flamme ultra-localisé ne « mord » que si le token a son centre dans le volume**. →
-  acceptable en v1, ou on livre aussi `toutRecouvrement` ?
-- **F5.** `remanence: 'conditional'` en v1 = le statut **persiste à la sortie + le MJ le retire à la
-  main** (`remanenceCondition` = libellé d'affichage seul ; extinction auto par immersion/neutralisant
-  = v2). → ok ?
-- **F6.** Milieu (sous-marin / 0G) porté par la **zone** ou la **salle** (`PLAN_ENVIRONNEMENT_
-  MILIEUX`) — v2, mais direction : **défaut sur la salle, override par zone** (patron PF2e). À acter
-  dans les deux docs quand `skillOverride` arrivera.
+- **F1.** `stackingPolicy` : v1 = **`'max'`** (le pire l'emporte — **déjà** le comportement de
+  `burning` : `applyModStatus` écrase + `turnsFromNow` fait `max`) + `'independent'`. `'stackCount'` /
+  `'refreshDuration'` = déclarés, non résolus v1.
+- **F2.** `chaining` : forme `{ engendre, délai, condition, géométrie }` dans le contrat ; **0
+  résolveur** v1.
+- **F3.** `zoneInteractionRules` : **0 règle** v1 (Polaris n'a pas de « les surfaces interagissent » —
+  c'est du DOS2 ; le MJ arbitre). Forme `{ whenTag, meetsTag, action }` dans le contrat.
+- **F4. ✅ RÉSOLU (Saar)** — **`centreDedans` seul en v1**. Le geyser de flamme ne mord que si le
+  centre du token est dans le volume ; l'effleurer ne fait rien. `toutRecouvrement` = v2 si le jeu
+  réel le réclame.
+- **F5.** `remanence: 'conditional'` v1 = persiste à la sortie + **retrait MJ manuel** ;
+  `remanenceCondition` = libellé d'affichage. Extinction auto (immersion / neutralisant) = v2.
+- **F6.** Milieu (sous-marin / 0G) : v2 ; direction **défaut salle + override zone** (patron PF2e) ; à
+  acter dans `PLAN_ENVIRONNEMENT_MILIEUX` quand `skillOverride` arrivera.
 
 #### G. Coordination inter-chantiers
 
-- **G1.** Z3 / Z5 **dé-gèlent le chantier grenades** (`circleGrenade.js`). → mettre à jour
-  `PLAN_GRENADES.md` §6 au démarrage de Z3. ok ?
-- **G2.** Grenade à énergie — `armorReductionFactor: 1` par défaut (champ d'énergie ↔ armure
-  physique, RAW muet) — déjà noté, à confirmer avec le reste.
+- **G1.** Z3 / Z5 **dé-gèlent le chantier grenades** — mettre à jour `PLAN_GRENADES.md` §6 au
+  démarrage de Z3.
+- **G2.** *(aparté hors zones)* Grenade à énergie — `armorFactor` du champ d'énergie vs armure
+  physique : `[à confirmer]`, non tranché par Saar, reste sur `1` par défaut. Suivi côté chantier
+  grenades, pas ici.
 
 ## 11. Historique
 
