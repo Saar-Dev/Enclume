@@ -1032,6 +1032,13 @@ Convention :
   text-shadow: 0 0 3px var(--bg-app), 0 0 3px var(--bg-app);
 }
 .itg-icon-wrap.itg-panne-simple .itg-bang { color: var(--color-warning); }
+/* Liseré bleu discret : une demande de réparation est en cours pour cet objet
+   (repair_request_status ∈ {pending_mj_review, awaiting_player_roll}, L6c-C). */
+.itg-icon-wrap.itg-repair-pending {
+  outline: 1.5px solid var(--color-primary, #5b8dee);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
 
 /* ── .itg-pop — fenêtre d'Intégrité ancrée à l'icône (IntegrityPopover, L6c-B) ──────
    Patron visuel = SkillInfoPopover / autocomplétion /t (fenêtre flottante sombre).

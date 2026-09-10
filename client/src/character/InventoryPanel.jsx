@@ -582,10 +582,11 @@ function IntegritySegment({ item, onOpen }) {
   const tier = hasItg ? getIntegrityTier(item.integrity_current) : null
   const modifier = hasItg ? getIntegrityModifier(item.integrity_current) : null
   const broken = item.malfunction_severity != null
+  const repairPending = item.repair_request_status != null
   const tierKey = tier?.key ?? null
   const tierLabel = tierKey ? t(`inventoryPanel.integrity.tier.${tierKey}`) : null
   const fractionSuffix = hasItg ? ` (${item.integrity_current}/${item.integrity_max})` : ''
-  const tooltip = broken
+  const baseTooltip = broken
     ? (item.malfunction_severity === 'critical'
         ? t('inventoryPanel.integrity.atelierTooltip')
         : t('inventoryPanel.integrity.panneTooltip')) + fractionSuffix
@@ -596,6 +597,9 @@ function IntegritySegment({ item, onOpen }) {
         : modifier === 0
           ? t('inventoryPanel.integrity.modifierNone', { tier: tierLabel })
           : t('inventoryPanel.integrity.modifierTooltip', { tier: tierLabel, modifier: modifier > 0 ? `+${modifier}` : `${modifier}` })
+  const tooltip = repairPending
+    ? `${baseTooltip} · ${t('inventoryPanel.integrity.repairPendingTooltip')}`
+    : baseTooltip
 
   // Couleur du pictogramme : le palier si l'ITG est connue et l'objet fonctionnel, blanc sinon
   // (non définie OU en panne — Saar 2026-09-09).
@@ -604,6 +608,7 @@ function IntegritySegment({ item, onOpen }) {
     'itg-icon-wrap', 'has-tooltip', 'itg-editable',
     broken ? 'itg-broken' : '',
     broken && item.malfunction_severity === 'simple' ? 'itg-panne-simple' : '',
+    repairPending ? 'itg-repair-pending' : '',
   ].filter(Boolean).join(' ')
 
   return (

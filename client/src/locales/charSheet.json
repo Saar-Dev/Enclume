@@ -123,6 +123,7 @@
       "unusableTooltip": "Hors d'usage — inutilisable",
       "panneTooltip": "En panne — réparation requise",
       "atelierTooltip": "Panne critique — réparation en atelier",
+      "repairPendingTooltip": "Demande de réparation en cours",
       "editCurrent": "Courante",
       "editMax": "Max",
       "rollOccasion": "Occasion",

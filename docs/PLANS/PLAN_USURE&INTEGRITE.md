@@ -553,10 +553,13 @@ L4 rend le palier lisible sur chaque item.
 >   retire l'éditeur inline **et** le bouton 🔧 adjacent ; visage MJ (parité L4/L7 stricte + fix Usage
 >   intensif + presets paliers) + visage joueur (`repair-preview`, `[Réparer soi-même]`, `[Annuler]`) ;
 >   route `repair-cancel` ; CSS classes neuves ; i18n.
-> - **L6c-C — icône statut** : migration index partiel `game_echeances` ; `repair_request_status` aux
->   SELECT `getInventory`/`getItemWithRef` ; `INVENTORY_UPDATED` (item frais) sur les 3 routes de
->   réparation (`repair-request`/`repair-decision`/`repair-cancel` + socket roll) ; classe
->   `itg-repair-pending` (liseré bleu) + infobulle ; reset auto.
+> - **L6c-C — icône statut — FAIT (⚠️ liseré à confirmer visuellement).** Migration **335** (index
+>   partiel `game_echeances ((payload->>'itemId')) WHERE condition_type = 'equipment_repair'`, appliquée
+>   par nodemon, index vérifié) ; `IntegritySegment` : classe `itg-repair-pending` (liseré bleu
+>   `--color-primary`, `index.css`) + suffixe d'infobulle `repairPendingTooltip` quand
+>   `item.repair_request_status != null`. Le `repair_request_status` aux SELECT + les émissions
+>   `INVENTORY_UPDATED` ont été livrés en L6c-B (leur premier consommateur). Reset auto : à la
+>   résolution/refus/annulation le statut repasse `null` → l'émission `INVENTORY_UPDATED` retire le liseré.
 >
 > ---
 > **[ARCHIVE] Plan L6c corrigé après 2ᵉ analyse à charge (2026-09-10) — superseded par le replan ci-dessus :**
