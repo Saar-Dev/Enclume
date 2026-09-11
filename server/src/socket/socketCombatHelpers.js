@@ -1,6 +1,6 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
-import { parseDice } from '../lib/diceParser.js'
+import { parseDice, rollDamageFormula } from '../lib/diceParser.js'
 import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
@@ -48,8 +48,35 @@ import {
 import {
   advanceTimeline, broadcastCurrentSubPhase, pickNextTimelineStep,
   pickNextObligatoryDelayed, triggerDelayedPass, computeMultiAttackMalus,
+  combatTimers, combatPreviews,
 } from './combatTurnEngine.js'
+import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
 
+// flushDeferredEmissions — variante de `flushEmissions` (socketCombatResolution.js) pour un
+// contexte SANS `socket` vivant (résolution reprise depuis SITE_HANDLERS après un choix Chance
+// différé, PLAN_CHANCE.md L3e-4). Une entrée `to:'socket'` cible ici le socket courant du joueur
+// (`userId`) retrouvé par recherche dans la room — patron déjà établi (`socketEntity.js`,
+// `s.data.userId`), plus robuste qu'un `socket.id` figé qui deviendrait invalide en cas de
+// reconnexion pendant l'attente. Skip silencieux si le joueur n'a aucun socket connecté (même
+// esprit que `flushEmissions` avec un `socket` null) — jamais un crash. `to:'user'`/`to:'room'`
+// suivent le même patron que `flushEmissions`. Exporté pour socketCombatExo.js (et les futurs
+// sites de socketCombatHelpers.js lui-même).
+export async function flushDeferredEmissions(io, campaignId, userId, emissions) {
+  const needsTarget = emissions.some(e => e.to === 'socket' || e.to === 'user')
+  const roomSockets = needsTarget ? await io.in(campaignId).fetchSockets() : []
+  for (const e of emissions) {
+    if (e.to === 'room') {
+      io.to(campaignId).emit(e.event, e.data)
+    } else if (e.to === 'socket') {
+      const s = roomSockets.find(sock => sock.data.userId === userId)
+      if (s) s.emit(e.event, e.data)
+    } else if (e.to === 'user') {
+      const s = roomSockets.find(sock => sock.data.userId === e.userId)
+      if (s) s.emit(e.event, e.data)
+      else if (e.fallback === 'room') io.to(campaignId).emit(e.event, e.data)
+    }
+  }
+}
 
 // ─── Breakdown jets de dé — labels d'affichage (FR serveur, dette i18n séparée) ─
 // Les tables de VALEURS (situation Tir + CaC, taille, portée) vivent dans
@@ -498,7 +525,10 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       if (weaponInvId && !effectiveDamage) {
         console.warn(`[WS] confirmDamage — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
       }
-      const rolled = effectiveDamage ? null : await parseDice(formula.replace(/\s/g, ''))
+      // rollDamageFormula (pas parseDice brut) — formule stockée peut être '' (tireur exo/drone à
+      // Choc pur, correctif EXO-CHOC-PUR-TIR-BLOQUE ; même repli déjà valable pour une arme humanoïde
+      // Choc pur désequipée entre Déclaration et Confirmation, ex. Flex).
+      const rolled = effectiveDamage ? null : await rollDamageFormula(formula.replace(/\s/g, ''))
       dmgRolls = effectiveDamage ? effectiveDamage.rolls : rolled.rolls
       dmgSeed  = effectiveDamage ? dmgRolls.reduce((a, b) => a ^ b, 0) : rolled.seed
       rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
@@ -1929,35 +1959,111 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — même règle que tout Test de
   // combat en Résolution (omis puis corrigé en analyse à charge, PLAN_EXOARMURE.md §9.2).
   // targetTokenId:null — Test sans adversaire, champ purement descriptif (vérifié catastropheService.js).
-  await maybeTriggerCatastrophe(io, campaignId, tokenId, outcome.catastropheRisk, {
+  // Mécanisme indépendant du choix Chance ci-dessous (conséquence narrative MJ, pas la régénération
+  // de Chance) — reste appelé inconditionnellement, y compris quand une Catastrophe ouvre un choix.
+  // Retour capturé (id de la ligne pending_catastrophes) pour que le client puisse apparier les deux
+  // cartes MJ en une seule (patron unifié, PLAN_CHANCE.md L3e-4, retour Saar 2026-09-11 : "aucun
+  // intérêt d'avoir deux fenêtres différentes").
+  const pendingCatastrophe = await maybeTriggerCatastrophe(io, campaignId, tokenId, outcome.catastropheRisk, {
     site: 'exo_stand_up', actorTokenId: tokenId, targetTokenId: null,
   })
 
-  // Échec : state_position reste 'prone' (déjà sa valeur) — aucune écriture. Rien d'autre ne
-  // s'exécute ce Tour, garanti par l'exclusivité de la déclaration (Annonce, pas ici).
-  if (isSuccess && targetPosition) {
-    const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first()
-    await db.transaction(async (trx) => {
-      await trx('combat_roster')
-        .where({ campaign_id: campaignId, token_id: tokenId })
-        .update({ state_position: targetPosition, updated_at: trx.fn.now() })
-      // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3) — même patron que
-      // socketCombatAnnouncement.js/socketCombatState.js, weapon inchangé mais transmis pour que le
-      // contrôle de cohérence shadow reste exact (il compare position ET weapon ensemble).
-      await setCharacterState(trx, tokenId, 'position', targetPosition)
-      await shadowCheckCharacterState(trx, tokenId, { position: targetPosition, weapon: rosterEntry?.state_weapon })
+  // Choix Chance posé AVANT la résolution de l'issue (décision Saar 2026-09-11, PLAN_CHANCE.md §5)
+  // — DICE_RESULT et maybeTriggerCatastrophe restent immédiats (comme convenu, mêmes deux
+  // mécanismes déjà émis avant tout branchement), seule l'écriture state_position (dépendante de
+  // isSuccess) est différée. `suspend: true` bloque advanceTimeline() côté appelant
+  // (socketCombatResolution.js) — pas de nouvelle sous-phase FSM : le choix a déjà son propre
+  // timeout (L3e-1), contrairement à AWAITING_DAMAGE qui n'en a pas.
+  if (outcome.catastropheRisk) {
+    await openChanceChoice(io, campaignId, pilot.id, {
+      testLabel: "Manœuvre d'armure",
+      site: 'exo_stand_up',
+      linkedCatastropheId: pendingCatastrophe?.id ?? null,
+      context: {
+        tokenId, targetPosition,
+        exoCharacterName: exoCharacter.name ?? 'Exo-armure',
+        skillTotal: ctx.skillTotal, mastery: ctx.mastery,
+        categoryLabel: `Catégorie ${exoSheet.category}`, categoryMod,
+      },
     })
-    // COMBAT_ROSTER_UPDATED (pas d'attente du prochain snapshot complet, endTurn) — même mécanisme
-    // que COMBAT_INIT_STATE (socketCombatState.js) pour une transition de state_position hors du
-    // flux d'Annonce standard : sans lui, les autres clients ne verraient la position à jour qu'à la
-    // fin du Tour.
-    const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
-    const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
-    emissions.push({ to: 'room', event: WS.COMBAT_ROSTER_UPDATED, data: { roster: broadcastRoster } })
+    return { suspend: true, emissions }
   }
 
+  await finalizeExoStandUp(io, campaignId, { tokenId, targetPosition, isSuccess })
   return { suspend: false, emissions }
 }
+
+// finalizeExoStandUp — écrit state_position si succès (RAW : échec = reste à terre, aucune
+// écriture). Appelée immédiatement (pas de Catastrophe) ou depuis SITE_HANDLERS.exo_stand_up
+// (choix Chance résolu, PLAN_CHANCE.md L3e-4a) — UNE SEULE implémentation, jamais dupliquée.
+// N'appelle jamais advanceTimeline elle-même : le chemin immédiat le fait déjà via le shell
+// socketCombatResolution.js (gardé par `suspend`), le chemin différé le fait explicitement dans
+// finishExoStandUpChoice après cet appel — l'appeler ici doublerait l'avancement de l'échelle sur
+// le chemin immédiat.
+async function finalizeExoStandUp(io, campaignId, { tokenId, targetPosition, isSuccess }) {
+  if (!isSuccess || !targetPosition) return
+  const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first()
+  await db.transaction(async (trx) => {
+    await trx('combat_roster')
+      .where({ campaign_id: campaignId, token_id: tokenId })
+      .update({ state_position: targetPosition, updated_at: trx.fn.now() })
+    await setCharacterState(trx, tokenId, 'position', targetPosition)
+    await shadowCheckCharacterState(trx, tokenId, { position: targetPosition, weapon: rosterEntry?.state_weapon })
+  })
+  const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
+  const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
+  io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
+}
+
+// finishExoStandUpChoice — SITE_HANDLERS.exo_stand_up (PLAN_CHANCE.md L3e-4a). RAW : 'gain_point'
+// et le timeout (choice=null) gardent le jet original — toujours un échec ici puisque
+// catastropheRisk ne se déclenche que sur échec, donc rien à finaliser au-delà du point de Chance
+// déjà accordé en amont (chanceCatastropheChoiceService.js). Seul 'reroll' relance réellement le
+// D20 ("refaire son Test") et émet un nouveau DICE_RESULT (le premier, envoyé avant le choix, ne
+// portait que le jet raté). Pas de récursivité assumée : un reroll lui-même catastrophique ne
+// rouvre pas de second choix Chance (RAW muet sur ce cas, décision la plus sûre — pas de boucle).
+async function finishExoStandUpChoice(io, campaignId, resolved, { choice, context }) {
+  const { tokenId, targetPosition, exoCharacterName, skillTotal, mastery, categoryLabel, categoryMod } = context
+  let isSuccess = false
+
+  if (choice === 'reroll') {
+    const { total: roll, rolls, seed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({
+      skillLabel: "Manœuvre d'armure", skillTotal, totalLabel: 'Seuil', rollAttaque: roll,
+      contributions: [{ label: categoryLabel, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' }],
+    })
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: mastery }))
+    const { seuil, breakdown, mr } = outcomeCrit
+    isSuccess = outcomeCrit.isSuccess
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId: null, username: exoCharacterName, color: '#808080',
+      formula: '1d20', rolls, total: roll,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed, timestamp: new Date().toISOString(),
+      skillLabel: "Tentative de se redresser (Manœuvre d'armure) — Chance : relance",
+      mechanicalTotal: skillTotal,
+      diffLabel: seuil - skillTotal >= 0 ? `+${seuil - skillTotal}` : `${seuil - skillTotal}`,
+      chancesDeReussite: seuil,
+      isSuccess,
+      mr,
+      breakdown,
+    })
+
+    await maybeTriggerCatastrophe(io, campaignId, tokenId, outcome.catastropheRisk, {
+      site: 'exo_stand_up', actorTokenId: tokenId, targetTokenId: null,
+    })
+  }
+
+  await finalizeExoStandUp(io, campaignId, { tokenId, targetPosition, isSuccess })
+  await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+// Enregistrement au chargement du module (patron catastropheService.js EFFECT_HANDLERS) —
+// chanceCatastropheChoiceService.js reste agnostique du domaine combat.
+SITE_HANDLERS.exo_stand_up = finishExoStandUpChoice
 
 // ─── RÉSOLUTION ASSAUT ──────────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='assault' + confirmedModifiers présents.
@@ -2079,8 +2185,11 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
     }) : null
 
-    if (!weapon?.effective_formula) {
-      console.warn(`[WS] resolveDroneAssaultAction — arme sans formule. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
+    // Bail-out seulement si NI dégât physique NI Choc — une arme catalogue à Choc pur (chocDsl non
+    // null, ex. Fusil sonique incap. sirène) doit continuer jusqu'au jet (correctif
+    // EXO-CHOC-PUR-TIR-BLOQUE, symétrique côté exo/socketCombatExo.js), formula devient '' ci-dessous.
+    if (!weapon?.effective_formula && !chocDsl) {
+      console.warn(`[WS] resolveDroneAssaultAction — arme sans formule ni Choc. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
       emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: null, username: character.name ?? 'Drone', color: '#30aaaa',
         formula: '—', rolls: [], total: 0,
@@ -2232,7 +2341,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const cibleCharacter = cibleToken?.character_id
       ? await db('characters').where({ id: cibleToken.character_id }).first()
       : null
-    const formula = weapon.effective_formula.replace(/\s/g, '')
+    const formula = weapon.effective_formula ? weapon.effective_formula.replace(/\s/g, '') : ''
 
     // Branchement cible (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) — guard clauses, même style que Lots 2/4.
     // Aucune des 3 fonctions sœurs n'a son propre try/catch : toute exception remonte à ce catch
@@ -2268,7 +2377,9 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
   const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
   if (!droneSheet) return { suspend: false, emissions }
-  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  // rollDamageFormula (pas parseDice brut) — une arme tireur à Choc pur (formula '') n'a aucun dégât
+  // physique à lancer, correctif EXO-CHOC-PUR-TIR-BLOQUE (diceParser.js).
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await rollDamageFormula(formula)
   const modDomAttaque = getMrModifier(mr)
   const degautsBruts  = rawDice + modDomAttaque
   const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
@@ -2298,7 +2409,7 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
 // resolveAttackHitDrone : auto-resolve, aucune défense active (même absence RAW que le drone).
 export async function resolveAttackHitExo(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
-  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await rollDamageFormula(formula)
   const modDomAttaque = getMrModifier(mr)
   const degautsBruts  = rawDice + modDomAttaque
   const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleCharacter.id, degautsBruts })
@@ -2332,7 +2443,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
     ? await damageService.fetchCibleNA(db, cibleCharacter.id, cibleSheet.id)
     : { for_na: 8, con_na: 8, vol_na: 8 }
 
-  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await rollDamageFormula(formula)
   const modDomAttaque = getMrModifier(mr)
   const degautsBruts  = rawDice + modDomAttaque
   const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {

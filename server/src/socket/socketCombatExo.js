@@ -31,7 +31,10 @@ import {
   resolveAttackHitDrone, resolveAttackHitExo, resolveAttackHitPnj, resolveAttackHitPj,
   resolveDefenselessTarget, resolveMeleeDefensePnj, resolveMeleeDefenseDrone, resolveMeleeDefensePj,
   PORTEE_LABELS, TAILLE_LABELS, SITUATION_LABELS,
+  flushDeferredEmissions,
 } from './socketCombatHelpers.js'
+import { advanceTimeline, combatTimers, combatPreviews } from './combatTurnEngine.js'
+import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
 
 // ─── resolveExoAssaultAction — résolution Tir exo-armure ───────────────────────────────────────────
 // Appelée depuis resolveAssaultAction (socketCombatHelpers.js) quand character.type === 'exo'.
@@ -48,8 +51,13 @@ import {
 // - Mods d'arme (Lunette...), Tir visé, Localisation visée, dual-wield, Tir Multi : tous exclus dès
 //   la Déclaration (socketCombatAnnouncement.js) — aucune donnée à consommer ici.
 // - Arme exo "maison" (label_override sans ref_equipment_id) : `effective_formula` sera toujours null
-//   (exo_weapons n'a pas de colonne damage_formula propre, contrairement à drone_weapons) — bail-out
-//   gracieux ci-dessous, jamais un crash. Gap de schéma pré-existant (Lot C), pas introduit ici.
+//   ET aucun Choc catalogue (chocDsl null aussi, ref_equipment absent) — bail-out gracieux ci-dessous,
+//   jamais un crash. Gap de schéma pré-existant (Lot C), pas introduit ici.
+// - Arme catalogue à Choc pur (CHOC1, ex. Fusil sonique incap. sirène — damage_h null, shock_mechanism
+//   'pure') : `effective_formula` est null mais chocDsl ne l'est pas — la garde ci-dessous ne bail-out
+//   plus dans ce cas (correctif EXO-CHOC-PUR-TIR-BLOQUE), `formula` devient '' et rollDamageFormula
+//   (diceParser.js) la traite comme 0 dégât physique, jamais un throw. Même convention déjà éprouvée
+//   côté CaC exo (getEffectiveMeleeDamage, damageService.js — cite déjà ce cas de figure).
 // fetchExoWeapon — arme exo re-vérifiée à la Résolution (combat.md : seule la Résolution vérifie ce
 // qui est réellement possible), jamais confiance au fetch de la Déclaration (arme a pu être retirée
 // du loadout entre-temps, ownership rescopée sur character.id). Extrait de resolveExoAssaultAction
@@ -102,8 +110,10 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
     }) : null
 
-    if (!weapon?.effective_formula) {
-      console.warn(`[WS] resolveExoAssaultAction — arme sans formule. exo_weapon_inv_id:${action.exo_weapon_inv_id}`)
+    // Bail-out seulement si NI dégât physique NI Choc — une arme catalogue à Choc pur (chocDsl non
+    // null) doit continuer jusqu'au jet (§ correctif ci-dessus), formula devient '' dans ce cas.
+    if (!weapon?.effective_formula && !chocDsl) {
+      console.warn(`[WS] resolveExoAssaultAction — arme sans formule ni Choc. exo_weapon_inv_id:${action.exo_weapon_inv_id}`)
       emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: null, username: character.name ?? 'Exo-armure', color: '#808080',
         formula: '—', rolls: [], total: 0,
@@ -114,7 +124,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       } })
       return { suspend: false, emissions }
     }
-    const formula = weapon.effective_formula.replace(/\s/g, '')
+    const formula = weapon.effective_formula ? weapon.effective_formula.replace(/\s/g, '') : ''
 
     // 2. Portée (helper partagé)
     console.log(`[DBG] resolveExoAssaultAction — avant resolveRangedDistance`)
@@ -192,21 +202,21 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const coverageModifier = options.coverageModifier ?? 0
 
+    const contributions = [
+      { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
+      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      ...((confirmedModifiers?.situation ?? []).map(k => {
+        const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
+        return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+      })),
+      { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+      { label: 'Malus santé / encombrement (pilote)', value: ctxTireur.effectiveMalus, type: 'malus' },
+      { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+    ]
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const assaultOutcome0 = computeAttackRoll({
-      skillLabel: 'Compétence', skillTotal: ctxTireur.skillTotal, totalLabel: 'Seuil', rollAttaque,
-      contributions: [
-        { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
-        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
-        ...((confirmedModifiers?.situation ?? []).map(k => {
-          const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
-          return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
-        })),
-        { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
-        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-        { label: 'Malus santé / encombrement (pilote)', value: ctxTireur.effectiveMalus, type: 'malus' },
-        { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
-      ],
+      skillLabel: 'Compétence', skillTotal: ctxTireur.skillTotal, totalLabel: 'Seuil', rollAttaque, contributions,
     })
     const assaultOutcomeCrit = applyCriticalSuccessBonus(assaultOutcome0, getCriticalSuccessBonus({ masteryLevel: ctxTireur.mastery }))
     const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = assaultOutcomeCrit
@@ -223,45 +233,118 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       diffLabel: chancesDeReussite - ctxTireur.skillTotal >= 0 ? `+${chancesDeReussite - ctxTireur.skillTotal}` : `${chancesDeReussite - ctxTireur.skillTotal}`,
       chancesDeReussite, isSuccess, mr, breakdown,
     } })
-    await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
+    const pendingCatastrophe = await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
       site: 'exo_assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
     })
 
-    // Décompte munitions (§16.2.3) — quel que soit le résultat (touché ou raté), même convention que
-    // le Tir humanoïde. Skip si ammo_remaining NULL (tracking désactivé — toute arme exo aujourd'hui,
-    // aucun mécanisme d'init/rechargement construit).
+    // Décompte munitions (§16.2.3) — quel que soit le résultat (touché, raté, ou Catastrophe menant
+    // à un choix Chance), même convention que le Tir humanoïde et que "avant, comme DICE_RESULT"
+    // (décision Saar 2026-09-11, PLAN_CHANCE.md L3e-4) : conséquence du jet lui-même, pas de l'issue
+    // optionnelle du choix. Skip si ammo_remaining NULL (tracking désactivé).
     if (weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
       const bulletsFired = action.bullet_count ?? 1
       const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
       await db('exo_weapons').where({ id: action.exo_weapon_inv_id }).update({ ammo_remaining: newRemaining })
     }
 
-    if (!isSuccess) {
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId: action.token_id, cibleId: action.target_token_id,
-        localisation: null, degautsBruts: 0, degatsNets: 0,
-        severity: null, is_lethal: false, isSuccess: false, shockResult: null,
-      } })
-      return { suspend: false, emissions }
+    // Choix Chance posé AVANT la résolution de l'issue (PLAN_CHANCE.md L3e-4, décision Saar
+    // 2026-09-11) — DICE_RESULT/maybeTriggerCatastrophe/munitions restent immédiats (ci-dessus),
+    // seul le dispatch échec/dégâts est différé. `suspend:true` bloque advanceTimeline() côté
+    // appelant, pas de sous-phase FSM neuve (le choix a déjà son propre timeout, L3e-1).
+    if (assaultOutcome.catastropheRisk) {
+      await openChanceChoice(io, campaignId, character.id, {
+        testLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+        site: 'exo_assault',
+        linkedCatastropheId: pendingCatastrophe?.id ?? null,
+        context: {
+          action, formula, portee: authoritativeRangeBand, tireurUsername, tireurColor,
+          userId: character.user_id ?? null, chocDsl,
+          skillTotal: ctxTireur.skillTotal, mastery: ctxTireur.mastery, contributions,
+          weaponDisplayName: weapon.display_name ?? 'Armement',
+        },
+      })
+      return { suspend: true, emissions }
     }
 
-    // 6. Identifier la cible + dispatch dégâts — entièrement réutilisé, aucune réécriture.
-    const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
-    const cibleCharacter = cibleToken?.character_id
-      ? await db('characters').where({ id: cibleToken.character_id }).first()
-      : null
-    const now = new Date().toISOString()
-    const ctx = { action, cibleCharacter, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, now, chocDsl }
-    if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
-    if (cibleCharacter?.type === 'exo')   return await resolveAttackHitExo(io, campaignId, ctx, emissions)
-    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
-    return await resolveAttackHitPj(io, campaignId, ctx, emissions)
+    const finalized = await finalizeExoAssault(io, campaignId, { action, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, chocDsl, isSuccess, emissions })
+    return finalized
 
   } catch (err) {
     console.error('[WS] resolveExoAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
 }
+
+// finalizeExoAssault — émission de l'échec OU dispatch des dégâts par type de cible (autorité
+// unique, appelée immédiate ou depuis SITE_HANDLERS.exo_assault, PLAN_CHANCE.md L3e-4). Reprend
+// telle quelle la logique existante (échec l.239-245 / succès l.248-258 d'origine), jamais dupliquée.
+async function finalizeExoAssault(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions }) {
+  if (!isSuccess) {
+    emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+      tireurId: action.token_id, cibleId: action.target_token_id,
+      localisation: null, degautsBruts: 0, degatsNets: 0,
+      severity: null, is_lethal: false, isSuccess: false, shockResult: null,
+    } })
+    return { suspend: false, emissions }
+  }
+
+  const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
+  const cibleCharacter = cibleToken?.character_id
+    ? await db('characters').where({ id: cibleToken.character_id }).first()
+    : null
+  const now = new Date().toISOString()
+  const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now, chocDsl }
+  if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
+  if (cibleCharacter?.type === 'exo')   return await resolveAttackHitExo(io, campaignId, ctx, emissions)
+  if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
+  return await resolveAttackHitPj(io, campaignId, ctx, emissions)
+}
+
+// finishExoAssaultChoice — SITE_HANDLERS.exo_assault (PLAN_CHANCE.md L3e-4b). RAW : 'gain_point' et
+// le timeout (choice=null) gardent le jet original — toujours un échec ici (catastropheRisk ne se
+// déclenche que sur échec). Seul 'reroll' relance réellement le D20 ("refaire son Test") avec les
+// MÊMES contributions situationnelles (déjà figées au moment du jet original, non rejouées) et émet
+// un nouveau DICE_RESULT. Pas de récursivité assumée (reroll lui-même catastrophique = résultat
+// final, pas de second choix). `flushDeferredEmissions` cible le joueur par recherche de socket
+// (userId), aucun `socket` vivant dans ce contexte différé.
+async function finishExoAssaultChoice(io, campaignId, resolved, { choice, context }) {
+  const { action, formula, portee, tireurUsername, tireurColor, userId, chocDsl, skillTotal, mastery, contributions, weaponDisplayName } = context
+  let isSuccess = false
+  let mr = null
+  const emissions = []
+
+  if (choice === 'reroll') {
+    const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({ skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque, contributions })
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: mastery }))
+    const { seuil: chancesDeReussite, breakdown } = outcomeCrit
+    isSuccess = outcomeCrit.isSuccess
+    mr = outcomeCrit.mr
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls: attackRolls, total: rollAttaque,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed: attackSeed, timestamp: new Date().toISOString(),
+      skillLabel: `${weaponDisplayName} — Exo-armure — Chance : relance`,
+      mechanicalTotal: skillTotal,
+      diffLabel: chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
+      chancesDeReussite, isSuccess, mr, breakdown,
+    } })
+
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, outcome.catastropheRisk, {
+      site: 'exo_assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
+  }
+
+  const { emissions: finalEmissions } = await finalizeExoAssault(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
+  await flushDeferredEmissions(io, campaignId, userId, finalEmissions)
+  await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+SITE_HANDLERS.exo_assault = finishExoAssaultChoice
 
 // ─── resolveExoMeleeAction — résolution CaC exo-armure ─────────────────────────────────────────────
 // Appelée depuis socketCombatResolution.js quand action.type==='melee' && character.type==='exo'.

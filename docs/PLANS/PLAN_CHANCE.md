@@ -82,25 +82,74 @@ prouve la primitive avant les suivants.
 
 Fichier neuf : `server/src/services/chanceService.js`, sur le modèle de
 `server/src/services/integrityService.js` (DB pure, transactionnel, **aucune émission
-socket** — l'appelant émet après succès, cf. `.claude/rules/core.md`).
+socket** — l'appelant émet après succès, cf. `.claude/rules/core.md`). **Codé 2026-09-11** —
+signature corrigée par rapport au pseudocode initial ci-dessous, alignée sur le patron réel
+observé dans `integrityService.js`/`advantageService.js`/`mutationService.js` : `db` importé une
+fois en haut du fichier (jamais passé en paramètre), `trxOpt` optionnel en dernier argument,
+`sheetId` (pas `charSheetId`, seul nom utilisé ailleurs dans le projet).
 
 ```js
-// spendChancePoints(db, charSheetId, n, { reason }) → { chc: nouveauScore }
-// Garde : chc - n >= 3 (RAW : "descendu à 3 ne peut plus dépenser"). Rejette sinon.
-// Décrémente char_sheet.chc directement, sous transaction (verrou contre dépense concurrente).
+// spendChancePoints(sheetId, n, { reason }, trxOpt) → { chc, reason }
+// Garde : chc - n >= 3 (RAW : "descendu à 3 ne peut plus dépenser"). Rejette sinon (AppError 400).
+// Décrémente char_sheet.chc directement, sous transaction, verrou .forUpdate() (dépense concurrente
+// sérialisée sur la ligne, patron pessimiste établi du projet — cf. integrityService.js).
 // n ∈ {1, 2} selon l'appelant — le service ne connaît pas la raison métier du montant.
 ```
 
-Tests DB (`node --test`, nécessite `--env-file`, lancés par Saar) : garde refusée sous le
-plancher, dépense concurrente sérialisée correctement.
+Tests DB écrits (`server/src/services/chanceService.test.mjs`, patron `advantageService.test.mjs`) :
+dépense simple, garde refusée sous le plancher, dépense concurrente sérialisée. Lancés par Saar
+(`node --env-file=... --test server/src/services/chanceService.test.mjs`) — pas encore exécutés.
 
 ---
 
-## 5. L3 — Service `chanceService.grantChancePoint` + hook régénération Catastrophe
+## 5. L3 — Service régénération Catastrophe (sous-découpé 2026-09-11)
+
+**Correction du postulat initial (exploration Explore agent, 2026-09-11)** : ce PLAN supposait
+*"même pattern UI que le reroll déjà en place sur échec critique"* (ancienne version de ce §, cf.
+git). Vérifié faux : `applyCriticalFailReroll` est appliqué **automatiquement côté serveur**, sans
+aucune fenêtre de décision joueur (`polarisTestService.js:23-27`, `gmArbitratedTestService.js:
+179-182`, `socketCombatHelpers.js:95`). Il n'existe **aucune fenêtre de décision synchrone joueur**
+nulle part dans le projet actuel — la Catastrophe combat (`catastropheService.js`,
+`maybeTriggerCatastrophe`) est arbitrée **MJ**, pas joueur, et gardée `isCombatActive` (donc
+inutilisable telle quelle pour un hook système entier). Le choix RAW « gagner 1 Chance vs
+relancer » est une **brique d'architecture neuve**, pas un branchement sur un patron existant —
+d'où le sous-découpage ci-dessous (L3d isolé, seul morceau réellement nouveau).
+
+| Sous-lot | Contenu | Dépend de |
+|---|---|---|
+| **L3a — codé 2026-09-11** | `chanceService.grantChancePoint` + `cancelChanceGrant` (patron `spendChancePoints`, DB pure, testée) | L2 |
+| L3b | `chanceService.handleCatastropheRegen` (plafond RAW 15) | L3a |
+| L3c | Carte MJ `chance_catastrophe_regen` (composant + `MessageRendererRegistry` + endpoint annulation), patron `RepairRequestCard.jsx` | L3b |
+| L3d | Fenêtre de décision joueur (gagner/relancer), timeout → Test normal — **brique neuve**. **Décision Saar 2026-09-11 : la fenêtre se pose AVANT toute résolution/émission** (jet → si Catastrophe, pause → choix → un seul résultat final émis) — RAW "refaire son Test" (`MANUEL_CHANCE.md:141-142`) est un second jet complet qui remplace le premier, jamais un correctif après-coup visible par la table. Restructure le flux des 3 sites socket (aujourd'hui : jet → emit immédiat), pas un simple ajout. | indépendant |
+| **L3e-1 — codé 2026-09-11** | Machinerie générique : table `pending_chance_choices` + `openChanceChoice`/`resolveChanceChoice` (patron `pending_catastrophes`/`resolvePendingCatastrophe`, idempotent `UPDATE...WHERE resolved_at IS NULL`, timeout détaché type `combatTurnEngine`) + carte PJ (filtre propriété, patron `repair_request`) + file MJ (copie `CatastropheReviewQueue.jsx`). `handleCatastropheRegen` (L3b) codé au passage — bloquant pour L3e-1, pas encore fait. Migration 336-338 appliquée (Saar, nodemon). 15/15 tests DB verts. `SITE_HANDLERS` vide (aucun site réel câblé, comportement existant inchangé). | L3d + L3b |
+| **L3e-2 — codé 2026-09-11** | ~~`gmArbitratedTestService.js`~~ → **`socketEntity.js` poussée/traction** (revu après lecture réelle : `gmArbitratedTestService.js` est appelé depuis un second handler déjà en attente GM, imbriquer une 2e attente aurait été plus risqué). Refactor deux-phases : `finalizeEntityDisplacement` extraite (autorité unique, appelée immédiate OU différée), `SITE_HANDLERS.entity_displacement` enregistré au chargement du module. `ENTITY_MOVE_RESULT` ciblé via `io.to(socketId)` (pas `socket.emit`, le socket d'origine peut ne plus exister). Guard double-soumission ajouté (`context->>'entityId'`, patron `combat_pending`). **Validation navigateur bloquée** (2026-09-11, Saar) : impossible de placer des « Entités interactives » dans le world builder actuel — régression d'un chantier parallèle (world builder rework), pas liée à ce lot. Non re-testable tant que ce blocage externe n'est pas levé — décision Saar : laisser courir tel quel, priorité à L3e-4. | L3e-1 |
+| **L3e-4a — codé 2026-09-11** | `socketCombatHelpers.js` / `resolveExoStandUpAction` (site combat le plus simple, cf. exploration ci-dessous — pas `AWAITING_CHANCE_CHOICE` finalement, `suspend:true` + timeout déjà existant suffit). `finalizeExoStandUp` + `SITE_HANDLERS.exo_stand_up`. Refactor annexe : `combatTimers`/`combatPreviews` déplacés de `socket/index.js` vers `combatTurnEngine.js` (cycle d'import évité). 22/22 tests DB verts. | L3e-1 |
+| **L3e-4b — codé 2026-09-11** | ~~`resolveDroneAssaultAction`~~ → **`socketCombatExo.js` / `resolveExoAssaultAction`** (Tir exo, revu en cours de test : 2 sites hors inventaire initial découverts dans ce fichier, exploration précédente scopée à tort à `socketCombatHelpers.js` seul — `exo_melee` reste à faire). Munitions décomptées avant le choix (immédiat, comme convenu). `finalizeExoAssault` + `SITE_HANDLERS.exo_assault`. Nouveau helper partagé `flushDeferredEmissions` (`socketCombatHelpers.js`, exporté) — cible un joueur par recherche de socket (`userId`), pas un `socket.id` figé (`resolveExoAssaultAction` ne reçoit même pas `socket`) ; réutilisable par tout futur site combat. 39/39 tests DB verts. | L3e-4a |
+| **L3e-4b-fusion — codé 2026-09-11** | **Fusion UI Catastrophe/Chance** (retour Saar après test réel : "aucun intérêt d'avoir deux fenêtres différentes" — `CatastropheReviewQueue.jsx` + `ChanceGmChoiceQueue.jsx` faisaient doublon côté MJ pour un PNJ). Migration 339 (`pending_chance_choices.linked_catastrophe_id`, FK → `pending_catastrophes`), `openChanceChoice` accepte `linkedCatastropheId`, les 2 sites déjà câblés (exo_stand_up, exo_assault) capturent le retour de `maybeTriggerCatastrophe` et le transmettent. Nouveau `CatastropheChoiceQueue.jsx` (remplace les 2 anciens, fusion dérivée au rendu par `linkedCatastropheId`, aucun état de "résolution partielle" à maintenir). `ChancePlayerChoiceCard.jsx` (PJ) inchangé — pas de doublon côté joueur (audiences déjà distinctes). 39/39 tests DB, build client OK. | L3e-4a/b |
+| **L3e-4b-correctifs — codé 2026-09-11** | Deux bugs trouvés en test réel (post-fusion). **(a)** « Relancer » ne retirait pas la Catastrophe combat d'origine (RAW : "refaire son Test" remplace intégralement le Test, sa Catastrophe ne tient plus) — nouvelle `withdrawPendingCatastrophe` (`catastropheService.js`, patron `resolvePendingCatastrophe` sans appliquer d'effet), appelée automatiquement dans `resolveChanceChoice` quand `choice==='reroll'` et `linked_catastrophe_id` présent — un seul point central, pas dupliqué par site. **(b)** Timeout 45s "semblait arbitraire" (aucune indication visuelle) — migration 340 (`timeout_ms` persisté), `useChanceCountdown.js` (hook partagé), décompte affiché sur les deux cartes. 43/43 tests DB (dont 4 nouveaux), build client OK. | L3e-4b-fusion |
+| L3e-4b-bis | `socketCombatExo.js` / `resolveExoMeleeAction` (CaC exo) — même fichier, même patron que exo_assault (+ capturer/transmettre `linkedCatastropheId`) | L3e-4b-fusion |
+| L3e-4c | `socketCombatHelpers.js` / `resolveDroneAssaultAction` + `resolveAssaultAction` (tir humanoïde/drone) — munitions/panne d'arme restent immédiates, bifurcation PJ/PNJ après le jet à reproduire | L3e-4a |
+| L3e-4d/e | `melee_defense` (`confirmMeleeDefense`) + `melee_attack` (`resolveMeleeAction`, ~570 lignes après le jet) — les deux plus gros, session dédiée probable | L3e-4c |
+
+**L3f retiré (décision Saar, 2026-09-11) : pas de Catastrophe sur un Test de Chance, par
+principe.** Annule la lecture RAW littérale ci-dessous ("un Test de Chance est lui-même un Test
+aléatoire, donc `resolveChanceTest` doit recevoir le même hook") — `resolveChanceTest` (Petit
+bouclier L1, futur Test de Chance AOE L4) ne déclenche jamais la régénération Catastrophe. Détail
+§12.
+
+Note hors-scope : `socketEntity.js` (poussée/traction) n'a aujourd'hui même pas le hook Catastrophe
+combat (`maybeTriggerCatastrophe`) câblé — gap préexistant, séparé de ce chantier, non traité ici.
+
+### L3a — codé et testé (`node --check` OK, tests DB écrits, exécution par Saar en attente)
 
 ```js
-// grantChancePoint(db, charSheetId, n = 1) → { chc: nouveauScore }
-// Inverse de spendChancePoints — plafond min(chc + n, 20), sous transaction.
+// grantChancePoint(sheetId, n = 1, trxOpt) → { chc }
+// Inverse de spendChancePoints — plafond min(chc + n, CHC_CEIL=20). Clampe, ne rejette jamais.
+
+// cancelChanceGrant(sheetId, n, trxOpt) → { chc }
+// Revert MJ d'un grantChancePoint automatique. Clampe sur le même plancher RAW que
+// spendChancePoints (CHC_FLOOR=3) mais NE REJETTE JAMAIS (spendChancePoints rejette parce que
+// c'est un choix joueur refusable ; cancelChanceGrant est une correction MJ, toujours appliquée).
 ```
 
 **Décision tranchée (Saar, 2026-09-11) : câblage système entier.** Une mécanique de Chance qui
@@ -111,13 +160,11 @@ Catastrophe (Marge d'échec ≥ 15) lors d'un Test aléatoire**.
 
 Surface réelle, vérifiée : `resolveTestOutcome` a **5 points d'appel directs** côté serveur —
 `combatAttackRoll.js`, `polarisTestService.js`, `socketCombatHelpers.js`, `socketEntity.js`,
-`gmArbitratedTestService.js`. **S'y ajoute la primitive L1** : un Test de Chance est lui-même un
-Test aléatoire au sens RAW (`REGLE_CHANCE.md` : « le Test à effectuer est un Test aléatoire
-normal »), donc `resolveChanceTest` (qui passe par `resolveTestOutcome`) doit recevoir le même
-hook — sinon on recrée exactement l'incohérence « ça marche partout sauf là » qu'on vient
-d'écarter pour le combat/narratif. Concrètement : la bascule Petit bouclier (L1) et le Test de
-Chance AOE (L4) sont aussi des points d'entrée du hook. Câblage contenu malgré tout : 5 sites
-directs + les 2 consommateurs de `resolveChanceTest`, pas un sprawl.
+`gmArbitratedTestService.js`. **Ne s'y ajoute PAS la primitive L1** : bien qu'un Test de Chance
+soit un Test aléatoire au sens RAW (`REGLE_CHANCE.md`), Saar tranche par principe qu'aucune
+Catastrophe ne se déclenche sur un Test de Chance — pas de récursivité mécanique (un Test qui
+pourrait se regagner lui-même). `resolveChanceTest` (Petit bouclier L1, Test de Chance AOE L4)
+reste donc hors du câblage L3. Décision §12.
 
 **Aucune distinction PJ/PNJ (décision Saar)** : même câblage pour tout `char_sheet` qui a un
 `chc`, sans garde `character.type`. Plus simple (rien à filtrer) et sans conséquence — un PNJ
@@ -131,25 +178,23 @@ d'entrée dédié à cette seule source.
 
 Chaque site (direct ou via `resolveChanceTest`), quand `outcome.catastropheRisk === true` sur le
 Test d'un personnage :
-1. Propose le choix RAW au joueur : gagner 1 point de Chance **ou** relancer le Test à la place
-   (mutuellement exclusif) — même famille de mécanisme et même pattern UI que le reroll déjà en
-   place sur échec critique (`applyCriticalFailReroll`). **À vérifier au moment de coder ce
-   lot, site par site** : chacun des 5+2 points d'appel a-t-il déjà une fenêtre de résultat
-   synchrone où poser ce choix, ou faut-il en construire une (comme la fenêtre de décision AOE
-   du L4) ? Pas supposé résolu ici — ce lot peut se révéler aussi large que L4 pour cette raison.
-2. Si le joueur choisit le point : `chanceService.handleCatastropheRegen(db, io, charSheetId, {
-   testLabel })` :
+1. **(L3d)** Propose le choix RAW au joueur : gagner 1 point de Chance **ou** relancer le Test à
+   la place (mutuellement exclusif) — brique neuve, aucun patron UI existant à réutiliser (cf.
+   correction en tête de §5). Comportement par défaut si le joueur ne répond pas dans la fenêtre :
+   timeout → Test normal, pas de forçage silencieux (cohérent avec L4 §6).
+2. **(L3b)** Si le joueur choisit le point : `chanceService.handleCatastropheRegen(sheetId, {
+   testLabel }, trxOpt)` :
 
 ```js
-// chanceService.handleCatastropheRegen(db, io, charSheetId, { testLabel }) :
+// handleCatastropheRegen(sheetId, { testLabel }, trxOpt) :
 // - si chc >= 15 : rien (RAW, pas de regain)
-// - sinon : grantChancePoint(db, charSheetId, 1), puis poste la carte MJ (ci-dessous)
+// - sinon : grantChancePoint(sheetId, 1, trxOpt), puis le caller (L3c) poste la carte MJ
 // Le choix joueur (étape 1 ci-dessus) a déjà eu lieu avant cet appel : cette fonction ne fait
-// que le grant + la carte, jamais la relance — point d'entrée unique pour les 7 sites, logique
-// de garde/carte écrite une seule fois.
+// que le grant, jamais la relance — point d'entrée unique pour les 7 sites, logique de garde
+// écrite une seule fois. Ne poste pas la carte elle-même (L3c, côté appelant socket qui a `io`).
 ```
 
-**Garde-fou MJ (décision Saar) — réutilise un patron déjà construit et validé.** Le chantier
+**(L3c) Garde-fou MJ (décision Saar) — réutilise un patron déjà construit et validé.** Le chantier
 Usure & Intégrité a déjà livré exactement ce mécanisme pour la réparation (L6c, validé jeu réel
 2026-09-10) : une carte d'action dans le chat du MJ, enregistrée par type de message dans le
 `MessageRendererRegistry` (`repair_request: (msg, ctx) => <RepairRequestCard msg={msg}
@@ -159,7 +204,7 @@ gate `ctx.isGm`, un bouton **Annuler**). L'action cible l'événement précis (i
 décrément aveugle, au cas où plusieurs regains s'enchaînent) et appelle :
 
 ```js
-// chanceService.cancelChanceGrant(db, charSheetId, n) → { chc }
+// cancelChanceGrant(sheetId, n, trxOpt) → { chc }
 // Revert d'un grantChancePoint automatique, initié par le MJ. Décrémente sans garde de
 // plancher (§4) — distinct de spendChancePoints, réservé aux dépenses joueur.
 ```
@@ -313,3 +358,10 @@ projet) — même sur un lot déjà approuvé dans son ensemble.
   groupés sous le MJ), pas un branchement trivial — accepté comme complexité raisonnable (§6).
 - **Propagation `chc` en temps réel** — pas de nouvel événement générique ; le delta voyage dans
   le payload des événements combat déjà émis (§5).
+- **Pas de Catastrophe sur un Test de Chance, par principe** (Saar, 2026-09-11) — annule la
+  lecture RAW littérale initiale de L3 (§5). Retire le sous-lot L3f : `resolveChanceTest` (Petit
+  bouclier L1, Test de Chance AOE L4) ne déclenche jamais `handleCatastropheRegen`. Seuls les 5
+  points d'appel directs de `resolveTestOutcome` portent le hook (L3e).
+- **Plancher Chance = 3, contrainte unique** (Saar, 2026-09-11) — pas de plancher distinct pour
+  l'annulation MJ. `spendChancePoints` REJETTE (choix joueur refusable) ; `cancelChanceGrant`
+  CLAMPE sur le même plancher sans jamais rejeter (correction MJ, toujours appliquée). §5/L3a.

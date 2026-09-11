@@ -697,5 +697,16 @@
       "name": "Déséquilibre",
       "effect": "Le personnage trébuche ou tombe."
     }
+  },
+  "chance": {
+    "choiceCard": {
+      "title": "Catastrophe — Chance",
+      "gainPointButton": "Gagner 1 point de Chance",
+      "rerollButton": "Relancer le Test",
+      "autoResolveIn": "Résolution automatique dans {{seconds}}s"
+    },
+    "gmQueue": {
+      "title": "Catastrophe — Chance (PNJ)"
+    }
   }
 }

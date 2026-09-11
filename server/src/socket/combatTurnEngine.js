@@ -45,6 +45,17 @@ import * as statusService from '../lib/statusService.js'
 // avec le reste de l'échelle et permettre l'affichage. Marqueur data : `resolution_snapshot.carriedFrom`.
 const CARRY_OVER_BASE = 1_000_000
 
+// combatTimers — Map<campaignId, Map<tokenId, timeoutId>> des timers combat actifs. combatPreviews
+// — Map<campaignId, previewPayload>, cache éphémère des previews d'annonce en cours (non persisté,
+// perte tolérée au redémarrage — présence éphémère LdB, synchronisé au client sur SESSION_JOIN,
+// purgé sur declare/changement de phase/fin de combat). Singletons déclarés ici (pas dans
+// socket/index.js comme avant PLAN_CHANCE.md L3e-4a) : le moteur de tour les possède et les
+// consomme (`advanceTimeline`/`startAnnouncementTimers`/`endTurn`...) ; socketCombatHelpers.js doit
+// pouvoir rappeler `advanceTimeline` avec les mêmes instances depuis une résolution différée par un
+// choix Chance, ce qui créerait un cycle d'import en les gardant dans index.js.
+export const combatTimers = new Map()
+export const combatPreviews = new Map()
+
 // ─── Helper — démarrer les timers auto-skip pour la phase ANNONCE ─────────────
 // PC17 : skip uniquement si timerSec > 0. Exclut PNJs et tokens du GM (gmUserId).
 export async function startAnnouncementTimers(io, campaignId, timerSec, gmUserId, pendingMaps) {

@@ -13,6 +13,7 @@ import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQue
 import { executeBattlemapRigidPairMovement } from '../services/worldForcedMovementService.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 import { resolveGmArbitratedTest } from '../services/gmArbitratedTestService.js'
+import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
 
 // ─── Helper — résolution état entité après succès ─────────────────────────────
 // Lit target_state_id de l'interaction, met à jour current_state_id en base,
@@ -53,6 +54,141 @@ async function resolveEntityState(entityId, interactionId, campaignId, io) {
     console.error('[WS] resolveEntityState error:', err.message)
   }
 }
+
+// ─── finalizeEntityDisplacement — poussée/traction (PLAN_CHANCE.md L3e-2) ─────────────────────
+// Reprend l'ENTITY_MOVE_REQUEST original à partir du calcul de réussite/Dmax jusqu'à la
+// résolution complète (DICE_RESULT + mouvement + ENTITY_MOVE_RESULT). Appelée immédiatement (pas
+// de Catastrophe) ou depuis SITE_HANDLERS.entity_displacement (choix Chance résolu, choix posé
+// AVANT toute résolution — décision Saar 2026-09-11) — UNE SEULE implémentation, jamais dupliquée
+// entre les deux chemins. Re-fetch entité/token frais en DB (positions à jour, robuste au temps
+// écoulé pendant l'attente du choix — executeBattlemapRigidPairMovement le fait déjà en interne
+// de toute façon). `socketId` cible ENTITY_MOVE_RESULT via `io.to(socketId)`, jamais `socket.emit`
+// — le socket d'origine peut ne plus exister si la résolution a été différée.
+async function finalizeEntityDisplacement(io, campaignId, {
+  entityId, tokenId, interactionId, destX, destZ, socketId, userId, username,
+  attributeId, attributeAN, effectiveDifficulty, dmaxOverride, diceRoll, rolls, seed,
+}) {
+  const entity = await db('entities').where({ id: entityId }).first()
+  const token = await db('tokens').where({ id: tokenId }).first()
+  if (!entity || !token) return // supprimés entre-temps — rien à finaliser
+
+  const chancesDeReussite = attributeAN + effectiveDifficulty
+  const rawOutcome = resolveTestOutcome(diceRoll, chancesDeReussite)
+  const { isSuccess, isCriticalSuccess, mr } = applyCriticalSuccessBonus(rawOutcome, getCriticalSuccessBonus({ attributeAN }))
+  const modifier = isSuccess ? getMrModifier(mr) : 0
+  let dmax = isSuccess ? modifier + 1 : 0
+  if (dmaxOverride != null) dmax = Math.min(dmax, dmaxOverride)
+
+  const color = await getUserColor(db, userId)
+  const diffLabel = effectiveDifficulty >= 0 ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
+  const timestamp = new Date().toISOString()
+
+  const breakdownDisp = [
+    { label: ATTR_LABELS[attributeId] || attributeId, value: attributeAN, type: 'base' },
+    ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
+    { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+  ]
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId, username, color,
+    formula: ATTR_LABELS[attributeId] || attributeId,
+    rolls, total: diceRoll,
+    type: 'entity_action', interactionType: 'displacement',
+    isCriticalSuccess, isCriticalFail: false, seed, timestamp,
+    skillLabel: ATTR_LABELS[attributeId] || attributeId,
+    mechanicalTotal: attributeAN, chancesDeReussite, diffLabel, isSuccess, mr,
+    breakdown: breakdownDisp,
+  })
+
+  if (dmax === 0) {
+    io.to(socketId).emit(WS.ENTITY_MOVE_RESULT, {
+      requestId: `${entityId}-${interactionId}-${Date.now()}`,
+      diceResult: diceRoll, mr, dmax: 0,
+      finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
+      finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
+      success: false,
+    })
+    return
+  }
+
+  const movement = await executeBattlemapRigidPairMovement({
+    battlemapId: entity.battlemap_id,
+    tokenId, entityId,
+    destination: { x: Number(destX), y: Number(entity.pos_z), z: Number(destZ) },
+    maxSteps: dmax,
+  })
+
+  const stepsCompleted = movement.result?.stepsCompleted || 0
+
+  // Guard : 0 pas complétés = entité bloquée dès le premier pas (collision)
+  if (stepsCompleted === 0) {
+    io.to(socketId).emit(WS.ENTITY_MOVE_RESULT, {
+      requestId: `${entityId}-${interactionId}-${Date.now()}`,
+      diceResult: diceRoll, mr, dmax,
+      finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
+      finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
+      success: false,
+    })
+    return
+  }
+
+  const updatedEntity = movement.entity
+  const updatedToken = movement.token
+
+  io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+    battlemapId: entity.battlemap_id,
+    runtimeRevision: movement.runtimeRevision,
+    kind: 'forced-movement',
+  })
+  for (const passenger of movement.elevatorPassengerTokens || []) {
+    io.to(campaignId).emit(WS.TOKEN_MOVED, {
+      tokenId: passenger.id,
+      pos_x: passenger.pos_x, pos_y: passenger.pos_y, pos_z: passenger.pos_z,
+      position_space: passenger.position_space, updated_at: passenger.updated_at,
+      worldMovement: { kind: 'elevator-passenger' },
+    })
+  }
+
+  io.to(campaignId).emit(WS.ENTITY_MOVED, {
+    entityId: updatedEntity.id,
+    pos_x: updatedEntity.pos_x, pos_y: updatedEntity.pos_y, pos_z: updatedEntity.pos_z,
+    updated_at: updatedEntity.updated_at,
+    worldMovement: { kind: 'forced', stepsCompleted },
+  })
+
+  io.to(campaignId).emit(WS.TOKEN_MOVED, {
+    tokenId: updatedToken.id,
+    pos_x: updatedToken.pos_x, pos_y: updatedToken.pos_y, pos_z: updatedToken.pos_z,
+    position_space: updatedToken.position_space, updated_at: updatedToken.updated_at,
+    worldMovement: { kind: 'forced', stepsCompleted, effectEvents: movement.effectEvents },
+  })
+
+  io.to(socketId).emit(WS.ENTITY_MOVE_RESULT, {
+    requestId: `${entityId}-${interactionId}-${Date.now()}`,
+    diceResult: diceRoll, mr, dmax,
+    finalEntityPos: { pos_x: updatedEntity.pos_x, pos_y: updatedEntity.pos_y, pos_z: updatedEntity.pos_z },
+    finalActorPos:  { pos_x: updatedToken.pos_x,  pos_y: updatedToken.pos_y,  pos_z: updatedToken.pos_z },
+    success: stepsCompleted > 0,
+  })
+
+  console.log(`[WS] entity:move_request (finalize) — ${username} → entité ${entityId} (MR:${mr} Dmax:${dmax} steps:${stepsCompleted})`)
+}
+
+// finishEntityDisplacementChoice — SITE_HANDLERS.entity_displacement (PLAN_CHANCE.md L3e-2). RAW :
+// 'gain_point' et le timeout (choice=null) gardent le jet original (la Catastrophe reste, seul un
+// point de Chance est gagné en plus) ; seul 'reroll' relance réellement le D20 ("refaire son Test").
+async function finishEntityDisplacementChoice(io, campaignId, resolved, { choice, context }) {
+  let { diceRoll, rolls, seed } = context
+  if (choice === 'reroll') {
+    const rerolled = await parseDice('1d20')
+    diceRoll = rerolled.total; rolls = rerolled.rolls; seed = rerolled.seed
+  }
+  await finalizeEntityDisplacement(io, campaignId, { ...context, diceRoll, rolls, seed })
+}
+
+// Enregistrement au chargement du module (pas à chaque connexion socket) — patron registre
+// (EFFECT_HANDLERS de catastropheService.js), chanceCatastropheChoiceService.js reste agnostique
+// du domaine entités (aucun import dans l'autre sens).
+SITE_HANDLERS.entity_displacement = finishEntityDisplacementChoice
 
 export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, pendingEntityActions) {
   // ─── ENTITY:ACTION_REQUEST ─────────────────────────────────────────────
@@ -361,6 +497,17 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         .some(p => p.entityId === entityId)
       if (alreadyPending) { console.log('[DBG] RETURN — déjà en attente'); return }
 
+      // Guard double-soumission — choix Chance déjà en attente pour cette entité (PLAN_CHANCE.md
+      // L3e-2). La fenêtre de résolution différée (jusqu'au timeout) élargit ce qui était un trou
+      // pré-existant négligeable (quelques centaines de ms) en cas réellement exploitable — patron
+      // déjà utilisé sur `combat_pending` pour interroger un payload jsonb (`->>`), `entityId` n'est
+      // pas une colonne dédiée de `pending_chance_choices` (context libre par site).
+      const alreadyAwaitingChance = await db('pending_chance_choices')
+        .whereNull('resolved_at')
+        .whereRaw("context->>'entityId' = ?", [entityId])
+        .first()
+      if (alreadyAwaitingChance) { console.log('[DBG] RETURN — choix Chance déjà en attente pour cette entité'); return }
+
       // ── Charger entité ───────────────────────────────────────────────
       const entity = await db('entities').where({ id: entityId }).first()
       if (!entity) { console.log('[DBG] RETURN — entité introuvable'); return }
@@ -467,157 +614,29 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       // dmax = modifier + 1 si réussite (toute réussite = au moins 1 case), 0 si échec.
       const chancesDeReussite = attributeAN + effectiveDifficulty
       const rawOutcome = resolveTestOutcome(diceRoll, chancesDeReussite)
-      const { isSuccess, isCriticalSuccess, mr } = applyCriticalSuccessBonus(rawOutcome, getCriticalSuccessBonus({ attributeAN }))
-      const modifier = isSuccess ? getMrModifier(mr) : 0
-      let dmax = isSuccess ? modifier + 1 : 0
 
-      // Override déplacement — dmax_override plafonne push ET pull (session 40)
-      if (interaction.dmax_override !== null && interaction.dmax_override !== undefined) {
-        dmax = Math.min(dmax, interaction.dmax_override)
+      const finalizeCtx = {
+        entityId, tokenId, interactionId, destX, destZ,
+        socketId: socket.id, userId: user.id, username: user.username,
+        attributeId, attributeAN, effectiveDifficulty,
+        dmaxOverride: interaction.dmax_override ?? null,
+        diceRoll, rolls, seed,
       }
 
-      // ── Couleur joueur pour DICE_RESULT ──────────────────────────────
-      const color = await getUserColor(db, user.id)
-
-      const diffLabel = effectiveDifficulty >= 0
-        ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
-      const timestamp = new Date().toISOString()
-
-      // Broadcast DICE_RESULT — visible dans le chat pour joueur et GM
-      const breakdownDisp = [
-        { label: ATTR_LABELS[attributeId] || attributeId, value: attributeAN, type: 'base' },
-        ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
-        { label: 'Seuil', value: chancesDeReussite, type: 'total' },
-      ]
-      io.to(campaignId).emit(WS.DICE_RESULT, {
-        userId: user.id,
-        username: user.username,
-        color,
-        formula: ATTR_LABELS[attributeId] || attributeId,
-        rolls,
-        total: diceRoll,
-        type: 'entity_action',
-        interactionType: 'displacement',
-        isCriticalSuccess,
-        isCriticalFail: false,
-        seed,
-        timestamp,
-        skillLabel: ATTR_LABELS[attributeId] || attributeId,
-        mechanicalTotal: attributeAN,
-        chancesDeReussite,
-        diffLabel,
-        isSuccess,
-        mr,
-        breakdown: breakdownDisp,
-      })
-
-      // ── Échec (Dmax = 0) → résultat immédiat, pas de mouvement ───────
-      if (dmax === 0) {
-        socket.emit(WS.ENTITY_MOVE_RESULT, {
-          requestId: `${entityId}-${interactionId}-${Date.now()}`,
-          diceResult: diceRoll,
-          mr,
-          dmax: 0,
-          finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
-          finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
-          success: false,
+      // Choix Chance posé AVANT toute résolution (décision Saar 2026-09-11, PLAN_CHANCE.md §5) —
+      // ni DICE_RESULT ni mouvement ne sont émis ici si Catastrophe : la suite arrive via
+      // finishEntityDisplacementChoice (SITE_HANDLERS.entity_displacement) une fois le choix résolu.
+      if (rawOutcome.catastropheRisk) {
+        await openChanceChoice(io, campaignId, token.character_id, {
+          testLabel: ATTR_LABELS[attributeId] || attributeId,
+          site: 'entity_displacement',
+          context: finalizeCtx,
         })
         return
       }
 
-      // ── Step-by-step ────────────────────────────────────────────────
-      // Le couple acteur/objet s'exclut lui-même des contrôles d'occupation.
-      const movement = await executeBattlemapRigidPairMovement({
-        battlemapId: entity.battlemap_id,
-        tokenId,
-        entityId,
-        destination: { x: Number(destX), y: Number(entity.pos_z), z: Number(destZ) },
-        maxSteps: dmax,
-      })
-
-      const stepsCompleted = movement.result?.stepsCompleted || 0
-
-      // Guard : 0 pas complétés = entité bloquée dès le premier pas (collision)
-      // Malgré un Dmax > 0, la case (k=1) est occupée — pas de mouvement.
-      if (stepsCompleted === 0) {
-        socket.emit(WS.ENTITY_MOVE_RESULT, {
-          requestId: `${entityId}-${interactionId}-${Date.now()}`,
-          diceResult: diceRoll,
-          mr,
-          dmax,
-          finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
-          finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
-          success: false,
-        })
-        return
-      }
-
-      // Positions finales (stepsCompleted ≥ 1)
-      // ── Update DB ────────────────────────────────────────────────────
-      const updatedEntity = movement.entity
-      const updatedToken = movement.token
-
-      io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
-        battlemapId: entity.battlemap_id,
-        runtimeRevision: movement.runtimeRevision,
-        kind: 'forced-movement',
-      })
-      for (const passenger of movement.elevatorPassengerTokens || []) {
-        io.to(campaignId).emit(WS.TOKEN_MOVED, {
-          tokenId: passenger.id,
-          pos_x: passenger.pos_x,
-          pos_y: passenger.pos_y,
-          pos_z: passenger.pos_z,
-          position_space: passenger.position_space,
-          updated_at: passenger.updated_at,
-          worldMovement: { kind: 'elevator-passenger' },
-        })
-      }
-
-      // ── Broadcasts room ──────────────────────────────────────────────
-      io.to(campaignId).emit(WS.ENTITY_MOVED, {
-        entityId: updatedEntity.id,
-        pos_x: updatedEntity.pos_x,
-        pos_y: updatedEntity.pos_y,
-        pos_z: updatedEntity.pos_z,
-        updated_at: updatedEntity.updated_at,
-        worldMovement: { kind: 'forced', stepsCompleted },
-      })
-
-      io.to(campaignId).emit(WS.TOKEN_MOVED, {
-        tokenId: updatedToken.id,
-        pos_x: updatedToken.pos_x,
-        pos_y: updatedToken.pos_y,
-        pos_z: updatedToken.pos_z,
-        position_space: updatedToken.position_space,
-        updated_at: updatedToken.updated_at,
-        worldMovement: {
-          kind: 'forced',
-          stepsCompleted,
-          effectEvents: movement.effectEvents,
-        },
-      })
-
-      // ── Résultat vers joueur uniquement ──────────────────────────────
-      socket.emit(WS.ENTITY_MOVE_RESULT, {
-        requestId: `${entityId}-${interactionId}-${Date.now()}`,
-        diceResult: diceRoll,
-        mr,
-        dmax,
-        finalEntityPos: {
-          pos_x: updatedEntity.pos_x,
-          pos_y: updatedEntity.pos_y,
-          pos_z: updatedEntity.pos_z,
-        },
-        finalActorPos: {
-          pos_x: updatedToken.pos_x,
-          pos_y: updatedToken.pos_y,
-          pos_z: updatedToken.pos_z,
-        },
-        success: stepsCompleted > 0,
-      })
-
-      console.log(`[WS] entity:move_request — ${user.username} → ${actualMoveType} entité ${entityId} (MR:${mr} Dmax:${dmax} steps:${stepsCompleted})`)
+      await finalizeEntityDisplacement(io, campaignId, finalizeCtx)
+      console.log(`[WS] entity:move_request — ${user.username} → ${actualMoveType} entité ${entityId}`)
     } catch (err) {
       console.error('[WS] entity:move_request error:', err.message)
     }

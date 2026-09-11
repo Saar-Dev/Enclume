@@ -29,7 +29,8 @@ import Sidebar from '../components/Sidebar'
 import CriticalEffectOverlay from '../components/CriticalEffectOverlay'
 import DicePanel from '../components/DicePanel'
 import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
-import CatastropheReviewQueue from '../components/CatastropheReviewQueue'
+import CatastropheChoiceQueue from '../components/CatastropheChoiceQueue'
+import ChancePlayerChoiceCard from '../components/ChancePlayerChoiceCard'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
 import ExoSheetWindow from '../character/ExoSheetWindow'
@@ -1269,8 +1270,13 @@ function SessionContent({ campaignId }) {
       {/* ─── EnvironmentalResultQueue — toujours monté, jamais gaté au mode combat ───── */}
       <EnvironmentalResultQueue socket={socket} />
 
-      {/* ─── CatastropheReviewQueue — toujours monté, MJ uniquement, jamais gaté au mode ── */}
-      <CatastropheReviewQueue socket={socket} />
+      {/* ─── CatastropheChoiceQueue — toujours monté, MJ uniquement, jamais gaté au mode. Fusionne
+           Catastrophe combat (conséquence table) + choix Chance PNJ (PLAN_CHANCE.md L3e-4, retour
+           Saar 2026-09-11 : une seule fenêtre, pas deux séparées) ── */}
+      <CatastropheChoiceQueue socket={socket} />
+
+      {/* ─── Choix Chance sur Catastrophe — PJ, sa propre carte (PLAN_CHANCE.md L3e-1) ── */}
+      <ChancePlayerChoiceCard socket={socket} />
 
       {/* ─── CombatOverlay — position:fixed, z-index 1000, visible en mode combat ── */}
       {mode === 'combat' && (

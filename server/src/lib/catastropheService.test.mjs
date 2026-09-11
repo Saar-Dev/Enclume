@@ -5,7 +5,7 @@ import db from '../db/knex.js'
 import { CATASTROPHE_EFFECT_TABLE, findCatastropheEntry } from '../../../shared/catastropheEffectTable.js'
 import {
   rollCatastropheEffect, isCombatActive, createPendingCatastrophe, resolvePendingCatastrophe,
-  maybeTriggerCatastrophe, listPendingCatastrophes,
+  maybeTriggerCatastrophe, listPendingCatastrophes, withdrawPendingCatastrophe,
 } from './catastropheService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/catastropheService.test.mjs
@@ -162,6 +162,47 @@ test('resolvePendingCatastrophe : override hors 1-10 rejeté avant toute écritu
 
     const resolved = await resolvePendingCatastrophe(fakeIo, fixture.campaign.id, pending.id, {})
     assert.ok(resolved)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+// ─── withdrawPendingCatastrophe — annulation sans effet, idempotence ─────────────────────────
+
+test('withdrawPendingCatastrophe : annule sans appliquer, jamais deux fois', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    await db('combat_state').insert({ campaign_id: fixture.campaign.id, phase: 'RESOLUTION' })
+    const pending = await createPendingCatastrophe(fakeIo, fixture.campaign.id, fixture.token.id, { site: 'test' })
+
+    const withdrawn = await withdrawPendingCatastrophe(fakeIo, fixture.campaign.id, pending.id)
+    assert.ok(withdrawn)
+    assert.equal(withdrawn.applied_entry, null, 'aucun effet appliqué')
+    assert.ok(withdrawn.resolved_at)
+
+    // Idempotence : un second retrait ne fait rien.
+    const secondAttempt = await withdrawPendingCatastrophe(fakeIo, fixture.campaign.id, pending.id)
+    assert.equal(secondAttempt, null)
+
+    assert.equal((await listPendingCatastrophes(fixture.campaign.id)).length, 0)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('withdrawPendingCatastrophe : no-op si déjà résolue par le MJ (resolvePendingCatastrophe)', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    await db('combat_state').insert({ campaign_id: fixture.campaign.id, phase: 'RESOLUTION' })
+    const pending = await createPendingCatastrophe(fakeIo, fixture.campaign.id, fixture.token.id, { site: 'test' })
+    const resolved = await resolvePendingCatastrophe(fakeIo, fixture.campaign.id, pending.id, {})
+    assert.ok(resolved)
+
+    const withdrawAttempt = await withdrawPendingCatastrophe(fakeIo, fixture.campaign.id, pending.id)
+    assert.equal(withdrawAttempt, null, 'déjà résolue par le MJ — jamais retirée après coup')
+
+    const row = await db('pending_catastrophes').where({ id: pending.id }).first()
+    assert.equal(row.applied_entry, pending.table_entry, 'effet du MJ resté intact')
   } finally {
     await cleanup(fixture)
   }

@@ -148,6 +148,12 @@ export const WS = {
   CATASTROPHE_PENDING:           'combat:catastrophe_pending',     // serveur → room (filtré MJ côté client) : nouvelle entrée en attente { id, tokenId, tableEntry, context, rolledAt }
   CATASTROPHE_RESOLVE:           'combat:catastrophe_resolve',     // GM → serveur : { pendingId, override? } — override = numéro d'entrée 1-10 alternatif, absent = confirme le jet tel quel
   CATASTROPHE_APPLIED:           'combat:catastrophe_applied',     // serveur → room : effet réellement appliqué après validation MJ { id, tokenId, appliedEntry }
+  // Régénération de Chance sur Catastrophe (docs/PLANS/PLAN_CHANCE.md L3) — système entier, PAS
+  // combat-only (contrairement à CATASTROPHE_* ci-dessus) : namespace 'chance:', pas 'combat:'.
+  // Choix RAW mutuellement exclusif gagner 1 Chance / relancer le Test, posé AVANT toute résolution.
+  CHANCE_CHOICE_PENDING:         'chance:choice_pending',          // serveur → room (filtré : PJ propriétaire ou MJ pour un PNJ, patron CATASTROPHE_PENDING) : { id, characterId, testLabel, site, rolledAt }
+  CHANCE_CHOICE_RESOLVE:         'chance:choice_resolve',          // joueur (son perso) ou MJ (PNJ) → serveur : { pendingId, choice: 'gain_point' | 'reroll' }
+  CHANCE_CHOICE_RESOLVED:        'chance:choice_resolved',         // serveur → room : choix appliqué, retire l'entrée en attente { id, characterId, choice }
   // Notice système combat — retour éphémère à un seul joueur (pas un message de chat persistant,
   // cf. docs/PLANS/PLAN_CHAT.md). Remplace un détournement de CHAT_MESSAGE (COM29 dual-wield),
   // même famille que COMBAT_DECLARE_ERROR/TRADE_ERROR/WIZARD_ERROR.

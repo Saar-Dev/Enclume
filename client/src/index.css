@@ -4492,6 +4492,52 @@ Convention :
   right: 4px;
 }
 
+/* ── CatastropheChoiceQueue.jsx (bloc chance-choice-*) / ChancePlayerChoiceCard.jsx — même recette visuelle que
+   catastrophe-review-*, classes propres pour ne pas coupler les deux fonctionnalités
+   (PLAN_CHANCE.md L3e-1) ── */
+.chance-choice-overlay {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+}
+.chance-choice-card {
+  width: 320px;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+}
+.chance-choice-title {
+  font-weight: 700;
+}
+.chance-choice-test-label {
+  opacity: 0.85;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+.chance-choice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+.chance-choice-queue-badge {
+  position: fixed;
+  top: 4px;
+  left: 4px;
+}
+.chance-choice-countdown {
+  font-size: 0.8em;
+  opacity: 0.7;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
 /* ── Curseur custom canvas 3D (SceneCursorOverlay.jsx) ─────────────────────── */
 .scene-cursor-overlay {
   position: fixed;

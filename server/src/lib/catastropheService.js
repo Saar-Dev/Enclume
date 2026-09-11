@@ -115,6 +115,27 @@ export async function resolvePendingCatastrophe(io, campaignId, pendingId, { ove
   return resolved
 }
 
+// withdrawPendingCatastrophe — annule une Catastrophe en attente SANS appliquer d'effet (PLAN_
+// CHANCE.md L3e-4 : le joueur a choisi "refaire son Test" sur le choix Chance lié — RAW, un
+// reroll remplace intégralement le Test d'origine, sa Catastrophe ne tient plus). Idempotent comme
+// resolvePendingCatastrophe (WHERE resolved_at IS NULL) : si déjà résolue (validée par le MJ avant
+// que le joueur ne réponde), rejetée silencieusement, jamais retirée d'un effet déjà appliqué.
+export async function withdrawPendingCatastrophe(io, campaignId, pendingId, database = db) {
+  const [resolved] = await database('pending_catastrophes')
+    .where({ id: pendingId, campaign_id: campaignId })
+    .whereNull('resolved_at')
+    .update({ resolved_at: database.fn.now(), applied_entry: null })
+    .returning('*')
+
+  if (!resolved) return null // déjà résolue (MJ a validé avant l'arrivée du choix) — pas de retrait
+
+  io.to(campaignId).emit(WS.CATASTROPHE_APPLIED, {
+    id: resolved.id, tokenId: resolved.token_id, appliedEntry: null, withdrawn: true,
+  })
+
+  return resolved
+}
+
 // listPendingCatastrophes — resync (montage client, reconnexion MJ via SESSION_JOIN,
 // server/src/socket/index.js). Ordonné par ancienneté, même patron que combat_pending.
 export async function listPendingCatastrophes(campaignId, database = db) {

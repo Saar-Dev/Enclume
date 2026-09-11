@@ -7,12 +7,14 @@ import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerConnectorHandlers } from './socketConnector.js'
 import { registerCombatHandlers } from './socketCombat.js'
-import { pickNextTimelineStep } from './combatTurnEngine.js'
+import { pickNextTimelineStep, combatTimers, combatPreviews } from './combatTurnEngine.js'
 import { registerTradeHandlers } from './socketTrade.js'
 import { registerWizardHandlers } from './socketWizard.js'
 import { registerChatHandlers } from '../chat/socketChat.js'
 import { registerCatastropheHandlers } from './socketCatastrophe.js'
 import { listPendingCatastrophes } from '../lib/catastropheService.js'
+import { registerChanceHandlers } from './socketChance.js'
+import { listPendingChanceChoices } from '../lib/chanceCatastropheChoiceService.js'
 import { startPresence, endPresence } from '../lib/campaignActivityService.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
@@ -24,15 +26,9 @@ const pendingEntityActions = new Map()
 // pendingEntityActions ci-dessus (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §7 point 5).
 const pendingConnectorActions = new Map()
 
-// Map des timers combat actifs â€” Map<campaignId, Map<tokenId, timeoutId>>
-// DÃ©clarÃ©e hors de initSocket â€” singleton, PC16.
-// Sprint 1 : dÃ©clarÃ©e uniquement. Logique timer dÃ©marrÃ©e en Sprint 2.
-const combatTimers = new Map()
-
-// Cache Ã©phÃ©mÃ¨re des previews d'annonce en cours â€” Map<campaignId, previewPayload>
-// Non persistÃ© : perdu sur restart serveur (perte tolÃ©rÃ©e â€” prÃ©sence Ã©phÃ©mÃ¨re LdB).
-// SynchronisÃ© au client sur SESSION_JOIN. PurgÃ© sur declare / phase change / combat end.
-const combatPreviews = new Map()
+// combatTimers / combatPreviews — désormais déclarées dans combatTurnEngine.js (PLAN_CHANCE.md
+// L3e-4a) : socketCombatHelpers.js doit pouvoir les réutiliser pour rappeler advanceTimeline()
+// depuis une résolution différée par un choix Chance, sans créer de cycle d'import avec index.js.
 
 const initSocket = (io) => {
 
@@ -282,6 +278,22 @@ const initSocket = (io) => {
                 })
               }
             }
+
+            // Choix Chance sur Catastrophe (PLAN_CHANCE.md L3e-1) — resync tous rôles, même patron
+            // que la diffusion live (io.to(campaignId).emit) : le filtrage PJ/PNJ/propriété se fait
+            // côté client (CatastropheChoiceQueue.jsx / ChancePlayerChoiceCard.jsx), pas ici.
+            const pendingChanceChoices = await listPendingChanceChoices(campaignId)
+            for (const pc of pendingChanceChoices) {
+              socket.emit(WS.CHANCE_CHOICE_PENDING, {
+                id: pc.id,
+                characterId: pc.character_id,
+                testLabel: pc.test_label,
+                site: pc.site,
+                rolledAt: pc.rolled_at,
+                linkedCatastropheId: pc.linked_catastrophe_id,
+                timeoutMs: pc.timeout_ms,
+              })
+            }
           }
         } catch (err) {
           console.warn('[WS] session:join â€” combat state sync error (non bloquant):', err.message)
@@ -297,6 +309,7 @@ const initSocket = (io) => {
         registerTradeHandlers(io, socket, context)
         registerChatHandlers(io, socket, context)
         registerCatastropheHandlers(io, socket, context)
+        registerChanceHandlers(io, socket, context)
         // registerWizardHandlers déjà appelé plus haut, avant SESSION_JOINED (voir commentaire ligne
         // ~59) — pas ici, doublon supprimé (aurait enregistré wizard:join/wizard:lock_update deux
         // fois sur le même socket).
