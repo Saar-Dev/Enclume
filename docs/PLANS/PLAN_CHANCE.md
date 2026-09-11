@@ -1,177 +1,315 @@
-# PLAN_CHANCE.md — Mécanique de dépense de points de Chance
+# PLAN_CHANCE.md — Plan technique : mécanique de dépense de points de Chance
 
-> Cadrage 2026-09-05 (Claude/Saar). Chantier **transversal** : débloque le Test de Chance de l'AOE
-> (fusil à pompe / grenades longue-extrême portée, aujourd'hui ignoré — écart RAW), le **tir de
-> suppression** (toute sa résolution en dépend), la réduction de gravité des Dommages d'armure et des
-> Blessures, et la relance de jet générique. **Autorité : Livre de Base Polaris.**
+> Version 2.0 — 2026-09-11 (réécriture complète, RAW fourni par Saar). **Remplace intégralement
+> la v1 (2026-09-05)**, dont l'hypothèse d'architecture centrale (une réserve `chc_points`
+> séparée du score) s'est révélée fausse à la lecture du RAW — voir `MANUEL_CHANCE.md` §1.
+> Statut : cadrage terminé, prêt à coder sur validation Saar.
 >
-> ## ⚠️ Bloqué en amont — RAW à fournir par Saar
->
-> Le cœur des règles de Chance est, selon le LdB lui-même (`docs/REGLES/ATTRIBUTS.md:31-33` : « Les
-> règles de Chance sont amplement détaillées dans le chapitre consacré au système de jeu »,
-> `REGLEARMURE.md:446` : « Voir la section Chance, dans le chapitre Tests et actions »), dans **un
-> chapitre non transcrit** dans `docs/REGLES/`. Il manque :
-> 1. **Combien de points dépensables** un personnage a, et **comment ils se régénèrent** (par
->    séance ? par aventure ? repos ? jamais ?). Le *score* de Chance (`chc`, niveau sur 20) existe ;
->    la *réserve dépensable* est une autre notion.
-> 2. **Le coût exact** de chaque usage (relance = 1 pt ? réduction de gravité = 1-2 pts, ça c'est
->    connu `REGLEARMURE.md:443-446` ; forcer un Test de Chance = ?).
-> 3. **Ce qu'un Test de Chance teste précisément** : `1D20 ≤ chc` modifié par le bonus/malus (c'est
->    la lecture actuelle, `damageService.js:404`), ou une autre échelle.
-> 4. Les usages hors combat (« indices et petits bonus du MJ », `ATTRIBUTS.md:36`) — probablement
->    hors périmètre v1, à confirmer.
->
-> **→ Fournir la ou les pages « Chance » du chapitre système de jeu avant le cadrage détaillé.** Ce
-> document liste ce qui est déjà en place et tous les points d'intégration, pour qu'ils soient prêts
-> dès que le RAW arrive.
+> Responsabilité unique : architecture technique (fichiers, services, séquencement). Ce document
+> ne contient aucune règle métier — celles-ci sont dans `docs/MANUELS/MANUEL_CHANCE.md`, sourcé
+> lui-même sur `docs/REGLES/REGLE_CHANCE.md` (RAW). Toute question « pourquoi ce coût / cet
+> effet » se répond dans le MANUEL, jamais ici (Règle 9/10, `docs/RegleDocumentaire.md`).
 
 ---
 
-## 1. Ce qui existe déjà [VÉRIFIÉ dans le code, 2026-09-05]
+## 1. Vue d'ensemble
 
-**Correction d'une affirmation fausse répétée** : plusieurs docs et commentaires
-(`PLAN_AOE.md` §5.2, `PLAN_ARMES_SPECIALES.md` §3, `socketCombatAoe.js:388-393`, `JOURNAL8.md`
-§« AOE Segment 8 »/§« 2b ») affirment « aucune colonne Chance n'existe dans le schéma, grep zéro
-résultat char_sheet ». **Faux** — le grep cherchait `chance`, la colonne s'appelle `chc` :
+**Périmètre V1** (détail et raisons : `MANUEL_CHANCE.md` §5) :
+- Test de Chance générique (formule + modificateur signé)
+- Dépense — Événement favorable (forçage combat), Réduction de gravité (Blessures grave+),
+  Indice / Événement favorable narratif (mécanique minimale, zéro résolution)
+- Régénération — Catastrophe (auto + choix joueur), Bonne idée / Accomplissement scénario
+  (zéro dev, édition `chc` déjà existante)
 
-| Brique | Où | État |
-|---|---|---|
-| **Score de Chance** `char_sheet.chc` | migration `22_char_sheet.js:7` (`integer default 11`, borné 1-20) | ✅ existe |
-| Édition MJ/joueur du score | `PUT /api/char-sheet/:characterId/chc` (`char-sheet.js:480`) + `CharacterSheet.jsx:258-260,588` (champ éditable) | ✅ câblé |
-| **Test de Chance déjà résolu** (Petit bouclier) | `damageService.js:398-405` — `1d20 ≤ (sheetCible.chc ?? 11)`, émis en `DICE_RESULT` (`skillLabel: 'Test de Chance — Bouclier'`, `socketCombatHelpers.js:1157-1168`) | ✅ 1 cas réel, **pas encore de modificateur bonus/malus appliqué** |
-| Valeur de départ RAW | Réaliste 11 / Intermédiaire 13 / Héroïque 15 (`REGLE_CREATION.md:273-278`) | à câbler en création si pas déjà (à vérifier) |
+**Hors périmètre V1** (rappel, détail `MANUEL_CHANCE.md` §3.5, §3.2-3.3) :
+- Coup de pouce (+5, marge forcée à 0) — reporté V2, pas abandonné
+- Test de groupe, modificateurs narratifs MJ — aucun consommateur identifié
+- Mort subite, Maladies/poisons/drogues/irradiations — dépendances externes non résolues
+  (mécanique de mort et domaine « États de santé » absents du projet)
 
-Donc le chantier **n'est pas « créer le stockage »** — le score est là. Ce qui manque : la **réserve
-dépensable**, le **geste de dépense** (relance / réduction de gravité / forçage), et son **UI**.
+**Débloque** : tir de suppression (`PLAN_AOE.md`), Test de Chance AOE longue/extrême portée
+(écart RAW documenté dans `socketCombatAoe.js`), Usure & Intégrité Lot 2 — L8 (`ROADMAP.md`,
+dépend de `resolveChanceTest`).
 
----
-
-## 2. Points d'intégration — tous recensés (RAW combat déjà transcrit)
-
-### 2.1 Test de Chance « pour éviter d'être touché » — AOE (aujourd'hui *ignoré*)
-
-- **Fusil à pompe** longue portée : « les cibles ont droit à un Test de Chance pour éviter d'être
-  touchées » ; extrême : « Test de Chance avec un bonus de +5 » (`REGLES_ARMES_SPECIALES.md:36,39`).
-- **Grenades** longue portée : idem ; extrême : « + un bonus de +5 » (`REGLES_ARMES_SPECIALES.md:100,103`).
-- État actuel : `socketCombatAoe.js` documente explicitement l'écart — les cibles à ces paliers
-  subissent le dégât réduit **sans aucune chance d'esquive**. Une fois `resolveChanceTest` disponible :
-  la couche 4 AOE (par cible, à partir de `ht.band`) appelle le Test ; sur réussite, la cible est
-  retirée de `resolveTargets`. Le modificateur = « bonus de réussite / malus d'échec du Test de tir »
-  (`REGLES_ARMES_SPECIALES.md` + `REGLESYSCOMBAT.md:1407`), + `+5` au palier extrême.
-
-### 2.2 Tir de suppression — *toute* la résolution en dépend
-
-`PLAN_AOE.md` §1 (couloir ~3 m) : « pas de dégât direct — **Test de Chance par cible dans/traversant
-la zone** ». `REGLESYSCOMBAT.md:1545-1550` : le personnage qui traverse une zone de tir de barrage
-fait un Test de Chance ; **un bonus de réussite du tireur *réduit* le niveau de Chance de la cible,
-un malus d'échec l'*augmente* (inversé par rapport à l'habitude)** ; couverture partielle / obscurité
-/ gaz → +3 à +10 au gré du MJ ; **un PJ à découvert peut toujours dépenser un point de Chance pour
-réussir ce Test** (`:1550`). C'est le cas d'usage « forçage » le plus net.
-→ Ne pas démarrer le tir de suppression avant ce chantier (déjà acté, `ROADMAP.md`).
-
-### 2.3 Réduction de gravité — Dommages d'armure et Blessures
-
-- **Dommages d'armure** : `REGLEARMURE.md:442-446` — « dépenser des points de Chance pour réduire le
-  niveau de Dommages d'un ou deux degrés » (1 pt → -1 degré, 2 pts → -2). Point d'accroche :
-  après résolution d'un Dommage d'armure, avant écriture définitive de la gravité.
-- **Blessures** : `ATTRIBUTS.md:35` — « réduire la gravité de certaines blessures ». Formulation
-  vague (« certaines ») → **RAW précis nécessaire** (quelles blessures, quel coût). Point d'accroche :
-  `damageService.resolveTargetHit` / la file de confirmation de dégât PJ (`COMBAT_DAMAGE_PROMPT` /
-  `CombatDamageWindow`), après le calcul de `finalSeverity`, avant persistance.
-
-### 2.4 Relance de jet générique
-
-`ATTRIBUTS.md:34` — « relancer des dés lors de tests malchanceux ». Miroir du flux d'auto-relance sur
-échec critique déjà en place (`shared/polarisTestResolution.js#applyCriticalFailReroll`,
-`resolveCriticalFailReroll`) — mais **déclenché par le joueur**, sur un échec simple, contre 1 point.
-Point d'accroche : `CombatModifiersWindow` (jet de tir/CaC), fenêtre de résultat de Test générique.
-
-### 2.5 Autres mentions combat (à cadrer avec le RAW)
-
-- Tir furtif : « en cas de réussite du Test de tir, il doit enfin réussir un Test de Chance »
-  (`REGLESYSCOMBAT.md:1405-1408`).
-- Événement malheureux / catastrophe : Test de Chance « avec les modificateurs que le MJ estime
-  nécessaires » (`REGLESYSCOMBAT.md:1660-1665`) — recoupe le Lot 1 Catastrophe (file MJ, `mechanized:false`).
+**Autorités** (invariant #3, `AGENTS.md`) : Livre de Base Polaris > `REGLE_CHANCE.md` >
+`MANUEL_CHANCE.md` > ce PLAN. Une divergence entre ce PLAN et le MANUEL est un bug de ce PLAN.
 
 ---
 
-## 3. Architecture cible [CIBLE — à valider avec le RAW]
+## 2. L0 — Schéma : **aucune migration**
 
-### 3.1 Stockage
+`char_sheet.chc` (migration `22_char_sheet.js:7`, `integer default 11`) reste tel quel — c'est
+déjà la réserve dépensable, pas seulement le score (`MANUEL_CHANCE.md` §1). Aucune colonne
+nouvelle.
 
-- **Score** : `char_sheet.chc` — **inchangé**, déjà là.
-- **Réserve dépensable** : nouvelle colonne `char_sheet.chc_points` (integer, nullable ou default =
-  valeur RAW). Régénération : **règle RAW**. Édition MJ : même route/UI que `chc` (ajouter le champ,
-  pas une route neuve — `PUT /chc` accepte déjà un body, l'étendre en `{ chc, chc_points }` ou une
-  route sœur selon la convention `char-sheet.js`). Migration `NNN_char_sheet_chc_points.js` (structure)
-  — numéro réel au moment de coder (`rules/migrations.md`).
+Contrainte existante : uniquement applicative, `PUT /api/char-sheet/:characterId/chc`
+(`char-sheet.js:497`, `1 ≤ chc ≤ 20`) — pas de `CHECK` en base. Suffisant : les services L2/L3
+appliquent leurs propres gardes (`chc − coût ≥ 3` en dépense, `min(chc + n, 20)` en
+régénération) au niveau applicatif, cohérent avec la route MJ existante. Rien à changer ici.
 
-### 3.2 Primitive partagée
+---
 
-`shared/polarisTestResolution.js` (ou un nouveau `shared/chanceTest.js` si le fichier grossit) :
+## 3. L1 — Primitive `resolveChanceTest` (shared, pure, testée)
+
+Le Livre de Base p.201-205 est déjà couvert par une autorité unique marge/critique/Catastrophe :
+`shared/polarisTestResolution.js#resolveTestOutcome(roll, seuil)` — fonction pure, un jet déjà
+effectué contre un Seuil déjà calculé, retourne `{ isSuccess, isCriticalSuccess, isCriticalFail,
+mr, catastropheRisk }`. Un Test de Chance **est** un Test comme un autre au sens de cette
+fonction : `seuil = chc + modificateur`.
 
 ```js
-// resolveChanceTest(chc, { modifier = 0 }) → { roll, threshold, success }
-// 1D20 ≤ chc + modifier. Le SENS du modificateur est RAW-spécifique (cf. §2.2 : inversé pour le
-// barrage). L'appelant fournit le modificateur signé, cette primitive ne connaît pas le contexte.
+// shared/polarisTestResolution.js — ajout
+// resolveChanceTest(chc, roll, { modifier = 0 } = {}) → resolveTestOutcome(roll, chc + modifier)
+// Enveloppe nommée, pas de réimplémentation — expose isSuccess/mr/catastropheRisk gratuitement,
+// y compris le hook de régénération L3 (catastropheRisk) sans code Chance-spécifique.
 ```
 
-`damageService.js:398-405` (Petit bouclier) **bascule dessus** — aujourd'hui il fait le jet à la
-main sans modificateur ; c'est le premier consommateur, prouvé avant les autres (même discipline que
-`resolveTargetLocations` pour l'AOE).
+Pas de nouveau fichier : `polarisTestResolution.js` est déjà l'autorité déclarée pour ce type de
+calcul, et reste de taille raisonnable après cet ajout.
 
-### 3.3 Geste de dépense
+Test unitaire : étendre `shared/polarisTestResolution.test.mjs` (cas Chance : succès/échec,
+modificateur positif/négatif, seuil ≥ 20).
 
-Un seul point d'autorité serveur : `chanceService.spendChancePoints(db, charSheetId, n, { reason })`
-— décrémente `chc_points` sous garde (`>= n`, transaction), émet l'événement de mise à jour fiche,
-refuse si insuffisant. Trois déclencheurs :
-1. **Forçage d'un Test de Chance** (barrage `:1550`, AOE longue/extrême) : avant/à la place du jet,
-   « réussite automatique » contre le coût RAW.
-2. **Relance d'un jet** (§2.4) : re-`parseDice` du même type, garde le meilleur (ou le nouveau — RAW).
-3. **Réduction de gravité** (§2.3) : `finalSeverity` descend de `n` degrés (borné), `n ∈ {1,2}`.
-
-### 3.4 UI — bouton « Utiliser sa Chance »
-
-Transversal, **jamais** un composant par site. Un `<ChanceSpendButton>` réutilisable (affiché si
-`chc_points > 0` et le contexte l'autorise), branché dans :
-- `CombatModifiersWindow` (relance du jet de tir/CaC),
-- la fenêtre de confirmation de dégât PJ (`CombatDamageWindow` — réduction de gravité),
-- une éventuelle fenêtre de Test de Chance dédiée (barrage / AOE — la cible PJ décide).
-Reset/verrou : un point dépensé est confirmé serveur avant de disparaître de l'UI (pas d'optimisme).
+**Bascule du premier consommateur** — Petit bouclier (`damageService.js:398-407`) : remplace le
+jet manuel (`rollChance <= chanceThreshold`, sans modificateur) par un appel à
+`resolveChanceTest`. Comportement observable inchangé (aucun modificateur appliqué aujourd'hui à
+ce site) — même discipline que `resolveTargetLocations` pour l'AOE : le premier consommateur
+prouve la primitive avant les suivants.
 
 ---
 
-## 4. Séquençage proposé [CIBLE]
+## 4. L2 — Service `chanceService.spendChancePoints`
 
-1. **Migration `chc_points`** + édition MJ (route + `CharacterSheet.jsx`) + valeur de départ en
-   création. Isolé, testable seul.
-2. **`resolveChanceTest` partagée** + bascule du Petit bouclier dessus (0 changement de comportement,
-   prouvé avant les autres consommateurs). `node --test`.
-3. **`chanceService.spendChancePoints`** + événement fiche + garde transactionnelle. Tests DB.
-4. **UI `<ChanceSpendButton>`** + branchement relance de jet (le cas le plus simple, 1 pt, pas de
-   file). Session Saar.
-5. **Réduction de gravité** (Dommages d'armure d'abord — coût RAW connu 1-2 pts ; Blessures ensuite si
-   le RAW le précise). Session Saar.
-6. **Wiring AOE** : Test de Chance fusil à pompe / grenades longue-extrême (retire la cible de
-   `resolveTargets` sur réussite ; forçage possible). Lève l'écart RAW documenté dans
-   `socketCombatAoe.js` + `JOURNAL8.md`. Session Saar.
-7. **Débloque le tir de suppression** — chantier séparé (`PLAN_AOE.md`), qui devient faisable.
+Fichier neuf : `server/src/services/chanceService.js`, sur le modèle de
+`server/src/services/integrityService.js` (DB pure, transactionnel, **aucune émission
+socket** — l'appelant émet après succès, cf. `.claude/rules/core.md`).
 
----
+```js
+// spendChancePoints(db, charSheetId, n, { reason }) → { chc: nouveauScore }
+// Garde : chc - n >= 3 (RAW : "descendu à 3 ne peut plus dépenser"). Rejette sinon.
+// Décrémente char_sheet.chc directement, sous transaction (verrou contre dépense concurrente).
+// n ∈ {1, 2} selon l'appelant — le service ne connaît pas la raison métier du montant.
+```
 
-## 5. Hors périmètre
-
-- Usages narratifs hors combat (« indices et bonus du MJ ») — v2, à cadrer si besoin.
-- La **zone persistante inter-tours** du tir de suppression (couloir qui contraint le déplacement
-  d'un Tour à l'autre) — c'est l'*autre* blocage du tir de suppression, indépendant de la Chance
-  (objet zone vivante dans l'état de combat que `planCombatWorldMovement` consulte). Chantier distinct.
+Tests DB (`node --test`, nécessite `--env-file`, lancés par Saar) : garde refusée sous le
+plancher, dépense concurrente sérialisée correctement.
 
 ---
 
-## 6. État d'implémentation
+## 5. L3 — Service `chanceService.grantChancePoint` + hook régénération Catastrophe
 
-| Étape | Statut |
+```js
+// grantChancePoint(db, charSheetId, n = 1) → { chc: nouveauScore }
+// Inverse de spendChancePoints — plafond min(chc + n, 20), sous transaction.
+```
+
+**Décision tranchée (Saar, 2026-09-11) : câblage système entier.** Une mécanique de Chance qui
+ne fonctionnerait que « parfois » (uniquement en combat) serait incohérente en termes de game
+design — soit elle s'implante partout où le RAW la prévoit, soit elle ne s'implante pas
+(`MANUEL_CHANCE.md` §4.1). Le RAW du régénérateur « Être malchanceux » se déclenche sur **toute
+Catastrophe (Marge d'échec ≥ 15) lors d'un Test aléatoire**.
+
+Surface réelle, vérifiée : `resolveTestOutcome` a **5 points d'appel directs** côté serveur —
+`combatAttackRoll.js`, `polarisTestService.js`, `socketCombatHelpers.js`, `socketEntity.js`,
+`gmArbitratedTestService.js`. **S'y ajoute la primitive L1** : un Test de Chance est lui-même un
+Test aléatoire au sens RAW (`REGLE_CHANCE.md` : « le Test à effectuer est un Test aléatoire
+normal »), donc `resolveChanceTest` (qui passe par `resolveTestOutcome`) doit recevoir le même
+hook — sinon on recrée exactement l'incohérence « ça marche partout sauf là » qu'on vient
+d'écarter pour le combat/narratif. Concrètement : la bascule Petit bouclier (L1) et le Test de
+Chance AOE (L4) sont aussi des points d'entrée du hook. Câblage contenu malgré tout : 5 sites
+directs + les 2 consommateurs de `resolveChanceTest`, pas un sprawl.
+
+**Aucune distinction PJ/PNJ (décision Saar)** : même câblage pour tout `char_sheet` qui a un
+`chc`, sans garde `character.type`. Plus simple (rien à filtrer) et sans conséquence — un PNJ
+jetable qui finirait à 20 en Chance avant d'être jeté ne change rien au jeu.
+
+`grantChancePoint` reste **générique** (§5 : `+n`, plafond 20, aucune connaissance de la raison
+métier — même principe que `spendChancePoints`). Le plafond RAW `chc < 15` n'est **pas** une
+règle générale de tout regain (les futures régénérations « bonne idée »/« accomplissement »
+n'ont que le plafond 20, pas 15), donc il ne vit pas dans `grantChancePoint` mais dans un point
+d'entrée dédié à cette seule source.
+
+Chaque site (direct ou via `resolveChanceTest`), quand `outcome.catastropheRisk === true` sur le
+Test d'un personnage :
+1. Propose le choix RAW au joueur : gagner 1 point de Chance **ou** relancer le Test à la place
+   (mutuellement exclusif) — même famille de mécanisme et même pattern UI que le reroll déjà en
+   place sur échec critique (`applyCriticalFailReroll`). **À vérifier au moment de coder ce
+   lot, site par site** : chacun des 5+2 points d'appel a-t-il déjà une fenêtre de résultat
+   synchrone où poser ce choix, ou faut-il en construire une (comme la fenêtre de décision AOE
+   du L4) ? Pas supposé résolu ici — ce lot peut se révéler aussi large que L4 pour cette raison.
+2. Si le joueur choisit le point : `chanceService.handleCatastropheRegen(db, io, charSheetId, {
+   testLabel })` :
+
+```js
+// chanceService.handleCatastropheRegen(db, io, charSheetId, { testLabel }) :
+// - si chc >= 15 : rien (RAW, pas de regain)
+// - sinon : grantChancePoint(db, charSheetId, 1), puis poste la carte MJ (ci-dessous)
+// Le choix joueur (étape 1 ci-dessus) a déjà eu lieu avant cet appel : cette fonction ne fait
+// que le grant + la carte, jamais la relance — point d'entrée unique pour les 7 sites, logique
+// de garde/carte écrite une seule fois.
+```
+
+**Garde-fou MJ (décision Saar) — réutilise un patron déjà construit et validé.** Le chantier
+Usure & Intégrité a déjà livré exactement ce mécanisme pour la réparation (L6c, validé jeu réel
+2026-09-10) : une carte d'action dans le chat du MJ, enregistrée par type de message dans le
+`MessageRendererRegistry` (`repair_request: (msg, ctx) => <RepairRequestCard msg={msg}
+ctx={ctx} .../>`, `client/src/components/RepairRequestCard.jsx`). Même patron ici : nouveau type
+de message (ex. `chance_catastrophe_regen`), nouveau composant sur ce modèle (`useState` local,
+gate `ctx.isGm`, un bouton **Annuler**). L'action cible l'événement précis (idempotente — pas un
+décrément aveugle, au cas où plusieurs regains s'enchaînent) et appelle :
+
+```js
+// chanceService.cancelChanceGrant(db, charSheetId, n) → { chc }
+// Revert d'un grantChancePoint automatique, initié par le MJ. Décrémente sans garde de
+// plancher (§4) — distinct de spendChancePoints, réservé aux dépenses joueur.
+```
+
+Le libellé du Test (« Test de tir », « Test de Coordination »...) transite déjà dans les
+événements existants (`DICE_RESULT`/équivalents à chaque site) — à réutiliser pour la carte, pas
+de nouveau texte à inventer par site.
+
+**Propagation temps réel de `chc` (Saar : « il faudrait remonter en temps réel »)** : pas
+d'événement générique `char_sheet` dans le projet (vérifié, `shared/events.js`) — le patron
+existant est que chaque événement socket qui porte déjà le résultat d'une action mutante
+embarque directement les deltas nécessaires (les stores client se mettent à jour depuis ce
+payload, jamais un rebroadcast séparé). `chc` suit le même principe : le delta voyage dans le
+payload de l'événement combat déjà émis par le site concerné (résultat d'attaque, résolution de
+dégât), pas un nouvel événement générique.
+
+---
+
+## 6. L4 — Forçage combat : Événement favorable
+
+Consommateur immédiat : Test de Chance AOE longue/extrême portée (fusil à pompe, grenades —
+`socketCombatAoe.js`, écart RAW déjà documenté dans le code : ces cibles subissent aujourd'hui le
+dégât réduit sans aucune chance d'esquive).
+
+**Point d'attention vérifié avant d'écrire ce lot** : la boucle de résolution AOE
+(`socketCombatAoe.js`, `for (const ht of resolveTargets)`, ~L753-781) est aujourd'hui
+**synchrone et atomique** — aucune pause n'existe pour qu'une cible décide quoi que ce soit avant
+résolution. Donner à chaque cible le choix « forcer / tenter le Test » exige donc d'introduire un
+vrai point d'attente dans cette boucle, pas un simple branchement de primitive.
+
+**Design retenu (Saar)** : une fenêtre de décision envoyée **simultanément à toutes les cibles**
+de l'AOE avant résolution — chaque PJ touché reçoit son propre prompt (forcer / tenter le Test) ;
+les PNJ touchés sont **groupés sous le MJ** en une liste qu'il valide en un clic, comme le fait
+déjà un joueur pour son propre personnage. Un clic de plus par Tour, uniquement dans le cadre
+précis d'une AOE — accepté comme complexité raisonnable, pas un red flag comparable au piège
+« N `armAwaitingDamage` FIFO » déjà écarté sur le tireur PJ AOE (celui-ci corrompait l'UI en
+prétendant gérer N cibles avec un pipeline pensé pour 1 ; ici la fenêtre groupée est conçue pour
+N dès le départ).
+
+Flux : la couche 4 AOE (par cible, à partir de `ht.band`) ouvre cette fenêtre. Si la cible force
+(appel à `spendChancePoints(db, charSheetId, 1, { reason: 'forçage AOE' })`, RAW « Événement
+favorable » — remplace le Test), elle est retirée de `resolveTargets` sans jet. Sinon, Test de
+Chance via L1 avec le modificateur normal (bonus de réussite / malus d'échec du Test de tir, `+5`
+au palier extrême, déjà transcrit `REGLES_ARMES_SPECIALES.md`).
+
+Détail à cadrer au moment de coder ce lot (pas dans ce PLAN) : comportement par défaut si un
+joueur ne répond pas dans la fenêtre (timeout → Test normal, pas de forçage silencieux, cohérent
+avec « pas d'optimisme » déjà posé en L6).
+
+Le tir de barrage (`PLAN_AOE.md`, hors ce chantier) devient faisable une fois L1-L4 livrés, mais
+n'est pas construit ici.
+
+---
+
+## 7. L5 — Réduction de gravité (Blessures)
+
+Point d'accroche : après calcul de `finalSeverity`, avant persistance — flux de confirmation de
+dégât PJ (`COMBAT_DAMAGE_PROMPT` / `CombatDamageWindow`).
+
+`spendChancePoints(db, charSheetId, n, { reason: 'réduction gravité' })`, `n ∈ {1, 2}`, fait
+descendre `finalSeverity` de `n` crans sur l'échelle `WOUND_SEVERITIES`
+(`shared/woundConstants.js` : `legere < moyenne < grave < critique < mortelle`).
+
+Gardes côté appelant (pas dans `spendChancePoints`, qui reste agnostique du « pourquoi ») :
+- Déclenchable uniquement sur Blessure **grave, critique ou mortelle** (RAW — pas légère/moyenne).
+- Exception RAW du palier plein (`MANUEL_CHANCE.md` §3.2) : si le palier cible n'a plus de case
+  disponible, continuer à dépenser au-delà du plafond normal de 2 points.
+- **Hors scope de ce lot** : le cas « Mort subite » (§9) — pas de palier au-delà de `mortelle`
+  dans le moteur actuel, dépendance externe non résolue.
+
+---
+
+## 8. L6 — UI `<ChanceSpendButton>` + fenêtre narrative
+
+Composant React réutilisable, visible si `chc − coût ≥ 3`. Jamais un composant par site
+d'intégration (transversal, cf. doctrine déjà posée en v1 §3.4).
+
+Deux branchements :
+- **Mécanique** (résolution réelle, effet immédiat) : fenêtre de forçage AOE (L4), fenêtre de
+  confirmation de dégât PJ (L5).
+- **Narrative** (`MANUEL_CHANCE.md` §3.4, zéro résolution automatisée) : bouton générique
+  « Utiliser sa Chance » avec un champ texte libre optionnel, décrémente 1 point et poste une
+  note à l'attention du MJ. Canal exact à identifier au moment du lot — réutiliser un mécanisme
+  de message/notification MJ existant plutôt qu'en créer un nouveau (à vérifier, pas supposé ici).
+
+Reset/verrou : une dépense n'disparaît de l'UI qu'une fois confirmée côté serveur — pas
+d'optimisme (principe déjà posé en v1, conservé).
+
+Vérification transverse (`MANUEL_CHANCE.md` §6) : `chc` devient une valeur qui varie en cours de
+séance — revérifier `CharacterSheet.jsx` et tout affichage dérivé pour s'assurer qu'aucun ne le
+traite comme une valeur figée d'Attribut.
+
+---
+
+## 9. Hors-scope V1 (rappel, détail `MANUEL_CHANCE.md` §3.2, §3.3, §3.5)
+
+| Usage | Raison |
 |---|---|
-| Cadrage | Rédigé 2026-09-05 — **bloqué sur RAW** (chapitre système de jeu, section Chance) |
-| Correction docs (« aucune colonne `chc` » → faux) | À faire : `PLAN_AOE.md` §5.2, `PLAN_ARMES_SPECIALES.md` §3, `socketCombatAoe.js` commentaire, `JOURNAL8.md` |
-| 1-7 | Non commencé |
+| Coup de pouce (+5, marge forcée à 0) | Touche potentiellement le moteur générique de marge (`polarisTestResolution.js`) sur tout Test de Compétence/Attribut — cadrage séparé nécessaire. Reporté, pas abandonné. |
+| Test de groupe / modificateurs narratifs MJ | Aucun consommateur identifié parmi les chantiers en attente |
+| Mort subite | RAW complet (`REGLEBLESSURES.md`, seuil 30) mais aucune mécanique de mort de personnage dans le projet |
+| Maladies/poisons/drogues/irradiations | RAW complet (`FATIGUE&DOMMAGES.md` p.244-249, 3 sous-systèmes) mais aucun compteur runtime existant |
+
+---
+
+## 10. Ordre d'implémentation recommandé
+
+L0 (vérification, aucun code) → **L1** (primitive + bascule Petit bouclier, `node --test`) →
+**L2** (`spendChancePoints`, tests DB) → **L3** (`grantChancePoint`/`handleCatastropheRegen`/
+`cancelChanceGrant` + choix joueur + hook Catastrophe sur les 7 points d'entrée, + carte MJ) →
+**L4** (forçage AOE, débloque l'écart RAW documenté) → **L5** (réduction de gravité Blessures) →
+**L6** (UI, session Saar).
+
+L3 est le lot le plus large (7 points d'entrée à instrumenter, dont la vérification/construction
+d'une fenêtre de choix synchrone par site) — candidat naturel à un sous-découpage par site si
+besoin au moment de coder (toujours un fichier à la fois).
+
+Un fichier/service à la fois, pause avant le suivant (segmentation par fichier, convention du
+projet) — même sur un lot déjà approuvé dans son ensemble.
+
+---
+
+## 11. Invariants respectés
+
+- **Une propriété métier = une autorité unique** (invariant #3) : `char_sheet.chc` reste l'unique
+  source de vérité (score et réserve confondus) ; `chanceService` l'unique point d'écriture
+  mutante sur cette valeur.
+- **Pas de logique métier dupliquée client/serveur** : `spendChancePoints`/`grantChancePoint`
+  autoritaires côté serveur ; le client affiche et propose, jamais ne décide.
+- **RAW ou décision écrite, jamais un raccourci silencieux** (invariant #5) : chaque exclusion de
+  périmètre a sa raison tracée (`MANUEL_CHANCE.md` §3.2-3.3, §6 ; ce PLAN §9).
+
+---
+
+## 12. Décisions tranchées (2026-09-11)
+
+- **Pas de colonne `chc_points`** — corrige et remplace l'hypothèse d'architecture de la v1
+  (§3.1, 2026-09-05), fausse à la lecture du RAW.
+- **Coup de pouce** → V2, reporté explicitement (charge sur le moteur générique de marge).
+- **Indice / Événement favorable narratif** → V1, mécanique minimale (décision Saar : « le
+  narratif, c'est juste une fenêtre pour expliquer que l'option existe, aucune résolution »).
+- **Réduction de gravité — Mort subite / Maladies-poisons-drogues-irradiations** → hors périmètre
+  V1, dépendances externes non résolues (RAW complet, moteur absent).
+- **Régénération Catastrophe — câblage système entier** (5 sites `resolveTestOutcome` directs +
+  2 consommateurs de `resolveChanceTest`, un Test de Chance étant lui-même un Test aléatoire RAW),
+  pas limité au combat — cohérence de game design. Aucune distinction PJ/PNJ (même câblage pour
+  tous, plus simple, sans conséquence). Choix joueur préservé (gagner le point ou relancer,
+  mutuellement exclusif) avant tout regain — à vérifier/construire site par site (§5). Garde-fou :
+  carte d'annulation MJ dans le chat, sur le patron déjà validé de `RepairRequestCard.jsx` (§5).
+- **Forçage AOE (L4)** — fenêtre de décision simultanée à toutes les cibles (PJ individuel, PNJ
+  groupés sous le MJ), pas un branchement trivial — accepté comme complexité raisonnable (§6).
+- **Propagation `chc` en temps réel** — pas de nouvel événement générique ; le delta voyage dans
+  le payload des événements combat déjà émis (§5).
