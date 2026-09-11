@@ -13,6 +13,7 @@ import {
   parseAmmoEffects, resolveDmgEffect, resolveChocFormula,
   resolveAmmoMechanic, resolveMechanicDamageFormula,
 } from '../../../shared/weaponAmmoDsl.js'
+import { resolveChanceTest } from '../../../shared/polarisTestResolution.js'
 
 // ─── _fetchWeaponAndAmmo (interne) ─────────────────────────────────────────────
 // Fetch commun arme + munition chargée (current_ammo) en une passe — partagé par
@@ -402,7 +403,7 @@ export async function resolveTargetHit(io, db, campaignId, {
       const rolled = await parseDice('1d20')
       rollChance = rolled.total; chanceRolls = rolled.rolls; chanceSeed = rolled.seed
       chanceThreshold = sheetCible?.chc ?? 11
-      chanceSuccess = rollChance <= chanceThreshold
+      chanceSuccess = resolveChanceTest(chanceThreshold, rollChance).isSuccess
       if (chanceSuccess) armuresSlot.push(shieldPetit)
     }
     const resistanceArmure = calcResistanceArmure(armuresSlot)

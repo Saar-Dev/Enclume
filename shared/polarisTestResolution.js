@@ -120,3 +120,11 @@ export function applyCriticalSuccessBonus(outcome, bonus) {
   if (!outcome.isCriticalSuccess || !bonus) return outcome
   return { ...outcome, mr: outcome.mr + bonus }
 }
+
+// resolveChanceTest(chc, roll, { modifier }) — Test de Chance (docs/REGLES/REGLE_CHANCE.md) :
+// un Test comme un autre au sens de resolveTestOutcome ci-dessus, Seuil = score de Chance actuel
+// + modificateur signé. Enveloppe nommée, pas de réimplémentation — expose isSuccess/mr/
+// catastropheRisk gratuitement à tout appelant (docs/PLANS/PLAN_CHANCE.md §3).
+export function resolveChanceTest(chc, roll, { modifier = 0 } = {}) {
+  return resolveTestOutcome(roll, chc + modifier)
+}

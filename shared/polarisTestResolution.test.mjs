@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier, getMrDegreeKey, MR_TABLE } from './polarisTestResolution.js'
+import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier, getMrDegreeKey, MR_TABLE, resolveChanceTest } from './polarisTestResolution.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
 //   node --test shared/polarisTestResolution.test.mjs
@@ -151,6 +151,36 @@ test('getMrDegreeKey — une clé par palier, "deJustesse" partagé entre réuss
   assert.equal(getMrDegreeKey(35), 'legendaire')
   assert.equal(getMrDegreeKey(-15), 'catastrophique')
   assert.equal(getMrDegreeKey(-1000), 'catastrophique')
+})
+
+test('resolveChanceTest — Seuil = chc sans modificateur, réussite si roll <= chc', () => {
+  const r = resolveChanceTest(11, 11)
+  assert.equal(r.isSuccess, true)
+  assert.deepEqual(r, resolveTestOutcome(11, 11))
+})
+
+test('resolveChanceTest — échec si roll > chc, sans modificateur', () => {
+  const r = resolveChanceTest(11, 12)
+  assert.equal(r.isSuccess, false)
+})
+
+test('resolveChanceTest — modificateur positif élève le Seuil effectif', () => {
+  const r = resolveChanceTest(11, 14, { modifier: 5 })
+  assert.equal(r.isSuccess, true) // seuil effectif 16
+  assert.deepEqual(r, resolveTestOutcome(14, 16))
+})
+
+test('resolveChanceTest — modificateur négatif abaisse le Seuil effectif', () => {
+  const r = resolveChanceTest(11, 9, { modifier: -3 })
+  assert.equal(r.isSuccess, false) // seuil effectif 8
+  assert.deepEqual(r, resolveTestOutcome(9, 8))
+})
+
+test('resolveChanceTest — chc + modificateur >= 20 : aucun échec possible, un 20 devient critique', () => {
+  const r = resolveChanceTest(15, 20, { modifier: 5 })
+  assert.equal(r.isSuccess, true)
+  assert.equal(r.isCriticalFail, false)
+  assert.equal(r.isCriticalSuccess, true)
 })
 
 test('MR_TABLE — aucun trou ni recouvrement entre paliers consécutifs', () => {
