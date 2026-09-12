@@ -6641,3 +6641,52 @@ jeu réel jusqu'ici, après correction du bug de libellé de bouton ci-dessus).
 **Retour arrière** : `git revert` du commit ; `down` des migrations 341-342.
 **Reste** : L5 (réduction de gravité Blessures), L6 (UI générique `<ChanceSpendButton>`) — non
 commencés, détail `PLAN_CHANCE.md` §7-8.
+
+---
+
+## Session (Claude) — 2026-09-12 — Fix : le MJ ne démarre plus de création au nom d'un joueur (onglet Joueurs)
+
+Bug remonté par Saar : dans Configuration de campagne → onglet Joueurs, le bouton « Démarrer une
+création » (`SectionPlayers.jsx`) laissait le MJ créer lui-même le `character`/`char_sheet` d'un
+joueur ciblé (`POST /creation/start` avec `targetUserId`, `routes/creation.js`) — fonctionnalité
+volontaire à l'origine (`docs/Old/PLAN_WIZARDCOLLAB.md` §4.2, « création guidée »), mais contraire à
+l'usage voulu ici : le joueur crée sa fiche lui-même, le MJ ne fait que la rejoindre. Le chemin
+« rejoindre » existait déjà et restait correct (bouton « Reprendre » sur un brouillon déjà démarré
+par le joueur, même route `GET /creation/:sheetId`) — seul le chemin « créer pour autrui » posait
+problème. `targetUserId` n'avait qu'un seul appelant dans tout le client (vérifié par grep), donc
+retrait complet plutôt qu'un correctif partiel.
+
+**Décision d'architecture (recherche demandée par Saar avant de coder)** : le rafraîchissement
+automatique souhaité (« idéalement, actualisation automatique ») a été étudié avant tout ajout —
+un agent d'exploration a confirmé que la page Configuration est un îlot 100% REST : aucun socket
+ouvert (contrairement à SessionPage/WizardCreation), et la fonctionnalité sœur du même composant
+(demandes de transfert du Coffre) utilise déjà exclusivement le rechargement REST, sans push
+(confirmé par un commentaire explicite dans `routes/vault.js`). Ajouter un événement Socket.IO
+dédié à ce seul signal aurait fragmenté la vue (un champ poussé, les autres en snapshot) — rejeté.
+Retenu à la place : rafraîchissement périodique (20 s) + au retour de focus de l'onglet, réplique du
+comportement par défaut de React Query/SWR (absents du projet, aucune dépendance ajoutée) — pattern
+documenté pour un panneau d'admin sans canal poussé dédié.
+
+**Implémentation** : `SectionPlayers.jsx` — bouton « Démarrer une création », `handleStartCreation`
+et le style associé retirés ; `load()` accepte `{ silent }` pour que le poll ne fasse pas clignoter
+la liste vers l'état "Chargement..." ; nouvel effet interval + listener `visibilitychange`, nettoyés
+au démontage. `routes/creation.js` — branche `targetUserId` de `POST /start` supprimée
+intégralement (plus aucun chemin serveur ne permet au MJ d'agir au nom d'un joueur). Clés i18n
+orphelines `rosterStartCreation`/`rosterStartError` retirées de `fr.json`. Commentaire de la garde
+d'idempotence dans `creationService.js#startCreation` corrigé (référençait le chemin `targetUserId`
+supprimé comme raison d'être — la garde reste utile pour un double-clic/deux onglets, juste la
+justification était devenue fausse).
+
+**Trouvaille notée, pas corrigée en base** : le ticket `bug_tickets` `DBG-C1` (« character.user_id
+null quand le MJ crée pour un joueur absent ») porte précisément sur le chemin `targetUserId`
+supprimé ici — désormais caduc, ne peut plus se reproduire. Écriture DB non faite (convention :
+script lancé par Saar), signalé à Saar pour clôture.
+
+**Testé** : `node --check` sur `routes/creation.js` et `services/creationService.js` ; JSON de
+`fr.json` validé ; `eslint` ciblé sur `SectionPlayers.jsx` (0 erreur). Aucun test automatisé
+n'existait sur ces chemins (vérifié, aucune régression à surveiller de ce côté).
+**Non testé** : scénario réel navigateur (le joueur démarre sa création, la carte MJ bascule seule
+sur « Reprendre » sans reload manuel) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : additif de suppression pure — `git revert` du commit suffit, aucune donnée
+persistée à restaurer.

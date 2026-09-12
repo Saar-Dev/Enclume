@@ -1,3 +1,14 @@
+## v233 — 2026-09-12 — Configuration de campagne : onglet Joueurs
+
+### Campagne
+- [fix] Dans l'onglet Joueurs de la Configuration de campagne, le MJ ne peut plus démarrer une
+  création de personnage à la place d'un joueur : c'est désormais toujours le joueur qui crée son
+  personnage lui-même, le MJ ne fait que rejoindre sa fiche une fois qu'elle existe (bouton
+  « Reprendre la création »).
+- [new] La liste des joueurs se met maintenant à jour toute seule (au retour sur l'onglet, et
+  périodiquement) : la fiche en cours de création d'un joueur apparaît sans avoir à recharger la
+  page.
+
 ## v232 — 2026-09-12 — Combat : éviter un tir de zone à longue/extrême portée
 
 ### Combat

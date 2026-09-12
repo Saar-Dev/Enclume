@@ -9,10 +9,9 @@
  *
  * Routes :
  *   POST   /api/creation/start                  — démarre un brouillon (character + char_sheet),
- *                                                  idempotent, targetUserId réservé au MJ.
+ *                                                  idempotent, toujours pour l'utilisateur connecté.
  *                                                  campaignId omis → brouillon Coffre-native (pas
- *                                                  de campagne), toujours pour l'utilisateur
- *                                                  connecté, targetUserId alors refusé (400)
+ *                                                  de campagne)
  *   GET    /api/creation/campaign/:campaignId/drafts — brouillons actifs de la campagne (Lot A3)
  *   GET    /api/creation/:sheetId/state         — état réconcilié complet (step1-5, Lot A3 —
  *                                                  step4.skillAllocations best-effort, voir creationService.js)
@@ -61,12 +60,11 @@ router.param('sheetId', async (req, res, next, sheetId) => {
 
 router.post('/start', async (req, res, next) => {
   try {
-    const { campaignId, targetUserId } = req.body
+    const { campaignId } = req.body
 
     // Coffre-native (pas de campagne) : aucun MJ, aucune notion de brouillon ciblé pour un autre
     // joueur — le personnage n'appartient qu'à l'utilisateur connecté, dans son propre Coffre.
     if (!campaignId) {
-      if (targetUserId) return next(new AppError(400, "targetUserId n'a pas de sens sans campaignId"))
       const result = await startCreation(null, req.user.id)
       return res.json({ ...result, isGm: false, ownerUserId: req.user.id })
     }
@@ -76,16 +74,10 @@ router.post('/start', async (req, res, next) => {
       .first()
     if (!member) return next(new AppError(403, "Vous n'êtes pas membre de cette campagne"))
 
-    let ownerUserId = req.user.id
-    if (targetUserId) {
-      // docs/PLAN_WIZARDCOLLAB.md §4.2 — le MJ peut démarrer un brouillon pour un joueur ciblé.
-      if (member.role !== 'gm') return next(new AppError(403, 'Seul le MJ peut démarrer un brouillon pour un autre joueur'))
-      const targetMember = await db('campaign_members')
-        .where({ campaign_id: campaignId, user_id: targetUserId })
-        .first()
-      if (!targetMember) return next(new AppError(400, "Le joueur ciblé n'est pas membre de cette campagne"))
-      ownerUserId = targetUserId
-    }
+    // Le MJ ne démarre jamais un brouillon au nom d'un joueur : toujours l'appelant connecté. Le
+    // MJ rejoint un brouillon déjà démarré par le joueur via GET /campaign/:campaignId/drafts
+    // (onglet Joueurs de la Configuration), il n'en crée jamais un.
+    const ownerUserId = req.user.id
 
     const result = await startCreation(campaignId, ownerUserId)
     // isGm (rôle réel de campagne, pas seulement "MJ en train d'observer le brouillon d'un autre",

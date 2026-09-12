@@ -39,21 +39,39 @@ export default function SectionPlayers({ campaignId }) {
   const [campaignStats, setCampaignStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // `busyId` : id d'une demande de transfert en cours de traitement, ou `start:<userId>` pour un
-  // démarrage de création — verrouille les boutons concernés sans bloquer le reste de la vue.
+  // `busyId` : id d'une demande de transfert en cours de traitement — verrouille les boutons
+  // concernés sans bloquer le reste de la vue.
   const [busyId, setBusyId] = useState(null)
 
-  const load = useCallback(async () => {
+  // `silent` : un rafraîchissement en arrière-plan (poll, retour de focus) ne doit pas remplacer la
+  // liste par l'état "Chargement..." — seul le premier chargement affiche ce placeholder.
+  const load = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const res = await api.get(`/campaigns/${campaignId}/roster`)
       setRoster(res.data.roster)
       setCampaignStats(res.data.campaignStats ?? null)
     } catch { setError(t('settings.rosterErrorLoad')) }
-    finally { setLoading(false) }
+    finally { if (!silent) setLoading(false) }
   }, [campaignId, t])
 
   useEffect(() => { load() }, [load])
+
+  // Le MJ n'a aucun moyen de savoir qu'un joueur vient de démarrer sa création sans recharger la
+  // page — cet onglet n'ouvre pas de socket (page Configuration 100% REST, contrairement à
+  // SessionPage/WizardCreation), donc pas d'événement à écouter ici. Rafraîchissement périodique +
+  // au retour de focus de l'onglet, pattern standard des tableaux d'admin sans canal poussé (cf.
+  // comportement par défaut de React Query/SWR), sans dépendance ajoutée.
+  useEffect(() => {
+    const refresh = () => load({ silent: true })
+    const interval = setInterval(refresh, 20000)
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [load])
 
   const processTransfer = async (requestId, action, errKey) => {
     setBusyId(requestId)
@@ -64,18 +82,6 @@ export default function SectionPlayers({ campaignId }) {
     } catch {
       setError(t(errKey))
     } finally {
-      setBusyId(null)
-    }
-  }
-
-  const handleStartCreation = async (userId) => {
-    setBusyId(`start:${userId}`)
-    setError(null)
-    try {
-      const res = await api.post('/creation/start', { campaignId, targetUserId: userId })
-      navigate(`/campaigns/${campaignId}/creation/${res.data.sheetId}`)
-    } catch (err) {
-      setError(err.response?.data?.error?.message || t('settings.rosterStartError'))
       setBusyId(null)
     }
   }
@@ -114,7 +120,6 @@ export default function SectionPlayers({ campaignId }) {
               onReject={(id) => processTransfer(id, 'reject', 'settings.transferRequestErrorReject')}
               onOpenSheet={openSheet}
               onResumeDraft={resumeDraft}
-              onStartCreation={handleStartCreation}
             />
           ))}
         </div>
@@ -123,9 +128,8 @@ export default function SectionPlayers({ campaignId }) {
   )
 }
 
-function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onResumeDraft, onStartCreation }) {
+function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onResumeDraft }) {
   const isGm = player.role === 'gm'
-  const hasDraft = player.characters.some(c => c.status === 'draft')
 
   return (
     <div style={s.card}>
@@ -162,16 +166,6 @@ function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onRes
                   )}
                 </div>
               ))
-            )}
-            {!hasDraft && (
-              <button
-                className="btn btn-ghost"
-                style={s.startBtn}
-                disabled={busyId === `start:${player.userId}`}
-                onClick={() => onStartCreation(player.userId)}
-              >
-                {t('settings.rosterStartCreation')}
-              </button>
             )}
           </div>
 
@@ -242,7 +236,6 @@ const s = {
   rowName: { fontSize: '13px', color: 'var(--text-primary)' },
   rowActions: { display: 'flex', gap: '8px', marginLeft: 'auto' },
   rowBtn: { marginLeft: 'auto' },
-  startBtn: { alignSelf: 'flex-start', marginTop: '2px' },
   typeTag: {
     fontSize: '10px', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)',
     borderRadius: '4px', padding: '2px 6px',

@@ -606,8 +606,6 @@
     "rosterHidden": "masqué",
     "rosterOpenSheet": "Ouvrir la fiche",
     "rosterResume": "Reprendre la création",
-    "rosterStartCreation": "Démarrer une création",
-    "rosterStartError": "Impossible de démarrer la création",
     "rosterActivity": "Activité",
     "rosterStatPlay": "Jeu",
     "rosterStatWizard": "Création",

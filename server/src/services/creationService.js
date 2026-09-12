@@ -541,9 +541,8 @@ export async function startCreation(campaignId, userId) {
   const result = await db.transaction(async (trx) => {
     // Idempotence (docs/PLAN_WIZARDCOLLAB.md §0 5e passe, Lot A3) : un brouillon actif existe déjà
     // pour cet utilisateur dans cette campagne (ou dans son Coffre) → le retourner au lieu d'en
-    // créer un second. Sans ça, un MJ démarrant un brouillon via targetUserId (routes/creation.js)
-    // pour un joueur qui, sans le savoir, en démarre un second via le flux normal (ou l'inverse)
-    // créerait un doublon orphelin — s'applique dans les deux sens, même vérification.
+    // créer un second. Sans ça, deux appels rapprochés du même utilisateur (double-clic, deux onglets)
+    // créeraient un doublon orphelin.
     const existing = await trx('char_sheet as cs')
       .join('characters as c', 'c.id', 'cs.character_id')
       .where(campaignId ? { 'c.campaign_id': campaignId, 'c.user_id': userId } : { 'c.vault_id': vaultId, 'c.user_id': userId })
