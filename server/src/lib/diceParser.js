@@ -94,6 +94,20 @@ export async function parseDice(formula) {
   }
 }
 
+// ─── rollDamageFormula ──────────────────────────────────────────────────────
+// parseDice tolérant à une formule absente — une arme à Choc pur (CHOC1, damage_h null en catalogue,
+// ex. Flex/Dague neurale Brain) n'a légitimement AUCUN dégât physique à lancer : formule vide signifie
+// "0 dégât", jamais une erreur. Même convention déjà établie deux fois indépendamment
+// (damageService.js:getEffectiveWeaponDamage L.92-96 pour le Tir humanoïde, getEffectiveMeleeDamage
+// L.266-268 pour le CaC exo/drone/humanoïde) — généralisée ici en un seul point pour tout appelant qui
+// tient déjà une formule résolue en main (Tir exo/drone : fetchExoWeapon/fetchDroneWeapon n'ont pas de
+// DSL munition à traverser, contrairement au Tir humanoïde via char_inventory). `parseDice` reste
+// strict par ailleurs (formule MJ invalide = un vrai bug à ne jamais avaler silencieusement).
+export async function rollDamageFormula(formula) {
+  if (!formula) return { rolls: [], total: 0, formula: '', dieType: null, seed: 0 }
+  return parseDice(formula)
+}
+
 // ─── rollSignedDie ────────────────────────────────────────────────────────────
 // Roule une chaîne de dé SIGNÉE — "+1D10", "-2D10", "+0" (ou falsy) → entier signé
 // (0 pour "+0" / chaîne absente). Le signe de tête est retiré avant `parseDice`, puis réappliqué au
