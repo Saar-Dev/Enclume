@@ -29,5 +29,5 @@ export function useWizardLock(step) {
     socket.emit(WS.WIZARD_LOCK_UPDATE, { sheetId, step, optionKey, locked: !isLocked(optionKey) })
   }
 
-  return { isLocked, isLockedForPlayer, toggleLock, showLockToggle: isGmView && guideModeActive }
+  return { isLocked, isLockedForPlayer, toggleLock, showLockToggle: isGmView && guideModeActive, lockedOptions }
 }

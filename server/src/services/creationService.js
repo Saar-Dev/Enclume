@@ -148,7 +148,14 @@ async function checkCareerEligibility(sheetId, careerId, trx) {
     requiredGenotypeLabel = g?.label ?? career.required_genotype
   }
 
-  const education = await trx('ref_career_education').where({ career_id: careerId })
+  // Libellés d'éducation prérésolus (field = code ref_backgrounds, comparé à higher_ed —
+  // careerEligibility.js §4 ; fieldLabel = nom humain pour le message d'erreur).
+  const educationRows = await trx('ref_career_education').where({ career_id: careerId })
+  const education = []
+  for (const e of educationRows) {
+    const bg = await trx('ref_backgrounds').where({ type: 'higher_ed', code: e.field }).first()
+    education.push({ ...e, fieldLabel: bg?.name ?? e.field })
+  }
 
   // Contexte personnage.
   const existingCareers = await trx('char_careers').where({ char_sheet_id: sheetId })
@@ -221,7 +228,10 @@ export async function getStep4RefData(sheetId) {
   for (const t of careerTitles) careersMap.get(t.career_id)?.titles.push(t)
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
-  for (const e of careerEducation) careersMap.get(e.career_id)?.education.push(e)
+  // fieldLabel (careerEligibility.js §4) : field est le code ref_backgrounds, résolu ici en
+  // libellé humain pour l'affichage côté client (fonction d'éligibilité pure, sans accès base).
+  const higherEdNameByCode = new Map(bgsWithSkills.filter(b => b.type === 'higher_ed').map(b => [b.code, b.name]))
+  for (const e of careerEducation) careersMap.get(e.career_id)?.education.push({ ...e, fieldLabel: higherEdNameByCode.get(e.field) ?? e.field })
   for (const rb of localizeRefRows('ref_career_random_benefits', careerRandomBenefits)) careersMap.get(rb.career_id)?.randomBenefits.push(rb)
 
   const byType = (type) => bgsWithSkills.filter(b => b.type === type)

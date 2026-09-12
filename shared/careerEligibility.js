@@ -17,7 +17,9 @@ const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 /**
  * @param {object} career - ligne ref_careers + { prerequisites[], education[],
  *   requiredGenotypeLabel }. Chaque prerequisite porte { prerequisite_career_id, min_years,
- *   prerequisiteCareerName }. Chaque education porte { field }.
+ *   prerequisiteCareerName }. Chaque education porte { field, fieldLabel } — field = code
+ *   ref_backgrounds (comparé à ctx.higherEd), fieldLabel = libellé humain pré-résolu pour
+ *   l'affichage (optionnel, retombe sur field si absent).
  * @param {object} context - { careers:[{career_id, years}], genotypeId, higherEd,
  *   attributes:{FOR..PRE} }
  * @returns {{ eligible: boolean, reasons: Array }}
@@ -63,10 +65,12 @@ export function evaluateCareerEligibility(career, context) {
   }
   if (failed.length > 0) reasons.push({ code: 'attributes', failed })
 
-  // 4. Études supérieures.
+  // 4. Études supérieures. `field` est le CODE ref_backgrounds (comparé à ctx.higherEd, lui-même
+  // un code — cf. resolveBackground côté serveur) ; `fieldLabel` est le libellé humain pré-résolu
+  // par l'appelant pour l'affichage (même patron que requiredGenotypeLabel ci-dessus).
   const eduReqs = career.education || []
   if (eduReqs.length > 0) {
-    const fields = eduReqs.map(e => e.field)
+    const fields = eduReqs.map(e => e.fieldLabel ?? e.field)
     if (!ctx.higherEd) {
       reasons.push({ code: 'education', present: false, fields })
     } else if (!eduReqs.some(e => e.field === ctx.higherEd)) {

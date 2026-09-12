@@ -128,7 +128,7 @@ export default function CareersAllocator({
   skillMaxLevelEnabled,
 }) {
   const { t } = useTranslation('creation')
-  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(4)
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle, lockedOptions } = useWizardLock(4)
   const [state, dispatch] = useReducer(
     careersReducer,
     [initialSkillAllocations, initialOpenedSkills],
@@ -188,9 +188,10 @@ export default function CareersAllocator({
   const careerLockedForPlayer = isLockedForPlayer(careerLockKey)
   // Dérogation MJ (demande Saar) — distincte du verrou ci-dessus : lève les prérequis pour CETTE
   // carrière précise, indépendamment de qui soumet (serveur : reconcileCreation, avant
-  // checkCareerEligibility). N'affecte jamais l'affichage du joueur (ni grisé ni déblocage visuel
-  // ici — l'éligibilité réelle reste calculée normalement côté client, seule la validation serveur
-  // change ; le joueur découvre l'effet en soumettant, cohérent avec le reste du Wizard).
+  // checkCareerEligibility). Débloque aussi "Ajouter" côté client (eligibilityById plus bas) :
+  // un bouton HTML `disabled` ne peut de toute façon jamais être cliqué, donc l'ancienne intention
+  // "seule la validation serveur change, le joueur découvre l'effet en soumettant" était
+  // irréalisable telle quelle — bug réel corrigé (Saar, Option 1).
   const careerWaiveKey = career ? careerWaiveOptionKey(career.code) : null
 
   const getTitleForYears = (titles, yrs) => {
@@ -231,13 +232,21 @@ export default function CareersAllocator({
         ...p,
         prerequisiteCareerName: careersById.get(p.prerequisite_career_id)?.name,
       }))
-      map.set(c.id, evaluateCareerEligibility(
+      const result = evaluateCareerEligibility(
         { ...c, prerequisites, education: c.education ?? [] },
         eligContext
-      ))
+      )
+      // Dérogation MJ (career_waive_<code>) : en parité avec le bypass serveur
+      // (creationService.js, avant checkCareerEligibility), qui lève TOUS les prérequis sans
+      // distinction — jamais seulement l'éducation.
+      const waived = isLocked(careerWaiveOptionKey(c.code))
+      map.set(c.id, waived ? { ...result, eligible: true } : result)
     }
     return map
-  }, [careers, careersById, eligContext])
+    // isLocked ferme sur lockedOptions (recréé à chaque rendu) ; lockedOptions est la vraie
+    // dépendance réactive à déclarer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [careers, careersById, eligContext, lockedOptions])
 
   const filteredCareers = (careers ?? []).filter(c => {
     if (filter === 'all') return true
