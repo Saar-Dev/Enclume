@@ -4,27 +4,38 @@ import { WS } from '../../../shared/events.js'
 import { CATASTROPHE_EFFECT_TABLE, findCatastropheEntry } from '../../../shared/catastropheEffectTable.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useTokenStore } from '../stores/tokenStore'
+import { useAuthStore } from '../stores/authStore.js'
 import { useChanceCountdown } from '../lib/useChanceCountdown.js'
 
 let nextQueueId = 0
 
-// CatastropheChoiceQueue — remplace CatastropheReviewQueue.jsx + ChanceGmChoiceQueue.jsx par une
-// carte MJ unique par Catastrophe (docs/PLANS/PLAN_CHANCE.md L3e-4, retour Saar 2026-09-11 :
-// "aucun intérêt d'avoir deux fenêtres différentes" — les deux flux (conséquence combat +
-// régénération de Chance) sont mécaniquement indépendants côté serveur, RAW-fidèle, mais
-// n'ont aucune raison de s'afficher séparément côté MJ). MJ uniquement, toujours monté.
+// CatastropheChoiceQueue — remplace CatastropheReviewQueue.jsx + ChanceGmChoiceQueue.jsx +
+// ChancePlayerChoiceCard.jsx (docs/PLANS/PLAN_CHANCE.md L3e-4, retour Saar 2026-09-11 puis
+// 2026-09-12) : UNE seule fenêtre, à UNE seule position, pour tout ce qui relève d'une Catastrophe
+// combat et/ou du choix Chance qui lui est lié — quel que soit le type du personnage concerné.
+// Router le choix Chance d'un PJ vers un second composant à un autre endroit de l'écran recréait
+// exactement le problème que la fusion MJ/PNJ avait déjà réglé : le mécanisme redevenait visible à
+// deux endroits différents selon un critère (PJ vs PNJ) que le joueur n'a aucune raison de percevoir.
+//
+// Toujours monté pour tout le monde (MJ et joueurs) — le filtrage est par audience, jamais par
+// position : le MJ voit les Catastrophes (conséquence table, jamais montrée à un joueur) + les choix
+// Chance des PNJ ; un joueur voit uniquement le choix Chance de SON PROPRE personnage. Un même viewer
+// peut cumuler les deux rôles (MJ qui teste aussi un PJ) — les deux flux se mélangent alors
+// naturellement dans la même file, à la même position.
 //
 // Corrélation : CHANCE_CHOICE_PENDING porte `linkedCatastropheId` (id de la ligne pending_
 // catastrophes ouverte par le même jet, quand les deux mécanismes sont câblés sur le même site —
 // PLAN_CHANCE.md L3e). Une entrée Catastrophe et une entrée Chance partageant cet id fusionnent en
 // une seule carte ; sinon chacune s'affiche seule (site Catastrophe pas encore câblé sur Chance, ou
 // Chance hors combat sans Catastrophe associée — `maybeTriggerCatastrophe` est gardé `isCombatActive`,
-// pas `openChanceChoice`). Le PJ (choix Chance sur son propre personnage) reste géré par
-// ChancePlayerChoiceCard.jsx, jamais ici (filtre `character.type === 'pj'` ci-dessous).
+// pas `openChanceChoice`). Un joueur n'a jamais de moitié Catastrophe visible : `catastropheEntries`
+// n'est peuplée que côté MJ (onCatastrophePending ci-dessous), donc `entry` reste toujours null pour
+// lui — la garde est structurelle, pas un `if` séparé au rendu.
 export default function CatastropheChoiceQueue({ socket }) {
   const { t } = useTranslation('combat')
   const { isGm, characters } = useCharacterStore()
   const tokens = useTokenStore(s => s.tokens)
+  const userId = useAuthStore(s => s.user?.id)
 
   const [catastropheEntries, setCatastropheEntries] = useState([])
   const [chanceEntries, setChanceEntries] = useState([])
@@ -33,6 +44,7 @@ export default function CatastropheChoiceQueue({ socket }) {
   useEffect(() => {
     if (!socket) return
     const onCatastrophePending = (data) => {
+      if (!isGm) return // conséquence narrative — jamais montrée à un joueur, MJ uniquement
       setCatastropheEntries(q => [...q, { ...data, _queueId: nextQueueId++ }])
     }
     const onCatastropheApplied = (data) => {
@@ -40,7 +52,11 @@ export default function CatastropheChoiceQueue({ socket }) {
     }
     const onChancePending = (data) => {
       const character = characters.find(c => c.id === data.characterId)
-      if (character?.type === 'pj') return // PJ → ChancePlayerChoiceCard.jsx, pas cette file
+      if (!character) return
+      // Audience RAW : le choix appartient au joueur du personnage pour un PJ (jamais montré à un
+      // autre joueur ni au MJ) ; au MJ pour un PNJ (qui n'a pas de joueur propre).
+      const forMe = character.type === 'pj' ? character.user_id === userId : isGm
+      if (!forMe) return
       setChanceEntries(q => [...q, { ...data, _queueId: nextQueueId++ }])
     }
     const onChanceResolved = (data) => {
@@ -56,7 +72,7 @@ export default function CatastropheChoiceQueue({ socket }) {
       socket.off(WS.CHANCE_CHOICE_PENDING, onChancePending)
       socket.off(WS.CHANCE_CHOICE_RESOLVED, onChanceResolved)
     }
-  }, [socket, characters])
+  }, [socket, characters, isGm, userId])
 
   // Fusion dérivée à chaque rendu — pas d'état séparé à synchroniser : une fois l'une des deux
   // moitiés résolue, elle disparaît de sa propre liste source et la carte continue de montrer
@@ -88,7 +104,7 @@ export default function CatastropheChoiceQueue({ socket }) {
     setChanceEntries(q => q.filter(item => item._queueId !== current.chance._queueId))
   }, [socket, current])
 
-  if (!isGm || !current) return null
+  if (!current) return null
 
   const { catastrophe, chance } = current
   const entry = catastrophe ? findCatastropheEntry(catastrophe.tableEntry) : null
@@ -133,7 +149,7 @@ export default function CatastropheChoiceQueue({ socket }) {
 
         {chance && (
           <>
-            {entry && <div className="chance-choice-test-label">{chance.testLabel}</div>}
+            <div className="chance-choice-test-label">{chance.testLabel}</div>
             <div className="chance-choice-actions">
               <button className="btn-ghost" onClick={() => resolveChance('reroll')}>
                 {t('chance.choiceCard.rerollButton')}

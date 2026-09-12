@@ -137,6 +137,26 @@ async function armAwaitingDamage(io, campaignId, tokenId, payload) {
   return parseInt(count, 10)
 }
 
+// resolveChanceRecipientCharacterId — id du personnage dont le char_sheet doit recevoir un choix
+// Chance, à partir de l'id ET du type d'un combattant quelconque (PLAN_CHANCE.md L3e-4d).
+// - pj/pnj : le personnage a son propre char_sheet, retourné tel quel.
+// - exo : aucun char_sheet propre — la Chance appartient au PILOTE (même correctif que
+//   resolveExoAssaultAction/resolveExoMeleeAction, trouvaille 2026-09-11 sur du code déjà poussé).
+// - drone : aucun char_sheet, jamais de Chance possible (combatantContextService.js:283-287,
+//   même exclusion que drone_attack) — retourne null, l'appelant doit alors sauter openChanceChoice.
+// Centralisé ici (pas dupliqué par site) car nécessaire à la fois pour l'attaquant ET le défenseur
+// d'un CaC — le type du combattant dont c'est le Test n'est pas toujours connu à l'avance du site.
+async function resolveChanceRecipientCharacterId(characterId, characterType) {
+  if (characterType === 'drone') return null
+  if (characterType === 'exo') {
+    const exoCharacter = await db('characters').where({ id: characterId }).first()
+    if (!exoCharacter) return null
+    const { pilot } = await resolveExoContext(db, exoCharacter)
+    return pilot?.id ?? null
+  }
+  return characterId
+}
+
 // ─── confirmMeleeDefense / confirmDamage (docs/PLAN_COMBAT_TIMELINE.md Lot D) ──────────────────────
 // Extraits des handlers socket COMBAT_MELEE_DEFENSE_CONFIRM/COMBAT_DAMAGE_CONFIRM (socketCombatResolution.js)
 // — même code exact, appelable aussi depuis le déclenchement générique MJ (COMBAT_SKIP_PLAYER, « le
@@ -158,8 +178,8 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
   // resolveAssaultAction) : un attaquant PJ qui touche pose AWAITING_DAMAGE plus bas (sous-état FSM
   // bloquant) pour qu'il lance ses dégâts — appeler advanceTimeline juste après l'écraserait en
   // SLOT_ACTIVE dès qu'un autre combattant a un pas suivant, rendant COMBAT_DAMAGE_CONFIRM rejeté par
-  // le garde FSM.
-  let suspendForDamage = false
+  // le garde FSM. Le calcul de `suspendForDamage` vit désormais dans finalizeMeleeDefense (PLAN_CHANCE.md
+  // L3e-4d), appelée immédiate ou différée — plus une variable locale mutée en cours de fonction.
 
   const {
     campaignId: meleeCampaignId,
@@ -202,26 +222,22 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
 
     // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, PLAN_RW_SYSCOMBAT.md
     // §2.4.h) au lieu d'un tableau assemblé à la main (miroir de resolveMeleeDefensePnj).
+    const defenseContributions = [
+      { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' },
+      { label: 'Multi-adversaires', value: multiMalusDefenseur ?? 0, type: 'malus' },
+      { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
+      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
+    ]
     const defenseOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
-      contributions: [
-        { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' },
-        { label: 'Multi-adversaires', value: multiMalusDefenseur ?? 0, type: 'malus' },
-        { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
-        { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
-      ],
+      contributions: defenseContributions,
     })
     // Réussite critique défenseur (p.204, Lot 2) — même geste que resolveMeleeDefensePnj.
     const defenseOutcomeCrit = applyCriticalSuccessBonus(defenseOutcome0, getCriticalSuccessBonus({ masteryLevel: defenderMastery }))
     const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcomeCrit
     const defenseOutcome = await resolveCriticalFailReroll(defenseOutcomeCrit)
 
-    // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
-    // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
-    const attackSuccess = rollAttaque <= chancesAttaque
-    const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
-
-    console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
+    console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense}`)
 
     // Broadcast roll défense au chat — identité du défenseur si forcé par le MJ (§ « devient PNJ
     // pour le Tour », docs/PLAN_COMBAT_TIMELINE.md Lot D), sinon celle du joueur qui a cliqué.
@@ -244,51 +260,155 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     })
     // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — no-op hors combat/sans
     // risque, garde centralisée dans maybeTriggerCatastrophe, jamais dupliquée ici.
-    await maybeTriggerCatastrophe(io, meleeCampaignId, tokenId, defenseOutcome.catastropheRisk, {
+    const pendingCatastrophe = await maybeTriggerCatastrophe(io, meleeCampaignId, tokenId, defenseOutcome.catastropheRisk, {
       site: 'melee_defense', actorTokenId: tokenId, targetTokenId: attackerTokenId,
     })
 
-    // 3. Résultat opposition → room
-    io.to(meleeCampaignId).emit(WS.COMBAT_MELEE_RESULT, {
-      attaquantId: attackerTokenId,
-      defenseurId: tokenId,
-      rollAttaque, chancesAttaque,
-      rollDefense, chanceDefense,
-      hit,
-      multiMalusAttaquant: pending.multiMalusAttaquant ?? 0,
-      multiMalusDefenseur: pending.multiMalusDefenseur ?? 0,
-    })
-
-    // 4. Dégâts si touche — branchement post-hit sur le type de l'attaquant (PLAN_RW_SYSCOMBAT.md §2.9).
-    if (hit) {
-      const ctx = {
-        attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
-        rollAttaque, chancesAttaque, mrAttaque,
-        damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
-        characterIdCible, cibleType, char_sheet_id_cible,
-        for_na_cible, con_na_cible, vol_na_cible,
-        targetName, userId, tokenId, socket,
-      }
-      if (attackerCharacter.type === 'pj') {
-        const result = await resolveMeleeDefenseHitAttackerPj(io, meleeCampaignId, ctx)
-        suspendForDamage = result.suspendForDamage
-      } else {
-        await resolveMeleeDefenseHitAttackerPnj(io, meleeCampaignId, ctx)
-      }
+    const finalizeCtx = {
+      meleeCampaignId, tokenId, attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
+      rollAttaque, chancesAttaque, mrAttaque,
+      damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
+      characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+      targetName, userId, pendingMultiMalusAttaquant: pending.multiMalusAttaquant ?? 0,
+      pendingMultiMalusDefenseur: pending.multiMalusDefenseur ?? 0,
+      defenderSkillTotal, defenderMastery, defenseContributions,
+      rollDefense, chanceDefense, mrDefense, defenseSuccess,
     }
 
-    // 5. Pas suivant de l'échelle — l'entrée elle-même est déjà marquée 'resolved' (COMBAT_ACTION_CONFIRM,
-    // avant l'appel à resolveMeleeAction) ; une éventuelle attaque suivante de la même série est une
-    // entrée distincte, reprise plus tard par advanceTimeline() (§5 Lot B, plus de récursion ici).
-    // Sauf si l'attaquant PJ vient de poser AWAITING_DAMAGE ci-dessus (suspendForDamage) — le pas
-    // courant reste dû jusqu'à COMBAT_DAMAGE_CONFIRM, comme AWAITING_DEFENSE le fait déjà ailleurs.
-    if (!suspendForDamage) {
+    // Choix Chance posé AVANT la résolution de l'opposition (PLAN_CHANCE.md L3e-4d, décision Saar
+    // 2026-09-11) — DICE_RESULT (défense) reste immédiat (ci-dessus), tout le reste (hit,
+    // COMBAT_MELEE_RESULT, dégâts) est différé, puisque "refaire son Test" peut changer l'issue de
+    // l'opposition elle-même. Le choix appartient au DÉFENSEUR (dont c'est le Test) — jamais
+    // l'attaquant, même si l'attaquant est celui qui a initié l'action ce Tour.
+    if (defenseOutcome.catastropheRisk) {
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(characterIdCible, cibleType)
+      if (recipientCharacterId) {
+        await openChanceChoice(io, meleeCampaignId, recipientCharacterId, {
+          testLabel: 'Jet pour défendre (contact)',
+          site: 'melee_defense',
+          linkedCatastropheId: pendingCatastrophe?.id ?? null,
+          context: finalizeCtx,
+        })
+        return
+      }
+      // recipientCharacterId null (défenseur drone, jamais de char_sheet) — pas de choix possible,
+      // finalisation immédiate comme si de rien n'était (maybeTriggerCatastrophe reste appliqué).
+    }
+
+    const { suspendForDamage: finalSuspend } = await finalizeMeleeDefense(io, meleeCampaignId, { ...finalizeCtx, socket })
+    if (!finalSuspend) {
       await advanceTimeline(io, meleeCampaignId, pendingMaps)
     }
   } catch (err) {
     console.error('[WS] confirmMeleeDefense error:', err.message)
   }
 }
+
+// finalizeMeleeDefense — résolution de l'opposition (hit) + COMBAT_MELEE_RESULT + dispatch dégâts,
+// autorité unique appelée immédiate ou depuis SITE_HANDLERS.melee_defense (PLAN_CHANCE.md L3e-4d).
+// `socket` optionnel (absent dans le chemin différé — resolveMeleeDefenseHitAttackerPj retrouve
+// déjà le socket de l'attaquant via fetchSockets, `socket` n'est qu'un repli "même socket" pour le
+// cas où le défenseur confirme lui-même, rare et sans objet une fois différé).
+async function finalizeMeleeDefense(io, meleeCampaignId, {
+  tokenId, attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
+  rollAttaque, chancesAttaque, mrAttaque,
+  damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
+  characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+  targetName, userId, pendingMultiMalusAttaquant, pendingMultiMalusDefenseur,
+  rollDefense, chanceDefense, mrDefense, defenseSuccess, socket,
+}) {
+  // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
+  // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
+  const attackSuccess = rollAttaque <= chancesAttaque
+  const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
+  console.log(`[WS] melee défense (finalize) — hit:${hit}`)
+
+  // 3. Résultat opposition → room
+  io.to(meleeCampaignId).emit(WS.COMBAT_MELEE_RESULT, {
+    attaquantId: attackerTokenId,
+    defenseurId: tokenId,
+    rollAttaque, chancesAttaque,
+    rollDefense, chanceDefense,
+    hit,
+    multiMalusAttaquant: pendingMultiMalusAttaquant,
+    multiMalusDefenseur: pendingMultiMalusDefenseur,
+  })
+
+  let suspendForDamage = false
+  // 4. Dégâts si touche — branchement post-hit sur le type de l'attaquant (PLAN_RW_SYSCOMBAT.md §2.9).
+  if (hit) {
+    const ctx = {
+      attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
+      rollAttaque, chancesAttaque, mrAttaque,
+      damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
+      characterIdCible, cibleType, char_sheet_id_cible,
+      for_na_cible, con_na_cible, vol_na_cible,
+      targetName, userId, tokenId, socket: socket ?? null,
+    }
+    if (attackerCharacter.type === 'pj') {
+      const result = await resolveMeleeDefenseHitAttackerPj(io, meleeCampaignId, ctx)
+      suspendForDamage = result.suspendForDamage
+    } else {
+      await resolveMeleeDefenseHitAttackerPnj(io, meleeCampaignId, ctx)
+    }
+  }
+
+  // 5. Pas suivant de l'échelle — même règle que le chemin immédiat (§5 d'origine) : sauf si
+  // l'attaquant PJ vient de poser AWAITING_DAMAGE ci-dessus, le pas courant reste dû.
+  return { suspendForDamage }
+}
+
+// finishMeleeDefenseChoice — SITE_HANDLERS.melee_defense (PLAN_CHANCE.md L3e-4d). 'gain_point'/
+// timeout gardent le jet de défense original (toujours un échec, catastropheRisk ne se déclenche
+// que sur échec) ; 'reroll' relance la défense contre le même Seuil (mêmes `defenseContributions`,
+// déjà figées). Le jet d'ATTAQUE (rollAttaque/chancesAttaque/mrAttaque) n'est jamais rejoué ici —
+// c'est le Test du défenseur qui a produit la Catastrophe, pas celui de l'attaquant.
+async function finishMeleeDefenseChoice(io, campaignId, resolved, { choice, context }) {
+  const {
+    meleeCampaignId, defenderSkillTotal, defenderMastery, defenseContributions,
+  } = context
+  let { rollDefense, chanceDefense, mrDefense, defenseSuccess } = context
+
+  if (choice === 'reroll') {
+    const { total: newRoll, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: newRoll,
+      contributions: defenseContributions,
+    })
+    const { seuil: newChanceDefense, breakdown } = outcome0
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: defenderMastery }))
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+    rollDefense = newRoll
+    chanceDefense = newChanceDefense
+    mrDefense = outcomeCrit.mr
+    defenseSuccess = outcomeCrit.isSuccess
+
+    io.to(meleeCampaignId).emit(WS.DICE_RESULT, {
+      userId: null, username: context.targetName ?? 'Défenseur', color: '#6060c0',
+      formula: '1d20', rolls: defRolls, total: rollDefense,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed: defSeed, timestamp: new Date().toISOString(),
+      skillLabel: 'Jet pour défendre (contact) — Chance : relance',
+      mechanicalTotal: defenderSkillTotal,
+      diffLabel: chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
+      chancesDeReussite: chanceDefense, isSuccess: defenseSuccess, mr: mrDefense, breakdown,
+    })
+
+    await maybeTriggerCatastrophe(io, meleeCampaignId, context.tokenId, outcome.catastropheRisk, {
+      site: 'melee_defense', actorTokenId: context.tokenId, targetTokenId: context.attackerTokenId,
+    })
+  }
+
+  const { suspendForDamage } = await finalizeMeleeDefense(io, meleeCampaignId, {
+    ...context, rollDefense, chanceDefense, mrDefense, defenseSuccess, socket: null,
+  })
+  if (!suspendForDamage) {
+    await advanceTimeline(io, meleeCampaignId, { combatTimers, combatPreviews })
+  }
+}
+
+SITE_HANDLERS.melee_defense = finishMeleeDefenseChoice
 
 // Attaquant PJ après un hit confirmé en défense CaC — invite à lancer les dégâts (CombatDamageWindow
 // existant), même primitive que les Lots 2/4/6 (armAwaitingDamage). Ne fait pas partie de la file
@@ -1218,22 +1338,23 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // sans écart). La coquille assemble la liste ordonnée des contributions (l'ordre de la liste EST
     // l'ordre d'affichage client) ; le noyau somme, filtre les zéros et assemble le breakdown.
     // Ajouter un modificateur CaC = ajouter une entrée ici, jamais toucher au noyau.
+    const attaqueContributions = [
+      { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
+      { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
+      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+      { label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' },
+      { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
+      { label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' },
+      { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
+      { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
+      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' },
+      { label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' },
+      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
+      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+    ]
     const attaqueOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
-      contributions: [
-        { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
-        { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
-        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-        { label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' },
-        { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
-        { label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' },
-        { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
-        { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
-        { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' },
-        { label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' },
-        { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
-      ],
+      contributions: attaqueContributions,
     })
     const { seuil: chancesAttaque, breakdown: breakdownAtk } = attaqueOutcome0
     // Réussite critique (p.204, docs/PLAN_TEST_CRITIQUE.md Lot 2) : bonus = niveau de maîtrise de la
@@ -1262,7 +1383,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       breakdown:         breakdownAtk,
     } })
     // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
-    await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
+    const pendingCatastrophe = await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
       site: 'melee_attack', actorTokenId: action.token_id, targetTokenId,
     })
 
@@ -1274,29 +1395,98 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       outcome: attaqueOutcome, emissions,
     })
 
-    // ── 2. Cible ──────────────────────────────────────────────────────────────
-    const targetToken = await db('tokens').where({ id: targetTokenId }).first()
-    if (!targetToken?.character_id) {
-      // Entité de décor — pas de défense ni dégâts
-      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
-        attaquantId: action.token_id, defenseurId: targetTokenId,
-        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
-      } })
-      return { suspend: false, emissions }
+    const finalizeCtx = {
+      action, character, targetTokenId,
+      weaponInvId, damageFormula, naturalWeaponCharMutationId,
+      modDom, combatModeBonus, attackerSheetId: ctx.sheetId, attackerUsername, attackerColor,
+      multiMalusAttaquant, confirmedModifiers,
+      skillTotal: attackerSkillTotal, skillMastery: ctx.mastery, attaqueContributions,
+      rollAttaque, chancesAttaque, mr: attaqueOutcome.mr,
     }
 
-    const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
-    if (!defenderCharacter) return { suspend: false, emissions }
+    // Choix Chance posé AVANT le branchement défenseur (PLAN_CHANCE.md L3e-4e, décision Saar
+    // 2026-09-11) — DICE_RESULT/maybeTriggerCatastrophe/panne d'arme restent immédiats (ci-dessus),
+    // toute la résolution défenseur (identité, dégâts, dispatch) est différée — c'est le Test de
+    // l'ATTAQUANT qui a produit la Catastrophe ici (contrairement à melee_defense).
+    if (attaqueOutcome.catastropheRisk) {
+      await openChanceChoice(io, campaignId, character.id, {
+        testLabel: 'Jet pour toucher (contact)',
+        site: 'melee_attack',
+        linkedCatastropheId: pendingCatastrophe?.id ?? null,
+        context: finalizeCtx,
+      })
+      return { suspend: true, emissions }
+    }
 
-    const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
+    return await finalizeMeleeAttack(io, campaignId, { ...finalizeCtx, emissions })
+  } catch (err) {
+    console.error('[WS] resolveMeleeAction error:', err.message)
+    return { suspend: false, emissions: [] }
+  }
+}
 
-    // Multi-adversaires : malus si le défenseur est entouré d'ennemis (positions post-déplacement)
-    const defEnemyType = defenderCharacter.type === 'pj' ? 'pnj' : 'pj'
-    const multiMalusDefenseur = multiAdversaryMalus(
-      countAdversaires(targetTokenPos, rosterTokens, targetTokenId, defEnemyType, measurement.metrics)
+// finalizeMeleeAttack — identification cible + stats défenseur + dispatch (sans-défense/pnj/drone/
+// pj), autorité unique appelée immédiate ou depuis SITE_HANDLERS.melee_attack (PLAN_CHANCE.md
+// L3e-4e). Re-fetch la cible et sa position fraîches en DB (multiMalusDefenseur dépend de l'état
+// du monde au moment de la finalisation, pas de celui au moment du jet) — même principe que tous
+// les autres finalize de ce chantier. `multiMalusAttaquant` (l'attaquant lui-même) reste celui
+// déjà figé au moment du jet, comme `attaqueContributions` — ce sont SES propres modificateurs,
+// pas ceux de la cible.
+async function finalizeMeleeAttack(io, campaignId, {
+  action, character, targetTokenId, weaponInvId, damageFormula, naturalWeaponCharMutationId,
+  modDom, combatModeBonus, attackerSheetId, attackerUsername, attackerColor, multiMalusAttaquant,
+  confirmedModifiers, rollAttaque, chancesAttaque, mr, emissions,
+}) {
+  // ── 2. Cible ──────────────────────────────────────────────────────────────
+  const targetToken = await db('tokens').where({ id: targetTokenId }).first()
+  if (!targetToken?.character_id) {
+    // Entité de décor — pas de défense ni dégâts
+    emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+      attaquantId: action.token_id, defenseurId: targetTokenId,
+      rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
+    } })
+    return { suspend: false, emissions }
+  }
+
+  const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
+  if (!defenderCharacter) return { suspend: false, emissions }
+
+  const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
+
+  // Positions/roster re-fetchés frais (état du monde au moment de la finalisation, pas du jet —
+  // même principe que tous les autres finalize de ce chantier) — nécessaires pour
+  // multiMalusDefenseur et la taille de la cible ci-dessous.
+  const measurement = await measureBattlemapTokenDistance({
+    sourceTokenId: action.token_id, targetTokenId,
+  })
+  const rosterTokens = await db('tokens as t')
+    .join('combat_roster as cr', 'cr.token_id', 't.id')
+    .join('characters as c', 'c.id', 't.character_id')
+    .leftJoin('char_inventory_slots as cis',
+      db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
+    .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
+    .leftJoin('ref_equipment as re',
+      db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
+    .where('cr.campaign_id', campaignId)
+    .where('cr.status', 'active')
+    .groupBy('t.id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type')
+    .select(
+      't.id as token_id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type as char_type',
+      db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
     )
 
-    // ── 3. Données défenseur ──────────────────────────────────────────────────
+  // Multi-adversaires : malus si le défenseur est entouré d'ennemis (positions post-déplacement)
+  const defEnemyType = defenderCharacter.type === 'pj' ? 'pnj' : 'pj'
+  const multiMalusDefenseur = measurement.status === 'ok'
+    ? multiAdversaryMalus(countAdversaires(measurement.targetToken, rosterTokens, targetTokenId, defEnemyType, measurement.metrics))
+    : 0
+
+  // DEF5 — recalculé frais (état du personnage a pu changer pendant l'attente du choix : étourdi,
+  // inconscient... même principe que multiMalusDefenseur ci-dessus).
+  const settings = await getCampaignSettings(db, campaignId)
+  const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
+
+  // ── 3. Données défenseur ──────────────────────────────────────────────────
     // Identité de l'acteur EFFECTIF derrière ce défenseur (pas encore le contexte de Test complet) :
     // pour un humain c'est le personnage lui-même, pour un exo-armure c'est son pilote — la main
     // directrice, le choix de l'arme équipée ET le routage de la confirmation de défense (branchement
@@ -1382,9 +1572,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       rollAttaque,
       chancesAttaque,
       // mrAttaque : Marge de réussite déjà résolue (bonus Réussite critique + reroll Échec critique
-      // inclus, cf. commentaire au-dessus de attaqueOutcomeCrit) — les branches défenseur/dégâts
-      // l'utilisent tel quel, ne le recalculent jamais.
-      mrAttaque: attaqueOutcome.mr,
+      // inclus par l'appelant — coquille ou SITE_HANDLERS.melee_attack) — les branches défenseur/
+      // dégâts l'utilisent tel quel, ne le recalculent jamais.
+      mrAttaque: mr,
       defenderSkillTotal,
       defenderEffectiveMalus,
       defenderMastery,
@@ -1406,7 +1596,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       confirmedModifiers,
       situationDef: confirmedModifiers?.situationDef ?? [],
       targetTokenId,
-      attackerSheetId: ctx.sheetId,
+      attackerSheetId,
       naturalWeaponCharMutationId,
       defenderCharacterName: defenderCharacter.name,
       // Distinct de attackerUsername (compte ayant lancé le dé, DICE_RESULT) — identité narrative du
@@ -1432,12 +1622,64 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     if (defenderCharacter.type === 'drone') {
       return await resolveMeleeDefenseDrone(io, campaignId, commonPending, emissions)
     }
-    return await resolveMeleeDefensePj(io, campaignId, commonPending, emissions)
-  } catch (err) {
-    console.error('[WS] resolveMeleeAction error:', err.message)
-    return { suspend: false, emissions: [] }
-  }
+  return await resolveMeleeDefensePj(io, campaignId, commonPending, emissions)
 }
+
+// finishMeleeAttackChoice — SITE_HANDLERS.melee_attack (PLAN_CHANCE.md L3e-4e). 'gain_point'/
+// timeout gardent le jet original (toujours un échec) ; 'reroll' relance contre le même Seuil
+// (mêmes `attaqueContributions`, déjà figées) — pas de nouveau Test de panne d'arme (déjà appliqué
+// une fois, avant le choix). `flushDeferredEmissions` gère les `to:'user'`/`to:'socket'` émis par
+// les branches défenseur (ex. resolveMeleeDefensePj cible le défenseur par `to:'user'`, pas
+// l'attaquant — géré par `e.userId` propre à chaque émission, pas par le paramètre userId ici).
+async function finishMeleeAttackChoice(io, campaignId, resolved, { choice, context }) {
+  const {
+    action, character, targetTokenId, weaponInvId, damageFormula, naturalWeaponCharMutationId,
+    modDom, combatModeBonus, attackerSheetId, attackerUsername, attackerColor, multiMalusAttaquant,
+    confirmedModifiers, skillTotal, skillMastery, attaqueContributions,
+  } = context
+  let { rollAttaque, chancesAttaque, mr } = context
+  const emissions = []
+
+  if (choice === 'reroll') {
+    const { total: newRoll, rolls, seed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque: newRoll,
+      contributions: attaqueContributions,
+    })
+    const { seuil: newChancesAttaque, breakdown } = outcome0
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: skillMastery }))
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+    rollAttaque = newRoll
+    chancesAttaque = newChancesAttaque
+    mr = outcomeCrit.mr
+
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: character.user_id, username: attackerUsername, color: attackerColor,
+      formula: '1d20', rolls, total: rollAttaque,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed, timestamp: new Date().toISOString(),
+      skillLabel: 'Jet pour toucher (contact) — Chance : relance',
+      mechanicalTotal: skillTotal,
+      diffLabel: chancesAttaque - skillTotal >= 0 ? `+${chancesAttaque - skillTotal}` : `${chancesAttaque - skillTotal}`,
+      chancesDeReussite: chancesAttaque, isSuccess: outcomeCrit.isSuccess, mr, breakdown,
+    } })
+
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, outcome.catastropheRisk, {
+      site: 'melee_attack', actorTokenId: action.token_id, targetTokenId,
+    })
+  }
+
+  const finalized = await finalizeMeleeAttack(io, campaignId, {
+    action, character, targetTokenId, weaponInvId, damageFormula, naturalWeaponCharMutationId,
+    modDom, combatModeBonus, attackerSheetId, attackerUsername, attackerColor, multiMalusAttaquant,
+    confirmedModifiers, rollAttaque, chancesAttaque, mr, emissions,
+  })
+  await flushDeferredEmissions(io, campaignId, character.user_id ?? null, finalized.emissions)
+  if (!finalized.suspend) await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+SITE_HANDLERS.melee_attack = finishMeleeAttackChoice
 
 // ── Branches défenseur de resolveMeleeAction (PLAN_RW_SYSCOMBAT.md §2.4, Lot 2) ──────────────────
 // Extraites de resolveMeleeAction — ctx = commonPending (contexte déjà assemblé par la coquille, §2.4.b).
@@ -2322,46 +2564,61 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       chancesDeReussite, isSuccess,
       breakdown: breakdownDrone,
     } })
-    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
+    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — inchangée, comportement
+    // narratif combat indépendant de Chance.
     await maybeTriggerCatastrophe(io, campaignId, action.token_id, droneOutcome.catastropheRisk, {
       site: 'drone_attack', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
     })
 
-    if (!isSuccess) {
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId: action.token_id, cibleId: action.target_token_id,
-        localisation: null, degautsBruts: 0, degatsNets: 0,
-        severity: null, is_lethal: false, isSuccess: false, shockResult: null,
-      } })
-      return { suspend: false, emissions }
-    }
-
-    // 7. Identifier la cible
-    const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
-    const cibleCharacter = cibleToken?.character_id
-      ? await db('characters').where({ id: cibleToken.character_id }).first()
-      : null
+    // PAS de choix Chance ici (contrairement aux autres sites L3e-4) : un drone n'a aucun char_sheet
+    // (combatantContextService.js:283-287, "drone_programs.level sert directement de Seuil, aucun
+    // char_sheet impliqué") — donc aucune réserve de Chance à faire gagner. Ouvrir la fenêtre aurait
+    // silencieusement débité/crédité personne (trouvaille en auto-relecture avant de câbler ce site,
+    // 2026-09-11, avant toute mise en prod). `finalizeAssaultOutcome` reste appelée directement,
+    // immédiate, pas de `suspend`/SITE_HANDLERS pour ce site.
     const formula = weapon.effective_formula ? weapon.effective_formula.replace(/\s/g, '') : ''
 
-    // Branchement cible (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) — guard clauses, même style que Lots 2/4.
-    // Aucune des 3 fonctions sœurs n'a son propre try/catch : toute exception remonte à ce catch
-    // unique, qui vide alors `emissions` — comportement existant préservé à l'identique.
-    const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now, chocDsl }
-    if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
-    // PLAN_EXOARMURE.md §11.4 (catégorie A, site 6) — AVANT le test 'pnj' : sans cette branche, une exo
-    // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveAttackHitPj (`cibleType: null`
-    // codé en dur, prompt adressé à cibleCharacter.user_id au lieu du pilote). Une exo n'a pas de
-    // défense active contre un tir (même absence que le drone, RAW) — auto-résolution immédiate, jamais
-    // de suspend/prompt.
-    if (cibleCharacter?.type === 'exo') return await resolveAttackHitExo(io, campaignId, ctx, emissions)
-    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
-    return await resolveAttackHitPj(io, campaignId, ctx, emissions)
+    return await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
 }
+
+// finalizeAssaultOutcome — émission de l'échec OU dispatch des dégâts par type de cible, autorité
+// unique partagée par resolveExoAssaultAction (socketCombatExo.js) ET resolveDroneAssaultAction
+// ci-dessus (PLAN_CHANCE.md L3e-4c) — les deux avaient EXACTEMENT la même queue post-jet
+// (échec → COMBAT_ATTACK_RESULT ; succès → identification cible + dispatch drone/exo/pnj/pj),
+// factorisée ici plutôt que dupliquée une seconde fois (invariant #3). Appelée immédiate ou depuis
+// un SITE_HANDLERS.* différé. Re-fetch la cible fraîche en DB, jamais un instantané en cache.
+export async function finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions }) {
+  if (!isSuccess) {
+    emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+      tireurId: action.token_id, cibleId: action.target_token_id,
+      localisation: null, degautsBruts: 0, degatsNets: 0,
+      severity: null, is_lethal: false, isSuccess: false, shockResult: null,
+    } })
+    return { suspend: false, emissions }
+  }
+
+  const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
+  const cibleCharacter = cibleToken?.character_id
+    ? await db('characters').where({ id: cibleToken.character_id }).first()
+    : null
+  const now = new Date().toISOString()
+  const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now, chocDsl }
+  if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
+  // PLAN_EXOARMURE.md §11.4 (catégorie A, site 6) — AVANT le test 'pnj' : sans cette branche, une exo
+  // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveAttackHitPj (`cibleType: null`
+  // codé en dur, prompt adressé à cibleCharacter.user_id au lieu du pilote). Une exo n'a pas de
+  // défense active contre un tir (même absence que le drone, RAW) — auto-résolution immédiate, jamais
+  // de suspend/prompt.
+  if (cibleCharacter?.type === 'exo') return await resolveAttackHitExo(io, campaignId, ctx, emissions)
+  if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
+  return await resolveAttackHitPj(io, campaignId, ctx, emissions)
+}
+
 
 // ── Branches cible de resolveDroneAssaultAction (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) ─────────────────
 // Extraites de resolveDroneAssaultAction — ctx assemblé par la coquille juste avant le dispatch.
@@ -2802,28 +3059,29 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const itgAtkMod = weapon?.ref_has_integrity && weapon.integrity_current >= 1
       ? (getIntegrityModifier(weapon.integrity_current) ?? 0) : 0
 
+    const assaultContributions = [
+      { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
+      { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
+      { label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' },
+      { label: 'Deux armes', value: dualWieldComp, type: 'bonus' },
+      { label: 'Tir visé', value: aimBonusComp, type: 'bonus' },
+      { label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' },
+      { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
+      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
+      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
+      ...((confirmedModifiers.situation ?? []).map(k => {
+        const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
+        return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+      })),
+      { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+      { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
+      { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+    ]
     const assaultOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
-      contributions: [
-        { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
-        { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
-        { label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' },
-        { label: 'Deux armes', value: dualWieldComp, type: 'bonus' },
-        { label: 'Tir visé', value: aimBonusComp, type: 'bonus' },
-        { label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' },
-        { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
-        { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
-        ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
-        ...((confirmedModifiers.situation ?? []).map(k => {
-          const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
-          return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
-        })),
-        { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
-        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-        { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
-        { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
-      ],
+      contributions: assaultContributions,
     })
     // Réussite critique (p.204, Lot 2) — même geste que le CaC (resolveMeleeAction), appliqué avant
     // le reroll d'Échec critique. Pas d'opposition en Tir (contrairement au CaC) : rien à threader en
@@ -2853,7 +3111,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       breakdown,
     } })
     // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
-    await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
+    const pendingCatastrophe = await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
       site: 'assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
     })
 
@@ -2907,100 +3165,168 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       }
     }
 
-    if (isSuccess) {
-      // Fetch stats de la cible (commun PJ et PNJ)
-      const cibleToken = await db('tokens').where({ id: action.target_token_id }).first()
-      let char_sheet_id_cible = null
-      let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
-      let cibleCharacter = null
-
-      if (cibleToken?.character_id) {
-        cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
-        if (cibleCharacter) {
-          const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
-          if (sheetCible) {
-            char_sheet_id_cible = sheetCible.id
-            // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
-            // (docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2, complété le 2026-07-30 : 2ᵉ copie
-            // trouvée ici en plus de resolveDroneAssaultAction, dédupliquée à son tour).
-            const naCible = await damageService.fetchCibleNA(db, cibleCharacter.id, sheetCible.id)
-            for_na_cible = naCible.for_na
-            con_na_cible = naCible.con_na
-            vol_na_cible = naCible.vol_na
-          }
-        }
-      }
-
-      const targetName = cibleCharacter?.name ?? cibleToken?.label ?? 'Cible'
-
-      // Contexte transporté aux fonctions-feuilles (PLAN_RW_SYSCOMBAT.md §2.6.c) — objet interne à ce
-      // refactor, aucun lecteur externe (à distinguer du payload construit dans resolveAssaultHitPj
-      // pour armAwaitingDamage, celui-là bien relu par nom dans confirmDamage, §2.6.c).
-      const ctx = {
-        action, character, tireurUsername, tireurColor, weapon, effectiveWeaponInvId,
-        authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
-        cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
-        targetName,
-      }
-
-      if (character.type === 'pj') {
-        return await resolveAssaultHitPj(io, campaignId, ctx, emissions)
-      }
-
-      // PNJ — calcul complet immédiat, invisible aux joueurs. Dégâts bruts identiques que la cible
-      // soit un drone ou non (`[VÉRIFIÉ]`, PLAN_RW_SYSCOMBAT.md §2.6.a) — calculés une seule fois ici,
-      // avant le guard-clause vers la fonction-feuille adaptée (§2.6.b, aucune fonction-type qui
-      // re-branche elle-même, même précédent que resolveMeleeDefenseDrone/Pnj au Lot 2).
-      // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
-      // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
-      // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
-      // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
-      // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
-      // CHOC1 : repli sur weapon.ref_damage_h (fetch initial) si l'arme a disparu entre-temps — peut
-      // lui-même être vide (arme Choc pur) : ne jamais appeler parseDice sur une chaîne vide.
-      const rawDice = effectiveDamage
-        ? effectiveDamage.total
-        : weapon.ref_damage_h
-          ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
-          : 0
-      // PLAN_RW_SYSCOMBAT.md §2.10 (Lot 8a) — noyau pur, même formule que confirmDamage (branche assault).
-      const degautsBruts = computeAssaultRawDamage({ rawDice, mr, portee: authoritativeRangeBand, fireModeBonusDmg: action.fire_mode_bonus_dmg })
-
-      if (cibleCharacter?.type === 'drone') {
-        return await resolveAssaultHitPnjDrone(io, campaignId, { ...ctx, degautsBruts }, emissions)
-      }
-      return await resolveAssaultHitPnjNormal(io, campaignId, { ...ctx, degautsBruts, effectiveDamage }, emissions)
-    } else if (character.type === 'pj') {
-      emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
-        hit: false,
-        roll: rollAttaque,
-        seuil: chancesDeReussite,
-        tireurTokenId: action.token_id,
-        cibleTokenId: action.target_token_id,
-      } })
-    } else {
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId:         action.token_id,
-        cibleId:          action.target_token_id,
-        isSuccess:        false,
-        isPnj:            true,
-        roll:             rollAttaque,
-        chancesDeReussite,
-        localisation:     null,
-        degautsBruts:     null,
-        degatsNets:       null,
-        severity:         null,
-        is_lethal:        false,
-        shockResult:      null,
-      } })
+    const finalizeCtx = {
+      action, character, weapon, effectiveWeaponInvId, tireurUsername, tireurColor,
+      authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+      isSuccess, skillTotal, skillMastery, assaultContributions,
     }
-    return { suspend: false, emissions }
+
+    // Choix Chance posé AVANT le dispatch PJ/PNJ (PLAN_CHANCE.md L3e-4c, décision Saar 2026-09-11)
+    // — DICE_RESULT/maybeTriggerCatastrophe/panne d'arme/munitions restent immédiats (ci-dessus,
+    // "comme DICE_RESULT"), seul le dispatch final (résolution dégâts ou notice d'échec) est différé.
+    if (assaultOutcome.catastropheRisk) {
+      await openChanceChoice(io, campaignId, character.id, {
+        testLabel: 'Jet pour toucher (distance)',
+        site: 'assault',
+        linkedCatastropheId: pendingCatastrophe?.id ?? null,
+        context: finalizeCtx,
+      })
+      return { suspend: true, emissions }
+    }
+
+    return await finalizeAssaultHitOutcome(io, campaignId, { ...finalizeCtx, emissions })
   } catch (err) {
     console.error('[WS] resolveAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
 }
+
+// finalizeAssaultHitOutcome — dispatch final du Tir humanoïde (PJ touché → resolveAssaultHitPj,
+// PNJ → calcul dégâts immédiat, échec → notice privée PJ ou résultat public PNJ), autorité unique
+// appelée immédiate ou depuis SITE_HANDLERS.assault (PLAN_CHANCE.md L3e-4c). Reprend telle quelle
+// la logique existante — re-fetch la cible fraîche en DB, jamais un instantané en cache (même
+// principe que finalizeAssaultOutcome/finalizeExoMelee).
+async function finalizeAssaultHitOutcome(io, campaignId, {
+  action, character, weapon, effectiveWeaponInvId, tireurUsername, tireurColor,
+  authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+  isSuccess, emissions,
+}) {
+  if (isSuccess) {
+    // Fetch stats de la cible (commun PJ et PNJ)
+    const cibleToken = await db('tokens').where({ id: action.target_token_id }).first()
+    let char_sheet_id_cible = null
+    let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
+    let cibleCharacter = null
+
+    if (cibleToken?.character_id) {
+      cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
+      if (cibleCharacter) {
+        const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
+        if (sheetCible) {
+          char_sheet_id_cible = sheetCible.id
+          const naCible = await damageService.fetchCibleNA(db, cibleCharacter.id, sheetCible.id)
+          for_na_cible = naCible.for_na
+          con_na_cible = naCible.con_na
+          vol_na_cible = naCible.vol_na
+        }
+      }
+    }
+
+    const targetName = cibleCharacter?.name ?? cibleToken?.label ?? 'Cible'
+
+    const ctx = {
+      action, character, tireurUsername, tireurColor, weapon, effectiveWeaponInvId,
+      authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+      cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+      targetName,
+    }
+
+    if (character.type === 'pj') {
+      return await resolveAssaultHitPj(io, campaignId, ctx, emissions)
+    }
+
+    const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
+    const rawDice = effectiveDamage
+      ? effectiveDamage.total
+      : weapon.ref_damage_h
+        ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
+        : 0
+    const degautsBruts = computeAssaultRawDamage({ rawDice, mr, portee: authoritativeRangeBand, fireModeBonusDmg: action.fire_mode_bonus_dmg })
+
+    if (cibleCharacter?.type === 'drone') {
+      return await resolveAssaultHitPnjDrone(io, campaignId, { ...ctx, degautsBruts }, emissions)
+    }
+    return await resolveAssaultHitPnjNormal(io, campaignId, { ...ctx, degautsBruts, effectiveDamage }, emissions)
+  } else if (character.type === 'pj') {
+    emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+      hit: false,
+      roll: rollAttaque,
+      seuil: chancesDeReussite,
+      tireurTokenId: action.token_id,
+      cibleTokenId: action.target_token_id,
+    } })
+  } else {
+    emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+      tireurId:         action.token_id,
+      cibleId:          action.target_token_id,
+      isSuccess:        false,
+      isPnj:            true,
+      roll:             rollAttaque,
+      chancesDeReussite,
+      localisation:     null,
+      degautsBruts:     null,
+      degatsNets:       null,
+      severity:         null,
+      is_lethal:        false,
+      shockResult:      null,
+    } })
+  }
+  return { suspend: false, emissions }
+}
+
+// finishAssaultChoice — SITE_HANDLERS.assault (PLAN_CHANCE.md L3e-4c). 'gain_point'/timeout
+// gardent le jet original (toujours un échec) ; 'reroll' relance contre le même skillTotal avec
+// les mêmes `assaultContributions` (déjà figées, pas rejouées) — pas de nouveau Test de panne
+// d'arme ni de nouveau décompte de munitions (déjà appliqués une fois, avant le choix).
+async function finishAssaultChoice(io, campaignId, resolved, { choice, context }) {
+  const {
+    action, character, weapon, effectiveWeaponInvId, tireurUsername, tireurColor,
+    authoritativeRangeBand, aimedLocationKey, isJetOuTrait, skillTotal, skillMastery, assaultContributions,
+  } = context
+  let { rollAttaque, chancesDeReussite, mr, isSuccess } = context
+  const emissions = []
+
+  if (choice === 'reroll') {
+    const { total: newRoll, rolls, seed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque: newRoll,
+      contributions: assaultContributions,
+    })
+    const { seuil: newChancesDeReussite, breakdown } = outcome0
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: skillMastery }))
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+    rollAttaque = newRoll
+    chancesDeReussite = newChancesDeReussite
+    mr = outcomeCrit.mr
+    isSuccess = outcomeCrit.isSuccess
+
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: character.user_id, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls, total: rollAttaque,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed, timestamp: new Date().toISOString(),
+      skillLabel: 'Jet pour toucher (distance) — Chance : relance',
+      mechanicalTotal: skillTotal,
+      diffLabel: chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
+      chancesDeReussite, isSuccess, mr, breakdown,
+    } })
+
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, outcome.catastropheRisk, {
+      site: 'assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
+  }
+
+  const finalized = await finalizeAssaultHitOutcome(io, campaignId, {
+    action, character, weapon, effectiveWeaponInvId, tireurUsername, tireurColor,
+    authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+    isSuccess, emissions,
+  })
+  await flushDeferredEmissions(io, campaignId, character.user_id ?? null, finalized.emissions)
+  if (!finalized.suspend) await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+SITE_HANDLERS.assault = finishAssaultChoice
 
 // ── Branches "touche" de resolveAssaultAction (PLAN_RW_SYSCOMBAT.md §2.6, Lot 4) ──────────────────
 // Extraites de resolveAssaultAction — ctx assemblé par la coquille (§2.6.c). Contrat identique aux

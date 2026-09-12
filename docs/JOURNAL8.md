@@ -6505,3 +6505,70 @@ Aucun backfill d'inventaire.
 **Retour arrière** : `git revert` du commit ; `down` de la migration 334.
 **Reste** : L6c-C (liseré bleu sur l'icône ITG quand une demande est en cours + index partiel sur
 `game_echeances`), puis **validation V1 complète en jeu**, puis **Lot 2** (L8 / L9).
+
+---
+
+## Session (Claude) — 2026-09-12 — Chance : câblage combat L3e-4 + fusion fenêtre Catastrophe/Chance — CLOS (validé jeu réel)
+
+Suite de `PLAN_CHANCE.md` (RAW `REGLE_CHANCE.md`/`MANUEL_CHANCE.md`, v2.0). L1-L3a (primitive,
+`spendChancePoints`/`grantChancePoint`/`handleCatastropheRegen`) et L3e-1 à L3e-4b (machinerie
+générique `pending_chance_choices`, `exo_stand_up`, `exo_assault`) déjà poussés une session
+précédente. Cette session clôt **L3e-4** : les 7 sites Catastrophe combat identifiés sont câblés
+(`exo_stand_up`, `exo_assault`, `exo_melee`, `assault` Tir humanoïde, `melee_defense`,
+`melee_attack` ; `drone_attack` **exclu à raison** — un drone n'a aucun `char_sheet`,
+`combatantContextService.js:283-287`).
+
+**Patron « deux phases »**, appliqué aux 6 sites : le jet + `DICE_RESULT` + `maybeTriggerCatastrophe`
++ effets immédiats (munitions, panne d'arme) restent synchrones ; tout ce qui suit
+(identité/dispatch défenseur, dégâts) est extrait dans une fonction `finalize*` unique, appelée
+immédiate (pas de Catastrophe) ou différée depuis `SITE_HANDLERS.<site>` (Catastrophe → choix Chance
+posé avant toute résolution, RAW « refaire son Test » = un second jet complet qui remplace le
+premier). Choix Chance : pj/pnj direct au personnage, **exo → au pilote** (pas de `char_sheet`
+propre), drone → aucun choix.
+
+**Trois bugs réels trouvés et corrigés en auto-relecture, avant tout test navigateur** :
+1. `finishExoAssaultChoice`/`finishExoMeleeChoice` ignoraient le `suspend` retourné par la
+   finalisation — `advanceTimeline()` aurait pu écraser un `AWAITING_DAMAGE` juste armé.
+2. `exo_assault`/`exo_melee` (déjà poussés) créditaient `character.id` (l'exo, sans `char_sheet`)
+   au lieu du **pilote** — « Gagner 1 point » n'a jamais rien crédité depuis leur mise en ligne
+   jusqu'au correctif (lookup `char_sheet.where({id: ctx.sheetId}).first('character_id')`).
+3. `drone_attack` faillit être câblé avec le même mécanisme Chance — retiré avant tout push.
+
+**Fusion UI (retour Saar, jeu réel)** : deux corrections successives.
+- D'abord fusion de `CatastropheReviewQueue.jsx` + un `ChanceGmChoiceQueue.jsx` éphémère en
+  `CatastropheChoiceQueue.jsx` (MJ uniquement), corrélés par `linked_catastrophe_id`
+  (migration 339, FK → `pending_catastrophes` `ON DELETE SET NULL`) — un seul événement combat
+  (PNJ) ne montre plus deux fenêtres MJ séparées.
+- Puis (2026-09-12) `ChancePlayerChoiceCard.jsx` (carte joueur, positionnée à un autre coin de
+  l'écran) **supprimé et fusionné dans le même composant** : Saar a fait remarquer qu'un
+  découpage par audience (MJ vs joueur) ne justifiait pas un second composant à une seconde
+  position — le mécanisme redevenait visible à deux endroits différents selon le type de
+  personnage concerné, exactement le problème que la première fusion avait réglé côté MJ/PNJ.
+  `CatastropheChoiceQueue.jsx` est désormais l'unique fenêtre, une seule position à l'écran,
+  filtrée par audience en interne (MJ : Catastrophe + Chance PNJ ; joueur : Chance de son propre
+  PJ, jamais la moitié Catastrophe — garde structurelle, `catastropheEntries` n'est jamais
+  peuplée côté joueur).
+
+**Fausse piste écartée** : un `linked_catastrophe_id` retrouvé `null` en base après la fin d'un
+combat ne signifie PAS que le lien n'a jamais été posé — `purgePendingCatastrophes` (code
+préexistant, `COMBAT_END`) supprime toute `pending_catastrophes` de la campagne (résolues
+comprises), et la contrainte `ON DELETE SET NULL` efface rétroactivement la référence côté
+`pending_chance_choices`. Un log de diagnostic temporaire (retiré) a confirmé que
+`isCombatActive` était vrai à chaque jet en Catastrophe testé en session — le mécanisme
+fonctionnait déjà correctement, l'inspection après-coup était trompeuse.
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés ; suite DB
+`chanceService`/`chanceCatastropheChoiceService`/`catastropheService`/`combatTurnEngine`
+43/43 ; `eslint` client 0 erreur ; `vite build` OK. Jeu réel Saar, plusieurs combats : les 7 sites
+(dont les 3 impliquant un PJ/pilote réel) déclenchent la fenêtre Chance au bon moment, le MJ
+reçoit la Catastrophe liée pour un PNJ, « Relancer » retire la Catastrophe liée, une seule fenêtre
+à l'écran quel que soit le type de personnage — confirmé par Saar (« Test all ok »).
+**Non testé** : `socketEntity.js` (poussée/traction, L3e-2, déjà poussé une session précédente)
+reste bloqué par une régression externe (world builder) empêchant de placer des Entités
+interactives — hors périmètre de ce chantier.
+**Données** : migrations 336-340 (déjà appliquées et validées la session précédente), aucune
+nouvelle migration cette session.
+**Retour arrière** : `git revert` du commit ; les migrations restent additives, `down` disponible
+si nécessaire.
+**Reste** : L4 (forçage combat AOE — Événement favorable), L5 (réduction de gravité Blessures),
+L6 (UI générique `<ChanceSpendButton>`) — non commencés, détail `PLAN_CHANCE.md` §6-8.

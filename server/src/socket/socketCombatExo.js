@@ -31,7 +31,7 @@ import {
   resolveAttackHitDrone, resolveAttackHitExo, resolveAttackHitPnj, resolveAttackHitPj,
   resolveDefenselessTarget, resolveMeleeDefensePnj, resolveMeleeDefenseDrone, resolveMeleeDefensePj,
   PORTEE_LABELS, TAILLE_LABELS, SITUATION_LABELS,
-  flushDeferredEmissions,
+  flushDeferredEmissions, finalizeAssaultOutcome,
 } from './socketCombatHelpers.js'
 import { advanceTimeline, combatTimers, combatPreviews } from './combatTurnEngine.js'
 import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
@@ -252,7 +252,12 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
     // seul le dispatch échec/dégâts est différé. `suspend:true` bloque advanceTimeline() côté
     // appelant, pas de sous-phase FSM neuve (le choix a déjà son propre timeout, L3e-1).
     if (assaultOutcome.catastropheRisk) {
-      await openChanceChoice(io, campaignId, character.id, {
+      // La Chance appartient au PILOTE (char_sheet du pilote, ctxTireur.sheetId — resolveExoTestContext
+      // délègue à resolveHumanoidTestContext(db, pilot, ...), combatantContextService.js:280), jamais
+      // à l'exo elle-même (aucun char_sheet propre, seulement exo_sheet) — trouvaille en auto-relecture,
+      // même bug qu'aurait pu avoir exo_stand_up si elle n'utilisait pas déjà pilot.id.
+      const pilotCharacterId = (await db('char_sheet').where({ id: ctxTireur.sheetId }).first('character_id'))?.character_id ?? null
+      await openChanceChoice(io, campaignId, pilotCharacterId, {
         testLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
         site: 'exo_assault',
         linkedCatastropheId: pendingCatastrophe?.id ?? null,
@@ -266,7 +271,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       return { suspend: true, emissions }
     }
 
-    const finalized = await finalizeExoAssault(io, campaignId, { action, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, chocDsl, isSuccess, emissions })
+    const finalized = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, chocDsl, isSuccess, emissions })
     return finalized
 
   } catch (err) {
@@ -275,30 +280,9 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
   }
 }
 
-// finalizeExoAssault — émission de l'échec OU dispatch des dégâts par type de cible (autorité
-// unique, appelée immédiate ou depuis SITE_HANDLERS.exo_assault, PLAN_CHANCE.md L3e-4). Reprend
-// telle quelle la logique existante (échec l.239-245 / succès l.248-258 d'origine), jamais dupliquée.
-async function finalizeExoAssault(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions }) {
-  if (!isSuccess) {
-    emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-      tireurId: action.token_id, cibleId: action.target_token_id,
-      localisation: null, degautsBruts: 0, degatsNets: 0,
-      severity: null, is_lethal: false, isSuccess: false, shockResult: null,
-    } })
-    return { suspend: false, emissions }
-  }
-
-  const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
-  const cibleCharacter = cibleToken?.character_id
-    ? await db('characters').where({ id: cibleToken.character_id }).first()
-    : null
-  const now = new Date().toISOString()
-  const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now, chocDsl }
-  if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
-  if (cibleCharacter?.type === 'exo')   return await resolveAttackHitExo(io, campaignId, ctx, emissions)
-  if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
-  return await resolveAttackHitPj(io, campaignId, ctx, emissions)
-}
+// finalizeExoAssault a été généralisée en finalizeAssaultOutcome (socketCombatHelpers.js) —
+// structure identique à celle qu'exigeait resolveDroneAssaultAction (PLAN_CHANCE.md L3e-4c),
+// jamais une deuxième copie (invariant #3). Importée ci-dessus.
 
 // finishExoAssaultChoice — SITE_HANDLERS.exo_assault (PLAN_CHANCE.md L3e-4b). RAW : 'gain_point' et
 // le timeout (choice=null) gardent le jet original — toujours un échec ici (catastropheRisk ne se
@@ -339,9 +323,13 @@ async function finishExoAssaultChoice(io, campaignId, resolved, { choice, contex
     })
   }
 
-  const { emissions: finalEmissions } = await finalizeExoAssault(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
+  const { suspend: finalSuspend, emissions: finalEmissions } = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
   await flushDeferredEmissions(io, campaignId, userId, finalEmissions)
-  await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+  // Ne pas avancer l'échelle si la finalisation a elle-même armé une attente (ex. AWAITING_DAMAGE
+  // sur une cible PJ touchée, resolveAttackHitPj) — même garde que le chemin immédiat
+  // (socketCombatResolution.js:531-533, resolutionSuspended), sinon advanceTimeline() écraserait
+  // la sous-phase juste posée.
+  if (!finalSuspend) await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
 }
 
 SITE_HANDLERS.exo_assault = finishExoAssaultChoice
@@ -456,17 +444,18 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
     const attackerColor    = userRow?.color    ?? '#808080'
     const attackerUsername = userRow?.username ?? character.name ?? 'Exo-armure'
 
+    const attaqueContributions = [
+      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+      { label: 'Malus santé / encombrement (pilote)', value: effectiveMalusAttaquant, type: 'malus' },
+      { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
+      { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
+      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
+      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+    ]
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const attaqueOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
-      contributions: [
-        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-        { label: 'Malus santé / encombrement (pilote)', value: effectiveMalusAttaquant, type: 'malus' },
-        { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
-        { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
-        { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
-      ],
+      contributions: attaqueContributions,
     })
     const { seuil: chancesAttaque, breakdown: breakdownAtk } = attaqueOutcome0
     const attaqueOutcomeCrit = applyCriticalSuccessBonus(attaqueOutcome0, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))
@@ -483,113 +472,192 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
       diffLabel: chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
       chancesDeReussite: chancesAttaque, isSuccess: attaqueOutcome.isSuccess, mr: attaqueOutcome.mr, breakdown: breakdownAtk,
     } })
-    await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
+    const pendingCatastrophe = await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
       site: 'exo_melee', actorTokenId: action.token_id, targetTokenId,
     })
 
-    // ── Cible ────────────────────────────────────────────────────────────────
-    const targetToken = await db('tokens').where({ id: targetTokenId }).first()
-    if (!targetToken?.character_id) {
-      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
-        attaquantId: action.token_id, defenseurId: targetTokenId,
-        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
-      } })
-      return { suspend: false, emissions }
-    }
-    const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
-    if (!defenderCharacter) return { suspend: false, emissions }
-    const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
-
-    // Identité EFFECTIVE du défenseur (pilote si exo) — copie exacte du bloc resolveMeleeAction, non
-    // spécifique à l'attaquant : le routage de la confirmation de défense doit suivre le pilote du
-    // défenseur qu'il soit attaqué par un humain, un drone ou une exo (PLAN_EXOARMURE.md Lot 2 §7.7).
-    const { sheetId: sheetIdCible, userId: defenderEffectiveUserId, effectiveType: defenderEffectiveType } =
-      await resolveCombatantIdentity(db, defenderCharacter)
-    let defenderSkillTotal = 0, defenderEffectiveMalus = 0, defenderMastery = 0
-    let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
-    let char_sheet_id_cible = null
-
-    if (sheetIdCible) {
-      const [identityCible, defContactWeapons] = await Promise.all([
-        db('char_identity').where({ char_sheet_id: sheetIdCible }).first(),
-        db('char_inventory_slots as cis')
-          .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
-          .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-          .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .whereIn('cis.slot_code', ['MD', 'MG', '2M'])
-          .where('ref_equipment.category', 'Arme de contact')
-          .select('cis.slot_code as slot', 'char_inventory.equipment_id'),
-      ])
-      const slotPriority = (identityCible?.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
-      const defWeapon = slotPriority.map(s => defContactWeapons.find(w => w.slot === s)).find(w => w != null) ?? null
-      let defSkillId = 'COMBAT_A_MAINS_NUES'
-      if (defWeapon?.equipment_id) {
-        const assoc = await db('ref_equipment_skill_assoc').where({ item_id: defWeapon.equipment_id }).first()
-        if (assoc) defSkillId = assoc.skill_id
-      }
-      const ctxCible = await resolveCombatantTestContext(db, defenderCharacter, defSkillId)
-      if (ctxCible) {
-        defenderSkillTotal     = ctxCible.skillTotal
-        defenderEffectiveMalus = ctxCible.effectiveMalus
-        defenderMastery        = ctxCible.mastery
-        // Jamais dérivés du pilote pour un défenseur exo — même garde que resolveMeleeAction, l'armure
-        // a son propre pipeline de dégâts (exoAvarieService.resolveExoDamage), pas celui de son pilote.
-        if (defenderCharacter.type !== 'exo') {
-          for_na_cible = ctxCible.for_na
-          con_na_cible = ctxCible.con_na
-          vol_na_cible = ctxCible.vol_na
-          char_sheet_id_cible = ctxCible.sheetId
-        }
-      }
+    const finalizeCtx = {
+      action, character, targetTokenId,
+      weaponEquipmentId: weapon.equipment_id ?? null, weaponDamageFormula: weapon.damage_formula ?? null,
+      weaponDisplayName: weapon.display_name ?? 'Armement',
+      attackerSkillTotal, attackerMastery: ctx.mastery, attackerColor, attackerUsername,
+      attackerSheetId: ctx.sheetId, modDom, attaqueContributions, confirmedModifiers,
+      rollAttaque, chancesAttaque, mr: attaqueOutcome.mr,
     }
 
-    // commonPending — même contrat que resolveMeleeAction (§2.4.b), consommé tel quel par les 4
-    // fonctions de branchement défenseur déjà génériques. weaponInvId/naturalWeaponCharMutationId
-    // toujours null (armes exo hors char_inventory, aucune mutation) : getEffectiveMeleeDamage
-    // retombe alors correctement sur damageFormula (fallbackFormula), vérifié dans damageService.js.
-    // weaponRefId (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier D) : ref_equipment.id de l'arme exo — la
-    // seule info manquante pour que getEffectiveMeleeDamage dérive aussi le Choc (branche dédiée,
-    // damageService.js), jusqu'ici jamais transmise pour un attaquant exo.
-    const commonPending = {
-      campaignId,
-      attackerTokenId: action.token_id,
-      attackerCharacter: character,
-      attackerUsername, attackerColor,
-      rollAttaque, chancesAttaque,
-      mrAttaque: attaqueOutcome.mr,
-      defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
-      multiMalusAttaquant: 0, multiMalusDefenseur: 0,
-      damageFormula: weapon.damage_formula ?? null,
-      weaponInvId: null,
-      weaponRefId: weapon.equipment_id ?? null,
-      modDom,
-      combatModeBonus: 0,
-      characterIdCible: defenderCharacter.id,
-      cibleType: defenderCharacter.type,
-      char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
-      targetName,
-      userId: character.user_id ?? null,
-      defenderUserId: defenderEffectiveUserId,
-      confirmedModifiers,
-      situationDef: confirmedModifiers?.situationDef ?? [],
-      targetTokenId,
-      attackerSheetId: ctx.sheetId,
-      naturalWeaponCharMutationId: null,
-      defenderCharacterName: defenderCharacter.name,
-      attackerCharacterName: character.name ?? 'Exo-armure',
+    // Choix Chance posé AVANT la résolution du défenseur (PLAN_CHANCE.md L3e-4, décision Saar
+    // 2026-09-11) — DICE_RESULT/maybeTriggerCatastrophe restent immédiats (ci-dessus), toute la
+    // résolution du défenseur (identité, dispatch sans-défense/PNJ/drone/PJ) est différée.
+    if (attaqueOutcome.catastropheRisk) {
+      // La Chance appartient au pilote, pas à l'exo (même correctif qu'exo_assault ci-dessus) —
+      // ctx.sheetId est déjà celui du pilote (resolveCombatantTestContext → resolveExoTestContext).
+      const pilotCharacterId = (await db('char_sheet').where({ id: ctx.sheetId }).first('character_id'))?.character_id ?? null
+      await openChanceChoice(io, campaignId, pilotCharacterId, {
+        testLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+        site: 'exo_melee',
+        linkedCatastropheId: pendingCatastrophe?.id ?? null,
+        context: finalizeCtx,
+      })
+      return { suspend: true, emissions }
     }
 
-    // ── Branchement défenseur — ordre invariant, sans-défense d'abord (même raison que
-    // resolveMeleeAction : sinon un PNJ/PJ étourdi relancerait un jet de défense actif, contraire au
-    // RAW). defenderEffectiveType (pas defenderCharacter.type) pour la branche pnj/pj — un défenseur
-    // exo piloté par un PNJ s'auto-résout, piloté par un PJ prompte CE pilote.
-    if (targetDefenseless) return await resolveDefenselessTarget(io, campaignId, commonPending, emissions)
-    if (defenderEffectiveType === 'pnj') return await resolveMeleeDefensePnj(io, campaignId, commonPending, emissions)
-    if (defenderCharacter.type === 'drone') return await resolveMeleeDefenseDrone(io, campaignId, commonPending, emissions)
-    return await resolveMeleeDefensePj(io, campaignId, commonPending, emissions)
+    return await finalizeExoMelee(io, campaignId, { ...finalizeCtx, emissions })
 
   } catch (err) {
     console.error('[WS] resolveExoMeleeAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
 }
+
+// finalizeExoMelee — identité/stats du défenseur + dispatch (sans-défense/PNJ/drone/PJ), autorité
+// unique appelée immédiate ou depuis SITE_HANDLERS.exo_melee (PLAN_CHANCE.md L3e-4b-bis). Re-fetch
+// la cible fraîche en DB (état à jour, robuste au temps écoulé pendant l'attente du choix) —
+// jamais depuis un instantané mis en cache, même principe que finalizeAssaultOutcome/
+// finalizeEntityDisplacement.
+async function finalizeExoMelee(io, campaignId, {
+  action, character, targetTokenId, weaponEquipmentId, weaponDamageFormula, weaponDisplayName,
+  attackerSkillTotal, attackerColor, attackerUsername, attackerSheetId, modDom, confirmedModifiers,
+  rollAttaque, chancesAttaque, mr, emissions,
+}) {
+  const targetToken = await db('tokens').where({ id: targetTokenId }).first()
+  if (!targetToken?.character_id) {
+    emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+      attaquantId: action.token_id, defenseurId: targetTokenId,
+      rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
+    } })
+    return { suspend: false, emissions }
+  }
+  const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
+  if (!defenderCharacter) return { suspend: false, emissions }
+  const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
+
+  const { sheetId: sheetIdCible, userId: defenderEffectiveUserId, effectiveType: defenderEffectiveType } =
+    await resolveCombatantIdentity(db, defenderCharacter)
+  let defenderSkillTotal = 0, defenderEffectiveMalus = 0, defenderMastery = 0
+  let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
+  let char_sheet_id_cible = null
+
+  if (sheetIdCible) {
+    const [identityCible, defContactWeapons] = await Promise.all([
+      db('char_identity').where({ char_sheet_id: sheetIdCible }).first(),
+      db('char_inventory_slots as cis')
+        .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+        .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where({ 'char_inventory.character_id': defenderCharacter.id })
+        .whereIn('cis.slot_code', ['MD', 'MG', '2M'])
+        .where('ref_equipment.category', 'Arme de contact')
+        .select('cis.slot_code as slot', 'char_inventory.equipment_id'),
+    ])
+    const slotPriority = (identityCible?.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
+    const defWeapon = slotPriority.map(s => defContactWeapons.find(w => w.slot === s)).find(w => w != null) ?? null
+    let defSkillId = 'COMBAT_A_MAINS_NUES'
+    if (defWeapon?.equipment_id) {
+      const assoc = await db('ref_equipment_skill_assoc').where({ item_id: defWeapon.equipment_id }).first()
+      if (assoc) defSkillId = assoc.skill_id
+    }
+    const ctxCible = await resolveCombatantTestContext(db, defenderCharacter, defSkillId)
+    if (ctxCible) {
+      defenderSkillTotal     = ctxCible.skillTotal
+      defenderEffectiveMalus = ctxCible.effectiveMalus
+      defenderMastery        = ctxCible.mastery
+      if (defenderCharacter.type !== 'exo') {
+        for_na_cible = ctxCible.for_na
+        con_na_cible = ctxCible.con_na
+        vol_na_cible = ctxCible.vol_na
+        char_sheet_id_cible = ctxCible.sheetId
+      }
+    }
+  }
+
+  const settings = await getCampaignSettings(db, campaignId)
+  const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
+
+  const commonPending = {
+    campaignId,
+    attackerTokenId: action.token_id,
+    attackerCharacter: character,
+    attackerUsername, attackerColor,
+    rollAttaque, chancesAttaque,
+    mrAttaque: mr,
+    defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
+    multiMalusAttaquant: 0, multiMalusDefenseur: 0,
+    damageFormula: weaponDamageFormula,
+    weaponInvId: null,
+    weaponRefId: weaponEquipmentId,
+    modDom,
+    combatModeBonus: 0,
+    characterIdCible: defenderCharacter.id,
+    cibleType: defenderCharacter.type,
+    char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    targetName,
+    userId: character.user_id ?? null,
+    defenderUserId: defenderEffectiveUserId,
+    confirmedModifiers,
+    situationDef: confirmedModifiers?.situationDef ?? [],
+    targetTokenId,
+    attackerSheetId,
+    naturalWeaponCharMutationId: null,
+    defenderCharacterName: defenderCharacter.name,
+    attackerCharacterName: character.name ?? 'Exo-armure',
+  }
+
+  if (targetDefenseless) return await resolveDefenselessTarget(io, campaignId, commonPending, emissions)
+  if (defenderEffectiveType === 'pnj') return await resolveMeleeDefensePnj(io, campaignId, commonPending, emissions)
+  if (defenderCharacter.type === 'drone') return await resolveMeleeDefenseDrone(io, campaignId, commonPending, emissions)
+  return await resolveMeleeDefensePj(io, campaignId, commonPending, emissions)
+}
+
+// finishExoMeleeChoice — SITE_HANDLERS.exo_melee (PLAN_CHANCE.md L3e-4b-bis). Même règle que
+// exo_assault : 'gain_point'/timeout gardent le jet original, seul 'reroll' relance (mêmes
+// `attaqueContributions`, déjà figées — pas rejouées).
+async function finishExoMeleeChoice(io, campaignId, resolved, { choice, context }) {
+  const {
+    action, character, targetTokenId, weaponEquipmentId, weaponDamageFormula, weaponDisplayName,
+    attackerSkillTotal, attackerMastery, attackerColor, attackerUsername, attackerSheetId, modDom,
+    attaqueContributions, confirmedModifiers,
+  } = context
+  let { rollAttaque, chancesAttaque, mr } = context
+  const emissions = []
+
+  if (choice === 'reroll') {
+    const { total: newRoll, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
+    const outcome0 = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque: newRoll,
+      contributions: attaqueContributions,
+    })
+    const { seuil: newChancesAttaque, breakdown } = outcome0
+    const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: attackerMastery }))
+    const outcome = await resolveCriticalFailReroll(outcomeCrit)
+    rollAttaque = newRoll
+    chancesAttaque = newChancesAttaque
+    mr = outcomeCrit.mr
+
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: character.user_id ?? null, username: attackerUsername, color: attackerColor,
+      formula: '1d20', rolls: attackRolls, total: rollAttaque,
+      isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+      catastropheRisk: outcome.catastropheRisk,
+      seed: attackSeed, timestamp: new Date().toISOString(),
+      skillLabel: `${weaponDisplayName} — Exo-armure — Chance : relance`,
+      mechanicalTotal: attackerSkillTotal,
+      diffLabel: chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
+      chancesDeReussite: chancesAttaque, isSuccess: outcomeCrit.isSuccess, mr, breakdown,
+    } })
+
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, outcome.catastropheRisk, {
+      site: 'exo_melee', actorTokenId: action.token_id, targetTokenId,
+    })
+  }
+
+  const finalized = await finalizeExoMelee(io, campaignId, {
+    action, character, targetTokenId, weaponEquipmentId, weaponDamageFormula, weaponDisplayName,
+    attackerSkillTotal, attackerColor, attackerUsername, attackerSheetId, modDom, confirmedModifiers,
+    rollAttaque, chancesAttaque, mr, emissions,
+  })
+  await flushDeferredEmissions(io, campaignId, character.user_id ?? null, finalized.emissions)
+  // Ne pas avancer l'échelle si la finalisation a elle-même armé une attente (défense active PJ,
+  // AWAITING_DAMAGE...) — même garde que exo_assault ci-dessus et que le chemin immédiat.
+  if (!finalized.suspend) await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+SITE_HANDLERS.exo_melee = finishExoMeleeChoice

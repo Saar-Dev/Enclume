@@ -1,3 +1,15 @@
+## v231 — 2026-09-12 — Combat : régénération de Chance sur Catastrophe
+
+### Combat
+- [new] Quand une attaque ou une défense subit une **Catastrophe** (Marge d'échec ≥ 15), le
+  personnage concerné se voit proposer un choix : **regagner 1 point de Chance**, ou **relancer
+  intégralement le Test** — comme au premier jet, avec les mêmes modificateurs. Sans réponse dans
+  le délai affiché, le résultat original est conservé.
+- [new] Ce choix appartient au joueur pour son propre personnage (PJ ou pilote d'exo-armure) ; pour
+  un PNJ, c'est le MJ qui tranche, dans la même fenêtre que la conséquence de la Catastrophe.
+- [new] Relancer le Test annule la conséquence de la Catastrophe en cours de validation par le MJ
+  (elle ne s'applique plus, puisque le Test qui l'a produite n'a plus eu lieu).
+
 ## v230 — 2026-09-10 — Usure & Intégrité du matériel
 
 ### Inventaire

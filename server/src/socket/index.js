@@ -281,7 +281,7 @@ const initSocket = (io) => {
 
             // Choix Chance sur Catastrophe (PLAN_CHANCE.md L3e-1) — resync tous rôles, même patron
             // que la diffusion live (io.to(campaignId).emit) : le filtrage PJ/PNJ/propriété se fait
-            // côté client (CatastropheChoiceQueue.jsx / ChancePlayerChoiceCard.jsx), pas ici.
+            // côté client (CatastropheChoiceQueue.jsx, composant unique), pas ici.
             const pendingChanceChoices = await listPendingChanceChoices(campaignId)
             for (const pc of pendingChanceChoices) {
               socket.emit(WS.CHANCE_CHOICE_PENDING, {

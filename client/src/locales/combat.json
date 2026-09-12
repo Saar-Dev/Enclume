@@ -700,7 +700,6 @@
   },
   "chance": {
     "choiceCard": {
-      "title": "Catastrophe — Chance",
       "gainPointButton": "Gagner 1 point de Chance",
       "rerollButton": "Relancer le Test",
       "autoResolveIn": "Résolution automatique dans {{seconds}}s"
