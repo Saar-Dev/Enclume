@@ -1,3 +1,16 @@
+## v232 — 2026-09-12 — Combat : éviter un tir de zone à longue/extrême portée
+
+### Combat
+- [new] Touché par un fusil à pompe ou une grenade à fragmentation à **longue portée** ou
+  **portée extrême**, un personnage peut désormais tenter d'éviter complètement le coup : soit en
+  lançant un **Test de Chance** (bonus de +5 à portée extrême), soit en **dépensant directement 1
+  point de Chance** pour réussir sans lancer de dé.
+- [new] Si un même tir touche plusieurs personnages en même temps, chacun reçoit sa propre
+  fenêtre ; le résultat du tir n'est calculé qu'une fois que tout le monde a répondu (ou que le
+  délai est écoulé pour ceux qui n'ont pas répondu — ils restent alors touchés normalement).
+- [new] Ce choix appartient au joueur concerné (PJ ou pilote d'exo-armure) ; pour un PNJ, c'est le
+  MJ qui tranche.
+
 ## v231 — 2026-09-12 — Combat : régénération de Chance sur Catastrophe
 
 ### Combat

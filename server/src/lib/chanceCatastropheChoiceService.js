@@ -38,7 +38,14 @@ const SITE_HANDLERS = {}
 // openChanceChoice — pose la ligne en attente, émet CHANCE_CHOICE_PENDING, arme le timeout par
 // défaut (RAW : pas de forçage silencieux, "Test normal" = ni point ni relance). Ne bloque jamais
 // l'appelant — retourne dès l'insertion, la suite arrive via resolveChanceChoice.
-export async function openChanceChoice(io, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null } = {}) {
+//
+// actionId/targetTokenId (PLAN_CHANCE.md L4, migration 341) — corrélation Aggregator/Scatter-Gather :
+// plusieurs lignes ouvertes avec le même actionId (une par cible éligible d'un même tir AOE) forment
+// un groupe que le site appelant (aoe_avoidance) rassemble à la dernière résolution. `targetTokenId`
+// est le token à retirer de la résolution, distinct de `characterId` (le destinataire du choix, qui
+// est le PILOTE si la cible est une exo — même distinguo que les sites L3e). Les deux restent `null`
+// pour tout site à cible unique (L3e) : colonnes additives, jamais consultées hors L4.
+export async function openChanceChoice(io, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null } = {}) {
   const [pending] = await db('pending_chance_choices')
     .insert({
       campaign_id: campaignId,
@@ -48,6 +55,8 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
       context: JSON.stringify({ ...context, site }),
       linked_catastrophe_id: linkedCatastropheId,
       timeout_ms: timeoutMs,
+      action_id: actionId,
+      target_token_id: targetTokenId,
     })
     .returning('*')
 
@@ -55,6 +64,8 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
   // 2026-09-11 : une seule carte MJ unifiée, pas deux fenêtres "Catastrophe" séparées). Transmis au
   // client pour qu'il apparie les deux flux (CATASTROPHE_PENDING / CHANCE_CHOICE_PENDING).
   // timeoutMs/rolledAt : décompte visible côté client (retour Saar : le délai semblait arbitraire).
+  // actionId : transmis pour qu'un futur affichage groupé (liste MJ multi-cibles, L4e) puisse
+  // reconnaître les entrées d'un même tir sans requête supplémentaire.
   io.to(campaignId).emit(WS.CHANCE_CHOICE_PENDING, {
     id: pending.id,
     characterId,
@@ -63,6 +74,7 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
     rolledAt: pending.rolled_at,
     linkedCatastropheId: pending.linked_catastrophe_id,
     timeoutMs: pending.timeout_ms,
+    actionId: pending.action_id,
   })
 
   // .unref() — ce timer ne doit jamais empêcher le process de s'arrêter (arrêt serveur normal,
@@ -81,10 +93,21 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
 // resolveChanceChoice — idempotent (patron resolvePendingCatastrophe) : UPDATE ... WHERE
 // resolved_at IS NULL, 0 ligne retournée = déjà résolue (choix joueur arrivé avant le timeout, ou
 // double-clic) — rejeté silencieusement, jamais appliqué deux fois.
-// `choice` : 'gain_point' (RAW "regagne 1 point de Chance") | 'reroll' (RAW "refaire son Test") |
-// null (timeout — Test normal, ni l'un ni l'autre).
+//
+// Deux vocabulaires de choix pour deux mécaniques RAW distinctes (PLAN_CHANCE.md §12, décision
+// 2026-09-12 : ne PAS les fusionner en un concept indifférencié) :
+// - Régénération sur Catastrophe (L3e, 6 sites) : 'gain_point' (RAW "regagne 1 point de Chance") |
+//   'reroll' (RAW "refaire son Test") | null (timeout — Test normal). Effet CENTRALISÉ ci-dessous
+//   (handleCatastropheRegen/withdrawPendingCatastrophe) — les 6 sites le partagent à l'identique,
+//   la centralisation reste la bonne pratique DRY, ne pas la déplacer dans chaque handler.
+// - Forçage AOE longue/extrême portée (L4, site `aoe_avoidance`) : 'force' (RAW "Événement
+//   favorable") | 'attempt' (Test de Chance) | null (timeout — reste touché normalement). AUCUN
+//   effet central pour ces valeurs : contrairement à la régénération, cette mécanique n'est
+//   partagée par aucun autre site aujourd'hui — son unique handler (`SITE_HANDLERS.aoe_avoidance`)
+//   en porte l'intégralité (dépense/Test/jonction Aggregator), pas de duplication à éviter ici.
 export async function resolveChanceChoice(io, campaignId, pendingId, { choice = null, resolvedByUserId } = {}) {
-  if (choice !== null && choice !== 'gain_point' && choice !== 'reroll') {
+  const KNOWN_CHOICES = ['gain_point', 'reroll', 'force', 'attempt']
+  if (choice !== null && !KNOWN_CHOICES.includes(choice)) {
     throw new AppError(400, `choice invalide : ${choice}`)
   }
 

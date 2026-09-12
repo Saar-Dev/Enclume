@@ -230,9 +230,58 @@ dégât), pas un nouvel événement générique.
 
 ## 6. L4 — Forçage combat : Événement favorable
 
-Consommateur immédiat : Test de Chance AOE longue/extrême portée (fusil à pompe, grenades —
-`socketCombatAoe.js`, écart RAW déjà documenté dans le code : ces cibles subissent aujourd'hui le
-dégât réduit sans aucune chance d'esquive).
+**Statut (2026-09-12) : codé et VALIDÉ JEU RÉEL (chemin timeout/course + RAW confirmé par Saar ;
+le clic manuel « Forcer »/« Tenter » reste à éprouver, cf. Non testé en bas de section).**
+Migrations 341-342
+(`action_id`/`target_token_id`/`outcome` sur `pending_chance_choices`, additives, appliquées).
+`resolveChanceChoice` élargie à `force`/`attempt` (aucun effet central, délégué au handler — décision
+architecture §12, distincte du vocabulaire `gain_point`/`reroll` de L3e, volontairement PAS fusionnée
+dans un concept indifférencié). Nouveau site `aoe_avoidance` dans `socketCombatAoe.js` :
+`finalizeAoeResolution` (extraction fidèle de la queue de `resolveAoeAssaultAction`, appelable
+immédiate ou différée) + `finishAoeAvoidanceChoice` (`SITE_HANDLERS.aoe_avoidance`, patron
+Aggregator/Scatter-Gather — Enterprise Integration Patterns — jonction verrouillée par
+`pg_advisory_xact_lock` scopé à `action_id`, évite qu'un comptage naïf ne perde la complétion si
+deux cibles répondent à quelques ms d'écart). Filtre d'éligibilité : `ht.band ∈ {longue, extreme}`
+(couvre fusil à pompe ET grenade à fragmentation, exclut structurellement le lance-flammes dont
+`band` est toujours `null` — vérifié dans `aoeMechanisms/`). Modificateur RAW : +5 à portée extrême,
+0 à longue portée (`REGLES_ARMES_SPECIALES.md:37-40/102-104`, identique aux deux sections RAW).
+**Pas de test DB automatisé pour la jonction** — décision alignée sur une convention déjà écrite dans
+`combatTurnEngine.test.mjs` (`advanceTimeline` bout en bout jugé disproportionné à harnacher,
+laissé au run Saar) ; le code a été relu ligne à ligne à la place.
+
+**Bug trouvé et corrigé (2026-09-12, avant tout clic manuel)** : `CatastropheChoiceQueue.jsx`
+affichait toujours les boutons `reroll`/`gain_point` (vocabulaire L3e), quel que soit le site — un
+clic sur `aoe_avoidance` aurait silencieusement fini en `outcome:'hit'` (ni l'un ni l'autre choix
+reconnu par `finishAoeAvoidanceChoice`), sans jamais planter ni prévenir le joueur. Corrigé :
+nouvelles clés i18n `chance.choiceCard.forceButton`/`attemptButton`, le composant bascule sur
+`chance.site === 'aoe_avoidance'` pour choisir le bon couple de boutons/valeurs émises.
+
+**RAW « Forcer » confirmé (Saar, 2026-09-12)** — question soulevée en test réel (« à quel moment
+dans le RAW y a-t-il un Événement favorable pour éviter un fusil à pompe ? ») : `REGLE_CHANCE.md:
+75-77` définit « Événement favorable » comme pouvant remplacer **tout** Test de Chance par une
+dépense directe de 1 point (« il peut s'agir des conséquences d'un Test de Chance réussi, dans ce
+cas le joueur dépense d'emblée 1 point de Chance au lieu de faire le Test ») — et
+`REGLES_ARMES_SPECIALES.md:39-40` accorde explicitement un Test de Chance à la cible d'un fusil à
+pompe à portée extrême. Le lien entre les deux chapitres n'est écrit nulle part en un seul endroit,
+mais découle directement du texte des deux — confirmé par Saar après relecture, pas une extrapolation.
+
+**Testé** : `node --check` sur les fichiers serveur touchés ; suite DB `chanceCatastropheChoiceService`
+(dont un test dédié verrouillant la non-interférence gain_point/reroll vs force/attempt) + suite
+`socketCombatAoe` pures, toutes vertes ; eslint + `vite build` client OK. Jeu réel Saar : fusil à
+pompe (Klauss) tiré par un drone, 2 cibles (1 PJ, 1 PNJ) à portée extrême — les deux fenêtres
+ouvertes simultanément avec le bon `+5`, résolues par timeout à 13ms d'écart (le cas le plus
+dangereux pour la jonction Aggregator), combat repris normalement sans double résolution ni blocage.
+**Non testé** : le clic manuel sur « Forcer »/« Tenter » (seul le chemin timeout a été éprouvé en
+jeu réel jusqu'ici — le bug de libellé de bouton correspondant, trouvé et corrigé avant tout clic,
+cf. ci-dessus) ; le lance-flammes est vérifié exclu par construction (`band` toujours `null`), pas
+par un test dédié au tir réel.
+**Données** : migrations 341-342 (additives, `action_id`/`target_token_id`/`outcome` nullables sur
+`pending_chance_choices`), déjà appliquées.
+**Retour arrière** : `git revert` du commit ; `down` des migrations 341-342.
+
+Consommateur : Test de Chance AOE longue/extrême portée (fusil à pompe, grenades —
+`socketCombatAoe.js`, site `aoe_avoidance`) — l'écart RAW documenté ci-dessus dans une version
+antérieure de ce plan est désormais comblé (ci-dessus, codé et validé).
 
 **Point d'attention vérifié avant d'écrire ce lot** : la boucle de résolution AOE
 (`socketCombatAoe.js`, `for (const ht of resolveTargets)`, ~L753-781) est aujourd'hui

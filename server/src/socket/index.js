@@ -292,6 +292,7 @@ const initSocket = (io) => {
                 rolledAt: pc.rolled_at,
                 linkedCatastropheId: pc.linked_catastrophe_id,
                 timeoutMs: pc.timeout_ms,
+                actionId: pc.action_id,
               })
             }
           }

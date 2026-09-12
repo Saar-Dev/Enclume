@@ -6572,3 +6572,72 @@ nouvelle migration cette session.
 si nécessaire.
 **Reste** : L4 (forçage combat AOE — Événement favorable), L5 (réduction de gravité Blessures),
 L6 (UI générique `<ChanceSpendButton>`) — non commencés, détail `PLAN_CHANCE.md` §6-8.
+
+---
+
+## Session (Claude) — 2026-09-12 — Chance L4 : forçage / Test de Chance AOE longue-extrême portée — VALIDÉ JEU RÉEL
+
+Suite de `PLAN_CHANCE.md` §6. Comble l'écart RAW déjà documenté dans `socketCombatAoe.js` : à
+portée longue/extrême, le fusil à pompe et la grenade à fragmentation accordent à chaque cible
+touchée un Test de Chance pour éviter complètement d'être atteinte (+5 à portée extrême,
+`REGLES_ARMES_SPECIALES.md:34-40/99-104`), ou le RAW « Événement favorable »
+(`REGLE_CHANCE.md:75-77`) pour dépenser 1 point de Chance à la place du jet.
+
+**Décision d'architecture (analyse à charge demandée par Saar avant de coder)** : ne PAS créer un
+second service/table parallèle à `chanceCatastropheChoiceService.js` pour cette seconde mécanique
+RAW (déclencheur, vocabulaire de choix et cardinalité différents de la régénération sur
+Catastrophe de L3e). Recherche de patrons pro (Enterprise Integration Patterns) : le problème réel
+— une action AOE peut toucher PLUSIEURS cibles simultanément, il faut attendre TOUTES leurs
+décisions avant de résoudre les dégâts — est un **Aggregator/Scatter-Gather** classique, à
+construire sur l'infrastructure déjà validée de L3e (même table `pending_chance_choices`, même
+patron DB-row + event + résolution idempotente) plutôt qu'à dupliquer. `resolveChanceChoice`
+élargie à un second vocabulaire de choix (`force`/`attempt`, distinct de `gain_point`/`reroll`)
+sans aucun effet central pour ces valeurs — laissé à l'unique consommateur.
+
+**Implémentation** : migrations 341-342 (`action_id`/`target_token_id`/`outcome` sur
+`pending_chance_choices`, additives — `action_id` sert d'identifiant de corrélation, index partiel
+sur les lignes non résolues). `socketCombatAoe.js` : `finalizeAoeResolution` extrait fidèlement de
+la queue de `resolveAoeAssaultAction` (persistance + dégât + finalisation + effets post-résolution),
+appelable immédiate (aucune cible éligible, cas courant inchangé) ou différée. Nouveau site
+`aoe_avoidance` : `finishAoeAvoidanceChoice` applique l'effet individuel (`spendChancePoints` pour
+« Forcer », `resolveChanceTest` + jet 1D20 pour « Tenter »), puis vérifie la condition de
+complétion du groupe sous un verrou `pg_advisory_xact_lock` scopé à `action_id` — un simple
+comptage sans exclusion mutuelle aurait laissé une fenêtre de course où deux résolutions quasi
+simultanées se croient chacune « la dernière » (constaté a posteriori : le test réel a justement
+produit ce cas, deux timeouts à 13ms d'écart, sans le verrou ça aurait pu doubler ou perdre la
+résolution). Éligibilité : `ht.band ∈ {longue, extreme}` — couvre fusil à pompe et grenade à
+fragmentation, exclut structurellement le lance-flammes (`band` toujours `null`, RAW confirmé : ses
+dommages ne décroissent pas avec la portée, aucune clause de Test de Chance pour lui).
+
+**Bug client trouvé et corrigé avant tout clic manuel** : `CatastropheChoiceQueue.jsx` envoyait
+toujours `reroll`/`gain_point` (vocabulaire L3e) quel que soit le site — un clic sur une carte
+`aoe_avoidance` n'aurait rien fait d'utile (ni `force` ni `attempt` reconnus par le serveur,
+silencieusement traité comme "reste touché"). Le composant bascule désormais sur
+`chance.site === 'aoe_avoidance'` pour afficher les bons boutons (« Forcer »/« Tenter »).
+
+**Fausse alerte écartée en test réel** : un premier tir (lance-flammes) suivi d'une Catastrophe
+« mais le tir a lieu quand même » a semblé être un bug — RAW du lance-flammes vérifié
+(`REGLES_ARMES_SPECIALES.md:53-66`) : « en cas d'échec au Test de tir, les cibles sont touchées
+quand même » est le texte RAW littéral, pas un défaut. Un second doute (aucune cible éligible sur
+un tir au fusil à pompe) s'est résolu par un log de diagnostic temporaire montrant les bandes
+réelles (`moyenne`/`courte`, aucune `longue`/`extreme`) — géométrie du test, pas un bug ; log retiré
+une fois la cause confirmée.
+
+**RAW « Forcer » revérifié en session** (question de Saar) : `REGLE_CHANCE.md:75-77` définit
+« Événement favorable » comme substituable à tout Test de Chance par une dépense directe de 1
+point — c'est l'exemple même donné par le texte, pas une extrapolation. Confirmé par Saar après
+relecture.
+
+**Testé** : `node --check` sur les fichiers serveur touchés ; suite DB
+`chanceCatastropheChoiceService` (dont un nouveau test verrouillant que `force`/`attempt`
+n'interfèrent jamais avec les effets centraux `gain_point`/`reroll`) + suite pure `socketCombatAoe`,
+toutes vertes ; `eslint` + `vite build` client OK. Jeu réel Saar : fusil à pompe (Klauss) tiré par
+un drone, 2 cibles (1 PJ, 1 PNJ) à portée extrême — deux fenêtres ouvertes simultanément avec le
+bon `+5`, résolues par timeout à 13ms d'écart (le cas le plus dangereux pour la jonction), combat
+repris normalement sans double résolution ni blocage.
+**Non testé** : le clic manuel sur « Forcer »/« Tenter » (seul le chemin timeout a été éprouvé en
+jeu réel jusqu'ici, après correction du bug de libellé de bouton ci-dessus).
+**Données** : migrations 341-342 (additives, colonnes nullables), déjà appliquées.
+**Retour arrière** : `git revert` du commit ; `down` des migrations 341-342.
+**Reste** : L5 (réduction de gravité Blessures), L6 (UI générique `<ChanceSpendButton>`) — non
+commencés, détail `PLAN_CHANCE.md` §7-8.

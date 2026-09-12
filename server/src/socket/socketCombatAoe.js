@@ -15,7 +15,7 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { computeAttackRoll } from '../lib/combatAttackRoll.js'
-import { applyCriticalSuccessBonus, getCriticalSuccessBonus } from '../../../shared/polarisTestResolution.js'
+import { applyCriticalSuccessBonus, getCriticalSuccessBonus, resolveChanceTest } from '../../../shared/polarisTestResolution.js'
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { parseWeaponRangeBands } from '../../../shared/combatRange.js'
@@ -25,6 +25,9 @@ import * as damageService from '../lib/damageService.js'
 import * as statusService from '../lib/statusService.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
+import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
+import { spendChancePoints } from '../services/chanceService.js'
+import { advanceTimeline, combatTimers, combatPreviews } from './combatTurnEngine.js'
 import { evaluateAoeVisibility } from '../services/worldVisibilityService.js'
 import { getBattlemapWorldSnapshot } from '../services/worldService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -37,6 +40,8 @@ import {
   fetchAssaultWeaponAndMods,
   fetchDroneWeapon,
   resolveDroneIntegrityLoss,
+  resolveChanceRecipientCharacterId,
+  flushDeferredEmissions,
   SITUATION_LABELS,
   TAILLE_LABELS,
 } from './socketCombatHelpers.js'
@@ -752,59 +757,54 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     ctx = { ...ctx, hadExtraTargets: extras.length > 0 }
     const resolveTargets = [...hitTargets, ...extras]
 
-    // ── Persistance (§3) — une ligne combat_action_targets par cible (pseudo-cible incluse).
-    const targetRowIdByTokenId = await insertAoeTargetRows({
-      actionId: action.id, hitTargets: resolveTargets, modifierFn: mech.targetRowModifier,
-    })
-
-    // ── Dégât brut par cible — préparation commune aux deux mécanismes existants
-    // (`getEffectiveWeaponDamage`/repli `ref_damage_h`, comme resolveAssaultAction), puis délégation
-    // à `mech.computeTargetDamage` pour la formule propre au mécanisme (dispersion fusil à pompe,
-    // 2D10 sec + Localisations lance-flammes).
-    // getEffectiveWeaponDamage (ammo/mods-aware) est strictement char_inventory-only par construction
-    // (damageService.js#_fetchWeaponAndAmmo) — jamais appelé pour exo/drone (ni l'un ni l'autre n'a de
-    // munitions/mods dans ce sens, vérifié : resolveExoAssaultAction/resolveDroneAssaultAction ne
-    // l'appellent jamais non plus). weapon.ref_damage_h (déjà résolu par fetchAoeShooterWeapon —
-    // COALESCE override/catalogue côté exo) sert alors directement de baseRaw.
-    const isHumanoidShooter = character.type === 'pj' || character.type === 'pnj'
-    // Choc d'arme pour un tireur exo (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) — indépendant de
-    // `effectiveDamage`/`getEffectiveWeaponDamage` (ammo/mods-aware, strictement char_inventory-only,
-    // inchangé ci-dessous) : le Choc est une propriété de l'arme elle-même, pas de la munition, donc
-    // calculé une seule fois ici plutôt que par cible. Tireur drone : jamais atteint (fetchAoeShooterWeapon
-    // renvoie déjà `null` pour un drone, `!weapon` a fait sortir la fonction plus haut, §Segment 2b
-    // PLAN_ARMES_SPECIALES.md). `weapon.equipment_id` : garde une arme exo "maison" (label_override
-    // sans ref_equipment_id, mêmes colonnes shock alors indéfinies).
-    const shooterChocDsl = !isHumanoidShooter && weapon.equipment_id ? damageService.buildWeaponShockDsl({
-      shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
-    }) : null
-    const perTargetInputs = []
+    // ── Forçage / Test de Chance à portée longue/extrême (PLAN_CHANCE.md L4, RAW REGLES_ARMES_
+    // SPECIALES.md:34-40 fusil à pompe / :99-104 explosion-grenade — même règle aux deux endroits ;
+    // jamais le lance-flammes, qui ne dégresse pas par bande, `band` y est toujours `null` donc jamais
+    // retenu ci-dessous). Cible par cible : ouvre un choix Chance (patron Aggregator/Scatter-Gather,
+    // PLAN_CHANCE.md §12) pour chaque cible dont le destinataire existe (pj/pnj/pilote d'exo via
+    // `resolveChanceRecipientCharacterId` — jamais un drone, aucune Chance possible). Si au moins une
+    // fenêtre s'ouvre, toute la suite (dégât + émission agrégée) est différée jusqu'à ce que le
+    // groupe entier ait répondu (`SITE_HANDLERS.aoe_avoidance`) — jamais un `await` bloquant ici, la
+    // fonction retourne immédiatement (même discipline que tous les sites L3e).
+    const AOE_AVOIDANCE_BANDS = new Set(['longue', 'extreme'])
+    // RAW : bonus +5 au Test de Chance à portée extrême, aucun bonus à longue portée — même valeur
+    // aux deux sections RAW citées ci-dessus.
+    const AOE_AVOIDANCE_MODIFIER = { longue: 0, extreme: 5 }
+    const avoidanceOpenings = []
     for (const ht of resolveTargets) {
-      const effectiveDamage = isHumanoidShooter
-        ? await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band ?? null })
-        : null
-      const baseRaw = effectiveDamage
-        ? effectiveDamage.total
-        : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
-      const { degautsBruts, locationsCount, armorReductionFactor } = await mech.computeTargetDamage(ctx, ht, { effectiveDamage, baseRaw })
-      perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl, locationsCount, armorReductionFactor })
+      if (!AOE_AVOIDANCE_BANDS.has(ht.band)) continue
+      const cibleToken = await db('tokens').where({ id: ht.tokenId }).first()
+      if (!cibleToken?.character_id) continue
+      const cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
+      if (!cibleCharacter) continue
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(cibleCharacter.id, cibleCharacter.type)
+      if (!recipientCharacterId) continue // drone — reste normalement touché, aucun choix possible
+      avoidanceOpenings.push({
+        targetTokenId: ht.tokenId, recipientCharacterId,
+        cibleName: cibleCharacter.name ?? cibleToken.label ?? '?',
+        modifier: AOE_AVOIDANCE_MODIFIER[ht.band] ?? 0,
+      })
     }
 
-    // ── Générique : application par cible + finalisation (outcome + émissions + agrégat PJ).
-    const shooter = { userId: character.user_id, tireurUsername, tireurColor }
-    const perTargetResults = []
-    for (const inp of perTargetInputs) {
-      const ptr = await resolveAoeTargetDamage(io, campaignId, { ...inp, shooter })
-      if (ptr) perTargetResults.push(ptr)
+    if (avoidanceOpenings.length > 0) {
+      // Contexte gelé, identique pour toutes les lignes du groupe (même `action_id`), relu par le
+      // handler à la dernière résolution. Jamais `mech` lui-même (porte des fonctions, non JSON-safe)
+      // — `mechanic` (chaîne) suffit à le retrouver via `findAoeMechanismEntry`, patron déjà établi
+      // dans ce fichier (ligne ~512).
+      const groupCtx = { ctx, mechanic, resolveTargets, isPnjResult, tireurColor, tireurUsername }
+      for (const opening of avoidanceOpenings) {
+        await openChanceChoice(io, campaignId, opening.recipientCharacterId, {
+          testLabel: `${weapon.ref_name ?? 'Tir en zone'} — Éviter la zone d'effet (${opening.cibleName})`,
+          site: 'aoe_avoidance',
+          actionId: action.id,
+          targetTokenId: opening.targetTokenId,
+          context: { groupCtx, modifier: opening.modifier },
+        })
+      }
+      return { suspend: true, emissions }
     }
-    emissions.push(...await finalizeAoeResults({
-      perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult, action,
-    }))
 
-    // ── Effets post-résolution spécifiques au mécanisme (`mech.postResolve` — feu continu +
-    // auto-éclaboussure pour le lance-flammes, aucun effet pour le fusil à pompe).
-    emissions.push(...await mech.postResolve(io, campaignId, ctx, perTargetResults))
-
-    return { suspend: false, emissions }
+    return await finalizeAoeResolution(io, campaignId, { ctx, mechanic, resolveTargets, isPnjResult, tireurColor, tireurUsername })
   } catch (err) {
     console.error('[WS] resolveAoeAssaultAction error:', err.message)
     // Ne jamais perdre en silence ce qui a déjà été produit (DICE_RESULT du jet de tir / Test de
@@ -818,3 +818,153 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     return { suspend: false, emissions }
   }
 }
+
+// finalizeAoeResolution — tout ce qui suit le calcul de `resolveTargets` (persistance + dégât par
+// cible + finalisation + effets post-résolution), extrait pour être appelable immédiatement (aucune
+// cible éligible au forçage/Test de Chance L4) ou en différé depuis `finishAoeAvoidanceChoice`, une
+// fois le groupe entier résolu — autorité unique, jamais dupliquée entre les deux chemins.
+// `mechanic` (chaîne, pas `mech` — fonctions non JSON-safe) permet de retrouver le mécanisme
+// identiquement dans les deux cas via `findAoeMechanismEntry`. `avoidedTokenIds` retire des cibles de
+// `resolveTargets` sans jamais toucher aux lignes déjà persistées ailleurs (rien n'est encore écrit
+// en base pour ces cibles avant ce point).
+async function finalizeAoeResolution(io, campaignId, {
+  ctx, mechanic, resolveTargets, isPnjResult, tireurColor, tireurUsername, avoidedTokenIds = [],
+}) {
+  const emissions = []
+  const { character, action, weapon } = ctx
+  const mech = findAoeMechanismEntry(mechanic)
+  const finalTargets = avoidedTokenIds.length === 0
+    ? resolveTargets
+    : resolveTargets.filter(ht => !avoidedTokenIds.includes(ht.tokenId))
+
+  if (finalTargets.length === 0) {
+    // Toutes les cibles éligibles ont évité (forçage/Test de Chance, PLAN_CHANCE.md L4) — même
+    // traitement que « personne dans la zone » (hitTargets.length===0, immédiat) : le tir est parti,
+    // personne n'est touché, jamais un COMBAT_ATTACK_RESULT cible unique.
+    const shooterLabel = character.name ?? '?'
+    emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+      i18nKey: 'session.aoeNoTargets', params: { label: shooterLabel }, timestamp: new Date().toISOString(),
+    } })
+    if (!isPnjResult) {
+      emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+        hit: false, aoeNoTargets: true,
+        roll: ctx.rollResult?.rollAttaque ?? null, seuil: ctx.rollResult?.seuil ?? null,
+        tireurTokenId: action.token_id, cibleTokenId: null,
+      } })
+    }
+    return { suspend: false, emissions }
+  }
+
+  const targetRowIdByTokenId = await insertAoeTargetRows({
+    actionId: action.id, hitTargets: finalTargets, modifierFn: mech.targetRowModifier,
+  })
+
+  const isHumanoidShooter = character.type === 'pj' || character.type === 'pnj'
+  const shooterChocDsl = !isHumanoidShooter && weapon.equipment_id ? damageService.buildWeaponShockDsl({
+    shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
+  }) : null
+  const perTargetInputs = []
+  for (const ht of finalTargets) {
+    const effectiveDamage = isHumanoidShooter
+      ? await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band ?? null })
+      : null
+    const baseRaw = effectiveDamage
+      ? effectiveDamage.total
+      : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
+    const { degautsBruts, locationsCount, armorReductionFactor } = await mech.computeTargetDamage(ctx, ht, { effectiveDamage, baseRaw })
+    perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl, locationsCount, armorReductionFactor })
+  }
+
+  const shooter = { userId: character.user_id, tireurUsername, tireurColor }
+  const perTargetResults = []
+  for (const inp of perTargetInputs) {
+    const ptr = await resolveAoeTargetDamage(io, campaignId, { ...inp, shooter })
+    if (ptr) perTargetResults.push(ptr)
+  }
+  emissions.push(...await finalizeAoeResults({
+    perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult: ctx.rollResult, action,
+  }))
+
+  emissions.push(...await mech.postResolve(io, campaignId, ctx, perTargetResults))
+
+  return { suspend: false, emissions }
+}
+
+// finishAoeAvoidanceChoice — SITE_HANDLERS.aoe_avoidance (PLAN_CHANCE.md L4). Contrairement aux
+// sites L3e (une cible, un choix, une finalisation), une action AOE peut ouvrir PLUSIEURS lignes
+// pending_chance_choices (une par cible éligible, même `action_id`) — patron Aggregator/Scatter-
+// Gather (Enterprise Integration Patterns) : chaque résolution individuelle contribue son `outcome`,
+// la DERNIÈRE déclenche la finalisation agrégée pour tout le groupe.
+async function finishAoeAvoidanceChoice(io, campaignId, resolved, { choice, context }) {
+  const { groupCtx, modifier } = context
+  const emissions = []
+
+  const sheet = await db('char_sheet').where({ character_id: resolved.character_id }).first()
+  const recipientCharacter = sheet ? await db('characters').where({ id: resolved.character_id }).first() : null
+
+  // Défaut RAW : timeout ou choix non reconnu → reste touché normalement (pas de forçage silencieux,
+  // même discipline que L3e/L6).
+  let outcome = 'hit'
+  if (choice === 'force' && sheet) {
+    try {
+      await spendChancePoints(sheet.id, 1, { reason: 'Forçage AOE — Événement favorable' })
+      outcome = 'avoided'
+    } catch (err) {
+      // Chance insuffisante entre l'ouverture du choix et sa résolution (rare, concurrence d'une
+      // autre dépense entre-temps) — RAW ne permet jamais un forçage non payé ; jamais un throw qui
+      // laisserait la ligne sans `outcome` (bloquerait la jonction du groupe pour rien).
+      console.warn(`[WS] finishAoeAvoidanceChoice — forçage refusé (${err.message}), cible traitée comme touchée.`)
+    }
+  } else if (choice === 'attempt' && sheet) {
+    const { total: roll } = await parseDice('1d20')
+    const testOutcome = resolveChanceTest(sheet.chc, roll, { modifier })
+    const identity = recipientCharacter
+      ? await resolveCombatantDisplayIdentity(db, recipientCharacter)
+      : { username: 'Inconnu', color: '#808080' }
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: recipientCharacter?.user_id ?? null, username: identity.username, color: identity.color,
+      formula: '1d20', rolls: [roll], total: roll,
+      isCriticalSuccess: testOutcome.isCriticalSuccess, isCriticalFail: testOutcome.isCriticalFail,
+      catastropheRisk: false, // décision Saar 2026-09-11 — pas de Catastrophe sur un Test de Chance
+      seed: null, timestamp: new Date().toISOString(),
+      skillLabel: 'Test de Chance — Éviter la zone d\'effet',
+      mechanicalTotal: sheet.chc, chancesDeReussite: sheet.chc + modifier,
+      diffLabel: modifier >= 0 ? `+${modifier}` : `${modifier}`,
+      isSuccess: testOutcome.isSuccess, mr: testOutcome.mr,
+    } })
+    outcome = testOutcome.isSuccess ? 'avoided' : 'hit'
+  }
+
+  // Jonction Aggregator — verrou consultatif Postgres scopé à l'action AOE (`pg_advisory_xact_lock`,
+  // patron déjà validé ce chantier via `.forUpdate()` dans chanceService.js, ici un verrou de
+  // transaction plutôt que de lignes : un simple comptage sans exclusion mutuelle laisserait DEUX
+  // résolutions quasi simultanées se croire chacune « la dernière » si leurs lectures se chevauchent).
+  // Le verrou n'entoure QUE l'écriture de cet `outcome` + le comptage — jamais `finalizeAoeResolution`
+  // (potentiellement long : dégâts, plusieurs émissions), relâché avant de l'appeler.
+  const { isLast, avoidedTokenIds } = await db.transaction(async (trx) => {
+    await trx.raw('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [resolved.action_id])
+    await trx('pending_chance_choices').where({ id: resolved.id }).update({ outcome })
+    const remaining = await trx('pending_chance_choices')
+      .where({ action_id: resolved.action_id, site: 'aoe_avoidance' })
+      .whereNull('outcome')
+      .count('* as n')
+      .first()
+    if (Number(remaining.n) > 0) return { isLast: false, avoidedTokenIds: [] }
+    const avoidedRows = await trx('pending_chance_choices')
+      .where({ action_id: resolved.action_id, site: 'aoe_avoidance', outcome: 'avoided' })
+      .select('target_token_id')
+    return { isLast: true, avoidedTokenIds: avoidedRows.map(r => r.target_token_id) }
+  })
+
+  const shooterUserId = groupCtx.ctx.character.user_id ?? null
+  if (!isLast) {
+    await flushDeferredEmissions(io, campaignId, shooterUserId, emissions)
+    return
+  }
+
+  const finalized = await finalizeAoeResolution(io, campaignId, { ...groupCtx, avoidedTokenIds })
+  await flushDeferredEmissions(io, campaignId, shooterUserId, [...emissions, ...finalized.emissions])
+  await advanceTimeline(io, campaignId, { combatTimers, combatPreviews })
+}
+
+SITE_HANDLERS.aoe_avoidance = finishAoeAvoidanceChoice

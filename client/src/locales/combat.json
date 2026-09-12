@@ -702,6 +702,8 @@
     "choiceCard": {
       "gainPointButton": "Gagner 1 point de Chance",
       "rerollButton": "Relancer le Test",
+      "forceButton": "Forcer (Événement favorable)",
+      "attemptButton": "Tenter le Test de Chance",
       "autoResolveIn": "Résolution automatique dans {{seconds}}s"
     },
     "gmQueue": {

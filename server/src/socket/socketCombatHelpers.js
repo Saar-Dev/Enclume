@@ -146,7 +146,7 @@ async function armAwaitingDamage(io, campaignId, tokenId, payload) {
 //   même exclusion que drone_attack) — retourne null, l'appelant doit alors sauter openChanceChoice.
 // Centralisé ici (pas dupliqué par site) car nécessaire à la fois pour l'attaquant ET le défenseur
 // d'un CaC — le type du combattant dont c'est le Test n'est pas toujours connu à l'avance du site.
-async function resolveChanceRecipientCharacterId(characterId, characterType) {
+export async function resolveChanceRecipientCharacterId(characterId, characterType) {
   if (characterType === 'drone') return null
   if (characterType === 'exo') {
     const exoCharacter = await db('characters').where({ id: characterId }).first()

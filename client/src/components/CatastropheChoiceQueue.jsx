@@ -151,12 +151,29 @@ export default function CatastropheChoiceQueue({ socket }) {
           <>
             <div className="chance-choice-test-label">{chance.testLabel}</div>
             <div className="chance-choice-actions">
-              <button className="btn-ghost" onClick={() => resolveChance('reroll')}>
-                {t('chance.choiceCard.rerollButton')}
-              </button>
-              <button className="btn btn-gold" onClick={() => resolveChance('gain_point')}>
-                {t('chance.choiceCard.gainPointButton')}
-              </button>
+              {chance.site === 'aoe_avoidance' ? (
+                // Forçage AOE longue/extrême portée (PLAN_CHANCE.md L4) — vocabulaire RAW distinct de
+                // la régénération sur Catastrophe (reroll/gain_point ci-dessous) : deux mécaniques
+                // différentes partageant seulement la ressource Chance (décision §12, 2026-09-12),
+                // jamais le même couple de boutons.
+                <>
+                  <button className="btn-ghost" onClick={() => resolveChance('attempt')}>
+                    {t('chance.choiceCard.attemptButton')}
+                  </button>
+                  <button className="btn btn-gold" onClick={() => resolveChance('force')}>
+                    {t('chance.choiceCard.forceButton')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-ghost" onClick={() => resolveChance('reroll')}>
+                    {t('chance.choiceCard.rerollButton')}
+                  </button>
+                  <button className="btn btn-gold" onClick={() => resolveChance('gain_point')}>
+                    {t('chance.choiceCard.gainPointButton')}
+                  </button>
+                </>
+              )}
             </div>
             {remainingSeconds != null && (
               <div className="chance-choice-countdown">{t('chance.choiceCard.autoResolveIn', { seconds: remainingSeconds })}</div>

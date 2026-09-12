@@ -78,7 +78,7 @@ test('resolveChanceChoice résout une fois, un second appel est un no-op', { ski
 
 // ─── resolveChanceChoice — choix invalide rejeté avant toute écriture ────────────────────────
 
-test('resolveChanceChoice rejette un choix hors {null, gain_point, reroll}, aucune écriture', { skip }, async () => {
+test('resolveChanceChoice rejette un choix hors du vocabulaire connu, aucune écriture', { skip }, async () => {
   const fixture = await createRealFixture()
   try {
     const pending = await openChanceChoice(fakeIo, fixture.campaign.id, fixture.character.id, {
@@ -93,6 +93,35 @@ test('resolveChanceChoice rejette un choix hors {null, gain_point, reroll}, aucu
     const stillPending = await listPendingChanceChoices(fixture.campaign.id)
     assert.equal(stillPending.length, 1)
     assert.equal(stillPending[0].id, pending.id)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+// ─── resolveChanceChoice('force'/'attempt') — vocabulaire L4 (forçage AOE) accepté, mais SANS
+// effet central (contrairement à gain_point/reroll) : l'unique effet vit dans le futur handler
+// SITE_HANDLERS.aoe_avoidance, pas ici (PLAN_CHANCE.md §12, décision 2026-09-12). ──────────────
+
+test('resolveChanceChoice accepte "force"/"attempt" sans déclencher de regain ni de retrait', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    const pendingForce = await openChanceChoice(fakeIo, fixture.campaign.id, fixture.character.id, {
+      testLabel: 'Test', site: 'aoe_avoidance', timeoutMs: 60_000,
+    })
+    const resolvedForce = await resolveChanceChoice(fakeIo, fixture.campaign.id, pendingForce.id, { choice: 'force' })
+    assert.ok(resolvedForce)
+    assert.equal(resolvedForce.choice, 'force')
+
+    const pendingAttempt = await openChanceChoice(fakeIo, fixture.campaign.id, fixture.character.id, {
+      testLabel: 'Test', site: 'aoe_avoidance', timeoutMs: 60_000,
+    })
+    const resolvedAttempt = await resolveChanceChoice(fakeIo, fixture.campaign.id, pendingAttempt.id, { choice: 'attempt' })
+    assert.ok(resolvedAttempt)
+    assert.equal(resolvedAttempt.choice, 'attempt')
+
+    // Aucun effet central : chc inchangé (handleCatastropheRegen n'est appelé que sur 'gain_point').
+    const sheet = await db('char_sheet').where({ character_id: fixture.character.id }).first()
+    assert.equal(sheet.chc, 11, 'inchangé — force/attempt ne passent jamais par handleCatastropheRegen ici')
   } finally {
     await cleanup(fixture)
   }
