@@ -1999,11 +1999,11 @@ Convention :
 [data-decl] .decl-wpn--permanent .decl-wpn__ammo { font-style: italic; }
 [data-decl] .decl-wpn__reload {
   flex: none;
-  width: 20px; height: 20px;
+  width: 36px; height: 36px;
   padding: 0;
-  font-size: 13px; line-height: 1;
+  font-size: 24px; line-height: 1;
   border: 1px solid var(--decl-line);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--decl-row);
   color: var(--decl-text-dim);
   cursor: pointer;

@@ -26,7 +26,10 @@ export default function CombatDeclareActionList({
   groups,               // { distance: WeaponRow[], contact: WeaponRow[] }
   selectedRowId,        // id de la ligne sélectionnée (surbrillance) | null
   onPick,               // (row) => void
-  reload = null,        // { active: bool, onToggle: () => void } — ↻ sur l'arme de tir sélectionnée (D7)
+  reload = null,        // { active, onToggle, onQuickReload } — ↻ permanent sur chaque arme à distance
+                        //   (quel que soit son état de munitions) : onQuickReload(row) sélectionne
+                        //   l'arme et active Recharger en un clic ; onToggle désactive Recharger sur
+                        //   l'arme déjà active.
   extras = null,        // ReactNode rendu sous la liste
 }) {
   const { t } = useTranslation('combat')
@@ -40,6 +43,11 @@ export default function CombatDeclareActionList({
     if (row.requiresGrapple) bits.push(t('declareList.requiresGrapple'))
     if (row.permanent) bits.push(t('declareList.permanentTag'))
     const reasonKey = row.disabledReason && DISABLED_KEY[row.disabledReason]
+    // Recharger (retour Saar) : icône permanente sur toute ligne à distance, jamais conditionnée à
+    // la sélection ni à l'état des munitions — le grisage "chargeur vide" ne bloque que le Tir
+    // (corps de la ligne), jamais l'accès à Recharger. Ligne déjà l'arme en cours de Recharger →
+    // le clic désactive ; sinon il sélectionne cette arme et active Recharger directement.
+    const isReloadingThis = selectedRowId === row.id && reload?.active
     return (
       <div
         key={row.id}
@@ -56,13 +64,13 @@ export default function CombatDeclareActionList({
         {row.ammoLabel && (
           <span className="decl-wpn__ammo" data-status={row.ammoStatus}>{row.ammoLabel}</span>
         )}
-        {reload && row.group === 'distance' && selectedRowId === row.id && (
+        {reload && row.group === 'distance' && (
           <button
             type="button"
             className="decl-wpn__reload"
-            data-active={reload.active || undefined}
+            data-active={isReloadingThis || undefined}
             title={t('actionWindow.reloadButtonLabel')}
-            onClick={e => { e.stopPropagation(); reload.onToggle() }}
+            onClick={e => { e.stopPropagation(); isReloadingThis ? reload.onToggle() : reload.onQuickReload(row) }}
           >↻</button>
         )}
       </div>

@@ -17,6 +17,14 @@ test('assaultCheck — arme manquante', () => {
     { valid: false, reason: 'Sélectionner une arme de tir' })
 })
 
+test('assaultCheck — arme sélectionnée mais chargeur vide', () => {
+  assert.deepEqual(assaultCheck({ started: true, hasWeapon: true, weaponEmpty: true }),
+    { valid: false, reason: 'Chargeur vide — recharger avant de tirer' })
+  assert.deepEqual(assaultCheck({
+    started: true, hasWeapon: true, weaponEmpty: false, targetsFilled: 1, targetsNeeded: 1, hasVariant: true,
+  }), { valid: true, reason: null })
+})
+
 test('assaultCheck — cibles manquantes : libellé sur le NOMBRE RESTANT', () => {
   assert.equal(assaultCheck({ started: true, hasWeapon: true, targetsFilled: 0, targetsNeeded: 1 }).reason,
     'Choisir une cible')

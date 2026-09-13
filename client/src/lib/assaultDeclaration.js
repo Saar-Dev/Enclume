@@ -95,18 +95,20 @@ export function assaultTargetsComplete(state, currentFireMode) {
 // @param {object}   ctx
 // @param {boolean}  ctx.started
 // @param {boolean}  ctx.hasWeapon
+// @param {boolean}  [ctx.weaponEmpty]   chargeur de l'arme sélectionnée vide (garde-fou declareChecks.js)
 // @param {number}   ctx.effectiveCount   `effectiveAssaultCount` (série Tir Multi — CC seulement)
 // @param {boolean}  ctx.hasVariant       mode de tir configuré (`currentVariant != null`) — ignoré en
 //                                        zone d'effet (toujours `true`, aucun mode de tir à configurer)
 // @param {number}   ctx.aimTranches      tranches de Tir visé demandées — ignorées en zone d'effet
 // @param {string[]} ctx.aimReasons       `getAimIneligibilityReasons(...)` — `[]` si éligible
-// @returns {{ started: boolean, hasWeapon: boolean, targetsFilled: number, targetsNeeded: number,
-//             hasVariant: boolean, aimActive: boolean, aimReasons: string[] }}
+// @returns {{ started: boolean, hasWeapon: boolean, weaponEmpty: boolean, targetsFilled: number,
+//             targetsNeeded: number, hasVariant: boolean, aimActive: boolean, aimReasons: string[] }}
 export function assaultCheckInputs(state, ctx) {
   const aoe = assaultIsAoeMode(state)
   return {
     started:       ctx.started,
     hasWeapon:     ctx.hasWeapon,
+    weaponEmpty:   ctx.weaponEmpty ?? false,
     targetsFilled: aoe ? 1 : state.targets.slice(0, ctx.effectiveCount).filter(Boolean).length,
     targetsNeeded: aoe ? 1 : ctx.effectiveCount,
     hasVariant:    aoe || ctx.hasVariant,

@@ -20,6 +20,7 @@ import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSl
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
@@ -617,6 +618,16 @@ export default function CombatActionWindow({
     }
   }
 
+  // Ligne "Recharger" dédiée (retour Saar) sous une arme vide, distincte de handleWeaponPick puisque
+  // `row.disabled` (chargeur vide) bloque la sélection normale de cette ligne — miroir de la branche
+  // Distance ci-dessus, mais force Recharger ON au lieu de OFF.
+  const handleQuickReload = (row) => {
+    assaultDecl.selectWeapon(row.id)
+    if (!attackSelected) handleMapToggle('attack')
+    else dispatch({ type: 'SELECT_ATTACK' })
+    if (!reloadSelected) handleMapToggle('reload')
+  }
+
   // --- deplacement zone select ---------------------------------------------
   // Le survol/preview est permanent par défaut (useAutoMoveMode ci-dessus) — ce clic efface une
   // sélection déjà posée, ET réarme le survol s'il a été désactivé par un "Annuler" explicite
@@ -710,6 +721,9 @@ export default function CombatActionWindow({
   const assault = assaultCheck(assaultCheckInputs(assaultDecl.state, {
     started:        attackActive,
     hasWeapon:      assaultWeaponId != null,
+    // Garde-fou (retour Saar) : Recharger peut être désactivé sans que l'arme ait été rechargée
+    // (bouton ↻ existant sur la ligne sélectionnée) — le Tir doit rester refusé tant qu'elle est vide.
+    weaponEmpty:    weaponAmmoStatus(selectedWeapon?.ammo_remaining, selectedWeapon?.ref_ammo_count, selectedWeapon?.ref_caliber) === 'empty',
     effectiveCount: effectiveAssaultCount,
     hasVariant:     currentVariant != null,
     aimTranches,
@@ -1052,7 +1066,7 @@ export default function CombatActionWindow({
               groups={weaponGroups}
               selectedRowId={selectedWeaponRowId}
               onPick={handleWeaponPick}
-              reload={{ active: reloadSelected, onToggle: () => handleMapToggle('reload') }}
+              reload={{ active: reloadSelected, onToggle: () => handleMapToggle('reload'), onQuickReload: handleQuickReload }}
             />
           )}
 

@@ -14,6 +14,7 @@ import { parseFireModes } from '../../../shared/fireModes.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
+import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
@@ -457,6 +458,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const assault = assaultCheck(assaultCheckInputs(assaultDecl.state, {
     started:        attackStarted,
     hasWeapon:      !!weapon,
+    // Garde-fou (retour Saar) : Recharger peut être désactivé sans que l'arme ait été rechargée
+    // (bouton ↻ existant sur la ligne sélectionnée) — le Tir doit rester refusé tant qu'elle est vide.
+    weaponEmpty:    weaponAmmoStatus(weapon?.ammo_remaining, weapon?.ref_ammo_count, weapon?.ref_caliber) === 'empty',
     effectiveCount: effectiveAssaultCount,
     hasVariant:     currentVariant !== null,
     aimTranches,
@@ -496,14 +500,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     ? (assaultDecl.state.weaponId ?? weapon?.inv_id ?? null)
     : gmMeleeRowId
 
+  // Partagé par handleGmWeaponPick et handleGmQuickReload (ligne "Recharger" dédiée ci-dessous).
+  const clearMeleeSetup = () => {
+    setMeleePendingMode(false); meleeDecl.clear()
+    dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
+  }
+
   // Choisir une arme = déclarer cette attaque (auto-dégaine). Re-cliquer = annuler. Tir ⊕ CaC exclusif.
   // Le MJ ouvre la colonne 2 (panneau détail) sans sauter au ciblage — la cible se choisit dans la col. 2.
   const handleGmWeaponPick = (row) => {
     if (row.disabled) return
-    const clearMeleeSetup = () => {
-      setMeleePendingMode(false); meleeDecl.clear()
-      dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
-    }
     if (row.group === 'distance') {
       if (attackStarted && gmSelectedRowId === row.id) { assaultDecl.clear(); setMapAction(p => p === 'reload' ? null : p); return }
       if (meleeStarted) clearMeleeSetup()
@@ -519,6 +525,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       setMeleePendingMode(true)
       if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
     }
+  }
+
+  // Ligne "Recharger" dédiée (retour Saar) sous une arme vide, distincte de handleGmWeaponPick
+  // puisque `row.disabled` (chargeur vide) bloque la sélection normale de cette ligne — miroir de la
+  // branche Distance ci-dessus, mais force Recharger ON au lieu de OFF.
+  const handleGmQuickReload = (row) => {
+    if (meleeStarted) clearMeleeSetup()
+    assaultDecl.selectWeapon(row.id)
+    setMapAction('reload')
+    if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
   }
 
   // ── Déplacement direct ───────────────────────────────────────────────────
@@ -723,7 +739,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
                 onPick={handleGmWeaponPick}
-                reload={{ active: isReloading, onToggle: () => setMapAction(prev => prev === 'reload' ? null : 'reload') }}
+                reload={{ active: isReloading, onToggle: () => setMapAction(prev => prev === 'reload' ? null : 'reload'), onQuickReload: handleGmQuickReload }}
               />
 
               {/* ACTIONS RAPIDES */}
