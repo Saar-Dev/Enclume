@@ -1,12 +1,15 @@
 # INDEX.md — Carte documentaire d’Enclume
 
-> Version : 2026-08-26 — §8 Carte de dépendances ajoutée (couplages inter-systèmes confirmés par
+> Version : 2026-09-11 — §5 (MANUEL) et §6 (PLAN) complétés par relecture directe de `docs/MANUELS/`
+> et `docs/PLANS/` (9 MANUEL et 24 PLAN, contre 1 et 15 précédemment listés — les deux sections
+> avaient divergé du contenu réel des dossiers sans qu'aucun mécanisme ne le signale). Colonne
+> Couverture enrichie d'une phrase par document plutôt qu'un simple sujet, à la demande de Saar.
+> Précédent : 2026-08-26 — §8 Carte de dépendances ajoutée (couplages inter-systèmes confirmés par
 > lecture de code, alimentée au fil de l'audit de compréhension approfondie) ; légende étendue avec
-> le statut 🔎 (distinct de ✅, voir §8). Précédent : 2026-08-25 — section PLANS ajoutée (§6, pointeur
+> le statut 🔎 (distinct de ✅, voir §8). Avant : 2026-08-25 — section PLANS ajoutée (§6, pointeur
 > vers docs/ROADMAP.md pour le statut), entrée FOUNDATION.md rafraîchie (n'est plus un squelette),
-> hiérarchie de chargement alignée sur RegleDocumentaire.md §12/CLAUDE.md §1. Avant : 2026-08-12 —
-> ajout SYSTEME/ADMIN.md (rôle administrateur, page /admin) et SYSTEME/TICKETS.md (système de
-> tickets, remplace BUGIDENTIFIE.md archivé).
+> hiérarchie de chargement alignée sur RegleDocumentaire.md §12/CLAUDE.md §1. 2026-08-12 — ajout
+> SYSTEME/ADMIN.md et SYSTEME/TICKETS.md.
 > Statut : Document de navigation pour humains et agents IA.
 > Lire ceci en premier pour savoir où trouver une information.
 
@@ -158,38 +161,60 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 
 ## 5. MANUEL — Règles traduites en logique de jeu
 
-| Document | Responsabilité | Statut |
-|----------|----------------|--------|
-| `MANUELEXOARMURE.md` | Logique de l'exo-armure (traduction des règles RAW) | À jour |
+> `docs/MANUELS/*.md` — traduit une RAW en logique de jeu (quoi faire, jamais comment), pont entre
+> REGLES et PLAN (`GABARIT_MANUEL.md` fixe le patron). Cycle de vie : Rédaction → Validation Saar →
+> Passage au PLAN → Archivage — un MANUEL n'est plus modifié une fois le PLAN démarré (toute évolution
+> ultérieure est un nouveau MANUEL, ex. `MANUEL_EXOARMURE_V2.md`).
 
-*(Section à développer avec d'autres manuels similaires si nécessaire)*
+| Document | Couverture | Statut |
+|----------|------------|--------|
+| `MANUELS/GABARIT_MANUEL.md` | Modèle/gabarit à suivre pour tout MANUEL — pas un chantier | Référence |
+| `MANUELS/MANUEL_CREATION_CHAPEAU.md` | Document chapeau « Création de personnage » : articulation des 5 étapes, budget de Points de Création, vocabulaire commun | Rédigé 2026-08-04 |
+| `MANUELS/MANUEL_CREATION_ETAPE1_ATTRIBUTS.md` | Étape 1 : Attributs principaux (valeur de base, coûts progressifs) + Chance de base | Rédigé 2026-08-04 |
+| `MANUELS/MANUEL_CREATION_ETAPE2_GENETIQUE.md` | Étape 2 : type génétique (humain normal, hybride naturel, géno-hybride, techno-hybride) | Rédigé 2026-08-04 |
+| `MANUELS/MANUEL_CREATION_ETAPE3_CAPACITES.md` | Étape 3 : mutations (achat/tirage), Force Polaris latente/maîtrisée | Rédigé 2026-08-04 |
+| `MANUELS/MANUEL_EXOARMURE.md` | Armures mécanisées : types/catégories, combat en armure, gestion des dommages (Avaries, incidents) | Réécrit 2026-08-04 — **partiel** : ne couvre pas Lot C (ordinateurs/programmes, `PLAN_EXOARMURE.md` §13.4) |
+| `MANUELS/MANUEL_USURE.md` | Usure & Intégrité du matériel : qualité/ITG, Tests de panne, réparation | v1.5 — V1 (L0-L7) close et validée en jeu réel |
+| `MANUELS/MANUEL_INFORMATIQUE.md` | Ordinateurs (capacités/couche 1) + catalogue de programmes (couche 2) ; IEM/pannes électroniques | Réécrit 2026-09-11 (conformité gabarit, code/schéma purgés vers le PLAN) — couches 3-5 (piratage/conception/virus) pas encore écrites |
+| `MANUELS/MANUEL_CHANCE.md` | Dépense de points de Chance : Test de Chance, effets, régénération | v1.0 — rédigé 2026-09-11, RAW fournie par Saar |
 
 ---
 
 ## 6. PLANS — Spécifications de chantier (temporaires, Règle 10)
 
 > `docs/PLANS/*.md` — un fichier par chantier, archivé ou supprimé une fois la fonctionnalité livrée
-> (contenu durable transféré au DOMAIN/SYSTEM concerné). **Le statut courant de chaque plan (prêt à
-> coder, à cadrer, bloqué, périmé) vit dans `docs/ROADMAP.md`, jamais dupliqué ici** — cette liste
-> n'indique que l'existence et le sujet du fichier.
+> (contenu durable transféré au DOMAIN/SYSTEM concerné). **Le statut détaillé et à jour de chaque
+> plan vit dans `docs/ROADMAP.md`, jamais dupliqué ici** — la colonne Couverture explique le
+> *périmètre* du document (pour savoir s'il faut l'ouvrir), pas son avancement précis. Mise à jour
+> 2026-09-11 : les 24 fichiers présents dans `docs/PLANS/` au moment de l'audit sont listés (9
+> absents de la version précédente de cette table).
 
-| Document | Sujet |
-|----------|-------|
-| `PLANS/PLAN_EXOARMURE.md` | Exo-armures (v2) |
-| `PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md` | Milieu (submarine/surface/atmo/spatial) par pièce, moteur monde |
-| `PLANS/PLAN_LOCALISATION.md` | Résorption du texte en dur (i18n), client et données `ref_*` |
-| `PLANS/PLAN_FATIGUE_DOMMAGES.md` | Fatigue, blessures, dangers environnementaux, horloge de campagne |
-| `PLANS/PLAN_ARMES_SPECIALES.md` | Fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines |
-| `PLANS/PLAN_DECALS.md` | Décorations murales placées (câbles, panneaux) |
-| `PLANS/PLAN_RW_MATERIAUX.md` | Rework matériaux/textures (base PBR + procédural) |
-| `PLANS/PLAN_USURE&INTEGRITE.md` | Usure/Intégrité du matériel, Tests de panne |
-| `PLANS/PLAN_MORAL.md` | Règle optionnelle du Moral |
-| `PLANS/PLAN_RW_TOKEN.md` | Animations squelettiques de tokens (en-tête réel : `PLAN_ANIMATIONS.md`) |
-| `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique de l'instance |
-| `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap en illustration/tokens 2D |
-| `PLANS/PLAN_AOE.md` | Résolution de zone d'effet (AOE) — architecture en couches, prérequis Armes spéciales + Tir de suppression + Force Polaris |
-| `PLANS/PLAN_ZONES_DANGER.md` | Fondation « zones dangereuses » — comment une zone d'effet runtime est résolue tour par tour ; registre `effectLineResolverRegistry` + refonte du système « dangers environnementaux » + `dangerCatalog.js` |
-| `PLANS/PLAN_WORLD_BUILDER_REWORK.md` | Rework de l'édition de forme des salles (dessiner + éditer les arêtes) ; livre le primitif d'édition 2D partagé avec l'éditeur de zones dangereuses |
+| Document | Couverture | Repère d'état |
+|----------|------------|---------------|
+| `PLANS/PLAN_EXOARMURE.md` | Exo-armures (v2) — fondations combat (mouvement, substitution d'attributs, Choc, initiative, posture à terre), **Lot C** (ordinateurs/programmes/systèmes/armement/catalogue de modèles) | Lots 0-3 + 2bis + Lot C codés ; aucune exo réelle testée en navigateur à ce jour |
+| `PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md` | Milieu (sous-marin/surface/atmosphérique/spatial) porté par pièce, moteur monde — débloque le milieu hybride exo | Cadrage pur (architecture Option A tranchée), aucun code |
+| `PLANS/PLAN_LOCALISATION.md` | i18n : texte en dur (client) puis contenu de catalogue `ref_*` en base | Lots 1-4 (interface) codés ; Lot 5 (catalogue, 10 tables) en cours, Phase A/B partielles |
+| `PLANS/PLAN_FATIGUE_DOMMAGES.md` | Horloge de campagne, moteur générique d'échéances (`game_echeances`), Blessures/Guérison, dangers environnementaux (Chute/Acide/Décompression/Feu) | Lots 0-3 clos et confirmés ; Lot 4 (Fatigue) et Lot 6 (Noyade) restants |
+| `PLANS/PLAN_ARMES_SPECIALES.md` | Armes spéciales — lance-flammes (Lot 1), fouets/chaînes (hors périmètre → Arts martiaux) | Lot 1 clos ; Lot 2 (grenades) extrait vers `PLAN_GRENADES.md` |
+| `PLANS/PLAN_DECALS.md` | Décorations murales posées sur une face de mur (câbles, panneaux, affiches), sans nouveau GLB | Étude du modèle existant — **chevauchement non résolu avec `PLAN_RW_MATERIAUX.md` Lot 3** |
+| `PLANS/PLAN_RW_MATERIAUX.md` | Rework matériaux/textures : base + PBR + procédural par-dessus, Lots 0-4 | Spécifié en détail, aucun code démarré |
+| `PLANS/PLAN_USURE&INTEGRITE.md` | Usure/Intégrité du matériel — qualité, ITG, Tests de panne, réparation | V1 (L0-L7) close et validée en jeu réel ; Lot 2 (pièces détachées, entrées Catastrophe #2/#8) restant |
+| `PLANS/PLAN_MORAL.md` | Règle optionnelle du Moral | Stub (renvoi RAW seul), rien cadré |
+| `PLANS/PLAN_RW_TOKEN.md` | Animations squelettiques de tokens indépendantes du maillage, hitboxes par os (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur) | Différé (philosophie backend-first) ; séquence voulue par Saar pas encore reflétée dans le doc |
+| `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique quotidienne de l'instance (PostgreSQL + MinIO, cohérence sans transaction distribuée) | Lots 1-3 prêts à déployer ; Lots 4-5 spécifiés, attend le remplacement du serveur distant Kiwi |
+| `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap 2D (illustration pure ou fond d'image + tokens), distinct du Spotlight | Cadrage clos (Lot 0), aucun code, non prioritaire |
+| `PLANS/PLAN_AOE.md` | Résolution de zone d'effet (AOE) — socle générique (formes, distance, ciblage, persistance, fan-out PJ/PNJ) | Socle clos et validé ; avancement par arme délégué à `PLAN_ARMES_SPECIALES.md`/`PLAN_GRENADES.md` |
+| `PLANS/PLAN_ZONES_DANGER.md` | Fondation « zones dangereuses persistantes » — comment une zone d'effet runtime est résolue tour par tour ; registre `effectLineResolverRegistry` + `dangerCatalog.js` | Cadrage terminé (réécrit propre 2026-09-10), aucun code — prêt à coder Z0 |
+| `PLANS/PLAN_WORLD_BUILDER_REWORK.md` | Rework de l'édition de forme des salles (dessiner un volume + éditer les arêtes) ; primitif d'édition 2D partagé avec l'éditeur de zones dangereuses (E-v2) | Stub, cadrage non commencé |
+| `PLANS/PLAN_GRENADES.md` | Grenades et capsules à explosion (Segment 3 des armes de zone) — amorçage, dispersion, explosion différée, dégression par palier, catalogue | Frag + percussion/minuterie clos et validés ; types « à statut »/« à zone » restants, chantier gelé à un point de pause propre |
+| `PLANS/PLAN_NUAGE.md` | Armes à nuage volumétrique (fumigènes, gaz de combat) — propagation par compartiments, distinct d'une explosion géométrique | Bloqué/non cadré, attend la fondation zones dangereuses |
+| `PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md` | Option de campagne LIBRE/AUTO pilotant l'automatisation des modificateurs dérivés (taille de cible + allure) | **Clos** — M1-M5 codés, poussés, validés jeu réel (mode `auto`) |
+| `PLANS/PLAN_TAILLE.md` | Taille de cible ⇄ dimensions réelles des combattants (humanoïde/drone/exo) | S1-S4 clos et validés (doc de référence passé dans `SYSTEME/TAILLE.md`) ; reste D7 |
+| `PLANS/PLAN_ALLURE.md` | Malus RAW d'allure (tireur/cible) dérivé du mouvement déclaré (`combat_actions.movement_gait`) | **Clos** — A1-A3 codés et validés ; A4/A5 absorbés par `PLAN_MODE_MODIFICATEURS_COMBAT.md` |
+| `PLANS/PLAN_KIWI_BASCULE.md` | Bascule de la base `vtt` vers `enclumeBD` sur le serveur distant Kiwi (stratégie A : base neuve + report des données réelles) | En cours — diagnostic fait (`vtt` distant arrêté avant la refonte migrations) |
+| `PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md` | Bug ciblé : Choc de mutation à arme naturelle perdu sur la 4ᵉ branche défenseur PJ en défense active (les 3 autres branches sont correctes) | Cadré, cause identifiée, correctif isolé non encore livré |
+| `PLANS/PLAN_INFORMATIQUE.md` | Ordinateurs, pannes électroniques, IEM, piratage — chantier en 5 couches | Couches 1-2 cadrées en architecture réelle (Lots 1-4, réécrit 2026-09-11) ; couches 3-5 pas encore cadrées |
+| `PLANS/PLAN_CHANCE.md` | Mécanique de dépense de points de Chance — architecture technique (le MANUEL porte la règle métier) | v2.0 réécrite 2026-09-11 (RAW fournie par Saar le jour même) — **cadrage terminé, prêt à coder** |
 
 ---
 
