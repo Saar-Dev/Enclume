@@ -466,10 +466,15 @@ function doorGeometry(connector, surface, runtimeState) {
   const state = runtimeState?.state || connector.state || 'closed'
   const bottom = number(connector.y)
   const height = positive(geometry.height, positive(connector.height, 2))
-  const thickness = Math.max(
-    positive(connector.thickness, 1) / surface.fine,
-    positive(connector.depth, 0.25),
-  )
+  // Profondeur de collision / occlusion de la porte = l'ouverture qu'elle bouche dans le mur
+  // (`connector.thickness`, unités fine, posée par l'éditeur depuis l'épaisseur du mur cliqué —
+  // `client/src/lib/connectors.js`), JAMAIS la profondeur de la boîte englobante du GLB
+  // (`connector.depth`) : `.claude/rules/world.md` — « Le GLB définit l'apparence seulement ;
+  // collision, support, coût et occlusion viennent des capacités. » Une porte dont le modèle est plus
+  // profond que son mur (cadre saillant) débordait sinon, une fois gonflée du rayon de l'acteur, sur
+  // les cases de sol voisines : toute la bande de sol à portée d'interaction des deux côtés devenait
+  // injoignable dans le graphe de navigation (porte impossible à atteindre en jeu).
+  const thickness = positive(connector.thickness, 1) / surface.fine
   if (axis === 'segment') {
     const anchorX = number(connector.anchorX, (number(connector.x0) + number(connector.x1)) / (2 * surface.fine))
     const anchorZ = number(connector.anchorZ, (number(connector.z0) + number(connector.z1)) / (2 * surface.fine))
@@ -893,6 +898,25 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       : door.axis === 'x'
       ? bounds(door.alongMin, door.bottom, door.line - half, door.alongMax, door.top, door.line + half)
       : bounds(door.line - half, door.bottom, door.alongMin, door.line + half, door.top, door.alongMax)
+    // Segment 3D de l'embrasure (axe de l'ouverture, au niveau du seuil `door.bottom`), en
+    // unités-monde. Autorité unique de « où est cette porte dans l'espace » pour toute mesure de
+    // proximité joueur↔porte (`worldSpatialQueryService.measureBattlemapTokenConnectorDistance`) —
+    // évite que l'appelant re-dérive la géométrie depuis `bounds` + `axis` ou, pire, relise les
+    // coordonnées brutes de `surface_data` (unités de grille fine).
+    const opening = door.axis === 'segment'
+      ? {
+          from: { x: clean(doorFrom.x), y: clean(door.bottom), z: clean(doorFrom.z) },
+          to: { x: clean(doorTo.x), y: clean(door.bottom), z: clean(doorTo.z) },
+        }
+      : door.axis === 'x'
+      ? {
+          from: { x: clean(door.alongMin), y: clean(door.bottom), z: clean(door.line) },
+          to: { x: clean(door.alongMax), y: clean(door.bottom), z: clean(door.line) },
+        }
+      : {
+          from: { x: clean(door.line), y: clean(door.bottom), z: clean(door.alongMin) },
+          to: { x: clean(door.line), y: clean(door.bottom), z: clean(door.alongMax) },
+        }
     addBarrierOutputs(spatial, {
       id: `barrier:door:${door.worldId}`,
       sourceId: door.worldId,
@@ -900,6 +924,7 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       axis: door.axis,
       state: door.state,
       bounds: doorBounds,
+      opening,
       ...(door.axis === 'segment' ? {
         geometry: {
           type: 'wall-segment',

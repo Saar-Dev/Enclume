@@ -181,11 +181,21 @@ export async function measureBattlemapTokenConnectorDistance({
   const connector = loadBattlemapDoorConnector(battlemap, connectorId)
   if (!connector) return Object.freeze({ status: 'connector-not-found', distanceM: null })
 
+  // Géométrie de la porte : le segment d'embrasure compilé dans le WorldSnapshot (`barrier:door`,
+  // champ `opening`), en unités-monde — autorité spatiale unique (`.claude/rules/world.md`). Les
+  // coordonnées de `surface_data.connectors` (`connector.x0/z0/…`) sont en unités de grille fine :
+  // les lire ici mesurait une distance ×`surface.fine` (toujours hors portée, porte jamais
+  // interactive). Le compilateur émet cette barrière pour toute porte quel que soit son état.
+  const doorBarrier = runtimeContext.snapshot.spatial.barriers.find(
+    barrier => barrier.kind === 'door' && barrier.sourceId === connector.worldId,
+  )
+  if (!doorBarrier?.opening) return Object.freeze({ status: 'connector-not-found', distanceM: null })
+
   const metrics = runtimeContext.snapshot.metrics
   const distanceM = distanceToSegmentM(
     dbPositionToWorldPoint(token),
-    { x: connector.x0, y: connector.y, z: connector.z0 },
-    { x: connector.x1, y: connector.y, z: connector.z1 },
+    doorBarrier.opening.from,
+    doorBarrier.opening.to,
     metrics,
   )
 

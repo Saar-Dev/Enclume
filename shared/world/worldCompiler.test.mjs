@@ -521,6 +521,57 @@ test('la découpe physique d’une porte suit le cadre et non le seul panneau mo
   assert.equal(doorBarrier.bounds.max.x - doorBarrier.bounds.min.x, 0.5)
 })
 
+test('la profondeur de collision d’une porte suit l’épaisseur du mur, jamais la boîte du modèle 3D', () => {
+  // Modèle GLB plus profond (0.35) que l’ouverture qu’il bouche dans le mur
+  // (connector.thickness = 1 unité fine / fine 4 = 0.25 en unités-monde). La barrière de la porte
+  // — donc le collider de navigation — doit valoir 0.25, pas 0.35 : sinon, gonflée du rayon de
+  // l’acteur, elle déborde sur les cases de sol voisines et isole la bande à portée d’interaction.
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-door-thickness',
+    surfaceData: emptySurface({
+      rooms: { roomA: room('roomA', 0, 0) },
+      connectors: {
+        doorA: {
+          id: 'doorA', type: 'door', axis: 'x',
+          x0: 1, x1: 3, z0: 0, z1: 0, alongCenter: 2, y: 0,
+          thickness: 1, depth: 0.35, height: 2, state: 'closed',
+          modelGeometry: { openingWidth: 1, wallCutWidth: 1, depth: 0.35 },
+          roomIds: ['roomA'],
+        },
+      },
+    }),
+  })
+  const doorBarrier = snapshot.spatial.barriers.find(item => item.kind === 'door')
+  // axe 'x' → l’épaisseur est portée par l’axe z (perpendiculaire à l’ouverture)
+  assert.ok(Math.abs((doorBarrier.bounds.max.z - doorBarrier.bounds.min.z) - 0.25) < 1e-9)
+})
+
+test('une porte expose le segment 3D de son embrasure (opening) en unités-monde', () => {
+  // `opening` = autorité unique de « où est la porte dans l’espace » pour la mesure de proximité
+  // joueur↔porte, à la place d’une relecture des coordonnées brutes de surface_data (unités fine).
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-door-opening',
+    surfaceData: emptySurface({
+      rooms: { roomA: room('roomA', 0, 0) },
+      connectors: {
+        doorA: {
+          id: 'doorA', type: 'door', axis: 'z',
+          x0: 0, x1: 0, z0: 1, z1: 3, alongCenter: 2, y: 0,
+          thickness: 1, height: 2, state: 'closed',
+          modelGeometry: { openingWidth: 1, wallCutWidth: 1 },
+          roomIds: ['roomA'],
+        },
+      },
+    }),
+  })
+  const doorBarrier = snapshot.spatial.barriers.find(item => item.kind === 'door')
+  // axe 'z' : segment le long de z (0.5 ± openingWidth/2), x = door.line (x0/fine = 0), y = seuil (0)
+  assert.deepEqual(doorBarrier.opening, {
+    from: { x: 0, y: 0, z: 0 },
+    to: { x: 0, y: 0, z: 1 },
+  })
+})
+
 test('un escalier compile une traversée fractionnable entre deux hauteurs', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-stairs',
