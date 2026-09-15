@@ -14,6 +14,49 @@
 > de code) dans les versions 1.5-1.7 sans avoir été détectées — la réécriture propre les a rendues
 > visibles.
 >
+> **Audit complet RAW 2026-09-15 (« on veut être sûr »)** : chaque section de règle relue contre sa
+> source RAW citée, y compris 5 fichiers jamais ouverts avant cette passe malgré leur présence dans
+> la table §1 (`REGLE_ORDINATEUR.md`, `ORDINATEUR_GUIDETECH.md`, `REGLECOMPETENCE.md`,
+> `REGLES_ARMES_SONIQUES.md`, `REGLE_SERRURE.md`). Résultat : §4.1 (capacités, exemple chiffré),
+> §4.2 (Intégrité de départ), §4.3 (gabarits), §4.5 (les 5 sources de panne IEM/sonique), §4.6
+> (Blindage IEM), §4.8 (les 19 programmes RAW de base + les 7 du Guide Technique) confirmés
+> **[VÉRIFIÉ]** mot à mot, aucun écart. Deux corrections faites : §4.10 (Génie technique/Logiciels
+> omettait le prérequis « Éducation culture générale 10 » de la compétence de base, ne gardait que
+> celui de la spécialité) et §4.9 (le seuil « Intégrité ≤ 0 » du principal/secours est une convention
+> déjà codée par Exo-armures, pas une citation RAW directe — attribution de source précisée). Omis
+> volontairement, jugé non bloquant : la note RAW sur le stockage de données illimité par défaut
+> (`REGLE_ORDINATEUR.md`), non mécanisée et sans conséquence sur ce chantier.
+>
+> **Correction 2026-09-15 (analyse à charge du Lot 3, en amont du PLAN)** : §4.7 (Survie I.E.M.)
+> ne gardait que la toute dernière étape de la mécanique RAW (le jet de dégât résiduel au
+> redémarrage) — relu mot à mot `docs/REGLES/REGLEDRONE.md`, la séquence complète comporte deux
+> étapes intermédiaires disparues à la première rédaction : l'immobilisation de l'appareil pendant
+> un nombre de Tours égal à sa marge d'échec, puis un jet de redémarrage tenté à chaque Tour sous le
+> niveau de Survie I.E.M. Décision Saar (2026-09-15) : « le RAW a toujours raison » — le MANUEL est
+> corrigé pour refléter la séquence complète (§4.7 ci-dessous), quitte à agrandir le PLAN en
+> plusieurs lots pour l'implémenter (segmentation acceptée par avance). Une question RAW non résolue
+> par cette correction est ajoutée en §6 : le texte source décrit le comportement d'un robot/
+> androïde autonome, pas explicitement celui d'une exo-armure pilotée par un humain, alors que le
+> dispositif peut pourtant équiper les deux.
+>
+> **Décision 2026-09-15 (suite, le jour même) — question du §6 tranchée par Saar.** Exo-armure
+> portée : le pilote est entièrement gelé pendant l'immobilisation, seule option narrative « sortir
+> de l'armure », sans effet mécanique. Drone téléopéré : l'opérateur n'est jamais gelé (jamais
+> fusionné à la machine) ; décision de jeu associée, RAW-silencieuse, journalisée
+> `docs/JOURNAL8.md` — piloter un drone consomme l'action du Tour de l'opérateur, qui peut quand
+> même se déplacer lui-même contre le même malus qu'un Tireur en mouvement. Détail en §4.7, question
+> retirée du §6 (résolue).
+>
+> **Tour de relecture 2026-09-15 (suite, le jour même)** : trois questions listées en §6/§8.1
+> (portée d'un hit IEM, critère de hiérarchisation Gestion systèmes, propriétaire Survie
+> I.E.M./Gestion systèmes) étaient déjà tranchées par le PLAN le même jour mais jamais rebouclées
+> ici — §8.1 continuait de les lister comme bloquantes. Corrigé : les deux premières sont des
+> règles de jeu, déplacées dans les sections qu'elles concernent (§4.5 ciblage IEM, §4.1 critère de
+> déconnexion) plutôt que laissées uniquement dans le PLAN/JOURNAL8 (Règle 9/10,
+> `docs/RegleDocumentaire.md`) ; la troisième (organisation du schéma) est actée en §3.2. §6/§8.1
+> nettoyés en conséquence. Bug de structure corrigé au passage en §4.7 : le paragraphe sur le
+> pilote référençait « étapes 1-2 ci-dessous » avant la séquence qu'il décrit — déplacé après.
+>
 > Principe fondateur : ce document décrit quoi faire, jamais comment (pas de SQL, pas de code,
 > pas de choix d'implémentation). Il doit être compréhensible et validable par un expert règles
 > sans connaissance technique.
@@ -118,10 +161,11 @@ relève des sous-systèmes Exo-armures et Drones, pas de ce document** — ce MA
 règles de l'ordinateur lui-même (capacités, panne, catalogue), consommées telles quelles par ces
 plateformes. Relation déjà existante pour l'essentiel côté exo-armures et drones (les deux
 sous-systèmes savent déjà représenter un ordinateur embarqué, y compris la redondance
-principal/secours pour l'armure mécanisée, §4.9) — **à l'exception de deux règles RAW de ce
-document qui n'ont pas encore de propriétaire clair entre les deux chantiers** : la Survie I.E.M.
-(§4.7) et la désactivation automatique en cas de dépassement de la Gestion systèmes (§4.1) — point
-à trancher en Phase 4/Passage au PLAN (§8.1).
+principal/secours pour l'armure mécanisée, §4.9). **Propriété du schéma pour la Survie I.E.M.
+(§4.7) et l'auto-désactivation de Gestion systèmes (§4.1) — tranchée (2026-09-15)** : ce chantier
+ajoute la donnée/le comportement, Exo-armures reste seul propriétaire du schéma des tables
+(`exo_computers`, `exo_systems`), aucun des deux ne duplique l'autre. Détail technique dans
+`docs/PLANS/PLAN_INFORMATIQUE.md` §4 Lot 3a/Lot 4.
 
 ### 3.3 Lien avec le Combat
 
@@ -164,8 +208,9 @@ système de sécurité) reste à trancher avec le sous-système Portes/Connecteu
   (appareils, drones, capteurs…) que l'ordinateur peut piloter simultanément. Un système non géré
   par un ordinateur ne peut être activé que manuellement. **Si le nombre de systèmes rattachés
   dépasse cette capacité, les systèmes les moins importants sont automatiquement déconnectés** —
-  la RAW ne fournit aucun critère chiffré de hiérarchisation entre systèmes (question ouverte,
-  §6).
+  la RAW ne fournit aucun critère chiffré de hiérarchisation entre systèmes. **Critère retenu
+  (Saar, 2026-09-15, décision de jeu RAW-silencieuse)** : premier branché, premier débranché par
+  défaut ; le joueur peut réordonner cette liste de priorité à la main.
 - **Potentiel** = 10 + [(Génération × Niveau Technologique) × 2]. C'est la somme totale des
   niveaux de tous les programmes qu'un ordinateur peut porter simultanément — un programme ne peut
   être installé si la somme des niveaux déjà installés plus le sien dépasserait le Potentiel.
@@ -223,8 +268,17 @@ Une attaque par IEM soumet automatiquement les appareils électroniques touchés
 | Pouvoir Force Polaris « Pulsion électromagnétique » | Zone d'effet (100 mètres de diamètre ou plus), malus au Test de panne égal au modificateur de réussite du pouvoir. |
 | Arme sonique (mécanique adjacente, pas une IEM au sens strict) | Peut provoquer une panne en brisant un dispositif abîmé ou mal fixé — n'importe quel équipement, pas seulement électronique. Malus au Test de panne égal au modificateur de réussite de l'attaque ; en cas d'échec, perte de points d'Intégrité au gré du MJ. |
 
-**Question ouverte** : la RAW ne précise pas combien d'objets électroniques un seul hit peut
-tester simultanément lorsqu'une cible en porte plusieurs — voir §6.
+**Ciblage d'un hit IEM — tranché (Saar, 2026-09-15, RAW revérifiée mot à mot)**, la RAW ne
+précisant pas combien d'objets électroniques un seul hit peut tester simultanément lorsqu'une
+cible en porte plusieurs :
+- **Ordinateur seul** : c'est lui, sans ambiguïté (cas particulier à un seul élément).
+- **Exo-armure** : le tableau RAW ci-dessus (tirage entre les 4 catégories) s'applique tel quel.
+- **Personnage porteur de plusieurs objets électroniques distincts hors exo-armure** (accessoire
+  d'arme inclus) : **aucune RAW ne couvre ce cas** (recherché : le mot « accessoire » dans toutes
+  les règles disponibles, aucune occurrence pertinente). **Décision maison assumée** : tirage au
+  hasard équipondéré parmi les objets sensibles aux IEM réellement portés au moment du hit —
+  cohérent avec le principe « déterminé au hasard » que la RAW applique systématiquement dans les
+  cas voisins, mais ce n'est pas une règle RAW retrouvée. Journalisé `docs/JOURNAL8.md`.
 
 ### 4.6 Blindage IEM
 
@@ -234,14 +288,45 @@ niveau) × 200 sols.
 
 ### 4.7 Survie I.E.M.
 
-Dispositif distinct du Blindage IEM, qui équipe surtout les robots, androïdes et armures
-mécanisées (rare sur les drones). Il n'intervient qu'**après un échec** au Test de panne contre
-une IEM : un second jet d'1 dé est effectué — résultat pair, la panne est finalement évitée ;
-résultat impair, toutes les actions de l'appareil subissent un malus cumulatif de −1, porté à −2
-si **le Test de panne du défenseur lui-même (§4.5) a été un échec critique** (pas une réussite
-critique de l'attaquant — deux jets distincts). **Chaque activation du dispositif réduit son
-niveau de Survie I.E.M. de 1** — c'est une ressource qui s'épuise avec l'usage, pas un bonus
-permanent.
+Dispositif distinct du Blindage IEM. Le texte RAW (`REGLEDRONE.md`) le décrit pour un **robot ou un
+androïde autonome** ; il note aussi que le dispositif « peut équiper des exo-armures ou les
+systèmes d'un véhicule ». Rare sur les drones sauf à la surface.
+
+Il n'intervient qu'**après un échec** au Test de panne contre une IEM (§4.5) — une réussite ne
+change rien à ce qui suit. Séquence complète RAW, en 4 étapes (corrigée 2026-09-15 : la version
+précédente de ce document n'en gardait que la dernière) :
+
+1. **Immobilisation.** L'appareil coupe son alimentation et reste immobile pendant un nombre de
+   Tours égal à sa **marge d'échec** au Test de panne d'origine.
+2. **Tentative de redémarrage.** Une fois ce délai écoulé, l'appareil retente, **à chaque Tour**, un
+   jet sous son niveau de Survie I.E.M. (même principe qu'un Test de panne : 1D20 sous le score),
+   jusqu'à réussir.
+3. **Séquelle éventuelle au redémarrage.** Un jet d'1 dé détermine si l'appareil repart abîmé :
+   résultat pair, aucune séquelle ; résultat impair, toutes les actions de l'appareil subissent un
+   malus cumulatif de −1, porté à −2 si **le Test de panne du défenseur lui-même (étape d'origine,
+   pas une réussite critique de l'attaquant) a été un échec critique**.
+4. **Usure du dispositif.** Chaque redémarrage réussi réduit le niveau de Survie I.E.M. de 1 — une
+   ressource qui s'épuise avec l'usage, jamais un bonus permanent ; à 0, le dispositif ne protège
+   plus.
+
+**Application à un pilote humain pendant les étapes 1-2 — tranché (Saar, 2026-09-15)**, close la
+question ouverte du §6 :
+- **Exo-armure portée** : le pilote est fusionné au dispositif (pas d'« ailleurs » possible,
+  contrairement à un opérateur de drone ci-dessous) — il est **entièrement gelé** pendant toute la
+  fenêtre d'immobilisation, exactement comme le robot/androïde autonome du texte RAW. La seule
+  option qui lui reste est de sortir de l'armure, un geste **purement narratif**, sans effet
+  mécanique et sans action de jeu associée.
+- **Drone téléopéré** : l'opérateur n'est jamais fusionné à la machine — il continue de jouer son
+  propre Tour normalement pendant que le drone est immobilisé (son jet de Télépilotage ce Tour-là ne
+  fait simplement rien avancer, le drone restant hors service quel qu'en soit le résultat). Décision
+  de jeu associée, RAW-silencieuse (Télépilotage n'est mécanisée nulle part dans Enclume à ce jour,
+  `docs/REGLES/REGLEDRONE.md` la pose seulement comme Compétence limitative) : piloter activement un
+  drone consomme l'action du Tour de l'opérateur ; il peut néanmoins se déplacer lui-même ce
+  Tour-là, au même malus qu'un Tireur en mouvement (`RANGED_SITUATION_MODS.tireur_allure_*`,
+  extension par analogie — cette table est aujourd'hui strictement réservée au Tir). Décision hors
+  périmètre de ce chantier (mécanisation de la Télépilotage elle-même, couche séparée non commencée)
+  — notée ici uniquement pour clore la question de la Survie I.E.M., journalisée
+  `docs/JOURNAL8.md`.
 
 ### 4.8 Catalogue de programmes
 
@@ -275,18 +360,26 @@ l'installation (pas seulement affichées) :
    ne peut pas dépasser son Potentiel (§4.1).
 
 **Redondance principal/secours** : une plateforme qui porte deux ordinateurs (certains modèles
-d'armures mécanisées en portent un « principal » et un « secours ») n'en a jamais deux actifs
-simultanément. Le secours reste inactif tant que le principal fonctionne ; il ne prend le relais
-que lorsque le principal tombe hors d'usage (Intégrité courante à 0 ou moins).
+d'armures mécanisées en portent un « principal » et un « secours », abondamment attestés dans les
+gabarits d'exemple de `REGLEARMURE.md`) n'en a jamais deux actifs simultanément. Le secours reste
+inactif tant que le principal fonctionne ; il ne prend le relais que lorsque le principal tombe hors
+d'usage. **Précision de source (2026-09-15)** : le seuil exact (Intégrité courante à 0 ou moins)
+n'est pas une phrase RAW retrouvée telle quelle — c'est une convention déjà décidée et codée par le
+chantier Exo-armures (Saar, 2026-08-21, `shared/computerStats.js#resolveActiveComputer`), par
+analogie avec le seuil déjà établi pour le Générateur d'une exo-armure. Ce document reprend cette
+convention existante, il ne la déduit pas d'une citation RAW directe.
 
 ### 4.10 Compétences
 
 Trois compétences RAW couvrent l'informatique : **Informatique** (utiliser un ordinateur
 normalement, avec un accès autorisé — prérequis Éducation culture générale 10), **Génie
-technique**, spécialité **Logiciels** (concevoir des programmes — prérequis Informatique 10), et
-**Piratage informatique** (s'introduire dans un système sans y être autorisé — prérequis
-Informatique 10, ne peut pas dépasser le niveau de la compétence Informatique). Ce document ne
-mécanise que l'usage normal (Informatique) ; le Piratage informatique n'entre en jeu qu'en couche 3.
+technique**, spécialité **Logiciels** (concevoir des programmes — prérequis **Éducation culture
+générale 10 pour la compétence de base, plus Informatique 10 spécifiquement pour la spécialité
+Logiciels**, corrigé 2026-09-15 : la version précédente de ce document ne gardait que le second
+prérequis, `docs/REGLES/REGLECOMPETENCE.md` en liste bien deux), et **Piratage informatique**
+(s'introduire dans un système sans y être autorisé — prérequis Informatique 10, ne peut pas
+dépasser le niveau de la compétence Informatique). Ce document ne mécanise que l'usage normal
+(Informatique) ; le Piratage informatique n'entre en jeu qu'en couche 3.
 
 ---
 
@@ -298,26 +391,20 @@ Néant — aucune règle de ce chapitre RAW n'est marquée « optionnelle » dan
 
 ## 6. Questions ouvertes et ambiguïtés
 
-- **Portée d'un hit IEM.** La RAW dit qu'une attaque IEM soumet « les appareils électroniques »
-  d'une cible à un Test de panne, sans préciser combien d'objets sont concernés simultanément
-  lorsque la cible en porte plusieurs. Hypothèse de travail proposée (à confirmer) : tester
-  l'objet le plus pertinent au contexte plutôt que tout l'inventaire électronique d'un coup, pour
-  éviter une avalanche de jets sur un seul hit. Non bloquant pour le reste du document, ⚠️ à
-  trancher avant l'implémentation du déclencheur.
-- **Critère de hiérarchisation en cas de dépassement de Gestion systèmes.** Le RAW précise que les
-  systèmes « les moins importants » se déconnectent automatiquement en cas de dépassement, sans
-  fournir de barème d'importance. ⚠️ Bloquant pour mécaniser cette règle telle quelle — nécessite
-  soit une convention (ordre de priorité déclaré), soit un arbitrage MJ systématique.
+*Trois questions listées jusqu'ici dans cette section ont été tranchées le 2026-09-15 (relecture
+du 2026-09-15, suite) et sont retirées d'ici : la portée d'un hit IEM et le critère de
+hiérarchisation de Gestion systèmes sont désormais des règles décidées (§4.5 et §4.1
+respectivement) ; le propriétaire du complément Survie I.E.M./de l'auto-désactivation Gestion
+systèmes est réglé par le PLAN (§4 Lot 3a/Lot 4) — aucune des trois ne reste une ambiguïté RAW ni
+une question d'organisation ouverte.*
+
 - **« Contrôle armement » (RAW de base) face au catalogue existant.** Le programme RAW « Contrôle
   armement » (un programme par arme, niveau = niveau d'attaque) ne semble pas nommé ainsi dans le
   catalogue déjà constitué pour les plateformes drone/exo — probablement déjà couvert par un
   équivalent au rôle similaire, à vérifier avant de conclure à une entrée RAW manquante.
-- **Propriétaire du complément « Survie I.E.M. » et de l'auto-désactivation Gestion systèmes**
-  entre ce chantier et les sous-systèmes Exo-armures/Drones (§3.2) — question d'organisation du
-  travail, pas une ambiguïté RAW, à trancher en Phase 4/Passage au PLAN.
 - **Cas générique** (un personnage propriétaire d'un ordinateur personnel qui y installe des
   programmes, §4.9) : aucun besoin de jeu identifié à ce jour justifiant de le couvrir en V1 —
-  proposé hors périmètre (§7), à confirmer plutôt que décidé unilatéralement.
+  confirmé hors périmètre par le PLAN (§6 « Hors-scope »).
 
 ---
 
@@ -346,12 +433,10 @@ Néant — aucune règle de ce chapitre RAW n'est marquée « optionnelle » dan
 
 ### 8.1 Points bloquants
 
-- Critère de hiérarchisation des systèmes pour l'auto-désactivation de Gestion systèmes (§6) —
-  absent du RAW, nécessite une convention ou un arbitrage MJ avant de mécaniser cette règle.
-- Portée d'un hit IEM non bornée par le RAW (§6) — une hypothèse de travail est proposée, à valider
-  avant de coder le déclencheur.
-- Propriétaire (ce chantier vs Exo-armures/Drones) pour la Survie I.E.M. et l'auto-désactivation
-  Gestion systèmes (§3.2/§6) — question d'organisation, à trancher avant d'écrire une migration.
+*Néant — les trois points listés jusqu'ici (critère de hiérarchisation Gestion systèmes, portée
+d'un hit IEM, propriétaire Survie I.E.M./Gestion systèmes) ont tous été tranchés avec Saar le
+2026-09-15 ; voir §4.1, §4.5 et §3.2 pour les décisions, `docs/PLANS/PLAN_INFORMATIQUE.md` pour
+leur traduction technique.*
 
 ### 8.2 Dépendances externes
 
@@ -380,6 +465,12 @@ Blindage IEM, Survie I.E.M., ordinateur principal/secours, Programme (informatiq
   documentation.
 - Curation de contenu (marquer les objets sensibles aux IEM, renseigner la génération des
   ordinateurs catalogue) — travail potentiellement conséquent, taille non estimée.
+- **Survie I.E.M. (§4.7, corrigé 2026-09-15) est un état à suivre dans le temps, pas juste une
+  ressource et un malus final.** La séquence complète a besoin d'un compteur de Tours d'immobilité
+  et d'un jet tenté à chaque Tour jusqu'au redémarrage — plus proche d'une petite machine à états
+  (immobile → tentatives de redémarrage → redémarré, éventuellement abîmé) que d'un simple calcul
+  ponctuel. À anticiper dans le découpage en lots du PLAN, probablement un lot dédié séparé du
+  reste de la Survie I.E.M. (niveau/usure, qui reste simple).
 
 ### 8.5 Ordre de priorité suggéré
 
@@ -388,5 +479,5 @@ Blindage IEM, Survie I.E.M., ordinateur principal/secours, Programme (informatiq
 2. Le déclencheur de Test de panne par IEM lui-même (§4.5) — le seul vrai morceau de mécanique
    neuve.
 3. Blindage IEM — le lire dans le calcul une fois le déclencheur posé.
-4. Survie I.E.M. (§4.7) — dépend de la question de propriétaire (§8.1).
-5. Auto-désactivation de Gestion systèmes (§4.1) — dépend du critère de hiérarchisation (§8.1).
+4. Survie I.E.M. (§4.7) — segmentée par le PLAN en 3a (ressource) et 3b (machine à états).
+5. Auto-désactivation de Gestion systèmes (§4.1).

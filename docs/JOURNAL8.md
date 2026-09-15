@@ -6781,3 +6781,69 @@ PJ + PNJ (ci-dessus).
 canal de notification narrative à identifier au moment du lot (`PLAN_CHANCE.md` §8).
 **Données** : aucune migration (réutilise `pending_chance_choices`).
 **Retour arrière** : `git revert` du commit.
+
+---
+
+## Session (Dev) — 2026-09-15 — Décision RAW assumée : ciblage IEM sur un personnage porteur de plusieurs objets électroniques (chantier Informatique, `PLAN_INFORMATIQUE.md` Lot 2)
+
+**Contexte** : en cadrant le déclencheur de Test de panne par IEM (Lot 2), la RAW précise le
+ciblage pour un ordinateur seul (un appareil, singulier) et pour une exo-armure (`REGLEARMURE.md`,
+« Attaque IEM » : tirage entre 4 catégories — Exosquelette/Générateur/Systèmes auxiliaires en
+bloc/Armement). Elle ne dit rien du cas d'un personnage qui porte, hors exo-armure, plusieurs objets
+électroniques distincts en même temps (ordinateur personnel + arme à accessoire électronique +
+contrôleur de drone…).
+
+**Recherche menée avant de trancher** : le mot « accessoire » cherché dans toutes les règles RAW
+disponibles (armure, munitions, drones, compétences) — aucune occurrence traitant un accessoire
+d'arme comme une cible électronique distincte de l'arme elle-même. Même le détail RAW de la
+catégorie Armement d'une exo-armure ne touche jamais qu'« un seul et unique système d'attaque ou de
+défense » — jamais « l'arme ou un accessoire ». Confirmé : ce cas n'a pas de réponse RAW.
+
+**Décision retenue (Saar, validée après cette vérification)** : tirage au hasard équipondéré parmi
+les objets `is_electronic=true` réellement portés par le personnage au moment du hit. Cohérent avec
+le principe « déterminé au hasard » que la RAW applique systématiquement dans les cas voisins
+(exo-armure, incidents d'Avarie), mais ce n'est **pas** une règle RAW retrouvée — extension assumée,
+pas un raccourci silencieux (AGENTS.md invariant 5).
+
+**Non fait, volontairement** : aucun code, aucune migration. Cette entrée journalise la décision de
+règle ; l'implémentation (fonction de tirage, primitive d'énumération `char_inventory` filtrée
+`is_electronic=true`) reste à faire au Lot 2, cf. `docs/PLANS/PLAN_INFORMATIQUE.md` §4.
+**Testé** : n/a (documentation uniquement).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Dev) — 2026-09-15 — Décisions RAW assumées : Survie I.E.M. et pilote humain, exo-armure vs drone (chantier Informatique, `MANUEL_INFORMATIQUE.md` §4.7/§6, `PLAN_INFORMATIQUE.md` Lot 3b)
+
+**Contexte** : la séquence RAW de Survie I.E.M. (`REGLEDRONE.md`) décrit un robot/androïde
+**autonome** qui s'immobilise puis retente seul son redémarrage. Le même texte confirme que le
+dispositif « peut équiper des exo-armures ou les systèmes d'un véhicule », sans préciser ce que
+devient un humain aux commandes pendant cette fenêtre — question restée `[INCONNU]` au §6 du MANUEL
+depuis la correction du même jour (séquence complète en 4 étapes).
+
+**Décision 1 (exo-armure portée)** : le pilote est **entièrement gelé** pendant toute
+l'immobilisation — aucune action de combat possible via l'exo-armure. Justification : contrairement
+à un opérateur de drone (décision 2), le pilote d'une exo-armure est fusionné au dispositif, sans
+« ailleurs » où se replier — il n'a mécaniquement rien d'autre à faire que ce que fait l'armure
+elle-même. Seule option laissée : sortir de l'armure, un geste **purement narratif**, sans action de
+jeu ni conséquence mécanique associée (aucune mécanique de ce type n'existe dans le projet à ce
+jour — pas un oubli, une absence de besoin identifié).
+
+**Décision 2 (drone téléopéré)** : l'opérateur n'est **jamais gelé** — il n'est jamais fusionné à la
+machine immobilisée, il continue de jouer son propre Tour normalement (son jet de Télépilotage ce
+Tour-là n'a simplement aucun effet, le drone restant hors service). Décision de jeu associée, elle
+aussi RAW-silencieuse (`docs/REGLES/REGLEDRONE.md` pose la Télépilotage comme une Compétence
+limitative sur le niveau des programmes du drone, jamais comme une règle de coût d'action) :
+piloter activement un drone consomme l'action du Tour de l'opérateur, qui peut néanmoins se
+déplacer lui-même ce Tour-là contre le même malus qu'un Tireur en mouvement — extension par analogie
+de `shared/combatSituationMods.js#RANGED_SITUATION_MODS.tireur_allure_*`, vérifié strictement
+réservé au Tir dans le code actuel (la table CaC équivalente, `CAC_SITUATION_MODS`, n'a aucune
+entrée d'allure).
+
+**Non fait, volontairement** : aucun code, aucune migration. La Décision 1 est directement
+consommée par le Lot 3b (`PLAN_INFORMATIQUE.md`, blocage de déclaration à câbler sur le token de
+l'exo, même famille que `isTestBlockingWound`/`shared/woundConstants.js`). La Décision 2 ne
+déclenche aucun travail pour ce chantier (Survie I.E.M. reste hors périmètre pour les drones,
+`PLAN_INFORMATIQUE.md` §4 Lot 3 « [À TRANCHER] ») — elle ne fait que lever le doute qui aurait
+bloqué une extension future ; la mécanisation de la Compétence Télépilotage elle-même est un
+chantier séparé, non commencé, non cadré.
+**Testé** : n/a (documentation uniquement).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
