@@ -192,7 +192,9 @@ export function CombatResultReload({ result, onClose }) {
         {t('resultPanels.reload.impossible')}
       </div>
       <div style={{ fontSize: 12, color: C.textDim, fontStyle: 'italic' }}>
-        {t('resultPanels.reload.noAmmo', { caliber: result.caliber })}
+        {result.reason === 'not_in_hand'
+          ? t('resultPanels.reload.notInHand')
+          : t('resultPanels.reload.noAmmo', { caliber: result.caliber })}
       </div>
       {onClose && <CloseButton onClose={onClose} />}
     </div>

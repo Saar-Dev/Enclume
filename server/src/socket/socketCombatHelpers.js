@@ -2031,13 +2031,12 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
   ]
   let weapons
   if (action?.weapon_inv_id) {
-    const w = await db('char_inventory')
-      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-      .where({ 'char_inventory.id': action.weapon_inv_id, 'char_inventory.character_id': characterId })
-      .whereNotNull('ref_equipment.caliber')
-      .select(weaponSelect)
-      .first()
-    weapons = w ? [w] : []
+    // RELOAD-INHAND (docs/BUGIDENTIFIE.md) — ownership + en-main revérifiés via getOwnedHandWeapon
+    // (inventoryService.js), même autorité unique déjà utilisée par Tir (ASSAULT-INHAND-RESOLUTION)
+    // et CaC (MELEE-INHAND) : ce chemin faisait jusqu'ici confiance au weapon_inv_id envoyé par le
+    // client sans vérifier char_inventory_slots (une arme rangée pouvait être rechargée à distance).
+    const owned = await getOwnedHandWeapon(characterId, action.weapon_inv_id, { slotCodes: WEAPON_SLOTS })
+    weapons = (owned?.inHand && owned.ref_caliber) ? [owned] : []
   } else {
     // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : composite-safe (voir _handSlotConflict, inventoryService.js).
     weapons = await db('char_inventory_slots as cis')
@@ -2049,6 +2048,14 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
       .select(weaponSelect)
   }
   console.log(`[DBG] resolveReload — ${weapons.length} arme(s) à recharger`)
+
+  // RELOAD-INHAND — weapons vide (arme demandée pas en main, ou aucune arme MG/MD en fallback PNJ)
+  // ne doit jamais échouer en silence : même principe que le retour muet PNJ déjà corrigé plus haut
+  // (emitResult/isPnj) pour ce même point de blocage, sinon le nouveau garde-fou ci-dessus (ownership
+  // + en-main) deviendrait lui-même une source de rechargement silencieusement sans effet.
+  if (weapons.length === 0) {
+    await emitResult({ success: false, characterId, caliber: null, reason: 'not_in_hand' })
+  }
 
   for (const weapon of weapons) {
     const clipSize = parseCount(weapon.ref_ammo_count)
@@ -2817,17 +2824,16 @@ export async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
 // getOwnedHandWeapon (inventoryService.js), autorité unique déjà utilisée à la Déclaration
 // (socketCombatAnnouncement.js) et pour le CaC (MELEE-INHAND) : avant ce correctif, cette fonction ne
 // vérifiait ni l'un ni l'autre à la Résolution, malgré le commentaire ci-dessus affirmant "jamais deux
-// Fetch arme + mods installés pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
-// utilisent ce même fetch en Résolution, jamais deux copies divergentes des colonnes/jointures).
-// ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — ownership + en-main revérifiés via
-// getOwnedHandWeapon (inventoryService.js), autorité unique déjà utilisée à la Déclaration
-// (socketCombatAnnouncement.js) et pour le CaC (MELEE-INHAND) : avant ce correctif, cette fonction ne
 // copies divergentes" — cette copie-ci avait simplement perdu les deux contrôles en cours de route.
+// ASSAULT-CATEGORY (docs/BUGIDENTIFIE.md) — categoryOk n'était pas exploité ici (seul `inHand` était
+// vérifié) : rien n'empêchait de déclarer un Tir avec une arme de catégorie « Arme de contact »
+// (aucun fire_mode, RAW combat.md). Exclusion symétrique au CaC, qui exige l'égalité inverse.
 // export : consommé aussi par socketCombatAoe.js (résolution AOE extraite, segment 0a) — même fetch,
 // jamais une 2e copie (dette : ce helper gagnerait à vivre dans une lib combat, pas ici).
 export async function fetchAssaultWeaponAndMods(weaponInvId, characterId) {
   const [weapon, installedMods] = await Promise.all([
-    getOwnedHandWeapon(characterId, weaponInvId, { slotCodes: WEAPON_SLOTS }).then(item => item?.inHand ? item : null),
+    getOwnedHandWeapon(characterId, weaponInvId, { slotCodes: WEAPON_SLOTS })
+      .then(item => (item?.inHand && item.ref_category !== 'Arme de contact') ? item : null),
     // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
     // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
     // contrainte UNIQUE d'exclusivité). mod_key/state (docs/PLAN_MODDING_REFONTE.md Phase 1) :

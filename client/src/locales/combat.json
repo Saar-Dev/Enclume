@@ -556,7 +556,8 @@
     },
     "reload": {
       "impossible": "Impossible",
-      "noAmmo": "Aucune munition ({{caliber}}) disponible"
+      "noAmmo": "Aucune munition ({{caliber}}) disponible",
+      "notInHand": "Aucune arme en main à recharger"
     },
     "melee": {
       "hit": "Touché",
