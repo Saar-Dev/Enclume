@@ -2,6 +2,8 @@
 // aucune logique, données seules. Consommées à partir du Lot 2 (Saisie), Lot 2bis (Armure à terre)
 // et Lot 4 (RD + dégâts au contact) — définies dès le Lot 1 pour n'avoir qu'une seule source.
 
+import { SEVERITY_COLORS } from './woundConstants.js'
+
 // Rang explicite des 9 catégories dans leur ordre RAW — nécessaire pour exprimer "catégorie X et
 // plus" (Saisie, Armure à terre) sans comparaison de chaînes dans le désordre.
 export const EXO_CATEGORY_ORDER = [
@@ -108,4 +110,17 @@ export const EXO_AVARIE_COLUMN_BY_SEVERITY = {
   grave:          'avaries_graves',
   critique:       'avaries_critiques',
   catastrophique: 'avaries_catastrophiques',
+}
+
+// Couleur par palier d'Avarie (ExoSilhouettePanel.jsx) — référence SEVERITY_COLORS (woundConstants.js)
+// plutôt que de recopier des codes hex : même palette visuelle que les Blessures humaines, choix
+// esthétique de profondeur de gravité, pas une équivalence RAW entre Blessures et Avaries (tables
+// indépendantes, cf. commentaire EXO_AVARIE_TABLE ci-dessus). `catastrophique` n'a pas d'équivalent de
+// nom côté humain : reprend la teinte la plus sombre (`mortelle`).
+export const EXO_AVARIE_COLORS = {
+  legere:         SEVERITY_COLORS.legere,
+  moyenne:        SEVERITY_COLORS.moyenne,
+  grave:          SEVERITY_COLORS.grave,
+  critique:       SEVERITY_COLORS.critique,
+  catastrophique: SEVERITY_COLORS.mortelle,
 }

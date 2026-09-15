@@ -19,7 +19,7 @@ import api from '../lib/api.js'
 import { EXO_CATEGORY_ORDER, EXO_GRAPPLE_MALUS_TABLE, EXO_PRONE_RECOVERY_TABLE } from '../../../shared/exoConstants.js'
 
 const NUMBER_FIELDS = ['depth_operational', 'depth_limit', 'depth_crush']
-const TEXT_FIELDS = ['tech_level', 'taille', 'type_batterie', 'autonomy', 'notes']
+const TEXT_FIELDS = ['tech_level', 'taille', 'type_batterie', 'autonomy']
 
 const LABEL_STYLE = { fontSize: '12px', color: '#8a8aa0', whiteSpace: 'nowrap' }
 const INPUT_STYLE = { background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '12px', padding: '3px 6px', outline: 'none', minWidth: 0, flex: 1 }
@@ -140,21 +140,6 @@ export default function ExoInfoPanel({ characterId, exo, canEdit, onExoUpdate })
         {textRow('autonomy', 'exo.fieldAutonomy')}
         {derivedRow('exo.fieldGrappleMalus', grappleMalus)}
         {derivedRow('exo.fieldProneRecovery', proneRecovery)}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={LABEL_STYLE}>{t('exo.fieldNotes')}</label>
-        {canEdit ? (
-          <textarea
-            rows={3}
-            value={local.notes}
-            onChange={e => setLocal(l => ({ ...l, notes: e.target.value }))}
-            onBlur={() => handleTextBlur('notes')}
-            style={{ ...INPUT_STYLE, width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        ) : (
-          <span style={{ fontSize: '13px', color: '#c0c0d0', whiteSpace: 'pre-wrap' }}>{exo.notes || '—'}</span>
-        )}
       </div>
 
       {saving && <span style={{ fontSize: '11px', color: '#4a4a60' }}>{t('exo.saving')}</span>}

@@ -22,6 +22,7 @@ import CollapsibleBlock from './CollapsibleBlock.jsx'
 import ExoIdentityPanel from './ExoIdentityPanel.jsx'
 import ExoAttributesPanel from './ExoAttributesPanel.jsx'
 import ExoInfoPanel from './ExoInfoPanel.jsx'
+import ExoNotesPanel from './ExoNotesPanel.jsx'
 import ExoIntegrityPanel from './ExoIntegrityPanel.jsx'
 import ExoAvariesPanel from './ExoAvariesPanel.jsx'
 import ExoSystemsPanel from './ExoSystemsPanel.jsx'
@@ -43,7 +44,10 @@ const INITIAL_POS = {
 // pas un onglet par module. Les sous-blocs de "sheet" (identity/integrity/avaries/systems/computer)
 // sont des sections repliables (SHEET_SECTIONS ci-dessous), pas des onglets.
 const OUTER_TABS = ['sheet', 'settings']
-const SHEET_SECTIONS = ['identity', 'attributes', 'info', 'integrity', 'avaries', 'systems', 'weapons', 'computer']
+const SHEET_SECTIONS = ['identity', 'attributes', 'info', 'notes', 'integrity', 'avaries', 'systems', 'weapons', 'computer']
+
+// Sections repliées par défaut à l'ouverture de la fiche (cf. commentaire sur openSections plus bas).
+const CLOSED_BY_DEFAULT = new Set(['systems', 'weapons', 'computer'])
 
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconX = () => (
@@ -122,10 +126,14 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
   // ─── Onglets ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('sheet')
 
-  // ─── Sections repliables de l'onglet Fiche (toutes ouvertes par défaut, même patron que
-  // CharacterSheet.jsx#DEFAULT_ACCORDION_STATE — sans la persistance localStorage, non demandée ici) ──
+  // ─── Sections repliables de l'onglet Fiche — même patron que CharacterSheet.jsx#DEFAULT_ACCORDION_
+  // STATE (sans la persistance localStorage, non demandée ici). Défaut différencié (retour Saar
+  // 2026-09-15, CLOSED_BY_DEFAULT ci-dessus) : Identité/Attributs/Info/Intégrité/Avaries ouvertes
+  // (consultées d'un coup d'œil en combat) ; Systèmes/Armement/Ordinateur repliées (listes longues —
+  // ~20 lignes pour Systèmes, consultées à la demande, pas à chaque ouverture de la fiche). Ordre
+  // inchangé, seul l'état initial change — un clic sur l'en-tête rouvre normalement.
   const [openSections, setOpenSections] = useState(() =>
-    Object.fromEntries(SHEET_SECTIONS.map(id => [id, true])))
+    Object.fromEntries(SHEET_SECTIONS.map(id => [id, !CLOSED_BY_DEFAULT.has(id)])))
   const toggleSection = useCallback((id) => {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))
   }, [])
@@ -330,6 +338,7 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
             (jamais un onglet par module, cf. commentaire d'en-tête). */}
         {!loading && exo && activeTab === 'sheet' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Identité — seule, pleine largeur. */}
             <CollapsibleBlock id="identity" title={t('exo.tabIdentity')} open={openSections.identity} onToggle={toggleSection}>
               <div style={{ padding: '10px' }}>
                 <ExoIdentityPanel
@@ -343,38 +352,58 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
               </div>
             </CollapsibleBlock>
 
-            <CollapsibleBlock id="attributes" title={t('exo.tabAttributes')} open={openSections.attributes} onToggle={toggleSection}>
-              <div style={{ padding: '10px' }}>
-                <ExoAttributesPanel
-                  characterId={character.id}
-                  exo={exo}
-                  canEdit={canEdit}
-                  onExoUpdate={setExo}
-                />
-              </div>
-            </CollapsibleBlock>
+            {/* Attributs de l'armure (gauche) // Informations sur l'armure (droite) — spec Saar
+                2026-09-15. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
+              <CollapsibleBlock id="attributes" title={t('exo.tabAttributes')} open={openSections.attributes} onToggle={toggleSection}>
+                <div style={{ padding: '10px' }}>
+                  <ExoAttributesPanel
+                    characterId={character.id}
+                    exo={exo}
+                    canEdit={canEdit}
+                    onExoUpdate={setExo}
+                  />
+                </div>
+              </CollapsibleBlock>
 
-            <CollapsibleBlock id="info" title={t('exo.tabInfo')} open={openSections.info} onToggle={toggleSection}>
-              <div style={{ padding: '10px' }}>
-                <ExoInfoPanel
-                  characterId={character.id}
-                  exo={exo}
-                  canEdit={canEdit}
-                  onExoUpdate={setExo}
-                />
-              </div>
-            </CollapsibleBlock>
+              <CollapsibleBlock id="info" title={t('exo.tabInfo')} open={openSections.info} onToggle={toggleSection}>
+                <div style={{ padding: '10px' }}>
+                  <ExoInfoPanel
+                    characterId={character.id}
+                    exo={exo}
+                    canEdit={canEdit}
+                    onExoUpdate={setExo}
+                  />
+                </div>
+              </CollapsibleBlock>
+            </div>
 
-            <CollapsibleBlock id="integrity" title={t('exo.tabIntegrity')} open={openSections.integrity} onToggle={toggleSection}>
-              <div style={{ padding: '10px' }}>
-                <ExoIntegrityPanel
-                  characterId={character.id}
-                  exo={exo}
-                  canEdit={canEdit}
-                  onExoUpdate={setExo}
-                />
-              </div>
-            </CollapsibleBlock>
+            {/* Notes (gauche) // Intégrité (droite) — spec Saar 2026-09-15. Notes extrait
+                d'ExoInfoPanel.jsx en composant dédié (ExoNotesPanel.jsx) pour pouvoir être placé ici
+                indépendamment du reste du bloc Informations. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
+              <CollapsibleBlock id="notes" title={t('exo.fieldNotes')} open={openSections.notes} onToggle={toggleSection}>
+                <div style={{ padding: '10px' }}>
+                  <ExoNotesPanel
+                    characterId={character.id}
+                    exo={exo}
+                    canEdit={canEdit}
+                    onExoUpdate={setExo}
+                  />
+                </div>
+              </CollapsibleBlock>
+
+              <CollapsibleBlock id="integrity" title={t('exo.tabIntegrity')} open={openSections.integrity} onToggle={toggleSection}>
+                <div style={{ padding: '10px' }}>
+                  <ExoIntegrityPanel
+                    characterId={character.id}
+                    exo={exo}
+                    canEdit={canEdit}
+                    onExoUpdate={setExo}
+                  />
+                </div>
+              </CollapsibleBlock>
+            </div>
 
             <CollapsibleBlock id="avaries" title={t('exo.tabAvaries')} open={openSections.avaries} onToggle={toggleSection}>
               <div style={{ padding: '10px' }}>

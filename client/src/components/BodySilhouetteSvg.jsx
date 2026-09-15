@@ -1,4 +1,5 @@
 import { LOCATION_TO_SVG } from '../../../shared/armorConstants.js'
+import SilhouetteSvg from './SilhouetteSvg.jsx'
 
 // Tracé du corps — autorité unique, partagée entre l'affichage lecture-seule des blessures
 // (SilhouettePanel.jsx) et tout picker interactif (Viser une Localisation précise —
@@ -14,30 +15,19 @@ const PATHS = {
   jambe_droite: 'M 118.93,291.26 l -1.39,-0.51 0.02,-4.9 0.02,-4.9 1.66,-2.79 1.66,-2.79 7.24,-0.14 7.24,-0.14 0.78,0.65 c 0.43,0.36 2.34,2.51 4.25,4.8 l 3.47,4.15 v 3.58 3.58 l -11.78,-0.04 -11.78,-0.04 z M 120.58,270.85 c 0,-0.13 -0.68,-9.19 -1.50,-20.14 -0.83,-10.95 -1.64,-21.84 -1.81,-24.21 l -0.30,-4.31 1.09,-3.55 c 0.60,-1.95 1.28,-3.74 1.51,-3.98 0.29,-0.31 11.67,-2.46 15.05,-2.85 0.06,-0.01 0.83,2.30 1.72,5.12 l 1.62,5.13 -0.87,23.36 c -0.48,12.85 -0.97,23.88 -1.09,24.50 l -0.22,1.14 h -7.59 c -4.17,0 -7.59,-0.10 -7.59,-0.23 z M 118.79,209.59 c -0.11,-0.31 -0.56,-3.88 -1.00,-7.92 -0.44,-4.04 -1.71,-14.82 -2.82,-23.95 l -2.01,-16.60 5.34,-5.94 c 2.94,-3.27 6.87,-7.12 8.73,-8.56 l 3.40,-2.62 0.78,0.46 c 0.43,0.25 1.64,1.21 2.69,2.12 l 1.91,1.66 1.59,6.33 1.59,6.33 -1.41,23.05 -1.41,23.05 -0.46,0.30 c -0.25,0.16 -2.22,0.57 -4.37,0.90 -2.15,0.33 -5.81,0.91 -8.13,1.29 l -4.22,0.68 z',
 }
 
-const LOCATIONS = Object.keys(PATHS)
-const DEFAULT_STROKE = '#4a4a7a'
+const VIEW_BOX = '48 14 116 286'
 
 export default function BodySilhouetteSvg({ fillFor, strokeFor, onClickLocation, onHoverLocation, style }) {
   return (
-    <svg
-      viewBox="48 14 116 286"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ display: 'block', ...style }}
-    >
-      {LOCATIONS.map(loc => (
-        <path
-          key={loc}
-          id={LOCATION_TO_SVG[loc]}
-          fill={fillFor(loc)}
-          stroke={strokeFor ? strokeFor(loc) : DEFAULT_STROKE}
-          strokeWidth="1"
-          d={PATHS[loc]}
-          onClick={onClickLocation ? () => onClickLocation(loc) : undefined}
-          onMouseEnter={onHoverLocation ? () => onHoverLocation(loc) : undefined}
-          onMouseLeave={onHoverLocation ? () => onHoverLocation(null) : undefined}
-          style={onClickLocation ? { cursor: 'pointer' } : undefined}
-        />
-      ))}
-    </svg>
+    <SilhouetteSvg
+      paths={PATHS}
+      viewBox={VIEW_BOX}
+      idFor={loc => LOCATION_TO_SVG[loc]}
+      fillFor={fillFor}
+      strokeFor={strokeFor}
+      onClickLocation={onClickLocation}
+      onHoverLocation={onHoverLocation}
+      style={style}
+    />
   )
 }

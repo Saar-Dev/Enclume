@@ -1,3 +1,15 @@
+## v234 — 2026-09-15 — Fiche exo-armure : silhouette d'Avaries + mise en page resserrée
+
+### Exo-armures
+- [new] La section Avaries de la fiche exo-armure affiche maintenant une silhouette de l'armure, dont
+  la couleur reflète le pire palier d'Avarie actif (même code couleur que la silhouette de Blessures
+  des personnages humanoïdes).
+- [fix] Mise en page resserrée : Intégrité (Structure/Exosquelette/Générateur) tient sur une seule
+  ligne au lieu de trois blocs empilés, Notes est appairé à Intégrité, Attributs de l'armure est
+  appairé à Informations sur l'armure — moins de défilement, moins d'espace vide.
+- [fix] Les listes Systèmes et Armement restent correctement alignées colonne par colonne même quand
+  une ligne n'a pas de badge Niveau ou Dom./Mode de tir.
+
 ## v233 — 2026-09-12 — Configuration de campagne : onglet Joueurs
 
 ### Campagne

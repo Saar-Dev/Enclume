@@ -15,6 +15,11 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 
+// Grille à pistes fixes — même correctif et même raison qu'ExoSystemsPanel.jsx#ROW_COLUMNS : le
+// badge Dom./Mode de tir est absent quand le catalogue ne renseigne ni l'un ni l'autre, et décalait
+// les inputs ITG en `flex`. Badge plus large ici (ex. "5D10+3 · CC") qu'un badge Niveau.
+const ROW_COLUMNS = '1fr 92px 96px 18px'
+
 export default function ExoWeaponsPanel({ characterId, canEdit }) {
   const { t } = useTranslation()
   const [weapons, setWeapons] = useState([])
@@ -89,17 +94,17 @@ export default function ExoWeaponsPanel({ characterId, canEdit }) {
       )}
 
       {weapons.map(w => (
-        <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: '1px solid #1e1e2e' }}>
-          <span style={{ flex: 1, fontSize: '12px', color: '#c0c0d0' }} title={w.ref_description || ''}>
+        <div key={w.id} style={{ display: 'grid', gridTemplateColumns: ROW_COLUMNS, gap: '8px', alignItems: 'center', padding: '3px 0', borderBottom: '1px solid #1e1e2e' }}>
+          <span style={{ fontSize: '12px', color: '#c0c0d0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={w.ref_description || ''}>
             {w.display_name || '—'}
           </span>
           {(w.ref_damage || w.ref_fire_mode) && (
-            <span style={{ fontSize: '10px', color: '#c05a5a', background: '#241a1a', borderRadius: '3px', padding: '1px 5px', flexShrink: 0 }}>
+            <span style={{ fontSize: '10px', color: '#c05a5a', background: '#241a1a', borderRadius: '3px', padding: '1px 5px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {[w.ref_damage, w.ref_fire_mode].filter(Boolean).join(' · ')}
             </span>
           )}
           {canEdit ? (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
               <input
                 type="number" min={0} defaultValue={w.integrite_current ?? ''}
                 onBlur={e => {
@@ -117,9 +122,9 @@ export default function ExoWeaponsPanel({ characterId, canEdit }) {
                 }}
                 style={{ width: '40px', background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '2px 4px', textAlign: 'center' }}
               />
-            </>
+            </div>
           ) : (
-            <span style={{ fontSize: '11px', color: '#8888a0' }}>{w.integrite_current ?? '—'} / {w.integrite_max ?? '—'}</span>
+            <span style={{ fontSize: '11px', color: '#8888a0', textAlign: 'center' }}>{w.integrite_current ?? '—'} / {w.integrite_max ?? '—'}</span>
           )}
           {canEdit && (
             <button

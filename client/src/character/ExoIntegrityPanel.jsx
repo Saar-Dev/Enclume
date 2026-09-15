@@ -38,7 +38,11 @@ export default function ExoIntegrityPanel({ characterId, exo, canEdit, onExoUpda
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    // 3 composants sur une seule ligne (retour Saar 2026-09-15) — l'ancien empilement vertical
+    // (1 bloc par composant, chacun juste "label" + "20/20" sur une fraction de la largeur)
+    // laissait la majorité de chaque ligne vide. Chaque composant reste "label au-dessus de la
+    // valeur", seule la disposition des 3 change (côte à côte au lieu d'empilés).
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
       {COMPONENTS.map(({ key, labelKey }) => {
         const currentField = `itg_${key}_current`
         const maxField      = `itg_${key}_max`

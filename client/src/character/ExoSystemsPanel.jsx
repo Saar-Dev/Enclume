@@ -21,6 +21,13 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 
+// Grille à pistes fixes (retour Saar 2026-09-15, même défaut que ExoAvariesPanel.jsx#GRID_COLUMNS) —
+// le badge Niveau est absent sur la majorité des systèmes (RAW, seuls les systèmes facturés "X/niv."
+// en ont un, cf. commentaire d'en-tête). En `flex`, son absence décalait les inputs ITG vers la
+// gauche d'une ligne à l'autre ; en `grid` avec un gabarit littéral identique sur toutes les lignes,
+// les colonnes restent alignées que le badge soit rendu ou non.
+const ROW_COLUMNS = '1fr 52px 96px 18px'
+
 export default function ExoSystemsPanel({ characterId, canEdit }) {
   const { t } = useTranslation()
   const [systems, setSystems] = useState([])
@@ -97,17 +104,17 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
       )}
 
       {systems.map(s => (
-        <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: '1px solid #1e1e2e' }}>
-          <span style={{ flex: 1, fontSize: '12px', color: '#c0c0d0' }} title={s.ref_description || ''}>
+        <div key={s.id} style={{ display: 'grid', gridTemplateColumns: ROW_COLUMNS, gap: '8px', alignItems: 'center', padding: '3px 0', borderBottom: '1px solid #1e1e2e' }}>
+          <span style={{ fontSize: '12px', color: '#c0c0d0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.ref_description || ''}>
             {s.display_name || '—'}
           </span>
           {s.level != null && (
-            <span style={{ fontSize: '10px', color: '#5b8dee', background: '#1a1a2e', borderRadius: '3px', padding: '1px 5px', flexShrink: 0 }}>
+            <span style={{ fontSize: '10px', color: '#5b8dee', background: '#1a1a2e', borderRadius: '3px', padding: '1px 5px', textAlign: 'center' }}>
               {t('exo.itemLevel')} {s.level}
             </span>
           )}
           {canEdit ? (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
               <input
                 type="number" min={0} defaultValue={s.integrite_current ?? ''}
                 onBlur={e => {
@@ -125,9 +132,9 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
                 }}
                 style={{ width: '40px', background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '2px 4px', textAlign: 'center' }}
               />
-            </>
+            </div>
           ) : (
-            <span style={{ fontSize: '11px', color: '#8888a0' }}>{s.integrite_current ?? '—'} / {s.integrite_max ?? '—'}</span>
+            <span style={{ fontSize: '11px', color: '#8888a0', textAlign: 'center' }}>{s.integrite_current ?? '—'} / {s.integrite_max ?? '—'}</span>
           )}
           {canEdit && (
             <button
