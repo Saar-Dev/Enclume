@@ -315,19 +315,69 @@ n'est pas construit ici.
 
 ## 7. L5 — Réduction de gravité (Blessures)
 
-Point d'accroche : après calcul de `finalSeverity`, avant persistance — flux de confirmation de
-dégât PJ (`COMBAT_DAMAGE_PROMPT` / `CombatDamageWindow`).
+**Statut (2026-09-12) : codé, testé en base (6/6, `woundService.test.mjs`), EN ATTENTE DE
+VALIDATION JEU RÉEL.**
 
-`spendChancePoints(db, charSheetId, n, { reason: 'réduction gravité' })`, `n ∈ {1, 2}`, fait
-descendre `finalSeverity` de `n` crans sur l'échelle `WOUND_SEVERITIES`
-(`shared/woundConstants.js` : `legere < moyenne < grave < critique < mortelle`).
+**Le point d'accroche supposé ci-dessus n'existe pas — exploration dédiée avant tout code
+(analyse à charge demandée par Saar).** `resolveTargetHit`/`applyWound` (`damageService.js`/
+`woundService.js`) calculent la gravité finale ET l'insèrent en base ET diffusent `WOUND_ADDED` en
+une seule opération atomique, avant même de retourner à leur appelant — aucune fenêtre « avant
+persistance » n'existe côté victime. `COMBAT_DAMAGE_PROMPT`/`CombatDamageWindow` appartiennent en
+outre à l'**attaquant** (invite à lancer les dés), pas à la victime.
 
-Gardes côté appelant (pas dans `spendChancePoints`, qui reste agnostique du « pourquoi ») :
+**Architecture retenue : correction A POSTERIORI, pas un gate avant écriture.** RAW dit "dès que
+le personnage **subit** une Blessure grave ou plus" (`REGLE_CHANCE.md:116`) — une réaction à un
+fait déjà survenu, pas une clause suspensive ; gater `applyWound` (6 sites de dégât consolidés en
+un seul point d'entrée) aurait exigé de faire remonter une suspension à travers chacun, un
+refactor bien plus large que ce que RAW demande. Découverte décisive : `resolveWoundImprovement`
+(`woundUtils.js`) **existe déjà** — c'est l'inverse exact de l'insertion (construit pour la
+guérison naturelle), déjà branché sur `WOUND_UPDATED` que le client sait déjà rafraîchir
+génériquement. La réduction Chance ne fait que le déclencher immédiatement au lieu d'attendre
+l'échéance de jeu — aucune nouvelle mutation inventée.
+
+**Exception RAW du « palier plein »** (`REGLE_CHANCE.md:125-131`) — non gérée par
+`resolveWoundImprovement` (ni par personne, y compris pour la guérison naturelle : lacune latente
+préexistante, non corrigée ici, hors scope) : nouvelle fonction pure
+`computeAvailableSeverityReductions` (`woundUtils.js`) calcule, à l'ouverture du choix, les degrés
+qui aboutissent RÉELLEMENT à un palier disponible — les 2 degrés normaux si possible, sinon un
+seul palier (le premier disponible, potentiellement > 2 degrés) — jamais un bouton qui ferait
+dépenser des points pour rien.
+
+**3e vocabulaire de choix, généralisation du moteur générique** : `reduce_N` (N = degrés, calculé
+dynamiquement) — 3e mécanique RAW distincte après `gain_point`/`reroll` (L3e) et `force`/`attempt`
+(L4). "Règle des trois occurrences" : `resolveChanceChoice` valide désormais un **format**
+générique plutôt qu'une énumération figée — chaque handler reste responsable d'ignorer un choix
+qu'il ne reconnaît pas, jamais recouplé au moteur générique. `openChanceChoice` transmet aussi un
+champ `options` optionnel (jamais de texte FR figé — données structurées `{choice, degree,
+targetSeverity}`, le client compose le libellé via `t()`) pour les boutons dynamiques du client.
+
+**Dépense + réduction atomiques** : `spendChancePoints(sheetId, n, { reason }, trx)` puis N appels
+à `resolveWoundImprovement(trx, woundId)` dans la MÊME transaction — soit les deux réussissent,
+soit ni l'un ni l'autre (jamais des points débités sans effet, ni une blessure réduite sans
+dépense).
+
+**Cycle d'import cassé avant qu'il ne devienne un bug silencieux** : `resolveChanceRecipientCharacterId`
+(déjà utilisée par L3e/L4) vivait dans `combatantContextService.js`, qui importe `damageService.js`
+(pour `fetchCibleNA`), qui importe lui-même `woundService.js` (`applyWound`) — un import direct
+depuis `woundService.js` aurait donc bouclé. Extraite dans un nouveau fichier feuille sans aucune
+dépendance, `exoPilotService.js` (avec `resolvePilot`/`resolveExoContext`, ré-exportés depuis
+`combatantContextService.js` pour que ses 4 appelants existants n'aient rien à changer).
+
+Gardes :
 - Déclenchable uniquement sur Blessure **grave, critique ou mortelle** (RAW — pas légère/moyenne).
-- Exception RAW du palier plein (`MANUEL_CHANCE.md` §3.2) : si le palier cible n'a plus de case
-  disponible, continuer à dépenser au-delà du plafond normal de 2 points.
 - **Hors scope de ce lot** : le cas « Mort subite » (§9) — pas de palier au-delà de `mortelle`
   dans le moteur actuel, dépendance externe non résolue.
+
+**Testé** : `node --check` sur tous les fichiers touchés ; 6 nouveaux tests dédiés
+(`woundService.test.mjs` : ouverture conditionnée à grave+, dépense+réduction 1 et 2 degrés,
+timeout sans effet, Chance insuffisante sans effet partiel) + 4 nouveaux tests
+`computeAvailableSeverityReductions` (cas normal, palier 1 seul plein, exception 2 paliers pleins,
+exception sur 3 degrés) ; suite complète wound/chance/combat 155/155 verte (aucune régression, y
+compris sur le déplacement de `resolveExoContext`) ; eslint + `vite build` client OK.
+**Non testé** : scénario réel en combat (infliger une Blessure grave+ à un PJ/PNJ, vérifier
+l'apparition de la fenêtre, cliquer une réduction, vérifier `chc` et la gravité affichée).
+**Données** : aucune migration (réutilise `pending_chance_choices` tel quel).
+**Retour arrière** : `git revert` du commit.
 
 ---
 
