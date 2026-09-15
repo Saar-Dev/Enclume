@@ -1,7 +1,20 @@
-import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from './woundUtils.js'
+import {
+  resolveWoundInsertion, resolveWoundImprovement, computeAvailableSeverityReductions,
+  isShockTestRequired, getWorstWoundSeverity,
+} from './woundUtils.js'
 import { initializeWoundHealingEcheance } from './woundEvolutionService.js'
 import { emitTokenStatusUpdated } from './statusService.js'
+// Import DIRECT depuis exoPilotService.js, jamais combatantContextService.js (qui importe
+// damageService.js -> woundService.js : un import inverse ici boucherait le cycle).
+import { resolveChanceRecipientCharacterId } from './exoPilotService.js'
+import { openChanceChoice, SITE_HANDLERS } from './chanceCatastropheChoiceService.js'
+import { spendChancePoints } from '../services/chanceService.js'
 import { WS } from '../../../shared/events.js'
+import db from '../db/knex.js'
+
+// RAW (REGLE_CHANCE.md:112-131) : la réduction de gravité par Chance ne s'ouvre qu'à partir d'une
+// Blessure grave — jamais légère/moyenne.
+const CHANCE_ELIGIBLE_SEVERITIES = ['grave', 'critique', 'mortelle']
 
 // Centralise l'insertion de blessure + broadcast WOUND_ADDED (6 call sites WS → 1).
 // Retourne { finalSeverity, wound, promoted, shock_test_required, worst_wound_severity } — finalSeverity
@@ -43,6 +56,46 @@ export async function applyWound(io, db, campaignId, {
     shock_test_required,
     worst_wound_severity,
   })
+
+  // Réduction de gravité par Chance (PLAN_CHANCE.md L5, REGLE_CHANCE.md:112-131) — correction A
+  // POSTÉRIORI, jamais un gate avant l'écriture ci-dessus (analyse à charge 2026-09-12, PLAN §7) :
+  // applyWound reste le point d'entrée unique déjà atomique (insertion + broadcast) de 6 sites de
+  // dégât ; faire remonter une suspension à travers chacun aurait été un refactor bien plus large
+  // que ce que RAW demande réellement ("dès que le personnage SUBIT une Blessure..." — une réaction
+  // à un fait déjà survenu, pas une clause suspensive). Fire-and-forget : jamais un `await` bloquant
+  // sur la réponse du joueur, `applyWound` retourne normalement dans tous les cas ci-dessous.
+  if (CHANCE_ELIGIBLE_SEVERITIES.includes(finalSeverity)) {
+    try {
+      const character = await db('characters').where({ id: characterId }).first()
+      const recipientCharacterId = character
+        ? await resolveChanceRecipientCharacterId(db, characterId, character.type)
+        : null
+      if (recipientCharacterId) {
+        const reductions = await computeAvailableSeverityReductions(
+          db, charSheetId, result.wound.location, finalSeverity,
+        )
+        if (reductions.length > 0) {
+          // chcAvailable — valeur de Chance au moment de l'ouverture, jamais recalculée/devinée côté
+          // client (aucun store client ne porte `char_sheet.chc` aujourd'hui) : le texte explicatif de
+          // la carte affiche cette valeur telle quelle (retour Saar 2026-09-12, item 1).
+          const sheet = await db('char_sheet').where({ id: charSheetId }).first()
+          await openChanceChoice(io, campaignId, recipientCharacterId, {
+            testLabel: `Réduire la gravité — Blessure ${finalSeverity} (${result.wound.location})`,
+            site: 'wound_severity',
+            context: { woundId: result.wound.id, charSheetId, characterId, reductions, chcAvailable: sheet?.chc ?? null },
+            // Données structurées, jamais un libellé FR construit ici (règle i18n du projet : le
+            // serveur n'émet jamais de texte utilisateur figé) — le client compose le texte via
+            // t() à partir de `degree`/`targetSeverity`.
+            options: reductions.map(r => ({ choice: `reduce_${r.degree}`, degree: r.degree, targetSeverity: r.targetSeverity })),
+          })
+        }
+      }
+    } catch (err) {
+      // Jamais laisser un problème sur cette fonctionnalité annexe faire échouer l'application de
+      // la blessure elle-même (déjà commitée et diffusée ci-dessus) — juste logué.
+      console.error('[woundService] applyWound — ouverture du choix Chance échouée :', err.message)
+    }
+  }
 
   return {
     finalSeverity, worst_wound_severity, shock_test_required,
@@ -126,3 +179,50 @@ export async function healCampaignCharacters(io, db, campaignId, scope) {
   }
   return { count }
 }
+
+// finishWoundSeverityChoice — SITE_HANDLERS.wound_severity (PLAN_CHANCE.md L5). `choice` est
+// `reduce_N` où N doit être l'un des degrés PRÉ-VALIDÉS à l'ouverture (context.reductions,
+// computeAvailableSeverityReductions) — jamais recalculé ici en aveugle : si l'état a changé entre
+// l'ouverture et la réponse (ex. une autre blessure a rempli le palier visé entre-temps), le choix
+// ne correspond plus à une entrée connue et n'a simplement aucun effet, plutôt que d'appliquer une
+// réduction qui ne serait plus correcte.
+//
+// Dépense + réduction dans UNE SEULE transaction (spendChancePoints prend un trxOpt) — atomique :
+// soit les deux réussissent, soit aucun des deux (jamais des points débités sans effet, ni une
+// blessure réduite sans dépense).
+async function finishWoundSeverityChoice(io, campaignId, resolved, { choice, context }) {
+  if (!choice) return // timeout/déclin — RAW : la blessure reste telle quelle
+  const { woundId, charSheetId, characterId, reductions } = context
+  const match = reductions.find(r => `reduce_${r.degree}` === choice)
+  if (!match) return
+
+  const sheet = await db('char_sheet').where({ id: charSheetId }).first()
+  if (!sheet) return
+
+  let finalWoundId
+  try {
+    finalWoundId = await db.transaction(async (trx) => {
+      await spendChancePoints(sheet.id, match.degree, { reason: 'Réduction de gravité de Blessure' }, trx)
+      let currentWoundId = woundId
+      for (let i = 0; i < match.degree; i += 1) {
+        const result = await resolveWoundImprovement(trx, currentWoundId)
+        if (!result.wound) return null // guérie entièrement avant d'avoir consommé tous les degrés
+        currentWoundId = result.wound.id
+      }
+      return currentWoundId
+    })
+  } catch (err) {
+    // Chance insuffisante entre l'ouverture du choix et sa résolution (rare, concurrence d'une
+    // autre dépense entre-temps) — RAW ne permet jamais une réduction non payée ; jamais un throw
+    // qui remonterait jusqu'au handler socket générique (CHANCE_CHOICE_RESOLVE), la blessure reste
+    // telle quelle.
+    console.warn(`[woundService] finishWoundSeverityChoice — réduction refusée (${err.message}), blessure inchangée.`)
+    return
+  }
+
+  const finalWound = finalWoundId ? await db('character_wounds').where({ id: finalWoundId }).first() : null
+  const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
+  io.to(campaignId).emit(WS.WOUND_UPDATED, { characterId, wound: finalWound, worst_wound_severity })
+}
+
+SITE_HANDLERS.wound_severity = finishWoundSeverityChoice

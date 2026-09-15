@@ -32,6 +32,7 @@ import { evaluateAoeVisibility } from '../services/worldVisibilityService.js'
 import { getBattlemapWorldSnapshot } from '../services/worldService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { resolveCombatantTestContext, resolveCombatantDisplayIdentity } from '../lib/combatantContextService.js'
+import { resolveChanceRecipientCharacterId } from '../lib/exoPilotService.js'
 import { resolveScatter } from '../../../shared/world/aoeShapes.js'
 import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
 import { findAoeMechanismEntry } from '../lib/aoeMechanisms/registry.js'
@@ -40,7 +41,6 @@ import {
   fetchAssaultWeaponAndMods,
   fetchDroneWeapon,
   resolveDroneIntegrityLoss,
-  resolveChanceRecipientCharacterId,
   flushDeferredEmissions,
   SITUATION_LABELS,
   TAILLE_LABELS,
@@ -777,7 +777,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       if (!cibleToken?.character_id) continue
       const cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
       if (!cibleCharacter) continue
-      const recipientCharacterId = await resolveChanceRecipientCharacterId(cibleCharacter.id, cibleCharacter.type)
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, cibleCharacter.id, cibleCharacter.type)
       if (!recipientCharacterId) continue // drone — reste normalement touché, aucun choix possible
       avoidanceOpenings.push({
         targetTokenId: ht.tokenId, recipientCharacterId,

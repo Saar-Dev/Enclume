@@ -5,7 +5,7 @@ import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, resolveWoundInsertion, resolveWoundImprovement,
-  buildWoundInsertionUndoEntries,
+  buildWoundInsertionUndoEntries, computeAvailableSeverityReductions,
 } from './woundUtils.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
@@ -152,6 +152,66 @@ test('resolveWoundImprovement sur une blessure inconnue lève AppError(404)', { 
       resolveWoundImprovement(trx, '00000000-0000-0000-0000-000000000000'),
       (err) => err instanceof AppError && err.statusCode === 404,
     )
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+// ─── computeAvailableSeverityReductions — PLAN_CHANCE.md L5, REGLE_CHANCE.md:112-131 ───────────────
+// WOUND_MAX_COUNTS.corps = { legere:4, moyenne:3, grave:3, critique:2, mortelle:2 }
+
+test('computeAvailableSeverityReductions : cas normal, degrés 1 et 2 tous deux disponibles', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'grave')
+    assert.deepEqual(options, [
+      { degree: 1, targetSeverity: 'moyenne' },
+      { degree: 2, targetSeverity: 'legere' },
+    ])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('computeAvailableSeverityReductions : degré 1 plein, degré 2 seul retenu', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    for (let i = 0; i < 3; i++) { // moyenne/corps maxCount=3 -> plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'moyenne', occurred_at_game_minutes: i })
+    }
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'grave')
+    assert.deepEqual(options, [{ degree: 2, targetSeverity: 'legere' }])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('computeAvailableSeverityReductions : exception "palier plein" — degrés 1 et 2 pleins, un seul palier au-delà proposé', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    for (let i = 0; i < 3; i++) { // moyenne/corps plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'moyenne', occurred_at_game_minutes: i })
+    }
+    for (let i = 0; i < 4; i++) { // legere/corps maxCount=4 -> plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'legere', occurred_at_game_minutes: i })
+    }
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'grave')
+    // Rien sous Légère : réduction impossible malgré la dépense, tableau vide (jamais un throw ici —
+    // c'est à l'appelant de ne rien proposer/ne rien débiter dans ce cas).
+    assert.deepEqual(options, [])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('computeAvailableSeverityReductions : exception "palier plein" sur 3 degrés (mortelle -> moyenne, critique et grave pleins)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    for (let i = 0; i < 2; i++) { // critique/corps maxCount=2 -> plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'critique', occurred_at_game_minutes: i })
+    }
+    for (let i = 0; i < 3; i++) { // grave/corps maxCount=3 -> plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'grave', occurred_at_game_minutes: i })
+    }
+    // moyenne/corps vide -> disponible, 3 degrés en dessous de mortelle
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'mortelle')
+    assert.deepEqual(options, [{ degree: 3, targetSeverity: 'moyenne' }])
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })

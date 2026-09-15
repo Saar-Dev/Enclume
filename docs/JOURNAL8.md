@@ -6690,3 +6690,94 @@ sur « Reprendre » sans reload manuel) — à la charge de Saar.
 **Données** : aucune migration.
 **Retour arrière** : additif de suppression pure — `git revert` du commit suffit, aucune donnée
 persistée à restaurer.
+
+---
+
+## Session (Claude) — 2026-09-15 — Fix rechargement MJ : verrou circulaire + mauvaise arme + retour muet
+
+Bug remonté par Saar après le fix icône ↻ permanente (`8b9bd6f`) : le MJ pouvait sélectionner
+Recharger sur une arme de PNJ vide, mais « Déclarer » restait bloqué — puis, une fois débloqué,
+l'arme rechargée n'était pas forcément la bonne, et aucun retour ne confirmait succès ou échec.
+
+**Cause 1 (verrou circulaire)** : `assaultCheck` (`declareChecks.js`) refusait tout Tir sur arme
+vide (`weaponEmpty`), mais son `started` côté MJ (`attackStarted = assaultDecl.state.weaponId !=
+null`) restait vrai même quand Recharger était l'action active — l'arme qu'on vient de
+sélectionner pour la recharger déclenche donc le refus destiné au Tir. Côté PJ, `attackActive`
+excluait déjà Recharger ; l'exclusion n'existait nulle part côté MJ. Fix structurel : `isReloading`
+devient un paramètre explicite de l'autorité unique `assaultCheck`/`assaultCheckInputs` — PJ et MJ
+le transmettent désormais tel quel au lieu de le recalculer localement (source de la duplication
+qui a permis au bug de passer inaperçu côté MJ).
+
+**Cause 2 (mauvaise arme)** : `buildGmDeclarePayload` envoyait `reload: true` (booléen nu, sans
+identité d'arme) — `socketCombatAnnouncement.js` insérait alors `weapon_inv_id: null`, et
+`resolveReloadAction` rechargeait à l'aveugle tout ce qui traînait dans les emplacements MG/MD au
+lieu de l'arme ciblée par le bouton ↻. Fix : `{ weapon_inv_id }`, mêmes rails que le PJ (munition
+laissée à l'auto-sélection serveur déjà existante — le MJ n'a jamais eu de sélecteur dédié).
+
+**Cause 3 (retour muet)** : `resolveReloadAction#emitResult` ne notifiait jamais un PNJ (`if
+(!character.user_id) return`) — succès comme échec restaient invisibles côté MJ. Fix : broadcast
+room + `isPnj`, même patron que `COMBAT_ATTACK_RESULT`/`onAttackResult`/`gmAttackResult` déjà
+établi (`useCombatSocket.js`) ; nouveau `gmReloadResult` côté client, purge synchronisée avec les
+autres résultats de fenêtre à `COMBAT_ENDED`.
+
+**Analyse à charge gamedesign (retour Saar)** : « une popup de succès pour un seul personnage, ce
+n'est pas cohérent — soit tout le monde, soit personne ». Plutôt qu'étendre la popup à toutes les
+audiences (bruit inutile sur une action logistique fréquente), la bannière de **succès** est
+retirée entièrement (PJ et MJ) — le compteur de munitions déjà affiché sur la ligne d'arme (mis à
+jour en direct via `INVENTORY_UPDATED`) EST la confirmation. Seul l'**échec** (aucune trace
+ailleurs, sinon ambigu) garde une bannière, règle unique portée par `CombatResultReload` lui-même
+(pas dupliquée aux deux sites d'appel `CombatOverlay.jsx`). Clés i18n mortes (`success`,
+`clipDisplay`) retirées.
+
+**Testé** : `node --test` (137/137, tests golden master `buildGmDeclarePayload`/`assaultCheck`
+mis à jour + 2 nouveaux verrouillant `isReloading`) ; `eslint` ciblé 0 erreur ; `vite build`
+propre ; **validé jeu réel** (log serveur confirmant l'arme exacte rechargée à son plein chargeur,
+plus aucune popup visible sur un rechargement réussi).
+**Non testé** : rechargement en échec (aucune munition compatible) — bannière rouge attendue, pas
+encore éprouvée en jeu.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit `8c47558`.
+
+---
+
+## Session (Claude) — 2026-09-15 — Chance L5 (réduction de gravité) : clôture, VALIDÉ JEU RÉEL
+
+`PLAN_CHANCE.md` §7 — mécanique codée et testée en base (6/6) depuis le 2026-09-12, restait « en
+attente de validation jeu réel » : un PJ (Joueur Test) a bien pris une Blessure critique, la carte
+de réduction s'est ouverte, `reduce_N` a réduit la gravité et débité `chc` correctement — confirmé
+également côté PNJ (Baboulinet) dans une session précédente. **L1→L5 sont désormais tous clos et
+validés jeu réel.**
+
+**Fusion Tir → `CombatDamageWindow.jsx` (Étape 1, retour Saar : un seul bouton, jamais une fenêtre
+à part) — investigation close.** Codée le 2026-09-12, elle restait visuellement non confirmée
+plusieurs jours : Saar constatait la fenêtre séparée (patron `CatastropheChoiceQueue.jsx`) malgré
+deux relectures complètes du code (serveur + client, `woundId` tracé de bout en bout) ne trouvant
+aucune anomalie. Une pause explicite a été demandée (« STOP, run à vide sur toi ») plutôt que
+d'empiler une 3ᵉ hypothèse non vérifiée. Un vrai bug de dispatch serveur a été trouvé et corrigé
+au passage (`finalizeAssaultHitOutcome` : un PNJ tirant sur un PJ tombait dans la branche
+auto-résolution 100% serveur `resolveAssaultHitPnjNormal`, aucune fenêtre victime, malgré un
+commentaire affirmant à tort le contraire) — corrigé en réutilisant `resolveAttackHitPj` (déjà
+l'autorité correcte, jusqu'ici atteinte seulement via le tireur drone/exo). **Ce correctif était
+nécessaire mais pas suffisant** : la fusion visuelle restait absente après.
+
+**Cause réelle, confirmée à la reprise (2026-09-15) : stack dev périmée.** Un simple `Get-CimInstance
+Win32_Process -Filter Name='node.exe'` en début de reprise a montré **aucun processus node en
+cours** — le test précédent tournait donc forcément sur un bundle Vite/nodemon obsolète par
+rapport au code lu. Aucune modification de code supplémentaire n'a été nécessaire : un redémarrage
+propre de la stack a suffi. Confirme l'hypothèse n°1 posée à la pause et la leçon déjà actée dans
+la mémoire (`feedback_no_window_is_stale_tooling`, arrivée 3× sur ce projet) : **vérifier la
+fraîcheur de la stack AVANT une 3ᵉ relecture de code** sur un comportement qui semble correct à la
+lecture mais ne se manifeste pas en pratique — une instrumentation `console.log` temporaire avait
+été préparée en filet de sécurité pour ce cas précis, posée puis retirée sans avoir servi.
+
+**Testé** : `node --check` sur tous les fichiers serveur du lot (`woundService.js`,
+`chanceCatastropheChoiceService.js`, `combatantContextService.js`, `damageService.js`,
+`socketCombatHelpers.js`, `socket/index.js`, `socketCombatAoe.js`, `exoPilotService.js`,
+`woundUtils.js` + tests) ; `eslint` client 0 erreur ; JSON `combat.json` valide ; `vite build`
+propre. Suite DB complète (155/155, dont les 6+4 nouveaux tests L5) déjà verte depuis le
+2026-09-12 (non relancée cette session, aucun fichier serveur modifié depuis). **Validé jeu réel**
+PJ + PNJ (ci-dessus).
+**Non testé** : L6 (`<ChanceSpendButton>`, UI générique + fenêtre narrative) — non commencé,
+canal de notification narrative à identifier au moment du lot (`PLAN_CHANCE.md` §8).
+**Données** : aucune migration (réutilise `pending_chance_choices`).
+**Retour arrière** : `git revert` du commit.

@@ -101,6 +101,55 @@ export async function resolveWoundImprovement(trx, woundId) {
   return { wound: newWound, healed: false }
 }
 
+// hasSeverityRoom — vrai si ce palier a encore une case libre pour cette localisation (même règle
+// que resolveWoundInsertion, jamais dupliquée : `currentCount < maxCount`).
+async function hasSeverityRoom(dbOrTrx, charSheetId, location, severity) {
+  const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
+  if (maxCount == null) return false
+  const [{ count }] = await dbOrTrx('character_wounds')
+    .where({ char_sheet_id: charSheetId, location, severity })
+    .count('* as count')
+  return Number(count) < maxCount
+}
+
+// computeAvailableSeverityReductions — pour la réduction de gravité par dépense de Chance
+// (docs/PLANS/PLAN_CHANCE.md L5, REGLE_CHANCE.md:112-131). Calcule les degrés de réduction qui
+// aboutissent RÉELLEMENT à un palier disponible pour cette blessure — jamais un degré qui ferait
+// dépenser des points de Chance pour atterrir sur un palier déjà plein (resolveWoundImprovement ne
+// vérifie pas la capacité, cf. son commentaire : c'est à l'appelant de le faire en amont).
+//
+// Deux étapes RAW distinctes :
+// 1. Les degrés normaux (1 et 2, REGLE_CHANCE.md:117-119) — retenus seulement s'ils aboutissent
+//    chacun à un palier avec de la place.
+// 2. Exception du « palier plein » (REGLE_CHANCE.md:125-131) : si ni 1 ni 2 degrés n'aboutissent
+//    nulle part de disponible, il faut continuer à descendre — un SEUL palier est alors proposé
+//    (le premier disponible), jamais la liste des paliers intermédiaires encore pleins.
+//
+// Retourne un tableau (0 à 2 entrées) `{ degree, targetSeverity }`, jamais un `{ degree: 1..2 }`
+// hors norme sauf si l'exception s'applique (alors une seule entrée, degree > 2 possible).
+export async function computeAvailableSeverityReductions(dbOrTrx, charSheetId, location, severity) {
+  const normal = []
+  let candidate = severity
+  for (let degree = 1; degree <= 2; degree += 1) {
+    candidate = previousSeverity(candidate)
+    if (!candidate) break
+    if (await hasSeverityRoom(dbOrTrx, charSheetId, location, candidate)) {
+      normal.push({ degree, targetSeverity: candidate })
+    }
+  }
+  if (normal.length > 0) return normal
+
+  candidate = severity
+  for (let degree = 1; degree <= WOUND_SEVERITIES.length; degree += 1) {
+    candidate = previousSeverity(candidate)
+    if (!candidate) return [] // plus rien sous Légère et toujours plein — réduction impossible
+    if (await hasSeverityRoom(dbOrTrx, charSheetId, location, candidate)) {
+      return [{ degree, targetSeverity: candidate }]
+    }
+  }
+  return []
+}
+
 export async function getWorstWoundSeverity(db, charSheetId) {
   const ORDER = WOUND_SEVERITIES.slice().reverse()
   const wounds = await db('character_wounds').where({ char_sheet_id: charSheetId }).select('severity')

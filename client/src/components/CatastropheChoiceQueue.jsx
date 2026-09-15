@@ -5,6 +5,7 @@ import { CATASTROPHE_EFFECT_TABLE, findCatastropheEntry } from '../../../shared/
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAuthStore } from '../stores/authStore.js'
+import { useChanceChoiceStore } from '../stores/chanceChoiceStore.js'
 import { useChanceCountdown } from '../lib/useChanceCountdown.js'
 
 let nextQueueId = 0
@@ -38,8 +39,11 @@ export default function CatastropheChoiceQueue({ socket }) {
   const userId = useAuthStore(s => s.user?.id)
 
   const [catastropheEntries, setCatastropheEntries] = useState([])
-  const [chanceEntries, setChanceEntries] = useState([])
   const [overrideEntry, setOverrideEntry] = useState('')
+  const chanceEntriesRaw = useChanceChoiceStore(s => s.entries)
+  const activeWoundWindowId = useChanceChoiceStore(s => s.activeWoundWindowId)
+  const addPendingChance = useChanceChoiceStore(s => s.addPending)
+  const removeResolvedChance = useChanceChoiceStore(s => s.removeResolved)
 
   useEffect(() => {
     if (!socket) return
@@ -57,10 +61,10 @@ export default function CatastropheChoiceQueue({ socket }) {
       // autre joueur ni au MJ) ; au MJ pour un PNJ (qui n'a pas de joueur propre).
       const forMe = character.type === 'pj' ? character.user_id === userId : isGm
       if (!forMe) return
-      setChanceEntries(q => [...q, { ...data, _queueId: nextQueueId++ }])
+      addPendingChance({ ...data, _queueId: nextQueueId++ })
     }
     const onChanceResolved = (data) => {
-      setChanceEntries(q => q.filter(item => item.id !== data.id))
+      removeResolvedChance(data.id)
     }
     socket.on(WS.CATASTROPHE_PENDING, onCatastrophePending)
     socket.on(WS.CATASTROPHE_APPLIED, onCatastropheApplied)
@@ -72,7 +76,17 @@ export default function CatastropheChoiceQueue({ socket }) {
       socket.off(WS.CHANCE_CHOICE_PENDING, onChancePending)
       socket.off(WS.CHANCE_CHOICE_RESOLVED, onChanceResolved)
     }
-  }, [socket, characters, isGm, userId])
+  }, [socket, characters, isGm, userId, addPendingChance, removeResolvedChance])
+
+  // wound_severity pris en charge en ligne par CombatDamageWindow.jsx (Tir, PLAN_CHANCE.md L5 retour
+  // Saar 2026-09-12 item 4) : exclu d'ici pour ne jamais montrer deux fois le même choix (invariant
+  // déjà établi L3e-4, "une seule fenêtre, une seule position"). CombatOverlay annonce sa prise en
+  // charge via `activeWoundWindowId` (chanceChoiceStore) dès que `COMBAT_DAMAGE_RESULT.woundId`
+  // correspond à un choix en attente ; CaC/AOE n'ont pas de fenêtre victime à réutiliser (asymétrie
+  // vérifiée dans le code, Étape 2 à venir) et restent donc affichés ici normalement.
+  const chanceEntries = chanceEntriesRaw.filter(ch => !(
+    ch.site === 'wound_severity' && ch.woundId != null && ch.woundId === activeWoundWindowId
+  ))
 
   // Fusion dérivée à chaque rendu — pas d'état séparé à synchroniser : une fois l'une des deux
   // moitiés résolue, elle disparaît de sa propre liste source et la carte continue de montrer
@@ -101,8 +115,8 @@ export default function CatastropheChoiceQueue({ socket }) {
   const resolveChance = useCallback((choice) => {
     if (!socket || !current?.chance) return
     socket.emit(WS.CHANCE_CHOICE_RESOLVE, { pendingId: current.chance.id, choice })
-    setChanceEntries(q => q.filter(item => item._queueId !== current.chance._queueId))
-  }, [socket, current])
+    removeResolvedChance(current.chance.id)
+  }, [socket, current, removeResolvedChance])
 
   if (!current) return null
 
@@ -164,6 +178,20 @@ export default function CatastropheChoiceQueue({ socket }) {
                     {t('chance.choiceCard.forceButton')}
                   </button>
                 </>
+              ) : chance.site === 'wound_severity' ? (
+                // Réduction de gravité de Blessure (PLAN_CHANCE.md L5) — boutons DYNAMIQUES : le
+                // nombre et le libellé dépendent de la capacité réelle du palier visé (RAW « palier
+                // plein », woundUtils.js#computeAvailableSeverityReductions), calculés et transmis
+                // par le serveur (`chance.options`) — jamais figés ici, contrairement aux deux autres
+                // mécaniques dont le vocabulaire est fixe.
+                (chance.options ?? []).map((opt) => (
+                  <button key={opt.choice} className="btn btn-gold" onClick={() => resolveChance(opt.choice)}>
+                    {t('chance.choiceCard.reduceButton', {
+                      degree: opt.degree,
+                      severity: t(`resultPanels.severity.${opt.targetSeverity}`),
+                    })}
+                  </button>
+                ))
               ) : (
                 <>
                   <button className="btn-ghost" onClick={() => resolveChance('reroll')}>

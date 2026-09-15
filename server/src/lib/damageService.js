@@ -499,6 +499,10 @@ export async function resolveTargetHit(io, db, campaignId, {
     chocTotal,
     severity, is_lethal,
     finalSeverity,
+    // woundId — corrélation avec un éventuel choix Chance `wound_severity` ouvert par applyWound
+    // ci-dessus (PLAN_CHANCE.md L5, retour Saar 2026-09-12 item 4) : `null` si aucune blessure créée
+    // (dégât virtuel) ou si `applyWound` a été appelé sans passer par ce chemin.
+    woundId: woundResult?.wound?.id ?? null,
     shockResult,
     // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot B/C) — null quand non applicable
     // (pas de Petit bouclier en jeu sur ce coup).

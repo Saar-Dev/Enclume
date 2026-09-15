@@ -1,10 +1,21 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
+import { useChanceChoiceStore } from '../stores/chanceChoiceStore.js'
 
 export default function CombatDamageWindow({ payload, results, socket, onConfirmed }) {
   const { t } = useTranslation('combat')
   const [isRolling, setIsRolling] = useState(false)
+
+  // Bouton Chance (PLAN_CHANCE.md L5, retour Saar 2026-09-12) — un seul petit bouton ici, JAMAIS une
+  // seconde UI qui duplique CatastropheChoiceQueue.jsx : ce bouton se contente de révéler la carte
+  // existante (déjà tenue en suspens par activeWoundWindowId, useCombatSocket.js) en vidant
+  // activeWoundWindowId — exactement ce que fait déjà la fermeture de cette fenêtre sans répondre
+  // (le "filet de sécurité"), juste déclenché plus tôt et explicitement. chanceChoiceStore reste
+  // l'unique source de la carte ; aucun rendu du choix n'est dupliqué ici.
+  const activeWoundWindowId = useChanceChoiceStore(s => s.activeWoundWindowId)
+  const clearActiveWoundWindowId = useChanceChoiceStore(s => s.clearActiveWoundWindowId)
+  const hasPendingChanceChoice = results?.woundId != null && results.woundId === activeWoundWindowId
 
   const handleLancer = () => {
     setIsRolling(true)
@@ -98,6 +109,16 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
             </div>
           )
         })()}
+
+        {hasPendingChanceChoice && (
+          <button
+            className="btn btn-ghost"
+            style={styles.chanceCallBtn}
+            onClick={() => clearActiveWoundWindowId()}
+          >
+            {t('damageWindow.chanceReduce.callButton')}
+          </button>
+        )}
 
         {!results ? (
           <button
@@ -224,5 +245,10 @@ const styles = {
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
+  },
+  chanceCallBtn: {
+    alignSelf: 'center',
+    padding: '4px 10px',
+    fontSize: 11,
   },
 }

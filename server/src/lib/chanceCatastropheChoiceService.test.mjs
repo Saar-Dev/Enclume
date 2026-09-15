@@ -76,9 +76,11 @@ test('resolveChanceChoice résout une fois, un second appel est un no-op', { ski
   }
 })
 
-// ─── resolveChanceChoice — choix invalide rejeté avant toute écriture ────────────────────────
+// ─── resolveChanceChoice — validation générique (format), plus une énumération figée ────────────
+// (décision 2026-09-12, "règle des trois occurrences" : 3 vocabulaires de choix distincts, chacun
+// son handler — le moteur générique valide un FORMAT, jamais un vocabulaire métier particulier.)
 
-test('resolveChanceChoice rejette un choix hors du vocabulaire connu, aucune écriture', { skip }, async () => {
+test('resolveChanceChoice rejette un format de choix malformé, aucune écriture', { skip }, async () => {
   const fixture = await createRealFixture()
   try {
     const pending = await openChanceChoice(fakeIo, fixture.campaign.id, fixture.character.id, {
@@ -86,13 +88,30 @@ test('resolveChanceChoice rejette un choix hors du vocabulaire connu, aucune éc
     })
 
     await assert.rejects(
-      resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'not_a_choice' }),
+      resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'Not A Choice!' }),
       /choice invalide/,
     )
 
     const stillPending = await listPendingChanceChoices(fixture.campaign.id)
     assert.equal(stillPending.length, 1)
     assert.equal(stillPending[0].id, pending.id)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('resolveChanceChoice accepte un choix bien formé mais non reconnu par le site — persisté, sans effet', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    const pending = await openChanceChoice(fakeIo, fixture.campaign.id, fixture.character.id, {
+      testLabel: 'Test', site: 'entity_displacement', timeoutMs: 60_000,
+    })
+
+    // Aucun SITE_HANDLERS['entity_displacement'] enregistré dans ce fichier de test — le choix est
+    // persisté tel quel (le moteur générique ne juge jamais le vocabulaire), simplement sans effet
+    // puisqu'aucun handler ne le consomme.
+    const resolved = await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
+    assert.equal(resolved.choice, 'reduce_1')
   } finally {
     await cleanup(fixture)
   }

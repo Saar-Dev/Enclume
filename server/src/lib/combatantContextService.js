@@ -11,6 +11,7 @@ import { getCampaignSettings } from './campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { fetchCibleNA } from './damageService.js'
 import { computeExoStats } from '../../../shared/exoStats.js'
+import { resolvePilot, resolveExoContext } from './exoPilotService.js'
 
 // skillId=null → palier NA seul (cibles Tir/Drone, PLAN_COMBATANT_CONTEXT.md §2 palier 2) : pas de
 // fetch ref_skills/char_skills, { for_na, con_na, vol_na, sheetId } seulement. Délègue à
@@ -112,35 +113,12 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
 // `char_sheet` normale — ses attributs/Compétences sont utilisés tels quels (MANUEL_EXOARMURE.md
 // §4.1), sauf la Force, remplacée par l'Exo-Force de l'armure pour les dommages au contact/port
 // (même §4.1 — seule substitution actée à ce jour, docs/PLANS/PLAN_COMBATANT_CONTEXT.md §0.2).
-// Une seule autorité pour « comment retrouver le pilote d'un exo » — resolveExoTestContext (contexte
-// de Test complet) et resolveCombatantIdentity (identité seule, plus bas) en ont toutes deux besoin ;
-// jamais deux copies de ce fetch exo_sheet→characters.
-async function resolvePilot(db, exoCharacter) {
-  const exoSheet = await db('exo_sheet').where({ character_id: exoCharacter.id }).first()
-  if (!exoSheet?.pilot_character_id) return { pilot: null, exoSheet }  // pas de pilote assigné
-  const pilot = await db('characters').where({ id: exoSheet.pilot_character_id }).first()
-  // pilot peut être null si la ligne characters a disparu entre les deux lectures (FK ON DELETE
-  // SET NULL couvre la suppression déjà commitée ; garde explicite pour la fenêtre de concurrence,
-  // même raison que Lot B, resolveMeleeAction : « garde explicite plutôt qu'une confiance aveugle »).
-  return { pilot, exoSheet }
-}
-
-// PLAN_EXOARMURE.md Lot 2bis §9.3 (analyse à charge 2026-08-18, optimisation retenue) — extrait de
-// resolveExoTestContext ci-dessous, qui faisait ce même fetch pilote+template inline. Un second
-// appelant (resolveExoStandUpAction, Lot 2bis) a besoin des mêmes valeurs — `exoSheet` pour
-// resolveManeuverSkillId, `pilot`/`exoStats` pour le Seuil du Test.
-// Lot B (§13.3, 2026-08-20) — le JOIN vers `ref_exo_templates` disparaît : `exoSheet` porte désormais
-// sa propre base éditable (category/base_exoforce/base_blindage/malus_init_*/...), copiée une fois
-// par `applyExoTemplate` au moment de la sélection du modèle. `template_id` reste sur `exo_sheet`
-// comme simple référence d'origine, plus une dépendance de calcul — un appelant qui a encore besoin
-// du nom du modèle pour affichage (ex. "pré-rempli depuis : Armure Mentor") fait son propre fetch
-// séparé, jamais réintroduit ici (fonction partagée par tous les sites de combat, chemin chaud).
-// `pilot` reste `null` si aucun pilote n'est assigné (état valide, PLAN_EXOARMURE.md Lot 1 §6.5) —
-// jamais un throw ici, la garde revient à chaque appelant.
-export async function resolveExoContext(db, exoCharacter) {
-  const { pilot, exoSheet } = await resolvePilot(db, exoCharacter)
-  return { pilot, exoSheet }
-}
+// resolvePilot/resolveExoContext — déplacées dans exoPilotService.js (2026-09-12, chantier Chance
+// L5) pour casser un cycle d'import (ce fichier importe damageService.js plus haut pour
+// fetchCibleNA, qui importe lui-même woundService.js — un woundService.js import-ant
+// resolveExoContext directement d'ici aurait donc bouclé). Réexportées ici telles quelles : aucun
+// appelant existant de ce fichier n'a besoin de changer son import.
+export { resolveExoContext, resolveChanceRecipientCharacterId } from './exoPilotService.js'
 
 // Manœuvre d'armure — 4 spécialités RAW (REGLEARMURE.md p.325, texte complet PLAN_EXOARMURE.md §7.2),
 // indexées sur `ref_exo_templates.environment`. La colonne DB a 6 valeurs possibles

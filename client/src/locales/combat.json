@@ -465,7 +465,10 @@
     "shockOutcomes": {
       "ok": "Résistance"
     },
-    "d20Placeholder": "D20"
+    "d20Placeholder": "D20",
+    "chanceReduce": {
+      "callButton": "Faire appel à sa Chance"
+    }
   },
   "cacModifiers": {
     "header": "{{attacker}} — Corps à corps — {{target}}",
@@ -702,6 +705,7 @@
       "rerollButton": "Relancer le Test",
       "forceButton": "Forcer (Événement favorable)",
       "attemptButton": "Tenter le Test de Chance",
+      "reduceButton": "Réduire de {{degree}} (→ {{severity}})",
       "autoResolveIn": "Résolution automatique dans {{seconds}}s"
     },
     "gmQueue": {

@@ -284,6 +284,9 @@ const initSocket = (io) => {
             // côté client (CatastropheChoiceQueue.jsx, composant unique), pas ici.
             const pendingChanceChoices = await listPendingChanceChoices(campaignId)
             for (const pc of pendingChanceChoices) {
+              // options — PLAN_CHANCE.md L5, boutons dynamiques (wound_severity) — embarqué dans
+              // `context` à l'ouverture (chanceCatastropheChoiceService.js), relu ici tel quel.
+              const pcContext = typeof pc.context === 'string' ? JSON.parse(pc.context) : pc.context
               socket.emit(WS.CHANCE_CHOICE_PENDING, {
                 id: pc.id,
                 characterId: pc.character_id,
@@ -293,6 +296,9 @@ const initSocket = (io) => {
                 linkedCatastropheId: pc.linked_catastrophe_id,
                 timeoutMs: pc.timeout_ms,
                 actionId: pc.action_id,
+                options: pcContext?.options ?? null,
+                woundId: pcContext?.woundId ?? null,
+                chcAvailable: pcContext?.chcAvailable ?? null,
               })
             }
           }

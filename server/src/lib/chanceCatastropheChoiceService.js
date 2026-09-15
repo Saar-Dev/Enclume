@@ -45,14 +45,17 @@ const SITE_HANDLERS = {}
 // est le token à retirer de la résolution, distinct de `characterId` (le destinataire du choix, qui
 // est le PILOTE si la cible est une exo — même distinguo que les sites L3e). Les deux restent `null`
 // pour tout site à cible unique (L3e) : colonnes additives, jamais consultées hors L4.
-export async function openChanceChoice(io, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null } = {}) {
+export async function openChanceChoice(io, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null, options = null } = {}) {
   const [pending] = await db('pending_chance_choices')
     .insert({
       campaign_id: campaignId,
       character_id: characterId,
       site,
       test_label: testLabel ?? null,
-      context: JSON.stringify({ ...context, site }),
+      // `options` embarqué dans `context` (colonne déjà persistée) plutôt qu'une nouvelle colonne —
+      // c'est de la métadonnée d'affichage, relue telle quelle par le resync SESSION_JOIN
+      // (server/src/socket/index.js), jamais consultée par un handler de résolution.
+      context: JSON.stringify({ ...context, site, options }),
       linked_catastrophe_id: linkedCatastropheId,
       timeout_ms: timeoutMs,
       action_id: actionId,
@@ -66,6 +69,15 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
   // timeoutMs/rolledAt : décompte visible côté client (retour Saar : le délai semblait arbitraire).
   // actionId : transmis pour qu'un futur affichage groupé (liste MJ multi-cibles, L4e) puisse
   // reconnaître les entrées d'un même tir sans requête supplémentaire.
+  // options — PLAN_CHANCE.md L5 : boutons dynamiques (nombre/libellé variable selon la capacité du
+  // palier visé, contrairement aux 2 boutons fixes de L3e/L4). `null`/absent pour tout site à choix
+  // fixe — le client garde son rendu à 2 boutons par défaut, cette clé n'est consultée que pour
+  // `site === 'wound_severity'`.
+  // woundId/chcAvailable — mêmes principe que `options` : extraits de `context` (jamais renvoyé en
+  // entier, ce n'est pas une API générique) parce qu'un consommateur précis en a besoin. woundId sert
+  // à `CombatDamageWindow.jsx` (Tir) pour corréler ce choix avec la fenêtre de dégâts déjà ouverte
+  // chez le même destinataire (PLAN_CHANCE.md L5, retour Saar 2026-09-12 item 4) ; absent/`null` pour
+  // tout autre site.
   io.to(campaignId).emit(WS.CHANCE_CHOICE_PENDING, {
     id: pending.id,
     characterId,
@@ -75,6 +87,9 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
     linkedCatastropheId: pending.linked_catastrophe_id,
     timeoutMs: pending.timeout_ms,
     actionId: pending.action_id,
+    options,
+    woundId: context.woundId ?? null,
+    chcAvailable: context.chcAvailable ?? null,
   })
 
   // .unref() — ce timer ne doit jamais empêcher le process de s'arrêter (arrêt serveur normal,
@@ -105,9 +120,20 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
 //   effet central pour ces valeurs : contrairement à la régénération, cette mécanique n'est
 //   partagée par aucun autre site aujourd'hui — son unique handler (`SITE_HANDLERS.aoe_avoidance`)
 //   en porte l'intégralité (dépense/Test/jonction Aggregator), pas de duplication à éviter ici.
+// - Réduction de gravité de Blessure (L5, site `wound_severity`) : `reduce_N` où N est un nombre de
+//   degrés calculé dynamiquement à l'ouverture (`computeAvailableSeverityReductions`, woundUtils.js —
+//   jamais figé à {1,2}, RAW prévoit un palier au-delà en cas de "palier plein"). AUCUN effet
+//   central non plus, même raisonnement que aoe_avoidance : un 3e vocabulaire de choix, propre à un
+//   unique consommateur.
+//
+// Validation générique plutôt qu'une énumération figée (décision 2026-09-12, "règle des trois
+// occurrences" : 3 vocabulaires de choix distincts pour 3 mécaniques RAW, chacun avec son propre
+// handler qui ignore déjà silencieusement une valeur qu'il ne reconnaît pas — geler une liste
+// blanche ici recouplerait à tort le moteur générique à chaque mécanique concrète, jamais
+// extensible sans y revenir à chaque nouveau site). Le format reste contraint (identifiants courts,
+// alphanumériques) pour rejeter un envoi manifestement corrompu, sans connaître le vocabulaire.
 export async function resolveChanceChoice(io, campaignId, pendingId, { choice = null, resolvedByUserId } = {}) {
-  const KNOWN_CHOICES = ['gain_point', 'reroll', 'force', 'attempt']
-  if (choice !== null && !KNOWN_CHOICES.includes(choice)) {
+  if (choice !== null && !/^[a-z][a-z0-9_]{0,29}$/.test(choice)) {
     throw new AppError(400, `choice invalide : ${choice}`)
   }
 

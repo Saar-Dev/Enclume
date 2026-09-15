@@ -32,6 +32,7 @@ import {
   resolveCombatantTestContext, resolveCombatantIdentity, resolveCombatantDisplayIdentity,
   resolveExoContext, resolveManeuverSkillId, resolveHumanoidTestContext,
 } from '../lib/combatantContextService.js'
+import { resolveChanceRecipientCharacterId } from '../lib/exoPilotService.js'
 import { computeExoStats } from '../../../shared/exoStats.js'
 import { EXO_PRONE_RECOVERY_TABLE } from '../../../shared/exoConstants.js'
 import { setCharacterState } from '../lib/characterStateService.js'
@@ -137,25 +138,9 @@ async function armAwaitingDamage(io, campaignId, tokenId, payload) {
   return parseInt(count, 10)
 }
 
-// resolveChanceRecipientCharacterId — id du personnage dont le char_sheet doit recevoir un choix
-// Chance, à partir de l'id ET du type d'un combattant quelconque (PLAN_CHANCE.md L3e-4d).
-// - pj/pnj : le personnage a son propre char_sheet, retourné tel quel.
-// - exo : aucun char_sheet propre — la Chance appartient au PILOTE (même correctif que
-//   resolveExoAssaultAction/resolveExoMeleeAction, trouvaille 2026-09-11 sur du code déjà poussé).
-// - drone : aucun char_sheet, jamais de Chance possible (combatantContextService.js:283-287,
-//   même exclusion que drone_attack) — retourne null, l'appelant doit alors sauter openChanceChoice.
-// Centralisé ici (pas dupliqué par site) car nécessaire à la fois pour l'attaquant ET le défenseur
-// d'un CaC — le type du combattant dont c'est le Test n'est pas toujours connu à l'avance du site.
-export async function resolveChanceRecipientCharacterId(characterId, characterType) {
-  if (characterType === 'drone') return null
-  if (characterType === 'exo') {
-    const exoCharacter = await db('characters').where({ id: characterId }).first()
-    if (!exoCharacter) return null
-    const { pilot } = await resolveExoContext(db, exoCharacter)
-    return pilot?.id ?? null
-  }
-  return characterId
-}
+// resolveChanceRecipientCharacterId — déplacée dans exoPilotService.js (2026-09-12, chantier
+// Chance L5) : aucune dépendance socket, sa place est en lib pour que woundService.js (lib)
+// puisse aussi l'utiliser sans violer le sens d'import lib→socket interdit dans ce projet.
 
 // ─── confirmMeleeDefense / confirmDamage (docs/PLAN_COMBAT_TIMELINE.md Lot D) ──────────────────────
 // Extraits des handlers socket COMBAT_MELEE_DEFENSE_CONFIRM/COMBAT_DAMAGE_CONFIRM (socketCombatResolution.js)
@@ -281,7 +266,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     // l'opposition elle-même. Le choix appartient au DÉFENSEUR (dont c'est le Test) — jamais
     // l'attaquant, même si l'attaquant est celui qui a initié l'action ce Tour.
     if (defenseOutcome.catastropheRisk) {
-      const recipientCharacterId = await resolveChanceRecipientCharacterId(characterIdCible, cibleType)
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, characterIdCible, cibleType)
       if (recipientCharacterId) {
         await openChanceChoice(io, meleeCampaignId, recipientCharacterId, {
           testLabel: 'Jet pour défendre (contact)',
@@ -788,7 +773,7 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
   })
   if (hitResult === null) return
   const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-          is_lethal, finalSeverity, shockResult,
+          is_lethal, finalSeverity, shockResult, woundId,
           rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
@@ -803,6 +788,10 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
   const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
 
   // 6. COMBAT_DAMAGE_RESULT → socket tireur uniquement (affichage fenêtre)
+  // Pour un Tir sur PJ humanoïde, ce socket est celui de la VICTIME (cf. resolveAttackHitPj) — le
+  // même destinataire que le CHANCE_CHOICE_PENDING déjà émis par applyWound plus haut dans
+  // resolveTargetHit. woundId permet à CombatDamageWindow.jsx de retrouver ce choix précis dans le
+  // store client plutôt que de supposer "il n'y en a qu'un seul ouvert" (PLAN_CHANCE.md L5).
   if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
     rollLoc,
     locLabel: LOCATION_LABELS[localisation] ?? localisation,
@@ -812,6 +801,7 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
     severity: finalSeverity,
     severityColor,
     shockResult,
+    woundId,
   })
 
   // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
@@ -2766,8 +2756,16 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
 }
 
 // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT (seule branche qui suspend)
+// weaponInvId/aimedLocation/treatAsContact/fireModeBonusDmg — optionnels (PLAN_CHANCE.md L5, correctif
+// dispatch 2026-09-12) : absents pour les appelants historiques (tireur drone/exo, finalizeAssaultOutcome
+// — pas de char_inventory, comportement inchangé), fournis par finalizeAssaultHitOutcome pour un tireur
+// humanoïde (PNJ standard visant un PJ) afin que le jet de dégâts réel reste ammo/mods-aware exactement
+// comme pour resolveAssaultHitPj (tireur PJ) — une seule fonction "cible PJ", jamais une seconde copie.
 export async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
-  const { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl } = ctx
+  const {
+    action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl,
+    weaponInvId = null, aimedLocation = null, treatAsContact = false, fireModeBonusDmg = 0,
+  } = ctx
   const cibleSheet = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
   const { for_na, con_na, vol_na } = cibleSheet
     ? await damageService.fetchCibleNA(db, cibleCharacter.id, cibleSheet.id)
@@ -2784,18 +2782,27 @@ export async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
     cibleType:           null,
     char_sheet_id_cible: cibleSheet?.id ?? null,
     mr, portee,
-    fire_mode_bonus_dmg: 0,
+    aimedLocation,
+    fire_mode_bonus_dmg: fireModeBonusDmg,
     formula,
+    weaponInvId,
     for_na_cible:  for_na,
     con_na_cible:  con_na,
     vol_na_cible:  vol_na,
     tireurUsername, tireurColor, userId, targetName,
     type: 'assault', modDom: null, combatModeBonus: null,
     targetUserId: cibleCharacter.user_id,
+    treatAsContact,
     chocDsl,
   })
   if (pendingDamageCount === 1) {
-    const damagePayload = { tokenId: action.token_id, formula, targetName }
+    // Aperçu formule effective (munition chargée) — même correctif que resolveAssaultHitPj (Chantier 11
+    // Étape 2 Lot A) : uniquement quand weaponInvId est fourni (tireur humanoïde), sinon `formula` brute
+    // reste correcte telle quelle (tireur drone/exo, pas de char_inventory à consulter).
+    const formulaPreview = weaponInvId
+      ? await damageService.getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeBand: portee })
+      : null
+    const damagePayload = { tokenId: action.token_id, formula: formulaPreview ?? formula, targetName }
     emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
   }
   // Même correctif que resolveAssaultAction/confirmMeleeDefense (Saar, 2026-07-19) — AWAITING_DAMAGE
@@ -3201,11 +3208,14 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
   }
 }
 
-// finalizeAssaultHitOutcome — dispatch final du Tir humanoïde (PJ touché → resolveAssaultHitPj,
-// PNJ → calcul dégâts immédiat, échec → notice privée PJ ou résultat public PNJ), autorité unique
-// appelée immédiate ou depuis SITE_HANDLERS.assault (PLAN_CHANCE.md L3e-4c). Reprend telle quelle
-// la logique existante — re-fetch la cible fraîche en DB, jamais un instantané en cache (même
-// principe que finalizeAssaultOutcome/finalizeExoMelee).
+// finalizeAssaultHitOutcome — dispatch final du Tir humanoïde, autorité unique appelée immédiate ou
+// depuis SITE_HANDLERS.assault (PLAN_CHANCE.md L3e-4c). Trois issues pour un tir réussi : tireur PJ
+// (n'importe quelle cible) → resolveAssaultHitPj, fenêtre côté TIREUR ; cible PJ face à un tireur non-PJ
+// → resolveAttackHitPj, fenêtre côté VICTIME (correctif 2026-09-12, PLAN_CHANCE.md L5 — manquait
+// jusqu'ici, seule la branche tireur drone/exo l'atteignait) ; sinon calcul dégâts immédiat (PNJ/décor).
+// Échec : notice privée PJ ou résultat public PNJ. Reprend telle quelle la logique existante — re-fetch
+// la cible fraîche en DB, jamais un instantané en cache (même principe que finalizeAssaultOutcome/
+// finalizeExoMelee).
 async function finalizeAssaultHitOutcome(io, campaignId, {
   action, character, weapon, effectiveWeaponInvId, tireurUsername, tireurColor,
   authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
@@ -3243,6 +3253,25 @@ async function finalizeAssaultHitOutcome(io, campaignId, {
 
     if (character.type === 'pj') {
       return await resolveAssaultHitPj(io, campaignId, ctx, emissions)
+    }
+
+    // PJ visé par un tireur NON-PJ (PNJ standard, cas le plus fréquent : un ennemi tire sur un
+    // joueur) — bug trouvé en testant PLAN_CHANCE.md L5 (Saar 2026-09-12) : cette branche manquait,
+    // un tel tir tombait par erreur dans resolveAssaultHitPnjNormal plus bas (auto-résolution
+    // 100% serveur, AUCUNE interaction de la victime — son propre commentaire affirmait à tort que
+    // cette fonction n'était "jamais atteinte pour une cible PJ"). resolveAttackHitPj est déjà
+    // l'autorité correcte pour "cible PJ, fenêtre côté victime" — jusqu'ici seulement atteinte via
+    // finalizeAssaultOutcome (tireur drone/exo) ; on la réutilise ici telle quelle plutôt que de
+    // dupliquer une seconde branche "victime PJ" (invariant #3).
+    if (cibleCharacter?.type === 'pj') {
+      return await resolveAttackHitPj(io, campaignId, {
+        action, cibleCharacter, formula: weapon.ref_damage_h,
+        weaponInvId: effectiveWeaponInvId, aimedLocation: aimedLocationKey,
+        treatAsContact: isJetOuTrait, fireModeBonusDmg: action.fire_mode_bonus_dmg ?? 0,
+        mr, portee: authoritativeRangeBand,
+        tireurUsername, tireurColor, userId: character.user_id,
+        chocDsl: null, // munition résolue à la Confirmation via weaponInvId (comme resolveAssaultHitPj)
+      }, emissions)
     }
 
     const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
@@ -3466,9 +3495,10 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
   const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
-  // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction (branche
-  // resolveAssaultHitPnjNormal, jamais atteinte pour une cible PJ) — nom déjà connu via
-  // `cibleCharacter`, aucun compte utilisateur possible ici.
+  // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction — une cible PJ est
+  // désormais interceptée en amont par finalizeAssaultHitOutcome (correctif 2026-09-12, cf. son
+  // commentaire) avant d'atteindre cette branche, garanti structurellement, pas juste supposé — nom
+  // déjà connu via `cibleCharacter`, aucun compte utilisateur possible ici.
   if (shockResult) {
     statusService.emitShockDiceResult(io, campaignId, shockResult, null, cibleCharacter?.name ?? 'PNJ', '#808080')
   }

@@ -3,8 +3,9 @@
 > Version 2.0 — 2026-09-11 (réécriture complète, RAW fourni par Saar). **Remplace intégralement
 > la v1 (2026-09-05)**, dont l'hypothèse d'architecture centrale (une réserve `chc_points`
 > séparée du score) s'est révélée fausse à la lecture du RAW — voir `MANUEL_CHANCE.md` §1.
-> Statut (2026-09-12) : **L1→L3e-4 codés et VALIDÉS JEU RÉEL** (les 7 sites Catastrophe combat,
-> détail §5) — voir `JOURNAL8.md` pour la clôture complète. Restent L4/L5/L6 (§6-8), non commencés.
+> Statut (2026-09-15) : **L1→L5 codés et VALIDÉS JEU RÉEL** (les 7 sites Catastrophe combat + L4
+> forçage AOE + L5 réduction de gravité, détail §5-7) — voir `JOURNAL8.md` pour la clôture
+> complète. Reste **L6** (§8, UI `<ChanceSpendButton>`), non commencé.
 >
 > Responsabilité unique : architecture technique (fichiers, services, séquencement). Ce document
 > ne contient aucune règle métier — celles-ci sont dans `docs/MANUELS/MANUEL_CHANCE.md`, sourcé
@@ -315,8 +316,7 @@ n'est pas construit ici.
 
 ## 7. L5 — Réduction de gravité (Blessures)
 
-**Statut (2026-09-12) : codé, testé en base (6/6, `woundService.test.mjs`), EN ATTENTE DE
-VALIDATION JEU RÉEL.**
+**Statut (2026-09-15) : codé, testé en base (6/6, `woundService.test.mjs`), VALIDÉ JEU RÉEL.**
 
 **Le point d'accroche supposé ci-dessus n'existe pas — exploration dédiée avant tout code
 (analyse à charge demandée par Saar).** `resolveTargetHit`/`applyWound` (`damageService.js`/
@@ -374,8 +374,24 @@ timeout sans effet, Chance insuffisante sans effet partiel) + 4 nouveaux tests
 `computeAvailableSeverityReductions` (cas normal, palier 1 seul plein, exception 2 paliers pleins,
 exception sur 3 degrés) ; suite complète wound/chance/combat 155/155 verte (aucune régression, y
 compris sur le déplacement de `resolveExoContext`) ; eslint + `vite build` client OK.
-**Non testé** : scénario réel en combat (infliger une Blessure grave+ à un PJ/PNJ, vérifier
-l'apparition de la fenêtre, cliquer une réduction, vérifier `chc` et la gravité affichée).
+**Validé jeu réel (2026-09-15)** : un PNJ (Baboulinet) et un PJ (Joueur Test) ont chacun pris une
+Blessure grave/critique — le choix Chance s'ouvre, la réduction s'applique, la gravité et `chc`
+se mettent à jour correctement pour les deux types de personnage.
+
+**Étape 1 — fusion Tir dans `CombatDamageWindow.jsx` (retour Saar : un seul bouton, jamais une
+fenêtre à part)** : codée le 2026-09-12, mais restée **non confirmée visuellement** plusieurs
+jours malgré deux relectures complètes du code sans anomalie trouvée (chaîne serveur/client
+tracée entièrement, `woundId` correctement corrélé de bout en bout) — Saar a demandé une pause
+explicite plutôt que de laisser deviner une 3ᵉ hypothèse non vérifiée. Un vrai bug de dispatch
+serveur a été trouvé et corrigé au passage (`finalizeAssaultHitOutcome` : un PNJ tirant sur un PJ
+tombait dans la branche auto-résolution 100% serveur, aucune fenêtre victime), mais n'expliquait
+pas la fusion visuelle en elle-même. **Cause réelle (2026-09-15) : stack dev périmée** —
+confirmé en constatant qu'aucun processus `node` ne tournait en local au moment de la reprise ;
+un redémarrage propre de la stack a suffi, aucune modification de code supplémentaire nécessaire
+côté fusion. Leçon actée dans `feedback_no_window_is_stale_tooling` (mémoire) : vérifier la
+fraîcheur de la stack AVANT une 3ᵉ relecture de code sur un comportement qui semble correct à la
+lecture mais ne se manifeste pas en pratique.
+
 **Données** : aucune migration (réutilise `pending_chance_choices` tel quel).
 **Retour arrière** : `git revert` du commit.
 
