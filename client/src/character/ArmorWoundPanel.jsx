@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useCharacterStore } from '../stores/characterStore'
@@ -8,36 +8,29 @@ import LocationPanel   from './LocationPanel.jsx'
 
 export default function ArmorWoundPanel({ characterId, canEdit, dragItem = null }) {
   const { t } = useTranslation('charSheet')
-  const [wounds,        setWounds]        = useState([])
-  const [woundsLoading, setWoundsLoading] = useState(true)
-  const hasLoadedWoundsRef = useRef(false)
 
   const setStoreWounds = useCharacterStore(s => s.setWounds)
   const storeWounds    = useCharacterStore(s => s.woundsByCharId[characterId])
-
-  // Mise à jour directe depuis le store (WOUND_* WS) — fonctionne même si le composant n'était pas monté
-  useEffect(() => {
-    if (storeWounds !== undefined) setWounds(storeWounds)
-  }, [storeWounds])
+  const wounds         = storeWounds ?? []
+  const woundsLoading  = storeWounds === undefined
 
   const loadWounds = useCallback(async () => {
-    const showSpinner = !hasLoadedWoundsRef.current
-    if (showSpinner) setWoundsLoading(true)
     try {
       const res = await api.get(`/char-sheet/${characterId}/wounds`)
-      setWounds(res.data.wounds || [])
       setStoreWounds(characterId, res.data.wounds || [])
     } catch (err) {
       console.error('Erreur chargement blessures :', err)
-    } finally {
-      hasLoadedWoundsRef.current = true
-      if (showSpinner) setWoundsLoading(false)
     }
   }, [characterId, setStoreWounds])
 
+  // BETA-38 — même patron qu'useInventoryData.js (store = seule source de vérité, pas de copie locale
+  // divergente, react.md). Le store reste à jour même hors montage (WOUND_* WS, useCharacterSocket.js
+  // monté une fois au niveau SessionPage) : un seul fetch initial le peuple si absent pour ce
+  // characterId, plus de refetch à chaque montage/démontage de l'onglet Matériel.
   useEffect(() => {
+    if (!characterId || storeWounds !== undefined) return
     loadWounds()
-  }, [loadWounds])
+  }, [characterId, storeWounds, loadWounds])
 
   // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
   const { items: inventory, loading: inventoryLoading } = useInventoryData(characterId)

@@ -466,33 +466,32 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
         setCharSkills(skills || [])
 
-        try {
-          const advRes = await api.get(`/char-sheet/${characterId}/advantages`)
-          if (!cancelled) setCharAdvantages(advRes.data.advantages || [])
-        } catch (advErr) {
-          console.error('Erreur chargement advantages :', advErr)
-        }
+        // BETA-38 — ces 3 groupes ne dépendent que de characterId (déjà connu) et de l'existence de
+        // `sheet` (garantie par le bloc ci-dessus, création comprise) : aucune dépendance entre eux.
+        // Lancés en parallèle plutôt qu'en 3 vagues séquentielles ; chacun garde son propre `catch`
+        // pour ne pas corréler leurs échecs (même contrat qu'avant, juste moins d'aller-retours réseau).
+        const advantagesLoad = api.get(`/char-sheet/${characterId}/advantages`)
+          .then(res => { if (!cancelled) setCharAdvantages(res.data.advantages || []) })
+          .catch(advErr => console.error('Erreur chargement advantages :', advErr))
 
-        try {
-          const mutRes = await api.get(`/char-sheet/${characterId}/mutations`)
-          if (!cancelled) setCharMutations(mutRes.data.mutations || [])
-        } catch (mutErr) {
-          console.error('Erreur chargement mutations :', mutErr)
-        }
+        const mutationsLoad = api.get(`/char-sheet/${characterId}/mutations`)
+          .then(res => { if (!cancelled) setCharMutations(res.data.mutations || []) })
+          .catch(mutErr => console.error('Erreur chargement mutations :', mutErr))
 
-        try {
-          const [woundsRes, invRes] = await Promise.all([
-            api.get(`/char-sheet/${characterId}/wounds`),
-            api.get(`/char-sheet/${characterId}/inventory`),
-          ])
-          if (!cancelled) {
-            setWoundPenalty(woundsRes.data.wound_penalty ?? 0)
-            setWoundTestBlocked(woundsRes.data.wound_test_blocked ?? false)
-            setEncumbrancePenalty(invRes.data.ini_penalty ?? 0)
-          }
-        } catch (penaltyErr) {
-          console.error('Erreur fetch pénalités INI :', penaltyErr)
-        }
+        const penaltiesLoad = Promise.all([
+          api.get(`/char-sheet/${characterId}/wounds`),
+          api.get(`/char-sheet/${characterId}/inventory`),
+        ])
+          .then(([woundsRes, invRes]) => {
+            if (!cancelled) {
+              setWoundPenalty(woundsRes.data.wound_penalty ?? 0)
+              setWoundTestBlocked(woundsRes.data.wound_test_blocked ?? false)
+              setEncumbrancePenalty(invRes.data.ini_penalty ?? 0)
+            }
+          })
+          .catch(penaltyErr => console.error('Erreur fetch pénalités INI :', penaltyErr))
+
+        await Promise.all([advantagesLoad, mutationsLoad, penaltiesLoad])
 
       } catch (err) {
         if (!cancelled) setError(t('charSheet.errorLoad'))
