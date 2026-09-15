@@ -451,12 +451,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const attackStarted = assaultDecl.state.weaponId != null   // D5 : arme de tir choisie = Tir en cours
     || assaultTargets.length > 0
     || (combatTargetMode?.tokenId === activeTokenId && !(isActivePnj && meleeStarted))
+  // Recharger exclut le Tir (D7) : `isReloading` remonté ici pour être la SEULE source de cette
+  // exclusion (transmise à `assaultCheck` ci-dessous ET réutilisée l.535/542 pour `isAttackActive`,
+  // jamais recalculée deux fois) — bug vécu : `attackStarted` seul (arme sélectionnée) restait vrai
+  // pendant un Recharger, `assaultCheck` refusait alors le tour entier sur chargeur vide alors que
+  // Recharger était précisément l'action déclarée (verrou circulaire, fix session 2026-09-15).
+  const isReloading = mapAction === 'reload'
   // Args de `assaultCheck` dérivés du sous-état Tir — la neutralisation zone d'effet (une direction
   // posée = 1 cible attendue / 1 fournie) vit dans `assaultCheckInputs` (assaultDeclaration.js),
   // partagée avec le PJ (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B). Le contexte porte les
   // divergences MJ : `attackStarted` (arme ∨ cible ∨ ciblage carte), `!!weapon`.
   const assault = assaultCheck(assaultCheckInputs(assaultDecl.state, {
     started:        attackStarted,
+    isReloading,
     hasWeapon:      !!weapon,
     // Garde-fou (retour Saar) : Recharger peut être désactivé sans que l'arme ait été rechargée
     // (bouton ↻ existant sur la ligne sélectionnée) — le Tir doit rester refusé tant qu'elle est vide.
@@ -668,10 +675,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     }))
   }
 
-  // ── Etat CaC / Tir actif (pour l'affichage) — dérivés de `meleeStarted` / `attackStarted`
-  //    calculés plus haut (source unique avec `declareChecks`).
-  const isReloading   = mapAction === 'reload'
-  const isMeleeSetup  = isActivePnj && meleeStarted
+  // ── Etat CaC / Tir actif (pour l'affichage) — dérivés de `meleeStarted` / `attackStarted` /
+  //    `isReloading` calculés plus haut (source unique avec `declareChecks`).
+  const isMeleeSetup   = isActivePnj && meleeStarted
   const isAttackActive = attackStarted && !isReloading   // D7 : Recharger remplace le Tir
 
   // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination PNJ a

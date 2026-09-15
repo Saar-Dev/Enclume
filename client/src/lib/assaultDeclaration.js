@@ -94,6 +94,9 @@ export function assaultTargetsComplete(state, currentFireMode) {
 // @param {typeof ASSAULT_DECLARATION_INITIAL} state
 // @param {object}   ctx
 // @param {boolean}  ctx.started
+// @param {boolean}  [ctx.isReloading]   Recharger actif sur cette arme (D7, garde-fou declareChecks.js
+//                                       — transmis tel quel, jamais pré-combiné dans `started` par la
+//                                       fenêtre appelante : autorité unique de l'exclusion Tir/Recharger)
 // @param {boolean}  ctx.hasWeapon
 // @param {boolean}  [ctx.weaponEmpty]   chargeur de l'arme sélectionnée vide (garde-fou declareChecks.js)
 // @param {number}   ctx.effectiveCount   `effectiveAssaultCount` (série Tir Multi — CC seulement)
@@ -101,12 +104,14 @@ export function assaultTargetsComplete(state, currentFireMode) {
 //                                        zone d'effet (toujours `true`, aucun mode de tir à configurer)
 // @param {number}   ctx.aimTranches      tranches de Tir visé demandées — ignorées en zone d'effet
 // @param {string[]} ctx.aimReasons       `getAimIneligibilityReasons(...)` — `[]` si éligible
-// @returns {{ started: boolean, hasWeapon: boolean, weaponEmpty: boolean, targetsFilled: number,
-//             targetsNeeded: number, hasVariant: boolean, aimActive: boolean, aimReasons: string[] }}
+// @returns {{ started: boolean, isReloading: boolean, hasWeapon: boolean, weaponEmpty: boolean,
+//             targetsFilled: number, targetsNeeded: number, hasVariant: boolean, aimActive: boolean,
+//             aimReasons: string[] }}
 export function assaultCheckInputs(state, ctx) {
   const aoe = assaultIsAoeMode(state)
   return {
     started:       ctx.started,
+    isReloading:   ctx.isReloading ?? false,
     hasWeapon:     ctx.hasWeapon,
     weaponEmpty:   ctx.weaponEmpty ?? false,
     targetsFilled: aoe ? 1 : state.targets.slice(0, ctx.effectiveCount).filter(Boolean).length,

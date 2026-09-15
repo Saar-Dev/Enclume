@@ -238,7 +238,7 @@ test('assaultCheckInputs : passe started/hasWeapon/hasVariant tels quels, aimAct
 test('assaultCheckInputs : cible unique — compte les slots non nuls dans la série effective', () => {
   const state = { ...INIT, targets: ['e1', null, 'e3'] }
   assert.deepEqual(assaultCheckInputs(state, ctx({ effectiveCount: 3 })), {
-    started: true, hasWeapon: true, weaponEmpty: false, targetsFilled: 2, targetsNeeded: 3,
+    started: true, isReloading: false, hasWeapon: true, weaponEmpty: false, targetsFilled: 2, targetsNeeded: 3,
     hasVariant: true, aimActive: false, aimReasons: [],
   })
 })
@@ -246,6 +246,11 @@ test('assaultCheckInputs : cible unique — compte les slots non nuls dans la s�
 test('assaultCheckInputs : weaponEmpty transmis tel quel, défaut false si omis', () => {
   assert.equal(assaultCheckInputs(INIT, ctx()).weaponEmpty, false)
   assert.equal(assaultCheckInputs(INIT, ctx({ weaponEmpty: true })).weaponEmpty, true)
+})
+
+test('assaultCheckInputs : isReloading transmis tel quel, défaut false si omis (D7)', () => {
+  assert.equal(assaultCheckInputs(INIT, ctx()).isReloading, false)
+  assert.equal(assaultCheckInputs(INIT, ctx({ isReloading: true })).isReloading, true)
 })
 
 test('assaultCheckInputs : effectiveCount tronque le décompte (cibles au-delà de la série ignorées)', () => {

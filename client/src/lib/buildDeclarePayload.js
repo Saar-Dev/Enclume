@@ -113,9 +113,12 @@ export function buildHumanDeclarePayload(sel) {
 //  - `move` = `chargeSelection?.move ?? pendingMove` brut (pas de forçage `ini_mod` à 0 — serveur recalcule) ;
 //  - CaC via `weaponInvIdForMelee` / `naturalWeaponIdForMelee` (résolus par la fenêtre) ;
 //  - entrée Charge PNJ à 3 clés (pas de `offhandWeaponInvId`/`isDualWield`) vs 5 clés PJ ;
-//  - `mapActions.reload` : booléen nu (`sel.mapAction === 'reload'`) — PNJ n'envoie **ni arme ni
-//    munition**, alors que le PJ envoie `{ weapon_inv_id, ammo_item_id }` ou `false`. Le rechargement
-//    PNJ n'est pas configuré côté client (pas de `reloadValid` MJ — cf. PLAN §17.10 pt 5) ;
+//  - `mapActions.reload` : `{ weapon_inv_id }` (jamais `ammo_item_id`, contrairement au PJ) — le MJ
+//    n'a pas de sélecteur de munition (pas de `reloadValid` MJ — cf. PLAN §17.10 pt 5), le serveur
+//    auto-sélectionne (déjà son comportement de repli existant, `resolveReloadAction`) ; seule
+//    l'arme doit être explicite, sinon le serveur rechargeait à l'aveugle tout ce qui traîne dans
+//    les slots MG/MD (bug vécu, fix session 2026-09-15 : `↻` sur une arme vide ne rechargeait rien
+//    ou la mauvaise arme, faute d'identifiant transmis) ;
 //  - `quick: { ...sel.decl.quick }` (PNJ, spread) vs 3 champs explicites (PJ) — un 4ᵉ champ `quick`
 //    futur partirait côté PNJ, pas PJ.
 export function buildGmDeclarePayload(sel) {
@@ -171,7 +174,7 @@ export function buildGmDeclarePayload(sel) {
           })
         : null,
       melee:  meleeCaC.length > 0 ? meleeCaC : null,
-      reload: sel.mapAction === 'reload',
+      reload: sel.mapAction === 'reload' ? { weapon_inv_id: sel.weapon?.inv_id ?? null } : false,
     },
     quick: { ...sel.decl.quick },
   }

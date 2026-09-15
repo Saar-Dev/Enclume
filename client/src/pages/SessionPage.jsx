@@ -1313,6 +1313,8 @@ function SessionContent({ campaignId }) {
           onPnjAttackResultClose={() => combatSocket.setPnjAttackResult(null)}
           reloadResult={combatSocket.reloadResult}
           onReloadResultClose={() => combatSocket.setReloadResult(null)}
+          gmReloadResult={combatSocket.gmReloadResult}
+          onGmReloadResultClose={() => combatSocket.setGmReloadResult(null)}
           meleeDefensePrompt={combatSocket.meleeDefensePrompt}
           onMeleeDefenseConfirm={() => {
             if (!combatSocket.meleeDefensePrompt?.defenderTokenId || !socket) return

@@ -716,10 +716,13 @@ export default function CombatActionWindow({
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
   // Args de `assaultCheck` dérivés du sous-état Tir — la neutralisation zone d'effet (une direction
   // posée = 1 cible attendue / 1 fournie) vit dans `assaultCheckInputs` (assaultDeclaration.js),
-  // partagée avec le MJ (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B). Le contexte porte les
-  // divergences PJ : `attackActive` (Recharger exclut le Tir), arme déjà résolue.
+  // partagée avec le MJ (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B). `isReloading` transmis à
+  // part (pas pré-combiné dans `started`) : l'exclusion Tir/Recharger (D7) est l'autorité unique
+  // d'`assaultCheck`, jamais recalculée ici — `attackActive` reste utilisé tel quel pour
+  // `mapActionsObj.attack` (construction du payload), un besoin distinct de la validité.
   const assault = assaultCheck(assaultCheckInputs(assaultDecl.state, {
-    started:        attackActive,
+    started:        attackSelected,
+    isReloading:    reloadSelected,
     hasWeapon:      assaultWeaponId != null,
     // Garde-fou (retour Saar) : Recharger peut être désactivé sans que l'arme ait été rechargée
     // (bouton ↻ existant sur la ligne sélectionnée) — le Tir doit rester refusé tant qu'elle est vide.

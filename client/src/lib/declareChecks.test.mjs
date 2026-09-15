@@ -25,6 +25,20 @@ test('assaultCheck — arme sélectionnée mais chargeur vide', () => {
   }), { valid: true, reason: null })
 })
 
+test('assaultCheck — isReloading court-circuite tout, même arme vide (D7, bug MJ session 2026-09-15)', () => {
+  assert.deepEqual(
+    assaultCheck({ started: true, isReloading: true, hasWeapon: true, weaponEmpty: true }),
+    { valid: true, reason: null },
+  )
+  assert.deepEqual(
+    assaultCheck({ started: true, isReloading: true, hasWeapon: false }),
+    { valid: true, reason: null },
+  )
+  // isReloading omis → défaut false, comportement inchangé (arme vide toujours refusée)
+  assert.deepEqual(assaultCheck({ started: true, hasWeapon: true, weaponEmpty: true }),
+    { valid: false, reason: 'Chargeur vide — recharger avant de tirer' })
+})
+
 test('assaultCheck — cibles manquantes : libellé sur le NOMBRE RESTANT', () => {
   assert.equal(assaultCheck({ started: true, hasWeapon: true, targetsFilled: 0, targetsNeeded: 1 }).reason,
     'Choisir une cible')

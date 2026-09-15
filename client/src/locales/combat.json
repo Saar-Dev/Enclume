@@ -552,9 +552,7 @@
       "applied": "✓ Étourdissement appliqué"
     },
     "reload": {
-      "success": "Réussi",
       "impossible": "Impossible",
-      "clipDisplay": "/ {{clipSize}} balles",
       "noAmmo": "Aucune munition ({{caliber}}) disponible"
     },
     "melee": {

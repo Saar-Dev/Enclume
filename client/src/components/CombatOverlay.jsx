@@ -18,7 +18,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 import CombatTargetRecapToast from './CombatTargetRecapToast.jsx'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, combatModifiersMode = 'auto', pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, combatModifiersMode = 'auto', pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, gmReloadResult, onGmReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
   const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
@@ -600,6 +600,12 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Résultat rechargement — joueur rechargeur uniquement, persistant après avance du slot */}
       {!isGm && reloadResult && reloadResult.characterId === playerCharacter?.id && (
         <CombatResultReload result={reloadResult} onClose={onReloadResultClose} />
+      )}
+
+      {/* Résultat rechargement PNJ — MJ uniquement (même patron que gmAttackResult ci-dessus :
+          broadcast room, isPnj, aucun ciblage par characterId nécessaire côté MJ) */}
+      {isGm && gmReloadResult && (
+        <CombatResultReload result={gmReloadResult} onClose={onGmReloadResultClose} />
       )}
 
       {/* Prompt défense corps à corps — défenseur PJ uniquement */}

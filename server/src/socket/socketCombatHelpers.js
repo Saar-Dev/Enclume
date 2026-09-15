@@ -2005,9 +2005,19 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
 
   const parseCount = (s) => { const m = String(s ?? '').match(/\d+/); return m ? parseInt(m[0], 10) : 0 }
 
-  // Émet le résultat ciblé vers le socket du joueur (pas pour les PNJs)
+  // Émet le résultat : PJ (`character.user_id` présent) → ciblé sur le socket du joueur (ou celui du
+  // MJ s'il n'a pas encore été localisé, retrouvé ci-dessous). PNJ → aucun joueur propriétaire ; même
+  // patron que `COMBAT_ATTACK_RESULT`/`onAttackResult` (`useCombatSocket.js`, `data.isPnj`) : broadcast
+  // room, chaque client décide localement qui l'affiche (`CombatOverlay.jsx`, `isGm`) — jamais un
+  // ciblage serveur par socket comme pour un PJ. Avant ce correctif (session 2026-09-15), un
+  // rechargement PNJ pouvait réussir ou échouer en silence : le MJ qui vient de le déclarer n'avait
+  // aucun retour (`character.user_id` toujours vide pour un PNJ → l'ancien early-return ne notifiait
+  // personne).
   const emitResult = async (payload) => {
-    if (!character.user_id) return
+    if (!character.user_id) {
+      io.to(campaignId).emit(WS.COMBAT_RELOAD_RESULT, { ...payload, isPnj: true })
+      return
+    }
     if (socket.user?.id === character.user_id) {
       socket.emit(WS.COMBAT_RELOAD_RESULT, payload)
     } else {

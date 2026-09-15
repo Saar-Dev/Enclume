@@ -15,6 +15,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const { t } = useTranslation()
 
   const [reloadResult,        setReloadResult]        = useState(null)
+  const [gmReloadResult,      setGmReloadResult]      = useState(null)
   const [damagePayload,       setDamagePayload]        = useState(null)
   const [damageResults,       setDamageResults]        = useState(null)
   const [attackResult,        setAttackResult]         = useState(null)
@@ -31,7 +32,13 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   useEffect(() => {
     if (!socket) return
 
-    const onReloadResult        = (data) => { setReloadResult(data) }
+    // isPnj (fix session 2026-09-15, socketCombatHelpers.js#resolveReloadAction) : même patron que
+    // onAttackResult juste en dessous — un PNJ n'a pas de joueur propriétaire, le serveur broadcast
+    // room plutôt que de cibler un socket, chaque client filtre localement.
+    const onReloadResult        = (data) => {
+      if (data.isPnj) setGmReloadResult(data)
+      else setReloadResult(data)
+    }
     const onMeleeDefensePrompt  = (data) => { setMeleeDefensePrompt(data) }
     const onMeleeResult         = (data) => { setMeleeResult(data) }
     const onDamagePrompt        = (data) => { setDamagePayload(data) }
@@ -66,6 +73,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       // de ce hook sont désormais purgés ensemble, même invariant que attackResult/reloadResult déjà là.
       setAttackResult(null)
       setReloadResult(null)
+      setGmReloadResult(null)
       setDamagePayload(null)
       setDamageResults(null)
       setGmAttackResult(null)
@@ -246,6 +254,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
 
   return {
     reloadResult,        setReloadResult,
+    gmReloadResult,      setGmReloadResult,
     damagePayload,       setDamagePayload,
     damageResults,       setDamageResults,
     attackResult,        setAttackResult,

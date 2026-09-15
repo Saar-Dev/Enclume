@@ -368,7 +368,7 @@ test('GM — Zone d\'effet + Recharger → attack null (D7, même exclusivité q
     weapon: { inv_id: 'klauss-inv' }, aoeDirection: 17, mapAction: 'reload',
   }))
   assert.equal(p.mapActions.attack, null)
-  assert.equal(p.mapActions.reload, true)
+  assert.deepEqual(p.mapActions.reload, { weapon_inv_id: 'klauss-inv' })
 })
 
 test('GM — Tir avec cibles mais weapon null → attack null', () => {
@@ -435,9 +435,14 @@ test('GM — Dual-wield CaC PNJ (meleeOffhandWeapon.inv_id)', () => {
   assert.equal(p.mapActions.melee[0].isDualWield, true)
 })
 
-test('GM — Rechargement PNJ (mapAction reload → true)', () => {
-  const p = buildGmDeclarePayload(baseGmSel({ mapAction: 'reload' }))
-  assert.equal(p.mapActions.reload, true)
+test('GM — Rechargement PNJ (mapAction reload → { weapon_inv_id }, arme identifiée pour le serveur)', () => {
+  const p = buildGmDeclarePayload(baseGmSel({ mapAction: 'reload', weapon: { inv_id: 'w-vide' } }))
+  assert.deepEqual(p.mapActions.reload, { weapon_inv_id: 'w-vide' })
+})
+
+test('GM — Rechargement sans arme résolue → weapon_inv_id null (jamais undefined)', () => {
+  const p = buildGmDeclarePayload(baseGmSel({ mapAction: 'reload', weapon: null }))
+  assert.deepEqual(p.mapActions.reload, { weapon_inv_id: null })
 })
 
 test('GM — D7 : Recharger exclut le Tir même si une cible est posée', () => {
@@ -447,7 +452,7 @@ test('GM — D7 : Recharger exclut le Tir même si une cible est posée', () => 
     assaultTargets: ['e1'],
     effectiveAssaultCount: 1,
   }))
-  assert.equal(p.mapActions.reload, true)
+  assert.deepEqual(p.mapActions.reload, { weapon_inv_id: 'w1' })
   assert.equal(p.mapActions.attack, null)
 })
 

@@ -29,6 +29,10 @@ const fail = (reason) => ({ valid: false, reason })
  *
  * @param {object}   p
  * @param {boolean}  p.started
+ * @param {boolean}  [p.isReloading]   Recharger est l'action active sur cette arme (D7 : Recharger
+ *                                     remplace le Tir) — autorité unique de l'exclusion, ne pas la
+ *                                     recalculer dans chaque fenêtre appelante (PJ/MJ partagent ce
+ *                                     paramètre au lieu de pré-combiner leur propre `started`).
  * @param {boolean}  p.hasWeapon
  * @param {boolean}  p.weaponEmpty     chargeur vide (garde-fou : la ligne d'arme vide est grisée
  *                                     dans la liste, mais Recharger peut être désactivé sans que
@@ -41,9 +45,9 @@ const fail = (reason) => ({ valid: false, reason })
  * @returns {{ valid: boolean, reason: string | null }}
  */
 export function assaultCheck({
-  started, hasWeapon, weaponEmpty = false, targetsFilled = 0, targetsNeeded = 1, hasVariant, aimActive, aimReasons = [],
+  started, isReloading = false, hasWeapon, weaponEmpty = false, targetsFilled = 0, targetsNeeded = 1, hasVariant, aimActive, aimReasons = [],
 } = {}) {
-  if (!started) return OK
+  if (!started || isReloading) return OK
   if (!hasWeapon) return fail('Sélectionner une arme de tir')
   if (weaponEmpty) return fail('Chargeur vide — recharger avant de tirer')
   const missing = targetsNeeded - targetsFilled

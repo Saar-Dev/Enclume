@@ -159,12 +159,17 @@ function CloseButton({ onClose }) {
   )
 }
 
-/* ── Vue Rechargement — bottom-center, joueur rechargeur uniquement ────── */
+/* ── Vue Rechargement — bottom-center, échec uniquement ──────────────────
+   Retour Saar (analyse à charge gamedesign, session 2026-09-15) : le succès n'a plus de bannière —
+   le compteur de munitions déjà affiché sur la ligne d'arme (mis à jour en direct via
+   INVENTORY_UPDATED) EST la confirmation, une popup dessus serait une redondance qui interromprait
+   pour une information déjà visible. L'échec, lui, ne laisse aucune trace ailleurs (le compteur ne
+   bouge simplement pas — ambigu) : seul cas où l'interruption a une vraie valeur informative. Même
+   règle pour les deux audiences (PJ propriétaire / MJ sur un PNJ, cf. CombatOverlay.jsx) — autorité
+   unique ici, pas un `if` dupliqué à chaque site d'appel. */
 export function CombatResultReload({ result, onClose }) {
   const { t } = useTranslation('combat')
-  if (!result) return null
-  const success = result.success
-  const accent  = success ? C.green : C.red
+  if (!result || result.success) return null
 
   return (
     <div style={{
@@ -172,8 +177,8 @@ export function CombatResultReload({ result, onClose }) {
       transform: 'translateX(-50%)',
       width: 220,
       background: C.bg,
-      border: `1px solid ${accent}55`,
-      borderTop: `3px solid ${accent}`,
+      border: `1px solid ${C.red}55`,
+      borderTop: `3px solid ${C.red}`,
       padding: '14px 12px 12px',
       boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
       color: C.text,
@@ -183,25 +188,12 @@ export function CombatResultReload({ result, onClose }) {
       <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
         {t('actionLabels.reload')}
       </div>
-      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: accent, letterSpacing: '0.01em' }}>
-        {success ? t('resultPanels.reload.success') : t('resultPanels.reload.impossible')}
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: C.red, letterSpacing: '0.01em' }}>
+        {t('resultPanels.reload.impossible')}
       </div>
-      {success ? (
-        <div style={{
-          padding: '6px 10px',
-          background: C.bgInner,
-          border: `1px solid ${C.border}`,
-          borderLeft: `3px solid ${C.green}`,
-          display: 'flex', alignItems: 'baseline', gap: 4,
-        }}>
-          <span style={{ fontSize: 20, color: C.textBright, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{result.newAmmo}</span>
-          <span style={{ fontSize: 11, color: C.textDim }}>{t('resultPanels.reload.clipDisplay', { clipSize: result.clipSize })}</span>
-        </div>
-      ) : (
-        <div style={{ fontSize: 12, color: C.textDim, fontStyle: 'italic' }}>
-          {t('resultPanels.reload.noAmmo', { caliber: result.caliber })}
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: C.textDim, fontStyle: 'italic' }}>
+        {t('resultPanels.reload.noAmmo', { caliber: result.caliber })}
+      </div>
       {onClose && <CloseButton onClose={onClose} />}
     </div>
   )
