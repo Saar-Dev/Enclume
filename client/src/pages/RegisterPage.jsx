@@ -37,21 +37,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.logoRow}>
-          <img src="/logo.svg" alt="Enclume" style={styles.logoImg} />
-          <h1 style={styles.title}>Enclume</h1>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="register-logo-row">
+            <img src="/logo.svg" alt="Enclume" className="register-logo-img" />
+            <h1 className="login-title">Enclume</h1>
+          </div>
+          <p className="login-subtitle">{t('auth.registerSubtitle')}</p>
         </div>
-        <p style={styles.subtitle}>{t('auth.registerSubtitle')}</p>
 
-        {error && <div style={styles.error}>{error}</div>}
+        {error && <div className="login-error">{error}</div>}
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label style={styles.label}>{t('auth.username')}</label>
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label>{t('auth.username')}</label>
             <input
-              style={styles.input}
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
@@ -60,10 +61,9 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>{t('auth.email')}</label>
+          <div className="login-field">
+            <label>{t('auth.email')}</label>
             <input
-              style={styles.input}
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -72,10 +72,9 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>{t('auth.password')}</label>
+          <div className="login-field">
+            <label>{t('auth.password')}</label>
             <input
-              style={styles.input}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -84,10 +83,9 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>{t('auth.betaCode')}</label>
+          <div className="login-field">
+            <label>{t('auth.betaCode')}</label>
             <input
-              style={styles.input}
               type="text"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
@@ -97,105 +95,16 @@ export default function RegisterPage() {
             />
           </div>
 
-          <button style={styles.button} type="submit" disabled={loading}>
+          <button type="submit" disabled={loading}>
             {loading ? t('auth.registering') : t('auth.register')}
           </button>
         </form>
 
-        <p style={styles.footer}>
+        <p className="login-footer">
           {t('auth.alreadyAccount')}{' '}
           <Link to="/login">{t('auth.login')}</Link>
         </p>
       </div>
     </div>
   )
-}
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'var(--bg-app)',
-  },
-  card: {
-    width: '100%',
-    maxWidth: '400px',
-    backgroundColor: 'var(--bg-surface)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '12px',
-    padding: '40px',
-  },
-  logoRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '8px',
-  },
-  logoImg: {
-    width: '40px',
-    height: 'auto',
-    color: 'var(--text-primary)',
-  },
-  title: {
-    fontSize: '22px',
-    fontWeight: '500',
-    color: 'var(--text-primary)',
-    marginBottom: '0',
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: 'var(--text-secondary)',
-    marginBottom: '32px',
-  },
-  error: {
-    backgroundColor: 'rgba(224,92,92,0.12)',
-    border: '1px solid var(--color-danger)',
-    borderRadius: '6px',
-    padding: '10px 14px',
-    color: 'var(--color-danger)',
-    fontSize: '13px',
-    marginBottom: '20px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  label: {
-    fontSize: '12px',
-    fontWeight: '500',
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  input: {
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    color: 'var(--text-primary)',
-    outline: 'none',
-  },
-  button: {
-    backgroundColor: 'var(--color-primary)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '11px',
-    fontWeight: '500',
-    marginTop: '4px',
-  },
-  footer: {
-    textAlign: 'center',
-    fontSize: '13px',
-    color: 'var(--text-secondary)',
-    marginTop: '24px',
-  },
 }

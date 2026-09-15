@@ -527,6 +527,19 @@ LOGIN — VISUAL UPGRADE
   text-align: center;
   margin-top: var(--space-md);
 }
+
+/* REGISTER — variante avec logo au-dessus du titre (RegisterPage.jsx) */
+.register-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.register-logo-img {
+  width: 40px;
+  height: auto;
+}
 /* =========================
 DASHBOARD EXTENSION
 ========================= */
