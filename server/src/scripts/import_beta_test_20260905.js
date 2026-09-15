@@ -1,10 +1,11 @@
-// Import ponctuel — 5 retours du beta-test joueurs du 2026-09-05 (message direct de Saar, pas encore
+// Import ponctuel — 4 retours du beta-test joueurs du 2026-09-05 (message direct de Saar, pas encore
 // dans BUGIDENTIFIE.md/EN_COURS.md). Chaque bug a été diagnostiqué (lecture code + vérification base
 // où pertinent) avant écriture du ticket — voir `description`/`admin_notes` pour le détail et ce qui
 // reste [HYPOTHÈSE] vs [VÉRIFIÉ]. Même patron que importBugIdentifie.js : origin='admin' (transcrit par
 // Claude depuis un rapport oral, pas un formulaire /report-bug joueur), linked_bug_code stable
-// (BETA-35..39, suite de la plage BETA-* déjà utilisée par importBugIdentifie.js, la dernière étant
-// BETA-34), idempotent par linked_bug_code.
+// (BETA-35/37/38/39, suite de la plage BETA-* déjà utilisée par importBugIdentifie.js, la dernière
+// étant BETA-34), idempotent par linked_bug_code. BETA-36 (compte admin Kiwi) retiré avant import —
+// corrigé par Saar en cours de session (erreur de BDD, migration mal faite), plus un bug ouvert.
 //
 // Lancement manuel : node --env-file=.env server/src/scripts/import_beta_test_20260905.js
 
@@ -38,32 +39,6 @@ const ENTRIES = [
       ".login-* déjà stylées et testées) plutôt que d'inventer 2 nouveaux tokens qui dupliqueraient " +
       "--bg-input/--border-subtle déjà existants. Pas trivial au sens 1 ligne (restructuration JSX + " +
       "classes), mais périmètre clair et pattern déjà établi par le fichier sœur.",
-  },
-  {
-    code: 'BETA-36',
-    title: "Compte d.lebosse@protonmail.com pas admin sur le serveur distant",
-    domain: 'infrastructure',
-    priority: 'high',
-    status: 'triaged',
-    description:
-      "Retour Saar : son propre compte d.lebosse@protonmail.com n'a pas le rôle admin sur l'instance " +
-      "distante (Kiwi). Mécanisme vérifié dans le code (server/src/lib/bootstrapAdmin.js, appelé une " +
-      "fois au démarrage par server/src/index.js:163, après db.migrate.latest()) : la promotion admin " +
-      "se fait exclusivement via la variable d'environnement ADMIN_BOOTSTRAP_EMAIL, propre à chaque " +
-      "instance (jamais un email en dur dans une migration, PLAN_ADMIN.md §0.8) — bootstrapAdminFromEnv() " +
-      "promeut UPDATE users SET role='admin' WHERE email = process.env.ADMIN_BOOTSTRAP_EMAIL, " +
-      "idempotent, silencieux si la variable est absente. Aucune autre voie de promotion n'existe côté " +
-      "serveur pour le tout premier admin d'une instance (PATCH /admin/users/:id/role exige déjà " +
-      "requireAdmin — problème de l'œuf et la poule si aucun admin n'existe). Root cause la plus " +
-      "probable [HYPOTHÈSE, à vérifier par Saar sur l'environnement distant] : ADMIN_BOOTSTRAP_EMAIL " +
-      "absente sur l'instance Kiwi, ou définie avec une valeur différente de " +
-      "\"d.lebosse@protonmail.com\" (typo, ancien email), ou le compte utilisateur distant n'a pas " +
-      "exactement cet email en base (casse, variante).",
-    admin_notes:
-      "Action requise côté Saar (config remote, hors périmètre code local) : vérifier/poser " +
-      "ADMIN_BOOTSTRAP_EMAIL=d.lebosse@protonmail.com dans l'environnement du serveur distant puis " +
-      "redémarrer (le bootstrap ne s'exécute qu'au démarrage). Si déjà posée correctement, vérifier " +
-      "l'email exact du compte en base distante (`select email from users where role != 'admin'`).",
   },
   {
     code: 'BETA-37',
