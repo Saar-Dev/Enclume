@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseDice, isValidDiceFormula, rollSignedDie } from './diceParser.js'
+import { parseDice, isValidDiceFormula, rollSignedDie, rollDamageFormula } from './diceParser.js'
 
 test('parseDice — formule simple, total dans les bornes, dieType correct', async () => {
   const result = await parseDice('3d6+2')
@@ -50,4 +50,24 @@ test('rollSignedDie — signe de tête appliqué au total, bornes respectées', 
 test('rollSignedDie — sans signe de tête → traité comme positif', async () => {
   const v = await rollSignedDie('3D10')
   assert.ok(v >= 3 && v <= 30, `3D10 hors bornes : ${v}`)
+})
+
+// EXO-CHOC-PUR-TIR-BLOQUE — arme catalogue à Choc pur (damage_h null, ex. Fusil sonique incap.
+// sirène/Flex) : formule vide légitime, jamais un throw (contrairement à parseDice ci-dessus).
+test('rollDamageFormula — formule absente (arme Choc pur) → 0 dégât, jamais un throw', async () => {
+  assert.deepEqual(await rollDamageFormula(''), { rolls: [], total: 0, formula: '', dieType: null, seed: 0 })
+  assert.deepEqual(await rollDamageFormula(null), { rolls: [], total: 0, formula: '', dieType: null, seed: 0 })
+  assert.deepEqual(await rollDamageFormula(undefined), { rolls: [], total: 0, formula: '', dieType: null, seed: 0 })
+})
+
+test('rollDamageFormula — formule présente → même résultat que parseDice, aucun changement de comportement', async () => {
+  const result = await rollDamageFormula('2d10+2')
+  assert.equal(result.rolls.length, 2)
+  assert.ok(result.rolls.every(r => r >= 1 && r <= 10))
+  assert.equal(result.total, result.rolls.reduce((a, b) => a + b, 0) + 2)
+})
+
+test('rollDamageFormula — formule mixte/invalide reste un throw (jamais avalée silencieusement)', async () => {
+  await assert.rejects(() => rollDamageFormula('3d6+2d8'))
+  await assert.rejects(() => rollDamageFormula('pas une formule'))
 })
