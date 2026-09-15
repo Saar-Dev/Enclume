@@ -226,6 +226,7 @@ export default function WizardCreation() {
   }
 
   const handleTerminate = async () => {
+    if (pcDispo > 0 && !window.confirm(t('wizard.finalize_pc_remaining_confirm', { n: pcDispo }))) return
     setFinalizing(true)
     setStepError(null)
     try {

@@ -489,6 +489,7 @@
     "step_label_7": "Aperçu",
     "review_title": "Récapitulatif",
     "finalize": "Finaliser",
+    "finalize_pc_remaining_confirm": "Il reste {{n}} Point(s) de Création non dépensé(s). Terminer quand même ?",
     "prev": "Précédent",
     "open_sheet": "Voir ma fiche",
     "loading": "Chargement du personnage...",
