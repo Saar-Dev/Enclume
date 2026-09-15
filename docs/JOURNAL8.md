@@ -6847,3 +6847,33 @@ bloqué une extension future ; la mécanisation de la Compétence Télépilotage
 chantier séparé, non commencé, non cadré.
 **Testé** : n/a (documentation uniquement).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Dev) — 2026-09-15 — Fix : retrait du modificateur de taille en AOE (D7, `PLAN_TAILLE.md`), chantier Taille CLOS
+
+Dernier point ouvert du chantier Taille (§`ROADMAP.md` — « D7 uniquement »). Décision déjà actée
+(ci-dessus, session M1→M5, et `PLAN_TAILLE.md` D7) : un jet unique pour tout le cône/gerbe est
+incompatible avec un modificateur de taille par cible, une zone n'étant de toute façon pas un tir
+ajusté au sens RAW p.218 — aligné sur la décision grenades (« pas de modificateur de taille pour une
+zone visée »). Différé jusqu'ici uniquement parce que `socketCombatAoe.js` était encore édité en
+parallèle par le chantier grenades ; ce chantier est gelé depuis le 2026-09-09, plus aucune collision.
+
+**Fait** : `server/src/socket/socketCombatAoe.js#runAoePhaseA` — retrait des deux lectures de
+`confirmedModifiers.taille` (le calcul du modificateur et la contribution poussée dans le jet de
+Phase A). Le champ `confirmedModifiers.taille` reste lu normalement par les 5 sites de résolution à
+cible unique (`socketCombatHelpers.js`/`socketCombatExo.js`, inchangés) — seul le tronc AOE l'ignore
+désormais. `TAILLE_MODS` (import `shared/combatSituationMods.js`) et `TAILLE_LABELS` (import
+`socketCombatHelpers.js`) retirés des imports du fichier, devenus morts après le retrait (aucun autre
+usage dans ce module, vérifié par grep).
+
+Chantier Taille de cible entièrement clos (S1→S4 + D7). `docs/PLANS/PLAN_TAILLE.md` archivé vers
+`docs/Old/` (Règle 10, `RegleDocumentaire.md` — doc durable déjà dans `docs/SYSTEME/TAILLE.md` depuis
+S1) ; retiré de `docs/SYSTEME/INDEX.md` §6 (PLANS actifs) et de `docs/ROADMAP.md` §1.
+
+**Testé** : `node --check server/src/socket/socketCombatAoe.js` ; `node --test 'shared/**/*.test.mjs'`
+→ 587/587 (aucune régression, ce module n'a pas de test unitaire pur touchant `TAILLE_MODS`/AOE —
+`socketCombatAoe.test.mjs` ne référence pas `taille`, vérifié par grep avant modification).
+**Non testé** : scénario réel (tir de zone en jeu, vérifier l'absence de ligne « Taille » dans le
+breakdown du jet) — à la charge de Saar, pas rejouable sans base/serveur démarré.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit (additif inverse trivial — les
+deux lignes retirées + les deux imports).

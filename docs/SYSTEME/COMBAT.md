@@ -1164,7 +1164,7 @@ confirmations métier libres (couverture, obscurité, situation CaC).
 Deux modificateurs sont **dérivés d'un état de jeu autoritaire** plutôt que choisis librement :
 la **taille de la cible** (propriété de la cible) et l'**allure** tireur / cible (conséquence du
 mouvement déclaré ce Tour). L'option de campagne `settings.combat_modifiers_mode` (défaut `auto`,
-`docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`) décide qui pilote :
+`docs/Old/PLAN_MODE_MODIFICATEURS_COMBAT.md`, chantier clos) décide qui pilote :
 
 | | `auto` (défaut) | `libre` |
 |---|---|---|

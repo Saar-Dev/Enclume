@@ -1,8 +1,9 @@
 # SYSTEME/TAILLE.md — Taille d'un combattant
 
-> Créé 2026-09-08 (`docs/PLANS/PLAN_TAILLE.md`). Révisé 2026-09-09 — S5 (champ de fiche) retiré,
-> remplacé par l'option de campagne `combat_modifiers_mode` (`docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`).
-> Statut : **actif**. Reste D7 (AOE, voir §6).
+> Créé 2026-09-08 (`docs/Old/PLAN_TAILLE.md`, archivé — Règle 10). Révisé 2026-09-09 — S5 (champ
+> de fiche) retiré, remplacé par l'option de campagne `combat_modifiers_mode`
+> (`docs/Old/PLAN_MODE_MODIFICATEURS_COMBAT.md`). Révisé 2026-09-15 — D7 (AOE, §6) clos.
+> Statut : **actif**, chantier source clos.
 >
 > Lire pour : tout code qui a besoin de la taille physique d'un personnage — modificateur
 > de combat pour toucher, et à terme mise à l'échelle des tokens / occupation monde.
@@ -11,7 +12,7 @@ Documents associés :
 - `docs/REGLES/REGLESYSCOMBAT.md:1382-1390` — table RAW « Taille de la cible ».
 - `docs/REGLES/REGLEDRONE.md` / `docs/REGLES/REGLEARMURE.md:18-42` — taille RAW des drones / exo-armures.
 - `docs/SYSTEME/COMBAT.md` § « Modificateurs de combat » — l'usage combat (mode LIBRE/AUTO, gate, AOE).
-- `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md` — l'option de campagne qui pilote taille + allure.
+- `docs/Old/PLAN_MODE_MODIFICATEURS_COMBAT.md` — l'option de campagne qui pilote taille + allure (archivé, chantier clos).
 - `docs/JOURNAL8.md` (2026-09-08 / -09) — décisions durables (breakpoints, clamp, AOE, mode).
 
 ---
@@ -75,7 +76,7 @@ main. « Petite » reste atteignable pour un humanoïde (120–130 cm).
 | Modificateur de combat | `shared/combatSituationMods.js` | `TAILLE_MODS` (palier → mod) + garde de chargement qui casse si l'énumération diverge ; `GM_ONLY_CONFIRMED_MODIFIER_KEYS` / `stripGmOnlyModifiers` |
 | Accès base (serveur) | `server/src/lib/characterSizeService.js` | `resolveSizeCategory(db, char, opts)` → `{ cm, category, source }` ; `resolveAttackTargetSize(db, cibleId, confirmedModifiers)` (combat) |
 | Colonne | migration `327_characters_size_category.js` | `characters.size_category text` nullable + CHECK 8 valeurs. **Plus aucune UI ne l'écrit** (champ de fiche retiré, migration `328` l'a remise à NULL) — conservée comme 1er cran de la cascade `explicit ?? derived` |
-| UI combat | `CombatModifiersWindow.jsx` / `CombatCacModifiersWindow.jsx` | selon `settings.combat_modifiers_mode` : `auto` → `<select>` si MJ sinon lecture seule ; `libre` → `<select>` pour tous. Voir `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md` |
+| UI combat | `CombatModifiersWindow.jsx` / `CombatCacModifiersWindow.jsx` | selon `settings.combat_modifiers_mode` : `auto` → `<select>` si MJ sinon lecture seule ; `libre` → `<select>` pour tous. Voir `docs/Old/PLAN_MODE_MODIFICATEURS_COMBAT.md` |
 
 ---
 
@@ -83,7 +84,7 @@ main. « Petite » reste atteignable pour un humanoïde (120–130 cm).
 
 > Tout ce qui suit décrit le mode **`auto`** (défaut). En `libre`, le serveur ne dérive rien
 > (PRECHECK renvoie `null`), ne strippe pas `taille`, et la fenêtre présente un `<select>` neutre
-> à tous — `docs/PLANS/PLAN_MODE_MODIFICATEURS_COMBAT.md`.
+> à tous — `docs/Old/PLAN_MODE_MODIFICATEURS_COMBAT.md`.
 
 1. **PRECHECK** — avant d'ouvrir la fenêtre de modificateurs, le client émet
    `COMBAT_ACTION_PRECHECK`. Le serveur (`socketCombatResolution.js`) y calcule
@@ -121,14 +122,13 @@ renseignée, mais plus aucune UI ne l'écrit (cascade prête pour un futur pilot
 
 ---
 
-## 6. Zone d'effet (AOE) — écart, D7 EN ATTENTE
+## 6. Zone d'effet (AOE) — écart D7 (clos)
 
 `runAoePhaseA` (`socketCombatAoe.js`) fait **un seul jet pour tout le cône** : incompatible
-avec une taille par cible. Décision (D7, `PLAN_TAILLE.md`) : **l'AOE n'applique aucun
+avec une taille par cible. Décision (D7, `docs/Old/PLAN_TAILLE.md`) : **l'AOE n'applique aucun
 modificateur de taille** — cohérent avec les grenades (« pas de modificateur de taille pour
 une zone visée », JOURNAL8) ; une gerbe / un cône n'est pas un tir ajusté au sens p.218.
 
-**État au 2026-09-08** : le retrait du read `confirmedModifiers?.taille` de `runAoePhaseA`
-est **différé** — `socketCombatAoe.js` est en cours de refonte par le chantier grenades 3f.
-En attendant : un joueur → `taille` filtrée → contribue 0 (inoffensif) ; un MJ → sa valeur de
-fenêtre s'applique au cône entier (comportement pré-chantier inchangé).
+**Fait le 2026-09-15** : le read `confirmedModifiers.taille` (et sa contribution au jet) est
+retiré de `runAoePhaseA` — un tir de zone ne porte plus jamais de modificateur de taille,
+que ce soit un joueur ou un MJ qui déclare.

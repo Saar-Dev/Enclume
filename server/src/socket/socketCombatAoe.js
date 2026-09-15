@@ -6,9 +6,9 @@
 // §1.4bis) — ce fichier ne connaît plus aucun `if (mechanic === ...)`, il dispatche via
 // findAoeMechanismEntry et n'orchestre que ce qui est générique à tout mécanisme AOE (jet unique,
 // munitions, persistance, application par cible, finalisation).
-// Graphe d'import : ce module importe lib/services + le registre AOE + 5 symboles de
+// Graphe d'import : ce module importe lib/services + le registre AOE + des symboles de
 // socketCombatHelpers.js (resolveCriticalFailReroll, fetchAssaultWeaponAndMods,
-// resolveDroneIntegrityLoss, SITUATION_LABELS, TAILLE_LABELS) — jamais l'inverse.
+// resolveDroneIntegrityLoss, SITUATION_LABELS) — jamais l'inverse.
 // socketCombatResolution.js importe resolveAoeAssaultAction d'ici.
 
 import { WS } from '../../../shared/events.js'
@@ -16,7 +16,7 @@ import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { computeAttackRoll } from '../lib/combatAttackRoll.js'
 import { applyCriticalSuccessBonus, getCriticalSuccessBonus, resolveChanceTest } from '../../../shared/polarisTestResolution.js'
-import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
+import { RANGED_SITUATION_MODS, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { parseWeaponRangeBands } from '../../../shared/combatRange.js'
 import { getAoeMechanic, normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
@@ -43,7 +43,6 @@ import {
   resolveDroneIntegrityLoss,
   flushDeferredEmissions,
   SITUATION_LABELS,
-  TAILLE_LABELS,
 } from './socketCombatHelpers.js'
 // fetchExoWeapon — import socket→socket (socketCombatExo.js n'importe jamais socketCombatAoe.js,
 // vérifié : aucun cycle, même pattern que socketCombatResolution.js qui importe déjà les deux).
@@ -105,7 +104,6 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
     }
   }
   const skillTotal = ctxTireur?.skillTotal ?? 0
-  const tailleModComp = TAILLE_MODS[confirmedModifiers?.taille]?.mod ?? 0
   const situationMods = confirmedModifiers?.situation ?? []
   const rollResult = await resolveAoeAttackRoll({
     skillTotal, skillMastery: ctxTireur?.mastery ?? 0,
@@ -116,7 +114,6 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
         if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
         return acc
       }, []),
-      ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
     ],
   })
   const userRow = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
