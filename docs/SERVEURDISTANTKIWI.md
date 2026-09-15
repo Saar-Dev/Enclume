@@ -1,9 +1,41 @@
 # SERVEUR DISTANT — Documentation déploiement Enclume
 > Créé : 2026-06-01 — Session 68/69
-> Mis à jour : 2026-08-21 (session dépannage post-pull, 67 commits de retard : récidive skip-worktree
-> sur client/package.json + nouveau sur client/package-lock.json (P-SRV-10), journal Knex désynchronisé
-> du schéma réel (P-SRV-11) — script de diagnostic pré-migration ajouté). Entrée précédente :
-> 2026-08-08 (DNS cassé + node_modules serveur désynchro, P-SRV-9 et section Procédure git pull)
+> Mis à jour : 2026-09-05 (⚠ P-SRV-12 — Kiwi jamais basculé sur `enclumeBD`, voir en tête de section
+> Migrations). Entrée précédente : 2026-08-21 (session dépannage post-pull, 67 commits de retard :
+> récidive skip-worktree sur client/package.json + nouveau sur client/package-lock.json (P-SRV-10),
+> journal Knex désynchronisé du schéma réel (P-SRV-11) — script de diagnostic pré-migration ajouté).
+> Entrée précédente : 2026-08-08 (DNS cassé + node_modules serveur désynchro, P-SRV-9 et section
+> Procédure git pull)
+
+## ⚠ P-SRV-12 — Ce serveur tourne encore sur `vtt`, jamais basculé sur `enclumeBD` (2026-09-05)
+
+`PLAN_MIGRATIONS_REFONTE.md` Phase 2 (2026-08-22, voir `docs/SYSTEME/CORE.md` P55/P57) a remplacé
+~260 fichiers de migration par 310 nouveaux (un par table + un par seed) et créé une base **neuve**,
+`enclumeBD`, pour les faire tourner proprement — `vtt` gardée intacte comme filet, jamais touchée.
+Ce repointage **n'a jamais été fait sur Kiwi**. Confirmé en session (BETA-40, roster Config campagne
+en échec) :
+
+```
+$ grep DATABASE_URL /home/didier/Enclume/.env
+DATABASE_URL=postgresql://vtt:...@localhost:5432/vtt
+$ docker exec enclume-postgres-1 psql -U vtt -d vtt -c "\l"
+ postgres | vtt | ...
+ template0 | vtt | ...
+ template1 | vtt | ...
+ vtt        | vtt | ...
+ vtt_codex  | vtt | ...
+ vtt_fusion | vtt | ...
+```
+
+`enclumeBD` n'existe même pas dans ce conteneur. Le dossier `server/src/db/migrations/` récupéré par
+`git pull` contient pourtant les 310 fichiers de la refonte (noms inconnus de `knex_migrations` sur
+`vtt`, qui garde l'historique des ~260 anciens noms). **Ne jamais lancer `migrate.latest()` ni
+redémarrer `enclume-server` sur ce serveur sans avoir d'abord vérifié l'état réel de
+`knex_migrations`** (section Migrations ci-dessous) — un redémarrage non contrôlé tenterait de rejouer
+les 310 fichiers sur une base qui a déjà tout le schéma, avec collision quasi certaine dès la première
+création de table, sur des données de production réelles (comptes, campagnes, personnages de joueurs
+actifs). Stratégie de rattrapage encore à trancher avec Saar — pas de bascule/rejeu en solo tant que ce
+n'est pas explicitement décidé.
 
 ---
 
