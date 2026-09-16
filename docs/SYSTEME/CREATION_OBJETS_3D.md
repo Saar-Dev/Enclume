@@ -40,8 +40,8 @@ output/
 └── mon_pack/
     ├── manifest.json
     └── glb/
-        ├── Console murale.glb
-        └── Caisse technique.glb
+        ├── 01_technical_crate.glb
+        └── 02_wall_console.glb
 ```
 
 Au démarrage, le serveur lit chaque `output/<pack>/manifest.json`. Chaque asset dont le GLB existe est créé ou mis à jour dans `entity_blueprints` avec la clé stable `<pack>/<asset.name>`. Un GLB remplacé garde donc ses instances existantes et reçoit automatiquement une nouvelle URL de cache.
@@ -49,9 +49,18 @@ Au démarrage, le serveur lit chaque `output/<pack>/manifest.json`. Chaque asset
 Règles de stabilité :
 
 - le nom du dossier de pack et `asset.name` sont des identifiants ; ne pas les renommer après publication ;
-- `catalog_file` doit correspondre exactement au nom du fichier dans `glb/` ;
+- **nommer directement le fichier `glb/<asset.name>.glb`** et omettre `catalog_file` — le serveur et
+  `tools/validate-3d-manifest.mjs` retombent tous les deux sur ce nom par défaut. `catalog_file` reste
+  disponible pour un cas particulier (réutiliser un fichier existant sans le renommer), mais un nouveau
+  pack ne doit pas s'en servir pour nommer ses fichiers d'après le `label` : un export Blender sous un
+  nom accentué/à espaces a produit par le passé des doublons silencieux (fichier accentué et non
+  accentué coexistant, un seul réellement catalogué) — incident détaillé dans
+  `docs/PLANS/PLAN_ASSETS_3D_BUILTIN.md` tant qu'il existe ;
 - `label` est le nom visible et peut changer ;
 - le chemin absolu `glb` présent dans certains anciens manifests est ignoré et ne doit plus être ajouté ;
+- les champs racine de bookkeeping pipeline (`pack`, `blend`, `combined_glb`, `preview_png` et
+  variantes) ne font pas partie du manifeste consommé par le serveur ; les fichiers `.blend`,
+  previews et diagnostics n'ont pas leur place dans le dossier du pack livré au serveur ;
 - les champs `features`, `animation` et `color_slots` des anciens packs sont actuellement ignorés par le catalogue.
 
 ## Manifeste canonique
@@ -68,7 +77,6 @@ Champs nécessaires pour un objet libre :
     {
       "name": "01_technical_crate",
       "label": "Caisse technique",
-      "catalog_file": "Caisse technique.glb",
       "category": "storage",
       "placement_mode": "free",
       "origin": "floor-center",
@@ -202,7 +210,8 @@ Le validateur contrôle le JSON, les champs obligatoires, les identifiants, les 
 Checklist avant transfert :
 
 1. Vérifier le sens avant/arrière et le pivot dans Blender.
-2. Appliquer les transformations et exporter un GLB par objet.
+2. Appliquer les transformations et exporter un GLB par objet, nommé directement
+   `<asset.name>.glb` (ASCII, sans espace ni accent) — jamais d'après le `label` affiché.
 3. Mesurer les dimensions réelles du GLB et renseigner l'empreinte sans étirer le modèle.
 4. Vérifier les noms de matériaux et `editor_color_slots`.
 5. Lancer le validateur sans erreur.

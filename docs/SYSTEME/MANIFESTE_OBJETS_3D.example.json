@@ -1,6 +1,5 @@
 {
   "format_version": 1,
-  "pack": "mon_pack",
   "unit": "enclume_world_unit",
   "placement_mode_default": "free",
   "origin_default": "floor-center",
@@ -8,7 +7,6 @@
     {
       "name": "01_technical_crate",
       "label": "Caisse technique",
-      "catalog_file": "Caisse technique.glb",
       "category": "storage",
       "placement_mode": "free",
       "origin": "floor-center",
@@ -42,7 +40,6 @@
     {
       "name": "02_wall_console",
       "label": "Console murale",
-      "catalog_file": "Console murale.glb",
       "category": "wall_console",
       "placement_mode": "wall",
       "origin": "wall-back-center",
