@@ -40,6 +40,7 @@ import {
 } from '../lib/surfaceData.js'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 // ─── Constantes — identiques à Canvas3D ──────────────────────────────────────
 const GRID_SIZE = 50
 
@@ -189,6 +190,70 @@ function EntityEditorScene({
     return tops
   }, [voxels])
 
+  // Empilement — sommet des entités posées (mode free uniquement) par case de grille, même logique
+  // que columnTops/displayedFloorSupports : la hauteur de pose est celle de ce qu'il y a en dessous,
+  // que ce soit le sol, un voxel ou une autre entité (patron pro confirmé — Unity/Unreal surface
+  // snapping font un raycast vers le bas sans distinguer sol et objet). Liste par case (pas un max
+  // déjà réduit) pour pouvoir exclure l'entité en cours de déplacement à la lecture, sans recalculer
+  // toute la carte à chaque mousemove. pos_z est la BASE de l'entité (GhostEntityBounds positionne
+  // le groupe à y puis décale le mesh de +height/2 à l'intérieur) — le sommet est donc pos_z+height,
+  // échelle (state.transform.scale) comprise pour rester cohérent avec une entité agrandie.
+  const entityTopSupportsByCell = useMemo(() => {
+    const supports = new Map()
+    for (const entity of entities) {
+      const blueprint = blueprints[entity.blueprint_id]
+      if (!blueprint) continue
+      if (blueprintPlacementMode(blueprint) === 'wall') continue
+      if (yToLevel(Number(entity.pos_z) || 0) !== displayLevel) continue
+
+      const scale = normalizeEntityScale(entity.state)
+      const width = (Number(blueprint.geometry?.width) || 1) * scale
+      const depth = (Number(blueprint.geometry?.depth) || 1) * scale
+      const height = (Number(blueprint.geometry?.height) || 1) * scale
+      const quarterTurn = Math.abs(Number(entity.r) || 0) % 2 === 1
+      const footprintWidth = quarterTurn ? depth : width
+      const footprintDepth = quarterTurn ? width : depth
+      const floorCentered = blueprint.geometry?.origin === 'floor-center'
+      const x = Number(entity.pos_x) || 0
+      const z = Number(entity.pos_y) || 0
+      const minX = floorCentered ? x - footprintWidth / 2 : x
+      const maxX = floorCentered ? x + footprintWidth / 2 : x + footprintWidth
+      const minZ = floorCentered ? z - footprintDepth / 2 : z
+      const maxZ = floorCentered ? z + footprintDepth / 2 : z + footprintDepth
+      const top = (Number(entity.pos_z) || 0) + height
+
+      // Cases FINES (SURFACE_FINE, même granularité que le placement lui-même — snap(value) =
+      // Math.round(value*SURFACE_FINE)/SURFACE_FINE ailleurs dans ce fichier), pas la case entière
+      // de columnTops/displayedFloorSupports. Une case entière faisait déclencher l'empilement
+      // jusqu'à ~1 unité (4 pas de la grille fine affichée) du bord réel d'un objet — imprécision
+      // confirmée en jeu (2026-09-16), pas seulement une limite en dessous du sol/voxel.
+      const cxMax = Math.floor(maxX * SURFACE_FINE - 1e-6)
+      const czMax = Math.floor(maxZ * SURFACE_FINE - 1e-6)
+      for (let cx = Math.floor(minX * SURFACE_FINE); cx <= cxMax; cx++) {
+        for (let cz = Math.floor(minZ * SURFACE_FINE); cz <= czMax; cz++) {
+          const key = `${cx}:${cz}`
+          const list = supports.get(key)
+          if (list) list.push({ entityId: entity.id, top })
+          else supports.set(key, [{ entityId: entity.id, top }])
+        }
+      }
+    }
+    return supports
+  }, [entities, blueprints, displayLevel])
+
+  // cellX/cellZ ici sont des cases FINES (déjà multipliées par SURFACE_FINE par l'appelant),
+  // cohérentes avec la clé construite ci-dessus — jamais les cases entières de columnTops.
+  const entityTopSupportAt = useCallback((fineCellX, fineCellZ, excludeEntityId) => {
+    const list = entityTopSupportsByCell.get(`${fineCellX}:${fineCellZ}`)
+    if (!list) return -Infinity
+    let max = -Infinity
+    for (const candidate of list) {
+      if (candidate.entityId === excludeEntityId) continue
+      if (candidate.top > max) max = candidate.top
+    }
+    return max
+  }, [entityTopSupportsByCell])
+
   const calcEntityPos = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
@@ -228,7 +293,7 @@ function EntityEditorScene({
     return { x, y: 0, z }
   }, [camera, gl, voxels, columnTops])
 
-  const calcPreciseEntityPos = useCallback((clientX, clientY, blueprint, rotation = 0) => {
+  const calcPreciseEntityPos = useCallback((clientX, clientY, blueprint, rotation = 0, excludeEntityId = null) => {
     if (!blueprint) return null
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
@@ -341,7 +406,12 @@ function EntityEditorScene({
       if (!hit) return null
       centerX = target.x
       centerZ = target.z
-      supportY = displayedFloorSupports.get(`${Math.floor(centerX)}:${Math.floor(centerZ)}`) ?? supportY
+      const cellX = Math.floor(centerX)
+      const cellZ = Math.floor(centerZ)
+      supportY = Math.max(
+        displayedFloorSupports.get(`${cellX}:${cellZ}`) ?? supportY,
+        entityTopSupportAt(Math.floor(centerX * SURFACE_FINE), Math.floor(centerZ * SURFACE_FINE), excludeEntityId),
+      )
     } else {
       const target = new THREE.Vector3()
       const placementPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -levelToY(displayLevel))
@@ -351,13 +421,19 @@ function EntityEditorScene({
         if (!legacy) return null
         centerX = legacy.x + 0.5
         centerZ = legacy.z + 0.5
-        supportY = legacy.y
+        supportY = Math.max(
+          legacy.y,
+          entityTopSupportAt(Math.floor(centerX * SURFACE_FINE), Math.floor(centerZ * SURFACE_FINE), excludeEntityId),
+        )
       } else {
         centerX = target.x
         centerZ = target.z
         const cellX = Math.floor(centerX)
         const cellZ = Math.floor(centerZ)
-        supportY = columnTops[`${cellX}:${cellZ}`] ?? supportY
+        supportY = Math.max(
+          columnTops[`${cellX}:${cellZ}`] ?? supportY,
+          entityTopSupportAt(Math.floor(centerX * SURFACE_FINE), Math.floor(centerZ * SURFACE_FINE), excludeEntityId),
+        )
       }
     }
 
@@ -379,7 +455,7 @@ function EntityEditorScene({
       r: rotation,
       placement: { mode: 'free', level: displayLevel },
     }
-  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
+  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, entityTopSupportAt, gl, surfaceData])
 
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -417,7 +493,7 @@ function EntityEditorScene({
         if (drag.moved) {
           const entity = entities.find(item => item.id === drag.entityId)
           const blueprint = entity ? blueprints[entity.blueprint_id] : null
-          const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
+          const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0, entity?.id)
           if (next && entity && blueprint) {
             const preview = { entityId: entity.id, position: next, blueprint, r: next.r ?? entity.r ?? 0 }
             moveGhostRef.current = preview

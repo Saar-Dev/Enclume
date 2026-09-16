@@ -118,6 +118,15 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     Un ghost suit la souris (calcPreciseEntityPos), aimanté à la grille fine.
 
+    Depuis Lot A, point 2 (2026-09-16) : la hauteur de pose est celle du sommet le plus haut sous le
+    curseur — sol/voxel (comportement d'origine) ou une autre entité déjà posée en mode free sur le
+    même étage. Aucun raycast 3D contre les meshes : recherche par case de grille, même patron que
+    columnTops/displayedFloorSupports (footprint ajusté par la rotation et l'échelle de l'entité).
+    Les entités murales ne comptent jamais comme support. **Granularité fine (SURFACE_FINE, quart
+    de case) pour la recherche de support entité**, pas la case entière du sol/voxel — une case
+    entière déclenchait l'empilement jusqu'à ~1 unité du bord réel d'un objet (imprécision confirmée
+    en jeu), corrigé pour matcher la précision déjà utilisée par le placement lui-même.
+
     Au clic gauche, POST /api/battlemaps/:id/entities crée l'entité.
 
     Le serveur rejette la création si le blueprint est de type connector (HTTP 400).
@@ -152,6 +161,9 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     Cas mural : le drag cherche obligatoirement un nouveau mur. La rotation est recalculée
     depuis la normale de la face et n'est pas réglable manuellement.
+
+    L'entité déplacée est exclue de sa propre recherche de support (sinon elle utiliserait sa
+    propre hauteur comme sol pendant qu'on la glisse et resterait figée en l'air).
 
 3.4 Rotation (touche R)
 
