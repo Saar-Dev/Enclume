@@ -1,8 +1,8 @@
 # PLAN_ASSETS_3D_BUILTIN.md — Rangement du catalogue 3D intégré (`output/`)
 
-> Statut : exécuté 2026-09-16 (72 renommages glb, 51 déplacements, 0 suppression). Validation
-> `tools/validate-3d-manifest.mjs` : 0 erreur sur les 7 packs. En attente de la validation
-> fonctionnelle de Saar (redémarrage serveur, `syncBuiltinModels()`) avant commit.
+> Statut : CLOS 2026-09-16, validé jeu réel, commité `dev/Saar` (`a1581ec`), **pas poussé**. Contenu durable transféré vers
+> `docs/SYSTEME/CREATION_OBJETS_3D.md`, `docs/SYSTEME/ASSETS.md`, `docs/JOURNAL8.md`. Archivé ici
+> (Règle 10) — document figé, ne plus éditer.
 > Document temporaire (Règle 10, `docs/RegleDocumentaire.md`) — à archiver/supprimer une fois le
 > chantier clos, contenu définitif à reporter dans `docs/SYSTEME/CREATION_OBJETS_3D.md` si une
 > convention change durablement.

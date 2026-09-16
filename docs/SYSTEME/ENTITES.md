@@ -7,6 +7,8 @@ SYSTEME/ENTITES.md — Entités libres du monde 3D
     Audit de compréhension approfondie 2026-08-26 : événements WS (§7.2), assertWallPlacementState,
     withEntityScale, absence réelle de consommation du champ animations (§5.4) et fichiers de
     référence (§9) confirmés contre le code. Aucune correction nécessaire.
+    Mise à jour 2026-09-16 : §5.4 complétée — un mécanisme d'animation par état existe désormais
+    (visual_override.animationProgress), distinct du champ animations toujours inexploité.
     Lire pour : tout travail sur les entités 3D libres, leur cycle de vie, leur apparence et leur
     persistance.
 
@@ -211,8 +213,19 @@ entity.state.materialOverrides, avec priorité à l'état visuel courant sur l'�
 Les matériaux marqués FIXED dans le modèle ne sont jamais recolorés.
 5.4 Animations
 
-Les blueprints peuvent déclarer un champ animations. Ce champ est présent dans la structure du
-manifeste mais n'est pas consommé par le moteur de jeu à ce jour.
+Le champ animations (liste de clips déclarés) reste présent dans la structure du manifeste mais
+n'est toujours pas consommé par le moteur de jeu.
+
+Depuis 2026-09-16 (chantier caisses interactives), un mécanisme distinct existe : un state peut
+déclarer visual_override.animationProgress (0 à 1). EntityMesh.jsx construit un
+THREE.AnimationMixer sur la scène clonée de l'entité et lit le premier clip d'animation du GLB
+(animations[0], indépendant de son nom) — convention retenue : temps 0 du clip = valeur 0,
+fin du clip = valeur 1. La progression interpole en douceur vers la cible au changement d'état
+(lerp, comme la position) et snape instantanément au montage (pas de rejeu de l'animation à
+chaque chargement de carte). Ne gère qu'un seul clip par GLB ; un modèle à plusieurs clips
+synchronisés (ex. deux vantaux de porte coulissante) n'est pas couvert par ce mécanisme.
+Détail et incident de mise au point : docs/Old/PLAN_CAISSES_INTERACTIVES.md (archivé, Règle 10)
+et docs/JOURNAL8.md.
 5.5 Eau sur les modèles GLB
 
 Un mesh GLB dont le nom contient water_surface, waterfall, fluid_window ou fluid_band (ou

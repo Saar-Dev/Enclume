@@ -117,6 +117,14 @@ Les packs sous `output/<pack>/manifest.json` sont synchronisés au démarrage se
 Les fichiers sont servis par Express sous `/api/assets/builtin-models/...`, pas par MinIO.
 Le catalogue ajoute automatiquement `?v=<mtime>-<size>` à `glb_url` pour forcer le rechargement navigateur/useGLTF quand un GLB intégré est retouché.
 
+Depuis 2026-09-16, `states`/`interactions` déclarés par asset dans le manifest sont propagés vers
+`entity_blueprints` par `syncBuiltinModels()` (insert et merge) — jusque-là toujours écrasés à
+`[]` pour tout modèle intégré, quel que soit le contenu du manifest. Un blueprint builtin a
+`created_by: null` : il ne peut pas être édité via l'Atelier (`PUT /api/entity-blueprints/:id`
+refuse si `created_by !== req.user.id`) — tout comportement interactif d'un modèle intégré se
+déclare donc dans son manifest, jamais en base à la main. Format des champs :
+`docs/SYSTEME/CREATION_OBJETS_3D.md`, mécanisme d'animation associé : `docs/SYSTEME/ENTITES.md` §5.4.
+
 Le contrat complet de fabrication, le manifeste canonique, les conventions de pivot et la commande de validation sont dans `docs/SYSTEME/CREATION_OBJETS_3D.md`.
 
 ### Slots couleur GLB

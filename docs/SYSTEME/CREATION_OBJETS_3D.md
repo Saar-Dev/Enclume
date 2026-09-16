@@ -7,6 +7,9 @@ Ce document est le contrat de fabrication des GLB intégrés à Enclume. Il couv
 > (`server/src/index.js` au démarrage, `builtinModelCatalog.js`) et le format `editor_color_slots`
 > confirmés contre le code. Cohérent avec `ENTITES.md` (footprint, wall_mount) et `SURFACES_SALLES.md`
 > (rôles d'eau). Aucune correction nécessaire.
+> Mise à jour 2026-09-16 : nommage de fichier (`<name>.glb` direct, §"Structure d'un pack intégré")
+> et section Animations complétées suite au premier pack builtin réellement interactif
+> (`futuristic_crates_chests`, cf. `docs/JOURNAL8.md`).
 
 Le modèle prêt à copier se trouve dans `docs/SYSTEME/MANIFESTE_OBJETS_3D.example.json`.
 
@@ -55,7 +58,7 @@ Règles de stabilité :
   pack ne doit pas s'en servir pour nommer ses fichiers d'après le `label` : un export Blender sous un
   nom accentué/à espaces a produit par le passé des doublons silencieux (fichier accentué et non
   accentué coexistant, un seul réellement catalogué) — incident détaillé dans
-  `docs/PLANS/PLAN_ASSETS_3D_BUILTIN.md` tant qu'il existe ;
+  `docs/Old/PLAN_ASSETS_3D_BUILTIN.md` (archivé, Règle 10) ;
 - `label` est le nom visible et peut changer ;
 - le chemin absolu `glb` présent dans certains anciens manifests est ignoré et ne doit plus être ajouté ;
 - les champs racine de bookkeeping pipeline (`pack`, `blend`, `combined_glb`, `preview_png` et
@@ -173,12 +176,26 @@ editor_water_medium = water | algae
 
 ## Animations
 
-Les anciens manifests décrivent parfois `animation` et des numéros de frames, mais le catalogue intégré ne les exploite pas encore. Pour préparer correctement un modèle :
+Les anciens manifests décrivent parfois `animation` et des numéros de frames (`animation_frame_closed`/`animation_frame_open`) : ce format n'est lu par aucun code, à ne plus utiliser.
 
-- exporter les animations comme clips glTF nommés (`open`, `close`, `idle`, etc.) ;
-- conserver un état fermé propre à la frame initiale ;
-- ne pas cuire une translation globale de l'objet dans le clip ;
-- documenter les clips dans `animations`, sans supposer qu'ils seront joués avant l'implémentation du contrôleur.
+Depuis 2026-09-16, un contrôleur existe (`EntityMesh.jsx`) mais reste volontairement simple : il ne lit que **le premier clip d'animation du GLB** (`animations[0]`, peu importe son nom), et l'exploite uniquement via `states[].visual_override.animationProgress` (0 à 1) déclaré dans le manifest — pas de lecture directe des champs `animation`/`animation_frame_*`. Convention : le temps 0 du clip correspond à `animationProgress: 0`, la fin du clip à `animationProgress: 1`. **Un seul clip par asset est géré** ; un modèle qui nécessite plusieurs clips synchronisés (ex. deux vantaux de porte coulissante, plusieurs charnières) n'est pas encore couvert — nommer les clips `open`/`close`/`idle` reste la bonne pratique d'export pour préparer un futur contrôleur multi-clips, mais ne change rien au comportement actuel.
+
+Déclaration `states`/`interactions` dans le manifest (propagées vers `entity_blueprints` par `syncBuiltinModels()` depuis 2026-09-16) :
+
+```json
+"states": [
+  { "id": 0, "name": "closed", "visual_override": { "animationProgress": 0 } },
+  { "id": 1, "name": "open", "visual_override": { "animationProgress": 1 } }
+],
+"interactions": [
+  { "id": "open", "action_label": "Ouvrir", "required_state_ids": [0], "target_state_id": 1 },
+  { "id": "close", "action_label": "Fermer", "required_state_ids": [1], "target_state_id": 0 }
+]
+```
+
+- `required_state_ids` filtre la visibilité de l'interaction selon l'état courant de l'instance — champ consommé par `SessionPage.jsx` sans garde ; l'omettre fait planter silencieusement l'ouverture du menu radial en jeu (pas en éditeur). Toujours le renseigner, même à `[]`.
+- Sans `skill_id`/`attribute_id`, l'interaction se résout directement (pas d'arbitrage MJ) — adapté à un simple couvercle, pas à un accès verrouillé (`docs/REGLES/REGLE_SERRURE.md`, non câblé à ce jour).
+- Exemple complet et incident de mise au point : `docs/JOURNAL8.md` (2026-09-16, chantier caisses interactives).
 
 ## Cas particulier des connecteurs
 

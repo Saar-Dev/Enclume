@@ -1,7 +1,11 @@
 # PLAN_CAISSES_INTERACTIVES.md — Ouverture/fermeture des caisses et coffres (futuristic_crates_chests)
 
+> Statut : CLOS 2026-09-16, validé jeu réel, commité `dev/Saar` (`eece01e`), **pas poussé**.
+> Contenu durable transféré vers `docs/SYSTEME/ENTITES.md` §5.4, `docs/SYSTEME/ASSETS.md`,
+> `docs/SYSTEME/CREATION_OBJETS_3D.md`, `docs/JOURNAL8.md`, `docs/ROADMAP.md` §1/§2 (trouvaille
+> portes). Archivé ici (Règle 10) — document figé, ne plus éditer.
 > Document temporaire (Règle 10, `docs/RegleDocumentaire.md`).
-> Suite de `docs/PLANS/PLAN_ASSETS_3D_BUILTIN.md` (rangement du catalogue, clos).
+> Suite de `docs/Old/PLAN_ASSETS_3D_BUILTIN.md` (rangement du catalogue, clos).
 
 ## 1. Objectif
 

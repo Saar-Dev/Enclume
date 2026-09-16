@@ -6877,3 +6877,61 @@ breakdown du jet) — à la charge de Saar, pas rejouable sans base/serveur dém
 **Données** : aucune migration.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit (additif inverse trivial — les
 deux lignes retirées + les deux imports).
+
+## Session (Dev) — 2026-09-16 — Rangement catalogue 3D builtin + premier contenu réel du moteur d'entités interactives (caisses/coffres)
+
+Déclencheur Saar : avant de câbler des entités interactives, ranger `output/` (mélange FR/EN,
+doublons accent/non-accent, artefacts Blender committés, chemins absolus morts). Deux chantiers
+séquentiels, plans détaillés dans `docs/Old/PLAN_ASSETS_3D_BUILTIN.md` et
+`docs/Old/PLAN_CAISSES_INTERACTIVES.md` (archivés après clôture, Règle 10).
+
+**Fait — rangement (`a1581ec`)** : 72 GLB renommés vers leur slug ASCII stable (`asset.name`,
+déjà validé par `tools/validate-3d-manifest.mjs`), `catalog_file`/`glb` retirés (fallback natif
+suffit). 27 fichiers pipeline (`.blend`, preview/diagnostic, `README.md`, `validation.json`) + 7
+GLB combinés déplacés vers `docs/AssetsSource/<pack>/`. **17 fichiers non catalogués mis en
+quarantaine** `docs/AssetsSource/<pack>/non-catalogues/` — vérifiés par taille+hash contre leur
+homologue référencé (tous différents : ce sont de vrais modèles distincts, pas des doublons),
+donc jamais supprimés, jamais encore revus par Saar. Racine `output/` et noms de dossier de pack
+inchangés (identifiants stables `builtin_key`, documentés et outillés — un renommage aurait
+cassé la doc et le validateur sans bénéfice réel). Doc de fabrication mise à jour en conséquence
+(`a7d405c` : `docs/SYSTEME/CREATION_OBJETS_3D.md`, `MANIFESTE_OBJETS_3D.example.json`).
+
+**Fait — caisses interactives (`eece01e`)** : les 10 assets de `futuristic_crates_chests`
+déclarent désormais `states` (fermé/ouvert, `visual_override.animationProgress` 0|1) et
+`interactions` (Ouvrir/Fermer, `required_state_ids`, sans compétence — action directe).
+`builtinModelCatalog.js` propage `states`/`interactions` du manifest vers `entity_blueprints`
+(`readBuiltinModels()` + `syncBuiltinModels()` insert et merge — jusque-là toujours écrasés à
+`[]` pour tout modèle intégré, quel que soit le manifest ; bloqueur d'autorisation identifié en
+route : `created_by: null` empêche toute édition via l'Atelier, d'où le choix manifest-only).
+`EntityMesh.jsx` lit le premier clip d'animation du GLB (`animations[0]`, un seul par asset) et
+interpole vers la progression cible de l'état courant (refs impératives, pas de mutation d'une
+valeur `useMemo` — règle de lint react-compiler). Portée volontairement limitée : pas de verrou
+électronique (`docs/REGLES/REGLE_SERRURE.md`, dépend du chantier Informatique en cours), pas de
+Test de compétence à l'ouverture.
+
+**Incidents de mise au point réels** (détail complet dans le plan archivé) : (1) manifest
+resynchronisé en base seulement via redémarrage serveur ou bouton « Rafraîchir » de l'éditeur —
+pas automatique, a cassé l'éditeur le temps du premier test ; (2) interaction manquant
+`required_state_ids` (champ que je ne connaissais pas, garanti par l'Atelier mais absent d'un
+manifest écrit à la main) → clic sans effet en jeu, crash silencieux dans `SessionPage.jsx` ;
+(3) régression introduite en corrigeant l'animation elle-même : `mixer.setTime()` sur une action
+en pause ne fait jamais avancer le temps (le flag `paused` force le delta à 0) — repassé sur
+`action.time = X` direct + `mixer.update(0)`.
+
+**Trouvaille non traitée dans ce chantier** : les 8 GLB de `futuristic_doors` ont déjà des clips
+d'animation nommés (contrairement aux caisses, un seul clip générique) — mais les portes sont des
+connecteurs (`surface_data.connectors`), pas des `entity_blueprints`, et certaines ont plusieurs
+clips à synchroniser (coulissantes, porte triangulaire). Pas un copier-coller du contrôleur
+caisses. Noté dans `docs/ROADMAP.md` §2, aucun ticket ouvert (vérifié `bug_tickets`).
+
+**Testé** : `tools/validate-3d-manifest.mjs` sur les 7 packs (0 erreur) ; `node --check` sur les
+fichiers serveur modifiés ; lint client ciblé (0 erreur) ; ouverture/fermeture d'une caisse en
+session réelle par Saar, y compris le menu radial hors éditeur.
+**Non testé** : les 17 fichiers en quarantaine (aucune décision prise) ; les 62 autres assets
+builtin sans états/interactions (aucune régression attendue, `states` reste `[]` pour eux, non
+revérifié en jeu au-delà de la validation du validateur).
+**Données** : aucune migration. `entity_blueprints.states`/`.interactions` des 10 blueprints
+caisses/coffres se remplissent au prochain `syncBuiltinModels()` (redémarrage ou rafraîchissement
+éditeur), sans effet sur les autres lignes.
+**Retour arrière** : deux commits isolés sur `dev/Saar` (`a7d405c`, `eece01e`), `git revert`
+suffit pour chacun indépendamment. Non poussé.
