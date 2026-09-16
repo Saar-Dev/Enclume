@@ -117,6 +117,8 @@ export function readBuiltinModels() {
         category: packName,
         glbUrl: `builtin-models/${packName}/glb/${fileName}?v=${cacheVersion}`,
         geometry: dimensions(asset, packName, manifest),
+        states: Array.isArray(asset.states) ? asset.states : [],
+        interactions: Array.isArray(asset.interactions) ? asset.interactions : [],
       })
     }
   }
@@ -131,8 +133,8 @@ export async function syncBuiltinModels() {
       label: model.label,
       glb_url: model.glbUrl,
       geometry: JSON.stringify(model.geometry),
-      states: JSON.stringify([]),
-      interactions: JSON.stringify([]),
+      states: JSON.stringify(model.states),
+      interactions: JSON.stringify(model.interactions),
       deprecated: false,
       builtin_key: model.key,
       category: model.category,
@@ -140,6 +142,8 @@ export async function syncBuiltinModels() {
       label: model.label,
       glb_url: model.glbUrl,
       geometry: JSON.stringify(model.geometry),
+      states: JSON.stringify(model.states),
+      interactions: JSON.stringify(model.interactions),
       category: model.category,
       deprecated: false,
       updated_at: db.fn.now(),

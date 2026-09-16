@@ -170,7 +170,10 @@ function EntityMeshGlb({
   const leaveTimerRef = useRef(null);
 
   // Chargement du GLB avec l'URL absolue
-  const { scene: sourceScene } = useGLTF(glbUrl);
+  const { scene: sourceScene, animations: sourceAnimations } = useGLTF(glbUrl);
+  const animationClip = sourceAnimations?.[0] ?? null;
+  const targetAnimProgress = currentState?.visual_override?.animationProgress;
+  const hasAnimatedState = typeof targetAnimProgress === 'number';
   const materialSlots = useMemo(() => normalizeModelMaterialSlots(blueprint?.geometry), [blueprint?.geometry]);
   const materialOverrides = useMemo(() => ({
     ...(currentState?.visual_override?.materialOverrides || currentState?.visual_override?.material_overrides || {}),
@@ -199,6 +202,41 @@ function EntityMeshGlb({
     });
     return clone;
   }, [sourceScene, materialSlots, materialOverrides, entity.id, isPreview]);
+
+  // Progression d'animation pilotée par état (ouverture/fermeture de coffre) — un seul clip par
+  // GLB, convention : temps 0 = fermé, fin du clip = ouvert (cf. docs/PLANS/PLAN_CAISSES_INTERACTIVES.md)
+  // Handles Three.js impératifs en refs (comme groupRef/lerpPos) — jamais de mutation d'une
+  // valeur issue de useMemo (règle react-hooks/immutability).
+  const animMixerRef = useRef(null);
+  const animActionRef = useRef(null);
+  const animTimeRef = useRef(0);
+  const targetAnimTimeRef = useRef(0);
+  useEffect(() => {
+    if (!animationClip) {
+      animMixerRef.current = null;
+      animActionRef.current = null;
+      return undefined;
+    }
+    const newMixer = new THREE.AnimationMixer(scene);
+    const action = newMixer.clipAction(animationClip);
+    action.play();
+    action.paused = true;
+    const startTime = (hasAnimatedState ? targetAnimProgress : 0) * animationClip.duration;
+    animTimeRef.current = startTime;
+    targetAnimTimeRef.current = startTime;
+    action.time = startTime;
+    newMixer.update(0);
+    animMixerRef.current = newMixer;
+    animActionRef.current = action;
+    return () => newMixer.stopAllAction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snap initial volontaire, la cible suit ensuite via l'effet ci-dessous
+  }, [scene, animationClip]);
+  useEffect(() => {
+    const action = animActionRef.current;
+    if (!action) return;
+    targetAnimTimeRef.current = (hasAnimatedState ? targetAnimProgress : 0) * action.getClip().duration;
+  }, [hasAnimatedState, targetAnimProgress]);
+
   const waterMaterials = useMemo(() => {
     const materials = [];
     scene.traverse((child) => {
@@ -288,6 +326,12 @@ function EntityMeshGlb({
     lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha;
     groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z);
     waterMaterials.forEach(material => updateWaterMaterial(material, state.clock.elapsedTime));
+    if (animActionRef.current) {
+      const animAlpha = 1 - Math.exp(-delta / 0.25);
+      animTimeRef.current += (targetAnimTimeRef.current - animTimeRef.current) * animAlpha;
+      animActionRef.current.time = animTimeRef.current;
+      animMixerRef.current.update(0);
+    }
   });
 
   if (!scene) return null;

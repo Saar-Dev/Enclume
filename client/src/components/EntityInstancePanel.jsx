@@ -433,9 +433,11 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
                     <span style={{ fontSize: '12px', color: '#c0c0d0', flex: 1 }}>
                       {interaction.action_label}
                     </span>
-                    <span style={{ fontSize: '10px', color: '#4a4a60' }}>
-                      DC{interaction.difficulty_dc}
-                    </span>
+                    {interaction.difficulty_dc != null && (
+                      <span style={{ fontSize: '10px', color: '#4a4a60' }}>
+                        DC{interaction.difficulty_dc}
+                      </span>
+                    )}
                   </div>
                 )
               })}

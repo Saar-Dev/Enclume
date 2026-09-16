@@ -48,7 +48,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "02_crate_medium_deep_stackable",
@@ -92,7 +126,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "03_crate_tall_narrow_supply",
@@ -136,7 +204,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "04_crate_long_low_cargo",
@@ -187,6 +289,40 @@
         "CRATE_LONG__FIXED__control_screen_unlocked_green",
         "CRATE_LONG__FIXED__control_screen_locked_red",
         "CRATE_LONG__FIXED__control_screen_text"
+      ],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
       ]
     },
     {
@@ -231,7 +367,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "06_chest_compact_lockbox",
@@ -282,6 +452,40 @@
         "CHEST_LOCK__FIXED__control_screen_unlocked_green",
         "CHEST_LOCK__FIXED__control_screen_locked_red",
         "CHEST_LOCK__FIXED__control_screen_text"
+      ],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
       ]
     },
     {
@@ -326,7 +530,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "08_chest_long_reinforced_trunk",
@@ -377,6 +615,40 @@
         "CHEST_TRUNK__FIXED__control_screen_unlocked_green",
         "CHEST_TRUNK__FIXED__control_screen_locked_red",
         "CHEST_TRUNK__FIXED__control_screen_text"
+      ],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
       ]
     },
     {
@@ -421,7 +693,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     },
     {
       "name": "10_crate_pack_mixed_formats",
@@ -465,7 +771,41 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": []
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
     }
   ]
 }
