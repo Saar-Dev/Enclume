@@ -5,13 +5,10 @@
   "style": "cartoon futuristic post-apocalyptic underwater station",
   "materials_note": "No wood. Assets use iron/steel, rubber, molded plastic, composite and sealed fabric materials.",
   "construction_note": "Standalone containers use hollow shells with visible interior floors and walls.",
-  "blend": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\submarine_postapo_crates_chests_pack.blend",
-  "combined_glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\submarine_postapo_crates_chests_pack.glb",
-  "preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\submarine_postapo_crates_chests_preview.png",
   "assets": [
     {
       "name": "01_crate_shallow_parts_bin",
-      "label": "Bac \u00e0 petites pi\u00e8ces",
+      "label": "Bac à petites pièces",
       "category": "crate",
       "size_class": "small",
       "format": "shallow_wide",
@@ -51,9 +48,7 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Bac a petites pieces.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Bac a petites pieces.glb"
+      "fixed_materials": []
     },
     {
       "name": "02_crate_medium_deep_stackable",
@@ -97,9 +92,7 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Caisse empilable profonde.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse empilable profonde.glb"
+      "fixed_materials": []
     },
     {
       "name": "03_crate_tall_narrow_supply",
@@ -110,7 +103,7 @@
       "footprint_width_m": 0.44,
       "footprint_depth_m": 0.4,
       "height_m": 0.755,
-      "capacity_liters": 72.0,
+      "capacity_liters": 72,
       "features": "upright supply crate with telescopic vertical-lift lid and deep empty interior",
       "interior": "hollow",
       "animation": "vertical_lift",
@@ -143,9 +136,7 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Caisse haute de ravitaillement.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse haute de ravitaillement.glb"
+      "fixed_materials": []
     },
     {
       "name": "04_crate_long_low_cargo",
@@ -196,9 +187,7 @@
         "CRATE_LONG__FIXED__control_screen_unlocked_green",
         "CRATE_LONG__FIXED__control_screen_locked_red",
         "CRATE_LONG__FIXED__control_screen_text"
-      ],
-      "catalog_file": "Caisse longue de fret.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse longue de fret.glb"
+      ]
     },
     {
       "name": "05_crate_large_bulk_square",
@@ -242,13 +231,11 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Grande caisse de stockage.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Grande caisse de stockage.glb"
+      "fixed_materials": []
     },
     {
       "name": "06_chest_compact_lockbox",
-      "label": "Coffre compact s\u00e9curis\u00e9",
+      "label": "Coffre compact sécurisé",
       "category": "chest",
       "size_class": "small",
       "format": "compact_lockbox",
@@ -295,13 +282,11 @@
         "CHEST_LOCK__FIXED__control_screen_unlocked_green",
         "CHEST_LOCK__FIXED__control_screen_locked_red",
         "CHEST_LOCK__FIXED__control_screen_text"
-      ],
-      "catalog_file": "Coffre compact securise.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre compact securise.glb"
+      ]
     },
     {
       "name": "07_chest_reinforced_tool_case",
-      "label": "Coffre \u00e0 outils renforc\u00e9",
+      "label": "Coffre à outils renforcé",
       "category": "chest",
       "size_class": "medium",
       "format": "workshop_tool_case",
@@ -341,13 +326,11 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Coffre a outils renforce.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre a outils renforce.glb"
+      "fixed_materials": []
     },
     {
       "name": "08_chest_long_reinforced_trunk",
-      "label": "Malle longue renforc\u00e9e",
+      "label": "Malle longue renforcée",
       "category": "chest",
       "size_class": "extra_large",
       "format": "long_trunk",
@@ -394,9 +377,7 @@
         "CHEST_TRUNK__FIXED__control_screen_unlocked_green",
         "CHEST_TRUNK__FIXED__control_screen_locked_red",
         "CHEST_TRUNK__FIXED__control_screen_text"
-      ],
-      "catalog_file": "Malle longue renforcee.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Malle longue renforcee.glb"
+      ]
     },
     {
       "name": "09_chest_tall_supply_vault",
@@ -440,20 +421,18 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Coffre haut de ravitaillement.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre haut de ravitaillement.glb"
+      "fixed_materials": []
     },
     {
       "name": "10_crate_pack_mixed_formats",
-      "label": "Pack de caisses sous b\u00e2che",
+      "label": "Pack de caisses sous bâche",
       "category": "crate_pack",
       "size_class": "set",
       "format": "messy_tarped_stack",
       "footprint_width_m": 2.2,
       "footprint_depth_m": 0.92,
       "height_m": 0.86,
-      "capacity_liters": 0.0,
+      "capacity_liters": 0,
       "features": "messy stacked crate pile with partial sealed tarp; only two exposed top crates open",
       "interior": "hollow",
       "animation": "open_top_lids",
@@ -486,9 +465,7 @@
           "recolorable": true
         }
       ],
-      "fixed_materials": [],
-      "catalog_file": "Pack de caisses.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Pack de caisses.glb"
+      "fixed_materials": []
     }
   ]
 }
