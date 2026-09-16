@@ -36,6 +36,7 @@ import { setFSMSubPhase } from '../lib/combatFSM.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
+import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
 
 // M3 — `phase_position` d'une entrée REPORTÉE au Tour suivant (Initiative ≤ 0, RAW REGLESYSCOMBAT.md:354
@@ -182,6 +183,18 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       .whereIn('ts.status_code', getAllHazardCodes())
       .select('roster.token_id', 'ts.status_code', 'ts.data')
     await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
+
+    // Informatique Lot 3b (docs/PLANS/PLAN_INFORMATIQUE.md §4 Lot 3b) — Survie I.E.M. : tentative
+    // de redémarrage à chaque Tour pour toute exo-armure immobilisée (`iem_survival`), boucle
+    // indépendante des dangers environnementaux ci-dessus (deux domaines séparés, jamais fusionnés,
+    // même principe que la séparation mods/dangers). `currentTurn` déjà résolu plus haut dans cette
+    // fonction — pas un second fetch dans `resolveIemSurvivalTicks` (contrairement à
+    // `exposeToIemSurvival`, qui n'a pas cette donnée sous la main).
+    const iemSurvivalRows = await db('combat_roster as roster')
+      .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
+      .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active', 'ts.status_code': IEM_SURVIVAL_STATUS_CODE })
+      .select('roster.token_id', 'ts.data')
+    await resolveIemSurvivalTicks(io, db, campaignId, currentTurn, iemSurvivalRows)
 
     const broadcastRoster = await buildBroadcastRoster(db, fullRoster)
 

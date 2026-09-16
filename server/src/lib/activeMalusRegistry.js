@@ -31,6 +31,17 @@ export const ACTIVE_MALUS_SOURCES = [
       ? getFatigueLevelMalus(ctx.fatiguePoints ?? 0)
       : 0,
   },
+  // Informatique Lot 3b (docs/PLANS/PLAN_INFORMATIQUE.md §4 Lot 3b, MANUEL_INFORMATIQUE.md §4.7
+  // étape 3) — séquelle cumulative de Survie I.E.M. Alimentée par `combatantContextService.js`
+  // (`resolveExoTestContext`, lecture `exo_computers.sequelle_malus` de l'ordinateur actif du
+  // pilote), jamais par `token_statuses` (contrairement à `iem_survival`, qui lui est temporaire —
+  // la séquelle est permanente, propriété de l'ordinateur). Toujours 0 pour un appelant humain
+  // direct (`ctx.iemSurvivalMalus` absent), aucun changement de comportement pour les 3 sources
+  // ci-dessus.
+  {
+    key: 'iemSurvival',
+    compute: (ctx) => ctx.iemSurvivalMalus ?? 0,
+  },
 ]
 
 // exclude : clés à ignorer — utilisé par le Test de Fatigue lui-même pour s'auto-exempter du malus

@@ -12,7 +12,9 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
-import { runPanneTest, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
+import { runPanneTest, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
+import { resolveActiveComputer } from '../../../shared/computerStats.js'
+import { exposeToIemSurvival } from '../lib/iemSurvivalService.js'
 import { randomInt } from 'crypto'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
@@ -732,7 +734,10 @@ async function resolveDamageConfirmExoTarget(io, campaignId, ctx, socket) {
   // composants (Exosquelette/Générateur/Systèmes auxiliaires/Armement) à un Test de panne — même
   // dualité dégâts+panne que le chemin PJ/PNJ (resolveDamageConfirmNormalTarget ci-dessus).
   const iemEmissions = []
-  await runIemPanneTrigger({ ammoFx: effectiveAmmoFx, characterIdCible, cibleType: 'exo', targetName, emissions: iemEmissions })
+  // `tokenId` du paramètre `runIemPanneTrigger` = token de la CIBLE (celui à immobiliser côté
+  // Survie I.E.M., Lot 3b) — `targetTokenId` ici, jamais `tokenId` de `ctx` qui désigne l'ATTAQUANT
+  // dans cette fonction (cf. `tireurId: tokenId, cibleId: targetTokenId` plus bas).
+  await runIemPanneTrigger({ ammoFx: effectiveAmmoFx, characterIdCible, cibleType: 'exo', targetName, emissions: iemEmissions, io, campaignId, tokenId: targetTokenId })
   if (iemEmissions.length > 0) await flushDeferredEmissions(io, campaignId, null, iemEmissions)
 
   const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
@@ -1110,7 +1115,13 @@ async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, characte
 // CHOC-TEST-WRONG-ATTRIBUTION) évite de reproduire cette classe de bug pour un 2ᵉ Test côté cible.
 const IEM_PANNE_MALUS = -3
 
-async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetName, emissions }) {
+// `io`/`campaignId`/`tokenId` (Lot 3b, PLAN_INFORMATIQUE.md §4) : requis uniquement pour poser le
+// statut `iem_survival` (`exposeToIemSurvival`, appelé depuis `runIemPanneTriggerExo` quand
+// l'ordinateur ACTIF de l'exo échoue son Test de panne) — jamais lus par le chemin PJ/PNJ
+// (`char_inventory`, aucune Survie I.E.M. possible hors exo). Optionnels par défaut : les 2 seuls
+// appelants réels les passent déjà (ils les ont en scope), mais rien ne casse pour un futur appelant
+// qui ne cible jamais une exo.
+async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetName, emissions, io, campaignId, tokenId }) {
   // DBG systématique (même discipline que runCombatWeaponPanne) — sans lui, un test en jeu qui ne
   // déclenche rien est indiagnosticable depuis les logs serveur (aucun signal entre "IEM non tiré",
   // "cible hors périmètre drone" et "aucun objet électronique porté").
@@ -1123,7 +1134,7 @@ async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetN
     return
   }
   if (cibleType === 'exo') {
-    await runIemPanneTriggerExo({ characterIdCible, targetName, emissions })
+    await runIemPanneTriggerExo({ characterIdCible, targetName, emissions, io, campaignId, tokenId })
     return
   }
   if (cibleType !== 'pj' && cibleType !== 'pnj') {
@@ -1198,12 +1209,16 @@ const EXO_IEM_CATEGORIES = ['exosquelette', 'generateur', 'systemes_auxiliaires'
 // Un seul Test de panne exo — factorisé, appelé une fois pour Exosquelette/Générateur/Armement,
 // jusqu'à 9 fois (1D6+3) pour Systèmes auxiliaires. `cibleIdentity` résolue une seule fois par
 // `runIemPanneTriggerExo` (pas ici) : plusieurs jets de la même Attaque IEM restent attribués au
-// même personnage, pas une re-résolution par composant touché.
+// même personnage, pas une re-résolution par composant touché. Retourne `res` (Lot 3b,
+// PLAN_INFORMATIQUE.md §4) — le seul appelant qui en a besoin (branche ordinateur de
+// `runIemPanneTriggerExo`) décide d'après `res.panne`/`res.mr`/`res.isCriticalFail` s'il faut
+// déclencher la Survie I.E.M. ; `undefined` en cas de 'skipped', comportement inchangé pour les
+// appelants qui ignoraient déjà la valeur de retour.
 async function runExoCategoryPanneTest({ adapter, rowId, characterIdCible, cibleIdentity, itemLabel, emissions }) {
   const res = await runPanneTest(rowId, { reason: 'iem_hit_exo', characterId: characterIdCible, modifier: IEM_PANNE_MALUS, adapter })
   if (res.panne === 'skipped') {
     console.log(`[DBG] test de panne IEM exo — ${itemLabel} : aucune Intégrité suivie → ignoré`)
-    return
+    return undefined
   }
   console.log(`[WS] test de panne IEM exo — ${cibleIdentity.username} (${itemLabel}) : roll:${res.roll}/${res.threshold} → ${res.panne}${res.panne === 'simple' ? ' (-1 ITG)' : res.panne === 'critical' ? ` (-${res.loss} ITG)` : ''}`)
   const ts = new Date().toISOString()
@@ -1241,9 +1256,10 @@ async function runExoCategoryPanneTest({ adapter, rowId, characterIdCible, cible
   // Exosquelette-Générateur à ce jour (même situation, non régressive, que `exo_computers` depuis le
   // Lot 2) — MJ/joueurs voient l'état à jour à la prochaine ouverture de la fiche. Inventer un
   // événement sans consommateur serait une abstraction non requise (AGENTS.md, sobriété du projet).
+  return res
 }
 
-async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions }) {
+async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions, io, campaignId, tokenId }) {
   const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
   const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter, targetName)
 
@@ -1266,21 +1282,54 @@ async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions }
   }
 
   if (category === 'systemes_auxiliaires') {
+    // Pool fusionné (trouvaille Lot 3b, PLAN_INFORMATIQUE.md §4) — REGLEARMURE.md range les
+    // "Ordinateurs" sous la même rubrique que les autres systèmes électroniques embarqués
+    // (sonscans/radars, ceux qui peuplent `exo_systems`) : l'ordinateur est un système comme un
+    // autre pour ce tirage, jamais une catégorie séparée. Seul l'ordinateur ACTIF (`resolveActiveComputer`,
+    // même autorité principal/secours que `shared/computerStats.js`) est candidat — jamais les deux :
+    // `token_statuses` n'admet qu'UNE ligne `iem_survival` par token (UNIQUE(token_id, status_code)),
+    // un secours inactif n'est de toute façon pas "en service" au sens où la Survie I.E.M. aurait un
+    // sens à s'y déclencher.
     const systems = await db('exo_systems')
       .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
       .where({ 'exo_systems.character_id': characterIdCible })
       .select('exo_systems.id', 'exo_systems.label_override', 'ref_equipment.name as ref_name')
-    console.log(`[DBG] test de panne IEM exo — cible:${targetName} systèmes installés:${systems.length}`)
-    if (systems.length === 0) return
-    const hitCount = Math.min(systems.length, (await parseDice('1D6')).total + 3)
-    const pool = [...systems]
+    const computers = await db('exo_computers').where({ character_id: characterIdCible })
+    const activeComputer = resolveActiveComputer(computers)
+    const pool = [
+      ...systems.map(s => ({ kind: 'system', id: s.id, label: s.label_override ?? s.ref_name ?? 'Système' })),
+      ...(activeComputer ? [{ kind: 'computer', id: activeComputer.id, label: 'Ordinateur' }] : []),
+    ]
+    console.log(`[DBG] test de panne IEM exo — cible:${targetName} systèmes installés:${systems.length} ordinateur actif:${activeComputer ? 'oui' : 'non'}`)
+    if (pool.length === 0) return
+    const hitCount = Math.min(pool.length, (await parseDice('1D6')).total + 3)
+    const drawPool = [...pool]
     for (let i = 0; i < hitCount; i++) {
-      const idx = randomInt(0, pool.length)
-      const [sys] = pool.splice(idx, 1)
-      await runExoCategoryPanneTest({
-        adapter: EXO_SYSTEM_ADAPTER, rowId: sys.id, characterIdCible, cibleIdentity,
-        itemLabel: sys.label_override ?? sys.ref_name ?? 'Système', emissions,
-      })
+      const idx = randomInt(0, drawPool.length)
+      const [picked] = drawPool.splice(idx, 1)
+      if (picked.kind === 'computer') {
+        const res = await runExoCategoryPanneTest({
+          adapter: EXO_COMPUTER_ADAPTER, rowId: picked.id, characterIdCible, cibleIdentity,
+          itemLabel: picked.label, emissions,
+        })
+        // Survie I.E.M. (Lot 3b) — uniquement sur un échec (simple ou critique) du Test de panne de
+        // l'ordinateur, jamais Exosquelette/Générateur/Systèmes/Armement (MANUEL §4.7 : dispositif
+        // propre à l'ordinateur, pas une propriété générale de l'armure). `io`/`campaignId`/`tokenId`
+        // absents (chemin appelant qui ne les fournit pas encore) → log dédié plutôt qu'un throw,
+        // la panne elle-même reste appliquée normalement au-dessus.
+        if (res && (res.panne === 'simple' || res.panne === 'critical')) {
+          if (io && campaignId && tokenId) {
+            await exposeToIemSurvival(io, db, campaignId, tokenId, { computerId: picked.id, mr: res.mr, isCriticalFail: res.isCriticalFail })
+          } else {
+            console.log('[DBG] Survie IEM — io/campaignId/tokenId absents à ce site d\'appel, statut iem_survival non posé')
+          }
+        }
+      } else {
+        await runExoCategoryPanneTest({
+          adapter: EXO_SYSTEM_ADAPTER, rowId: picked.id, characterIdCible, cibleIdentity,
+          itemLabel: picked.label, emissions,
+        })
+      }
     }
     return
   }
@@ -3723,6 +3772,7 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
       cibleType: 'exo',
       targetName: cibleCharacter?.name ?? 'PNJ',
       emissions,
+      io, campaignId, tokenId: action.target_token_id,
     })
     const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleToken.character_id, degautsBruts })
     if (exoResult) {

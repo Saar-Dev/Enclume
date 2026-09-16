@@ -2635,7 +2635,7 @@ router.post('/:characterId/exo/computers', async (req, res, next) => {
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, sort_order = 0 } = req.body
+    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, survie_iem_max, survie_iem_current, sort_order = 0 } = req.body
     if (!EXO_COMPUTER_ROLE_VALUES.includes(role)) throw new AppError(400, 'Invalid role')
     if (gen == null || nt == null) throw new AppError(400, 'gen et nt sont requis')
 
@@ -2646,6 +2646,8 @@ router.post('/:characterId/exo/computers', async (req, res, next) => {
         blindage_iem: blindage_iem ?? null,
         integrite_max: integrite_max ?? null,
         integrite_current: integrite_current ?? integrite_max ?? null,
+        survie_iem_max: survie_iem_max ?? null,
+        survie_iem_current: survie_iem_current ?? survie_iem_max ?? null,
         sort_order,
       })
       .returning('*')
@@ -2659,7 +2661,7 @@ router.put('/:characterId/exo/computers/:computerId', async (req, res, next) => 
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, sort_order } = req.body
+    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, survie_iem_max, survie_iem_current, sort_order } = req.body
     if (role !== undefined && !EXO_COMPUTER_ROLE_VALUES.includes(role)) throw new AppError(400, 'Invalid role')
 
     const updates = {}
@@ -2669,6 +2671,8 @@ router.put('/:characterId/exo/computers/:computerId', async (req, res, next) => 
     if (blindage_iem       !== undefined) updates.blindage_iem       = blindage_iem
     if (integrite_max      !== undefined) updates.integrite_max      = integrite_max
     if (integrite_current  !== undefined) updates.integrite_current  = integrite_current
+    if (survie_iem_max     !== undefined) updates.survie_iem_max     = survie_iem_max
+    if (survie_iem_current !== undefined) updates.survie_iem_current = survie_iem_current
     if (sort_order         !== undefined) updates.sort_order         = sort_order
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 

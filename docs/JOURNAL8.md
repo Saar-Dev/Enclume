@@ -7035,3 +7035,82 @@ vérifier que le lot décoratif n'affiche aucune option d'interaction.
 les lignes existantes.
 **Retour arrière** : un seul commit à prévoir (déplacements + manifest), `git revert` suffit
 (additif pur). Non committé à ce stade — en attente de confirmation de Saar après test réel.
+
+## Session (Dev) — 2026-09-16 — Informatique Lot 3b (Survie I.E.M.) — décision maison en cours de route
+
+Chantier en cours (pas encore clos, pas encore committé) — décision maison isolée, journalisée
+immédiatement plutôt qu'en fin de lot (précédent de fin de session déjà tenu pour le Lot 2bis, mais
+mieux vaut ne pas attendre pour celle-ci).
+
+**Taille du dé du jet de séquelle (MANUEL_INFORMATIQUE.md §4.7 étape 3, `REGLEDRONE.md:638`)** :
+RAW dit littéralement « en lançant 1 dé » sans préciser sa taille — seule la parité (pair/impair)
+compte pour le résultat, RAW confirmé mot à mot, aucune taille n'est donnée nulle part dans le
+texte source. **Décision : 1D6**, dé générique le plus courant du reste de la RAW Polaris — la
+taille n'a aucun effet sur le résultat mécanique (parité seule), seulement sur l'affichage du jet
+dans le chat. `server/src/lib/iemSurvivalService.js#resolveIemSurvivalTicks`.
+
+## Session (Dev) — 2026-09-16 — Informatique Lot 3b (Survie I.E.M.) — clôture code
+
+Suite immédiate du Lot 2bis (même session). Avant de coder, Saar a explicitement demandé une
+analyse critique plutôt qu'un « je suis sûr » de principe (« Sur de toi à 100% ou analyse
+critique avant de coder ? On a le temps »). Bonne décision : l'analyse a trouvé une vraie faille
+avant tout code.
+
+**Faille trouvée en stress-testant le plan (pas en l'écrivant)** : `token_statuses` a
+`UNIQUE(token_id, status_code)` — une seule ligne `iem_survival` possible par token. Une exo peut
+porter 2 ordinateurs (principal + secours). Le plan initial proposait les deux comme candidats du
+tirage « Systèmes auxiliaires » — deux immobilisations indépendantes sur le même token se
+seraient donc écrasées silencieusement (`applyModStatus` fait `.onConflict().merge()` sans
+condition). **Fix, touche le Lot 2bis déjà livré** : seul l'ordinateur **actif**
+(`resolveActiveComputer`) est candidat, jamais les deux — un secours inactif n'est de toute façon
+pas « en service » au sens où la Survie I.E.M. aurait un sens à s'y déclencher. Corrige aussi, au
+passage, une trouvaille distincte : `runIemPanneTriggerExo` (Lot 2bis) ne pouvait auparavant
+JAMAIS atteindre `exo_computers` du tout (aucune de ses 4 branches ne l'incluait) — la Survie
+I.E.M. n'avait donc aucun chemin de déclenchement réel avant ce fix, malgré tout le Lot 3b déjà
+écrit autour.
+
+**Code** (7 fichiers, un par un avec vérification syntaxe/tests à chaque étape, aucune pause
+demandée à Saar — code serveur dense, patron « je suis sûr » de
+`feedback-segment-by-file` déjà validé) :
+- Migration 353 — `exo_computers.sequelle_malus` (NOT NULL DEFAULT 0, cumulatif, jamais effacé).
+- `server/src/lib/iemSurvivalService.js` (nouveau) — `exposeToIemSurvival`/`resolveIemSurvivalTicks`,
+  même patron qu'`environmentalHazardService.js` (pose+tick d'un domaine dans un seul fichier),
+  jamais dans `integrityService.js` qui n'émet aucun événement par contrat documenté.
+- `socketCombatHelpers.js` — pool `systemes_auxiliaires` fusionné (`exo_systems` + ordinateur
+  actif), `runIemPanneTrigger`/`runIemPanneTriggerExo`/`runExoCategoryPanneTest` étendus
+  (`io`/`campaignId`/`tokenId`, `res` retourné) pour pouvoir appeler `exposeToIemSurvival` sur un
+  échec de Test de panne de l'ordinateur. **Bug attrapé en vérifiant le mapping tokenId/
+  targetTokenId avant d'écrire l'appel** (pas après) : dans `resolveDamageConfirmExoTarget`,
+  `tokenId` du `ctx` désigne l'ATTAQUANT, pas la cible — `targetTokenId` était le bon champ.
+- `combatTurnEngine.js` — tick `resolveIemSurvivalTicks` juste après la boucle des dangers
+  environnementaux dans `startResolutionPhase`, même jointure `combat_roster`.
+- `activeMalusRegistry.js` — 4ᵉ source `iemSurvival`.
+- `combatantContextService.js` — `resolveHumanoidTestContext`/`resolveExoTestContext` étendus de
+  façon purement additive (aucun appelant existant modifié, 41/41 tests préexistants toujours verts).
+- `socketCombatAnnouncement.js` — garde de blocage totale (aucune exception, contrairement au
+  stun guard/à la garde blessure mortelle voisins) sur le token d'une exo tant que `iem_survival`
+  est active — décision Saar 2026-09-15 (« entièrement gelé »).
+
+**Dette i18n pré-existante suivie sciemment, pas corrigée** : `COMBAT_DECLARE_ERROR` (mécanisme
+utilisé par la nouvelle garde) envoie du texte FR figé, pas un `i18nKey` — dette systémique de tout
+ce fichier (stun guard, garde blessure mortelle idem), pas quelque chose que ce lot a introduit ni
+à corriger isolément ici (chantier séparé, plus large).
+
+**Testé** : `iemSurvivalService.test.mjs` (nouveau, 11 tests) + `activeMalusRegistry.test.mjs`
+étendu + non-régression `combatantContextService.test.mjs`/`integrityService.test.mjs`/
+`combatTurnEngine.test.mjs` — 112/112 verts au total. `node --check` sur les 9 fichiers touchés.
+**Non testé : ⚠️ clos partiel** — le dispatch socket bout en bout (pas de test pour
+`socketCombatHelpers.js`/`socketCombatAnnouncement.js` dans ce projet) et la garde de blocage en
+combat réel : validation Saar à venir avant tout commit.
+**Données** : migration 353, additive pure.
+**Retour arrière** : rien committé à ce stade (en attente de validation jeu réel), un seul commit
+prévu une fois validé.
+
+**Complément UI trouvé nécessaire pour tester** : la route serveur `survie_iem_max`/
+`survie_iem_current` existait déjà (Lot 3a, avant cette session) mais `ExoComputerPanel.jsx`
+n'avait jamais reçu de champ pour l'éditer — sans lui, le dispositif restait inatteignable en jeu
+normal (aucun script ponctuel accepté, décision explicite Saar : « solution technique la plus
+robuste, pérenne et adaptative »). Ajouté en suivant exactement le patron déjà en place pour
+Blindage IEM/Intégrité (même fonction `field()`, même style, `PUT /:characterId/exo/computers/:id`
+déjà prêt à recevoir ces deux champs) — nouvelle clé i18n `exo.computerSurvieIem`
+(`client/src/locales/fr.json`). Lint client ciblé propre.

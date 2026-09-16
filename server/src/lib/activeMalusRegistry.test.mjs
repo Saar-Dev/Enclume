@@ -10,8 +10,8 @@ const baseCtx = {
   settings: { encumbrance_enabled: true, encumbrance_multiplier: 3, fatigue_enabled: true },
 }
 
-test('ACTIVE_MALUS_SOURCES — 3 sources déclarées', () => {
-  assert.deepEqual(ACTIVE_MALUS_SOURCES.map(s => s.key), ['wound', 'encumbrance', 'fatigue'])
+test('ACTIVE_MALUS_SOURCES — 4 sources déclarées', () => {
+  assert.deepEqual(ACTIVE_MALUS_SOURCES.map(s => s.key), ['wound', 'encumbrance', 'fatigue', 'iemSurvival'])
 })
 
 test('calcActiveMalus — aucune source active = 0', () => {
@@ -57,6 +57,17 @@ test('calcActiveMalus — exclude retire uniquement la source visée (auto-exemp
   const withFatigue = calcActiveMalus(ctx)
   const withoutFatigue = calcActiveMalus(ctx, { exclude: ['fatigue'] })
   assert.equal(withoutFatigue, withFatigue - getFatigueContribution(ctx))
+})
+
+// Informatique Lot 3b — séquelle de Survie I.E.M. (docs/PLANS/PLAN_INFORMATIQUE.md §4 Lot 3b)
+test('calcActiveMalus — iemSurvivalMalus absent du ctx (appelant humain direct) = 0, aucun changement', () => {
+  assert.equal(calcActiveMalus(baseCtx), 0)
+})
+
+test('calcActiveMalus — iemSurvivalMalus cumulé avec les 3 autres sources', () => {
+  const ctx = { ...baseCtx, wounds: [{ severity: 'legere' }], iemSurvivalMalus: -2 }
+  const wound = ACTIVE_MALUS_SOURCES[0].compute(ctx)
+  assert.equal(calcActiveMalus(ctx), wound + -2)
 })
 
 function getFatigueContribution(ctx) {

@@ -20,6 +20,7 @@ import { computeIniDelta } from '../../../shared/combatIniCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
+import { IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import { firstFireMode, parseFireModes } from '../../../shared/fireModes.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
@@ -202,6 +203,26 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
         if (movementDeclaration && ['rapide', 'max'].includes(movementDeclaration.gait)) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — allure maximale : Moyenne" })
+          return
+        }
+      }
+
+      // Informatique Lot 3b (docs/PLANS/PLAN_INFORMATIQUE.md §4 Lot 3b, MANUEL_INFORMATIQUE.md §4.7
+      // étapes 1-2) — Survie I.E.M. : une exo-armure immobilisée après un échec au Test de panne IEM
+      // de son ordinateur est « entièrement gelée » (décision Saar 2026-09-15, journalisée
+      // JOURNAL8.md) jusqu'au redémarrage réussi (`iemSurvivalService.js#resolveIemSurvivalTicks`,
+      // tick par Tour). Contrairement au stun guard ci-dessus (Allure Moyenne encore permise) et à la
+      // garde blessure mortelle ci-dessous (Allure lente/Passer le tour encore permis), aucune
+      // exception : la seule option RAW est un geste narratif sans effet mécanique (sortir de
+      // l'armure), jamais une déclaration de jeu. Pas de garde `status_effects_mode` (comme le stun
+      // guard) : ce n'est pas un statut cosmétique togglable, c'est une conséquence mécanique directe
+      // d'un Test de panne raté. `character.type !== 'exo'` : seule une exo-armure porte ce statut
+      // (MANUEL §4.7, "application à un pilote humain" — un drone téléopéré n'immobilise jamais son
+      // opérateur, cf. commentaire du plan).
+      if (character.type === 'exo') {
+        const iemSurvivalRow = await db('token_statuses').where({ token_id: tokenId, status_code: IEM_SURVIVAL_STATUS_CODE }).first()
+        if (iemSurvivalRow) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Armure immobilisée (Survie I.E.M.) — en attente de redémarrage' })
           return
         }
       }

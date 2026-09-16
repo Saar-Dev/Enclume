@@ -176,7 +176,7 @@ function ComputerCard({ computer, isActive, programs, catalog, canEdit, onFieldU
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '12px', color: '#c0c0d0', marginBottom: '8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '12px', color: '#c0c0d0', marginBottom: '8px' }}>
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{t('exo.computerGen')}</div>
           {field(t('exo.computerGen'), computer.gen, 'gen', '40px')}
@@ -194,12 +194,32 @@ function ComputerCard({ computer, isActive, programs, catalog, canEdit, onFieldU
             </div>
           )}
         </div>
+      </div>
+
+      {/* Paires courante/max séparées de la rangée ci-dessus (Trouvaille visuelle 2026-09-16,
+          Saar : 5 colonnes égales masquaient les champs Survie I.E.M. — chaque paire courante/max a
+          besoin de nettement plus de largeur qu'un champ simple, jamais un partage à parts égales
+          avec Génération/NT/Blindage IEM). Survie I.E.M. (MANUEL_INFORMATIQUE.md §4.7, dispositif
+          optionnel distinct du Blindage IEM) — même patron d'édition que Intégrité : nullable,
+          réglé à la main par le MJ, jamais propagé par un modèle (`applyExoTemplate`, même doctrine
+          que `blindage_iem`). Prérequis pour que la machine à états Lot 3b
+          (`iemSurvivalService.js`) ait un effet observable — sans cette valeur réglée, le
+          dispositif reste absent (RAW : "rare"), pas une erreur. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '12px', color: '#c0c0d0', marginBottom: '8px' }}>
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{t('exo.itemIntegrity')}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {field(t('exo.itemIntegrity'), computer.integrite_current, 'integrite_current')}
             <span>/</span>
             {field(t('exo.itemIntegrity'), computer.integrite_max, 'integrite_max')}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{t('exo.computerSurvieIem')}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {field(t('exo.computerSurvieIem'), computer.survie_iem_current, 'survie_iem_current')}
+            <span>/</span>
+            {field(t('exo.computerSurvieIem'), computer.survie_iem_max, 'survie_iem_max')}
           </div>
         </div>
       </div>

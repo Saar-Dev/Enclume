@@ -120,10 +120,19 @@
 >   plateforme, `finalizeAssaultOutcome`/`socketCombatExo.js` ne portent aucun `ammoFx`) — gap
 >   d'infrastructure Exo-armures bien plus large que l'IEM seul, jamais construit, pas propre à ce
 >   chantier. Non traité, non régressif (ce lot ne fait qu'ajouter une capacité côté cible).
-> - **Lot 3a (ressource Survie I.E.M.) — fait avant cette session, à revérifier au moment d'y toucher.**
-> - **Lot 3b (machine à états Survie I.E.M.) — re-cadré et SIMPLIFIÉ 2026-09-16** (le malus de
->   séquelle n'a plus besoin de toucher `combatantContextService.js`, cf. §4 Lot 3b) ; pas encore
->   codé, testable maintenant que le Lot 2bis fournit un chemin de déclenchement réel côté exo.
+> - **Lot 3a (ressource Survie I.E.M.) — fait avant cette session, revérifié au moment d'y toucher
+>   (Lot 3b) : toujours conforme.**
+> - **Lot 3b (machine à états Survie I.E.M.) — CODÉ 2026-09-16, PAS ENCORE VALIDÉ EN JEU RÉEL.**
+>   Analyse critique avant code (demandée par Saar, « on a le temps ») a trouvé une vraie faille de
+>   conception avant tout écriture : `token_statuses` n'admet qu'une ligne `iem_survival` par token
+>   (UNIQUE), or une exo peut avoir 2 ordinateurs — deux immobilisations indépendantes se seraient
+>   écrasées silencieusement. Fix : seul l'ordinateur ACTIF (`resolveActiveComputer`) est candidat
+>   au tirage IEM, jamais les deux. Nouveau fichier `server/src/lib/iemSurvivalService.js`
+>   (pose + tick, même patron qu'`environmentalHazardService.js`), migration 353
+>   (`exo_computers.sequelle_malus`), 4ᵉ source `activeMalusRegistry.js`, extension additive de
+>   `combatantContextService.js`, garde de blocage `socketCombatAnnouncement.js`. 112/112 tests
+>   verts (suites `iemSurvivalService`/`activeMalusRegistry`/`combatantContextService`/
+>   `combatTurnEngine`/`integrityService`).
 > - **Lot 4 (auto-désactivation Gestion systèmes) — cadré, pas codé, indépendant des autres lots.**
 >
 > **Leçon retenue cette session, à appliquer partout dans ce document** : une affirmation reprise
@@ -548,7 +557,19 @@ vérifiée** (`node --check` OK) : `server/src/db/migrations/345_exo_computers_s
 (usure) — sa valeur baisse d'1 à chaque redémarrage réussi (3b), rien de plus ; elle ne porte aucun
 état de combat en cours, c'est pour ça qu'elle survit déjà telle quelle à la correction du MANUEL.
 
-#### 3b — Machine à états (immobilisation, tentatives de redémarrage, séquelle) — nouveau
+#### 3b — Machine à états (immobilisation, tentatives de redémarrage, séquelle) — CODÉ 2026-09-16, PAS ENCORE VALIDÉ EN JEU RÉEL
+
+**Correction trouvée en analyse critique avant de coder (2026-09-16), touche le Lot 2bis déjà
+livré** : `runIemPanneTriggerExo` (Lot 2bis) ne pouvait jamais atteindre `exo_computers` — aucune
+de ses 4 branches ne l'incluait, alors que REGLEARMURE.md range explicitement les « Ordinateurs »
+sous la même rubrique que les autres systèmes électroniques embarqués (sonscans/radars, ceux qui
+peuplent `exo_systems`). Sans correction, la Survie I.E.M. ne pouvait **jamais** se déclencher
+(son seul déclencheur RAW, MANUEL §4.7, est un échec au Test de panne de l'ordinateur). **Fix** :
+la branche « Systèmes auxiliaires » pioche désormais dans `exo_systems` ET l'ordinateur **actif**
+de l'exo (`resolveActiveComputer`) réunis dans le même pool, même tirage 1D6+3 sans remise.
+Restriction à l'actif seulement (jamais les deux ordinateurs) : `token_statuses` a une contrainte
+`UNIQUE(token_id, status_code)` — deux immobilisations indépendantes sur le même token se
+seraient écrasées silencieusement (perte du délai de redémarrage/`wasCritical` de la première).
 
 **Pourquoi pas les deux mécanismes différés déjà existants du moteur de combat** — les deux ont été
 lus en entier avant de conclure (jamais un patron copié sans vérifier qu'il correspond) :
@@ -676,23 +697,31 @@ encore moins besoin du `tokenId` — relire l'état `iem_survival` « en cours �
 jamais fonctionné pour la séquelle, puisqu'au moment où elle est décidée (tick de redémarrage réussi)
 la ligne `iem_survival` est justement supprimée dans la même étape.
 
-**Architecture retenue** : nouvelle colonne `exo_computers.sequelle_malus` (integer, `NOT NULL
-DEFAULT 0`, jamais remis à 0 par ce chantier — RAW ne donne aucune condition d'effacement, jamais
-inventée ici) — même migration additive simple que 348/349. `resolveExoTestContext`
-(`combatantContextService.js`) connaît déjà `exoCharacter.id` : il lui suffit de lire l'ordinateur
-actif (`exo_computers` filtré par `character_id`, passé à `resolveActiveComputer` de
-`shared/computerStats.js`, déjà la seule autorité principal/secours) et de faire descendre son
-`sequelle_malus` comme un paramètre additif de plus dans `resolveHumanoidTestContext` (même
-discipline que `forNAOverride`), qui l'ajoute au `ctx` de `calcActiveMalus`. La 4ᵉ source
-`{ key: 'iemSurvival', compute: (ctx) => ctx.iemSurvivalMalus ?? 0 }` dans
-`activeMalusRegistry.js` reste inchangée dans son principe, juste alimentée différemment (une
-lecture `exo_computers`, jamais `token_statuses`). **Aucun changement de signature sur
-`resolveCombatantTestContext`/`resolveCombatantIdentity`, aucun appelant existant à toucher.**
-**[À TRANCHER avec Saar]** : le malus s'incrémente-t-il aussi pour Exosquelette/Générateur/Systèmes
-auxiliaires/Armement (Lot 2bis) sous IEM, ou seulement pour l'ordinateur (Survie I.E.M. étant un
-dispositif spécifique à l'ordinateur, MANUEL §4.7) ? Lecture par défaut retenue ici : uniquement
-l'ordinateur, la Survie I.E.M. étant un dispositif optionnel propre à cette pièce d'équipement, pas
-une propriété générale de l'armure.
+**Architecture codée** : migration 353, `exo_computers.sequelle_malus` (integer, `NOT NULL
+DEFAULT 0`, jamais remis à 0 — RAW ne donne aucune condition d'effacement, jamais inventée ici).
+`resolveExoTestContext` (`combatantContextService.js`) lit l'ordinateur actif (`exo_computers`
+filtré par `character_id`, passé à `resolveActiveComputer` de `shared/computerStats.js`) et fait
+descendre son `sequelle_malus` comme paramètre additif `iemSurvivalMalus` dans
+`resolveHumanoidTestContext` (même discipline que `forNAOverride`), qui l'ajoute au `ctx` de
+`calcActiveMalus`. 4ᵉ source `{ key: 'iemSurvival', compute: (ctx) => ctx.iemSurvivalMalus ?? 0 }`
+dans `activeMalusRegistry.js`. **Aucun changement de signature sur
+`resolveCombatantTestContext`/`resolveCombatantIdentity`, aucun appelant existant modifié** —
+confirmé, 41/41 tests `combatantContextService.test.mjs` préexistants toujours verts.
+**Question résolue par construction** (n'était plus ouverte une fois le fix Lot 2bis ci-dessus
+posé) : le malus ne s'incrémente QUE pour l'ordinateur — Exosquelette/Générateur/Systèmes/Armement
+n'ont pas de ressource `survie_iem_current`, donc structurellement aucune séquelle possible pour
+eux (MANUEL §4.7 : dispositif propre à l'ordinateur, jamais une propriété générale de l'armure).
+
+**Toute la logique de pose+tick vit dans un nouveau fichier dédié**,
+`server/src/lib/iemSurvivalService.js` (`exposeToIemSurvival`/`resolveIemSurvivalTicks`), même
+patron qu'`environmentalHazardService.js` (pose + tick d'un même domaine dans un seul fichier) —
+pas dans `integrityService.js`, qui n'émet jamais d'événement par contrat documenté (son
+en-tête) alors que `statusService.applyModStatus`/`clearModStatus` en émettent un.
+
+**Taille du dé du jet de séquelle (MANUEL §4.7 étape 3)** — décision maison journalisée
+`docs/JOURNAL8.md` 2026-09-16 : RAW dit littéralement « 1 dé » sans préciser sa taille (seule la
+parité compte) — 1D6 retenu (dé générique le plus courant de la RAW Polaris), sans effet sur le
+résultat mécanique au-delà de l'affichage du jet en chat.
 
 **Frontière confirmée, ne pas élargir sans nécessité** : les drones n'appellent jamais
 `resolveCombatantTestContext` (`drone_programs.level` sert directement de Seuil, commentaire du
@@ -700,22 +729,19 @@ fichier) — si le Blindage/la Survie I.E.M. côté drone est un jour tranché �
 [À TRANCHER]), le malus de séquelle drone n'emprunterait de toute façon pas ce chemin et devra être
 câblé séparément, pas anticipé ici sans besoin réel.
 
-**Tests** : fonction de tick testée unitairement (sélection par `rebootEligibleTurn`, jet
-pair/impair, décrément de `survie_iem_current`, suppression de la ligne sur succès, non-sélection
-tant que `rebootEligibleTurn > currentTurn`, incrément cumulatif de `exo_computers.sequelle_malus`
-sur jet impair, −2 si `wasCritical`) ; non-régression de `calcActiveMalus`/
-`activeMalusRegistry.test.mjs` après l'ajout de la 4ᵉ source (les 3 sources existantes inchangées à
-`iemSurvival` absent du `ctx`) ; non-régression de `resolveExoTestContext`/
-`combatantContextService.test.mjs` pour un ordinateur sans `sequelle_malus` (0 par défaut, aucun
-changement de comportement) ; scénario d'intégration Test de panne IEM échoué (Lot 2) → pose du
-statut avec la bonne `rebootEligibleTurn` (`mr` du Lot 2) → tentatives échouées plusieurs Tours de
-suite → redémarrage réussi avec séquelle → malus lu depuis `exo_computers.sequelle_malus` au
-prochain Test du pilote de l'exo concernée, persistant même après la fin du combat ; scénario de
-blocage — une déclaration d'action tentée sur le token de l'exo pendant que `iem_survival` est
-active doit être refusée, acceptée de nouveau dès la ligne supprimée ; non-régression de
-`isTestBlockingWound`/`socketCombatAnnouncement.js` (la nouvelle garde s'ajoute, ne remplace rien) ;
-second échec IEM sur la même plateforme avant la fin d'un incident en cours (§ ci-dessus) ne doit
-jamais raccourcir `rebootEligibleTurn` ni perdre un `wasCritical` déjà vrai.
+**Tests, tous verts (112/112 sur l'ensemble des suites concernées)** : `iemSurvivalService.test.mjs`
+(nouveau, 11 tests — pose initiale et calcul `rebootEligibleTurn`, garde anti-écrasement
+Math.max/OR sur un second échec IEM avant la fin d'un incident, sélection par `rebootEligibleTurn`,
+échec de redémarrage déterministe (`survie_iem_current=0` → seuil toujours raté), succès
+déterministe (`survie_iem_current=25` → toujours réussi) sur 40 tirages avec invariant de parité
+pair/impair et −2 si `wasCritical`, cumul de la séquelle sans jamais repartir de 0, ordinateur
+supprimé entre-temps → statut retiré sans crash, ligne malformée → ignorée sans throw) ;
+`activeMalusRegistry.test.mjs` étendu (4 sources déclarées, `iemSurvivalMalus` absent = 0, cumul
+avec les 3 autres sources) ; non-régression `combatantContextService.test.mjs` (41/41) et
+`integrityService.test.mjs` (34/34). **Non testé automatiquement, comme le reste de
+`socketCombatHelpers.js`/`socketCombatAnnouncement.js`** : le dispatch socket bout en bout (pool
+fusionné systèmes+ordinateur actif, déclenchement `exposeToIemSurvival` depuis
+`runIemPanneTriggerExo`, garde de blocage de déclaration) — validation en jeu réel par Saar.
 
 ### Lot 4 — Auto-désactivation Gestion systèmes
 
