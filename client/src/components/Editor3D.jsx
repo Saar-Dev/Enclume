@@ -601,27 +601,35 @@ function EntityEditorScene({
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'r' && e.key !== 'R') return
-      const entityId = getEntityUnderCursor(mousePosRef.current.x, mousePosRef.current.y)
-      if (entityId) {
-        const entity = entities.find(en => en.id === entityId)
-        if (!entity) return
-        const blueprint = blueprints[entity.blueprint_id]
-        if (blueprintPlacementMode(blueprint) === 'wall') return
-        const newR = (entity.r + 1) % 4
-        api.put(`/entities/${entityId}`, { r: newR })
-          .then(res => {
-            updateEntity(res.data.entity)
-            socket?.emit(WS.ENTITY_MOVED, {
-              entityId, pos_x: res.data.entity.pos_x,
-              pos_y: res.data.entity.pos_y, pos_z: res.data.entity.pos_z, r: newR,
-              updated_at: res.data.entity.updated_at,
-            })
-          })
-          .catch(err => console.error('[EntityEditor] Erreur rotation :', err))
-      } else {
+
+      // Une pose en cours (fantôme actif) a toujours priorité sur ce qu'il y a sous le curseur —
+      // sinon R tourne une entité déjà posée qui se trouve par hasard sous la souris pendant qu'on
+      // essaie d'orienter le fantôme (contre-intuitif, confirmé en jeu 2026-09-16, même principe
+      // que la pose répétée : un mode actif prime sur l'ambiant). Ordre des deux branches inversé
+      // par rapport à avant, comportement de chacune inchangé.
+      if (activeBlueprint?.id) {
         if (blueprintPlacementMode(activeBlueprint) === 'wall') return
         setGhostR(prev => (prev + 1) % 4)
+        return
       }
+
+      const entityId = getEntityUnderCursor(mousePosRef.current.x, mousePosRef.current.y)
+      if (!entityId) return
+      const entity = entities.find(en => en.id === entityId)
+      if (!entity) return
+      const blueprint = blueprints[entity.blueprint_id]
+      if (blueprintPlacementMode(blueprint) === 'wall') return
+      const newR = (entity.r + 1) % 4
+      api.put(`/entities/${entityId}`, { r: newR })
+        .then(res => {
+          updateEntity(res.data.entity)
+          socket?.emit(WS.ENTITY_MOVED, {
+            entityId, pos_x: res.data.entity.pos_x,
+            pos_y: res.data.entity.pos_y, pos_z: res.data.entity.pos_z, r: newR,
+            updated_at: res.data.entity.updated_at,
+          })
+        })
+        .catch(err => console.error('[EntityEditor] Erreur rotation :', err))
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

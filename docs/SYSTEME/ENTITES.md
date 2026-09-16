@@ -167,7 +167,12 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
 3.4 Rotation (touche R)
 
-    L'entité sous le curseur pivote de 90° (r = (r + 1) % 4).
+    Priorité au fantôme : si une pose est en cours (blueprint actif), R tourne toujours le
+    fantôme, jamais une entité déjà posée qui se trouverait par hasard sous le curseur (bug
+    corrigé le 2026-09-16 — l'ordre inverse faisait tourner l'entité sous le curseur en priorité,
+    contre-intuitif pendant une pose).
+
+    Sans pose en cours, l'entité sous le curseur pivote de 90° (r = (r + 1) % 4).
 
     PUT /api/entities/:id persiste, ENTITY_MOVED diffuse.
 
