@@ -1,5 +1,12 @@
 # PLAN_INFORMATIQUE.md — Plan technique : ordinateurs, programmes, pannes électroniques
 
+> Statut : CLOS 2026-09-16 (couches 1-2, Lots 1-4 tous codés/committés/poussés, Lot 3b testé par
+> trace de code, pas observé en jeu réel de bout en bout — accepté par Saar). Contenu durable
+> transféré vers `docs/SYSTEME/INFORMATIQUE.md`, `docs/JOURNAL8.md`, `docs/ROADMAP.md`. Archivé ici
+> (Règle 10, `docs/RegleDocumentaire.md`) — document figé, ne plus éditer. Couches 3-5 (piratage/
+> conception de programmes/virus) n'ont pas de MANUEL écrit : un futur chantier sur ces couches
+> ouvrira un nouveau PLAN, pas une réouverture de celui-ci.
+
 > Créé 2026-09-09, réécrit intégralement 2026-09-11 (`METHODO_PLAN.md` — conformité au livrable
 > type et au marquage [VÉRIFIÉ]/[INFÉRÉ], après constat que la version précédente était restée un
 > stub narratif malgré une matière technique abondante mal rangée dans le MANUEL).

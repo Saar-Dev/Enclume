@@ -101,10 +101,11 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 |----------|----------------|--------|
 | `SYSTEME/TRADE.md` | Marchands (catalogue, achat), échange PJ↔PJ, revente PJ→GM, transfert direct | 🔎 Analysé en profondeur (2026-08-26) |
 
-### 3.6 Exo-armures
+### 3.6 Exo-armures et Informatique (ordinateurs, IEM)
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
 | `SYSTEME/EXOARMURE.md` | Schéma catalogue/instance, source exclusive d'équipement, services (applyExoTemplate, exoAvarieService, computeExoStats), routes, illustration | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/INFORMATIQUE.md` | Ordinateurs (schéma/formules), catalogue de programmes, Test de panne générique et IEM (Repository pattern), machine à états Survie I.E.M., auto-désactivation Gestion systèmes | Créé 2026-09-16, chantier `PLAN_INFORMATIQUE.md` (couches 1-2) clos et archivé (`docs/Old/`) |
 
 ### 3.7 Éditeur & création
 | Document | Responsabilité | Statut |
@@ -175,7 +176,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `MANUELS/MANUEL_CREATION_ETAPE3_CAPACITES.md` | Étape 3 : mutations (achat/tirage), Force Polaris latente/maîtrisée | Rédigé 2026-08-04 |
 | `MANUELS/MANUEL_EXOARMURE.md` | Armures mécanisées : types/catégories, combat en armure, gestion des dommages (Avaries, incidents) | Réécrit 2026-08-04 — **partiel** : ne couvre pas Lot C (ordinateurs/programmes, `PLAN_EXOARMURE.md` §13.4) |
 | `MANUELS/MANUEL_USURE.md` | Usure & Intégrité du matériel : qualité/ITG, Tests de panne, réparation | v1.5 — V1 (L0-L7) close et validée en jeu réel |
-| `MANUELS/MANUEL_INFORMATIQUE.md` | Ordinateurs (capacités/couche 1) + catalogue de programmes (couche 2) ; IEM/pannes électroniques | Réécrit 2026-09-11 (conformité gabarit, code/schéma purgés vers le PLAN) — couches 3-5 (piratage/conception/virus) pas encore écrites |
+| `MANUELS/MANUEL_INFORMATIQUE.md` | Ordinateurs (capacités/couche 1) + catalogue de programmes (couche 2) ; IEM/pannes électroniques | Réécrit 2026-09-11 (conformité gabarit) — couches 1-2 codées et closes, architecture dans `SYSTEME/INFORMATIQUE.md` ; couches 3-5 (piratage/conception/virus) pas encore écrites |
 | `MANUELS/MANUEL_CHANCE.md` | Dépense de points de Chance : Test de Chance, effets, régénération | v1.0 — rédigé 2026-09-11, RAW fournie par Saar |
 
 ---
@@ -210,7 +211,6 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_NUAGE.md` | Armes à nuage volumétrique (fumigènes, gaz de combat) — propagation par compartiments, distinct d'une explosion géométrique | Bloqué/non cadré, attend la fondation zones dangereuses |
 | `PLANS/PLAN_KIWI_BASCULE.md` | Bascule de la base `vtt` vers `enclumeBD` sur le serveur distant Kiwi (stratégie A : base neuve + report des données réelles) | En cours — diagnostic fait (`vtt` distant arrêté avant la refonte migrations) |
 | `PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md` | Bug ciblé : Choc de mutation à arme naturelle perdu sur la 4ᵉ branche défenseur PJ en défense active (les 3 autres branches sont correctes) | Cadré, cause identifiée, correctif isolé non encore livré |
-| `PLANS/PLAN_INFORMATIQUE.md` | Ordinateurs, pannes électroniques, IEM, piratage — chantier en 5 couches | Couches 1-2 cadrées en architecture réelle (Lots 1-4, réécrit 2026-09-11) ; couches 3-5 pas encore cadrées |
 | `PLANS/PLAN_CHANCE.md` | Mécanique de dépense de points de Chance — architecture technique (le MANUEL porte la règle métier) | v2.0 réécrite 2026-09-11 (RAW fournie par Saar le jour même) — **cadrage terminé, prêt à coder** |
 
 ---
