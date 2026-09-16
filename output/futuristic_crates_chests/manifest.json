@@ -806,6 +806,416 @@
           "target_state_id": 0
         }
       ]
+    },
+    {
+      "name": "11_crate_shallow_dual_bifold_bin",
+      "label": "Bac à petites pièces",
+      "category": "crate",
+      "size_class": "small",
+      "format": "shallow_dual_bifold",
+      "footprint_width_m": 0.516,
+      "footprint_depth_m": 0.447,
+      "height_m": 0.208,
+      "features": "shallow parts bin with front and rear bifold panels folding down into the shell",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_SHALLOW_shell_sage_plastic_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_SHALLOW_lid_pale_grey_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_SHALLOW_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_SHALLOW_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_SHALLOW_feet_black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
+    },
+    {
+      "name": "12_crate_deep_dual_gullwing_maglock",
+      "label": "Caisse moyenne empilable",
+      "category": "crate",
+      "size_class": "medium",
+      "format": "deep_dual_gullwing",
+      "footprint_width_m": 0.828,
+      "footprint_depth_m": 0.570,
+      "height_m": 0.518,
+      "features": "deep stackable crate with twin gullwing lids and a central magnetic lock",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_DEEP_shell_olive_composite_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_DEEP_lid_graphite_lid_panels",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_DEEP_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_DEEP_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_DEEP_feet_black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
+    },
+    {
+      "name": "13_chest_compact_riveted_lockbox",
+      "label": "Coffre compact sécurisé",
+      "category": "chest",
+      "size_class": "small",
+      "format": "compact_riveted_lockbox",
+      "footprint_width_m": 0.568,
+      "footprint_depth_m": 0.456,
+      "height_m": 0.328,
+      "features": "compact riveted lockbox with a single flat hinged lid and corner posts",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_LOCK_shell_smoke_green_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_LOCK_lid_off_white_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_LOCK_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_LOCK_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_LOCK_feet_black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
+    },
+    {
+      "name": "14_chest_domed_tool_case",
+      "label": "Coffre à outils renforcé",
+      "category": "chest",
+      "size_class": "medium",
+      "format": "domed_tool_case",
+      "footprint_width_m": 0.948,
+      "footprint_depth_m": 0.580,
+      "height_m": 0.582,
+      "features": "tool case with an arched hinged lid and side carry handles",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_DOME_shell_charcoal_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_DOME_lid_oxide_red_arch",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_DOME_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_DOME_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_DOME_feet_black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
+    },
+    {
+      "name": "15_chest_long_dual_gullwing_trunk",
+      "label": "Malle longue renforcée",
+      "category": "chest",
+      "size_class": "extra_large",
+      "format": "long_dual_gullwing_trunk",
+      "footprint_width_m": 1.608,
+      "footprint_depth_m": 0.658,
+      "height_m": 0.533,
+      "features": "long reinforced trunk with twin gullwing lids, a central magnetic lock and side carry handles",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_TRUNK_shell_dark_graphite_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_TRUNK_lid_muted_red_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_TRUNK_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_TRUNK_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_TRUNK_feet_black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "states": [
+        {
+          "id": 0,
+          "name": "closed",
+          "visual_override": {
+            "animationProgress": 0
+          }
+        },
+        {
+          "id": 1,
+          "name": "open",
+          "visual_override": {
+            "animationProgress": 1
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "id": "open",
+          "action_label": "Ouvrir",
+          "required_state_ids": [
+            0
+          ],
+          "target_state_id": 1
+        },
+        {
+          "id": "close",
+          "action_label": "Fermer",
+          "required_state_ids": [
+            1
+          ],
+          "target_state_id": 0
+        }
+      ]
+    },
+    {
+      "name": "16_crate_pack_tarped_stack_decor",
+      "label": "Lot de caisses assorties",
+      "category": "crate_pack",
+      "size_class": "set",
+      "format": "tarped_mixed_stack",
+      "footprint_width_m": 2.259,
+      "footprint_depth_m": 1.049,
+      "height_m": 0.868,
+      "features": "decorative stacked crate pile under a partial tarp — static prop, no interaction or displacement",
+      "interior": "hollow",
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_PACK_shell_mixed_sage_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_PACK_lid_mixed_warm_grey_lids",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_PACK_interior_deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_PACK_hardware_brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "tarp",
+          "material": "CRATE_PACK_tarp_sealed_dark_green_tarp",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": []
     }
   ]
 }

@@ -7158,3 +7158,41 @@ indépendamment. Non poussé à ce stade.
 **Idée notée pour plus tard, non actionnée** (Saar) : un mode rotation miroir pourrait être
 pertinent en complément de la rotation par quart de tour — non urgent, rien cadré, juste consigné
 ici pour ne pas la perdre.
+
+## Session (Dev) — 2026-09-16 — Lot A1 : quarantaine `futuristic_crates_chests` cataloguée, clos
+
+Suite de `PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` (Lot A). Consigne explicite de Saar avant
+tout code : « Go A1 si et seulement si tu es sûr à 100%. Pas de zone d'ombre, pas d'approximation,
+pas de découverte en cours de code. » Les 6 fichiers en quarantaine du pack (issus du rangement
+`docs/PLANS/PLAN_ASSETS_3D_BUILTIN.md`, jamais revus depuis) triés un par un :
+
+- **5 fichiers catalogués avec le patron ouverture/fermeture déjà validé** (chantier caisses
+  interactives, `docs/Old/PLAN_CAISSES_INTERACTIVES.md`) : `11_crate_shallow_dual_bifold_bin`,
+  `12_crate_deep_dual_gullwing_maglock`, `13_chest_compact_riveted_lockbox`,
+  `14_chest_domed_tool_case`, `15_chest_long_dual_gullwing_trunk`. Dimensions mesurées sur la
+  bounding box réelle du GLB (pas d'estimation), matériaux vérifiés un par un contre le GLB déplacé
+  (`color_slots`), convention « premier keyframe = fermé » confirmée canal d'animation par canal
+  d'animation pour chacun des 5 — zéro donnée du manifest devinée.
+- **1 fichier laissé purement décoratif** (décision produit de Saar) : `16_crate_pack_tarped_stack_decor`
+  (« Lot de caisses assorties », plusieurs sous-caisses assemblées dans un seul GLB, pas de
+  découpage propre en sous-objets ouvrables) — aucun `states`/`interactions`, non déplaçable.
+- **Zéro changement de code** : `builtinModelCatalog.js` lisait déjà `states`/`interactions` du
+  manifest de façon générique depuis le chantier caisses interactives ; seul du contenu manifest a
+  été ajouté. `node tools/validate-3d-manifest.mjs` : 0 erreur.
+- Fichiers déplacés/renommés par `git mv` (slug ASCII stable) de
+  `docs/AssetsSource/futuristic_crates_chests/non-catalogues/` vers
+  `output/futuristic_crates_chests/glb/`.
+
+**Testé** : `node tools/validate-3d-manifest.mjs` (0 erreur) avant validation en jeu ; puis
+validation en jeu réel par Saar après redémarrage serveur (`syncBuiltinModels()`) — les 5 caisses
+posées, ouvertes, fermées sans anomalie ; le lot décoratif confirmé sans option d'interaction.
+**Non testé** : rien en suspens sur ce lot.
+**Données** : aucune migration — contenu manifest uniquement, `builtinModelCatalog.js` resynchronise
+les `entity_blueprints` builtin au démarrage serveur (mécanisme déjà existant, pas nouveau).
+**Retour arrière** : un seul commit, `git revert` direct si besoin.
+
+**Reste ouvert** (hors périmètre de ce lot) : 11 fichiers en quarantaine restants
+(`futuristic_kitchen` 9, `futuristic_hydroponics` 2 — Lot B, décision produit à prendre d'abord) ;
+Lot A2 (preuve `move_type`, aucun code, juste un blueprint de test à créer via l'Atelier et tester
+en jeu) ; verrou électronique (après le chantier Informatique) ; push de ce commit et des
+précédents vers `dev/Saar` toujours en attente.
