@@ -69,6 +69,19 @@ function GhostEntityBounds({ position, blueprint, r }) {
   )
 }
 
+// ─── Highlight case pleine — pose au sol avec le snap grille (touche G) ─────────
+// Genre déjà standard des VTT (Roll20/Foundry) : la case ciblée se surligne, pas l'empreinte de
+// l'objet — indépendant de la taille du modèle posé.
+function TileSnapHighlight({ position }) {
+  if (!position || position.placement?.mode !== 'free') return null
+  return (
+    <mesh position={[position.x, position.y + 0.01, position.z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[0.92, 0.92]} />
+      <meshBasicMaterial color="#3ddc84" transparent opacity={0.35} depthWrite={false} />
+    </mesh>
+  )
+}
+
 function GhostEntity({ position, blueprint, r }) {
   if (!position || !blueprint) return null
   const entity = {
@@ -128,6 +141,10 @@ function EntityEditorScene({
   const [ghostR, setGhostR] = useState(0)
   const [moveGhost, setMoveGhost] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
+  // Snap sur la grande case (touche G) — défaut OFF, comportement de pose au sol inchangé tant
+  // qu'on ne l'active pas explicitement. Portée volontairement limitée au sol (placement free) ;
+  // les objets muraux gardent leur snap fin actuel (PLAN_ENTITES_INTERACTIVES_ROADMAP.md Lot A5).
+  const [tileSnapEnabled, setTileSnapEnabled] = useState(false)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -437,8 +454,12 @@ function EntityEditorScene({
       }
     }
 
-    const snappedCenterX = Math.round(centerX * SURFACE_FINE) / SURFACE_FINE
-    const snappedCenterZ = Math.round(centerZ * SURFACE_FINE) / SURFACE_FINE
+    // Snap grille (case entière, centre à x.5) si tileSnapEnabled, sinon le snap fin d'origine.
+    const snapValue = tileSnapEnabled
+      ? value => Math.floor(value) + 0.5
+      : value => Math.round(value * SURFACE_FINE) / SURFACE_FINE
+    const snappedCenterX = snapValue(centerX)
+    const snappedCenterZ = snapValue(centerZ)
     if (Math.abs(snappedCenterX) > GRID_SIZE / 2 || Math.abs(snappedCenterZ) > GRID_SIZE / 2) return null
 
     const width = Number(blueprint.geometry?.width) || 1
@@ -455,7 +476,7 @@ function EntityEditorScene({
       r: rotation,
       placement: { mode: 'free', level: displayLevel },
     }
-  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, entityTopSupportAt, gl, surfaceData])
+  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, entityTopSupportAt, gl, surfaceData, tileSnapEnabled])
 
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -635,6 +656,25 @@ function EntityEditorScene({
     return () => document.removeEventListener('keydown', onKey)
   }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, socket, updateEntity])
 
+  // ─── Snap grille — touche G (toggle) ────────────────────────────────────────
+  // Mode global et persistant (pas lié à une pose en cours), comme un aimant qu'on active/désactive
+  // — pas d'affordance visuelle ailleurs que le highlight de case (TileSnapHighlight), même
+  // approche minimaliste que R/Delete dans ce fichier.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'g' && e.key !== 'G') return
+      const target = e.target
+      const isTextInput = target?.tagName === 'INPUT'
+        || target?.tagName === 'TEXTAREA'
+        || target?.tagName === 'SELECT'
+        || target?.isContentEditable
+      if (isTextInput) return
+      setTileSnapEnabled(prev => !prev)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.
   useEffect(() => {
@@ -716,10 +756,16 @@ function EntityEditorScene({
         )
       })}
       {ghostPos && activeBlueprint && (
-        <GhostEntity position={ghostPos} blueprint={activeBlueprint} r={ghostPos.r ?? ghostR} />
+        <>
+          <GhostEntity position={ghostPos} blueprint={activeBlueprint} r={ghostPos.r ?? ghostR} />
+          {tileSnapEnabled && <TileSnapHighlight position={ghostPos} />}
+        </>
       )}
       {moveGhost && (
-        <GhostEntity position={moveGhost.position} blueprint={moveGhost.blueprint} r={moveGhost.r} />
+        <>
+          <GhostEntity position={moveGhost.position} blueprint={moveGhost.blueprint} r={moveGhost.r} />
+          {tileSnapEnabled && <TileSnapHighlight position={moveGhost.position} />}
+        </>
       )}
     </>
   )

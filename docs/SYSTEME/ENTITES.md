@@ -116,7 +116,11 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     L'utilisateur sélectionne un blueprint dans la palette Entités.
 
-    Un ghost suit la souris (calcPreciseEntityPos), aimanté à la grille fine.
+    Un ghost suit la souris (calcPreciseEntityPos), aimanté à la grille fine par défaut, ou à la
+    grande case visible (centre à x.5) si le snap grille est actif (touche G, toggle global,
+    Lot A point 5, 2026-09-16) — portée limitée à la pose au sol, les objets muraux gardent leur
+    snap fin. Un highlight vert de la case ciblée s'affiche sous le fantôme quand ce mode est actif
+    (seule affordance visuelle du toggle, pas de bouton dans une barre d'outils).
 
     Depuis Lot A, point 2 (2026-09-16) : la hauteur de pose est celle du sommet le plus haut sous le
     curseur — sol/voxel (comportement d'origine) ou une autre entité déjà posée en mode free sur le

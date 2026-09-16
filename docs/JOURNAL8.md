@@ -7114,3 +7114,47 @@ robuste, pérenne et adaptative »). Ajouté en suivant exactement le patron dé
 Blindage IEM/Intégrité (même fonction `field()`, même style, `PUT /:characterId/exo/computers/:id`
 déjà prêt à recevoir ces deux champs) — nouvelle clé i18n `exo.computerSurvieIem`
 (`client/src/locales/fr.json`). Lint client ciblé propre.
+
+## Session (Dev) — 2026-09-16 — Éditeur d'entités : durcissement (pose répétée, empilement, rotation, ménage)
+
+Suite de l'audit du monde de l'éditeur déclenché par une remarque de Saar sur la qualité UX de
+l'outil (repoussé à quatre fils distincts : éditeur d'entités, UI/UX des panneaux, forme des
+salles, décorations murales — seul le premier est traité ici). **Nom de commit trompeur** : les 5
+commits de ce fil portent le message "Lot A" par réutilisation abusive du nom de
+`PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` — **ce n'est pas le même Lot A** que celui du plan
+(quarantaine `futuristic_crates_chests` + preuve `move_type`, toujours ouvert par ailleurs). Cinq
+points fermés dans `Editor3D.jsx`/`SessionPage.jsx`, chacun validé en jeu réel par Saar avant
+commit (`7d6600d`, `357adab`, `ff4c856`, `1d04a54` + le commit de ce point 5) :
+
+1. **Pose répétée** — le blueprint actif restait désélectionné après chaque pose
+   (`onBlueprintPlaced`), obligeant à recliquer la palette à chaque exemplaire. Retiré ; Échap
+   annule explicitement (garde champ-texte ajoutée, absente ailleurs dans ce fichier).
+2. **Empilement** — `calcPreciseEntityPos` ne regardait que le sol/voxel pour la hauteur de pose,
+   jamais les entités déjà posées. Nouvelle table `entityTopSupportsByCell` (même patron que
+   `columnTops`/`displayedFloorSupports`, footprint ajusté rotation+échelle, entité en cours de
+   déplacement exclue). Patron pro confirmé (Unity/Unreal : raycast vers le bas, sol ou objet sans
+   distinction). **Bug de granularité trouvé en jeu réel après la première validation** : la
+   recherche tournait sur la case entière, pas la case fine (`SURFACE_FINE`) du placement lui-même
+   — déclenchait l'empilement jusqu'à ~1 unité du bord réel d'un objet. Corrigé pour aligner les
+   deux précisions.
+3. **Priorité rotation (touche R)** — le handler vérifiait toujours en premier une entité sous le
+   curseur, même pendant une pose active : si le curseur survolait par hasard un élément existant,
+   R le tournait au lieu du fantôme. Confirmé par les logs de Saar (3 rotations successives sur la
+   même entité déjà posée). Priorité inversée : une pose en cours capte toujours R.
+4. **Ménage** — `EntityEditor.jsx` (325 lignes, jamais importé nulle part, reste de la fusion
+   Kiwi) supprimé. Confirmé sans risque (`npm run build`/`npm run lint` sans erreur de résolution).
+5. **Snap grille (touche G, toggle)** — mode optionnel (défaut off) qui aimante la pose au sol sur
+   le centre de la grande case visible au lieu du quart de case habituel ; highlight vert de la
+   case ciblée sous le fantôme (seule affordance, pas de bouton toolbar — cohérent avec le reste du
+   fichier). Portée limitée au sol, les objets muraux gardent leur snap fin.
+
+**Testé** : `eslint` ciblé + `npm run build` complet après chaque point (0 erreur à chaque fois),
+et validation en jeu réel par Saar avant chaque commit.
+**Non testé** : rien en suspens — chaque point a été validé avant de passer au suivant.
+**Données** : aucune migration sur ce fil.
+**Retour arrière** : 5 commits atomiques sur `dev/Saar` (un par point), chacun `git revert`-able
+indépendamment. Non poussé à ce stade.
+
+**Idée notée pour plus tard, non actionnée** (Saar) : un mode rotation miroir pourrait être
+pertinent en complément de la rotation par quart de tour — non urgent, rien cadré, juste consigné
+ici pour ne pas la perdre.
