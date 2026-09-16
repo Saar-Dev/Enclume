@@ -98,6 +98,10 @@ Dans la barre latérale, l'onglet Entités affiche les blueprints disponibles :
 
     Un aperçu 3D du modèle sélectionné (Object3DPreview) est affiché avant la pose.
 
+    Depuis PLAN_ENTITES_INTERACTIVES_ROADMAP.md Lot A (2026-09-16) : après une pose réussie, le
+    blueprint actif reste sélectionné (pose répétée du même objet). Pour arrêter, recliquer le même
+    blueprint dans la palette, en choisir un autre, ou appuyer sur Échap.
+
 2.5 Placement mode
 Mode	Comportement
 free	L'entité se pose au sol, centrée ou calée au coin selon origin
@@ -122,7 +126,9 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     bumpBattlemapRuntimeRevision est appelé pour invalider le cache du snapshot physique.
 
-    Après une pose réussie, le blueprint actif est automatiquement désélectionné.
+    Depuis Lot A (2026-09-16) : le blueprint actif reste sélectionné après la pose (pose répétée) —
+    voir §2.4. Échap (SessionPage.jsx, ignoré si le focus est dans un champ texte) désélectionne
+    explicitement.
 
 3.2 Placement mural
 

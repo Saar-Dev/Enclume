@@ -340,6 +340,28 @@ function SessionContent({ campaignId }) {
     fetchBlueprints()
   }, [])
 
+  // ─── Échap — annule la pose d'entité en cours ──────────────────────────────
+  // Depuis le retrait de la désélection automatique après pose (pose répétée,
+  // PLAN_ENTITES_INTERACTIVES_ROADMAP.md Lot A), il faut une sortie explicite du
+  // mode pose autre que recliquer la palette. Ignoré si le focus est dans un
+  // champ texte (garde absente sur R/Delete dans Editor3D.jsx — bug latent connu,
+  // non reproduit ici).
+  useEffect(() => {
+    if (!activeBlueprint) return
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      const target = e.target
+      const isTextInput = target?.tagName === 'INPUT'
+        || target?.tagName === 'TEXTAREA'
+        || target?.tagName === 'SELECT'
+        || target?.isContentEditable
+      if (isTextInput) return
+      setActiveBlueprint(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [activeBlueprint])
+
   // ─── Socket.io ────────────────────────────────────────────────────────────────
   const socket = useSocket()
 
@@ -673,7 +695,6 @@ function SessionContent({ campaignId }) {
               displayLevel={displayLevel}
               selectedEntityId={instancePanel?.entityId || null}
               onEntitySelect={handleEditorEntitySelect}
-              onBlueprintPlaced={() => setActiveBlueprint(null)}
             />
           : <Canvas3D
               mode={mode}
