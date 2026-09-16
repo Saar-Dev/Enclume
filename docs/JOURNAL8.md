@@ -7196,3 +7196,41 @@ les `entity_blueprints` builtin au démarrage serveur (mécanisme déjà existan
 Lot A2 (preuve `move_type`, aucun code, juste un blueprint de test à créer via l'Atelier et tester
 en jeu) ; verrou électronique (après le chantier Informatique) ; push de ce commit et des
 précédents vers `dev/Saar` toujours en attente.
+
+## Session (Dev) — 2026-09-16 — Informatique Lot 4 : auto-désactivation Gestion systèmes, clos
+
+Suite de `PLANS/PLAN_INFORMATIQUE.md` §4 Lot 4 — dernier lot du chantier Informatique. Plan présenté
+avant code (fichiers, invariants, hors périmètre) ; une question ouverte tranchée par Saar avant
+d'écrire la première ligne : un système déjà auto-déconnecté par manque de capacité "Gestion
+systèmes" doit-il rester une cible valide du tirage IEM (Lot 2bis) ? Réponse : « hors service, rien
+à griller » — exclu du tirage.
+
+**Correction trouvée avant code** : le plan précédent citait un patron de réordonnancement par
+drag&drop « déjà existant » dans `InventoryPanel.jsx`/`ContainerPanel.jsx`/`WeaponPanel.jsx` —
+vérification directe : faux. Ces fichiers utilisent `@dnd-kit/core` uniquement pour déplacer un objet
+entre conteneurs, jamais pour réordonner une liste via `sort_order`, et `@dnd-kit/sortable` n'est
+même pas une dépendance installée. Décision (déléguée par Saar, tranchée sur le critère
+d'aggradation — testable/robuste/pérenne, jamais le confort) : boutons ↑/↓ plutôt qu'un drag&drop
+complet à écrire de zéro pour un besoin qu'aucune autre liste du projet n'a aujourd'hui.
+
+- `shared/exoSystemsCapacity.js` (nouveau, pur) — `selectDisconnectedSystems` : partitionne les
+  systèmes d'une exo-armure selon la capacité de l'ordinateur actif, RAW = un compte de systèmes
+  (jamais une somme pondérée, contrairement au Potentiel). 8/8 tests.
+- `char-sheet.js` GET `/exo/systems` enrichit chaque système avec `disconnected`, calculé à la volée
+  (jamais stocké — un basculement principal/secours doit se refléter immédiatement).
+- `socketCombatHelpers.js` — le pool IEM "Systèmes auxiliaires" (Lot 2bis/3b) exclut les systèmes
+  déconnectés avant tirage ; l'ordinateur actif reste toujours candidat.
+- `ExoSystemsPanel.jsx` — badge « Déconnecté » + boutons ↑/↓ qui renumérotent toute la liste
+  (0..N-1) plutôt qu'échanger deux `sort_order`, tous à 0 par défaut à la création.
+
+**Testé** : `node --check` (2 fichiers serveur), `npx eslint` (composant client), validation JSON
+(`fr.json`), 8/8 `exoSystemsCapacity.test.mjs` + non-régression `computerStats.test.mjs` (24/24) ;
+validation en jeu réel par Saar (« Fonctionnel »).
+**Non testé** : rien en suspens sur ce lot.
+**Données** : aucune migration — tout calculé à la volée.
+**Retour arrière** : un seul commit, `git revert` direct si besoin.
+
+**Chantier Informatique** : Lot 1/2/2bis/4 validés jeu réel. Lot 3b codé, testé (trace de code sur
+le chemin RNG à faible probabilité, accepté par Saar en lieu d'une observation en direct), pas
+encore observé de bout en bout en jeu réel — seul point encore ouvert avant clôture complète du
+chantier.

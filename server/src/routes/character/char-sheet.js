@@ -71,7 +71,8 @@ import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
 } from '../../../../shared/exoConstants.js'
-import { computeOrdinateurStats } from '../../../../shared/computerStats.js'
+import { computeOrdinateurStats, resolveActiveComputer } from '../../../../shared/computerStats.js'
+import { selectDisconnectedSystems } from '../../../../shared/exoSystemsCapacity.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import * as integrityService from '../../services/integrityService.js'
@@ -2414,7 +2415,11 @@ function validateExoEquipmentSource({ ref_equipment_id, label_override }) {
   }
 }
 
-// GET /:characterId/exo/systems
+// GET /:characterId/exo/systems — enrichit chaque système avec `disconnected` : capacité "Gestion
+// systèmes" de l'ordinateur ACTIF (docs/REGLES/REGLE_ORDINATEUR.md:11-15, PLAN_INFORMATIQUE.md §4
+// Lot 4) dépassée → déconnexion automatique des systèmes les moins importants (sort_order le plus
+// élevé). Calculé à la volée à chaque lecture, jamais stocké — un basculement principal/secours doit
+// se refléter immédiatement (shared/computerStats.js#resolveActiveComputer).
 router.get('/:characterId/exo/systems', async (req, res, next) => {
   try {
     const systems = await selectExoSystemFields(
@@ -2422,7 +2427,17 @@ router.get('/:characterId/exo/systems', async (req, res, next) => {
     )
       .orderBy('exo_systems.sort_order', 'asc')
       .orderBy('exo_systems.id', 'asc')
-    res.json({ systems })
+
+    const computers = await db('exo_computers').where({ character_id: req.params.characterId })
+    const activeComputer = resolveActiveComputer(computers)
+    const gestionSystemes = activeComputer
+      ? computeOrdinateurStats({ gen: activeComputer.gen, nt: activeComputer.nt }).gestionSystemes
+      : null
+
+    const { disconnected } = selectDisconnectedSystems({ gestionSystemes, systems })
+    const disconnectedIds = new Set(disconnected.map(s => s.id))
+
+    res.json({ systems: systems.map(s => ({ ...s, disconnected: disconnectedIds.has(s.id) })) })
   } catch (err) { next(err) }
 })
 

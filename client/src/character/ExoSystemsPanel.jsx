@@ -25,8 +25,10 @@ import api from '../lib/api.js'
 // le badge Niveau est absent sur la majorité des systèmes (RAW, seuls les systèmes facturés "X/niv."
 // en ont un, cf. commentaire d'en-tête). En `flex`, son absence décalait les inputs ITG vers la
 // gauche d'une ligne à l'autre ; en `grid` avec un gabarit littéral identique sur toutes les lignes,
-// les colonnes restent alignées que le badge soit rendu ou non.
-const ROW_COLUMNS = '1fr 52px 96px 18px'
+// les colonnes restent alignées que le badge soit rendu ou non. Colonnes ajoutées pour le Lot 4
+// (PLAN_INFORMATIQUE.md §4) : badge "Déconnecté" (capacité Gestion systèmes dépassée, calculé serveur)
+// + réordonnancement ↑/↓ (priorité de connexion, "premier branché, premier débranché").
+const ROW_COLUMNS = '1fr 52px 130px 96px 34px 18px'
 
 export default function ExoSystemsPanel({ characterId, canEdit }) {
   const { t } = useTranslation()
@@ -58,6 +60,17 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
     return () => { cancelled = true }
   }, [characterId])
 
+  // Réutilisée après ajout/suppression/réordonnancement : `disconnected` (Lot 4) est calculé serveur
+  // pour TOUS les systèmes d'un coup (capacité de l'ordinateur actif vs somme des systèmes) — changer
+  // le nombre ou l'ordre des systèmes peut faire basculer le statut d'un système qu'on n'a pas
+  // touché directement, un patch local ne suffit pas. Pas de garde d'annulation ici (contrairement
+  // au montage ci-dessus) : n'est appelée qu'en réaction directe à une action utilisateur, le
+  // composant est nécessairement encore monté.
+  const fetchSystems = async () => {
+    const res = await api.get(`/char-sheet/${characterId}/exo/systems`)
+    setSystems(res.data.systems || [])
+  }
+
   const handleAdd = async (e) => {
     e.preventDefault()
     if (mode !== 'custom' && !selectedId) return
@@ -72,8 +85,8 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
         ...(level !== '' ? { level: parseInt(level, 10) } : {}),
         ...(integriteMax !== '' ? { integrite_max: parseInt(integriteMax, 10) } : {}),
       }
-      const res = await api.post(`/char-sheet/${characterId}/exo/systems`, payload)
-      setSystems(prev => [...prev, res.data.system])
+      await api.post(`/char-sheet/${characterId}/exo/systems`, payload)
+      await fetchSystems()
       setSelectedId(''); setCustomLabel(''); setLevel(''); setIntegriteMax('')
     } catch (err) {
       console.error('ExoSystemsPanel add:', err)
@@ -81,18 +94,40 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
     } finally { setAdding(false) }
   }
 
+  // `disconnected` n'est renvoyé que par le GET liste (calculé pour l'ensemble des systèmes d'un
+  // coup), jamais par ce PUT ponctuel — fusion qui préserve la valeur déjà connue plutôt que
+  // remplacer par `res.data.system` tel quel (qui l'effacerait silencieusement, `undefined`).
   const handleIntegriteUpdate = async (systemId, field, value) => {
     try {
       const res = await api.put(`/char-sheet/${characterId}/exo/systems/${systemId}`, { [field]: value })
-      setSystems(prev => prev.map(s => s.id === systemId ? res.data.system : s))
+      setSystems(prev => prev.map(s => s.id === systemId ? { ...s, ...res.data.system } : s))
     } catch (err) { console.error('ExoSystemsPanel update:', err) }
   }
 
   const handleDelete = async (systemId) => {
     try {
       await api.delete(`/char-sheet/${characterId}/exo/systems/${systemId}`)
-      setSystems(prev => prev.filter(s => s.id !== systemId))
+      await fetchSystems()
     } catch (err) { console.error('ExoSystemsPanel delete:', err) }
+  }
+
+  // Réordonnancement (Lot 4, boutons ↑/↓ — décision Saar 2026-09-16 : plus simple/robuste qu'un
+  // drag&drop, aucune liste du projet n'a ce besoin de dépendance supplémentaire aujourd'hui).
+  // Renumérote systématiquement TOUTE la liste (0..N-1) plutôt que d'échanger les deux `sort_order`
+  // en présence : à la création, chaque système reçoit `sort_order: 0` par défaut (jamais posé par
+  // l'UI d'ajout) — échanger deux valeurs identiques ne produirait aucun changement visible.
+  const handleMove = async (index, direction) => {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= systems.length) return
+    const reordered = [...systems]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
+    try {
+      await Promise.all(
+        reordered.map((s, i) => api.put(`/char-sheet/${characterId}/exo/systems/${s.id}`, { sort_order: i }))
+      )
+      await fetchSystems()
+    } catch (err) { console.error('ExoSystemsPanel move:', err) }
   }
 
   if (loading) return <p style={{ color: '#4a4a60', fontSize: '12px', textAlign: 'center' }}>…</p>
@@ -103,7 +138,7 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
         <p style={{ fontSize: '12px', color: '#4a4a60', fontStyle: 'italic' }}>{t('exo.noSystems')}</p>
       )}
 
-      {systems.map(s => (
+      {systems.map((s, index) => (
         <div key={s.id} style={{ display: 'grid', gridTemplateColumns: ROW_COLUMNS, gap: '8px', alignItems: 'center', padding: '3px 0', borderBottom: '1px solid #1e1e2e' }}>
           <span style={{ fontSize: '12px', color: '#c0c0d0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.ref_description || ''}>
             {s.display_name || '—'}
@@ -111,6 +146,11 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
           {s.level != null && (
             <span style={{ fontSize: '10px', color: '#5b8dee', background: '#1a1a2e', borderRadius: '3px', padding: '1px 5px', textAlign: 'center' }}>
               {t('exo.itemLevel')} {s.level}
+            </span>
+          )}
+          {s.disconnected && (
+            <span style={{ fontSize: '10px', color: '#e05c5c', background: 'rgba(224,92,92,0.12)', borderRadius: '3px', padding: '1px 6px', textAlign: 'center' }}>
+              {t('exo.systemDisconnected')}
             </span>
           )}
           {canEdit ? (
@@ -135,6 +175,22 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
             </div>
           ) : (
             <span style={{ fontSize: '11px', color: '#8888a0', textAlign: 'center' }}>{s.integrite_current ?? '—'} / {s.integrite_max ?? '—'}</span>
+          )}
+          {canEdit && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+              <button
+                onClick={() => handleMove(index, -1)}
+                disabled={index === 0}
+                style={{ background: 'none', border: 'none', color: index === 0 ? '#2a2a3e' : '#8888a0', cursor: index === 0 ? 'default' : 'pointer', fontSize: '11px', padding: 0 }}
+                title={t('exo.systemMoveUp')}
+              >▲</button>
+              <button
+                onClick={() => handleMove(index, 1)}
+                disabled={index === systems.length - 1}
+                style={{ background: 'none', border: 'none', color: index === systems.length - 1 ? '#2a2a3e' : '#8888a0', cursor: index === systems.length - 1 ? 'default' : 'pointer', fontSize: '11px', padding: 0 }}
+                title={t('exo.systemMoveDown')}
+              >▼</button>
+            </div>
           )}
           {canEdit && (
             <button

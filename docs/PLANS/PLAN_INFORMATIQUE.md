@@ -133,7 +133,8 @@
 >   `combatantContextService.js`, garde de blocage `socketCombatAnnouncement.js`. 112/112 tests
 >   verts (suites `iemSurvivalService`/`activeMalusRegistry`/`combatantContextService`/
 >   `combatTurnEngine`/`integrityService`).
-> - **Lot 4 (auto-désactivation Gestion systèmes) — cadré, pas codé, indépendant des autres lots.**
+> - **Lot 4 (auto-désactivation Gestion systèmes) — CODÉ ET VALIDÉ JEU RÉEL 2026-09-16** (Saar :
+>   « Fonctionnel »), indépendant des autres lots (attaqué avant validation jeu réel du Lot 3b).
 >
 > **Leçon retenue cette session, à appliquer partout dans ce document** : une affirmation reprise
 > d'une version précédente de ce PLAN (« aucune colonne d'Intégrité sur exo_systems/exo_weapons »)
@@ -743,15 +744,16 @@ avec les 3 autres sources) ; non-régression `combatantContextService.test.mjs` 
 fusionné systèmes+ordinateur actif, déclenchement `exposeToIemSurvival` depuis
 `runIemPanneTriggerExo`, garde de blocage de déclaration) — validation en jeu réel par Saar.
 
-### Lot 4 — Auto-désactivation Gestion systèmes
+### Lot 4 — Auto-désactivation Gestion systèmes — CODÉ ET VALIDÉ JEU RÉEL (2026-09-16)
 
 **Critère de hiérarchisation tranché (Saar, 2026-09-15)** : premier branché, premier débranché par
-défaut ; le joueur peut réordonner la liste à la main (drag&drop) pour changer cet ordre.
+défaut ; le joueur peut réordonner la liste à la main pour changer cet ordre.
 
 **Gap de schéma trouvé en creusant l'implémentation (2026-09-15), absent de la version précédente de
-ce document** : `exo_systems` (migration 45) n'a **aucune colonne `exo_computer_id`** —
-contrairement à `exo_programs`, qui a bien un rattachement explicite à un ordinateur précis. Rien
-dans le schéma actuel ne dit quel ordinateur pilote quel système.
+ce document** : `exo_systems` (créée migration 257, pas 45 — la version précédente de ce document
+citait le mauvais numéro) n'a **aucune colonne `exo_computer_id`** — contrairement à `exo_programs`,
+qui a bien un rattachement explicite à un ordinateur précis. Rien dans le schéma actuel ne dit quel
+ordinateur pilote quel système.
 
 **Résolution retenue (option A, pas de migration de rattachement)** — [VÉRIFIÉ] : ce chantier n'a
 pas la main pour ajouter cette relation. `MANUEL_INFORMATIQUE.md` §3.2, texte exact : « la
@@ -765,20 +767,47 @@ chantier. Effet de bord RAW-cohérent et volontaire : un basculement principal�
 Génération plus faible peut d'un coup dépasser la nouvelle capacité et déclencher des déconnexions —
 c'est le comportement attendu, pas un bug.
 
-**Réordonnancement (drag&drop) — pas un nouveau choix technique** : `@dnd-kit/core` et
-`@dnd-kit/utilities` sont déjà des dépendances du client (`client/package.json`), déjà utilisées pour
-réordonner des listes dans `InventoryPanel.jsx`, `ContainerPanel.jsx` et `WeaponPanel.jsx`. `sort_order`
-existe déjà sur `exo_systems` (migration 45) et `exo_programs`. Réutiliser ce patron pour la liste des
-systèmes d'une exo-armure — aucune nouvelle librairie, aucun nouveau concept d'interface à inventer.
-L'ordre par défaut (« premier branché ») se lit simplement dans l'ordre d'insertion / `sort_order`
-initial ; le drag&drop du joueur réécrit `sort_order` via la route PUT existante (patron déjà
-éprouvé sur les 3 fichiers ci-dessus).
+**Correction trouvée avant code (2026-09-16), contredit la version précédente de ce document** : le
+patron de réordonnancement par drag&drop supposé « déjà existant » dans `InventoryPanel.jsx`/
+`ContainerPanel.jsx`/`WeaponPanel.jsx` n'existe pas — ces fichiers utilisent `@dnd-kit/core`
+(`useDraggable`/`useDroppable`) uniquement pour déplacer un objet **entre conteneurs** (Sac/Ceinture/
+Coffre), jamais pour réordonner une liste en écrivant `sort_order`. Aucun composant du client ne le
+fait, et `@dnd-kit/sortable` (le module officiel dédié à ce cas) n'est même pas une dépendance
+installée. Décidé (critère d'aggradation — testable/robuste/pérenne, jamais le confort ou la
+modernité de l'UX ; `AGENTS.md` : ne pas concevoir pour un besoin hypothétique futur) :
+**boutons ↑/↓** plutôt qu'un drag&drop complet — zéro nouvelle dépendance, zéro cas limite tactile/
+clavier à couvrir, largement suffisant pour une liste courte. `sort_order` existait déjà (migration
+257) et était déjà réinscriptible via le PUT existant — seul le point d'entrée UI manquait.
 
-- **Tests** : fonction pure de sélection des systèmes à déconnecter (capacité de l'ordinateur actif
-  vs somme des systèmes attachés, tri par `sort_order`) ; scénario bascule principal→secours qui
-  dépasse la capacité ; non-régression du drag&drop existant sur les 3 composants qui utilisent déjà
-  `@dnd-kit` (aucune modification de leur code, seulement réutilisation du patron sur un nouveau
-  composant).
+**Architecture as-built** :
+- `shared/exoSystemsCapacity.js` (nouveau, pur) — `selectDisconnectedSystems({gestionSystemes,
+  systems})` : trie par `sort_order` (égalité départagée par `id`), partitionne `active`/
+  `disconnected` selon la capacité. RAW (`REGLE_ORDINATEUR.md:11-15`) : un **compte** de systèmes,
+  jamais une somme pondérée de niveaux (contrairement au Potentiel). `gestionSystemes: null`
+  (aucun ordinateur actif) → tout est déconnecté. 8/8 tests.
+- `char-sheet.js` GET `/:characterId/exo/systems` — enrichit chaque système avec `disconnected`,
+  calculé à la volée à chaque lecture (jamais stocké — un basculement principal/secours doit se
+  refléter immédiatement, même doctrine que `resolveActiveComputer`).
+- `socketCombatHelpers.js` (`runIemPanneTriggerExo`, branche `systemes_auxiliaires`) — le pool
+  fusionné systèmes+ordinateur actif (Lot 3b) exclut désormais les systèmes déjà déconnectés avant
+  le tirage : décision Saar 2026-09-16, « hors service, rien à griller ». L'ordinateur actif lui-même
+  reste toujours candidat (il gère la capacité, ne se déconnecte jamais lui-même).
+- `ExoSystemsPanel.jsx` — badge rouge « Déconnecté » (même convention que `ExoComputerPanel.jsx`
+  pour une capacité dépassée, `#e05c5c`) + boutons ↑/↓ qui renumérotent toute la liste (0..N-1,
+  jamais un simple échange de deux `sort_order` : à la création chaque système reçoit `sort_order: 0`
+  par défaut, échanger deux valeurs identiques ne changerait rien). Toute mutation (ajout/suppression/
+  réordonnancement) refetch la liste complète plutôt qu'un patch local — `disconnected` est calculé
+  pour l'ensemble des systèmes d'un coup, pas système par système.
+- `fr.json` — 3 clés (`systemDisconnected`, `systemMoveUp`, `systemMoveDown`).
+
+**Tests** : `shared/exoSystemsCapacity.test.mjs` (8/8, fonction pure) + non-régression
+`computerStats.test.mjs` (24/24 au total). Dispatch socket bout en bout (exclusion IEM des systèmes
+déconnectés) et UI (badge, boutons, bascule de capacité) non testés automatiquement, comme le reste
+de `socketCombatHelpers.js`/`ExoSystemsPanel.jsx` — validés en jeu réel par Saar (« Fonctionnel »).
+
+**Hors périmètre confirmé** : aucune mécanique d'« activation manuelle » d'un système déconnecté
+(RAW la mentionne mais aucun consommateur combat n'existe pour ce geste aujourd'hui) — Lot 4 reste
+informationnel (affichage + exclusion IEM) et réordonnancement, pas un nouveau geste de jeu.
 
 ---
 

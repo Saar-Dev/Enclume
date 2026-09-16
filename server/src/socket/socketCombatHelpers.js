@@ -13,7 +13,8 @@ import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { runPanneTest, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
-import { resolveActiveComputer } from '../../../shared/computerStats.js'
+import { resolveActiveComputer, computeOrdinateurStats } from '../../../shared/computerStats.js'
+import { selectDisconnectedSystems } from '../../../shared/exoSystemsCapacity.js'
 import { exposeToIemSurvival } from '../lib/iemSurvivalService.js'
 import { randomInt } from 'crypto'
 import { calcWeaponModBonus } from '../services/modingService.js'
@@ -1293,14 +1294,24 @@ async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions, 
     const systems = await db('exo_systems')
       .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
       .where({ 'exo_systems.character_id': characterIdCible })
-      .select('exo_systems.id', 'exo_systems.label_override', 'ref_equipment.name as ref_name')
+      .select('exo_systems.id', 'exo_systems.label_override', 'exo_systems.sort_order', 'ref_equipment.name as ref_name')
     const computers = await db('exo_computers').where({ character_id: characterIdCible })
     const activeComputer = resolveActiveComputer(computers)
+
+    // Lot 4 (PLAN_INFORMATIQUE.md §4) — un système déjà auto-déconnecté par manque de capacité
+    // "Gestion systèmes" est hors service : rien à griller (décision Saar 2026-09-16). L'ordinateur
+    // actif lui-même n'est jamais concerné par cette déconnexion (c'est lui qui gère la capacité,
+    // il ne se déconnecte pas lui-même) — reste candidat dans tous les cas.
+    const gestionSystemes = activeComputer
+      ? computeOrdinateurStats({ gen: activeComputer.gen, nt: activeComputer.nt }).gestionSystemes
+      : null
+    const { active: connectedSystems } = selectDisconnectedSystems({ gestionSystemes, systems })
+
     const pool = [
-      ...systems.map(s => ({ kind: 'system', id: s.id, label: s.label_override ?? s.ref_name ?? 'Système' })),
+      ...connectedSystems.map(s => ({ kind: 'system', id: s.id, label: s.label_override ?? s.ref_name ?? 'Système' })),
       ...(activeComputer ? [{ kind: 'computer', id: activeComputer.id, label: 'Ordinateur' }] : []),
     ]
-    console.log(`[DBG] test de panne IEM exo — cible:${targetName} systèmes installés:${systems.length} ordinateur actif:${activeComputer ? 'oui' : 'non'}`)
+    console.log(`[DBG] test de panne IEM exo — cible:${targetName} systèmes installés:${systems.length} (dont ${systems.length - connectedSystems.length} déconnectés, hors tirage) ordinateur actif:${activeComputer ? 'oui' : 'non'}`)
     if (pool.length === 0) return
     const hitCount = Math.min(pool.length, (await parseDice('1D6')).total + 3)
     const drawPool = [...pool]
