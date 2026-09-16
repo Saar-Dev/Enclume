@@ -583,6 +583,11 @@
     "jammed": "L'arme de {{name}} (Intégrité {{itg}}) s'enraye après cette attaque ratée : −1 Intégrité, une réparation simple est nécessaire pour la débloquer avant de pouvoir la réutiliser.",
     "broken": "Panne critique de l'arme de {{name}} (Intégrité {{itg}}) après cette attaque ratée : −{{loss}} Intégrité d'un coup. L'arme est gravement endommagée — réparation en atelier requise."
   },
+  "iemPanne": {
+    "held": "L'impulsion électromagnétique soumet {{item}} de {{name}} à un test de panne (Intégrité {{itg}}) — réussi, l'appareil tient.",
+    "jammed": "L'impulsion électromagnétique fait s'enrayer {{item}} de {{name}} (Intégrité {{itg}}) : −1 Intégrité, une réparation simple est nécessaire avant de pouvoir s'en servir de nouveau.",
+    "broken": "Panne critique : l'impulsion électromagnétique grille {{item}} de {{name}} (Intégrité {{itg}}) : −{{loss}} Intégrité d'un coup. L'appareil est gravement endommagé — réparation en atelier requise."
+  },
   "modifiers": {
     "header": "{{shooter}} — Tir — {{target}}",
     "headerAoe": "{{shooter}} — Zone d'effet",

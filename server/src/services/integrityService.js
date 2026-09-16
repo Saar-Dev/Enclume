@@ -84,28 +84,74 @@ async function applyPanneLoss(trx, row, { loss, severity }) {
   }
 }
 
-// runPanneTest(invId, { reason }, trxOpt) — Test de panne RAW : 1D20 sous l'ITG courante, sans
-// aucun modificateur (`resolvePolarisTest(integrity_current)`, MANUEL §4.1). Réussite → rien.
-// Échec simple → −1 ITG, `malfunction_severity = 'simple'`. Catastrophe → −1D6 ITG,
-// `malfunction_severity = 'critical'`. N'annule jamais l'action en cours (la panne est postérieure).
+// ─── Repository pattern pour runPanneTest (Lot 2, PLAN_INFORMATIQUE.md §4 Lot 2) ───────────────────
+// Le jet + l'interprétation + le calcul de perte (ci-dessous, dans runPanneTest) restent strictement
+// communs, jamais dupliqués (AGENTS.md invariant #2 : pas de second moteur). Seules les 2 étapes
+// spécifiques à une table — verrouiller/lire la ligne, écrire le résultat — sont extraites dans un
+// adaptateur. `lockRow` renvoie `{ found: false }` (ligne introuvable/mauvais characterId → 404,
+// comportement 404 existant préservé), `{ found: true, eligible: false }` (pas d'ITG suivie → 'skipped',
+// comportement existant préservé), ou `{ found: true, eligible: true, current, max, malfunction }`.
+// `applyLoss` écrit les 3 valeurs finales dans les colonnes réelles de sa table.
+export const CHAR_INVENTORY_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    const row = await lockInventoryRow(trx, id, characterId)
+    if (!row) return { found: false }
+    if (!row.has_integrity || row.integrity_current == null) return { found: true, eligible: false }
+    return { found: true, eligible: true, current: row.integrity_current, max: row.integrity_max, malfunction: row.malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('char_inventory').where({ id }).update({
+      integrity_current: current, integrity_max: max, malfunction_severity: malfunction,
+      updated_at: trx.fn.now(),
+    })
+  },
+}
+
+// Adaptateur `exo_computers` (nouveau, Lot 2) — même contrat, colonnes réelles `integrite_current`/
+// `integrite_max` (FR, cohérent avec le reste de la table, migration 42). Aucun flag équivalent à
+// `has_integrity` sur cette table : l'éligibilité est `integrite_current` non NULL (même convention
+// que `blindage_iem`/Survie I.E.M., colonnes nullables réglées à la main, PLAN §4 Lot 3a).
+export const EXO_COMPUTER_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    const where = characterId ? { id, character_id: characterId } : { id }
+    const row = await trx('exo_computers').where(where).forUpdate().first()
+    if (!row) return { found: false }
+    if (row.integrite_current == null) return { found: true, eligible: false }
+    return { found: true, eligible: true, current: row.integrite_current, max: row.integrite_max, malfunction: row.malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('exo_computers').where({ id }).update({
+      integrite_current: current, integrite_max: max, malfunction_severity: malfunction,
+    })
+  },
+}
+
+// runPanneTest(id, { reason, characterId, modifier, adapter }, trxOpt) — Test de panne RAW : 1D20
+// sous l'ITG courante (MANUEL_USURE.md §4.1), plus le `modifier` optionnel signé (défaut 0, aucun
+// changement pour les appelants existants — nécessaire au Lot 2 : malus IEM −3 contré par le
+// Blindage IEM de la cible). Réussite → rien. Échec simple → −1 ITG, `malfunction_severity =
+// 'simple'`. Catastrophe → −1D6 ITG, `malfunction_severity = 'critical'`. N'annule jamais l'action
+// en cours (la panne est postérieure). `adapter` (défaut `CHAR_INVENTORY_ADAPTER`, comportement
+// historique inchangé) sélectionne la table cible — voir adaptateurs ci-dessus.
 // `reason` : trace libre reportée dans le retour (`'combat_low_itg'`, `'intensive'`, catastrophe #8…).
-export async function runPanneTest(invId, { reason, characterId } = {}, trxOpt) {
+export async function runPanneTest(id, { reason, characterId, modifier = 0, adapter = CHAR_INVENTORY_ADAPTER } = {}, trxOpt) {
   const run = async (trx) => {
-    const row = await lockInventoryRow(trx, invId, characterId)
-    if (!row) throw new AppError(404, 'Objet d\'inventaire introuvable')
-    if (!row.has_integrity || row.integrity_current == null) {
+    const locked = await adapter.lockRow(trx, id, { characterId })
+    if (!locked.found) throw new AppError(404, 'Objet introuvable')
+    if (!locked.eligible) {
       return { panne: 'skipped', reason: reason ?? null, skippedBecause: 'no_integrity' }
     }
 
-    const before = snapshot(row)
-    const outcome = await resolvePolarisTest(row.integrity_current)
+    const before = { current: locked.current, max: locked.max, malfunction_severity: locked.malfunction }
+    const outcome = await resolvePolarisTest(locked.current + modifier)
     const panne = interpretPanneOutcome(outcome) // 'ok' | 'simple' | 'critical'
 
     const common = {
       panne,
       reason: reason ?? null,
       roll: outcome.roll,
-      threshold: row.integrity_current,
+      threshold: outcome.threshold, // = current + modifier (row.integrity_current quand modifier=0)
+      modifier,
       // `seed` / `isCriticalFail` : repris tels quels de `resolvePolarisTest` pour que l'appelant
       // puisse émettre une carte `DICE_RESULT` reproductible (L5c — test de panne d'arme en combat,
       // patron `socketDice.js` WOUND_INFECTION_ROLL). Sans lecteur pour `applyPanneSystematic` (pas de
@@ -114,6 +160,10 @@ export async function runPanneTest(invId, { reason, characterId } = {}, trxOpt) 
       isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       criticalFailReroll: outcome.criticalFailReroll ?? null,
+      // `mr` (Lot 3, marge signée — négative sur échec) : ajouté pour la durée d'immobilisation
+      // Survie I.E.M. (PLAN_INFORMATIQUE.md §4 Lot 2/3b) ; aucun lecteur existant ne le consommait,
+      // ajout sans impact.
+      mr: outcome.mr,
       before,
     }
 
@@ -122,8 +172,16 @@ export async function runPanneTest(invId, { reason, characterId } = {}, trxOpt) 
     }
 
     const loss = panne === 'critical' ? (await parseDice('1D6')).total : 1
-    const applied = await applyPanneLoss(trx, row, { loss, severity: panne })
-    return { ...common, loss, ...applied }
+    const { newCurrent, newMax, definitiveLoss, tiersCrossed } = applyTemporaryLoss(locked.current, locked.max, loss)
+    const malfunction = newCurrent === 0 ? 'critical' : panne
+    await adapter.applyLoss(trx, id, { current: newCurrent, max: newMax, malfunction })
+    return {
+      ...common,
+      loss,
+      after: { current: newCurrent, max: newMax, malfunction_severity: malfunction },
+      definitiveLoss,
+      tiersCrossed,
+    }
   }
   return trxOpt ? run(trxOpt) : db.transaction(run)
 }

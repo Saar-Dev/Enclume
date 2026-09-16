@@ -98,7 +98,30 @@
 > `shared/integrityRules.js` (`applyTemporaryLoss`, plancher à 0 vérifié).
 >
 > Statut : couches 1-2 seulement (couches 3-5 n'ont pas encore de MANUEL, donc pas de PLAN).
-> **Plan complet, tous les points bloquants tranchés. Exécution non commencée — aucun code appliqué.**
+> **Plan complet, tous les points bloquants tranchés. Lot 1 (catalogue) ET Lot 2 (déclencheur IEM,
+> périmètre réduit — voir ci-dessous) appliqués/codés et vérifiés 2026-09-16. Lots 3-4 non commencés.
+> Aucun scénario réel en jeu encore joué par Saar (validation restante).**
+>
+> **Lot 2, réduction de périmètre décidée avec Saar (2026-09-16)** : le déclencheur IEM ne couvre
+> que les cibles PJ/PNJ standard (`char_inventory.is_electronic`). Exo-armure et drone sont
+> explicitement HORS PÉRIMÈTRE de cette implémentation — l'incident RAW à 4 catégories de
+> l'exo-armure (Exosquelette/Générateur/Systèmes auxiliaires/Armement) n'a aucun équivalent construit
+> côté Exo-armures (`exo_systems`/`exo_weapons` n'ont aucune colonne d'Intégrité), et un drone n'a ni
+> `char_inventory` ni `exo_computers`. Improviser l'un ou l'autre aurait été un second moteur sur une
+> RAW non modélisée. Reste un gap connu, à reprendre dans le domaine Exo-armures. Détail complet
+> (ciblage, malus, attribution des jets) dans `server/src/socket/socketCombatHelpers.js`
+> (`runIemPanneTrigger`, juste après `runCombatWeaponPanne`).
+>
+> **Exécution Lot 1, 2026-09-16** : 344 et 345 avaient été auto-appliquées par `nodemon` malgré le
+> gel posé le 2026-09-15 (piège connu, `.claude/rules/migrations.md`) — sans casse, mais 344 avait
+> figé une version intermédiaire du correctif (malus -3 correct, tag pas encore simplifié en
+> `FX=IEM`). Jamais poussée : repris proprement (revert des 17 lignes à leur état pré-344, suppression
+> de la ligne `knex_migrations`, réapplication du fichier actuel) plutôt qu'empilé un correctif de
+> plus. 346 (`is_electronic`, 89 lignes, catégories mixtes revues une par une sur leur texte RAW
+> complet) et 347 (7 programmes Guide Technique, catalogue `Logiciels` à 41 lignes) écrites et
+> appliquées dans la foulée, mêmes garde-fous (assertion de compte final, idempotence). Détail
+> classement `is_electronic` et sourcing des 7 programmes : commentaires en tête des migrations
+> 346/347, jamais dans ce document (Lot 1 = architecture, MANUEL_INFORMATIQUE.md = règles).
 
 ---
 

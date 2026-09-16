@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity, applyRepairOutcome } from './integrityService.js'
+import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity, applyRepairOutcome, EXO_COMPUTER_ADAPTER } from './integrityService.js'
 import { QUALITY_TABLE } from '../../../shared/integrityRules.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/integrityService.test.mjs
@@ -42,6 +42,27 @@ const cleanup = async ({ campaign, gm }) => {
   await db('users').where({ id: gm.id }).del()
 }
 const readItem = (id) => db('char_inventory').where({ id }).first()
+
+// Fixture exo_computers (Lot 2, PLAN_INFORMATIQUE.md §4 Lot 2) — même patron que createFixture,
+// pour l'adaptateur `EXO_COMPUTER_ADAPTER` de runPanneTest. `current: null` → integrite_current
+// jamais posée (dispositif optionnel réglé à la main, cf. commentaire de l'adaptateur).
+async function createExoFixture({ current = 10, max = 15 } = {}) {
+  const [gm] = await db('users')
+    .insert({ email: `itg-exo-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'itg-exo-gm' })
+    .returning('*')
+  const [campaign] = await db('campaigns')
+    .insert({ gm_id: gm.id, name: 'Campagne test integrityService exo', invite_code: `ITGEXO-${Date.now()}-${Math.random()}` })
+    .returning('*')
+  const [exoCharacter] = await db('characters')
+    .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test integrityService', type: 'exo' })
+    .returning('*')
+  await db('exo_sheet').insert({ character_id: exoCharacter.id })
+  const insert = { character_id: exoCharacter.id, role: 'principal', gen: 3, nt: 2 }
+  if (current != null) { insert.integrite_current = current; insert.integrite_max = max }
+  const [computer] = await db('exo_computers').insert(insert).returning('*')
+  return { gm, campaign, exoCharacter, computer }
+}
+const readComputer = (id) => db('exo_computers').where({ id }).first()
 
 // ── adjustIntegrity ─────────────────────────────────────────────────────────
 test('adjustIntegrity — pose courante + max, puis la panne, puis « Opérationnel »', { skip }, async () => {
@@ -186,6 +207,83 @@ test('runPanneTest / applyPanneSystematic — scoping characterId (L7) : mauvais
     assert.equal(ok.panne, 'simple')
   } finally {
     await cleanup(fx)
+  }
+})
+
+// ── runPanneTest — Lot 2 (PLAN_INFORMATIQUE.md §4 Lot 2) : modifier, mr, adaptateur exo_computers ──
+test('runPanneTest — modifier optionnel décale le seuil testé (malus/bonus IEM)', { skip }, async () => {
+  const fx = await createFixture({ current: 25, max: 25 })
+  try {
+    const r = await runPanneTest(fx.item.id, { reason: 'test_iem', modifier: -5 })
+    assert.equal(r.modifier, -5)
+    assert.equal(r.threshold, 20, 'seuil testé = current + modifier, jamais current seul')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('runPanneTest — sans modifier, threshold reste identique au comportement historique', { skip }, async () => {
+  const fx = await createFixture({ current: 12, max: 15 })
+  try {
+    const r = await runPanneTest(fx.item.id, { reason: 'combat_low_itg' })
+    assert.equal(r.modifier, 0)
+    assert.equal(r.threshold, 12)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('runPanneTest — mr signé présent dans le retour (consommé par le Lot 3, Survie I.E.M.)', { skip }, async () => {
+  const fx = await createFixture({ current: 25, max: 25 })
+  try {
+    const r = await runPanneTest(fx.item.id, {})
+    assert.equal(typeof r.mr, 'number')
+    assert.ok(r.isCriticalFail || r.panne !== 'skipped')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('runPanneTest — adaptateur exo_computers : lit/écrit integrite_current/max, jamais char_inventory', { skip }, async () => {
+  const fx = await createExoFixture({ current: 4, max: 10 })
+  try {
+    for (let i = 0; i < 20; i++) {
+      await db('exo_computers').where({ id: fx.computer.id }).update({ integrite_current: 4, integrite_max: 10, malfunction_severity: null })
+      const r = await runPanneTest(fx.computer.id, { reason: 'iem_hit', adapter: EXO_COMPUTER_ADAPTER })
+      assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
+      const row = await readComputer(fx.computer.id)
+      assert.equal(row.integrite_current, r.after.current, 'écriture sur exo_computers, colonnes FR')
+      assert.equal(row.malfunction_severity, r.after.malfunction_severity)
+      if (r.panne !== 'ok') assert.ok(row.malfunction_severity != null)
+    }
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_computers : integrite_current NULL (dispositif non réglé) → skipped', { skip }, async () => {
+  const fx = await createExoFixture({ current: null })
+  try {
+    const r = await runPanneTest(fx.computer.id, { adapter: EXO_COMPUTER_ADAPTER })
+    assert.equal(r.panne, 'skipped')
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_computers : mauvais characterId → 404', { skip }, async () => {
+  const fx = await createExoFixture({ current: 8, max: 10 })
+  const bad = '00000000-0000-0000-0000-000000000000'
+  try {
+    await assert.rejects(
+      () => runPanneTest(fx.computer.id, { characterId: bad, adapter: EXO_COMPUTER_ADAPTER }),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
   }
 })
 
