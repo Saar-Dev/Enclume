@@ -126,6 +126,83 @@ export const EXO_COMPUTER_ADAPTER = {
   },
 }
 
+// 4 adaptateurs Lot 2bis (PLAN_INFORMATIQUE.md §4) — Attaque IEM sur exo-armure
+// (REGLEARMURE.md:434-441) : les 4 catégories touchées (Exosquelette, Générateur, Systèmes
+// auxiliaires, Armement) sont TOUTES « soumises à un Test de panne », jamais au traitement
+// « incident » générique de dommages (déjà couvert par `exoAvarieService.js`, hors périmètre).
+// Migrations 350/351/352.
+
+// Catégorie Systèmes auxiliaires — table dédiée, une ligne par système installé.
+export const EXO_SYSTEM_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    const where = characterId ? { id, character_id: characterId } : { id }
+    const row = await trx('exo_systems').where(where).forUpdate().first()
+    if (!row) return { found: false }
+    if (row.integrite_current == null) return { found: true, eligible: false }
+    return { found: true, eligible: true, current: row.integrite_current, max: row.integrite_max, malfunction: row.malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('exo_systems').where({ id }).update({
+      integrite_current: current, integrite_max: max, malfunction_severity: malfunction,
+    })
+  },
+}
+
+// Catégorie Armement — table dédiée, une ligne par arme installée. Le filtrage « sauf les
+// équipements ne comportant pas de composants électroniques » (REGLEARMURE.md:436) est fait par
+// l'appelant (runIemPanneTrigger, via `ref_equipment.is_electronic`), pas ici.
+export const EXO_WEAPON_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    const where = characterId ? { id, character_id: characterId } : { id }
+    const row = await trx('exo_weapons').where(where).forUpdate().first()
+    if (!row) return { found: false }
+    if (row.integrite_current == null) return { found: true, eligible: false }
+    return { found: true, eligible: true, current: row.integrite_current, max: row.integrite_max, malfunction: row.malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('exo_weapons').where({ id }).update({
+      integrite_current: current, integrite_max: max, malfunction_severity: malfunction,
+    })
+  },
+}
+
+// Catégories Exosquelette et Générateur — aucune table dédiée, l'Intégrité vit directement sur
+// `exo_sheet` (migration 44), une seule ligne par exo-armure clé `character_id` (pas de colonne
+// `id` séparée). Convention pour ces 2 adaptateurs : `id` passé à `runPanneTest` EST le
+// `character_id` de l'exo (jamais un id de ligne distinct) — `characterId`, s'il est fourni, doit
+// alors coïncider avec `id` (garde de cohérence, jamais un 2ᵉ champ réel à comparer).
+// Pas de branche `eligible: false` ici, contrairement aux 3 adaptateurs ci-dessus : `itg_exosquelette_
+// current`/`itg_generator_current` sont NOT NULL (défaut 20, migration 44) — l'Exosquelette et le
+// Générateur sont des composants obligatoires de toute exo-armure (RAW), jamais un dispositif
+// optionnel réglé à la main comme un ordinateur ou la Survie I.E.M. Ligne trouvée ⇒ toujours éligible.
+export const EXO_EXOSQUELETTE_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    if (characterId && characterId !== id) return { found: false }
+    const row = await trx('exo_sheet').where({ character_id: id }).forUpdate().first()
+    if (!row) return { found: false }
+    return { found: true, eligible: true, current: row.itg_exosquelette_current, max: row.itg_exosquelette_max, malfunction: row.exosquelette_malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('exo_sheet').where({ character_id: id }).update({
+      itg_exosquelette_current: current, itg_exosquelette_max: max, exosquelette_malfunction_severity: malfunction,
+    })
+  },
+}
+
+export const EXO_GENERATOR_ADAPTER = {
+  async lockRow(trx, id, { characterId } = {}) {
+    if (characterId && characterId !== id) return { found: false }
+    const row = await trx('exo_sheet').where({ character_id: id }).forUpdate().first()
+    if (!row) return { found: false }
+    return { found: true, eligible: true, current: row.itg_generator_current, max: row.itg_generator_max, malfunction: row.generator_malfunction_severity }
+  },
+  async applyLoss(trx, id, { current, max, malfunction }) {
+    await trx('exo_sheet').where({ character_id: id }).update({
+      itg_generator_current: current, itg_generator_max: max, generator_malfunction_severity: malfunction,
+    })
+  },
+}
+
 // runPanneTest(id, { reason, characterId, modifier, adapter }, trxOpt) — Test de panne RAW : 1D20
 // sous l'ITG courante (MANUEL_USURE.md §4.1), plus le `modifier` optionnel signé (défaut 0, aucun
 // changement pour les appelants existants — nécessaire au Lot 2 : malus IEM −3 contré par le

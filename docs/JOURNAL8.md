@@ -6935,3 +6935,103 @@ caisses/coffres se remplissent au prochain `syncBuiltinModels()` (redémarrage o
 éditeur), sans effet sur les autres lignes.
 **Retour arrière** : deux commits isolés sur `dev/Saar` (`a7d405c`, `eece01e`), `git revert`
 suffit pour chacun indépendamment. Non poussé.
+
+## Session (Dev) — 2026-09-16 — Informatique Lot 2bis : ciblage IEM sur exo-armure
+
+Suite du Lot 2 (déclencheur IEM PJ/PNJ, validé jeu réel la même session). Lot 3b (Survie I.E.M.)
+ne peut jamais se déclencher sans un chemin IEM touchant une exo-armure — ce lot comble ce
+chaînon. Corrige en cours de route une erreur du PLAN lui-même (`exo_systems`/`exo_weapons`
+avaient bien des colonnes d'Intégrité depuis longtemps, migrations 44/45, juste jamais branchées
+à un Test de panne — pas le schéma absent qu'affirmait le document).
+
+**Décisions maison (RAW non chiffrée pour ce cas précis, `REGLEARMURE.md:434-441` dit juste
+« déterminé au hasard »)**, tranchées avec Saar avant de coder :
+- **Tirage entre les 4 catégories (Exosquelette/Générateur/Systèmes auxiliaires/Armement) :
+  équipondéré (1/4 chacune).** Option écartée : reprendre les poids relatifs de la table 1D10 de
+  l'incident générique de dommages (2:1:2:2/7, en ignorant Structure/Pilote) — extrapolation, pas
+  une citation RAW, alors que le texte dit littéralement « hasard » sans pondération.
+- **Exosquelette et Générateur reçoivent aussi un `malfunction_severity`** (état de panne
+  persistant jusqu'à réparation), symétrique aux 2 autres catégories — la RAW dit uniformément
+  « soumis à un Test de panne » pour les 4, donc la même mécanique complète s'applique aux 4.
+
+**Trouvaille en écrivant les tests** (avant tout code de production touché par cette trouvaille) :
+`exo_sheet.itg_exosquelette_current`/`itg_generator_current` sont `NOT NULL` (défaut 20,
+migration 44) — Exosquelette et Générateur sont des composants **obligatoires** de toute
+exo-armure, jamais un dispositif optionnel réglé à la main comme un ordinateur. Les adaptateurs
+`EXO_EXOSQUELETTE_ADAPTER`/`EXO_GENERATOR_ADAPTER` n'ont donc aucune branche `eligible:false`
+(toujours éligibles si la ligne existe), contrairement aux 3 autres adaptateurs de ce lot
+(`EXO_COMPUTER_ADAPTER`/`EXO_SYSTEM_ADAPTER`/`EXO_WEAPON_ADAPTER`, dispositifs facultatifs).
+
+**Gap satellite trouvé, non traité (hors périmètre)** : un exo-armure/drone **tireur** ne peut
+charger aucune munition typée aujourd'hui, IEM ou autre — `exo_weapons.ammo_remaining` n'est
+qu'un compteur de coups, `finalizeAssaultOutcome`/`resolveExoAssaultAction`
+(`socketCombatExo.js`) ne portent aucun `ammoFx`. Manque d'infrastructure Exo-armures plus large
+que l'IEM seul, jamais construit, pas propre à ce chantier — noté dans `PLAN_INFORMATIQUE.md` §4
+Lot 2bis, aucun ticket ouvert (pas un bug, une capacité jamais construite).
+
+**Code** : migrations 350/351/352 (`malfunction_severity` sur `exo_systems`/`exo_weapons`/
+`exo_sheet`) ; 4 adaptateurs Repository dans `integrityService.js` ; `runIemPanneTrigger`
+(`socketCombatHelpers.js`) élargi via `runIemPanneTriggerExo` — routé aux 2 sites qui portaient
+déjà `cibleType === 'exo'` (`resolveDamageConfirmExoTarget`, `resolveAssaultHitPnjNormal`), en
+plus du routage `exoAvarieService.resolveExoDamage` existant (dualité dégâts+panne, même principe
+que le ciblage PJ/PNJ). Détail complet dans `PLAN_INFORMATIQUE.md` §4 Lot 2bis (Règle 10 — pas
+recopié ici).
+
+**Testé** : `integrityService.test.mjs` étendu (4 nouveaux adaptateurs), 33/33 verts
+(`node --env-file=../.env --test server/src/services/integrityService.test.mjs`) ; `node --check`
+sur tous les fichiers modifiés ; migrations vérifiées en base après application (auto par
+`nodemon`, colonnes/contraintes conformes aux fichiers).
+**Non testé : ⚠️ clos partiel** — le dispatch socket (tirage de catégorie, boucle Systèmes
+auxiliaires, dualité dégâts+panne aux 2 sites) n'a aucun test automatisé (aucun test n'existe pour
+`socketCombatHelpers.js` dans le projet) et n'a pas encore été rejoué en combat réel par Saar.
+**Données** : migrations 350/351/352, additives pures, auto-appliquées par `nodemon` en cours de
+session (piège connu, sans casse). `down()` retire les colonnes ajoutées, pas de perte de données
+préexistante (colonnes neuves, jamais peuplées avant ce lot).
+**Retour arrière** : un seul commit à prévoir sur `dev/Saar` une fois validé en jeu ; `git revert`
+suffit (additif pur, aucune modification de comportement existant pour les cibles PJ/PNJ/décor ou
+pour le routage exo non-IEM). Non committé à ce stade — en attente de validation Saar.
+
+## Session (Dev) — 2026-09-16 — Entités interactives Lot A1 : 6 fichiers en quarantaine `futuristic_crates_chests`
+
+Suite du chantier caisses/coffres (`docs/Old/PLAN_CAISSES_INTERACTIVES.md`, entrée ci-dessus) —
+`PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` Lot A1. Décision Saar : les 5 premiers fichiers
+rejoignent le catalogue avec le même patron ouverture/fermeture déjà validé (assets 11-15) ; le 6e
+(« Lot de caisses assorties », 9 sous-caisses assemblées dans un seul GLB) reste **purement
+décoratif** — pas de `states`/`interactions`, pas déplaçable (patron déjà existant pour du décor
+sans interaction : `output/futuristic_furniture/manifest.json`).
+
+Zéro changement de code — `builtinModelCatalog.js` lit déjà `states`/`interactions` du manifest
+de façon générique depuis le chantier caisses/coffres, aucune adaptation nécessaire pour ce lot.
+Uniquement du contenu : `git mv` des 6 GLB (accentués/espacés) vers `output/futuristic_crates_chests/
+glb/` sous slug ASCII stable, + 6 entrées ajoutées à `manifest.json`.
+
+**Vérifications faites avant d'écrire une seule ligne** (consigne explicite de Saar : zéro
+approximation, zéro découverte en cours de code) :
+- dimensions mesurées par bounding box réelle (parsing des accessors glTF + matrices de
+  transformation des nœuds), pas estimées ;
+- matériaux de `color_slots` copiés depuis la liste réelle des matériaux du GLB, puis
+  recontrôlés après déplacement (script dédié, 0 écart sur les 6 fichiers) ;
+- convention « temps 0 du clip = fermé » vérifiée canal par canal (comparaison valeur au premier
+  keyframe vs transform de base du nœud) pour les 6 fichiers, plutôt que supposée héritée des 10
+  premiers assets ;
+- absence de doublon avec le catalogue existant reconfirmée par comparaison de taille de fichier
+  (les 6 partagent parfois le même nom de scène Blender/`ROOT_XX` que des assets déjà catalogués —
+  ex. `ROOT_06_chest_compact_lockbox` — mais taille distincte à chaque fois : variantes de design
+  proches, pas des doublons) ;
+- champs dépréciés (`animation`, `animation_frame_closed/open`) explicitement non reconduits sur
+  le contenu neuf (`docs/SYSTEME/CREATION_OBJETS_3D.md`, note du 2026-09-16) ; aucun champ
+  numérique non vérifiable (ex. `capacity_liters`) inventé pour les nouvelles entrées.
+
+**Testé** : `node tools/validate-3d-manifest.mjs output/futuristic_crates_chests/manifest.json`
+(0 erreur, 16 avertissements — le même avertissement stylistique préexistant sur les 10 entrées
+d'origine, rien de nouveau) ; `node --check server/src/lib/builtinModelCatalog.js` ; JSON du
+manifest reparsé sans erreur ; script de contrôle croisé matériaux déclarés ↔ matériaux réels du
+GLB déplacé (0 écart sur les 6).
+**Non testé : ⚠️ clos partiel** — refresh du catalogue par Saar (redémarrage serveur ou bouton
+« Rafraîchir » de l'éditeur) puis test réel : poser/ouvrir/fermer les 5 nouvelles caisses/coffres,
+vérifier que le lot décoratif n'affiche aucune option d'interaction.
+**Données** : aucune migration. `entity_blueprints` recevra 6 nouvelles lignes (`builtin_key`
+`futuristic_crates_chests/11_...` à `.../16_...`) au prochain `syncBuiltinModels()`, sans effet sur
+les lignes existantes.
+**Retour arrière** : un seul commit à prévoir (déplacements + manifest), `git revert` suffit
+(additif pur). Non committé à ce stade — en attente de confirmation de Saar après test réel.

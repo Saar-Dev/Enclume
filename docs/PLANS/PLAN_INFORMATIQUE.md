@@ -97,20 +97,40 @@
 > `server/src/db/migrations/{83,180,266}_token_statuses*` (schéma exact de `token_statuses`),
 > `shared/integrityRules.js` (`applyTemporaryLoss`, plancher à 0 vérifié).
 >
-> Statut : couches 1-2 seulement (couches 3-5 n'ont pas encore de MANUEL, donc pas de PLAN).
-> **Plan complet, tous les points bloquants tranchés. Lot 1 (catalogue) ET Lot 2 (déclencheur IEM,
-> périmètre réduit — voir ci-dessous) appliqués/codés et vérifiés 2026-09-16. Lots 3-4 non commencés.
-> Aucun scénario réel en jeu encore joué par Saar (validation restante).**
+> Statut (mis à jour 2026-09-16, fin de session) : couches 1-2 seulement (couches 3-5 n'ont pas
+> encore de MANUEL, donc pas de PLAN).
 >
-> **Lot 2, réduction de périmètre décidée avec Saar (2026-09-16)** : le déclencheur IEM ne couvre
-> que les cibles PJ/PNJ standard (`char_inventory.is_electronic`). Exo-armure et drone sont
-> explicitement HORS PÉRIMÈTRE de cette implémentation — l'incident RAW à 4 catégories de
-> l'exo-armure (Exosquelette/Générateur/Systèmes auxiliaires/Armement) n'a aucun équivalent construit
-> côté Exo-armures (`exo_systems`/`exo_weapons` n'ont aucune colonne d'Intégrité), et un drone n'a ni
-> `char_inventory` ni `exo_computers`. Improviser l'un ou l'autre aurait été un second moteur sur une
-> RAW non modélisée. Reste un gap connu, à reprendre dans le domaine Exo-armures. Détail complet
-> (ciblage, malus, attribution des jets) dans `server/src/socket/socketCombatHelpers.js`
-> (`runIemPanneTrigger`, juste après `runCombatWeaponPanne`).
+> - **Lot 1 (catalogue) — FAIT, committé, appliqué en base.**
+> - **Lot 2 (déclencheur IEM, cibles PJ/PNJ) — FAIT, committé (`64c6667`), VALIDÉ EN COMBAT RÉEL**
+>   par Saar (tirage à 1 puis 3 objets électroniques, jet, perte d'ITG, notice, inventaire — bout en
+>   bout). Exo-armure et drone restent hors périmètre de CE lot précis (cf. Lot 2bis).
+> - **Lot 2bis (ciblage IEM sur exo-armure) — CODÉ 2026-09-16, PAS ENCORE VALIDÉ EN JEU RÉEL.**
+>   Corrige une erreur de ce document (voir §4 Lot 2bis) : `exo_systems`/`exo_weapons` ont bien des
+>   colonnes d'Intégrité, jamais utilisées — le manque réel était plus petit qu'annoncé. Migrations
+>   350/351/352 (`malfunction_severity` sur `exo_systems`/`exo_weapons`/`exo_sheet` Exosquelette-
+>   Générateur — décision Saar : symétrie complète avec les 2 autres catégories), 4 adaptateurs
+>   Repository (`integrityService.js`), tirage équipondéré 1/4 entre les 4 catégories (décision
+>   Saar : « déterminé au hasard » RAW = équipondéré, pas de pondération inventée), `exo_systems`
+>   éligible NULL→skip comme un dispositif facultatif, **Exosquelette/Générateur toujours
+>   éligibles** (colonnes NOT NULL, composants obligatoires de toute exo-armure — trouvaille de
+>   cette session, corrige une hypothèse de conception fausse détectée par les tests). 33/33 tests
+>   `integrityService.test.mjs` verts. **Gap satellite trouvé, hors périmètre** : un exo-armure/
+>   drone TIREUR ne peut jamais charger de munition IEM aujourd'hui (`exo_weapons.ammo_remaining`
+>   est un simple compteur, aucune résolution de type de munition/`ammo_effects` pour cette
+>   plateforme, `finalizeAssaultOutcome`/`socketCombatExo.js` ne portent aucun `ammoFx`) — gap
+>   d'infrastructure Exo-armures bien plus large que l'IEM seul, jamais construit, pas propre à ce
+>   chantier. Non traité, non régressif (ce lot ne fait qu'ajouter une capacité côté cible).
+> - **Lot 3a (ressource Survie I.E.M.) — fait avant cette session, à revérifier au moment d'y toucher.**
+> - **Lot 3b (machine à états Survie I.E.M.) — re-cadré et SIMPLIFIÉ 2026-09-16** (le malus de
+>   séquelle n'a plus besoin de toucher `combatantContextService.js`, cf. §4 Lot 3b) ; pas encore
+>   codé, testable maintenant que le Lot 2bis fournit un chemin de déclenchement réel côté exo.
+> - **Lot 4 (auto-désactivation Gestion systèmes) — cadré, pas codé, indépendant des autres lots.**
+>
+> **Leçon retenue cette session, à appliquer partout dans ce document** : une affirmation reprise
+> d'une version précédente de ce PLAN (« aucune colonne d'Intégrité sur exo_systems/exo_weapons »)
+> s'est révélée fausse parce qu'elle n'a pas été revérifiée contre le schéma réel avant d'être
+> répétée à Saar. Corrigée (§4 Lot 2bis) — mais tout `[VÉRIFIÉ]` de ce document antérieur au
+> 2026-09-16 mérite une revérification rapide avant d'être cité tel quel, pas seulement fait confiance.
 >
 > **Exécution Lot 1, 2026-09-16** : 344 et 345 avaient été auto-appliquées par `nodemon` malgré le
 > gel posé le 2026-09-15 (piège connu, `.claude/rules/migrations.md`) — sans casse, mais 344 avait
@@ -355,111 +375,140 @@ document, trouvés en creusant l'architecture des Lots 2/3/4 le 2026-09-15) :
   `family='Logiciels'` (41 attendu après seed : 34 + 7), non-régression du round-trip migration
   (`.claude/rules/migrations.md`).
 
-### Lot 2 — Déclencheur de Test de panne par IEM
+### Lot 2 — Déclencheur de Test de panne par IEM — **FAIT, COMMITTÉ, VALIDÉ JEU RÉEL**
 
-**Ciblage d'un hit IEM — arbitré avec Saar 2026-09-15, RAW revérifiée mot à mot avant validation**
-(`docs/REGLES/REGLEARMURE.md`, `docs/REGLES/REGLEPOLARIS.md`) :
+**Statut 2026-09-16** : codé, testé (suite `integrityService.test.mjs` 27/27 + vérifications directes
+en base), validé par Saar en combat réel (PNJ tireur, munition IEM, cible à 1 puis 3 objets
+électroniques — tirage, jet, perte d'ITG, notice chat, mise à jour inventaire, bout en bout).
+Committé `64c6667` (`dev/Saar`, pas encore poussé). Détail dans le code, pas ici (Règle 10 — un PLAN
+documente l'architecture, pas un journal de session) :
 
-- **Ordinateur seul — simplifié (analyse à charge 2026-09-15)** : pas une branche de code séparée.
-  Une fois `is_electronic` posé (Lot 1), c'est le cas particulier N=1 du tirage équipondéré
-  générique décrit plus bas — un ensemble d'un seul objet électronique se tire toujours lui-même.
-  RAW cohérente (le pouvoir Force Polaris « Attaque IEM » parle toujours d'« un appareil
-  électronique » au singulier) sans avoir besoin d'un `if` dédié. Un seul chemin de code pour ce cas
-  et le cas générique, deux seulement au total avec l'exo-armure (RAW à part, ci-dessous).
-- **Exo-armure** : reprendre le tableau RAW **exact**, pas une liste plate de tout l'équipement à
-  égalité — citation `REGLEARMURE.md`, incident Avarie IEM : « Chaque attaque touche habituellement
-  l'un des éléments suivants (plusieurs parfois), déterminé au hasard : Exosquelette, Générateur,
-  Systèmes auxiliaires (dans ce cas, 1D6+3 systèmes sont touchés), Armement (sauf les équipements ne
-  comportant pas de composants électroniques). » Tirage entre ces **4 catégories**, pas entre les
-  objets individuellement ; la catégorie Systèmes auxiliaires touche plusieurs objets d'un coup si
-  elle sort ; la catégorie Armement n'en touche jamais qu'un seul (« un seul et unique système
-  d'attaque ou de défense », même fichier, section Armement). Le détail fin de cet incident RAW reste
-  le territoire d'Exo-armures (MANUEL §7) — ce chantier ne fait que router vers le Test de panne une
-  fois la cible tirée.
-- **Personnage porteur de plusieurs objets électroniques séparés hors exo-armure** (accessoire
-  d'arme inclus) : **aucune RAW ne couvre ce cas** — cherché spécifiquement le mot « accessoire »
-  dans toutes les règles (armure, munitions, drones, compétences), aucune trace. **Décision maison
-  assumée** (Saar, 2026-09-15) : tirage au hasard équipondéré parmi les objets `is_electronic=true`
-  réellement portés — cohérent avec le principe « au hasard » que la RAW applique systématiquement
-  dans ce genre de cas, mais ce n'est pas une règle RAW retrouvée. **Journalisé `docs/JOURNAL8.md`**
-  (session 2026-09-15), comme l'exige `AGENTS.md` invariant 5 (jamais un écart RAW silencieux).
-- **Primitive d'énumération** (cas générique) : filtrer `char_inventory` (jointure `ref_equipment`)
-  par `is_electronic = true`, même garde `container !== 'Coffre'` que le calcul de poids porté
-  (`gmArbitratedTestService.js`).
+- `server/src/services/integrityService.js` — `runPanneTest` refactorée en Repository pattern
+  (`CHAR_INVENTORY_ADAPTER` exporté = comportement historique inchangé, `EXO_COMPUTER_ADAPTER`
+  exporté à ce Lot — consommé depuis le Lot 2bis ci-dessous, qui ajoute 4 adaptateurs sœurs).
+  Nouveau paramètre `modifier` (malus IEM −3, défaut 0). `mr` ajouté au retour (consommé par le
+  Lot 3b).
+- `server/src/socket/socketCombatHelpers.js` — `runIemPanneTrigger` (juste après
+  `runCombatWeaponPanne`) : lit `ammoFx` déjà résolu par `damageService.getEffectiveWeaponDamage`
+  (`.tags.FX`, jamais une nouvelle lecture d'`ammo_effects`), tirage équipondéré (`randomInt` de
+  `crypto`, même patron que `advantageService.js`) parmi les objets `char_inventory.is_electronic
+  = true` du défenseur hors Coffre. Branchée aux 2 sites qui portent `ammoFx` (tir différé
+  PJ-tireur via `resolveDamageConfirmNormalTarget`, tir immédiat PNJ-tireur via
+  `resolveAssaultHitPnjNormal`). Décision maison (tirage équipondéré générique, aucune RAW ne
+  couvre le cas d'un personnage portant plusieurs objets électroniques hors exo-armure) —
+  journalisée `docs/JOURNAL8.md` 2026-09-15.
+- Migrations 348 (`malfunction_severity` sur `exo_computers`) et **349** (trouvaille en testant en
+  jeu réel 2026-09-16 : `is_electronic` et `has_integrity` sont deux flags indépendants, 53 des 89
+  objets électroniques n'avaient pas d'Intégrité suivie donc jamais testables — décision Saar « on
+  suit le RAW », `has_integrity=true` étendu à tout `is_electronic=true`).
+- Ticket `bug_tickets` créé pour les 19 lignes catalogue mortes trouvées au Lot 1 (`423fad76-…`).
 
-**Architecture du moteur — arbitrée 2026-09-15 (§2.4, recherche externe faite)** :
+**Hors périmètre de ce Lot, explicitement** (`cibleType !== 'pj' && cibleType !== 'pnj'` dans
+`runIemPanneTrigger`, avec DBG dédié plutôt qu'un silence) : exo-armure et drone. Voir Lot 2bis.
 
-- `runPanneTest` (`server/src/services/integrityService.js:92`) est refactorée en Repository
-  pattern : l'interprétation (`interpretPanneOutcome`) et le calcul de perte
-  (`applyTemporaryLoss`, dans `shared/integrityRules.js`) restent strictement communs et inchangés.
-  Seules les 2 étapes spécifiques à une table (verrouiller/lire la ligne, écrire le résultat) sont
-  extraites dans un petit adaptateur passé en paramètre. Un adaptateur `char_inventory`
-  (comportement actuel, inchangé, les deux appelants existants
-  `socketCombatHelpers.js:1022`/`char-sheet.js:1244` continuent de fonctionner à l'identique) et un
-  adaptateur `exo_computers` (nouveau, pour ce lot) — jamais une fonction sœur qui recopie le
-  verrouillage/l'écriture (second moteur interdit, `AGENTS.md` invariant 2).
-- **[VÉRIFIÉ] Deuxième changement nécessaire dans `runPanneTest`, pas seulement l'adaptateur de
-  stockage (analyse à charge 2026-09-15)** : `resolvePolarisTest(threshold, criticalSuccessBonus)`
-  (`polarisTestService.js:18`) ne prend qu'un seuil brut — `runPanneTest` l'appelle aujourd'hui avec
-  `row.integrity_current` tel quel, sans aucun moyen d'ajouter un modificateur. Le Test de panne IEM
-  a besoin d'un modificateur net (malus RAW −3, contré par le Blindage IEM de la cible) — sans lui,
-  le jet serait toujours non modifié, faux par rapport au RAW. `runPanneTest` doit donc gagner un
-  paramètre `modifier` optionnel (défaut 0, aucun changement pour les deux appelants existants),
-  appliqué comme `resolvePolarisTest(row.integrity_current + modifier)`. Le malus −3 lui-même est
-  une constante RAW fixe (jamais variable par calibre) : elle vit dans le futur module du
-  déclencheur IEM (pas encore écrit), jamais dans `shared/weaponAmmoDsl.js` (qui ne fait que
-  signaler `FX=IEM`, cf. §2.5) ni dans le catalogue.
-- **[VÉRIFIÉ] Troisième changement nécessaire dans `runPanneTest` — trouvé en préparant le Lot 3
-  (analyse à charge 2026-09-15, citation corrigée lors de l'analyse critique du même jour :
-  l'objet `common` va de `integrityService.js:104` à `:114`, pas `:118`)** : l'objet `common`
-  retourné aujourd'hui porte `roll`, `threshold`, `isCriticalFail`, mais jamais `mr` — la marge
-  signée que `resolveTestOutcome` calcule pourtant déjà (`shared/polarisTestResolution.js:77`,
-  `mr = isSuccess ? roll : seuil - roll`). MANUEL §4.7 étape 1 fixe la durée d'immobilisation de la
-  Survie I.E.M. à « sa marge d'échec au Test de panne d'origine » — sans `mr` dans le retour de
-  `runPanneTest`, le Lot 3 n'a aucun moyen de connaître cette durée. Ajouter `mr: outcome.mr` à
-  `common`, aucun changement pour les appelants existants (un champ de plus dans un objet qu'ils ne
-  déstructurent que partiellement).
-  **[À NE PAS RATER, trouvé à l'analyse critique] `mr` est NÉGATIF sur un échec** (`seuil - roll`
-  avec `roll > seuil`) — la marge d'échec RAW (un nombre de Tours, positif) est donc `-mr` (ou
-  `Math.abs(mr)`), jamais `mr` tel quel. Le Lot 3b (ci-dessous) calcule
-  `rebootEligibleTurn = currentTurn - mr` : un appel naïf en `currentTurn + mr` retrancherait des
-  Tours au lieu d'en ajouter — bug de signe à éviter explicitement à l'écriture, pas une évidence
-  du nom du champ.
-- **Migration additive requise dans ce lot** : `malfunction_severity` sur `exo_computers` (absente
-  aujourd'hui, cf. §2.4/§3 point 5) — même forme que `char_inventory`, nécessaire pour que
-  l'adaptateur `exo_computers` puisse écrire un résultat de panne complet, pas seulement une perte
-  d'ITG.
-- **Condition de déclenchement** : lire `parsed.tags.FX === 'IEM'` (résultat de
-  `parseAmmoEffects(row.ammo_effects)`, §2.5) directement dans le nouveau site d'appel — **jamais**
-  via `resolveAmmoMechanic` (registre de `damageService.js`, frontière déjà actée). **[À VÉRIFIER,
-  pas encore fait]** : le site d'appel (résolution d'un tir, `socketCombatHelpers.js` ~ligne 3137)
-  a-t-il déjà sous la main la munition réellement tirée (`ammo_effects`), ou faut-il une requête
-  supplémentaire — pas encore lu à ce jour.
-- **Site d'appel** : nouvelle fonction, patron de `runCombatWeaponPanne` mais branchée sur
-  `runPanneTest` refactorée (avec son nouveau paramètre `modifier`) + l'adaptateur `exo_computers`,
-  appelée au moment où un coup est confirmé porté sur le défenseur ET où la condition ci-dessus est
-  vraie — à positionner précisément dans `socketCombatHelpers.js` au moment de l'implémentation
-  (près des deux sites d'appel existants de `runCombatWeaponPanne`, lignes 1241/2751, sans en
-  modifier le comportement). **Reste à vérifier avant de coder** : comment le personnage/
-  l'inventaire de la **cible** (pas l'attaquant, déjà résolu à cet endroit du fichier) se résout
-  depuis `targetTokenId` à ce point précis du pipeline — non lu à ce jour, [À VÉRIFIER] en ouvrant
-  `socketCombatHelpers.js` au moment de l'implémentation.
-- **Événement WS** : réutiliser le patron déjà en place pour la panne d'Usure (`DICE_RESULT` +
-  `COMBAT_SYSTEM_NOTICE` côté combat, `INVENTORY_UPDATED` côté `char_inventory` — §2.4) ; équivalent
-  côté `exo_computers` — pas d'événement `EXO_UPDATED`/équivalent confirmé à ce jour, [À VÉRIFIER].
-- **Aucune modification de `shared/integrityRules.js`** : le déclenchement IEM est un nouvel
-  appelant de `interpretPanneOutcome`/`runPanneTest` (refactorée), pas une nouvelle branche de calcul.
-- **Frontière avec `damageService.js`/`weaponAmmoDsl.js` — précisée (analyse à charge)** : le Lot 1
-  peut y toucher pour la réduction de dégâts des Balles IEM (moitié dégâts, un calcul de dégâts pur
-  — sa place légitime). Le Lot 2 n'y touche **pas** : le déclenchement du Test de panne lui-même
-  est un effet de bord de combat, jamais une entrée `AMMO_MECHANIC_ACTIONS`. Les deux lots peuvent
-  toucher les mêmes munitions IEM, chacun sa moitié du problème, sans se chevaucher.
-- **Tests** : scénario Balles IEM sur cible avec objet `is_electronic`, avec/sans Blindage IEM ;
-  scénario exo-armure (tirage 4 catégories, bloc Systèmes auxiliaires) ; scénario personnage
-  générique multi-objets (tirage équipondéré) ; non-régression des deux appelants existants de
-  `runPanneTest` après refactor (mêmes résultats qu'avant, adaptateur `char_inventory` transparent) ;
-  non-régression du pipeline de dégâts existant côté Lot 2 (cette fonction ne modifie aucun calcul
-  de dégâts, seulement `damageService.js` du Lot 1 le fait, pour la réduction de moitié).
+### Lot 2bis — Ciblage IEM sur exo-armure — CODÉ 2026-09-16, PAS ENCORE VALIDÉ EN JEU RÉEL
+
+**Pourquoi un lot séparé** : la Survie I.E.M. (Lot 3) équipe spécifiquement les exo-armures/drones
+(MANUEL §4.7) — sans un chemin IEM qui touche une exo, le Lot 3b n'a jamais l'occasion de se
+déclencher. Ce lot comble ce chaînon avant d'écrire le Lot 3b.
+
+**[VÉRIFIÉ] Correction d'une affirmation fausse de ce document (analyse à charge 2026-09-16,
+erreur commise en citant l'ancienne version de ce paragraphe sans revérifier le schéma réel avant
+de la répéter)** : l'ancienne version affirmait qu'`exo_systems`/`exo_weapons` n'avaient « aucune
+colonne d'Intégrité ». **Faux.** Requête directe sur `enclumeBD` (2026-09-16) :
+- `exo_systems.integrite_current`/`integrite_max` — présentes (migration 45).
+- `exo_weapons.integrite_current`/`integrite_max` — présentes.
+- `exo_sheet.itg_exosquelette_current`/`_max` et `itg_generator_current`/`_max` — présentes
+  (migration 44), déjà éditables via la route MJ `PUT /:characterId/exo` (`char-sheet.js:2283-2293`).
+
+Ces colonnes existent mais ne sont **consommées par aucun mécanisme** aujourd'hui (`grep` exhaustif,
+2026-09-16) — `exoAvarieService.js` (le système d'Avaries générique déjà codé, PLAN_EXOARMURE.md
+§11) n'écrit que `exo_sheet.itg_structure_current`, jamais les 4 autres colonnes. Le vrai manque
+n'est donc pas un schéma absent, mais un **mécanisme de Test de panne jamais branché** sur des
+colonnes déjà là — un problème beaucoup plus petit que ce que la version précédente de ce document
+laissait croire.
+
+**RAW — deux mécaniques distinctes à ne pas confondre (`docs/REGLES/REGLEARMURE.md`, lu en entier
+2026-09-16)** :
+1. **Incident générique de Dommages** (`:354-368`) : un Dommage qui franchit un seuil d'Avarie peut
+   déclencher un incident (1D10+modificateur ≥ 7), localisé au hasard sur 1D10 parmi Structure(1-2)/
+   Exosquelette(3-4)/Générateur(5)/Systèmes auxiliaires(6-7)/Armement(8-9)/Pilote(10). Pour
+   Structure/Exosquelette/Générateur, l'effet est une perte d'Intégrité **automatique** dépendant de
+   la bande de résultat (`:451-542`) — **jamais un Test de panne**. Ce mécanisme est déjà couvert
+   par `exoAvarieService.js` (Structure) — **hors périmètre de ce chantier**, propriété
+   Exo-armures, pas à toucher.
+2. **Attaque IEM** (`:434-441`, citée mot à mot) : « Chaque attaque touche habituellement l'un des
+   éléments suivants (plusieurs parfois), déterminé au hasard : Exosquelette, Générateur, Systèmes
+   auxiliaires (dans ce cas, 1D6+3 systèmes sont touchés), Armement (sauf les équipements ne
+   comportant pas de composants électroniques). **Les éléments touchés sont soumis à un Test de
+   panne** (voir le chapitre Équipement), avec un modificateur plus ou moins important selon la
+   puissance de l'attaque. » **C'est ce mécanisme que ce lot doit construire** — les 4 catégories
+   sont TOUTES soumises au Test de panne standard (`runPanneTest`, déjà construit), jamais au
+   traitement « incident » du point 1. Confirmation croisée pour Systèmes auxiliaires (`:544-548`,
+   RAW indépendante des IEM) : « 1 Système est touché... Lancez 1D20 : si le résultat est supérieur
+   au niveau d'Intégrité du système, celui-ci tombe en panne (à traiter comme une panne normale) »
+   — exactement `runPanneTest`.
+
+**Architecture codée** :
+- **4 adaptateurs Repository** (`integrityService.js`), même patron que `EXO_COMPUTER_ADAPTER` :
+  - `EXO_SYSTEM_ADAPTER` (table `exo_systems`, par `id`) — `integrite_current` nullable, dispositif
+    facultatif comme `exo_computers` → `eligible:false`/`skipped` possible.
+  - `EXO_WEAPON_ADAPTER` (table `exo_weapons`, par `id`) — même convention que ci-dessus.
+  - `EXO_EXOSQUELETTE_ADAPTER` / `EXO_GENERATOR_ADAPTER` : lisent/écrivent
+    `exo_sheet.itg_exosquelette_*`/`itg_generator_*`, par `character_id` (pas de ligne dédiée —
+    l'adaptateur porte l'`id` = `character_id` de l'exo, pas un id de ligne séparée ; `characterId`
+    fourni doit coïncider avec `id`, sinon 404). **Trouvaille en écrivant les tests (`node --test`,
+    échec réel avant correction)** : ces 2 colonnes sont `NOT NULL` (défaut 20, migration 44) —
+    Exosquelette et Générateur sont des composants **obligatoires** de toute exo-armure, jamais un
+    dispositif optionnel réglé à la main. Ces 2 adaptateurs n'ont donc **aucune branche
+    `eligible:false`** : une ligne `exo_sheet` trouvée est toujours éligible (contrairement aux 3
+    autres adaptateurs de ce lot). Corrigé avant merge, pas après — les tests ont fait leur travail.
+- **Migrations 350/351/352** : `malfunction_severity` sur `exo_systems` et `exo_weapons` (même
+  forme que `char_inventory`/`exo_computers`, migrations 330/348) ; **décision Saar 2026-09-16 :
+  oui, Exosquelette/Générateur ont aussi besoin d'un `malfunction_severity`** (symétrie RAW complète
+  avec les 2 autres catégories) → `exo_sheet.exosquelette_malfunction_severity`/
+  `generator_malfunction_severity` (migration 352, sans préfixe `itg_` — état de panne, pas une
+  valeur d'Intégrité).
+- **Pondération du tirage entre les 4 catégories — décision Saar 2026-09-16 : équipondéré (1/4
+  chacune)**. RAW dit juste « déterminé au hasard », aucune table chiffrée pour ce cas précis
+  (contrairement à l'incident générique du point 1 ci-dessus, qui a sa propre table 1D10) — la
+  lecture proportionnelle envisagée (2:1:2:2/7) était une extrapolation, jamais une citation ;
+  équipondéré colle au texte tel qu'il est écrit, sans probabilité inventée. `EXO_IEM_CATEGORIES`
+  (`socketCombatHelpers.js`).
+- **Site d'appel** : `runIemPanneTrigger` élargi — `cibleType === 'exo'` route désormais vers
+  `runIemPanneTriggerExo` (tirage de catégorie, puis adaptateur correspondant), **avant** (pas à la
+  place de) le routage `exoAvarieService.resolveExoDamage` existant aux 2 sites concernés
+  (`resolveDamageConfirmExoTarget`, `resolveAssaultHitPnjNormal`) — même dualité dégâts+panne que le
+  ciblage PJ/PNJ (une munition IEM inflige la moitié des dégâts ET impose un Test de panne, RAW).
+  Systèmes auxiliaires : 1D6+3 systèmes tirés sans remise parmi ceux installés (0 si aucun installé),
+  chacun son propre Test de panne. Armement : un parmi les armes dont `ref_equipment.is_electronic`
+  = true (exclusion RAW des équipements sans composants électroniques ; une arme sans
+  `ref_equipment_id` catalogue est exclue par prudence, pas supposée électronique).
+- **Frontière confirmée, non élargie** : Blindage IEM (`exo_computers.blindage_iem`) ne s'applique
+  qu'à la catégorie Ordinateur — ici on parle des 4 autres catégories de l'exo elle-même, aucune
+  colonne Blindage IEM équivalente pour Exosquelette/Générateur/Systèmes/Armement ([INCONNU] si RAW
+  en prévoit une ailleurs — pas cherché à ce stade, aucune réduction appliquée pour l'instant).
+- **Pas d'événement de mise à jour temps réel** pour `exo_systems`/`exo_weapons`/`exo_sheet`
+  Exosquelette-Générateur (contrairement à `INVENTORY_UPDATED` côté `char_inventory`) : aucun
+  panneau client n'écoute de flux temps réel pour ces tables à ce jour (même situation, non
+  régressive, que `exo_computers` depuis le Lot 2) — MJ/joueurs voient l'état à jour à la prochaine
+  ouverture de la fiche. Inventer un événement sans consommateur aurait été une abstraction non
+  requise.
+- **Gap satellite trouvé, hors périmètre de ce lot** : un exo-armure/drone **tireur** ne peut
+  jamais charger de munition IEM aujourd'hui — `exo_weapons.ammo_remaining` est un simple compteur
+  de coups, aucune résolution de type de munition/`ammo_effects` n'existe pour cette plateforme
+  (`finalizeAssaultOutcome`/`resolveExoAssaultAction` dans `socketCombatExo.js` ne portent aucun
+  `ammoFx` dans leur `ctx`). Ce lot ne concerne que l'exo **cible** — le gap côté tireur exo/drone
+  est un manque d'infrastructure Exo-armures bien plus large que l'IEM seul (aucune munition, quel
+  que soit son type, n'est sélectionnable pour ces plateformes), pas propre à ce chantier, non
+  traité, non régressif.
+- **Tests** : `integrityService.test.mjs` étendu (4 adaptateurs, lecture/écriture, éligibilité
+  NULL→skip pour Systèmes/Armement, toujours-éligible pour Exosquelette/Générateur, `characterId`
+  incohérent → 404, convention `id = character_id`) — 33/33 verts (`node --env-file=../.env --test
+  server/src/services/integrityService.test.mjs`). Non testé automatiquement : le dispatch socket
+  (`runIemPanneTriggerExo`, tirage de catégorie, boucle Systèmes auxiliaires) — comme le reste de
+  `socketCombatHelpers.js`, validé par Saar en jeu réel, pas par un test unitaire (pas de test pour
+  ce fichier dans le projet).
 
 ### Lot 3 — Blindage IEM (lecture) + Survie I.E.M.
 
@@ -614,26 +663,37 @@ périmètre côté drone tant que le Blindage IEM drone ne l'est pas (§4 Lot 3,
 décision lève seulement l'ambiguïté qui aurait pu bloquer une extension future, elle ne déclenche
 aucun code ici.
 
-**Point d'accroche du malus de séquelle — trouvé, nécessite un fil d'alimentation nouveau mais
-additif** : `server/src/lib/activeMalusRegistry.js` (`ACTIVE_MALUS_SOURCES`) est déjà le registre
-générique conçu pour exactement ce cas (commentaire en tête du fichier : « Chaque lot futur ajoute
-une entrée [...] — jamais besoin de retoucher `calcActiveMalus` ni les sites consommateurs »),
-aujourd'hui alimenté par 3 sources qui portent toutes sur le PILOTE (blessure, encombrement,
-fatigue). **Vérifié en lisant `combatantContextService.js` en entier** : pour un combattant de type
-`exo` (`resolveExoTestContext`), `effectiveMalus` est calculé par `resolveHumanoidTestContext(db,
-pilot, ...)` — c'est-à-dire avec le contexte du **pilote**, jamais celui de l'exo-armure qu'il
-pilote. Ajouter une 4ᵉ source (`key: 'iemSurvival'`) au registre ne suffit donc pas seul : il faut
-aussi que `resolveExoTestContext` sache lire l'état `iem_survival` en cours de la plateforme et
-l'injecte dans le `ctx` passé à `calcActiveMalus` — un nouveau paramètre à faire descendre dans
-`resolveHumanoidTestContext` (même discipline que `forNAOverride`, déjà un paramètre optionnel
-additif sans effet sur les appelants qui ne le fournissent pas). **Complication non résolue à ce
-stade, à trancher au moment d'écrire ce lot** : lire une ligne `token_statuses` suppose de connaître
-le `token_id` de la plateforme, or `resolveCombatantTestContext`/`resolveHumanoidTestContext`/
-`resolveExoTestContext` ne reçoivent aujourd'hui que `character`/`skillId`/`opts` — aucun `tokenId`.
-Les sites d'appel réels (résolution CaC/Tir) connaissent déjà le tokenId à cet instant : il s'agit de
-le faire transiter en plus, pas de le récupérer d'ailleurs — mais c'est un changement de signature
-d'une fonction partagée par 6+ sites d'appel (cf. commentaire de `combatantContextService.js`), donc
-à vérifier avec la même rigueur que le reste de ce fichier avant d'y toucher.
+**Point d'accroche du malus de séquelle — [VÉRIFIÉ] RE-SIMPLIFIÉ 2026-09-16, plus besoin de toucher
+`combatantContextService.js`.** L'ancienne version de ce paragraphe proposait de faire transiter un
+`tokenId` à travers la fonction partagée par 6+ sites d'appel, pour relire l'état `token_statuses`
+`iem_survival` EN COURS au moment du Test. **Erreur de raisonnement trouvée en relisant le RAW mot à
+mot (MANUEL §4.7 étape 3, 2026-09-16)** : le malus de séquelle est explicitement **cumulatif** («
+malus cumulatif de −1, porté à −2 si... ») et rien dans le texte ne prévoit de le faire disparaître —
+contrairement au statut `iem_survival` (l'immobilisation), qui lui EST supprimé dès le redémarrage
+réussi (§ ci-dessus). Un malus cumulatif et permanent est une propriété de l'objet (l'ordinateur),
+pas un état de combat temporaire : il n'a donc aucune raison de vivre dans `token_statuses`, et
+encore moins besoin du `tokenId` — relire l'état `iem_survival` « en cours » n'aurait de toute façon
+jamais fonctionné pour la séquelle, puisqu'au moment où elle est décidée (tick de redémarrage réussi)
+la ligne `iem_survival` est justement supprimée dans la même étape.
+
+**Architecture retenue** : nouvelle colonne `exo_computers.sequelle_malus` (integer, `NOT NULL
+DEFAULT 0`, jamais remis à 0 par ce chantier — RAW ne donne aucune condition d'effacement, jamais
+inventée ici) — même migration additive simple que 348/349. `resolveExoTestContext`
+(`combatantContextService.js`) connaît déjà `exoCharacter.id` : il lui suffit de lire l'ordinateur
+actif (`exo_computers` filtré par `character_id`, passé à `resolveActiveComputer` de
+`shared/computerStats.js`, déjà la seule autorité principal/secours) et de faire descendre son
+`sequelle_malus` comme un paramètre additif de plus dans `resolveHumanoidTestContext` (même
+discipline que `forNAOverride`), qui l'ajoute au `ctx` de `calcActiveMalus`. La 4ᵉ source
+`{ key: 'iemSurvival', compute: (ctx) => ctx.iemSurvivalMalus ?? 0 }` dans
+`activeMalusRegistry.js` reste inchangée dans son principe, juste alimentée différemment (une
+lecture `exo_computers`, jamais `token_statuses`). **Aucun changement de signature sur
+`resolveCombatantTestContext`/`resolveCombatantIdentity`, aucun appelant existant à toucher.**
+**[À TRANCHER avec Saar]** : le malus s'incrémente-t-il aussi pour Exosquelette/Générateur/Systèmes
+auxiliaires/Armement (Lot 2bis) sous IEM, ou seulement pour l'ordinateur (Survie I.E.M. étant un
+dispositif spécifique à l'ordinateur, MANUEL §4.7) ? Lecture par défaut retenue ici : uniquement
+l'ordinateur, la Survie I.E.M. étant un dispositif optionnel propre à cette pièce d'équipement, pas
+une propriété générale de l'armure.
+
 **Frontière confirmée, ne pas élargir sans nécessité** : les drones n'appellent jamais
 `resolveCombatantTestContext` (`drone_programs.level` sert directement de Seuil, commentaire du
 fichier) — si le Blindage/la Survie I.E.M. côté drone est un jour tranché « in scope » (§ ci-dessus,
@@ -642,12 +702,16 @@ câblé séparément, pas anticipé ici sans besoin réel.
 
 **Tests** : fonction de tick testée unitairement (sélection par `rebootEligibleTurn`, jet
 pair/impair, décrément de `survie_iem_current`, suppression de la ligne sur succès, non-sélection
-tant que `rebootEligibleTurn > currentTurn`) ; non-régression de `calcActiveMalus`/
+tant que `rebootEligibleTurn > currentTurn`, incrément cumulatif de `exo_computers.sequelle_malus`
+sur jet impair, −2 si `wasCritical`) ; non-régression de `calcActiveMalus`/
 `activeMalusRegistry.test.mjs` après l'ajout de la 4ᵉ source (les 3 sources existantes inchangées à
-`iemSurvival` absent du `ctx`) ; scénario d'intégration Test de panne IEM échoué (Lot 2) → pose du
+`iemSurvival` absent du `ctx`) ; non-régression de `resolveExoTestContext`/
+`combatantContextService.test.mjs` pour un ordinateur sans `sequelle_malus` (0 par défaut, aucun
+changement de comportement) ; scénario d'intégration Test de panne IEM échoué (Lot 2) → pose du
 statut avec la bonne `rebootEligibleTurn` (`mr` du Lot 2) → tentatives échouées plusieurs Tours de
-suite → redémarrage réussi → malus appliqué au Test suivant du pilote de l'exo concernée ; scénario
-de blocage — une déclaration d'action tentée sur le token de l'exo pendant que `iem_survival` est
+suite → redémarrage réussi avec séquelle → malus lu depuis `exo_computers.sequelle_malus` au
+prochain Test du pilote de l'exo concernée, persistant même après la fin du combat ; scénario de
+blocage — une déclaration d'action tentée sur le token de l'exo pendant que `iem_survival` est
 active doit être refusée, acceptée de nouveau dès la ligne supprimée ; non-régression de
 `isTestBlockingWound`/`socketCombatAnnouncement.js` (la nouvelle garde s'ajoute, ne remplace rien) ;
 second échec IEM sur la même plateforme avant la fin d'un incident en cours (§ ci-dessus) ne doit

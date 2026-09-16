@@ -12,7 +12,7 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
-import { runPanneTest } from '../services/integrityService.js'
+import { runPanneTest, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
 import { randomInt } from 'crypto'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
@@ -724,14 +724,17 @@ async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
 // même rôle que le bloc DICE_RESULT/COMBAT_ATTACK_RESULT du drone, format propre à l'exo.
 async function resolveDamageConfirmExoTarget(io, campaignId, ctx, socket) {
   const {
-    degautsBruts, characterIdCible, targetTokenId, tokenId,
+    degautsBruts, characterIdCible, targetTokenId, tokenId, targetName,
     tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed, effectiveAmmoFx,
   } = ctx
-  // Informatique Lot 2 (PLAN_INFORMATIQUE.md §4) : cible exo hors périmètre de runIemPanneTrigger
-  // (jamais appelée dans cette branche) — même DBG dédié que resolveAssaultHitPnjNormal.
-  if (effectiveAmmoFx === 'IEM') {
-    console.log('[DBG] test de panne IEM — cible exo-armure (chemin différé) : hors périmètre Lot 2, ignoré')
-  }
+  // Informatique Lot 2bis (PLAN_INFORMATIQUE.md §4 Lot 2bis) — Attaque IEM sur exo-armure : en
+  // plus des dégâts/Avarie normaux ci-dessous (inchangés), une munition IEM soumet l'un des 4
+  // composants (Exosquelette/Générateur/Systèmes auxiliaires/Armement) à un Test de panne — même
+  // dualité dégâts+panne que le chemin PJ/PNJ (resolveDamageConfirmNormalTarget ci-dessus).
+  const iemEmissions = []
+  await runIemPanneTrigger({ ammoFx: effectiveAmmoFx, characterIdCible, cibleType: 'exo', targetName, emissions: iemEmissions })
+  if (iemEmissions.length > 0) await flushDeferredEmissions(io, campaignId, null, iemEmissions)
+
   const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
   if (!exoResult) return
   if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
@@ -1074,52 +1077,57 @@ async function runCombatWeaponPanne({ weapon, weaponInvId, characterId, characte
   }
 }
 
-// ─── INFORMATIQUE — TEST DE PANNE PAR IMPULSION ÉLECTROMAGNÉTIQUE (IEM, Lot 2) ──────────────────
+// ─── INFORMATIQUE — TEST DE PANNE PAR IMPULSION ÉLECTROMAGNÉTIQUE (IEM, Lot 2 / Lot 2bis) ───────
 // PLAN_INFORMATIQUE.md §4 Lot 2 / MANUEL_INFORMATIQUE.md §4.5. Une munition IEM (`ammoFx === 'IEM'`,
 // tag déjà résolu en amont par `parseAmmoEffects`/`damageService.getEffectiveWeaponDamage` — non
 // relu ici) qui TOUCHE (le tir a réussi) soumet un objet électronique du DÉFENSEUR à un Test de
 // panne : forme inverse de `runCombatWeaponPanne` ci-dessus (qui teste l'arme de l'ATTAQUANT sur un
 // tir RATÉ).
 //
-// Ciblage — RAW revérifiée avec Saar 2026-09-15 (MANUEL_INFORMATIQUE.md §4.5) : tirage équipondéré
-// parmi les objets `char_inventory.is_electronic = true` du défenseur, hors Coffre (même garde
-// qu'ailleurs dans le projet : un objet rangé au Coffre — stockage distant — ne compte jamais
-// « sur soi », cf. `shared/inventoryMath.js#computeTotalWeight` et `inventoryService.js`
+// Ciblage PJ/PNJ — RAW revérifiée avec Saar 2026-09-15 (MANUEL_INFORMATIQUE.md §4.5) : tirage
+// équipondéré parmi les objets `char_inventory.is_electronic = true` du défenseur, hors Coffre
+// (même garde qu'ailleurs dans le projet : un objet rangé au Coffre — stockage distant — ne compte
+// jamais « sur soi », cf. `shared/inventoryMath.js#computeTotalWeight` et `inventoryService.js`
 // `VALID_CONTAINERS`/`fetchAmmoForWeapon`) — décision maison pour ce cas générique multi-objets
 // (aucune RAW ne le couvre, journalisée JOURNAL8.md 2026-09-15) ; le cas à un seul objet
 // (« Ordinateur seul ») en est le cas particulier N=1, sans branche dédiée.
-// **Hors périmètre, signalé (pas un oubli)** : exo-armure et drone. L'incident RAW à 4 catégories
-// de l'exo-armure (Exosquelette/Générateur/Systèmes auxiliaires/Armement, REGLEARMURE.md) n'a
-// aucun équivalent construit côté Exo-armures (`exo_systems`/`exo_weapons` n'ont aucune colonne
-// d'Intégrité) — improviser cette mécanique ici serait un second moteur sur une RAW non modélisée
-// (AGENTS.md invariant 2), à faire dans le domaine Exo-armures le jour où c'est repris. Un drone
-// n'a ni `char_inventory` ni `exo_computers`, même gap. `cibleType` filtré en liste blanche
-// ('pj'/'pnj' seulement, cf. `chk_character_type`) plutôt qu'en liste noire — un futur type de
-// personnage reste exclu par défaut, jamais couvert par erreur.
+//
+// Ciblage exo-armure (Lot 2bis, 2026-09-16) — Attaque IEM RAW (REGLEARMURE.md:434-441) : 4
+// catégories (Exosquelette, Générateur, Systèmes auxiliaires, Armement), tirage équipondéré (RAW
+// dit juste « déterminé au hasard », aucune table chiffrée pour ce cas précis — décision Saar,
+// contrairement à l'incident générique de dommages qui a sa propre table 1D10). Routage vers
+// `runIemPanneTriggerExo` ci-dessous. **Toujours hors périmètre** : drone — ni `char_inventory` ni
+// `exo_computers`/`exo_systems`/`exo_weapons`, aucun gisement électronique modélisé pour lui à ce
+// jour. `cibleType` filtré en liste blanche ('pj'/'pnj'/'exo', cf. `chk_character_type`) plutôt
+// qu'en liste noire — un futur type de personnage reste exclu par défaut, jamais couvert par erreur.
 //
 // Malus RAW fixe −3 (REGLESMUNITIONS.md, Balles IEM). Blindage IEM générique (`ref_equipment`, hors
 // exo) non modélisé à ce jour ([À TRANCHER], PLAN §4 Lot 3) : aucune réduction appliquée pour
 // l'instant — gap connu du plan, pas une valeur inventée ici.
 //
-// Attribution des jets/notices : c'est l'objet du DÉFENSEUR qui est testé, jamais le tireur —
-// `resolveCombatantDisplayIdentity` (même fonction que le Test de Choc, ticket
+// Attribution des jets/notices : c'est l'objet/composant du DÉFENSEUR qui est testé, jamais le
+// tireur — `resolveCombatantDisplayIdentity` (même fonction que le Test de Choc, ticket
 // CHOC-TEST-WRONG-ATTRIBUTION) évite de reproduire cette classe de bug pour un 2ᵉ Test côté cible.
 const IEM_PANNE_MALUS = -3
 
 async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetName, emissions }) {
   // DBG systématique (même discipline que runCombatWeaponPanne) — sans lui, un test en jeu qui ne
   // déclenche rien est indiagnosticable depuis les logs serveur (aucun signal entre "IEM non tiré",
-  // "cible hors périmètre exo/drone" et "aucun objet électronique porté").
+  // "cible hors périmètre drone" et "aucun objet électronique porté").
   if (ammoFx !== 'IEM') {
     console.log(`[DBG] test de panne IEM — ammoFx:${ammoFx ?? '—'} (≠ IEM) → ignoré`)
     return
   }
-  if (cibleType !== 'pj' && cibleType !== 'pnj') {
-    console.log(`[DBG] test de panne IEM — cibleType:${cibleType ?? '—'} hors périmètre (exo/drone/décor) → ignoré`)
-    return
-  }
   if (!characterIdCible) {
     console.log('[DBG] test de panne IEM — characterIdCible absent → ignoré')
+    return
+  }
+  if (cibleType === 'exo') {
+    await runIemPanneTriggerExo({ characterIdCible, targetName, emissions })
+    return
+  }
+  if (cibleType !== 'pj' && cibleType !== 'pnj') {
+    console.log(`[DBG] test de panne IEM — cibleType:${cibleType ?? '—'} hors périmètre (drone/décor) → ignoré`)
     return
   }
 
@@ -1177,6 +1185,120 @@ async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetN
   if (freshItem) {
     emissions.push({ to: 'room', event: WS.INVENTORY_UPDATED, data: { characterId: characterIdCible, item: freshItem } })
   }
+}
+
+// ─── Lot 2bis — Attaque IEM sur exo-armure (REGLEARMURE.md:434-441) ─────────────────────────────
+// 4 catégories équipondérées (décision Saar 2026-09-16, cf. commentaire ci-dessus). Systèmes
+// auxiliaires est la seule catégorie à toucher plusieurs éléments d'un coup (1D6+3, RAW), les 3
+// autres en touchent un seul (l'Exosquelette/le Générateur sont chacun un composant unique de l'exo ;
+// Armement en tire un au hasard parmi les armes électroniques, même patron équipondéré que le
+// ciblage PJ/PNJ ci-dessus).
+const EXO_IEM_CATEGORIES = ['exosquelette', 'generateur', 'systemes_auxiliaires', 'armement']
+
+// Un seul Test de panne exo — factorisé, appelé une fois pour Exosquelette/Générateur/Armement,
+// jusqu'à 9 fois (1D6+3) pour Systèmes auxiliaires. `cibleIdentity` résolue une seule fois par
+// `runIemPanneTriggerExo` (pas ici) : plusieurs jets de la même Attaque IEM restent attribués au
+// même personnage, pas une re-résolution par composant touché.
+async function runExoCategoryPanneTest({ adapter, rowId, characterIdCible, cibleIdentity, itemLabel, emissions }) {
+  const res = await runPanneTest(rowId, { reason: 'iem_hit_exo', characterId: characterIdCible, modifier: IEM_PANNE_MALUS, adapter })
+  if (res.panne === 'skipped') {
+    console.log(`[DBG] test de panne IEM exo — ${itemLabel} : aucune Intégrité suivie → ignoré`)
+    return
+  }
+  console.log(`[WS] test de panne IEM exo — ${cibleIdentity.username} (${itemLabel}) : roll:${res.roll}/${res.threshold} → ${res.panne}${res.panne === 'simple' ? ' (-1 ITG)' : res.panne === 'critical' ? ` (-${res.loss} ITG)` : ''}`)
+  const ts = new Date().toISOString()
+
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId: cibleIdentity.userId, username: cibleIdentity.username, color: cibleIdentity.color,
+    formula: '1d20', rolls: [res.roll], total: res.roll,
+    isCriticalSuccess: false, isCriticalFail: res.isCriticalFail,
+    seed: res.seed, timestamp: ts, secret: false,
+  } })
+
+  if (res.panne === 'critical') {
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: cibleIdentity.userId, username: cibleIdentity.username, color: cibleIdentity.color,
+      formula: '1d6', rolls: [res.loss], total: res.loss,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: res.loss, timestamp: ts, secret: false,
+    } })
+  }
+
+  // Mêmes clés i18n que le ciblage PJ/PNJ (combat:iemPanne.*, `item` générique) — pas de clé
+  // dédiée exo, le texte (« l'appareil tient/s'enraye/est grillé ») reste lisible pour un composant
+  // d'exo-armure, aucune raison de dupliquer 3 chaînes pour une nuance de vocabulaire.
+  const noticeKey = res.panne === 'ok'
+    ? 'combat:iemPanne.held'
+    : res.panne === 'critical' ? 'combat:iemPanne.broken' : 'combat:iemPanne.jammed'
+  emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+    i18nKey: noticeKey,
+    params: { name: cibleIdentity.username, item: itemLabel, itg: res.threshold, loss: res.loss },
+    timestamp: ts,
+  } })
+
+  // Pas d'événement « état mis à jour » ici (contrairement à INVENTORY_UPDATED côté char_inventory) :
+  // aucun panneau client n'écoute de flux temps réel pour `exo_systems`/`exo_weapons`/`exo_sheet`
+  // Exosquelette-Générateur à ce jour (même situation, non régressive, que `exo_computers` depuis le
+  // Lot 2) — MJ/joueurs voient l'état à jour à la prochaine ouverture de la fiche. Inventer un
+  // événement sans consommateur serait une abstraction non requise (AGENTS.md, sobriété du projet).
+}
+
+async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions }) {
+  const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
+  const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter, targetName)
+
+  const category = EXO_IEM_CATEGORIES[randomInt(0, EXO_IEM_CATEGORIES.length)]
+  console.log(`[DBG] test de panne IEM exo — cible:${targetName} catégorie tirée:${category}`)
+
+  if (category === 'exosquelette') {
+    await runExoCategoryPanneTest({
+      adapter: EXO_EXOSQUELETTE_ADAPTER, rowId: characterIdCible, characterIdCible, cibleIdentity,
+      itemLabel: 'Exosquelette', emissions,
+    })
+    return
+  }
+  if (category === 'generateur') {
+    await runExoCategoryPanneTest({
+      adapter: EXO_GENERATOR_ADAPTER, rowId: characterIdCible, characterIdCible, cibleIdentity,
+      itemLabel: 'Générateur', emissions,
+    })
+    return
+  }
+
+  if (category === 'systemes_auxiliaires') {
+    const systems = await db('exo_systems')
+      .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
+      .where({ 'exo_systems.character_id': characterIdCible })
+      .select('exo_systems.id', 'exo_systems.label_override', 'ref_equipment.name as ref_name')
+    console.log(`[DBG] test de panne IEM exo — cible:${targetName} systèmes installés:${systems.length}`)
+    if (systems.length === 0) return
+    const hitCount = Math.min(systems.length, (await parseDice('1D6')).total + 3)
+    const pool = [...systems]
+    for (let i = 0; i < hitCount; i++) {
+      const idx = randomInt(0, pool.length)
+      const [sys] = pool.splice(idx, 1)
+      await runExoCategoryPanneTest({
+        adapter: EXO_SYSTEM_ADAPTER, rowId: sys.id, characterIdCible, cibleIdentity,
+        itemLabel: sys.label_override ?? sys.ref_name ?? 'Système', emissions,
+      })
+    }
+    return
+  }
+
+  // Armement — exclusion RAW des équipements sans composants électroniques (REGLEARMURE.md:436).
+  // `ref_equipment_id` requis (pas `label_override` seul) : une arme sans ligne catalogue n'a aucun
+  // moyen de vérifier `is_electronic`, exclue par prudence plutôt que supposée électronique.
+  const weapons = await db('exo_weapons')
+    .join('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
+    .where({ 'exo_weapons.character_id': characterIdCible, 'ref_equipment.is_electronic': true })
+    .select('exo_weapons.id', 'exo_weapons.label_override', 'ref_equipment.name as ref_name')
+  console.log(`[DBG] test de panne IEM exo — cible:${targetName} armes électroniques:${weapons.length}`)
+  if (weapons.length === 0) return
+  const picked = weapons[randomInt(0, weapons.length)]
+  await runExoCategoryPanneTest({
+    adapter: EXO_WEAPON_ADAPTER, rowId: picked.id, characterIdCible, cibleIdentity,
+    itemLabel: picked.label_override ?? picked.ref_name ?? 'Arme', emissions,
+  })
 }
 
 // ─── RÉSOLUTION CORPS À CORPS ───────────────────────────────────────────────
@@ -3592,13 +3714,16 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
 
   if (cibleCharacter?.type === 'exo') {
     // PLAN_EXOARMURE.md §11.4 (catégorie A, site 5) — Tir immédiat, tireur PNJ ou exo, cible exo.
-    // Informatique Lot 2 (PLAN_INFORMATIQUE.md §4) : cible exo explicitement hors périmètre de
-    // runIemPanneTrigger (jamais appelée pour cette branche) — DBG dédié pour que ça se voie dans
-    // les logs sans deviner, plutôt qu'un silence indistinguable d'un bug (cas vécu, test Saar
-    // 2026-09-16).
-    if ((effectiveDamage?.tags?.FX ?? null) === 'IEM') {
-      console.log('[DBG] test de panne IEM — cible exo-armure : hors périmètre Lot 2 (incident RAW 4 catégories non construit), ignoré')
-    }
+    // Informatique Lot 2bis (PLAN_INFORMATIQUE.md §4 Lot 2bis) — Attaque IEM : en plus des
+    // dégâts/Avarie normaux ci-dessous (inchangés), soumet l'un des 4 composants à un Test de
+    // panne — même dualité dégâts+panne que le chemin PJ/PNJ ci-dessous.
+    await runIemPanneTrigger({
+      ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
+      characterIdCible: cibleToken.character_id,
+      cibleType: 'exo',
+      targetName: cibleCharacter?.name ?? 'PNJ',
+      emissions,
+    })
     const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleToken.character_id, degautsBruts })
     if (exoResult) {
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {

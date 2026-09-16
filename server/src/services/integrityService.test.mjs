@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity, applyRepairOutcome, EXO_COMPUTER_ADAPTER } from './integrityService.js'
+import { runPanneTest, applyPanneSystematic, adjustIntegrity, computeAcquisitionIntegrity, rollOccasionIntegrity, applyRepairOutcome, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from './integrityService.js'
 import { QUALITY_TABLE } from '../../../shared/integrityRules.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/integrityService.test.mjs
@@ -63,6 +63,68 @@ async function createExoFixture({ current = 10, max = 15 } = {}) {
   return { gm, campaign, exoCharacter, computer }
 }
 const readComputer = (id) => db('exo_computers').where({ id }).first()
+
+// Fixtures Lot 2bis (PLAN_INFORMATIQUE.md §4 Lot 2bis) — Attaque IEM sur exo-armure, 4 adaptateurs
+// (EXO_SYSTEM/EXO_WEAPON/EXO_EXOSQUELETTE/EXO_GENERATOR). Même patron que createExoFixture.
+async function createExoSystemFixture({ current = 10, max = 15 } = {}) {
+  const [gm] = await db('users')
+    .insert({ email: `itg-exosys-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'itg-exosys-gm' })
+    .returning('*')
+  const [campaign] = await db('campaigns')
+    .insert({ gm_id: gm.id, name: 'Campagne test integrityService exo-systeme', invite_code: `ITGEXOSYS-${Date.now()}-${Math.random()}` })
+    .returning('*')
+  const [exoCharacter] = await db('characters')
+    .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test integrityService systeme', type: 'exo' })
+    .returning('*')
+  await db('exo_sheet').insert({ character_id: exoCharacter.id })
+  const insert = { character_id: exoCharacter.id, label_override: 'Systeme test integrityService' }
+  if (current != null) { insert.integrite_current = current; insert.integrite_max = max }
+  const [system] = await db('exo_systems').insert(insert).returning('*')
+  return { gm, campaign, exoCharacter, system }
+}
+const readSystem = (id) => db('exo_systems').where({ id }).first()
+
+async function createExoWeaponFixture({ current = 10, max = 15 } = {}) {
+  const [gm] = await db('users')
+    .insert({ email: `itg-exowpn-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'itg-exowpn-gm' })
+    .returning('*')
+  const [campaign] = await db('campaigns')
+    .insert({ gm_id: gm.id, name: 'Campagne test integrityService exo-arme', invite_code: `ITGEXOWPN-${Date.now()}-${Math.random()}` })
+    .returning('*')
+  const [exoCharacter] = await db('characters')
+    .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test integrityService arme', type: 'exo' })
+    .returning('*')
+  await db('exo_sheet').insert({ character_id: exoCharacter.id })
+  const insert = { character_id: exoCharacter.id, label_override: 'Arme test integrityService' }
+  if (current != null) { insert.integrite_current = current; insert.integrite_max = max }
+  const [weapon] = await db('exo_weapons').insert(insert).returning('*')
+  return { gm, campaign, exoCharacter, weapon }
+}
+const readWeapon = (id) => db('exo_weapons').where({ id }).first()
+
+// Exosquelette/Générateur : pas de ligne dédiée, l'adaptateur adresse `exo_sheet` par `character_id`
+// — `id` passé à `runPanneTest` est donc directement `exoCharacter.id`, jamais un id de ligne séparé.
+// `itg_exosquelette_current`/`itg_generator_current` sont NOT NULL (défaut 20, migration 44) —
+// composants obligatoires de toute exo-armure, aucun `current: null` à couvrir ici (contrairement à
+// `exo_computers`/`exo_systems`/`exo_weapons`, dispositifs/équipements facultatifs).
+async function createExoSheetFixture({ exosqueletteCurrent = 10, exosqueletteMax = 15, generatorCurrent = 10, generatorMax = 15 } = {}) {
+  const [gm] = await db('users')
+    .insert({ email: `itg-exosheet-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'itg-exosheet-gm' })
+    .returning('*')
+  const [campaign] = await db('campaigns')
+    .insert({ gm_id: gm.id, name: 'Campagne test integrityService exo-sheet', invite_code: `ITGEXOSHEET-${Date.now()}-${Math.random()}` })
+    .returning('*')
+  const [exoCharacter] = await db('characters')
+    .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test integrityService sheet', type: 'exo' })
+    .returning('*')
+  await db('exo_sheet').insert({
+    character_id: exoCharacter.id,
+    itg_exosquelette_current: exosqueletteCurrent, itg_exosquelette_max: exosqueletteMax,
+    itg_generator_current: generatorCurrent, itg_generator_max: generatorMax,
+  })
+  return { gm, campaign, exoCharacter }
+}
+const readSheet = (characterId) => db('exo_sheet').where({ character_id: characterId }).first()
 
 // ── adjustIntegrity ─────────────────────────────────────────────────────────
 test('adjustIntegrity — pose courante + max, puis la panne, puis « Opérationnel »', { skip }, async () => {
@@ -281,6 +343,137 @@ test('runPanneTest — adaptateur exo_computers : mauvais characterId → 404', 
       () => runPanneTest(fx.computer.id, { characterId: bad, adapter: EXO_COMPUTER_ADAPTER }),
       (e) => e instanceof AppError && e.statusCode === 404,
     )
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+// ── runPanneTest — Lot 2bis (PLAN_INFORMATIQUE.md §4 Lot 2bis) : 4 adaptateurs Attaque IEM exo ──
+test('runPanneTest — adaptateur exo_systems : lit/écrit integrite_current/max', { skip }, async () => {
+  const fx = await createExoSystemFixture({ current: 4, max: 10 })
+  try {
+    for (let i = 0; i < 20; i++) {
+      await db('exo_systems').where({ id: fx.system.id }).update({ integrite_current: 4, integrite_max: 10, malfunction_severity: null })
+      const r = await runPanneTest(fx.system.id, { reason: 'iem_hit', adapter: EXO_SYSTEM_ADAPTER })
+      assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
+      const row = await readSystem(fx.system.id)
+      assert.equal(row.integrite_current, r.after.current)
+      assert.equal(row.malfunction_severity, r.after.malfunction_severity)
+    }
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_systems : integrite_current NULL → skipped ; mauvais characterId → 404', { skip }, async () => {
+  const fxSkip = await createExoSystemFixture({ current: null })
+  const fx = await createExoSystemFixture({ current: 8, max: 10 })
+  const bad = '00000000-0000-0000-0000-000000000000'
+  try {
+    const r = await runPanneTest(fxSkip.system.id, { adapter: EXO_SYSTEM_ADAPTER })
+    assert.equal(r.panne, 'skipped')
+    await assert.rejects(
+      () => runPanneTest(fx.system.id, { characterId: bad, adapter: EXO_SYSTEM_ADAPTER }),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
+  } finally {
+    await db('campaigns').where({ id: fxSkip.campaign.id }).del()
+    await db('users').where({ id: fxSkip.gm.id }).del()
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_weapons : lit/écrit integrite_current/max', { skip }, async () => {
+  const fx = await createExoWeaponFixture({ current: 4, max: 10 })
+  try {
+    for (let i = 0; i < 20; i++) {
+      await db('exo_weapons').where({ id: fx.weapon.id }).update({ integrite_current: 4, integrite_max: 10, malfunction_severity: null })
+      const r = await runPanneTest(fx.weapon.id, { reason: 'iem_hit', adapter: EXO_WEAPON_ADAPTER })
+      assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
+      const row = await readWeapon(fx.weapon.id)
+      assert.equal(row.integrite_current, r.after.current)
+      assert.equal(row.malfunction_severity, r.after.malfunction_severity)
+    }
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_weapons : integrite_current NULL → skipped ; mauvais characterId → 404', { skip }, async () => {
+  const fxSkip = await createExoWeaponFixture({ current: null })
+  const fx = await createExoWeaponFixture({ current: 8, max: 10 })
+  const bad = '00000000-0000-0000-0000-000000000000'
+  try {
+    const r = await runPanneTest(fxSkip.weapon.id, { adapter: EXO_WEAPON_ADAPTER })
+    assert.equal(r.panne, 'skipped')
+    await assert.rejects(
+      () => runPanneTest(fx.weapon.id, { characterId: bad, adapter: EXO_WEAPON_ADAPTER }),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
+  } finally {
+    await db('campaigns').where({ id: fxSkip.campaign.id }).del()
+    await db('users').where({ id: fxSkip.gm.id }).del()
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_sheet/Exosquelette : lit/écrit itg_exosquelette_current/max, id = character_id', { skip }, async () => {
+  const fx = await createExoSheetFixture({ exosqueletteCurrent: 4, exosqueletteMax: 10 })
+  try {
+    for (let i = 0; i < 20; i++) {
+      await db('exo_sheet').where({ character_id: fx.exoCharacter.id }).update({ itg_exosquelette_current: 4, itg_exosquelette_max: 10, exosquelette_malfunction_severity: null })
+      const r = await runPanneTest(fx.exoCharacter.id, { reason: 'iem_hit', adapter: EXO_EXOSQUELETTE_ADAPTER })
+      assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
+      const row = await readSheet(fx.exoCharacter.id)
+      assert.equal(row.itg_exosquelette_current, r.after.current)
+      assert.equal(row.exosquelette_malfunction_severity, r.after.malfunction_severity)
+      // Le générateur, colonnes sœurs sur la même ligne, n'est jamais touché par cet adaptateur.
+      assert.equal(row.itg_generator_current, 10)
+    }
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateur exo_sheet/Générateur : lit/écrit itg_generator_current/max, id = character_id', { skip }, async () => {
+  const fx = await createExoSheetFixture({ generatorCurrent: 4, generatorMax: 10 })
+  try {
+    for (let i = 0; i < 20; i++) {
+      await db('exo_sheet').where({ character_id: fx.exoCharacter.id }).update({ itg_generator_current: 4, itg_generator_max: 10, generator_malfunction_severity: null })
+      const r = await runPanneTest(fx.exoCharacter.id, { reason: 'iem_hit', adapter: EXO_GENERATOR_ADAPTER })
+      assert.ok(['ok', 'simple', 'critical'].includes(r.panne), `panne = ${r.panne}`)
+      const row = await readSheet(fx.exoCharacter.id)
+      assert.equal(row.itg_generator_current, r.after.current)
+      assert.equal(row.generator_malfunction_severity, r.after.malfunction_severity)
+      assert.equal(row.itg_exosquelette_current, 10)
+    }
+  } finally {
+    await db('campaigns').where({ id: fx.campaign.id }).del()
+    await db('users').where({ id: fx.gm.id }).del()
+  }
+})
+
+test('runPanneTest — adaptateurs exo_sheet : characterId incohérent avec id (convention id=character_id) → 404', { skip }, async () => {
+  const fx = await createExoSheetFixture({ exosqueletteCurrent: 8, exosqueletteMax: 10 })
+  const bad = '00000000-0000-0000-0000-000000000000'
+  try {
+    await assert.rejects(
+      () => runPanneTest(fx.exoCharacter.id, { characterId: bad, adapter: EXO_EXOSQUELETTE_ADAPTER }),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
+    await assert.rejects(
+      () => runPanneTest(fx.exoCharacter.id, { characterId: bad, adapter: EXO_GENERATOR_ADAPTER }),
+      (e) => e instanceof AppError && e.statusCode === 404,
+    )
+    // characterId cohérent (= id) : passe
+    const ok = await runPanneTest(fx.exoCharacter.id, { characterId: fx.exoCharacter.id, adapter: EXO_EXOSQUELETTE_ADAPTER })
+    assert.ok(['ok', 'simple', 'critical'].includes(ok.panne))
   } finally {
     await db('campaigns').where({ id: fx.campaign.id }).del()
     await db('users').where({ id: fx.gm.id }).del()
