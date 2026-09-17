@@ -8,7 +8,7 @@ import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } f
 import { getMutationEffects } from '../services/mutationService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
-import { startAnnouncementTimers, startResolutionPhase } from './combatTurnEngine.js'
+import { startAnnouncementTimers, advanceAnnouncementQueue } from './combatTurnEngine.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
 import { getAllModStatusCodes } from '../services/weaponModService.js'
@@ -386,14 +386,12 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // PC17 — timers auto-skip uniquement si action_timer_sec > 0
       await startAnnouncementTimers(io, campaignId, updated.action_timer_sec, user.id, pendingMaps)
 
-      // LdB p.212 — annonce séquentielle : émettre le premier slot (base_ini ASC)
-      const firstAnnounceSlot = await db('combat_roster')
-        .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-        .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
-        .first()
-      if (firstAnnounceSlot) {
-        io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: firstAnnounceSlot.token_id })
-      }
+      // LdB p.212 — Lot 0 : file d'ANNONCE centralisée (docs/PLANS/PLAN_DRONE.md §4).
+      // `advanceAnnouncementQueue` (pas juste le slot suivant) couvre le cas limite où la file est
+      // déjà vide à l'ouverture de l'ANNONCE — aucun combattant `classique` aujourd'hui, mais point
+      // d'extension nécessaire pour le Sprint 2d (combat entièrement composé de drones en ordres
+      // permanents, qui ne passent jamais par un slot).
+      await advanceAnnouncementQueue(io, campaignId, pendingMaps)
 
       console.log(`[WS] combat:announce_start — ${user.username} (campagne ${campaignId})`)
     } catch (err) {
@@ -521,13 +519,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           status: 'skipped',
           turn_number: _gCurrentTurn ?? 1,
         })
-        // PC13 — tous annoncés → phase Résolution
-        const [{ count }] = await db('combat_roster')
-          .where({ campaign_id: campaignId, has_announced: false })
-          .count('* as count')
-        if (parseInt(count) === 0) {
-          await startResolutionPhase(io, campaignId, pendingMaps)
-        }
+        // PC13 — Lot 0 : file d'ANNONCE centralisée. Corrige au passage un trou trouvé en centralisant
+        // (docs/PLANS/PLAN_DRONE.md §4) : cette branche ne diffusait jamais COMBAT_SLOT_ADVANCED quand
+        // l'échec de Réaction n'était pas le dernier non-annoncé — le slot affiché restait bloqué sur
+        // ce token auto-passé côté serveur jusqu'à ce qu'un autre événement fortuit rafraîchisse la file.
+        await advanceAnnouncementQueue(io, campaignId, pendingMaps)
       }
 
       // Broadcast roster mis à jour — sans surprise_roll (PC25)

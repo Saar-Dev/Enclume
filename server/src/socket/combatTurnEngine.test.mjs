@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
+import { WS } from '../../../shared/events.js'
 import {
   computeSeriesPositions, computeActNowPosition,
   pickNextTimelineStep, buildTimelineEntries, endTurn,
   advanceTimeline, registerAutonomousStepResolver,
+  findNextAnnounceSlot, advanceAnnouncementQueue,
 } from './combatTurnEngine.js'
 
 // Lancement : node --env-file=server/.env --test server/src/socket/combatTurnEngine.test.mjs
@@ -345,6 +347,49 @@ test('endTurn (M2b) — une entrée différée (resolve_on_turn futur) SURVIT au
     const fut = await db('combat_timeline_entries').where({ combat_action_id: aFut.id }).first()
     assert.equal(cur.status, 'skipped')     // Tour courant → balayée
     assert.equal(fut.status, 'scheduled')   // Tour futur → épargnée (le débloqueur de M3/3d)
+  } finally { await fx.cleanup() }
+})
+
+// ─── Lot 0 — findNextAnnounceSlot / advanceAnnouncementQueue (docs/PLANS/PLAN_DRONE.md §4) ─────────
+// Centralisation de la requête « prochain slot ANNONCE », dupliquée avant ce Lot dans 5 sites
+// (skipPlayer, endTurn, COMBAT_ACTION_DECLARE, COMBAT_ANNOUNCE_START, garde de déclaration) + une
+// 6ᵉ variante bugguée (COMBAT_SURPRISE_RESULT échec) qui ne diffusait jamais le slot suivant.
+// L'orchestration de `startResolutionPhase` (branche count===0) reste hors périmètre ici, même
+// principe que pour `advanceTimeline` plus haut — couverte par le run Saar, pas dupliquée en unitaire.
+
+test('findNextAnnounceSlot — tri base_ini ASC puis token_id ASC, ignore has_announced=true', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [
+    { baseIni: 15, announced: false },
+    { baseIni: 5, announced: true },   // déjà annoncé → exclu malgré l'Initiative la plus basse
+    { baseIni: 8, announced: false },
+  ] })
+  try {
+    const slot = await findNextAnnounceSlot(fx.campaign.id)
+    assert.equal(slot.token_id, fx.roster[2].token.id) // baseIni 8, le plus bas parmi les non-annoncés
+  } finally { await fx.cleanup() }
+})
+
+test('findNextAnnounceSlot — personne à déclarer → undefined (knex .first(), pas de wrapping)', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [{ baseIni: 10, announced: true }] })
+  try {
+    assert.equal(await findNextAnnounceSlot(fx.campaign.id), undefined)
+  } finally { await fx.cleanup() }
+})
+
+test('advanceAnnouncementQueue — au moins un non-annoncé → émet COMBAT_SLOT_ADVANCED pour le bon token, ne bascule pas la phase', { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', roster: [
+    { baseIni: 12, announced: false },
+    { baseIni: 6, announced: false },
+  ] })
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    await advanceAnnouncementQueue(stubIo, fx.campaign.id, pendingMaps)
+    assert.equal(emitted.length, 1)
+    assert.equal(emitted[0].event, WS.COMBAT_SLOT_ADVANCED)
+    assert.equal(emitted[0].payload.tokenId, fx.roster[1].token.id) // baseIni 6, le plus bas
+    const state = await db('combat_state').where({ campaign_id: fx.campaign.id }).first()
+    assert.equal(state.phase, 'ANNOUNCEMENT') // pas de transition tant qu'il reste un non-annoncé
   } finally { await fx.cleanup() }
 })
 

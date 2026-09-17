@@ -1,7 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
-import { skipPlayer, startResolutionPhase } from './combatTurnEngine.js'
+import { skipPlayer, findNextAnnounceSlot, advanceAnnouncementQueue } from './combatTurnEngine.js'
 import { forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
@@ -167,10 +167,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // LdB p.212 — guard ordre d'annonce : seul le slot actuel (base_ini ASC) peut déclarer
       const announceState = await db('combat_state').where({ campaign_id: campaignId }).first()
       if (!announceState || announceState.phase !== 'ANNOUNCEMENT') return
-      const firstNonAnnounced = await db('combat_roster')
-        .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-        .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
-        .first()
+      const firstNonAnnounced = await findNextAnnounceSlot(campaignId)
       if (!firstNonAnnounced || firstNonAnnounced.token_id !== tokenId) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Ce n'est pas encore votre tour de déclarer" })
         return
@@ -992,21 +989,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Purger le preview éphémère — le joueur a confirmé sa déclaration
       pendingMaps.combatPreviews.delete(campaignId)
 
-      // PC13 — tous annoncés → phase Résolution, sinon émettre le slot suivant (LdB p.212)
-      const [{ count }] = await db('combat_roster')
-        .where({ campaign_id: campaignId, has_announced: false })
-        .count('* as count')
-      if (parseInt(count) === 0) {
-        await startResolutionPhase(io, campaignId, pendingMaps)
-      } else {
-        const nextAnnounceSlot = await db('combat_roster')
-          .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-          .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
-          .first()
-        if (nextAnnounceSlot) {
-          io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextAnnounceSlot.token_id })
-        }
-      }
+      // PC13 — Lot 0 : file d'ANNONCE centralisée (docs/PLANS/PLAN_DRONE.md §4)
+      await advanceAnnouncementQueue(io, campaignId, pendingMaps)
 
       console.log(`[WS] combat:action_declare v2 — ${user.username} state:${JSON.stringify(state)} iniDelta:${iniDelta} -> ${updatedInitiative}`)
     } catch (err) {

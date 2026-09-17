@@ -77,6 +77,36 @@ export async function startAnnouncementTimers(io, campaignId, timerSec, gmUserId
   }
 }
 
+// ─── Helper — trouver le prochain slot ANNONCE non déclaré (LdB p.212, tri base_ini ASC) ──────────
+// Lot 0 (docs/PLANS/PLAN_DRONE.md §4) — requête auparavant dupliquée à l'identique dans 5 endroits
+// (skipPlayer, endTurn, COMBAT_ACTION_DECLARE, COMBAT_ANNOUNCE_START, garde « c'est ton tour de
+// déclarer ») : centralisée ici comme point d'extension unique, notamment pour le pré-remplissage des
+// drones en `ordres_permanents` (Sprint 2d) avant même que la file ne soit consultée.
+export async function findNextAnnounceSlot(campaignId) {
+  return db('combat_roster')
+    .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+    .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+    .first()
+}
+
+// ─── Helper — faire avancer la file d'ANNONCE (LdB p.212, PC13) ───────────────────────────────────
+// Lot 0 — même provenance que findNextAnnounceSlot : bascule en RÉSOLUTION si plus personne n'a à
+// déclarer, sinon diffuse le slot suivant. Le comptage reste volontairement SANS `status:'active'`
+// (périmètre des 3 sites d'origine préservé à l'identique, pas re-tranché ici).
+export async function advanceAnnouncementQueue(io, campaignId, pendingMaps) {
+  const [{ count }] = await db('combat_roster')
+    .where({ campaign_id: campaignId, has_announced: false })
+    .count('* as count')
+  if (parseInt(count) === 0) {
+    await startResolutionPhase(io, campaignId, pendingMaps)
+    return
+  }
+  const nextSlot = await findNextAnnounceSlot(campaignId)
+  if (nextSlot) {
+    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextSlot.token_id })
+  }
+}
+
 // ─── Helper — skip d'un participant pendant la phase ANNONCE ──────────────────
 // Appelé par COMBAT_SKIP_PLAYER (GM) et par le timer auto-skip (PC17).
 // Race condition guard : re-vérifie has_announced avant d'agir.
@@ -110,21 +140,8 @@ export async function skipPlayer(io, campaignId, tokenId, pendingMaps) {
     // Bug 1 fix : émettre COMBAT_TURN_SKIPPED AVANT de vérifier PC13
     io.to(campaignId).emit(WS.COMBAT_TURN_SKIPPED, { tokenId, tokenLabel })
 
-    // PC13 — tous annoncés → phase Résolution, sinon émettre le slot suivant (LdB p.212)
-    const [{ count }] = await db('combat_roster')
-      .where({ campaign_id: campaignId, has_announced: false })
-      .count('* as count')
-    if (parseInt(count) === 0) {
-      await startResolutionPhase(io, campaignId, pendingMaps)
-    } else {
-      const nextAnnounceSlot = await db('combat_roster')
-        .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-        .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
-        .first()
-      if (nextAnnounceSlot) {
-        io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextAnnounceSlot.token_id })
-      }
-    }
+    // PC13 — Lot 0 : file d'ANNONCE centralisée (docs/PLANS/PLAN_DRONE.md §4)
+    await advanceAnnouncementQueue(io, campaignId, pendingMaps)
   } catch (err) {
     console.error('[WS] skipPlayer error:', err.message)
   }
@@ -708,14 +725,11 @@ export async function endTurn(io, campaignId, pendingMaps) {
     await setFSMSubPhase(db, campaignId, null)
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
 
-    // LdB p.212 — émettre le premier slot d'annonce du nouveau tour (base_ini ASC)
-    const firstAnnounceSlotNewTurn = await db('combat_roster')
-      .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-      .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
-      .first()
-    if (firstAnnounceSlotNewTurn) {
-      io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: firstAnnounceSlotNewTurn.token_id })
-    }
+    // LdB p.212 — Lot 0 : file d'ANNONCE centralisée. `advanceAnnouncementQueue` (pas juste le slot
+    // suivant) couvre aussi le cas limite où le Tour entier vient d'être pré-annoncé (report M3 total
+    // du roster, ou tous les drones `ordres_permanents` — Sprint 2d) : bascule direct en RÉSOLUTION au
+    // lieu de rester bloqué en ANNONCE sans personne à qui la présenter.
+    await advanceAnnouncementQueue(io, campaignId, pendingMaps)
 
     // Relancer les timers pour le nouveau tour
     const gmMember = await db('campaign_members')
