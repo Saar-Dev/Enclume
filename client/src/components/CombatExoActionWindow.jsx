@@ -265,6 +265,16 @@ export default function CombatExoActionWindow({
   // toute la section cible sur « Viser une zone » au lieu de « Choisir une cible » — même principe que
   // AssaultRangedPanel.jsx (pas un choix parmi d'autres, l'arme n'a pas de mode de tir normal).
   const isAoeEligible = isAoeWeapon(selectedExoWeapon?.ref_aoe_profile)
+  // BETA-39 — instrumentation (pas un fix) : bug non reproductible côté humanoïde, ajouté ici aussi par
+  // sécurité (déjà vu 2× une confusion CaC/Tir exo/drone, DRONE-CC-MELEE-MISCLASS). Log direct (pas un
+  // useEffect : cette ligne suit un `return null` conditionnel plus haut dans le composant, un hook ici
+  // casserait l'ordre des hooks entre renders).
+  if (selectedExoWeapon) {
+    console.log('[DBG] BETA-39 EXO — arme sélectionnée', {
+      weaponId: selectedExoWeapon.id, weaponName: selectedExoWeapon.custom_name || selectedExoWeapon.ref_name,
+      ref_aoe_profile: selectedExoWeapon.ref_aoe_profile, isAoeEligible,
+    })
+  }
   // Grenade (cercle) → visée d'un POINT ; cône/rayon → visée d'une direction (PLAN_GRENADES.md §6 3c).
   const isPointAoe = getAoeProfile(selectedExoWeapon?.ref_aoe_profile)?.shape === 'circle'
   const aoePosed = exoDeclare.aoeDirection != null || exoDeclare.aoeIntendedOrigin != null
@@ -393,6 +403,7 @@ export default function CombatExoActionWindow({
           onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: playerToken.id, state: {}, mapActions: {} })}
         />
       </div>
+      <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
     </div>
     </>
   )

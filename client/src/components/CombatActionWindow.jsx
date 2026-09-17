@@ -447,6 +447,16 @@ export default function CombatActionWindow({
   // (ref_equipment.aoe_profile), même autorité client (`shared/combatAoe.js`) que la résolution
   // serveur et la fenêtre MJ. Plus de nom d'arme en dur.
   const isAoeEligible = isAoeWeapon(selectedWeapon?.ref_aoe_profile)
+  // BETA-39 — instrumentation (pas un fix) : bug non reproductible, tout vérifié statiquement sain.
+  // Capture l'état réel côté PJ au moment de la sélection pour la prochaine occurrence. Log direct
+  // (pas un useEffect : cette ligne suit un `return null` conditionnel plus haut dans le composant,
+  // un hook ici casserait l'ordre des hooks entre renders).
+  if (selectedWeapon) {
+    console.log('[DBG] BETA-39 PJ — arme sélectionnée', {
+      weaponId: selectedWeapon.id, weaponName: selectedWeapon.custom_name || selectedWeapon.ref_name,
+      ref_aoe_profile: selectedWeapon.ref_aoe_profile, isAoeEligible,
+    })
+  }
 
   // Modes disponibles pour le CombatDeclareStateSelector fire_mode
   const availableFireModes = forceCC
@@ -802,6 +812,7 @@ export default function CombatActionWindow({
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
         <p style={W.surpriseText}>{t('actionWindow.surpriseMessage')}</p>
         <button style={W.btnRoll} onClick={onSurpriseRolled}>{t('actionWindow.rollInitiativeButton')}</button>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -810,6 +821,7 @@ export default function CombatActionWindow({
       <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
         <p style={W.surpriseText}>{t('actionWindow.surprisedCannotAct')}</p>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -856,6 +868,7 @@ export default function CombatActionWindow({
             </button>
           )}
         </div>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -899,6 +912,7 @@ export default function CombatActionWindow({
         <p style={W.waitText}>
           {t('actionWindow.awaitingPlayer', { name: currentDeclarer?.label ?? '…' })}
         </p>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -912,6 +926,7 @@ export default function CombatActionWindow({
         <p style={W.waitText}>
           {activeResolveToken ? t('actionWindow.tokenActing', { name: activeResolveToken.label }) : t('actionWindow.resolutionInProgress')}
         </p>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -922,6 +937,7 @@ export default function CombatActionWindow({
       <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitleAlt')}</div>
         <p style={W.waitText}>{t('actionWindow.actionDeclaredWaiting')}</p>
+        <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
       </div>
     )
   }
@@ -1331,6 +1347,7 @@ export default function CombatActionWindow({
           onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: playerToken.id, state: {}, mapActions: {} })}
         />
       </div>
+      <div className="combat-float-drag-handle" onMouseDown={onHeaderMouseDown} />
     </div>
     </>
   )

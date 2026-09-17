@@ -250,7 +250,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     combatMoveMode,
     onEnterMoveMode,
     onMoveSelected: (sel) => setPendingMove(sel),
-    onCancel: () => {},
+    // Manquait (comparé au patron identique CombatActionWindow.jsx/CombatExoActionWindow.jsx,
+    // onCancel: () => setMoveSelection(null)) — un `() => {}` vide laissait `pendingMove` du MJ
+    // périmé après une annulation (désarmement enabled→false, Échap, ou dismiss explicite),
+    // trouvé en comparant les deux call sites (Saar 2026-09-17, BUG-DEPLACEMENT1).
+    onCancel: () => setPendingMove(null),
   })
 
   // ── Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) ──────────────────────
@@ -342,6 +346,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6 segment 0b) — l'AOE-ness est une donnée catalogue
   // (ref_equipment.aoe_profile), même autorité (`shared/combatAoe.js`) que la résolution serveur.
   const isAoeEligible = isAoeWeapon(weapon?.ref_aoe_profile)
+  // BETA-39 — instrumentation (pas un fix) : bug non reproductible, tout vérifié statiquement sain.
+  // Capture l'état réel côté MJ (PNJ) au moment de la sélection pour la prochaine occurrence. Log
+  // direct (pas un useEffect : cette ligne suit un `return null` conditionnel plus haut dans le
+  // composant, un hook ici casserait l'ordre des hooks entre renders).
+  if (weapon) {
+    console.log('[DBG] BETA-39 PNJ — arme sélectionnée', {
+      weaponId: weapon.id, weaponName: weapon.custom_name || weapon.ref_name,
+      ref_aoe_profile: weapon.ref_aoe_profile, isAoeEligible,
+    })
+  }
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le
@@ -1042,9 +1056,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
       </div>{/* fin body flex-row */}
 
-      {/* POIGNÉE BAS */}
-      <div onMouseDown={onHeaderMouseDown} style={S.bottomHandle} />
-
       {/* FOOTER */}
       <div className="combat-win-footer">
         {isActiveDrone && droneAlluresError && (
@@ -1065,6 +1076,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: activeTokenId, state: {}, mapActions: {} })}
         />
       </div>
+
+      {/* POIGNÉE BAS — déplacée après le footer (2026-09-17), même position que CombatActionWindow/
+          CombatExoActionWindow (bord bas réel de la fenêtre, pas avant le footer) : si la fenêtre est
+          coincée derrière un élément d'UI ancré en bas d'écran (barre de timeline), c'est le seul
+          point qui a une chance de dépasser suffisamment pour rester saisissable. */}
+      <div onMouseDown={onHeaderMouseDown} style={S.bottomHandle} />
 
     </div>
     </>

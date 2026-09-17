@@ -2550,6 +2550,19 @@ Convention :
 }
 .combat-float-header:active { cursor: grabbing; }
 
+/* Poignée de déplacement en bas de fenêtre — même patron que S.bottomHandle de
+   CombatGmDeclareWindow.jsx, réutilisé ici pour CombatActionWindow/CombatExoActionWindow (Saar
+   2026-09-17 : une fenêtre coincée derrière la barre de timeline devient injoignable par son seul
+   en-tête). Toujours le dernier enfant de .combat-float-win, réutilise onHeaderMouseDown tel quel
+   (la logique de déplacement ne dépend pas du point d'accroche). */
+.combat-float-drag-handle {
+  height: 6px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  background: rgba(90,100,120,0.12);
+  border-top: 1px solid rgba(90,100,120,0.18);
+}
+
 .combat-float-section {
   padding: 6px 14px;
   border-bottom: 1px solid var(--border-session);
