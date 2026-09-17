@@ -2,9 +2,15 @@ import { create } from 'zustand'
 
 export const useTokenStore = create((set) => ({
   tokens: [],
+  // Token actuellement sélectionné (clic sur un token, anneau visuel) — accessible hors de
+  // Canvas3D depuis ce store (ex. résolution du token acteur pour une interaction d'entité,
+  // client/src/lib/actingToken.js). Ancien état local de Canvas3D, promu ici le 2026-09-17.
+  selectedTokenId: null,
 
   // Remplacement complet — chargement initial, changement de carte
   setTokens: (tokens) => set({ tokens }),
+
+  setSelectedTokenId: (selectedTokenId) => set({ selectedTokenId }),
 
   // Ajout avec guard doublon — TOKEN_CREATED peut arriver à l'émetteur aussi
   addToken: (token) => set((state) => {

@@ -7234,3 +7234,188 @@ validation en jeu réel par Saar (« Fonctionnel »).
 le chemin RNG à faible probabilité, accepté par Saar en lieu d'une observation en direct), pas
 encore observé de bout en bout en jeu réel — seul point encore ouvert avant clôture complète du
 chantier.
+
+## Session (Dev) — 2026-09-16 — Lot A2 : interaction de déplacement sur les 15 caisses/coffres, incident et durcissement
+
+Suite de `PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` Lot A2 (preuve `move_type`). Décision Saar :
+appliquer directement sur les 15 caisses/coffres déjà cataloguées (les 10 initiales + les 5 d'A1),
+pas un blueprint de test jetable — le lot décoratif (`16_crate_pack_tarped_stack_decor`) reste exclu,
+décision A1 confirmée.
+
+**Incident (trouvé par Saar en testant, pas par moi)** : l'entrée manifest ajoutée pour "Déplacer"
+omettait `required_state_ids`. Deux sites de lecture identiques dans `SessionPage.jsx`
+(`handleEntityClick` et le rendu du `RadialMenu`) appellent `i.required_state_ids.includes(...)`
+sans garde — `undefined.includes()` levait une exception à chaque clic sur une des 15 caisses,
+pour le MJ et le joueur, en combat comme hors combat. `docs/SYSTEME/CREATION_OBJETS_3D.md`
+avertissait déjà explicitement de ce piège exact (ligne ajoutée lors du chantier caisses
+interactives précédent) — non relu avant d'écrire l'entrée manifest, malgré la consigne de
+vigilance maximale de Saar sur ce lot.
+
+**Saar a explicitement demandé une analyse à charge du correctif** ("correctif sérieux... ou fix
+bricolé ?") avant de considérer l'incident clos. Corriger seulement les 15 entrées manifest aurait
+réparé l'instance du jour, pas la classe de défaut : `tools/validate-3d-manifest.mjs` ne validait
+la forme de `states`/`interactions` sous aucun angle (confirmé en lisant le fichier en entier), et
+la route serveur de l'Atelier (`entity-blueprints.js`) fait le même `JSON.stringify(interactions ||
+[])` sans validation — deuxième porte d'entrée pour la même faille, non traitée dans ce lot (Atelier
+très peu utilisé actuellement, urgence moindre — noté pour plus tard).
+
+**Durcissement appliqué, même cause racine** :
+1. `tools/validate-3d-manifest.mjs` — nouvelles fonctions `validateStates`/`validateInteractions` :
+   `required_state_ids` doit être un tableau, ses valeurs et `target_state_id` doivent référencer un
+   `states[].id` réellement déclaré, `move_type` limité à `"displacement"`, `action_label` obligatoire
+   (lu sans garde par `RadialMenu.jsx`, `truncate()` y plante aussi sur `undefined`). Testé : reproduction
+   de l'incident exact dans un manifest temporaire → correctement rejeté ; les 7 manifests existants du
+   dépôt revalidés sans régression.
+2. `client/src/lib/entityInteractions.js` (nouveau) — `getAvailableInteractions(entity)` unique,
+   remplace les deux filtres dupliqués de `SessionPage.jsx`. Garde `Array.isArray` à la lecture :
+   une interaction malformée qui contournerait le validateur (ex. via l'Atelier, non couvert) est
+   ignorée silencieusement plutôt que de faire planter la session — frontière légitime au sens du
+   principe « valider aux limites », pas une rustine sur le symptôme du jour.
+3. Manifest corrigé : `required_state_ids: [0, 1]` sur les 15 interactions Déplacer (valable que la
+   caisse soit ouverte ou fermée).
+
+**Testé** : `node tools/validate-3d-manifest.mjs` sur les 7 manifests du dépôt (0 régression) + sur
+un manifest reproduisant l'incident (rejeté comme attendu) ; `eslint` ciblé (0 erreur, warnings
+pré-existants sans rapport) ; `npm run build` complet (succès).
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar (protocole : pose d'une caisse,
+tir hors ligne de mire, Déplacer vers la ligne de tir, nouveau tir, vérifier la ligne « Couverture
+cible ») encore à faire après ce correctif.
+**Données** : aucune migration — contenu manifest + code client/outillage uniquement.
+**Retour arrière** : rien committé à ce stade, en attente de la validation jeu réel de Saar.
+**Hors périmètre, noté** : même absence de validation côté route Atelier serveur
+(`entity-blueprints.js`) — deuxième porte d'entrée pour la même classe de défaut, urgence moindre
+tant que l'Atelier reste inutilisé (cf. audit éditeur 4 fils, `docs/JOURNAL8.md` même date).
+
+## Session (Dev) — 2026-09-17 — Résolution du token acteur : unification (MJ sans token possédé bloqué sur les interactions d'entité)
+
+Suite du test A2 (Déplacer) : le MJ ne pouvait jamais utiliser une interaction d'entité
+(`ENTITY_MOVE_REQUEST`) sans token possédé — `console.warn('[EntityMove] Aucun token acteur
+trouvé...')`, aucun repli. Diagnostic demandé par Saar : « qu'est-ce qui a provoqué la perte de
+cette fonctionnalité ? Documente-toi, regarde ce que font les pros. »
+
+**Racine trouvée par archéologie git, pas supposée** : ce n'est pas une régression. `handleEntityMove`
+(Session 41, 2026-04-30, "9F-B2") a toujours eu cette limitation, dès le premier commit. Le patron
+plus robuste (`followToken` dans `Canvas3D.jsx` : token possédé → token sélectionné → repli non-MJ)
+est arrivé 2,5 mois plus tard, au commit "Fusion Kiwi" (2026-07-15), construit pour la caméra 3e
+personne — jamais rapproché du code des interactions d'entité, plus ancien. `selectedTokenId`
+lui-même (sélection + anneau visuel) est encore plus ancien (Session 5) mais a toujours vécu comme
+état local de `Canvas3D`, structurellement invisible depuis `SessionPage.jsx`.
+
+**Confirmé par la doc Foundry VTT** : le patron pro traite "le token contrôlé" comme un concept
+global unique (`canvas.tokens.controlled`), jamais recalculé par fonctionnalité — cohérent avec la
+direction retenue.
+
+**Correctif structurel** (même défaut que `getAvailableInteractions` corrigé le 2026-09-16 : une
+propriété calculée à plusieurs endroits divergents plutôt qu'une autorité unique) :
+1. `selectedTokenId` promu de l'état local de `Canvas3D.jsx` vers `tokenStore.js` (accessible
+   partout, plus de prop-drilling nécessaire pour ce besoin).
+2. `client/src/lib/actingToken.js` (nouveau) — `resolveActingToken()` unique, même ordre de
+   résolution que l'ancien `followToken` (possédé → sélectionné → repli non-MJ). Le serveur reste
+   seul autoritaire sur l'ownership réel (`.claude/rules/entities.md`) — ce résolveur exprime une
+   intention côté client, jamais une autorisation.
+3. Trois sites rebranchés sur ce résolveur unique : `followToken` (caméra 3e personne),
+   `handleEntityMove`, le calcul `actorToken` du rendu `RadialMenu` — les deux derniers dans
+   `SessionPage.jsx`, qui réimplémentaient chacun une version tronquée (possédé seulement).
+
+**Testé** : `eslint` ciblé sur les 4 fichiers touchés (0 erreur ; le seul nouvel avertissement,
+dépendance manquante `setSelectedTokenId`, corrigé) ; comparaison avant/après par `git stash` sur
+`Canvas3D.jsx` confirmant que les 14 erreurs `react-hooks/refs` restantes sont préexistantes, sans
+rapport ; `npm run build` complet (succès).
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar (MJ sélectionne un token via clic,
+utilise Ouvrir/Déplacer sur une caisse sans token possédé).
+**Données** : aucune migration — état client uniquement (`tokenStore.js`, pas de colonne DB).
+**Retour arrière** : rien committé, en attente de validation jeu réel.
+**Hors périmètre, noté explicitement à Saar** : `handleEntityAction` (Ouvrir/Fermer) résout un
+*personnage* (pas un token) via une logique différente, déjà marquée `TODO` ("chantier /sc") par une
+session antérieure — même famille de problème, mais pas touchée ici, hors du périmètre validé.
+Reste également ouvert : pourquoi le joueur voit un cercle radial vide quelle que soit la distance
+(hypothèse de portée infirmée par Saar), et pourquoi le joueur ne peut plus déplacer son propre
+token hors combat — deux fils distincts, non encore investigués.
+
+## Session (Dev) — 2026-09-17 — Sélection MJ : découplage caméra/menu/sélection (UX, patron RTS)
+
+Suite du correctif précédent (résolution du token acteur) : Saar a testé, la mécanique fonctionne
+mais l'UX est inutilisable — un seul clic sur un token déclenchait simultanément la sélection, le
+recentrage caméra 3e personne, et l'ouverture du menu du token (`TokenRadialMenu`), avec un anneau
+de sélection quasi invisible. Analyse à charge demandée avant tout code ("on n'est pas pressés"),
+recherche RTS (StarCraft/AoE : clic = sélection seule, commande séparée pour l'action, caméra
+jamais liée à la sélection) confirmant le même patron déjà validé chez Foundry VTT (2026-09-16).
+
+**Diagnostic exact** (lu dans `Canvas3D.jsx`, pas supposé) : un clic court sur un token appelait
+`onTokenSelect` (sélection) ET, si propriétaire/MJ, `onTokenDoubleClick` (ouvre `TokenRadialMenu`,
+un menu riche : Fiche/Retirer/Échange/Viser/Statuts + boussole de rotation — vérifié en lisant le
+fichier, pas un menu accessoire) — malgré son nom, ce prop se déclenchait sur simple clic. La
+caméra bougeait parce que `followToken` (qui pilote la 3e personne) venait d'être étendu la veille
+pour inclure `selectedTokenId` — effet de bord non anticipé du correctif précédent.
+
+**Correctif, périmètre volontairement réduit après analyse à charge** (le plan initial proposait un
+nouveau champ `followedTokenId` + un geste dédié pour "faire suivre la caméra à un token choisi" —
+écarté : personne n'a demandé cette capacité, corriger l'effet de bord suffit) :
+1. `followToken` ne considère plus jamais `selectedTokenId` — retour exact au comportement caméra
+   d'avant le correctif de la veille.
+2. `client/src/lib/doubleClickTracker.js` (nouveau) — `useDoubleClickTracker()`, détection de
+   double-clic par comparaison de timestamp (le clic token est géré à la main via
+   pointerdown/up sur le canvas, pas par les props JSX de R3F — `dblclick` natif non fiable ici).
+3. `TokenRadialMenu` ne s'ouvre plus que sur un vrai double-clic détecté ; la sélection reste
+   inconditionnelle sur chaque clic court.
+4. `TokenRing` (`Canvas3D.jsx`) — l'anneau "sélectionné" était une simple version animée du même
+   anneau fin semi-transparent affiché pour tous les tokens (couleur de faction), quasiment
+   indissociable au repos. Ajout d'un second anneau, distinct (vert `#3ddc84`, même convention que
+   le highlight de snap grille de l'éditeur), plus large, avec la pulsation déjà existante.
+
+**Point 4 du plan initial (persistance de la sélection perdue à la fermeture du menu) — non traité
+séparément** : probablement un symptôme de la collision résolue par les points 1-3 (sélection et
+ouverture de menu ne partagent plus le même clic) plutôt qu'une cause distincte. À revalider par
+Saar après ce correctif avant de creuser plus loin — pas de correctif spéculatif sans repro.
+
+**Testé** : `eslint` ciblé (0 erreur ; un avertissement de dépendance introduit puis corrigé) ;
+`npm run build` complet (succès).
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar.
+**Données** : aucune migration, état client uniquement.
+**Retour arrière** : rien committé, en attente de validation jeu réel.
+**Hors périmètre, toujours ouvert** : raycast qui ouvre parfois le menu d'une caisse proche au lieu
+du token (priorité de détection de clic) ; cercle radial vide côté joueur ; joueur ne peut plus
+déplacer son propre token hors combat.
+
+## Session (Dev) — 2026-09-17 — Collision clic token/caisse : correctif ciblé + ouverture du chantier de fusion
+
+Suite immédiate du point précédent (raycast qui ouvre parfois le menu d'une caisse proche au lieu
+du token). Analyse à charge demandée par Saar : « peut-on éviter complètement la superposition de
+modules/fonctions ? » puis, après ma réponse initiale (correctif ciblé, fusion complète jugée
+disproportionnée) : « je m'en fous que ce soit disproportionné si ça aggrade l'architecture — si ça
+permet une architecture adaptative/évolutive, la question mérite d'être posée. »
+
+**Cause confirmée** : deux systèmes de détection de clic totalement indépendants. Les tokens
+passent par une boucle manuelle (écouteurs bruts sur le canvas, `Canvas3D.jsx`, nécessaire pour le
+drag) qui arbitre déjà AOE/déplacement combat/mode visée entité/drag avec un ordre de priorité
+explicite. Les entités utilisent le système `onClick` déclaratif intégré à React Three Fiber
+(`EntityMesh.jsx`), totalement à côté de cet arbitrage. Le token n'avait aucun gestionnaire `onClick`
+côté R3F — invisible pour son arbitrage interne (plus proche intersection gagne), qui ne connaissait
+donc que les entités comme candidates.
+
+**Décision de séquencement** (après avoir pesé le risque, pas le volume de travail — sur demande
+explicite de Saar de ne jamais utiliser le volume de travail comme critère) : correctif ciblé
+immédiat qui ferme le trou précis sans fusionner les deux systèmes ; fusion complète ouverte comme
+chantier séparé, cadré proprement, pas improvisée dans ce fil de débogage déjà long — risque de
+mélanger les causes si quelque chose casse pendant une réécriture qui touche potentiellement tous
+les packs d'assets, pas seulement les caisses.
+
+**Correctif** : `Canvas3D.jsx`, le token reçoit désormais un gestionnaire `onClick` (juste
+`e.stopPropagation()`) — le fait participer à l'arbitrage de R3F sans toucher à la boucle manuelle
+ni à `EntityMesh.jsx`. Pas un pansement séparé : première étape légitime vers la fusion, pas un
+correctif à défaire plus tard.
+
+**Chantier ouvert** : `docs/PLANS/PLAN_CLIC_3D_UNIFICATION.md` (stub) — référencé dans
+`docs/SYSTEME/INDEX.md` et `docs/ROADMAP.md`. Recense l'état connu, le correctif intérimaire, et ce
+que le cadrage détaillé devra faire (inventaire de tous les types d'objets cliquables, raycast
+unique, migration à risque identifié pour `EntityMesh.jsx`).
+
+**Testé** : `eslint` ciblé (0 nouvelle erreur/avertissement) ; `npm run build` complet (succès).
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar (token proche d'une caisse, clic
+exact sur le token).
+**Données** : aucune migration.
+**Retour arrière** : rien committé, en attente de validation.
+**Hors périmètre, toujours ouvert** : cercle radial vide côté joueur ; joueur ne peut plus déplacer
+son propre token hors combat ; décision caméra au double-clic (proposée par Saar, avis donné contre
+sans trancher — en attente de sa décision) ; chantier de fusion complète (stub créé, cadrage à
+faire séparément).

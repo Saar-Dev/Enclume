@@ -32,6 +32,8 @@ import {
   surfaceTextureIds,
 } from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
+import { resolveActingToken } from '../lib/actingToken.js'
+import { useDoubleClickTracker } from '../lib/doubleClickTracker.js'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
 import { useMapStore } from '../stores/mapStore'
@@ -115,8 +117,13 @@ function TokenActiveDisk({ isActive }) {
 }
 
 // ─── Anneau de base du token ──────────────────────────────────────────────────
+// SELECTION_RING_COLOR — même vert que le highlight de snap grille (Editor3D.jsx), convention du
+// projet pour "actif/sélectionné" dans le rendu 3D.
+const SELECTION_RING_COLOR = '#3ddc84'
+
 function TokenRing({ color, isSelected, opacity }) {
   const ringRef = useRef()
+  const selectionRingRef = useRef()
   const t = useRef(0)
 
   // baseY était calibré pour un corps flottant à Y_OFFSET=0.5 (0.6 ≈ ce flottement + 0.1 au sol) —
@@ -125,27 +132,38 @@ function TokenRing({ color, isSelected, opacity }) {
   const baseY = 0.1
   const baseOpacity = opacity ?? 0.5
 
+  // Anneau de sélection — délibérément un second anneau distinct (couleur/rayon propres), pas une
+  // simple animation de l'anneau de base : ce dernier existe pour TOUS les tokens (couleur de
+  // faction, toujours affiché), une variante à peine plus opaque du même anneau était donc
+  // quasiment invisible (retour Saar 2026-09-17, "à peine visible sous les pieds du token").
   useFrame((_, delta) => {
-    if (!ringRef.current) return
-    if (!isSelected) {
+    if (ringRef.current) {
       ringRef.current.position.y = baseY
       ringRef.current.scale.setScalar(1)
       ringRef.current.material.opacity = baseOpacity
-      return
     }
+    if (!isSelected || !selectionRingRef.current) return
     t.current += delta
     const time = t.current
-    ringRef.current.position.y = baseY + Math.sin(time * 3) * 0.05
+    selectionRingRef.current.position.y = baseY + Math.sin(time * 3) * 0.05
     const s = 1 + Math.sin(time * 2.5) * 0.08
-    ringRef.current.scale.set(s, 1, s)
-    ringRef.current.material.opacity = baseOpacity + Math.sin(time * 4) * 0.25 * (baseOpacity / 0.5)
+    selectionRingRef.current.scale.set(s, 1, s)
+    selectionRingRef.current.material.opacity = 0.55 + Math.sin(time * 4) * 0.25
   })
 
   return (
-    <mesh ref={ringRef} position={[0, baseY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.5, 0.58, 48]} />
-      <meshBasicMaterial color={color} transparent opacity={baseOpacity} depthWrite={false} />
-    </mesh>
+    <>
+      <mesh ref={ringRef} position={[0, baseY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.5, 0.58, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={baseOpacity} depthWrite={false} />
+      </mesh>
+      {isSelected && (
+        <mesh ref={selectionRingRef} position={[0, baseY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.64, 0.8, 48]} />
+          <meshBasicMaterial color={SELECTION_RING_COLOR} transparent opacity={0.7} depthWrite={false} />
+        </mesh>
+      )}
+    </>
   )
 }
 
@@ -388,6 +406,18 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
         e.stopPropagation()
         onDragStart(e, token)
       }}
+      // Le token n'avait aucun gestionnaire `onClick` côté React Three Fiber — invisible pour
+      // l'arbitrage interne de R3F (plus proche intersection gagne), qui ne gère QUE les entités
+      // (EntityMesh.jsx, onClick sur le mesh). Une caisse proche pouvait donc recevoir le clic
+      // via R3F même en cliquant exactement sur le token (dont la sélection réelle passe par la
+      // boucle manuelle de pointerup sur le canvas, un système entièrement séparé). Ce
+      // gestionnaire ne fait rien de plus que réclamer l'événement — la sélection reste gérée par
+      // la boucle manuelle ; correctif ciblé avant fusion complète des deux systèmes
+      // (docs/PLANS/PLAN_CLIC_3D_UNIFICATION.md).
+      onClick={(e) => {
+        if (sceneOpacity < 0.999) return
+        e.stopPropagation()
+      }}
     >
       <TokenActiveDisk isActive={isActive} />
       <TokenRing color={color} isSelected={isSelected} opacity={sceneOpacity * (isGmLayer ? 0.25 : 0.5)} />
@@ -575,6 +605,7 @@ function Scene({
   const { user } = useAuthStore()
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const { phase, announcedActions, activeTokenId, grenadeMarkers } = useCombatStore()
+  const checkTokenDoubleClick = useDoubleClickTracker()
 
   const [dragState, setDragState] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
@@ -601,15 +632,13 @@ function Scene({
   const tokensRef = useRef(tokens)
   tokensRef.current = tokens
 
-  const followToken = useMemo(() => {
-    const owned = tokens.find(token =>
-      characters.some(character => character.id === token.character_id && character.user_id === user?.id)
-    )
-    if (owned) return owned
-    if (selectedTokenId) return tokens.find(token => token.id === selectedTokenId) || null
-    if (!isGm) return tokens.find(token => token.layer !== 'gm') || null
-    return null
-  }, [tokens, characters, user?.id, selectedTokenId, isGm])
+  // Ne considère jamais selectedTokenId — sélectionner un token (pour agir via lui sur une
+  // interaction d'entité) ne doit pas faire suivre la caméra à sa place ; suivre la caméra reste
+  // un geste séparé, non construit (personne ne l'a demandé), cf. docs/JOURNAL8.md 2026-09-17.
+  const followToken = useMemo(
+    () => resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId: null, isGm }),
+    [tokens, characters, user?.id, isGm]
+  )
   const thirdPersonCameraActive = cameraMode === 'play' && !!followToken && !freeCameraOverride
 
   // ─── Échap : sortir de la caméra troisième personne (token possédé, jamais désélectionnable) ──
@@ -1213,12 +1242,14 @@ function Scene({
     setDragState(null)
 
     if (!wasMoving) {
-      // Clic court sans déplacement — sélection du token
-      // Si le token appartient au joueur ou est GM → émettre TOKEN_ROTATE via callback
+      // Clic court sans déplacement — sélection du token (toujours), menu du token seulement sur
+      // un vrai second clic rapproché (double-clic — retour Saar 2026-09-17 : un simple clic ne
+      // doit faire QUE sélectionner, pas ouvrir le menu ni bouger la caméra en même temps).
       // Propriétaire = character.user_id === user.id OU isGm
       const character = characters.find(c => c.id === token.character_id)
       const isOwner = character?.user_id === user?.id
-      if (isOwner || isGm) {
+      const isDoubleClick = checkTokenDoubleClick(token.id)
+      if (isDoubleClick && (isOwner || isGm)) {
         onTokenDoubleClick?.(token, e.clientX, e.clientY)
       }
       justSelectedRef.current = true
@@ -1245,7 +1276,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, ambientMapClickActive, findOccupantAt])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, ambientMapClickActive, findOccupantAt, checkTokenDoubleClick])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -1756,6 +1787,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const { entities } = useEntityStore()
   const { isGm, characters } = useCharacterStore()
   const { user } = useAuthStore()
+  // Promu depuis un useState local le 2026-09-17 — accessible hors de Canvas3D
+  // (client/src/lib/actingToken.js) pour résoudre le token acteur d'une interaction d'entité.
+  const { selectedTokenId, setSelectedTokenId } = useTokenStore()
 
   const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode })
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
@@ -1777,7 +1811,6 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
-  const [selectedTokenId, setSelectedTokenId] = useState(null)
 
   const {
     worldEffects,
@@ -2007,7 +2040,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
     setSelectedTokenId(null)
     setSurfaceConnectorPanel(null)
-  }, [])
+  }, [setSelectedTokenId])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

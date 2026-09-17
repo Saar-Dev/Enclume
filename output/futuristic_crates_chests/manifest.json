@@ -81,6 +81,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -159,6 +168,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -237,6 +255,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -322,6 +349,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -400,6 +436,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -485,6 +530,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -563,6 +617,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -648,6 +711,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -726,6 +798,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -804,6 +885,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -878,6 +968,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -888,7 +987,7 @@
       "size_class": "medium",
       "format": "deep_dual_gullwing",
       "footprint_width_m": 0.828,
-      "footprint_depth_m": 0.570,
+      "footprint_depth_m": 0.57,
       "height_m": 0.518,
       "features": "deep stackable crate with twin gullwing lids and a central magnetic lock",
       "interior": "hollow",
@@ -952,6 +1051,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -1026,6 +1134,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -1036,7 +1153,7 @@
       "size_class": "medium",
       "format": "domed_tool_case",
       "footprint_width_m": 0.948,
-      "footprint_depth_m": 0.580,
+      "footprint_depth_m": 0.58,
       "height_m": 0.582,
       "features": "tool case with an arched hinged lid and side carry handles",
       "interior": "hollow",
@@ -1100,6 +1217,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },
@@ -1174,6 +1300,15 @@
             1
           ],
           "target_state_id": 0
+        },
+        {
+          "id": "move",
+          "action_label": "Déplacer",
+          "move_type": "displacement",
+          "required_state_ids": [
+            0,
+            1
+          ]
         }
       ]
     },

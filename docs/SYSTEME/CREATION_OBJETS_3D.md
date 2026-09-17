@@ -189,13 +189,16 @@ Déclaration `states`/`interactions` dans le manifest (propagées vers `entity_b
 ],
 "interactions": [
   { "id": "open", "action_label": "Ouvrir", "required_state_ids": [0], "target_state_id": 1 },
-  { "id": "close", "action_label": "Fermer", "required_state_ids": [1], "target_state_id": 0 }
+  { "id": "close", "action_label": "Fermer", "required_state_ids": [1], "target_state_id": 0 },
+  { "id": "move", "action_label": "Déplacer", "move_type": "displacement", "required_state_ids": [0, 1] }
 ]
 ```
 
-- `required_state_ids` filtre la visibilité de l'interaction selon l'état courant de l'instance — champ consommé par `SessionPage.jsx` sans garde ; l'omettre fait planter silencieusement l'ouverture du menu radial en jeu (pas en éditeur). Toujours le renseigner, même à `[]`.
+- `required_state_ids` filtre la visibilité de l'interaction selon l'état courant de l'instance — **toujours obligatoire, jamais `[]` par défaut** : un tableau vide ne satisfait aucun état, l'interaction ne s'affiche alors dans AUCUN état. Lister explicitement tous les états où l'interaction doit apparaître (`[0, 1]` pour une interaction valable qu'importe l'état, ex. `move_type`).
+- `node tools/validate-3d-manifest.mjs` vérifie depuis le 2026-09-16 la forme de `states`/`interactions` (présence de `required_state_ids` en tableau, cohérence des références `required_state_ids`/`target_state_id` avec les `states.id` déclarés, valeur de `move_type`) — un manifest qui omet `required_state_ids` est maintenant rejeté avant d'atteindre le jeu. Toujours lancer ce script après édition manuelle du manifest.
+- Lecture côté client : `client/src/lib/entityInteractions.js` (`getAvailableInteractions`) est le seul point de lecture, garde `Array.isArray` incluse — une interaction malformée qui contournerait le validateur (ex. blueprint créé via l'Atelier, non validé côté serveur à ce jour) est silencieusement ignorée plutôt que de faire planter la session.
 - Sans `skill_id`/`attribute_id`, l'interaction se résout directement (pas d'arbitrage MJ) — adapté à un simple couvercle, pas à un accès verrouillé (`docs/REGLES/REGLE_SERRURE.md`, non câblé à ce jour).
-- Exemple complet et incident de mise au point : `docs/JOURNAL8.md` (2026-09-16, chantier caisses interactives).
+- Exemple complet et incident de mise au point : `docs/JOURNAL8.md` (2026-09-16, chantier caisses interactives ; durcissement validateur + lecture client, même date, chantier "Lot A2").
 
 ## Cas particulier des connecteurs
 

@@ -94,6 +94,83 @@ function validateSlot(slot, scope, seenCodes, glbInfo) {
   }
 }
 
+// validateStates / validateInteractions — entity_blueprints.states/interactions (jsonb, sans
+// contrainte de forme en base) alimentées par ce manifest ET par l'Atelier (entity-blueprints.js,
+// même absence de validation serveur). Un défaut de forme ici traverse tout le pipeline sans être
+// détecté avant d'atteindre le client — vécu : Session (Dev) 2026-09-16, required_state_ids
+// manquant sur une interaction de déplacement a fait planter SessionPage.jsx à chaque clic sur
+// l'entité (deux sites de lecture non protégés, cf. client/src/lib/entityInteractions.js).
+function validateStates(asset, scope) {
+  const stateIds = new Set()
+  if (asset.states === undefined) return stateIds
+  if (!Array.isArray(asset.states)) {
+    error(scope, 'states doit être un tableau')
+    return stateIds
+  }
+  asset.states.forEach((state, index) => {
+    const stateScope = `${scope}.states[${index}]`
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {
+      error(stateScope, 'un état doit être un objet')
+      return
+    }
+    if (!Number.isInteger(state.id) || state.id < 0) error(stateScope, 'id doit être un entier >= 0')
+    else if (stateIds.has(state.id)) error(stateScope, `id dupliqué ${state.id}`)
+    else stateIds.add(state.id)
+    if (!String(state.name || '').trim()) warn(stateScope, 'name manquant')
+  })
+  return stateIds
+}
+
+function validateInteractions(asset, scope, stateIds) {
+  if (asset.interactions === undefined) return
+  if (!Array.isArray(asset.interactions)) {
+    error(scope, 'interactions doit être un tableau')
+    return
+  }
+  const seenIds = new Set()
+  asset.interactions.forEach((interaction, index) => {
+    const interactionScope = `${scope}.interactions[${index}]`
+    if (!interaction || typeof interaction !== 'object' || Array.isArray(interaction)) {
+      error(interactionScope, 'une interaction doit être un objet')
+      return
+    }
+    const id = String(interaction.id || '').trim()
+    if (!id) error(interactionScope, 'id manquant')
+    else if (seenIds.has(id)) error(interactionScope, `id dupliqué ${id}`)
+    else seenIds.add(id)
+
+    // action_label lu sans garde par RadialMenu.jsx (truncate() plante sur undefined).
+    if (!String(interaction.action_label || '').trim()) error(interactionScope, 'action_label manquant')
+
+    // required_state_ids lu sans garde par SessionPage.jsx (deux sites) via
+    // getAvailableInteractions — absent/mal formé fait disparaître l'interaction (avec la garde
+    // actuelle) ou plantait la session (avant le durcissement de cette même session).
+    if (!Array.isArray(interaction.required_state_ids)) {
+      error(interactionScope, 'required_state_ids doit être un tableau (même vide) — sinon l’interaction ne s’affichera jamais côté client')
+    } else {
+      for (const stateId of interaction.required_state_ids) {
+        if (!stateIds.has(stateId)) error(interactionScope, `required_state_ids référence un état inexistant : ${stateId}`)
+      }
+    }
+
+    const hasMoveType = interaction.move_type !== undefined && interaction.move_type !== null
+    if (hasMoveType) {
+      if (interaction.move_type !== 'displacement') error(interactionScope, `move_type inconnu : ${interaction.move_type} (seule la valeur "displacement" existe)`)
+      if (interaction.target_state_id !== undefined && interaction.target_state_id !== null) {
+        warn(interactionScope, 'target_state_id ignoré sur une interaction de déplacement (move_type)')
+      }
+    } else if (interaction.target_state_id !== undefined && interaction.target_state_id !== null) {
+      if (!stateIds.has(interaction.target_state_id)) error(interactionScope, `target_state_id référence un état inexistant : ${interaction.target_state_id}`)
+    }
+
+    if (interaction.range !== undefined && !positiveNumber(interaction.range)) error(interactionScope, 'range doit être un nombre > 0')
+    if (interaction.difficulty_dc !== undefined && !Number.isFinite(Number(interaction.difficulty_dc))) error(interactionScope, 'difficulty_dc doit être un nombre')
+    if (interaction.dmax_override !== undefined && interaction.dmax_override !== null && !positiveNumber(interaction.dmax_override)) {
+      error(interactionScope, 'dmax_override doit être un nombre > 0 ou null')
+    }
+  })
+}
+
 function validateAsset(asset, index, seenNames, manifest) {
   const scope = `assets[${index}]${asset?.name ? ` (${asset.name})` : ''}`
   if (!asset || typeof asset !== 'object' || Array.isArray(asset)) {
@@ -165,6 +242,9 @@ function validateAsset(asset, index, seenNames, manifest) {
     }
   }
   if (asset.glb) warn(scope, 'le champ glb absolu est ignoré ; catalog_file suffit')
+
+  const stateIds = validateStates(asset, scope)
+  validateInteractions(asset, scope, stateIds)
 }
 
 let manifest
