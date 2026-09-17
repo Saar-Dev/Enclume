@@ -384,6 +384,23 @@ Trois consommateurs, une seule définition :
   combat/déplacement d'entité) — inchangé visuellement.
 - `npx eslint` + `npm run build` avant de rendre la main.
 
+### 9.4. Statut
+
+**Codé, lint/build vérifiés, commité et poussé** (`b373410`, `dev/Saar`) 2026-09-17, avec la
+correction `blocksEntityClick` du §11 dans le même commit (les deux modifient le même tableau
+`aimModes`, non séparables sans coût disproportionné).
+
+**Validation réelle partielle** — le détour de session (fenêtres de déclaration coincées derrière la
+timeline, déplacement combat cassé, occupation circulaire côté moteur monde — bugs sans rapport
+avec ce plan, cf. mémoire `project_combat_window_drag_handle`) a exercé en profondeur Échap/curseur
+pour `combatMoveMode`
+(désarmement/réarmement observé des dizaines de fois dans les logs BUG-DEPLACEMENT1) et la garde
+`blocksEntityClick` (caisses utilisables pendant le tour, confirmé). **Non rejoué explicitement** :
+Échap + curseur pour `combatTargetMode`, `combatAoeTargetMode`, `losMode`, `moveTarget` — la
+checklist §9.3 pour ces 4 modes reste à cocher en jeu réel avant de considérer le chantier
+entièrement clos, même si le code est identique en nature à ce qui a déjà été exercé pour
+`combatMoveMode`.
+
 ## 10. Note annexe — fichier parasite trouvé pendant le recensement
 
 `client/src/components/EntityMesh jsx.md` (espace dans le nom, extension `.md`) : semble être une
