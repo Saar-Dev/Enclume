@@ -16,6 +16,7 @@ import {
   ENTITY_SCALE_MIN,
   ENTITY_SCALE_STEP,
   normalizeEntityScale,
+  normalizeInteractionOverrides,
   withEntityScale,
 } from '../../../shared/world/entityTransform.js'
 
@@ -85,6 +86,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
   const [gmOnly,               setGmOnly]               = useState(entity.gm_only || false)
   const [currentStateId,       setCurrentStateId]       = useState(entity.current_state_id ?? 0)
   const [disabledInteractions, setDisabledInteractions] = useState(entity.disabled_interactions || [])
+  const [interactionOverrides, setInteractionOverrides] = useState(entity.interaction_overrides || {})
   const [notesGm,              setNotesGm]              = useState(entity.notes_gm || '')
   const [posX,                 setPosX]                 = useState(String(entity.pos_x ?? 0))
   const [posY,                 setPosY]                 = useState(String(entity.pos_y ?? 0))
@@ -128,7 +130,8 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     setPosZ(String(entity.pos_z ?? 0))
     setRotation(Number(entity.r) || 0)
     setScale(normalizeEntityScale(entity.state))
-  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.state])
+    setInteractionOverrides(entity.interaction_overrides || {})
+  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.state, entity.interaction_overrides])
 
   const previewTransform = useCallback((nextRotation, nextScale) => {
     previewRef.current.active = true
@@ -161,6 +164,24 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     )
   }
 
+  // Surcharge par instance (difficulty_dc/range) — vide = hérite du blueprint, même sémantique que
+  // interaction_overrides côté serveur (§10.1 ENTITES.md). rawValue === '' retire la clé plutôt que
+  // stocker une entrée vide, pour garder le jsonb propre (patron disabled_interactions).
+  const updateInteractionOverride = (interactionId, field, rawValue) => {
+    setInteractionOverrides(prev => {
+      const next = { ...prev }
+      const current = { ...(next[interactionId] || {}) }
+      if (rawValue === '') {
+        delete current[field]
+      } else {
+        current[field] = Number(rawValue)
+      }
+      if (Object.keys(current).length === 0) delete next[interactionId]
+      else next[interactionId] = current
+      return next
+    })
+  }
+
   const updateMaterialSlot = (slot, patch) => {
     setMaterialOverrides(prev => setMaterialSlotOverride(prev, slot, patch))
   }
@@ -190,6 +211,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         gm_only:               gmOnly,
         current_state_id:      currentStateId,
         disabled_interactions: disabledInteractions,
+        interaction_overrides: normalizeInteractionOverrides(interactionOverrides, blueprint?.interactions || []),
         state:                 withEntityScale({ ...normalizeEntityState(entity.state), materialOverrides }, scale),
         notes_gm:              notesGm.trim() || null,
       })
@@ -226,7 +248,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     } finally {
       setSaving(false)
     }
-  }, [entity, posX, posY, posZ, rotation, scale, labelOverride, gmOnly, currentStateId, disabledInteractions, materialOverrides, notesGm, updateEntity, socket])
+  }, [entity, posX, posY, posZ, rotation, scale, labelOverride, gmOnly, currentStateId, disabledInteractions, interactionOverrides, materialOverrides, notesGm, updateEntity, socket, blueprint?.interactions])
 
   const handleDelete = useCallback(async () => {
     setDeleting(true)
@@ -416,28 +438,59 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
               {interactions.map(interaction => {
                 const isDisabled = disabledInteractions.includes(interaction.id)
+                const override = interactionOverrides[interaction.id] || {}
+                // Miroir de la formule de résolution (socketEntity.js, ENTITY_ACTION_REQUEST /
+                // ENTITY_MOVE_REQUEST) — aperçu seul, jamais une 2e autorité : le serveur reste seul
+                // à trancher au jet.
+                const effectiveDifficulty = override.difficulty_dc ?? interaction.difficulty_dc ?? 0
                 return (
                   <div
                     key={interaction.id}
-                    onClick={() => toggleInteraction(interaction.id)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '5px 8px', borderRadius: '5px', cursor: 'pointer',
+                      borderRadius: '5px', padding: '5px 8px',
                       background: isDisabled ? 'rgba(224,92,92,0.06)' : 'rgba(76,175,119,0.06)',
                       border: `1px solid ${isDisabled ? 'rgba(224,92,92,0.2)' : 'rgba(76,175,119,0.2)'}`,
                     }}
                   >
-                    <span style={{ fontSize: '11px', color: isDisabled ? '#e05c5c' : '#4caf77' }}>
-                      {isDisabled ? '✕' : '✓'}
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#c0c0d0', flex: 1 }}>
-                      {interaction.action_label}
-                    </span>
-                    {interaction.difficulty_dc != null && (
-                      <span style={{ fontSize: '10px', color: '#4a4a60' }}>
-                        DC{interaction.difficulty_dc}
+                    <div
+                      onClick={() => toggleInteraction(interaction.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                    >
+                      <span style={{ fontSize: '11px', color: isDisabled ? '#e05c5c' : '#4caf77' }}>
+                        {isDisabled ? '✕' : '✓'}
                       </span>
-                    )}
+                      <span style={{ fontSize: '12px', color: '#c0c0d0', flex: 1 }}>
+                        {interaction.action_label}
+                      </span>
+                    </div>
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '5px' }}
+                    >
+                      <label style={S.compactField}>
+                        <span>{t('entityPanel.difficultyOverrideLabel')}</span>
+                        <input
+                          type="number" step="1"
+                          style={S.input}
+                          value={override.difficulty_dc ?? ''}
+                          placeholder={String(interaction.difficulty_dc ?? 0)}
+                          onChange={e => updateInteractionOverride(interaction.id, 'difficulty_dc', e.target.value)}
+                        />
+                      </label>
+                      <label style={S.compactField}>
+                        <span>{t('entityPanel.rangeOverrideLabel')}</span>
+                        <input
+                          type="number" step="0.5" min="0"
+                          style={S.input}
+                          value={override.range ?? ''}
+                          placeholder={String(interaction.range ?? 1.5)}
+                          onChange={e => updateInteractionOverride(interaction.id, 'range', e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <p style={{ ...S.hint, marginTop: '4px' }}>
+                      {t('entityPanel.overrideReference', { value: 3 + effectiveDifficulty })}
+                    </p>
                   </div>
                 )
               })}

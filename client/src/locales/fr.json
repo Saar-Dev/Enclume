@@ -1068,7 +1068,10 @@
     "saving": "Sauvegarde…",
     "saved": "✓ Sauvegardé",
     "delete": "Supprimer l'entité",
-    "deleteConfirm": "Confirmer la suppression"
+    "deleteConfirm": "Confirmer la suppression",
+    "difficultyOverrideLabel": "Difficulté (surcharge)",
+    "rangeOverrideLabel": "Portée (surcharge, m)",
+    "overrideReference": "Seuil de référence (FOR 18, max humain) : {{value}}/20"
   },
   "changelog": {
     "tags": {

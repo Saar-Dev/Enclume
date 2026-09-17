@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
-import { withEntityScale } from '../../../shared/world/entityTransform.js'
+import { withEntityScale, normalizeInteractionOverrides } from '../../../shared/world/entityTransform.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
 // quand monté sous /api/battlemaps/:id/entities
@@ -197,7 +197,11 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     if (current_state_id !== undefined) updates.current_state_id = current_state_id
     if (gm_only !== undefined) updates.gm_only = gm_only
     if (label_override !== undefined) updates.label_override = label_override || null
-    if (interaction_overrides !== undefined) updates.interaction_overrides = JSON.stringify(interaction_overrides)
+    if (interaction_overrides !== undefined) {
+      updates.interaction_overrides = JSON.stringify(
+        normalizeInteractionOverrides(interaction_overrides, blueprint?.interactions || []),
+      )
+    }
     if (disabled_interactions !== undefined) updates.disabled_interactions = disabled_interactions
     if (state !== undefined) updates.state = JSON.stringify(normalizedEntityState(state))
     if (notes_gm !== undefined) updates.notes_gm = notes_gm || null
