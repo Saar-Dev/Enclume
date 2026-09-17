@@ -717,6 +717,12 @@ function Scene({
   const losModeRef = useRef(null)
   losModeRef.current = losMode
 
+  // ─── Autorité unique « un mode de visée est actif » (PLAN_CLIC_3D_UNIFICATION.md §7.2) ──────
+  // Même condition que useSceneCursor.js (recopiée là aussi, dette connue du plan) — utilisée ici
+  // pour désactiver le clic déclaratif R3F des entités/connecteurs pendant un mode de visée combat,
+  // qui les court-circuitait entièrement (aucune garde avant ce lot, sauf moveTarget, cf. plan §7.1).
+  const aimModeActive = !!(combatMoveMode || combatTargetMode || combatAoeTargetMode || losMode?.active || moveTarget)
+
   // ─── Clic ambiant sur token adverse — P40 : ref miroir (COMBAT-CLICK-AUTOSOLVE) ──────────────
   const onAmbientTokenClickRef = useRef(null)
   onAmbientTokenClickRef.current = onAmbientTokenClick
@@ -1417,6 +1423,7 @@ function Scene({
           runtimeFeatureStates={runtimeFeatureStates}
           selectedConnectorId={selectedSurfaceConnectorId}
           onConnectorSelect={onSurfaceConnectorSelect}
+          aimModeActive={aimModeActive}
         />
       ) : USE_DIORAMA_TERRAIN ? (
         <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
@@ -1482,6 +1489,7 @@ function Scene({
             onHover={handleEntityHover}
             sceneOpacity={1}
             isSelected={moveTarget?.entity?.id === entity.id}
+            aimModeActive={aimModeActive}
           />
         )
       })}
@@ -1998,11 +2006,13 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
     if (connector?.type !== 'elevator' && connector?.type !== 'door') return
-    // Bug pré-existant partagé (trouvé en testant la porte, mais touche l'ascenseur à l'identique —
-    // même handler, ConnectorSegment.handlePointerDown déclenche sur POINTERDOWN, stopPropagation()
-    // n'empêche jamais le "click" natif suivant sur le <Canvas> DOM) : sans ce ref, handleCanvasClick
-    // referme le panneau à l'instant même où le clic se termine (pointerup). Mirroir exact du garde
-    // déjà posé pour la sélection de token (ligne ~989, justSelectedRef.current = true).
+    // Bug pré-existant partagé (trouvé en testant la porte, touche l'ascenseur à l'identique) :
+    // rien ne garantit que le stopPropagation() de ConnectorSegment.handleClick (React Three Fiber,
+    // PLAN_CLIC_3D_UNIFICATION.md §7.2) empêche le "click" natif délégué par React d'atteindre
+    // <Canvas onClick={handleCanvasClick}> — non vérifiable sans test en jeu réel (§7.2 point 3).
+    // Ce ref reste donc nécessaire : sans lui, handleCanvasClick referme le panneau à l'instant même
+    // où le clic se termine. Mirroir exact du garde déjà posé pour la sélection de token (ligne
+    // ~989, justSelectedRef.current = true).
     justSelectedRef.current = true
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
     setSurfaceConnectorPanel({

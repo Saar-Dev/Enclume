@@ -80,6 +80,7 @@ export default function EntityMesh({
   sceneOpacity = 1,
   isPreview = false,
   isSelected = false,
+  aimModeActive = false,
 }) {
   if (!blueprint) return null;
 
@@ -128,6 +129,7 @@ export default function EntityMesh({
       onEntityClick={onEntityClick}
       isPreview={isPreview}
       isSelected={isSelected}
+      aimModeActive={aimModeActive}
     />
   ) : (
     <EntityMeshVoxel
@@ -148,6 +150,7 @@ export default function EntityMesh({
       onEntityClick={onEntityClick}
       isPreview={isPreview}
       isSelected={isSelected}
+      aimModeActive={aimModeActive}
     />
   );
 }
@@ -162,6 +165,7 @@ function EntityMeshGlb({
   stateOpacity, altPressed, isGmOnly,
   onHover, onEntityClick,
   isPreview, isSelected,
+  aimModeActive,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
   const { pendingEntityId } = useSessionStore();
@@ -341,7 +345,7 @@ function EntityMeshGlb({
       ref={groupRef}
       rotation={[0, rot, 0]}
       scale={[scale, scale, scale]}
-      onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
+      onClick={!isPreview && !aimModeActive && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
       onPointerEnter={isPreview ? undefined : () => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
         setHovered(true);
@@ -394,7 +398,7 @@ function EntityMeshGlb({
 
       {/* Icône Html */}
       {!isPreview && hasInteractions && (
-        <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
+        <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} aimModeActive={aimModeActive} />
       )}
       {!isPreview && <PendingWaitIcon height={height} isPending={isPending} />}
     </group>
@@ -407,6 +411,7 @@ function EntityMeshVoxel({
   posX, posY, posZ, width, height, depth, rot, scale,
   stateOpacity, altPressed, isGmOnly, onHover, onEntityClick,
   isPreview, isSelected,
+  aimModeActive,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
   const { pendingEntityId } = useSessionStore();
@@ -489,7 +494,7 @@ function EntityMeshVoxel({
       ref={groupRef}
       rotation={[0, rot, 0]}
       scale={[scale, scale, scale]}
-      onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
+      onClick={!isPreview && !aimModeActive && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
       onPointerEnter={isPreview ? undefined : handlePointerEnter}
       onPointerLeave={isPreview ? undefined : handlePointerLeave}
     >
@@ -534,7 +539,7 @@ function EntityMeshVoxel({
 
       {/* Icône Html */}
       {!isPreview && hasInteractions && (
-        <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
+        <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} aimModeActive={aimModeActive} />
       )}
       {!isPreview && <PendingWaitIcon height={height} isPending={isPending} />}
     </group>
@@ -542,7 +547,7 @@ function EntityMeshVoxel({
 }
 
 // --- HoverIcon (VOTRE VERSION ORIGINALE, INCHANGÉE) ---
-function HoverIcon({ entity, height, hovered, onEntityClick }) {
+function HoverIcon({ entity, height, hovered, onEntityClick, aimModeActive }) {
   return (
     <Html
       position={[0, height / 2 + 0.4, 0]}
@@ -551,6 +556,7 @@ function HoverIcon({ entity, height, hovered, onEntityClick }) {
     >
       <div
         onClick={(e) => {
+          if (aimModeActive) return;
           e.stopPropagation();
           onEntityClick?.(entity, e.clientX, e.clientY);
         }}
@@ -566,9 +572,9 @@ function HoverIcon({ entity, height, hovered, onEntityClick }) {
           fontSize: '13px',
           cursor: 'pointer',
           boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-          visibility: hovered ? 'visible' : 'hidden',
-          opacity: hovered ? 1 : 0,
-          pointerEvents: hovered ? 'auto' : 'none',
+          visibility: hovered && !aimModeActive ? 'visible' : 'hidden',
+          opacity: hovered && !aimModeActive ? 1 : 0,
+          pointerEvents: hovered && !aimModeActive ? 'auto' : 'none',
           transition: 'opacity 0.15s',
         }}
         title={entity.label_override || ''}

@@ -563,12 +563,12 @@ function SessionContent({ campaignId }) {
   // Si 1 seule interaction disponible → action directe sans radial.
   // Si 2-6 interactions (+ tranche GM) → radial menu.
   // Déclaré APRÈS handleEntityAction et handleEntityMove — P4/P48.
+  // Ancien garde "if (moveTarget) { setMoveTarget(null); return }" supprimé
+  // (PLAN_CLIC_3D_UNIFICATION.md §7.2 point 4) : Canvas3D ne déclenche plus onEntityClick du tout
+  // pendant un mode de visée (aimModeActive, cf. EntityMesh.jsx) — la branche moveTarget de
+  // Canvas3D.handlePointerUp annule déjà le mode sur tout clic, ce garde ne faisait qu'annuler une
+  // deuxième fois en redondance.
   const handleEntityClick = useCallback((entity, clientX, clientY) => {
-    // Guard Q4 — mode visée actif : annuler silencieusement, ne pas ouvrir de radial
-    if (moveTarget) {
-      setMoveTarget(null)
-      return
-    }
     const availableInteractions = getAvailableInteractions(entity)
     // 1 seule interaction et pas GM → action directe (skillcheck) ou mode visée (displacement)
     if (availableInteractions.length === 1 && !isGm) {
@@ -581,7 +581,7 @@ function SessionContent({ campaignId }) {
       return
     }
     setRadialMenu({ entity, x: clientX, y: clientY })
-  }, [isGm, handleEntityAction, handleEntityMove, moveTarget])
+  }, [isGm, handleEntityAction, handleEntityMove])
 
   // ─── Résolution action entité (GM → serveur) ──────────────────────────────
   const handleEntityActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {

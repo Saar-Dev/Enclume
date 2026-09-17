@@ -1585,16 +1585,20 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   )
 }
 
-export function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
-  const handlePointerDown = useCallback((event) => {
-    if (!onPointerSelect || !connector?.id) return
+export function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, aimModeActive = false, displayLevel = null }) {
+  // onClick (pas onPointerDown) — un clic explicite plutôt que la phase descendante d'un geste qui
+  // pourrait devenir un pan/rotation caméra. Garde aimModeActive : même autorité que EntityMesh.jsx
+  // (PLAN_CLIC_3D_UNIFICATION.md §7.2) — un connecteur ne doit pas voler un clic pendant un mode de
+  // visée combat/entité.
+  const handleClick = useCallback((event) => {
+    if (!onPointerSelect || !connector?.id || aimModeActive) return
     event.stopPropagation()
     event.nativeEvent?.preventDefault?.()
     onPointerSelect(connector.id, connector, event)
-  }, [connector, onPointerSelect])
+  }, [connector, onPointerSelect, aimModeActive])
 
   if (!connector) return null
-  const pointerProps = onPointerSelect ? { onPointerDown: handlePointerDown } : {}
+  const pointerProps = onPointerSelect ? { onClick: handleClick } : {}
   if (connector.type === 'door') {
     const url = connectorAssetUrl(connector)
     if (url) {
@@ -1954,6 +1958,7 @@ function SurfaceDungeonScene({
   showDetails = true,
   selectedConnectorId = null,
   onConnectorSelect = null,
+  aimModeActive = false,
   runtimeFeatureStates = {},
   cameraControlsRef = null,
   onCameraRoomIdChange = null,
@@ -2154,6 +2159,7 @@ function SurfaceDungeonScene({
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}
           onPointerSelect={onConnectorSelect}
+          aimModeActive={aimModeActive}
           displayLevel={displayLevel}
         />
       ) : null)}

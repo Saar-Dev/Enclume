@@ -156,12 +156,9 @@ touchés n'ont rien à voir :
   dupliqués + surbrillance) — orthogonal à (a) : touche directement les 4 modes de combat déjà
   validés en jeu réel, sans suite de tests automatisés (risque explicitement signalé au §3).
 
-→ **Lot 1 = (a) seul.** Objectif : un seul raycast/une seule liste de candidats pour tokens +
-entités (2 variantes) + connecteurs, en mode jeu uniquement, réutilisant l'ordre de priorité déjà
-validé de la boucle manuelle (`handlePointerUp`) plutôt que d'inventer une nouvelle architecture.
-Supprime au passage le couplage `justSelectedRef` (système 4) en le remplaçant par la même autorité
-de priorité que le reste. Cadrage et code de ce lot uniquement, dans un tour dédié séparé de
-celui-ci — pas dans la continuité de ce document de recensement.
+→ **Lot 1 = (a) seul.** Objectif : une seule autorité de priorité pour tokens + entités (2
+variantes) + connecteurs, en mode jeu uniquement. Design détaillé et vérifié au §7 (remplace une
+première version écartée — voir §7.0).
 
 → **Lot 2 = (b), après le Lot 1 codé et confirmé en jeu réel.** Ne commence pas avant, pour ne
 jamais mélanger une régression possible sur les modes de combat avec le lot qui vient de sortir.
@@ -184,3 +181,118 @@ dans aucun des deux lots ci-dessus :
 - Ce n'est pas un report vague : si une unification mode jeu / mode édition s'avère un jour
   souhaitable, elle appartient au cadrage de `PLAN_WORLD_BUILDER_REWORK.md`, à faire pointer vers
   ce document (§2bis) pour l'état des lieux du côté mode jeu.
+
+## 7. Lot 1 — design vérifié `[VÉRIFIÉ 2026-09-17]`
+
+### 7.0. Piste écartée : registre + raycast fait main
+
+Première idée : sortir entités/connecteurs du système R3F déclaratif, les enregistrer dans un
+registre partagé (ref miroir), et faire un `raycaster.intersectObjects(registre, true)` manuel
+dans `handlePointerUp` pour retrouver « qui a été cliqué », trié par distance.
+
+**Écartée après vérification** — trois faits, trouvés en lisant la doc R3F
+([r3f.docs.pmnd.rs/api/events](https://r3f.docs.pmnd.rs/api/events)) et le code déjà présent :
+1. R3F fait déjà exactement ça en interne : raycaster partagé, distribution du plus proche vers le
+   plus loin, et `stopPropagation()` empêche la distribution aux objets plus lointains — le
+   comportement recherché existe déjà, nativement, pour tout mesh avec un `onClick`.
+2. `raycastGround`/`raycastWorldSupport` (`Canvas3D.jsx:821,833`) réutilisent déjà le `raycaster`
+   fourni par `useThree()` — **pas un second raycaster** comme supposé au §3 initial ; la boucle
+   manuelle et R3F partagent déjà la même instance.
+3. Un registre fait main aurait dupliqué ce que R3F fournit gratuitement — contraire à l'invariant
+   « ne jamais coder de zéro » : plus de code, plus de risque de régression sur les 6 packs
+   d'assets, pour un résultat déjà obtenu par le mécanisme natif.
+
+### 7.1. Root cause réelle, confirmée par relecture (pas supposée)
+
+Le clic « caisse au lieu du token » (déclencheur du chantier) était déjà corrigé correctement par
+le correctif intérimaire du 17/09 : le token a maintenant un `onClick` qui appelle
+`stopPropagation()`, et R3F distribue nativement au plus proche d'abord — donc quand le token est
+la géométrie la plus proche du rayon, son `onClick` gagne et bloque l'entité. **Ce correctif n'est
+pas une rustine à défaire, c'est déjà la bonne mécanique.**
+
+Ce qui reste réellement cassé, trouvé en vérifiant `handleEntityClick`
+(`SessionPage.jsx:566-580`) contre les 5 modes de visée : **seul `moveTarget` est gardé** (ligne
+567-571, `if (moveTarget) { setMoveTarget(null); return }`). Les 4 modes combat
+(`combatMoveMode`/`combatTargetMode`/`combatAoeTargetMode`/`losMode`) n'ont **aucune** garde côté
+entité — cliquer sur une caisse pendant un ciblage zone d'effet/CaC/tir/LOS ouvrirait quand même
+son menu radial ou déclencherait son interaction, en plus (pas à la place) de ce que fait la boucle
+manuelle pour ce mode. C'est une duplication de la même nature que celle déjà documentée au §2
+(chaque consommateur recopie sa propre liste des 5 modes) — ici une copie **incomplète** (1 mode
+sur 5), dans un fichier différent (`SessionPage.jsx`) de celui qui gère les 4 autres
+(`Canvas3D.jsx`).
+
+### 7.2. Design retenu — aligner les handlers déclaratifs sur l'autorité déjà existante
+
+Pas de nouveau système : le point de vérité « un mode de visée est actif » existe déjà
+(`useSceneCursor.js`, `Canvas3D.jsx:766`) sous forme de recopie. Lot 1 lui donne une seule
+définition (`aimModeActive`, calculée une fois dans `Canvas3D.jsx` à partir des 5 états) et la
+distribue :
+
+1. **`EntityMesh.jsx`** : `onClick={!isPreview && !aimModeActive && onEntityClick ? ... : undefined}`
+   (nouvelle prop `aimModeActive`, même garde que `isPreview` déjà en place ligne 344/492) —
+   remplace le garde incomplet et mal placé de `SessionPage.jsx:567-571`, qui est supprimé.
+2. **`ConnectorSegment`** (`SurfaceDungeonScene.jsx:1588`) : passage de `onPointerDown` à `onClick`
+   — aligne sur le patron déjà utilisé par `EntityMesh` (un clic explicite, pas la phase descendante
+   d'un geste qui pourrait devenir un pan/drag caméra) et ajoute la même garde `aimModeActive`.
+   N'élimine pas, à lui seul, le bug documenté du `click` natif remontant au `<Canvas>` racine — voir
+   point 3, gardé par prudence.
+5. **`HoverIcon`** (`EntityMesh.jsx:545-580`) : même garde `aimModeActive` sur son `onClick` — sans
+   ça, l'icône ⚙ resterait un deuxième chemin pour déclencher `onEntityClick` pendant un mode de
+   visée, contournant la garde du point 1.
+3. **`justSelectedRef` et `<Canvas onClick={handleCanvasClick}>` : conservés tels quels, pas
+   touchés dans ce lot.** Écarté après vérification — j'avais d'abord proposé de les supprimer en
+   supposant que le passage `onPointerDown`→`onClick` sur `ConnectorSegment` suffirait à empêcher le
+   `click` natif de remonter jusqu'au `<Canvas>` racine. Impossible à garantir sans test en jeu réel
+   (aucune trace, dans la doc R3F ou le code, de ce que `stopPropagation()` sur un événement
+   synthétique R3F empêche réellement côté `click` natif délégué par React — la seule preuve
+   observée dans ce fichier concerne `onPointerDown`, où ça NE marche PAS, d'où `justSelectedRef`).
+   Le fait qu'`EntityMesh` n'ait jamais eu besoin de `justSelectedRef` ne prouve rien : son clic
+   n'affecte jamais `surfaceConnectorPanel`, un bug identique y serait resté invisible. Sans pouvoir
+   tester dans le navigateur (hors périmètre Claude), je garde le garde-fou existant — coûte zéro
+   risque, la suppression n'aurait été qu'un gain cosmétique non vérifiable.
+4. **Comportement « clic sur entité annule `moveTarget` » — vérifié déjà préservé sans code
+   supplémentaire.** Relecture de la branche `moveTarget` de `handlePointerUp`
+   (`Canvas3D.jsx:1213-1231`) : elle s'exécute sur **tout** clic pendant `moveTarget` (le raycast
+   sol qu'elle utilise ignore l'occlusion par un mesh d'entité) et appelle déjà
+   `onMoveCancel?.()` inconditionnellement. Le garde `if (moveTarget)` dans
+   `handleEntityClick` (`SessionPage.jsx:568-570`) ne faisait donc qu'annuler une deuxième fois,
+   en redondance — sa suppression (conséquence directe de la garde `aimModeActive`) ne change aucun
+   comportement observable.
+
+### 7.3. Ce que ce lot ne fait pas (et pourquoi)
+
+- Le survol (`onPointerEnter`/`onPointerLeave` d'`EntityMesh`, icône ⚙) : aucune collision
+  constatée avec un autre système, aucun bénéfice identifié à le toucher — laissé identique.
+- Le token : son `onClick` (correctif du 17/09) reste tel quel, déjà correct (§7.1).
+- Tout raycast/registre nouveau : inutile, R3F fait déjà le travail (§7.0).
+
+### 7.4. Statut
+
+**Codé et VALIDÉ EN JEU RÉEL 2026-09-17** (`Canvas3D.jsx`, `EntityMesh.jsx`,
+`SurfaceDungeonScene.jsx`, `SessionPage.jsx`) selon le design ci-dessus, avec les corrections des
+points 3/4 (§7.2). Vérifié : `npx eslint` sur les 4 fichiers → même total qu'avant modification (24
+problèmes, 14 erreurs/10 avertissements, dette préexistante déjà documentée dans `Canvas3D.jsx`,
+aucun nouveau) ; `npm run build` côté client → succès ; scénario de test §7.4bis rejoué par Saar →
+« Fonctionnel ». **Lot 1 clos.**
+
+Lot 2 (cycle de vie des modes de visée — curseur/Échap, §5) : cadrage non commencé, attend son
+propre tour dédié, pas enchaîné à la suite de cette clôture.
+
+### 7.4bis. Validation prévue
+
+- Rejouer précisément le cas déclencheur (token proche d'une caisse, clic exact sur le token, clic
+  exact sur la caisse) sur au moins 2 packs d'assets différents (pas seulement
+  `futuristic_crates_chests`).
+- Rejouer le cas nouvellement trouvé (§7.1) : ouvrir une caisse pendant chacun des 4 modes combat +
+  `moveTarget` → doit être sans effet (mode prioritaire inchangé), pas une double action.
+- Rejouer l'ouverture/fermeture d'une porte et d'un ascenseur (clic connecteur, clic dans le vide
+  pour fermer le panneau) — cas exact du bug déjà documenté.
+- Rejouer l'annulation de `moveTarget` par clic sur une entité (§7.2 point 4) — pas seulement par
+  Échap.
+
+## 8. Note annexe — fichier parasite trouvé pendant le recensement
+
+`client/src/components/EntityMesh jsx.md` (espace dans le nom, extension `.md`) : semble être une
+copie ancienne d'`EntityMesh.jsx` collée dans un fichier Markdown, jamais importée nulle part
+(vérifié : aucune référence dans le code). Housekeeping, hors périmètre de ce chantier — à
+supprimer à l'occasion, signalé ici pour ne pas le perdre.
