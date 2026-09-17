@@ -66,7 +66,42 @@ Rendu 3D des murs / profils verticaux (déjà en place) ; connecteurs ; matéria
 
 ---
 
+## 6. Confirmation externe (2026-09-16) — direction validée, cadrage détaillé toujours à faire
+
+Recherche pro dédiée (déclenchée par une question directe de Saar : formes additives combinées vs
+édition de sommets/arêtes) — converge deux fois avec le constat du §2 :
+
+- **Dungeondraft** (l'outil le plus comparable — création de cartes de donjon pour JDR) : son outil
+  de mur de base pose déjà les sommets **un par un**, pas par primitive. Le mode additif (combiner
+  des formes) n'existe même pas dans le cœur du logiciel — c'est un **mod communautaire** ("Wall
+  Shapes"), signe que même côté pro, l'additif est un gadget d'appoint, jamais la fondation.
+- **Foundry VTT** n'a même pas de concept de « salle » : murs = segments libres, LOS = polygone de
+  visibilité calculé à la volée. Notre moteur (salles volumétriques, `boundaryArcs`,
+  `verticalProfile.slices`) est déjà plus riche que cette référence — le rework outille un modèle
+  déjà mûr, il ne rattrape pas un retard.
+- CSG 2D générique (Clipper2, martinez-polygon-clipping) : pièges documentés (segments/aires
+  quasi-nulles, arêtes qui se touchent = cas dégénéré fragile) confirmant le risque déjà identifié
+  au §3 — un second modèle de contour à nettoyer avant triangulation, contre un polygone simple à
+  une boucle que le `worldCompiler` consomme directement.
+
+**Confirmation** : édition directe de sommets/arêtes sur un contour à une seule boucle, additif au
+mieux comme aide de dessin qui produit *in fine* un polygone simple, jamais comme second modèle de
+données. Le §3 (primitif d'édition 2D partagé, `shared/world/`) reste la bonne cible — rien à
+changer dans la direction technique.
+
+**Point ouvert non couvert par cette recherche, soulevé par Saar le même jour** : l'UI/UX actuelle
+de l'éditeur de surface (panneaux flottants denses, styles inline, aucune affordance visuelle pour
+les raccourcis clavier existants) est jugée « au mieux inadaptée ». La recherche pro ci-dessus
+tranche la **représentation de données et l'algorithme**, pas l'**interaction concrète** (comment un
+MJ non-développeur pose un sommet, le déplace, annule un geste). Avant tout code sur ce chantier, le
+cadrage dédié (§3, jamais commencé) devra inclure une vraie passe UI/UX — a minima regarder à quoi
+ressemble concrètement l'outil de mur de Dungeondraft (pas seulement son modèle de données), pas
+uniquement la question technique déjà tranchée ici.
+
 ## Historique
 
+- **2026-09-16** — Confirmation externe ajoutée (§6) suite à une question directe de Saar sur
+  l'éditeur d'entités qui a élargi la discussion à l'éditeur de surface dans son ensemble. Point
+  UI/UX explicitement noté comme non couvert, cadrage détaillé toujours pas démarré.
 - **2026-09-10** — stub créé depuis la conversation de cadrage des zones dangereuses (la recherche
   éditeurs de région pro a mis en évidence que le primitif d'édition 2D est partagé). Cadrage à faire.

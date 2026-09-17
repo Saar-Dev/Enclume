@@ -1,4 +1,14 @@
 PLAN — Décorations murales (Wall Decals)
+
+> **2026-09-16** — Ambiguïté avec `PLAN_RW_MATERIAUX.md` Lot 3 résolue (voir `docs/VOCABULARY.md`
+> « Ambiguïtés connues » — Décal). Les deux ne se recouvrent pas : Lot 3 = texture source d'un motif
+> procédural appliqué à toute une surface (ingrédient du pipeline matériaux) ; ce document =
+> objet décoratif ponctuel positionné à un endroit précis d'un mur, indépendant du matériau de base.
+> Les deux peuvent coexister sur le même mur. Recherche pro (Three.js `DecalGeometry`, Unity Decal
+> Projector, Unreal Decal Actor) faite le même jour pour trancher la stratégie de rendu — voir §4bis.
+> **Reste hors de ce document** : l'outil d'édition de forme de salle (arêtes/sommets), traité par
+> `PLAN_WORLD_BUILDER_REWORK.md` — sujet distinct malgré la même session de cadrage.
+
 Objectif
 
 Permettre au MJ d'appliquer instantanément une décoration (câbles, conduites, panneaux, affiches, etc.) sur une face intérieure de mur, sans créer de nouveau GLB ni modifier le matériau du mur.
@@ -83,6 +93,26 @@ utiliser un DecalMesh
 suivant les performances.
 
 Le mesh du mur reste inchangé.
+
+Étape 4bis — Stratégie de rendu tranchée par la recherche pro (2026-09-16)
+
+Comparaison faite : `THREE.DecalGeometry` (exemple officiel three.js — projette un cube orienté,
+clippe la géométrie cible contre ses 6 faces, épouse exactement une surface plane ou courbe, coûteux
+si régénéré souvent, à calculer une fois à la pose) ; Unity Decal Projector (URP/HDRP — projection
+planaire simple, mal adaptée à une surface non plane, limite documentée officiellement) ; Unreal
+Decal Actor (projection volumique, gère mieux les surfaces courbes, beaucoup de decals simultanés
+sans grosse perte de perf).
+
+Décision : donnée déclarative uniquement dans `surface_data` (mur/segment cible, position relative,
+normale, taille, texture) — seule autorité, jamais de coordonnées Three.js indépendantes stockées.
+Au rendu :
+- mur plan (cas par défaut) → simple quad plaqué avec léger offset, coût nul ;
+- mur courbe ou profilé → vrai decal projeté (`DecalGeometry`), recalculé quand le mur change dans
+  le `WorldSnapshot` — jamais l'inverse (le rendu ne redéfinit jamais le modèle canonique).
+
+Ce choix répond aussi à la question ouverte "les décorations doivent-elles suivre les UV existants
+du mur ou une projection indépendante ?" (§Questions ouvertes) : ni l'un ni l'autre — la projection
+en cas de mur courbe rend la question des UV du mur sans objet pour la décoration elle-même.
 
 Étape 5 — Outil d'édition
 

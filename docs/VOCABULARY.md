@@ -1,6 +1,13 @@
 VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
-    Version : V2.8 — 2026-09-11 : ajout « Chance (score/réserve) » — RAW fourni par Saar, cadrage
+    Version : V2.9 — 2026-09-16 : ajout « Décal (motif procédural) vs Décoration murale placée »
+    (Ambiguïtés connues) — chevauchement apparent `PLAN_RW_MATERIAUX.md` Lot 3 / `PLAN_DECALS.md`
+    résolu (deux concepts complémentaires, pas un doublon). **Restauration** : les sections
+    Conventions de nommage / Pièges historiques / Ambiguïtés connues, réduites à un placeholder
+    `(… section inchangée …)` par la réorganisation du 2026-08-04 (contenu perdu six semaines sans
+    être remarqué), retrouvées via `git show 4f3027e~1` et réintégrées — non revérifiées contre le
+    code actuel au-delà de la nouvelle entrée « Décal ».
+    Précédent : V2.8 — 2026-09-11 : ajout « Chance (score/réserve) » — RAW fourni par Saar, cadrage
     terminé (`docs/PLANS/PLAN_CHANCE.md` v2.0, `docs/MANUELS/MANUEL_CHANCE.md` v1.0), rien codé.
     Corrige au passage l'ambiguïté `chance` vs `chc` répétée dans plusieurs docs avant ce chantier.
     Précédent : V2.7 — 2026-09-08 : ajout du cluster « Usure & Intégrité du matériel » (Intégrité du
@@ -101,13 +108,42 @@ Ticket	Signalement d'un bug, d'un déséquilibre de règle ou d'une suggestion, 
 Cluster (ticket)	Regroupement manuel de tickets à cause racine identique ou proche, porté par un champ texte libre (`cluster_label`), pas une table de référence. Reprend le mot et la logique de l'ancien regroupement `BUGIDENTIFIE.md` ("Cluster A"…"Cluster U"), qui reste la référence historique pour les tickets importés (`linked_bug_code`).	bug_tickets.cluster_label. Autorité : docs/SYSTEME/TICKETS.md.
 Conventions de nommage
 
-(… section inchangée …)
+Détail complet → `.claude/rules/conventions.md` + `docs/SYSTEME/CONVENTIONS.md` (ne pas dupliquer ici).
+Database : tables/colonnes en snake_case, migrations numérotées séquentiellement (server/src/db/migrations/).
+Backend : routes/*.js (HTTP) → services/*Service.js (logique) → db (knex). Events WebSocket définis une seule fois dans shared/events.js.
+Frontend : composants PascalCase.jsx. State inter-étapes/inter-composants → Zustand (jamais de state local dupliqué quand un store existe).
+WebSocket : constantes SCREAMING_SNAKE_CASE dans shared/events.js — vérifier existence avant de créer un nouvel event.
+
 Pièges historiques
 
-(… section inchangée …)
+> **Restauré 2026-09-16** — ces deux sections avaient été remplacées par un placeholder
+> `(… section inchangée …)` lors de la réorganisation documentaire du 2026-08-04 (`git blame` :
+> commit `4f3027e`), contenu perdu pendant six semaines sans que rien ne le signale. Contenu
+> récupéré depuis `git show 4f3027e~1:docs/VOCABULARY.md` — **non revérifié contre le code actuel**,
+> traiter chaque ligne comme un `[HYPOTHÈSE]` à confirmer si elle redevient pertinente, pas comme un
+> `[VÉRIFIÉ]` d'aujourd'hui.
+
+Ancien	Officiel	Pourquoi
+token.owner_id	token.character_id → characters.user_id	owner_id n'a jamais été la bonne chaîne de résolution — voir P1 (CLAUDE.md).
+char_advantages V1 (texte libre, pré-migration 99)	char_advantages V2 (FK catalogue ref_advantages)	Schéma strict depuis migration 99 — tout code lisant adv.label/adv.level lit des champs V1 inexistants en V2.
+ref_equipment_skills	ref_equipment_skill_assoc	Tables jumelles au schéma identique, rôles différents — voir Ambiguïtés connues ci-dessous. Ne jamais les confondre lors d'une requête combat.
+active_slot_idx / advanceSlot / COMBAT_SLOT_ADVANCED en Résolution	combat_timeline_entries / advanceTimeline / COMBAT_TIMELINE_UPDATED	Colonne et fonction retirées (migration 174) — la Résolution parcourt l'échelle de phases, plus une liste combat_roster triée. COMBAT_SLOT_ADVANCED reste émis, mais uniquement en phase ANNONCE.
+Sous-état FSM AWAITING_REACTION_WINDOW (minuteur, Retarder son Action)	Borne de position sur SLOT_ACTIVE (triggerActNow)	Ajouté puis retiré la même session — RAW ne prévoit aucun minuteur pour Retarder ; source de bugs réels avant son retrait. Ne pas réimplémenter.
+
 Ambiguïtés connues
 
-(… section inchangée …)
+Nom	Ne pas confondre avec	Explication
+ref_equipment_skill_assoc	ref_equipment_skills	_assoc = compétence d'utilisation pour résoudre un Test de combat (bien vivante). ref_equipment_skills = compétences boostées/requises par un accessoire (jamais consommée en jeu).
+Tir visé	Localisation précise (COM9) / Changer le mode de tir	Trois mécaniques distinctes de REGLESYSCOMBAT.md, jamais la même règle malgré la proximité des pages.
+« Seuil » (UI)	« CDR » (interne)	Même valeur, deux noms selon l'audience — ne jamais afficher « CDR » à un joueur.
+Vault (nom de code)	Coffre (nom produit)	Le code/DB garde vault*, tout texte utilisateur dit « Coffre ».
+« Coma »	« Inconscient » (statut réel)	Synonyme informel, pas un 3ᵉ état santé — token_statuses.status_code ne connaît que stunned/unconscious.
+PLAN (dossier docs/)	DOMAIN/SYSTEM (docs/SYSTEME/)	Un PLAN est temporaire (Règle 10) : une fois le chantier clos, archiver vers docs/Old/ — la doc durable vit dans docs/SYSTEME/*.md/.claude/rules/, pas dans le PLAN.
+Échange (PJ↔PJ)	Transfert (Coffre→campagne)	Échange (tradeService.js) = déplacement réel entre personnages vivants, double validation, jamais de copie. Transfert (vaultService.js) = copie Coffre→campagne, jamais de déplacement, validation MJ seule.
+ref_setbacks / « setback » (code)	Revers (UI/joueur)	Même mécanique, deux noms selon l'audience — comme Vault/Coffre. Le code et la base gardent l'anglais « setback », tout texte utilisateur dit « Revers ».
+Carte 2D	Spotlight	Une carte (2D ou 3D) montre le lieu où le groupe se trouve ; le Spotlight montre ponctuellement quelque chose en surimpression sans changer de lieu.
+Décal (motif procédural de matériau)	Décoration murale placée (WallDecoration)	**Ajouté 2026-09-16**, chantiers `PLAN_RW_MATERIAUX.md` Lot 3 vs `PLAN_DECALS.md` — même mot, deux concepts indépendants et complémentaires. Le premier est une texture (câbles/rivets/grille) source d'un motif procédural appliqué à toute une surface, ou un masque d'usure/saleté — un ingrédient du pipeline de matériaux (`proceduralMaterials.js`, `PATTERN_PRESETS`). Le second est un objet décoratif ponctuel (affiche, tronçon de câble) posé à un endroit précis d'un mur, positionné indépendamment du matériau de base. Un mur peut avoir les deux à la fois : un motif de surface ET une décoration ponctuelle par-dessus. Ne jamais désigner l'un par le nom de l'autre dans le code ou la doc — proposer un terme distinct (ex. « Décoration murale ») si le mot seul « décal » reste ambigu à l'usage.
+
 Acronymes
 Acronyme	Signification
 LdB	Livre de Base Polaris
