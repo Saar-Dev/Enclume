@@ -458,10 +458,11 @@ qu'une intention côté client.
 
 10.5 Limites connues (2026-09-17)
 
-    Détection de clic : un token et une entité proches peuvent se disputer le même clic — deux
-    systèmes de détection indépendants (boucle manuelle pour les tokens, `onClick` React Three Fiber
-    pour les entités), correctif ciblé posé, fusion complète non cadrée
-    (`docs/PLANS/PLAN_CLIC_3D_UNIFICATION.md`).
+    Détection de clic : **résolu 2026-09-17** (chantier clos, archivé `docs/Old/
+    PLAN_CLIC_3D_UNIFICATION.md`) — arbitrage token/entité/connecteur unifié par une autorité
+    `aimModeActive`/`blocksEntityClick`, validé en jeu réel. Détail du patron : `SYSTEME/REACT.md`
+    P59. `Editor3D.jsx` (raycasting séparé du mode édition) reste explicitement hors périmètre,
+    rattaché à `PLANS/PLAN_WORLD_BUILDER_REWORK.md` pour une éventuelle unification future.
 
     Difficulté non jouable et non ajustable : `difficulty_dc` vaut 0 par défaut faute de donnée (pas
     un choix RAW), et aucune interface MJ ne permet de le corriger par instance — bloquant réel

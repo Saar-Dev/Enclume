@@ -493,6 +493,20 @@ blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, so
 volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
 de l'éditeur ne sont qu'une commande par pas de 90°.
 
+**`canOccupy` teste un cercle, pas un carré** (`shared/world/spatialIndex.js`, corrigé 2026-09-17,
+`d81e503`) — `queryBounds` reste un broad-phase AABB (rapide, surensemble garanti, inchangé) mais la
+décision finale passe par `actorFootprintsOverlap` (narrow-phase : cylindres verticaux, rayons
+acteur+occupant, hauteurs). Avant ce correctif, deux occupants dont les boîtes carrées se touchaient
+en diagonale se bloquaient mutuellement même à une distance circulaire réelle supérieure à la somme
+de leurs rayons — trouvé en jeu réel (caisse à 0,90 m bloquant un nœud de navigation à 0,764 m de
+rayon combiné). Régression couverte par 2 tests avec des données réelles de campagne
+(`spatialIndex.test.mjs`).
+
+**Limite connue, non actionnée** : un token peut être posé sur une case déjà occupée par une entité
+(chevauchement circulaire réel, pas un bug de `canOccupy`) — rien n'empêche le placement initial, la
+détection n'intervient qu'au moment du déplacement suivant. Demande produit non cadrée : voir
+`docs/PLANS/PLAN_BLOCAGE_CASES_OCCUPEES.md` (stub).
+
 ### 7.1 Tranche d'étage affichée
 
 `displayLevel = N` rend la tranche N et toutes les tranches inférieures. Les niveaux inférieurs sont

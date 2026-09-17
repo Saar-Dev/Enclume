@@ -7558,3 +7558,55 @@ passer à autre chose — PLAN, ROADMAP et SYSTEME, pas seulement ce journal.
 **Hors périmètre, définitivement fermé pour cette session** : Lot A2 ne sera pas retesté avant le
 cadrage d'au moins `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`. Bug joueur (menu radial noir) reste
 non reproduit, non repris ici.
+
+## Session (Dev) — 2026-09-17 — Clôture PLAN_CLIC_3D_UNIFICATION : Lots 1+2 validés en jeu réel, occupation circulaire corrigée en cours de route
+
+Chantier ouvert le même jour (cadrage §2bis/§5 : 6 systèmes de clic indépendants recensés, pas 2 ;
+découpage Lot 1 arbitrage de clic / Lot 2 cycle de vie curseur+Échap ; `Editor3D.jsx` explicitement
+hors périmètre). Les deux lots codés, commités et validés en jeu réel dans la même session
+(`2825eae`, `b373410`, `2057b09`, `d81e503`, `6f87d85`, `2a3493f`, `dev/Saar`).
+
+**Lot 1** — `aimModeActive`, une autorité unique dérivée des 5 modes de visée, gate désormais
+`onClick` d'`EntityMesh`/`HoverIcon`/`ConnectorSegment` pendant un mode de visée. Piste de design
+initiale (registre + `raycaster.intersectObjects` fait main) écartée après lecture de la doc R3F
+officielle : le raycaster partagé + la distribution nearest-first + `stopPropagation()` existent
+déjà nativement, un registre maison aurait dupliqué ce que R3F fournit gratuitement.
+
+**Lot 2** — un seul tableau `aimModes` (`{key, active, cursor, onCancel, blocksEntityClick}`)
+remplace la recopie manuelle des 5 états dans `useSceneCursor.js` et les 5 `useEffect` Échap
+dupliqués de `Canvas3D.jsx`. Régression trouvée en jeu réel après clôture initiale : `combatMoveMode`
+(survol de déplacement ambiant, armé en continu pour tout le tour) avait été inclus dans la garde de
+clic entité par symétrie avec les 4 autres modes — rendait les caisses inutilisables pour tout le
+tour, pas seulement pendant un clic de visée ponctuel. Corrigé par un champ `blocksEntityClick`
+explicite par mode (`false` seulement pour `combatMoveMode`).
+
+**Détour de session, root cause distincte trouvée en testant Lot 2** — poignées de fenêtres de
+déclaration combat coincées derrière la timeline (PJ/Exo/MJ), `onCancel` manquant dans
+`useAutoMoveMode` de la fenêtre MJ, et surtout : le déplacement combat bloqué par une caisse
+pourtant hors de portée réelle. Cause racine serveur, pas cliente : `canOccupy`
+(`shared/world/spatialIndex.js`) ne testait que les boîtes carrées (AABB) entre acteur et
+occupant, jamais la distance circulaire réelle — une caisse à 0,90 m diagonale bloquait un nœud de
+navigation dont la somme des rayons circulaires n'était que 0,764 m. Corrigé par
+`actorFootprintsOverlap` (narrow-phase circulaire après le broad-phase AABB existant, inchangé),
+2 tests de régression ajoutés avec les chiffres réels de la campagne de Saar
+(`shared/world/spatialIndex.test.mjs`), suite complète `shared/**/*.test.mjs` → 597 tests, 0
+échec. Un second cas rejoué par Saar (PNJ2 immobile) s'est révélé être un vrai chevauchement
+circulaire (token posé sur une caisse) — pas un bug, mais a fait remonter une demande produit non
+cadrée : une mécanique empêchant de poser un token sur une case déjà occupée. Notée
+`docs/PLANS/PLAN_BLOCAGE_CASES_OCCUPEES.md` (stub), pas actionnée.
+
+**Testé** : arbitrage de clic token/entité/connecteur, garde `blocksEntityClick`, curseur + Échap
+pour les 5 modes de visée, poignées des 3 fenêtres de déclaration, déplacement combat après le
+correctif d'occupation circulaire — tout confirmé en jeu réel par Saar. Lint, build client et
+`shared/**/*.test.mjs` (597 tests) vérifiés à chaque étape.
+**Non testé** : rien d'identifié en attente pour ce périmètre.
+**Données** : aucune migration. Le correctif d'occupation circulaire modifie un calcul serveur pur,
+aucune donnée persistée touchée.
+**Retour arrière** : `git revert` des 6 commits ci-dessus si besoin, aucune dépendance externe
+(migration/seed) ne l'empêcherait.
+
+**Documentation de clôture (hygiène différée, corrigée dans cette même entrée)** : PLAN archivé
+`docs/Old/` (Règle 10) ; faits durables intégrés dans `docs/SYSTEME/REACT.md` (nouveau P59) et
+`docs/SYSTEME/ENTITES.md` (§10.5 limite mise à jour) ; `docs/ROADMAP.md`/`docs/SYSTEME/INDEX.md`
+nettoyés de la ligne stub périmée ; `client/public/CHANGELOG.md` — entrées joueur ajoutées (poignées
+de fenêtres, déplacement combat).

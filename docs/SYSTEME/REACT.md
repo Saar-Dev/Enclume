@@ -196,9 +196,6 @@ un **reducer pur par domaine** + un hook wrapper, monté à l'identique par les 
 />
 ```
 
-### Guard Q4 — moveTarget actif
-Si `moveTarget` est non-null dans SessionPage, `handleEntityClick` annule le mode visée et retourne sans ouvrir de radial menu. Comportement intentionnel — clic pendant mode visée = annulation.
-
 ### justSelectedRef — anti-deselect immédiat
 ```javascript
 // Canvas3D — evite dé-sélection immédiate après clic token (onClick Canvas bubbles up)
@@ -208,12 +205,39 @@ const justSelectedRef = useRef(false)
 // Passé en prop à Scene (stable par useRef)
 ```
 
-### Handlers Échap — 5 useEffects distincts (Canvas3D) — corrigé 2026-08-26, étaient 3 documentés
-| Mode actif | Handler | Action |
-|---|---|---|
-| `moveTarget` (entité) | `e.key === 'Escape'` | `onMoveCancel?.()` |
-| `combatMoveMode` | `e.key === 'Escape'` | `combatMoveMode.onCancel()` |
-| `combatTargetMode` | `e.key === 'Escape'` | `combatTargetMode.onCancel()` |
-| (caméra libre) | `e.key === 'Escape'` | `setFreeCameraOverride(true)` — manquait à cette table |
-| `losMode` | `e.key === 'Escape'` | `onLosCancel?.()` — manquait à cette table |
-Chaque useEffect guard `if (!mode) return` — n'enregistre le listener que quand le mode est actif.
+## P59 — `aimModes` : autorité unique curseur/Échap/garde clic entité (Canvas3D)
+
+> Chantier `PLAN_CLIC_3D_UNIFICATION.md` (clos 2026-09-17, archivé `docs/Old/`, Lots 1+2 —
+> `2825eae`/`b373410`/`2057b09`/`d81e503`/`6f87d85`/`2a3493f`). Remplace la table « Handlers Échap
+> — 5 useEffects distincts » et le « Guard Q4 — moveTarget actif » qui documentaient l'ancien état
+> (5 `useEffect` dupliqués + garde incomplète dans `SessionPage.jsx`, supprimée).
+
+Les 5 « modes de visée » (`combatTargetMode`/`combatAoeTargetMode`/`losMode`/`combatMoveMode`/
+`moveTarget`) partagent une seule définition, un tableau construit dans `Canvas3D.jsx` :
+
+```javascript
+const aimModes = useMemo(() => [
+  { key: 'combatTargetMode',    active: !!combatTargetMode,    cursor: 'cible', blocksEntityClick: true,  onCancel: () => combatTargetMode.onCancel() },
+  { key: 'combatAoeTargetMode', active: !!combatAoeTargetMode, cursor: 'cible', blocksEntityClick: true,  onCancel: () => combatAoeTargetMode.onCancel() },
+  { key: 'losMode',             active: !!losMode?.active,     cursor: 'cible', blocksEntityClick: true,  onCancel: () => onLosCancel?.() },
+  { key: 'combatMoveMode',      active: !!combatMoveMode,      cursor: 'case',  blocksEntityClick: false, onCancel: () => combatMoveMode.onCancel() },
+  { key: 'moveTarget',          active: !!moveTarget,          cursor: 'case',  blocksEntityClick: true,  onCancel: () => onMoveCancel?.() },
+], [combatTargetMode, combatAoeTargetMode, losMode, combatMoveMode, moveTarget, onLosCancel, onMoveCancel])
+```
+
+Trois consommateurs lisent ce même tableau, plus aucune copie locale :
+- **Curseur** : `useSceneCursor(aimModes)` — groupe par `cursor` (`'cible'` prioritaire sur `'case'`).
+- **Échap** : un seul `useEffect` (`aimModes.filter(m => m.active).forEach(m => m.onCancel())`),
+  remplace les 5 listeners `document.addEventListener` indépendants.
+- **Garde clic entité** (`EntityMesh.jsx`, `HoverIcon`, `ConnectorSegment`) : `aimModeActive =
+  aimModes.some(m => m.active && m.blocksEntityClick)`.
+
+**`blocksEntityClick` — piège vérifié en jeu réel** : `combatMoveMode` (survol de déplacement
+ambiant, armé par défaut pour tout le tour via `useAutoMoveMode`) est actif en continu, pas
+seulement pendant un clic de visée ponctuel — l'inclure dans la garde de clic entité rend les
+caisses/décors inutilisables pour tout le tour. Seuls les 4 modes de visée à 2 temps
+(cible/AOE/LOS/`moveTarget`) bloquent le clic entité ; `combatMoveMode` seul a `blocksEntityClick:
+false`. Curseur et Échap restent basés sur `active` seul, indépendants de ce champ.
+
+Handlers Échap **hors** de `aimModes`, non touchés par ce patron (portée différente) : Échap
+`selectedTokenId` (désélection, patron RTS) et Échap `freeCameraOverride` (caméra).

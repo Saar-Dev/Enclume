@@ -1,3 +1,19 @@
+## v235 — 2026-09-17 — Combat : déplacement, fenêtres de déclaration, clic sur les caisses
+
+### Combat
+- [fix] Le déplacement en combat n'est plus bloqué à tort par une caisse ou un élément de décor
+  proche : la détection utilisait la boîte carrée de l'objet plutôt que sa distance réelle au token,
+  ce qui pouvait bloquer une case pourtant hors de portée.
+- [fix] Fenêtre de déclaration MJ (PNJ) : annuler un déplacement en cours efface bien la sélection en
+  attente (elle pouvait rester affichée).
+- [add] Poignée de redimensionnement en bas des fenêtres de déclaration (joueur, MJ, exo-armure) —
+  peuvent désormais être agrandies verticalement, en plus du déplacement déjà existant.
+
+### Scène 3D
+- [fix] Cliquer sur une caisse ou un élément de décor pendant un ciblage (tir, corps-à-corps, zone
+  d'effet, ligne de vue) ou un déplacement de caisse n'ouvre plus son menu par erreur en plus de
+  l'action en cours.
+
 ## v234 — 2026-09-15 — Fiche exo-armure : silhouette d'Avaries + mise en page resserrée
 
 ### Exo-armures

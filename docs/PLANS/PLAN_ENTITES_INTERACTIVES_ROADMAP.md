@@ -58,8 +58,9 @@ d'abord) — cette séquence est une recommandation motivée, pas une contrainte
 - **Pourquoi clos maintenant plutôt que poursuivi** : trois problèmes distincts, plus profonds que
   le lot lui-même, ont été trouvés en le testant réellement — chacun mérite son propre cadrage,
   aucun n'est raisonnable à improviser dans la continuité de ce lot :
-  1. **Détection de clic 3D** (un token proche d'une caisse recevait son clic) —
-     `PLANS/PLAN_CLIC_3D_UNIFICATION.md` (stub, correctif ciblé posé).
+  1. **Détection de clic 3D** (un token proche d'une caisse recevait son clic) — clos et validé
+     jeu réel 2026-09-17, archivé `docs/Old/PLAN_CLIC_3D_UNIFICATION.md` (détail `SYSTEME/
+     REACT.md` P59).
   2. **Autorité serveur** (un MJ sans PJ propriétaire ne pouvait jamais agir via un PNJ) —
      `PLANS/PLAN_AUTORITE_PERSONNAGE_SERVEUR.md` (stub, correctif ciblé posé).
   3. **Difficulté du Test et absence de surcharge MJ** (15 % de réussite avec l'Attribut humain
