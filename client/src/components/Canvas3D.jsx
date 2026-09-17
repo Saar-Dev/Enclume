@@ -1481,6 +1481,7 @@ function Scene({
             onEntityClick={onEntityClick}
             onHover={handleEntityHover}
             sceneOpacity={1}
+            isSelected={moveTarget?.entity?.id === entity.id}
           />
         )
       })}
@@ -1791,7 +1792,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   // (client/src/lib/actingToken.js) pour résoudre le token acteur d'une interaction d'entité.
   const { selectedTokenId, setSelectedTokenId } = useTokenStore()
 
-  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode })
+  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode, moveTarget })
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
   // ne s'affiche jamais pendant un combat (retour Saar 2026-08-08), même sans mode armé.
   const combatPhase = useCombatStore(s => s.phase)
@@ -1883,6 +1884,19 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [losMode, onLosCancel])
+
+  // ─── Désélection de token sur Échap seulement (retour Saar 2026-09-17) ────
+  // handleCanvasClick ne désélectionne plus le token sur un clic ailleurs (sol, caisse…) : un MJ qui
+  // sélectionne un PNJ pour Déplacer perdait sa sélection au moindre clic suivant, y compris son
+  // propre clic de visée — resolveActingToken (actingToken.js) retombait alors sur null.
+  useEffect(() => {
+    if (!selectedTokenId) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setSelectedTokenId(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selectedTokenId, setSelectedTokenId])
 
   const justSelectedRef = useRef(false)
 
@@ -2038,9 +2052,8 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
-    setSelectedTokenId(null)
     setSurfaceConnectorPanel(null)
-  }, [setSelectedTokenId])
+  }, [])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
