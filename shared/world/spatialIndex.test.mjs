@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { createWorldSnapshot } from './worldContracts.js'
 import {
   actorBoundsAt,
+  actorFootprintsOverlap,
   createOccupancyIndex,
   createSpatialIndex,
   segmentGeometryInterval,
@@ -59,6 +60,38 @@ test('l’occupation dynamique conserve plusieurs occupants dans un même volume
     {},
     { excludeIds: ['token-a', 'token-b'] },
   ), true)
+})
+
+// BUG-DEPLACEMENT1 (Saar, 2026-09-17) — une caisse à 0,90 m de distance réelle (diagonale) d'un
+// nœud de déplacement le bloquait alors que la somme des rayons circulaires n'était que de 0,764 m
+// (0,35 pour l'acteur + 0,414 pour l'entité) : `canOccupy` ne testait que les boîtes carrées
+// (`actorBoundsAt`), jamais la distance circulaire réelle. Chiffres exacts reproduits ici.
+test('deux occupants circulaires dont les boîtes carrées se touchent en diagonale ne se bloquent pas réellement', () => {
+  const actorProfile = { radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+  const nodePoint = { x: 1.5, y: 0.125, z: 2.5 } // nœud de déplacement le plus proche du token bloqué
+  const entityPoint = { x: 1, y: 0.125, z: 1.75 } // caisse réelle, campagne de Saar
+  const entityProfile = { radius: 0.414, height: 0.518, maxStepHeight: 0.5 }
+
+  // Distance réelle nœud/entité ~0,90 m > 0,35+0,414 (0,764) — aucun chevauchement circulaire réel,
+  // contrairement à ce que les boîtes carrées laissaient croire avant le correctif.
+  assert.equal(actorFootprintsOverlap(nodePoint, actorProfile, entityPoint, entityProfile), false)
+
+  const occupants = createOccupancyIndex([
+    { id: 'entity-crate', point: entityPoint, actorProfile: entityProfile },
+  ])
+  assert.equal(occupants.canOccupy(nodePoint, actorProfile), true)
+})
+
+test('deux occupants circulaires qui se chevauchent réellement restent bloqués', () => {
+  const profileA = { radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+  const profileB = { radius: 0.414, height: 0.518, maxStepHeight: 0.5 }
+  const pointA = { x: 1, y: 0.125, z: 1 }
+  const pointB = { x: 1.3, y: 0.125, z: 1 } // distance 0.3 < 0.35+0.414 — chevauchement réel
+
+  assert.equal(actorFootprintsOverlap(pointA, profileA, pointB, profileB), true)
+
+  const occupants = createOccupancyIndex([{ id: 'entity-crate', point: pointB, actorProfile: profileB }])
+  assert.equal(occupants.canOccupy(pointA, profileA), false)
 })
 
 test('un collider incliné utilise son prisme orienté et non toute sa boîte englobante', () => {

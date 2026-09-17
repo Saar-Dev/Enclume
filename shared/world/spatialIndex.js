@@ -73,6 +73,26 @@ export function actorBoundsAt(point, actorProfile = {}) {
   })
 }
 
+// Chevauchement RÉEL de deux acteurs/occupants circulaires (rayon horizontal XZ + tranche verticale
+// Y) — jamais un carré. `actorBoundsAt` ci-dessus construit une boîte axis-aligned UNIQUEMENT comme
+// filtre large (index par buckets, `createBoundsIndex`) : deux cercles peuvent avoir des boîtes qui
+// se touchent en diagonale sans jamais se toucher réellement (distance réelle entre centres > somme
+// des rayons). Bug confirmé en jeu réel 2026-09-17 (BUG-DEPLACEMENT1) : une caisse à 0,90 m de
+// distance réelle d'un token bloquait son déplacement, alors que la collision circulaire ne se
+// déclenche qu'en dessous de 0,76 m (somme des deux rayons). `canOccupy` ci-dessous applique cette
+// fonction en second passage (narrow-phase) sur les candidats déjà filtrés par boîtes (broad-phase)
+// — jamais l'inverse : les boîtes restent un sur-ensemble garanti (aucun faux négatif possible,
+// seulement des faux positifs que cette fonction élimine).
+export function actorFootprintsOverlap(pointA, profileA, pointB, profileB) {
+  const a = normalizeWorldPoint(pointA, 'pointA')
+  const b = normalizeWorldPoint(pointB, 'pointB')
+  const profA = normalizeActorProfile(profileA)
+  const profB = normalizeActorProfile(profileB)
+  if (a.y >= b.y + profB.height - EPSILON || b.y >= a.y + profA.height - EPSILON) return false
+  const radiusSum = profA.radius + profB.radius
+  return Math.hypot(a.x - b.x, a.z - b.z) < radiusSum - EPSILON
+}
+
 export function segmentIntersectsBounds(from, to, value) {
   const start = normalizeWorldPoint(from, 'segment.from')
   const end = normalizeWorldPoint(to, 'segment.to')
@@ -384,9 +404,21 @@ export function createOccupancyIndex(occupants = [], options = {}) {
     const excluded = new Set(excludeIds)
     return Object.freeze(index.queryBounds(bounds).filter(item => !excluded.has(item.id)))
   }
-  const canOccupy = (point, actorProfile = {}, queryOptions = {}) => (
-    queryBounds(actorBoundsAt(point, actorProfile), queryOptions).length === 0
-  )
+  // Broad-phase (queryBounds, boîtes par buckets) pour trouver rapidement les candidats proches,
+  // puis narrow-phase (actorFootprintsOverlap, cercles réels) pour décider — jamais l'inverse.
+  // Repli conservateur (bloqué) si un occupant ne porte pas point+actorProfile : narrow-phase
+  // impossible, mais aucune régression silencieuse vers "toujours libre" pour un occupant futur qui
+  // n'exposerait que des bounds bruts (occupants[].bounds directement, cf. normalizeOccupant).
+  const canOccupy = (point, actorProfile = {}, queryOptions = {}) => {
+    const profile = normalizeActorProfile(actorProfile)
+    const feet = normalizeWorldPoint(point, 'actor feet')
+    return queryBounds(actorBoundsAt(feet, profile), queryOptions).every(occupant => {
+      const occupantPoint = occupant.point ?? occupant.position
+      const occupantProfile = occupant.actorProfile
+      if (!occupantPoint || !occupantProfile) return false
+      return !actorFootprintsOverlap(feet, profile, occupantPoint, occupantProfile)
+    })
+  }
 
   return Object.freeze({
     occupants: index.items,
