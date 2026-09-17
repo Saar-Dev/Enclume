@@ -182,6 +182,23 @@ dans aucun des deux lots ci-dessus :
   souhaitable, elle appartient au cadrage de `PLAN_WORLD_BUILDER_REWORK.md`, à faire pointer vers
   ce document (§2bis) pour l'état des lieux du côté mode jeu.
 
+## 11. Régression trouvée en jeu réel — `aimModeActive` trop large `[CORRIGÉ 2026-09-17]`
+
+Après clôture des Lots 1+2, test en combat réel par Saar : les caisses/éléments de décor
+devenaient inutilisables pendant **tout son tour**, pas seulement pendant un clic de visée
+ponctuel. Cause root : `combatMoveMode` (survol de déplacement ambiant, armé par défaut pour toute
+la durée du tour via `useAutoMoveMode`/COMBAT-DEPLACEMENT-HOVER, jamais un geste ponctuel) avait
+été inclus dans `aimModeActive` par symétrie avec les 4 autres modes (§7.1), sans revérifier que
+le bug confirmé qui motivait ce garde ne concernait QUE tir/CaC/zone d'effet/LOS/déplacer-une-
+entité — jamais le survol ambiant. Périmètre trop large dès l'écriture du Lot 1, pas une régression
+du Lot 2.
+
+**Correctif** : chaque entrée de `aimModes` porte désormais un champ `blocksEntityClick` explicite
+(`Canvas3D.jsx`, définition de `aimModes`) — `true` pour les 4 modes de visée ponctuels, `false`
+pour `combatMoveMode` seul. `aimModeActive = aimModes.some(m => m.active && m.blocksEntityClick)`.
+Curseur et annulation Échap restent inchangés (toujours basés sur `active` seul, indépendant de ce
+nouveau champ) — seul le clic entité est concerné.
+
 ## 7. Lot 1 — design vérifié `[VÉRIFIÉ 2026-09-17]`
 
 ### 7.0. Piste écartée : registre + raycast fait main
@@ -290,7 +307,84 @@ propre tour dédié, pas enchaîné à la suite de cette clôture.
 - Rejouer l'annulation de `moveTarget` par clic sur une entité (§7.2 point 4) — pas seulement par
   Échap.
 
-## 8. Note annexe — fichier parasite trouvé pendant le recensement
+## 9. Lot 2 — recensement et design `[VÉRIFIÉ 2026-09-17]`
+
+### 9.0. Recensement précis (relecture, pas la mémoire de la session)
+
+- **Curseur** (`useSceneCursor.js`, hook dédié, 1 seul appelant : `Canvas3D.jsx:1803`) : un
+  `if/else` qui recopie les 5 états — déjà oublié une fois pour `moveTarget` (§2, corrigé en
+  intérimaire).
+- **Annulation Échap** (`Canvas3D.jsx:1848-1894`, dans le composant `Canvas3D` externe — pas
+  `Scene`, le composant interne où vit `aimModeActive` du Lot 1) : 5 `useEffect` quasi identiques,
+  un par mode, chacun son propre `document.addEventListener('keydown', ...)`.
+- **`aimModeActive` (Lot 1)** vit dans `Scene` (interne, rendu dans le `<Canvas>` R3F) —
+  **troisième copie indépendante** de la même union de 5 états, dans un composant différent des
+  deux premières. Trois copies au lieu d'une, pas deux.
+- **Asymétrie de forme entre les 5 « modes »** : `combatMoveMode`/`combatTargetMode`/
+  `combatAoeTargetMode` portent leur propre méthode `.onCancel()` ; `moveTarget`/`losMode` non —
+  leur annulation passe par un callback externe séparé (`onMoveCancel`, `onLosCancel`). Pas
+  normalisé dans ce lot (toucherait la construction de ces objets dans `SessionPage.jsx`, hors
+  gain réel) — un adaptateur trivial à la construction du tableau suffit.
+- **« Mise en évidence de la cible » — vérifié, PAS une duplication à corriger.** Relecture des 4
+  modes combat : chacun a déjà son propre retour visuel, différent par nature (ligne
+  attaquant→cible pour `combatTargetMode`, `losLine` pour `losMode`, cône/cercle/segments pour
+  `combatAoeTargetMode`, chemin surligné pour `combatMoveMode`) — parce qu'ils ciblent un
+  **token/une position**, jamais une entité. `EntitySelectionHalo` est spécifique aux entités
+  (caisses, portes) et n'a de sens que pour `moveTarget`, qui est le seul des 5 à viser une entité.
+  Rien à unifier ici : le point « surbrillance » du stub (§2/§3) était une lecture prématurée —
+  **retiré du périmètre du Lot 2**.
+- **Hors périmètre, confirmé distinct** : l'Échap de `selectedTokenId` (`Canvas3D.jsx:1900-1905`,
+  désélection — volontairement pas un mode de visée, patron RTS déjà tranché,
+  [[project_selection_mj_acteur_entites]]) et l'Échap de `freeCameraOverride` (`:1832-1846`,
+  caméra). Pas touchés.
+
+### 9.1. Design — un tableau, pas un automate
+
+Pas de classe FSM/pushdown automaton (le stub le suggérait comme référence, mais un automate serait
+disproportionné pour 5 entrées déjà mutuellement exclusives en pratique — même leçon que le Lot 1 :
+réutiliser le plus petit primitif correct). Un seul tableau ordonné, construit une fois dans le
+composant `Canvas3D` externe (là où vivent déjà `useSceneCursor` et les 5 `useEffect`) :
+
+```js
+const aimModes = [
+  { key: 'combatTargetMode',    active: !!combatTargetMode,          cursor: 'cible', onCancel: () => combatTargetMode.onCancel() },
+  { key: 'combatAoeTargetMode', active: !!combatAoeTargetMode,       cursor: 'cible', onCancel: () => combatAoeTargetMode.onCancel() },
+  { key: 'losMode',             active: !!losMode?.active,           cursor: 'cible', onCancel: () => onLosCancel?.() },
+  { key: 'combatMoveMode',      active: !!combatMoveMode,            cursor: 'case',  onCancel: () => combatMoveMode.onCancel() },
+  { key: 'moveTarget',          active: !!moveTarget,                cursor: 'case',  onCancel: () => onMoveCancel?.() },
+]
+```
+
+Trois consommateurs, une seule définition :
+1. **`aimModeActive`** = `aimModes.some(m => m.active)` — remplace la copie locale de `Scene`
+   (Lot 1) ET la condition interne de `useSceneCursor.js`. Passé en prop à `<Scene
+   aimModeActive={aimModeActive} .../>` au lieu d'être recalculé dedans.
+2. **Curseur** : `useSceneCursor(aimModes)` — signature changée (prend le tableau, plus les 5 props
+   nommées) ; garde le même ordre de priorité qu'aujourd'hui (`cible` avant `case` — les 3
+   premières entrées du tableau) — pas un scan brut dans l'ordre du tableau, un groupement explicite
+   par `cursor` pour rester auditable plutôt que de dépendre implicitement de l'ordre.
+3. **Échap** : un seul `useEffect`, qui sur Échap appelle `onCancel()` de **chaque** entrée
+   actuellement active (`aimModes.filter(m => m.active).forEach(m => m.onCancel())`) — reproduit
+   exactement le comportement actuel (5 listeners indépendants sur `document`, qui se
+   déclencheraient tous les 5 si, anormalement, plusieurs modes étaient actifs en même temps),
+   plutôt que de n'en annuler qu'un seul par une supposition de priorité non vérifiée.
+
+### 9.2. Ce que ce lot ne fait pas
+
+- Pas de fusion avec l'arbitrage de clic du Lot 1 (déjà fait, déjà validé — ce tableau est
+  nouveau et distinct, même s'il partage la même liste de 5 états).
+- Pas de retour sur la « surbrillance » (§9.0 — vérifié non nécessaire).
+- Pas de normalisation de la forme `.onCancel()` vs callback externe (§9.0 — gain nul, risque nul
+  à laisser tel quel derrière l'adaptateur du tableau).
+
+### 9.3. Validation prévue
+
+- Rejouer Échap sur chacun des 5 modes séparément (annulation effective, pas de régression).
+- Vérifier le curseur affiché pour chaque mode (`cible` pour cible/AOE/LOS, `case` pour déplacement
+  combat/déplacement d'entité) — inchangé visuellement.
+- `npx eslint` + `npm run build` avant de rendre la main.
+
+## 10. Note annexe — fichier parasite trouvé pendant le recensement
 
 `client/src/components/EntityMesh jsx.md` (espace dans le nom, extension `.md`) : semble être une
 copie ancienne d'`EntityMesh.jsx` collée dans un fichier Markdown, jamais importée nulle part

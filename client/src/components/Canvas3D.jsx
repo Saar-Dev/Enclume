@@ -585,6 +585,7 @@ function Scene({
   onCharacterDrop,
   hoveringEntityRef,
   hoveringTokenRef,
+  aimModeActive,
 }) {
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
@@ -717,11 +718,10 @@ function Scene({
   const losModeRef = useRef(null)
   losModeRef.current = losMode
 
-  // ─── Autorité unique « un mode de visée est actif » (PLAN_CLIC_3D_UNIFICATION.md §7.2) ──────
-  // Même condition que useSceneCursor.js (recopiée là aussi, dette connue du plan) — utilisée ici
-  // pour désactiver le clic déclaratif R3F des entités/connecteurs pendant un mode de visée combat,
-  // qui les court-circuitait entièrement (aucune garde avant ce lot, sauf moveTarget, cf. plan §7.1).
-  const aimModeActive = !!(combatMoveMode || combatTargetMode || combatAoeTargetMode || losMode?.active || moveTarget)
+  // aimModeActive : reçu en prop depuis Canvas3D (autorité unique aimModes, PLAN_CLIC_3D_UNIFICATION.md
+  // §9.1) — utilisé ici pour désactiver le clic déclaratif R3F des entités/connecteurs pendant un
+  // mode de visée combat (Lot 1, §7.2). N'est plus recalculé localement depuis le Lot 2 (§9.0 : la
+  // copie locale du Lot 1 était une 3ᵉ copie indépendante de la même union de 5 états).
 
   // ─── Clic ambiant sur token adverse — P40 : ref miroir (COMBAT-CLICK-AUTOSOLVE) ──────────────
   const onAmbientTokenClickRef = useRef(null)
@@ -1800,7 +1800,29 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   // (client/src/lib/actingToken.js) pour résoudre le token acteur d'une interaction d'entité.
   const { selectedTokenId, setSelectedTokenId } = useTokenStore()
 
-  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode, moveTarget })
+  // ─── Autorité unique « modes de visée » (PLAN_CLIC_3D_UNIFICATION.md §9.1) ──────────────────
+  // Un seul tableau, ordonné (cible avant case, même priorité qu'aujourd'hui) — remplace 3 copies
+  // indépendantes de la même union de 5 états (aimModeActive du Lot 1 dans Scene, condition interne
+  // de useSceneCursor.js, et les 5 gardes des useEffect Échap ci-dessous). combatMoveMode/
+  // combatTargetMode/combatAoeTargetMode portent déjà leur propre `.onCancel()` ; moveTarget/losMode
+  // non — adaptateur trivial ici, pas de changement upstream (§9.0, gain nul à normaliser leur forme).
+  // blocksEntityClick : distinct de active/cursor — corrige une régression trouvée en jeu réel
+  // 2026-09-17 (caisses inutilisables tout le long d'un tour de combat). combatMoveMode est un
+  // survol AMBIANT, armé par défaut pour toute la durée du tour (useAutoMoveMode,
+  // COMBAT-DEPLACEMENT-HOVER) — ce n'est jamais un geste ponctuel de visée comme les 4 autres, donc
+  // jamais un motif pour bloquer le clic sur une entité. Le bug confirmé (§7.1 du plan) qui a motivé
+  // ce garde concernait spécifiquement tir/CaC/zone d'effet/LOS/déplacer-une-entité — pas le survol
+  // de déplacement par défaut. Curseur et Échap restent corrects pour combatMoveMode (mode réellement
+  // actif) ; seul le clic entité doit l'ignorer.
+  const aimModes = useMemo(() => [
+    { key: 'combatTargetMode',    active: !!combatTargetMode,    cursor: 'cible', blocksEntityClick: true,  onCancel: () => combatTargetMode.onCancel() },
+    { key: 'combatAoeTargetMode', active: !!combatAoeTargetMode, cursor: 'cible', blocksEntityClick: true,  onCancel: () => combatAoeTargetMode.onCancel() },
+    { key: 'losMode',             active: !!losMode?.active,     cursor: 'cible', blocksEntityClick: true,  onCancel: () => onLosCancel?.() },
+    { key: 'combatMoveMode',      active: !!combatMoveMode,      cursor: 'case',  blocksEntityClick: false, onCancel: () => combatMoveMode.onCancel() },
+    { key: 'moveTarget',          active: !!moveTarget,          cursor: 'case',  blocksEntityClick: true,  onCancel: () => onMoveCancel?.() },
+  ], [combatTargetMode, combatAoeTargetMode, losMode, combatMoveMode, moveTarget, onLosCancel, onMoveCancel])
+  const aimModeActive = aimModes.some(m => m.active && m.blocksEntityClick)
+  const sceneCursor = useSceneCursor(aimModes)
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
   // ne s'affiche jamais pendant un combat (retour Saar 2026-08-08), même sans mode armé.
   const combatPhase = useCombatStore(s => s.phase)
@@ -1845,53 +1867,21 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     }
   }, [])
 
-  // ─── Annulation mode visée entité sur Échap ──────────────────────────────
+  // ─── Annulation des modes de visée sur Échap (PLAN_CLIC_3D_UNIFICATION.md §9.1) ─────────────
+  // Un seul effet, piloté par aimModes (ci-dessus) — remplace 5 useEffect quasi identiques (un par
+  // mode). Annule CHAQUE mode actuellement actif, pas seulement le premier trouvé : reproduit à
+  // l'identique le comportement des 5 listeners indépendants d'avant ce lot (qui se déclencheraient
+  // tous si, anormalement, plusieurs modes étaient actifs en même temps) plutôt que de supposer une
+  // priorité non vérifiée entre eux.
   useEffect(() => {
-    if (!moveTarget) return
+    const activeModes = aimModes.filter(m => m.active)
+    if (activeModes.length === 0) return
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') onMoveCancel?.()
+      if (e.key === 'Escape') activeModes.forEach(m => m.onCancel())
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [moveTarget, onMoveCancel])
-
-  // ─── Annulation mode déplacement combat sur Échap ─────────────────────────
-  useEffect(() => {
-    if (!combatMoveMode) return
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') combatMoveMode.onCancel()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [combatMoveMode])
-
-  // ─── Annulation mode sélection cible sur Échap ────────────────────────────
-  useEffect(() => {
-    if (!combatTargetMode) return
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') combatTargetMode.onCancel()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [combatTargetMode])
-
-  // ─── Annulation mode visée zone d'effet sur Échap (PLAN_AOE.md §8 étape 9) ─────
-  useEffect(() => {
-    if (!combatAoeTargetMode) return
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') combatAoeTargetMode.onCancel()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [combatAoeTargetMode])
-
-  // ─── Annulation mode LOS sur Échap ─────────────────────────────────────────
-  useEffect(() => {
-    if (!losMode) return
-    const onKeyDown = (e) => { if (e.key === 'Escape') onLosCancel?.() }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [losMode, onLosCancel])
+  }, [aimModes])
 
   // ─── Désélection de token sur Échap seulement (retour Saar 2026-09-17) ────
   // handleCanvasClick ne désélectionne plus le token sur un clic ailleurs (sol, caisse…) : un MJ qui
@@ -2115,6 +2105,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           onCharacterDrop={onCharacterDrop}
           hoveringEntityRef={hoveringEntityRef}
           hoveringTokenRef={hoveringTokenRef}
+          aimModeActive={aimModeActive}
         />
       )}
     </Canvas>
