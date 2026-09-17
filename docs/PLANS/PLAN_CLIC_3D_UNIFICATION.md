@@ -1,5 +1,8 @@
 # PLAN_CLIC_3D_UNIFICATION.md — Unifier le cycle de vie des modes de visée 3D (clic, curseur, annulation)
 
+> **CLOS 2026-09-17** — Lots 1 et 2 codés, commités, poussés, validés en jeu réel dans leur
+> intégralité. Détail de clôture : §12. `Editor3D.jsx` reste hors périmètre (§6).
+
 > **Stub — 2026-09-17, élargi le même jour.** Chantier identifié pendant le durcissement de la
 > sélection MJ pour les interactions d'entité, puis élargi en corrigeant l'absence de retour visuel
 > sur le mode « Déplacer une caisse » (Lot A2) : la duplication ne concerne pas que l'arbitrage de
@@ -390,16 +393,31 @@ Trois consommateurs, une seule définition :
 correction `blocksEntityClick` du §11 dans le même commit (les deux modifient le même tableau
 `aimModes`, non séparables sans coût disproportionné).
 
-**Validation réelle partielle** — le détour de session (fenêtres de déclaration coincées derrière la
-timeline, déplacement combat cassé, occupation circulaire côté moteur monde — bugs sans rapport
-avec ce plan, cf. mémoire `project_combat_window_drag_handle`) a exercé en profondeur Échap/curseur
-pour `combatMoveMode`
-(désarmement/réarmement observé des dizaines de fois dans les logs BUG-DEPLACEMENT1) et la garde
-`blocksEntityClick` (caisses utilisables pendant le tour, confirmé). **Non rejoué explicitement** :
-Échap + curseur pour `combatTargetMode`, `combatAoeTargetMode`, `losMode`, `moveTarget` — la
-checklist §9.3 pour ces 4 modes reste à cocher en jeu réel avant de considérer le chantier
-entièrement clos, même si le code est identique en nature à ce qui a déjà été exercé pour
-`combatMoveMode`.
+**Validation réelle partielle puis complète** — le détour de session (fenêtres de déclaration
+coincées derrière la timeline, déplacement combat cassé, occupation circulaire côté moteur monde —
+bugs sans rapport avec ce plan, cf. mémoire `project_combat_window_drag_handle`) a exercé en
+profondeur Échap/curseur pour `combatMoveMode` (désarmement/réarmement observé des dizaines de fois
+dans les logs BUG-DEPLACEMENT1) et la garde `blocksEntityClick` (caisses utilisables pendant le
+tour, confirmé). Checklist §9.3 pour les 4 modes restants (`combatTargetMode`,
+`combatAoeTargetMode`, `losMode`, `moveTarget`) **rejouée par Saar 2026-09-17 → « Test fonctionnel »**.
+
+## 12. Clôture du chantier `[CLOS 2026-09-17]`
+
+Lots 1 et 2 codés, commités, poussés (`2825eae`, `b373410`, `2057b09`, `d81e503`, `6f87d85`,
+`dev/Saar`), validés en jeu réel dans leur intégralité (Lot 1 + correction `blocksEntityClick` +
+checklist complète des 5 modes du Lot 2). `Editor3D.jsx` reste explicitement hors périmètre (§6),
+rattaché à `docs/PLAN_WORLD_BUILDER_REWORK.md` pour une éventuelle unification future.
+
+**Testé** : arbitrage de clic token/entité/connecteur (Lot 1), garde `blocksEntityClick` par mode
+(caisses utilisables hors visée ponctuelle), curseur + Échap pour les 5 modes de visée (Lot 2) —
+tout confirmé en jeu réel par Saar. Lint, build client et suite `shared/**/*.test.mjs` (597 tests)
+vérifiés à chaque étape.
+**Non testé** : rien d'identifié en attente pour ce périmètre précis.
+**Données** : aucune migration. Le correctif d'occupation circulaire (§ mémoire
+`project_combat_window_drag_handle`, hors périmètre de CE plan mais découvert pendant son test) a
+changé un calcul serveur pur (`shared/world/spatialIndex.js`), aucune donnée persistée modifiée.
+**Retour arrière** : `git revert` des 5 commits ci-dessus si besoin, aucun n'a de dépendance externe
+(migrations, seeds) qui empêcherait un retour en arrière propre.
 
 ## 10. Note annexe — fichier parasite trouvé pendant le recensement
 
