@@ -1,7 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
-import { getUserColor } from '../lib/socketUtils.js'
+import { getUserColor, canActAsCharacter } from '../lib/socketUtils.js'
 import { resolveTestOutcome, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import {
   calcAttributeAN,
@@ -532,11 +532,14 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       if (!token) { console.log('[DBG] RETURN — token introuvable'); return }
       console.log(`[DBG] token chargé — pos:(${token.pos_x},${token.pos_y},${token.pos_z})`)
 
-      // Ownership : le character lié au token doit appartenir au joueur émetteur
+      // Ownership : le character lié au token doit appartenir au joueur émetteur, ou être un PNJ
+      // piloté par le MJ (canActAsCharacter — socketUtils.js). Un MJ sans PJ propriétaire ne pouvait
+      // jusqu'ici jamais déclencher Déplacer, y compris via un PNJ (limite du tout premier commit de
+      // la fonctionnalité, jamais un GM bypass n'avait été prévu ici).
       if (token.character_id) {
         const character = await db('characters')
           .where({ id: token.character_id }).first()
-        if (!character || character.user_id !== user.id) { console.log('[DBG] RETURN — ownership refusé'); return }
+        if (!canActAsCharacter(character, { userId: user.id, isGm })) { console.log('[DBG] RETURN — ownership refusé'); return }
       } else {
         // Token sans character → seul le GM peut interagir
         console.log('[DBG] RETURN — token sans character')
