@@ -43,14 +43,34 @@ d'abord) — cette séquence est une recommandation motivée, pas une contrainte
   d'interaction. **A1 clos.**
 - **Dépendance** : aucune.
 
-### A2. Preuve du dernier sous-type d'interaction (`move_type`)
+### A2. Preuve du dernier sous-type d'interaction (`move_type`) — CLOS 2026-09-17, à l'état « mécanisme prouvé, pas prêt pour la table »
 - **Quoi** : créer un blueprint avec une interaction de déplacement (pousser/tirer un objet pour
   la couverture) et valider en jeu réel que `state_cover`/LOS réagissent correctement.
-- **Pourquoi maintenant** : ligne `docs/ROADMAP.md` §1 explicitement ouverte depuis le
-  2026-08-25 — moteur déjà câblé (`ENTITY_MOVE_REQUEST`, PE27) mais jamais prouvé avec du
-  contenu réel, contrairement au sous-type état/animation qu'on vient de fermer. Ferme
-  définitivement la ligne "Interactions d'entité".
-- **Dépendance** : aucune — n'importe quel objet `free` existant peut servir de test.
+- **Fait** : interaction `move`/`displacement` ajoutée aux 15 caisses/coffres déjà cataloguées
+  (`required_state_ids: [0,1]`). Validateur (`tools/validate-3d-manifest.mjs`) durci pour rejeter la
+  forme d'un incident rencontré en route (`required_state_ids` manquant, crash client). Le pipeline
+  complet (résolution du token acteur, radial menu, jet FOR, Test de Chance, résolution) a tourné
+  deux fois de bout en bout sans erreur technique — testé en jeu réel par Saar, GM pilotant le
+  PNJ Baboulinet (FOR 18).
+- **Pas fait, et ne sera pas fait dans ce lot** : les deux tests réels ont échoué (jets 4 et 10,
+  15 % de chances de réussite) — **la caisse n'a jamais bougé, `state_cover`/LOS n'ont donc jamais
+  été observés en conditions réelles**. Objectif initial du lot non atteint sur ce point précis.
+- **Pourquoi clos maintenant plutôt que poursuivi** : trois problèmes distincts, plus profonds que
+  le lot lui-même, ont été trouvés en le testant réellement — chacun mérite son propre cadrage,
+  aucun n'est raisonnable à improviser dans la continuité de ce lot :
+  1. **Détection de clic 3D** (un token proche d'une caisse recevait son clic) —
+     `PLANS/PLAN_CLIC_3D_UNIFICATION.md` (stub, correctif ciblé posé).
+  2. **Autorité serveur** (un MJ sans PJ propriétaire ne pouvait jamais agir via un PNJ) —
+     `PLANS/PLAN_AUTORITE_PERSONNAGE_SERVEUR.md` (stub, correctif ciblé posé).
+  3. **Difficulté du Test et absence de surcharge MJ** (15 % de réussite avec l'Attribut humain
+     maximal, aucune interface pour l'ajuster) — `PLANS/PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`
+     (stub, **bloquant réel avant toute utilisation en jeu**, rien codé).
+- **Documentation durable** : le fonctionnement actuel du moteur d'interactions (schéma
+  `states`/`interactions`, protocole `ENTITY_ACTION_REQUEST`/`ENTITY_MOVE_REQUEST`, règle
+  d'ownership) est désormais décrit dans `docs/SYSTEME/ENTITES.md` §10 (Règle 10 — les faits
+  durables sortent du PLAN une fois vérifiés, même si le lot n'est pas entièrement jouable).
+- **Dépendance pour rouvrir ce sous-type** : cadrage de `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`
+  au minimum — inutile de reprendre le test en jeu tant que la Difficulté reste à 15 % non ajustable.
 
 ## Lot B — Extension du patron ouverture/fermeture
 

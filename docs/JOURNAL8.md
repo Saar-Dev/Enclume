@@ -7419,3 +7419,142 @@ exact sur le token).
 son propre token hors combat ; décision caméra au double-clic (proposée par Saar, avis donné contre
 sans trancher — en attente de sa décision) ; chantier de fusion complète (stub créé, cadrage à
 faire séparément).
+
+## Session (Dev) — 2026-09-17 — Test réel de Déplacer : MJ bloqué sans repli PNJ, ouverture du chantier d'autorité serveur
+
+Premier test réel de Lot A2 (`ENTITY_MOVE_REQUEST`) après tous les correctifs précédents. Deux
+symptômes rapportés par Saar : joueur sans accès aux caisses (menu radial noir, aucun log — non
+reproduit, hypothèse principale : bundle client périmé, cadré ci-dessous) ; MJ avec accès au menu
+mais Déplacer sans aucun effet.
+
+**Cause confirmée pour le MJ**, par le log serveur lui-même : `token:beeca25d...` → personnage
+**Baboulinet**, `type: 'pnj'`, `user_id: null`. `ENTITY_MOVE_REQUEST` (`socketEntity.js`) vérifiait
+l'ownership avec `character.user_id !== user.id`, **sans aucun repli MJ** — contrairement à la
+quasi-totalité des autres handlers socket du projet. Un MJ sans PJ propriétaire (le cas normal d'un
+MJ) ne pouvait donc jamais utiliser Déplacer, même via le token d'un PNJ.
+
+Saar a demandé, avant tout code, si ce correctif ne devrait pas plutôt aller dans
+`PLAN_CLIC_3D_UNIFICATION.md` — l'occasion de trancher explicitement : non, périmètre différent
+(autorisation serveur, pas détection de clic client, Règle 1 documentaire), mais même **forme** de
+problème (un trou ponctuel révélant une duplication plus large) et donc même séquencement.
+
+**Correctif** : `canActAsCharacter()` extraite dans `server/src/lib/socketUtils.js` — reprend le
+patron déjà éprouvé de `COMBAT_INIT_STATE` (`socketCombatState.js`, MJ autorisé sur un PNJ, jamais
+un PJ ni un drone), câblée uniquement sur `ENTITY_MOVE_REQUEST`. Pas une invention : un patron déjà
+validé en prod, extrait pour son 2ᵉ appelant plutôt que recopié une 7ᵉ fois ailleurs dans le code.
+
+**Chantier ouvert** : `docs/PLANS/PLAN_AUTORITE_PERSONNAGE_SERVEUR.md` (stub) — référencé dans
+`docs/SYSTEME/INDEX.md` et `docs/ROADMAP.md`. Recensement brut (grep, pas une lecture ligne à ligne)
+d'au moins 3 philosophies de contournement MJ différentes dans 8+ handlers socket (`socketDice.js`,
+`socketToken.js`, `socketChance.js`, `socketConnector.js`, `socketCombatState.js`,
+`socketCombatResolution.js`, `socketCombatAnnouncement.js`) — à lire un par un au cadrage, pas
+supposé unifiable en une seule règle sans vérification.
+
+**Testé** : `node --check` sur les deux fichiers serveur modifiés.
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar (MJ pilote un PNJ pour Déplacer).
+**Données** : aucune migration.
+**Retour arrière** : rien committé, en attente de validation.
+**Hors périmètre, toujours ouvert** : bug joueur (menu radial noir, non reproduit — hypothèse bundle
+périmé à vérifier par Saar via hard refresh avant nouvelle analyse) ; le mécanisme Déplacer complet
+(jet FOR, mouvement réel, malus « Couverture cible ») toujours pas observé en jeu de bout en bout ;
+cadrage détaillé de `PLAN_AUTORITE_PERSONNAGE_SERVEUR.md` (8+ sites à auditer un par un).
+
+## Session (Dev) — 2026-09-17 — Déplacer une caisse : diagnostic « clic sans effet » et affordances manquantes
+
+Après le correctif MJ/PNJ, Saar signale « clic sur Déplacer, rien » — sans aucun log, ni F12 ni
+serveur. Diagnostic erroné à deux reprises avant la bonne cause (autocritique explicite de Saar
+demandée en cours de route, cf. feedback à sauver) : d'abord une piste sur le clic de confirmation
+(dot=0 ambigu), écartée par Saar (« tu ne me lis pas ») ; puis une piste sur la portée du MJ,
+écartée par la couleur identique Ouvrir/Déplacer dans le menu. La vraie cause, confirmée par Saar :
+le clic sur « Déplacer » fonctionne, mais **rien ne signale qu'un second clic est nécessaire, ni ce
+qu'il fait** — pas un bug fonctionnel, une absence totale d'affordance.
+
+**Analyse à charge demandée avant tout code** (« reprends-toi », rappel des priorités qualité/temps).
+Proposition initiale insuffisante (bandeau texte seul, `cursor: crosshair` inventé) rejetée par
+Saar sur 3 points précis, tous corrigés après relecture : (1) c'est une destination, pas une
+direction — le ghost snappe déjà sur une case ; (2) un curseur personnalisé existe déjà dans le
+projet (`SceneCursorOverlay.jsx`/`useSceneCursor.js`, modes `'case'`/`'cible'`, assets
+`CURSEUR_CASE.svg`/`CURSEUR_CIBLE.svg`) — jamais câblé sur `moveTarget`, oublié depuis l'introduction
+de la mécanique ; (3) `EntitySelectionHalo` (`EntityMesh.jsx`) existe déjà (halo doré) mais n'est
+jamais branché en mode jeu, seulement dans l'éditeur GM.
+
+**Recherche demandée et faite** : le patron correct pour ce problème est le State pattern/pushdown
+automaton pour la gestion des entrées (*Game Programming Patterns*, Robert Nystrom) — un seul « mode
+actif », chaque mode portant son propre curseur/annulation/priorité. Confirmé pertinent ici : 5
+modes de visée (`combatMoveMode`/`combatTargetMode`/`combatAoeTargetMode`/`losMode`/`moveTarget`)
+déjà traités comme une famille par un effet de nettoyage (`Canvas3D.jsx:761-773`), mais recopiés à la
+main dans le curseur ET dans 5 `useEffect` Échap quasi identiques — `moveTarget` avait raté le
+curseur et le halo, jamais la priorité de clic ni le nettoyage.
+
+**Décision de séquencement** (même critère risque/qualité que pour le clic 3D et l'autorité serveur
+plus haut ce jour, redemandée explicitement par Saar avant de trancher) : correctif ciblé additif
+(`moveTarget` rejoint la branche `'case'` existante de `useSceneCursor.js` ; `isSelected` câblé sur
+l'appel `<EntityMesh>` de `Canvas3D.jsx` pour afficher le halo sur la caisse ciblée), sans migrer les
+4 modes combat déjà validés en jeu réel vers un vrai State pattern — risque de régression non
+maîtrisé sans suite de tests automatisés, à cadrer séparément.
+
+**Correctif** : `client/src/lib/useSceneCursor.js` (+`moveTarget` en paramètre et dans la branche
+`'case'`) ; `client/src/components/Canvas3D.jsx` (`moveTarget` transmis à `useSceneCursor`,
+`isSelected={moveTarget?.entity?.id === entity.id}` sur `<EntityMesh>`).
+
+**Chantier élargi** : `docs/PLANS/PLAN_CLIC_3D_UNIFICATION.md` (déjà ouvert plus haut ce jour) —
+retitré et étendu pour couvrir tout le cycle de vie d'un mode de visée (clic + curseur + annulation),
+pas seulement l'arbitrage de clic ; référencé `INDEX.md`/`ROADMAP.md`.
+
+**Testé** : `eslint` ciblé (17 problèmes, baseline pré-existant inchangé, 0 nouveau).
+**Non testé : ⚠️ clos partiel** — validation en jeu réel par Saar (curseur `'case'` visible pendant
+le mode visée, halo doré sur la caisse ciblée).
+**Données** : aucune migration.
+**Retour arrière** : rien committé, en attente de validation.
+**Hors périmètre, toujours ouvert** : bug joueur (menu radial noir) ; le mécanisme Déplacer complet
+jamais observé en jeu de bout en bout avec succès ; cadrage détaillé de `PLAN_CLIC_3D_UNIFICATION.md`
+et `PLAN_AUTORITE_PERSONNAGE_SERVEUR.md`.
+
+## Session (Dev) — 2026-09-17 — Clôture de Lot A2 : Difficulté non jouable, troisième chantier ouvert, documentation durable
+
+Après le correctif curseur/halo, Saar teste réellement Déplacer avec le PNJ Baboulinet (FOR 18,
+maximum humain) : deux jets, deux échecs (4→MR-1, 10→MR-7). Question posée avant tout code : cette
+difficulté est-elle RAW ou « au pif » ?
+
+**Vérifié, pas supposé** : la conversion Attribut→AN est RAW à l'identique (`docs/REGLES/
+ATTRIBUTS.md:131-142`, table p.114, reproduite dans `shared/polarisUtils.js` `AN_TABLE`) — FOR 18 →
+AN+3, confirmé par calcul direct. La Difficulté appliquée (0) n'est en revanche **une absence de
+donnée, jamais une valeur choisie** : aucun `difficulty_dc` n'existe sur aucune des 15 caisses, et
+aucune règle RAW de Difficulté de poussée par poids/taille d'objet n'a été trouvée dans les documents
+transcrits (recherche faite, rien trouvé). Résultat : 15 % de réussite avec l'Attribut humain maximal,
+sans aucun moyen de l'ajuster — la décision du 2026-07-31 portait sur la formule (Test d'Attribut
+seul), jamais sur cette valeur.
+
+Saar a ensuite posé trois constats (difficulté trop punitive pour un usage réel, invisible pour
+joueur et MJ, aucune interface de surcharge MJ alors que le système est censé être un repli
+ajustable) puis une question de fond : *« j'en suis à un point où je me pose la question de ce qu'on
+fait »* — Lot A2, censé être une preuve de concept mineure, a fait remonter coup sur coup deux
+chantiers d'architecture (clic 3D, autorité serveur) et maintenant un vrai trou de design/outillage,
+sans qu'aucun d'eux n'ait pu être improvisé sans risque.
+
+**Décision (Saar)** : clore Lot A2 ici, à l'état réel (mécanisme prouvé, pas prêt pour la table),
+plutôt que de continuer à empiler des correctifs sur un fil déjà long. Documenter fortement avant de
+passer à autre chose — PLAN, ROADMAP et SYSTEME, pas seulement ce journal.
+
+**Documentation de clôture** :
+- `docs/PLANS/PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md` (nouveau stub) — 3ᵉ chantier ouvert
+  aujourd'hui, même traitement que les deux précédents (déclencheur, état vérifié, hors périmètre,
+  rien codé).
+- `docs/PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` — Lot A2 marqué CLOS à l'état réel, les trois
+  chantiers listés comme conséquence, dépendance explicite posée sur
+  `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md` avant toute reprise du test en jeu.
+- `docs/SYSTEME/ENTITES.md` — nouvelle §10 (Règle 10 : les faits durables sortent du PLAN une fois
+  vérifiés) documentant le moteur d'interactions runtime (schéma `states`/`interactions`, protocole
+  `ENTITY_ACTION_REQUEST`/`ENTITY_MOVE_REQUEST`, ownership `canActAsCharacter`/`resolveActingToken`)
+  et ses 3 limites connues, chacune référencée vers son stub.
+- `docs/ROADMAP.md` / `docs/SYSTEME/INDEX.md` — ligne « Interactions d'entité » mise à jour (clôture
+  réelle de Lot A2, pointeurs vers les 3 stubs) ; nouvelle ligne pour
+  `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`.
+
+**Testé** : aucun code nouveau dans cette entrée — travail 100 % documentaire.
+**Non testé** : sans objet (pas de code).
+**Données** : aucune migration.
+**Retour arrière** : sans objet.
+**Hors périmètre, définitivement fermé pour cette session** : Lot A2 ne sera pas retesté avant le
+cadrage d'au moins `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`. Bug joueur (menu radial noir) reste
+non reproduit, non repris ici.

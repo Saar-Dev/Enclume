@@ -9,8 +9,12 @@ SYSTEME/ENTITES.md — Entités libres du monde 3D
     référence (§9) confirmés contre le code. Aucune correction nécessaire.
     Mise à jour 2026-09-16 : §5.4 complétée — un mécanisme d'animation par état existe désormais
     (visual_override.animationProgress), distinct du champ animations toujours inexploité.
-    Lire pour : tout travail sur les entités 3D libres, leur cycle de vie, leur apparence et leur
-    persistance.
+    Mise à jour 2026-09-17 : §10 ajoutée — interactions runtime (Ouvrir/Fermer/Déplacer), protocole
+    socket, règle d'ownership. Moteur câblé et partiellement prouvé en jeu réel (Lot A2,
+    PLAN_ENTITES_INTERACTIVES_ROADMAP.md) ; limites connues référencées vers 3 PLAN stub ouverts le
+    même jour (détection de clic, autorité serveur, Difficulté/surcharge MJ).
+    Lire pour : tout travail sur les entités 3D libres, leur cycle de vie, leur apparence, leur
+    persistance et leurs interactions en session.
 
 Documents associés :
 
@@ -376,3 +380,92 @@ server/src/routes/entities.js	API REST CRUD
 shared/world/entityTransform.js	Validation et normalisation de l'échelle
 client/src/lib/voxelTextures.js	Chargement des textures
 client/src/lib/modelMaterialSlots.js	Gestion des slots couleur
+
+10. Interactions runtime (Ouvrir/Fermer/Déplacer)
+
+Une entité posée peut porter des interactions déclenchables en session (pas dans l'éditeur GM) —
+Ouvrir/Fermer un coffre, Pousser/Tirer une caisse pour se couvrir. Câblé et prouvé partiellement en
+jeu réel (chantier caisses interactives, 2026-09-16, puis Lot A2 `move_type`, 2026-09-17 —
+`PLAN_ENTITES_INTERACTIVES_ROADMAP.md`).
+
+10.1 Schéma de données
+
+`entity_blueprints.states`/`interactions` (JSONB, zéro validation de forme au niveau de la base —
+voir `tools/validate-3d-manifest.mjs` pour la seule validation existante, côté manifest builtin) :
+
+    states : liste { id, name } — un état visuel/logique (ex. 0 = fermé, 1 = ouvert).
+
+    interactions : liste d'objets, un par action proposée au joueur/MJ :
+
+Champ	Rôle
+id	Identifiant stable de l'interaction (ex. "open", "move")
+action_label	Libellé affiché sur la tranche du menu radial
+required_state_ids	Liste blanche des états où l'interaction est proposée — jamais [] pour une interaction censée être toujours disponible (la rendrait invisible dans tous les états)
+target_state_id	État cible après une action réussie (Ouvrir/Fermer) — ignoré si move_type est présent
+move_type	'displacement' — bascule l'interaction en mode visée déplacement plutôt qu'action directe
+attribute_id / skill_id	Attribut ou Compétence testée ; ni l'un ni l'autre = résolution directe sans jet
+difficulty_dc	Modificateur signé ajouté au Seuil ; absent → 0 (voir 10.4, limite connue)
+range	Portée en mètres depuis le token acteur ; absent → repli 1,5 m
+
+`entities.disabled_interactions` (liste d'ids) et `entities.interaction_overrides` (jsonb, clé =
+id d'interaction) permettent de désactiver ou surcharger une interaction sur une instance précise
+sans toucher au blueprint partagé. La colonne existe et est lue côté serveur ; aucune interface
+d'édition ne l'écrit encore (voir 10.4).
+
+10.2 Lecture côté client
+
+`client/src/lib/entityInteractions.js` (`getAvailableInteractions(entity)`) est l'unique point de
+lecture des interactions disponibles pour l'état courant d'une instance — filtre par
+`required_state_ids` (liste blanche) et `disabled_interactions`, jamais dupliqué ailleurs dans
+`SessionPage.jsx`.
+
+10.3 Flux d'interaction
+
+    Clic sur une entité → `handleEntityClick` (`SessionPage.jsx`). Une seule interaction
+    disponible et pas MJ → action directe. Plusieurs (ou MJ, qui reçoit en plus une tranche
+    « Modifier ») → menu radial (`RadialMenu.jsx`).
+
+    Ouvrir/Fermer (sans move_type) → `ENTITY_ACTION_REQUEST` (joueur, arbitrage MJ si un Test est
+    requis) ou `ENTITY_ACTION_GM_DIRECT` (MJ, résolution instantanée sans arbitrage — action MJ
+    directe sans personnage engagé).
+
+    Déplacer (move_type: 'displacement') → arme un mode visée (`moveTarget` côté client, curseur
+    `'case'` via `useSceneCursor.js`, halo doré sur l'entité ciblée via `EntitySelectionHalo`,
+    `EntityMesh.jsx isSelected`). Un second clic sur une case de destination émet
+    `ENTITY_MOVE_REQUEST` — le serveur revalide portée et direction (dot(AE,AD), PE27) avant de
+    lancer le jet.
+
+    Le serveur reste seul autoritaire sur le Seuil, la portée, la direction et le résultat — le
+    client ne fait qu'exprimer une intention (guide-caméra/curseur), jamais une décision (règle
+    générale entités, `.claude/rules/entities.md`).
+
+    Le jet suit le circuit générique Test/Chance/Catastrophe (`shared/polarisTestResolution.js`,
+    `chanceCatastropheChoiceService.js`) — un risque de Catastrophe ouvre un choix Chance routé au
+    joueur propriétaire (PJ) ou au MJ (PNJ), avant toute résolution.
+
+10.4 Ownership — qui peut déclencher une interaction
+
+`server/src/lib/socketUtils.js` (`canActAsCharacter`) : le joueur propriétaire du personnage, ou le
+MJ mais seulement via un PNJ (jamais un PJ — autorité du joueur préservée ; jamais un drone —
+pilotage télécommandé dédié). Câblé sur `ENTITY_MOVE_REQUEST` uniquement à ce jour — cette règle est
+dupliquée sous plusieurs formes ailleurs dans le serveur, cadrage en cours
+(`docs/PLANS/PLAN_AUTORITE_PERSONNAGE_SERVEUR.md`).
+
+Côté client, `client/src/lib/actingToken.js` (`resolveActingToken`) résout le token acteur (possédé
+→ sélectionné → repli non-MJ) — autorité unique partagée par la caméra 3e personne, `handleEntityMove`
+et le rendu du menu radial. Le serveur revalide toujours l'ownership réelle ; ce résolveur n'exprime
+qu'une intention côté client.
+
+10.5 Limites connues (2026-09-17)
+
+    Détection de clic : un token et une entité proches peuvent se disputer le même clic — deux
+    systèmes de détection indépendants (boucle manuelle pour les tokens, `onClick` React Three Fiber
+    pour les entités), correctif ciblé posé, fusion complète non cadrée
+    (`docs/PLANS/PLAN_CLIC_3D_UNIFICATION.md`).
+
+    Difficulté non jouable et non ajustable : `difficulty_dc` vaut 0 par défaut faute de donnée (pas
+    un choix RAW), et aucune interface MJ ne permet de le corriger par instance — bloquant réel
+    avant toute utilisation en jeu de Déplacer (`docs/PLANS/PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`).
+
+    `move_type` n'a jamais été observé réussir en jeu réel (deux tests, deux échecs, 2026-09-17) —
+    l'effet sur `state_cover`/LOS reste théorique, jamais vérifié en conditions réelles.
