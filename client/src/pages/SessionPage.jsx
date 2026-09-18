@@ -37,7 +37,7 @@ import RadialMenu from '../components/RadialMenu'
 import TokenRadialMenu from '../components/TokenRadialMenu'
 import TokenStatusPanel from '../components/TokenStatusPanel'
 import EntityInstancePanel from '../components/EntityInstancePanel'
-import { getAvailableInteractions } from '../lib/entityInteractions.js'
+import { getAvailableInteractions, getEffectiveInteractionDifficulty } from '../lib/entityInteractions.js'
 import { resolveActingToken } from '../lib/actingToken.js'
 import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
@@ -1256,6 +1256,20 @@ function SessionContent({ campaignId }) {
         <div style={styles.mortalWoundBanner}>{mortalWoundBanner}</div>
       )}
 
+      {/* ─── Bandeau centré — Difficulté de la visée en cours (PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md
+          L2). Dérivé de moveTarget, pas un state séparé : apparaît/disparaît avec le mode visée lui-même,
+          aucun timer. Aperçu client seul (getEffectiveInteractionDifficulty) — le serveur reste seul
+          autoritaire sur le Seuil réel au moment du jet (ENTITY_MOVE_REQUEST). ─── */}
+      {moveTarget && (() => {
+        const diff = getEffectiveInteractionDifficulty(moveTarget.entity, moveTarget.interaction)
+        const diffLabel = diff >= 0 ? `+${diff}` : `${diff}`
+        return (
+          <div style={styles.moveDifficultyBanner}>
+            {t('session.moveDifficultyBanner', { label: moveTarget.interaction.action_label, diff: diffLabel })}
+          </div>
+        )
+      })()}
+
       {/* ─── Panneau config instance GM ──────────────────────────────────────── */}
       {instancePanel && (() => {
         const entity = entities.find(item => item.id === instancePanel.entityId)
@@ -1384,6 +1398,22 @@ const styles = {
     color: '#e0a0a0',
     background: `${SEVERITY_COLORS.mortelle}dd`,
     border: `1px solid ${SEVERITY_COLORS.mortelle}`,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+    pointerEvents: 'none',
+  },
+  moveDifficultyBanner: {
+    position: 'fixed',
+    top: '24%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 2000,
+    padding: '10px 20px',
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#dbe6ff',
+    background: 'rgba(20,26,46,0.88)',
+    border: '1px solid #5b8dee',
     boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
     pointerEvents: 'none',
   },

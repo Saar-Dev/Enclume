@@ -241,3 +241,23 @@ false`. Curseur et Échap restent basés sur `active` seul, indépendants de ce 
 
 Handlers Échap **hors** de `aimModes`, non touchés par ce patron (portée différente) : Échap
 `selectedTokenId` (désélection, patron RTS) et Échap `freeCameraOverride` (caméra).
+
+## P60 — `flexShrink: 0` obligatoire sur un enfant `overflow != visible` dans un flex-column scrollable
+```javascript
+// Faux : le conteneur défile en théorie, mais chaque section a overflow:hidden pour arrondir ses
+// coins — en flexbox, un enfant overflow != visible a une taille minimale automatique de 0 (au lieu
+// de sa taille de contenu). Le conteneur ne déborde jamais : il ÉCRASE ses enfants pour tenir dans
+// l'espace dispo, aucune barre de défilement n'apparaît, la molette ne fait rien.
+<div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', maxHeight: '...' }}>
+  <div style={{ overflow: 'hidden' }}>{/* contenu potentiellement long */}</div>
+</div>
+
+// Correct : flexShrink: 0 restaure la taille minimale basée sur le contenu — le conteneur déborde
+// et scrolle normalement.
+<div style={{ overflow: 'hidden', flexShrink: 0 }}>{/* ... */}</div>
+```
+Trouvé sur `FloatingPanelSection.jsx` (`EntityInstancePanel.jsx`/`SurfaceWallPanel.jsx`/
+`SurfaceRoomPanel.jsx`, `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`, 2026-09-18) — un panneau flottant
+avec plusieurs sections pliables (`<details>`, `overflow:hidden` pour l'arrondi) semblait "tenir"
+sans jamais scroller, avec des lignes du bas visuellement tronquées. S'applique à tout enfant direct
+d'un flex-column scrollable qui porte son propre `overflow`.

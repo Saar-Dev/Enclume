@@ -1,3 +1,24 @@
+## v237 — 2026-09-18 — Éditeur du monde : blocage des cases déjà occupées
+
+### Entités
+- [fix] Poser ou déplacer une caisse, un meuble ou un décor (au sol) sur une case déjà occupée par
+  un token ou un autre objet bloquant est désormais refusé, avec un message dans le fil de session —
+  jusqu'ici rien ne l'empêchait, contrairement aux tokens déjà protégés. Un objet déclaré non
+  bloquant (décor, tache au sol) reste empilable comme avant. Les objets muraux ne sont pas
+  concernés par ce changement.
+
+## v236 — 2026-09-18 — Difficulté des interactions d'entité, panneau de configuration
+
+### Entités
+- [add] Le MJ peut désormais régler la Difficulté et la Portée d'une interaction (Ouvrir/Fermer/
+  Déplacer) au cas par cas sur une caisse ou un coffre précis, sans toucher au modèle partagé par
+  toutes les instances du même objet.
+- [add] Pendant la visée de Déplacer (pousser/tirer un objet), un bandeau affiche la Difficulté
+  effective avant de valider la destination.
+- [fix] Le panneau de configuration d'une entité ne défilait plus correctement à la molette dès que
+  son contenu dépassait la hauteur de l'écran — certains champs (dont Déplacer) devenaient
+  inatteignables. Panneau réorganisé au passage (moins de texte redondant, champs Position groupés).
+
 ## v235 — 2026-09-17 — Combat : déplacement, fenêtres de déclaration, clic sur les caisses
 
 ### Combat

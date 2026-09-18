@@ -16,3 +16,13 @@ export function getAvailableInteractions(entity) {
     && !disabledInteractions.includes(interaction.id)
   )
 }
+
+// Difficulté effective d'une interaction (surcharge d'instance appliquée) — miroir de la formule de
+// résolution serveur (socketEntity.js, ENTITY_ACTION_REQUEST/ENTITY_MOVE_REQUEST :
+// `overrides.difficulty_dc ?? interaction.difficulty_dc ?? 0`), jamais une 2e autorité : sert
+// uniquement à un aperçu client avant le jet (PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md L2), le serveur
+// reste seul à trancher au moment du jet réel. Générique à toute interaction, pas seulement Déplacer.
+export function getEffectiveInteractionDifficulty(entity, interaction) {
+  const overrides = entity?.interaction_overrides?.[interaction?.id] || {}
+  return overrides.difficulty_dc ?? interaction?.difficulty_dc ?? 0
+}

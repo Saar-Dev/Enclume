@@ -13,6 +13,8 @@ SYSTEME/ENTITES.md — Entités libres du monde 3D
     socket, règle d'ownership. Moteur câblé et partiellement prouvé en jeu réel (Lot A2,
     PLAN_ENTITES_INTERACTIVES_ROADMAP.md) ; limites connues référencées vers 3 PLAN stub ouverts le
     même jour (détection de clic, autorité serveur, Difficulté/surcharge MJ).
+    Mise à jour 2026-09-18 : §10.1/§10.5 — surcharge MJ par instance (Difficulté/Portée) livrée et
+    validée en jeu réel, `PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md` clos et archivé (`docs/Old/`).
     Lire pour : tout travail sur les entités 3D libres, leur cycle de vie, leur apparence, leur
     persistance et leurs interactions en session.
 
@@ -409,8 +411,11 @@ range	Portée en mètres depuis le token acteur ; absent → repli 1,5 m
 
 `entities.disabled_interactions` (liste d'ids) et `entities.interaction_overrides` (jsonb, clé =
 id d'interaction) permettent de désactiver ou surcharger une interaction sur une instance précise
-sans toucher au blueprint partagé. La colonne existe et est lue côté serveur ; aucune interface
-d'édition ne l'écrit encore (voir 10.4).
+sans toucher au blueprint partagé. Surcharge `difficulty_dc`/`range` éditable depuis
+`EntityInstancePanel.jsx` (section « Interactions », un champ par interaction), normalisée par
+`normalizeInteractionOverrides` (`shared/world/entityTransform.js`, autorité unique client+serveur —
+valeur non finie ou id d'interaction absent du blueprint silencieusement écartés à l'écriture,
+`PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md` L1, 2026-09-18).
 
 10.2 Lecture côté client
 
@@ -431,7 +436,12 @@ lecture des interactions disponibles pour l'état courant d'une instance — fil
 
     Déplacer (move_type: 'displacement') → arme un mode visée (`moveTarget` côté client, curseur
     `'case'` via `useSceneCursor.js`, halo doré sur l'entité ciblée via `EntitySelectionHalo`,
-    `EntityMesh.jsx isSelected`). Un second clic sur une case de destination émet
+    `EntityMesh.jsx isSelected`). Un bandeau centré (`SessionPage.jsx`, dérivé de `moveTarget`, aucun
+    state séparé) affiche le modificateur de Difficulté effectif pendant toute la visée — seul chemin
+    d'interaction sans arbitrage MJ, donc le seul où ni le joueur ni le MJ ne voyaient rien avant le
+    jet (`PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md` L2, 2026-09-18 ; `getEffectiveInteractionDifficulty`,
+    `client/src/lib/entityInteractions.js`, point de lecture unique partagé avec `getAvailableInteractions`).
+    Un second clic sur une case de destination émet
     `ENTITY_MOVE_REQUEST` — le serveur revalide portée et direction (dot(AE,AD), PE27) avant de
     lancer le jet.
 
@@ -464,9 +474,13 @@ qu'une intention côté client.
     P59. `Editor3D.jsx` (raycasting séparé du mode édition) reste explicitement hors périmètre,
     rattaché à `PLANS/PLAN_WORLD_BUILDER_REWORK.md` pour une éventuelle unification future.
 
-    Difficulté non jouable et non ajustable : `difficulty_dc` vaut 0 par défaut faute de donnée (pas
-    un choix RAW), et aucune interface MJ ne permet de le corriger par instance — bloquant réel
-    avant toute utilisation en jeu de Déplacer (`docs/PLANS/PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`).
+    Difficulté ajustable par instance et affichée avant le jet (côté joueur pendant la visée, côté
+    MJ déjà via `ENTITY_ACTION_PENDING`/`sidebar.actionDC` pour Ouvrir/Fermer) : **résolu 2026-09-18**
+    (archivé `docs/Old/PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md`). Le MJ règle toujours `difficulty_dc`
+    par défaut au blueprint (atelier `/workshop`, `EntityBuilderTab.jsx`) — aucun repli automatique
+    dérivé du poids/taille n'a été ajouté (RAW silencieuse sur ce point, décision : le MJ configure à
+    la source plutôt qu'un calcul générique).
 
-    `move_type` n'a jamais été observé réussir en jeu réel (deux tests, deux échecs, 2026-09-17) —
-    l'effet sur `state_cover`/LOS reste théorique, jamais vérifié en conditions réelles.
+    `move_type` reste à observer réussir en jeu réel avec une Difficulté réglée à une valeur jouable
+    (validé jusqu'ici : configuration MJ + affichage joueur, pas encore un jet de Déplacer réussi avec
+    ce réglage) — l'effet sur `state_cover`/LOS reste théorique tant que ce test n'est pas fait.

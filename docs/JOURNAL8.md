@@ -7610,3 +7610,129 @@ aucune donnée persistée touchée.
 `docs/SYSTEME/ENTITES.md` (§10.5 limite mise à jour) ; `docs/ROADMAP.md`/`docs/SYSTEME/INDEX.md`
 nettoyés de la ligne stub périmée ; `client/public/CHANGELOG.md` — entrées joueur ajoutées (poignées
 de fenêtres, déplacement combat).
+
+## Session (Dev) — 2026-09-18 — Clôture PLAN_DIFFICULTE_INTERACTIONS_ENTITES : surcharge MJ, bandeau joueur, panneau réparé
+
+Déclenché par le test réel de Déplacer une caisse (Lot A2, session précédente) : FOR 18 (max humain)
+sans Difficulté donnait 15 % de réussite, invisible avant le jet, et aucune interface ne permettait
+au MJ de corriger la valeur au cas par cas. Cadrage fait en 3 passes (plan → analyse à charge →
+re-cadrage après recherche du pattern déjà résolu pour les portes verrouillées) avant tout code,
+conformément à la demande explicite de Saar de privilégier la qualité structurelle.
+
+**L1 — Surcharge MJ par instance.** `entities.interaction_overrides` était déjà lu par
+`socketEntity.js` (Ouvrir/Fermer et Déplacer) mais jamais écrit par aucune interface, et la route
+`PUT /entities/:id` persistait la valeur sans validation de forme (risque de NaN dans la résolution
+du jet). `normalizeInteractionOverrides` (`shared/world/entityTransform.js`, même autorité
+client+serveur que `withEntityScale`) filtre les ids d'interaction inconnus et les valeurs non
+finies, symétrique au traitement déjà réservé à `lockDifficultyDc` pour les portes verrouillées
+(`surfaceDocument.js`, chantier antérieur trouvé en cherchant un précédent pro avant de coder).
+Champs Difficulté/Portée ajoutés à `EntityInstancePanel.jsx`, avec un aperçu du seuil de référence
+(FOR 18, même benchmark que le déclencheur).
+
+**L2 — Bandeau Difficulté joueur.** Découverte en analysant l'existant : le MJ voit déjà la
+Difficulté effective avant d'approuver un Test d'entité arbitré (`ENTITY_ACTION_PENDING` →
+`sidebar.actionDC`, `MessageRendererRegistry.jsx`) — Déplacer est le seul chemin sans étape
+d'arbitrage MJ (décision RAW antérieure : Test d'Attribut seul, résolution directe), donc le seul
+où personne ne voyait rien avant le jet. Un bandeau centré, dérivé de `moveTarget` (aucun state
+séparé, apparaît/disparaît avec le mode visée lui-même), affiche uniquement le modificateur signé —
+pas un seuil calculé — pour rester cohérent avec le seul autre précédent du jeu (les fenêtres de
+modificateurs combat ne révèlent jamais non plus une chance de réussite calculée avant le tir).
+`getEffectiveInteractionDifficulty` (`client/src/lib/entityInteractions.js`) étend le point de
+lecture unique déjà utilisé par `getAvailableInteractions`, générique à toute interaction — L4
+(Ouvrir/Fermer un jour testé) satisfait par construction, aucun code séparé nécessaire. L3 (aperçu
+MJ à la conception) s'est avéré déjà couvert par le champ « Seuil de référence » ajouté en L1.
+
+**Décision actée** : pas de repli automatique dérivé du poids/taille de l'objet pour la Difficulté
+(RAW silencieuse sur la poussée/traction) — le MJ règle `difficulty_dc` par défaut directement au
+blueprint dans l'atelier (`EntityBuilderTab.jsx`, déjà possible avant ce chantier, simplement jamais
+utilisé). Simplifie le périmètre initialement envisagé (§3 du plan).
+
+**Bug de câblage trouvé et corrigé en cours de route** : `EntityInstancePanel.jsx` n'envoyait jamais
+`interaction_overrides` dans le payload de sauvegarde malgré la route qui l'acceptait déjà — corrigé
+dans le même lot.
+
+**Détour de session — panneau de configuration inutilisable, cause distincte** : après L1/L2, Saar
+signale "Déplacer" absent du panneau malgré des données confirmées correctes en base (vérifié par
+requête directe). Après plusieurs hypothèses infirmées (repli fermé par défaut, hauteur non liée à
+`position.top`), cause racine trouvée par lecture de `FloatingPanelSection.jsx` : un enfant avec
+`overflow` différent de `visible` dans un conteneur flex-column a une taille minimale automatique de
+0 (piège CSS documenté, `docs/SYSTEME/REACT.md` P60 nouveau) — le panneau semblait "tenir" en
+écrasant ses sections au lieu de déborder et de déclencher le défilement. `flexShrink: 0` ajouté sur
+`FloatingPanelSection.jsx`, corrige du même coup le même défaut latent sur `SurfaceWallPanel.jsx` et
+`SurfaceRoomPanel.jsx` qui partagent ce composant. Retours UI groupés dans la foulée : label "Nom
+affiché" redondant retiré, "État actuel" et X/Z/Altitude alignés sur une ligne (label + champ).
+
+**Testé** : `node --check` (fichiers serveur/shared), lint ciblé (0 erreur), `npm run build` client à
+chaque étape, `node --test shared/world/entityTransform.test.mjs` (7 tests, `normalizeInteractionOverrides`
+inclus). Panneau de configuration, défilement molette, champ Déplacer atteignable et éditable,
+confirmés en jeu réel par Saar.
+**Non testé** : un jet de Déplacer réussi en jeu réel avec une Difficulté réglée à une valeur
+jouable (configuration + affichage validés, pas encore le jet lui-même) ; effet sur `state_cover`/LOS
+en situation de couverture réelle.
+**Données** : aucune migration — `interaction_overrides` est une colonne jsonb déjà existante.
+**Retour arrière** : `git revert` des commits de ce chantier si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : PLAN archivé `docs/Old/` (Règle 10) ; faits durables intégrés dans
+`docs/SYSTEME/ENTITES.md` (§10.1/§10.5) et `docs/SYSTEME/REACT.md` (nouveau P60) ; `docs/ROADMAP.md`/
+`docs/SYSTEME/INDEX.md` nettoyés de la ligne stub périmée ; `client/public/CHANGELOG.md` — entrée
+joueur ajoutée (v236).
+
+---
+
+## Session (Dev) — 2026-09-18 — Blocage des cases occupées : entités du monde
+
+**Déclencheur** : en rejouant le correctif d'occupation circulaire (`spatialIndex.js`, session
+précédente), Saar a trouvé un PNJ réellement immobilisé par une caisse — pas un bug de collision,
+mais rien n'empêchait de poser un token sur une case déjà occupée à la pose initiale. Recensement
+complet des flux de pose avant tout code (méthode imposée par `AGENTS.md`) : **les tokens sont déjà
+protégés**, création et déplacement consultent tous deux `canOccupy`
+(`resolveBattlemapPlacement`/`executeBattlemapTokenMovement`, `worldMovementService.js`). Le vrai
+trou : **les entités du monde** (caisses, meubles, décors posés depuis l'éditeur) — `POST`/`PUT
+/api/entities` écrivaient `pos_x/pos_y/pos_z` sans jamais consulter l'occupation runtime, contraire
+à l'invariant déjà écrit dans `.claude/rules/entities.md`. Scénario cohérent avec le cas Baboulinet :
+la caisse (entité) a été posée par-dessus le token, geste jusque-là totalement silencieux côté
+serveur.
+
+**Décisions actées avec Saar** : refus dur (409, cohérent avec le comportement déjà existant des
+tokens — pas de snap, pas d'avertissement) ; entités murales (`placementMode: 'wall'`) exclues de
+la V1 (l'approximation circulaire du moteur surestimerait un objet plat contre un mur) ; concurrence
+tranchée après recherche externe (contraintes `EXCLUDE ... USING gist` PostgreSQL écartées — second
+moteur de collision dupliquant `actorFootprintsOverlap` en SQL, interdit par `.claude/rules/world.md`)
+— verrou transactionnel PostgreSQL (`.forUpdate()`, ordre `battlemaps→tokens→entities` symétrique à
+`executeBattlemapTokenMovement`) uniquement sur la branche `PUT` qui déplace réellement une entité,
+pas à la création (symétrique à la création de token, elle-même non transactionnelle).
+
+**Code** : `entityOccupant()` extrait de `worldMovementService.js` (autorité unique réutilisée par
+`dynamicOccupantsFromRows` et par les deux routes entités — pas de formule dupliquée). `entities.js`
+POST/PUT refusent (409) toute pose/déplacement d'entité bloquante `placementMode: 'free'` chevauchant
+un occupant existant ; le PUT ne déclenche le contrôle que sur un changement de position réel
+(comparaison de valeur à la base, pas présence du champ — `EntityInstancePanel.jsx` envoie toujours
+`pos_x/pos_y/pos_z`, même sans déplacement). Client (`Editor3D.jsx`, `EntityInstancePanel.jsx`) :
+message FR dans le fil de session sur refus (réutilise `declare_error`/`addMessage`, même patron que
+`session.tokenDropNoSurface`).
+
+**Analyse à charge menée avant de coder** (étape distincte, demandée explicitement par Saar) : trois
+erreurs trouvées et corrigées dans le plan avant tout code — mauvaise source pour `is_blocking`
+(vit sur `blueprint.states[current_state_id]`, jamais dans le JSON `state` de la requête), condition
+de déclenchement du contrôle PUT sous-spécifiée, `r` retiré du déclenchement (n'affecte jamais le
+rayon de collision circulaire actuel).
+
+**Vérification du code mort évoqué par Saar** : l'ancienne carte de collision Redis
+(`isCaseOccupied`, `collision:${battlemapId}`, `docs/Old/PLAN_ENTITY.md`) est déjà entièrement
+supprimée du code (zéro référence dans `server/src`) et sa suppression déjà documentée dans
+`docs/SYSTEME/MOTEUR_MONDE.md` §2.2 (« Redis et son hash de collision ont été supprimés ») —
+rien à nettoyer ni à noter, vérifié plutôt que supposé.
+
+**Testé** : `node --check` (`entities.js`, `worldMovementService.js`), `node --test
+worldMovementService.test.mjs` (5/5, aucune régression du refactor `entityOccupant`), `eslint` ciblé
+sur `Editor3D.jsx`/`EntityInstancePanel.jsx` (0 erreur, aucun nouveau warning), `npm run build`
+client, validation JSON `fr.json`, `git diff --check`. **Confirmé en jeu réel par Saar** (« test
+fonctionnel »).
+**Non testé** : déplacement concurrent réel (verrou transactionnel non observable sans multi-session).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des commits de ce chantier si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : PLAN archivé `docs/Old/` (Règle 10) ; faits durables intégrés dans
+`docs/SYSTEME/ENTITES.md` (§3.1/§3.3) et `docs/SYSTEME/MOTEUR_MONDE.md` (§2.2) ; `docs/ROADMAP.md`/
+`docs/SYSTEME/INDEX.md` nettoyés de la ligne stub périmée ; `client/public/CHANGELOG.md` — entrée
+MJ ajoutée (v237).

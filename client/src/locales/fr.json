@@ -160,6 +160,7 @@
   "session": {
     "loading": "Connexion à la session...",
     "connectionError": "Impossible de rejoindre la session",
+    "moveDifficultyBanner": "{{label}} — Difficulté : {{diff}}",
     "modePlay": "Mode jeu",
     "modeEdit": "Mode édition",
     "layerToken": "Calque tokens",

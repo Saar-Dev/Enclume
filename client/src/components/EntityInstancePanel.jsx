@@ -281,7 +281,12 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         borderRadius: '10px',
         boxShadow:    '0 8px 32px rgba(0,0,0,0.7)',
         overflow: 'hidden',
-        maxHeight: 'calc(100vh - 16px)',
+        // Lié à position.top (pas une constante fixe) — même invariant que clampFloatingPanelPosition
+        // (floatingPanel.js : maximumTop = viewportHeight - hauteur - 8) : sans ça, un panneau ouvert
+        // bas dans le viewport pouvait s'étendre sous le bord de l'écran malgré `overflow:hidden`, ce
+        // qui rendait la molette inopérante sur la zone invisible (retour Saar 2026-09-18 — Déplacer
+        // présent dans les données mais jamais atteignable).
+        maxHeight: `calc(100vh - ${position.top}px - 8px)`,
         animation: 'panelOpen 0.15s ease-out forwards',
       }}
     >
@@ -324,12 +329,16 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
       </div>
 
       {/* ── Corps ── */}
-      <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', maxHeight: 'calc(100vh - 92px)' }}>
+      <div style={{
+        padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto',
+        maxHeight: `calc(100vh - ${position.top}px - 84px)`,
+        scrollbarWidth: 'thin', scrollbarColor: '#2a2a3a #0d0d16',
+      }}>
         <FloatingPanelSection title="Identité" defaultOpen>
 
-        {/* Nom affiché */}
+        {/* Nom affiché — pas de label répété : le placeholder + le hint suffisent (retour Saar
+            2026-09-18, "NOM AFFICHÉ" faisait doublon avec le sous-titre du header déjà visible). */}
         <div style={S.field}>
-          <label style={S.label}>Nom affiché</label>
           <input
             style={S.input}
             value={labelOverride}
@@ -365,8 +374,8 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
 
         {/* État actuel — sélecteur si blueprint a plusieurs états */}
         {(blueprint?.states || []).length > 1 && (
-          <div style={S.field}>
-            <label style={S.label}>État actuel</label>
+          <div style={S.inlineField}>
+            <label style={S.inlineLabel}>État actuel</label>
             <select
               style={{ ...S.input, cursor: 'pointer' }}
               value={currentStateId}
@@ -385,17 +394,17 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         <FloatingPanelSection title="Transformation" defaultOpen>
         <div style={S.field}>
           <label style={S.label}>Position et rotation</label>
-          <div style={S.transformGrid}>
-            <label style={S.compactField}>
-              <span>X</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label style={S.inlineField}>
+              <span style={S.inlineLabel}>X</span>
               <input type="number" step="0.25" value={posX} onChange={e => setPosX(e.target.value)} style={S.input} disabled={isWallPlaced} />
             </label>
-            <label style={S.compactField}>
-              <span>Z</span>
+            <label style={S.inlineField}>
+              <span style={S.inlineLabel}>Z</span>
               <input type="number" step="0.25" value={posY} onChange={e => setPosY(e.target.value)} style={S.input} disabled={isWallPlaced} />
             </label>
-            <label style={S.compactField}>
-              <span>Altitude</span>
+            <label style={S.inlineField}>
+              <span style={S.inlineLabel}>Altitude</span>
               <input type="number" step="0.125" value={posZ} onChange={e => setPosZ(e.target.value)} style={S.input} disabled={isWallPlaced} />
             </label>
           </div>
@@ -430,9 +439,11 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         </div>
         </FloatingPanelSection>
 
-        {/* Interactions actives/désactivées */}
+        {/* Interactions actives/désactivées — defaultOpen : la surcharge Difficulté/Portée doit être
+            visible sans clic supplémentaire (retour Saar 2026-09-17, section restée fermée par défaut
+            faisait croire Déplacer absent du panneau alors qu'il fallait juste déplier la section). */}
         {interactions.length > 0 && (
-          <FloatingPanelSection title="Interactions">
+          <FloatingPanelSection title="Interactions" defaultOpen>
           <div style={S.field}>
             <label style={S.label}>Interactions actives</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
@@ -462,35 +473,33 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
                       <span style={{ fontSize: '12px', color: '#c0c0d0', flex: 1 }}>
                         {interaction.action_label}
                       </span>
+                      <span style={{ fontSize: '10px', color: '#4a4a60' }}>
+                        {t('entityPanel.overrideReference', { value: 3 + effectiveDifficulty })}
+                      </span>
                     </div>
                     <div
                       onClick={e => e.stopPropagation()}
-                      style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '5px' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}
                     >
-                      <label style={S.compactField}>
-                        <span>{t('entityPanel.difficultyOverrideLabel')}</span>
-                        <input
-                          type="number" step="1"
-                          style={S.input}
-                          value={override.difficulty_dc ?? ''}
-                          placeholder={String(interaction.difficulty_dc ?? 0)}
-                          onChange={e => updateInteractionOverride(interaction.id, 'difficulty_dc', e.target.value)}
-                        />
-                      </label>
-                      <label style={S.compactField}>
-                        <span>{t('entityPanel.rangeOverrideLabel')}</span>
-                        <input
-                          type="number" step="0.5" min="0"
-                          style={S.input}
-                          value={override.range ?? ''}
-                          placeholder={String(interaction.range ?? 1.5)}
-                          onChange={e => updateInteractionOverride(interaction.id, 'range', e.target.value)}
-                        />
-                      </label>
+                      <input
+                        type="number" step="1"
+                        style={{ ...S.input, width: '52px', padding: '5px 6px' }}
+                        title={t('entityPanel.difficultyOverrideLabel')}
+                        value={override.difficulty_dc ?? ''}
+                        placeholder={String(interaction.difficulty_dc ?? 0)}
+                        onChange={e => updateInteractionOverride(interaction.id, 'difficulty_dc', e.target.value)}
+                      />
+                      <span style={S.hint}>{t('entityPanel.difficultyOverrideLabel')}</span>
+                      <input
+                        type="number" step="0.5" min="0"
+                        style={{ ...S.input, width: '52px', padding: '5px 6px', marginLeft: 'auto' }}
+                        title={t('entityPanel.rangeOverrideLabel')}
+                        value={override.range ?? ''}
+                        placeholder={String(interaction.range ?? 1.5)}
+                        onChange={e => updateInteractionOverride(interaction.id, 'range', e.target.value)}
+                      />
+                      <span style={S.hint}>{t('entityPanel.rangeOverrideLabel')}</span>
                     </div>
-                    <p style={{ ...S.hint, marginTop: '4px' }}>
-                      {t('entityPanel.overrideReference', { value: 3 + effectiveDifficulty })}
-                    </p>
                   </div>
                 )
               })}
@@ -606,10 +615,18 @@ const S = {
     border: '1px solid rgba(91, 141, 238, 0.25)',
     background: 'rgba(15, 23, 42, 0.55)',
   },
-  transformGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: '6px',
+  inlineField: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  inlineLabel: {
+    fontSize: '11px',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    width: '56px',
+    flexShrink: 0,
   },
   rotationRow: {
     display: 'grid',
