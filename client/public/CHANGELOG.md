@@ -1,3 +1,15 @@
+## v239 — 2026-09-18 — Surprise (Test de Réaction) : bonus critique, PNJ silencieux, timing
+
+### Combat
+- [fix] Une Réussite critique sur un jet de Surprise reçoit maintenant le bonus RAW sur l'Initiative
+  obtenue (auparavant ignoré).
+- [fix] Le jet de Surprise d'un PJ affiche désormais une carte de chat lisible (libellé, réussite/
+  échec) au lieu d'un simple d20 sans contexte.
+- [fix] Le jet de Surprise d'un PNJ est maintenant annoncé dans le fil de session (auparavant
+  totalement silencieux) et peut réellement échouer (auparavant toujours réussi par construction).
+- [fix] Les PNJ surpris sont désormais révélés un par un, à leur propre tour d'annonce — plus tous
+  d'un coup à l'ouverture du combat (qui trahissait à l'avance qui allait pouvoir agir ou non).
+
 ## v238 — 2026-09-18 — Drones : mode autonome « ordres permanents »
 
 ### Combat

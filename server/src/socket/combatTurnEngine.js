@@ -38,6 +38,7 @@ import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
+import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
 
 // M3 — `phase_position` d'une entrée REPORTÉE au Tour suivant (Initiative ≤ 0, RAW REGLESYSCOMBAT.md:354
 // « le personnage agit en premier »). Sentinelle très au-dessus de toute position réelle
@@ -102,9 +103,56 @@ export async function advanceAnnouncementQueue(io, campaignId, pendingMaps) {
     return
   }
   const nextSlot = await findNextAnnounceSlot(campaignId)
-  if (nextSlot) {
-    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextSlot.token_id })
+  if (!nextSlot) return
+
+  // PNJ surpris pas encore résolu (surprise_roll IS NULL) : Test de Réaction auto-résolu MAINTENANT,
+  // à son tour d'ANNONCE (base_ini ASC, même ordre que tout le monde) — jamais à COMBAT_START (retour
+  // Saar 2026-09-18 : résoudre tous les PNJ d'un coup à l'ouverture du combat révèle qui va/ne va pas
+  // agir avant que ce soit pertinent). Un PJ suit un chemin différent (prompt manuel côté client,
+  // COMBAT_ANNOUNCE_START) — non concerné ici. Portée volontairement limitée à `character.type ===
+  // 'pnj'` : une exo-armure pilotée par un PNJ continue de se résoudre à COMBAT_START (son calcul
+  // d'Initiative dépend du pilote, jamais rencontré en jeu à ce jour — non repris ici, cf. retour
+  // Saar sur le périmètre de ce fix).
+  if (nextSlot.is_surprised && nextSlot.surprise_roll == null) {
+    const token = await db('tokens').where({ id: nextSlot.token_id }).first()
+    const character = token?.character_id
+      ? await db('characters').where({ id: token.character_id }).first()
+      : null
+    if (character?.type === 'pnj') {
+      const outcome = await rollSurpriseTest(nextSlot.base_ini)
+      await emitSurpriseDiceResult(io, campaignId, db, character, outcome)
+      if (outcome.isSuccess) {
+        await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: nextSlot.token_id })
+          .update({ surprise_roll: outcome.diceRoll, initiative: outcome.initiative, updated_at: db.fn.now() })
+        // Réussi : ce PNJ reste à déclarer normalement — on présente ce même slot au MJ ci-dessous.
+      } else {
+        const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+        await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: nextSlot.token_id })
+          .update({ surprise_roll: outcome.diceRoll, initiative: 0, has_announced: true, updated_at: db.fn.now() })
+        await db('combat_actions').insert({
+          campaign_id: campaignId,
+          token_id: nextSlot.token_id,
+          type: 'skip',
+          action_key: 'skip',
+          sequence: 99,
+          status: 'skipped',
+          turn_number: state?.current_turn ?? 1,
+        })
+        const roster = await db('combat_roster').where({ campaign_id: campaignId })
+        io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: await buildBroadcastRoster(db, roster) })
+        // Échec : ce slot est maintenant clos (has_announced=true) — ré-avancer pour trouver le vrai
+        // prochain slot à présenter, jamais présenter un slot déjà résolu au MJ.
+        await advanceAnnouncementQueue(io, campaignId, pendingMaps)
+        return
+      }
+      const roster = await db('combat_roster').where({ campaign_id: campaignId })
+      io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: await buildBroadcastRoster(db, roster) })
+    }
   }
+
+  io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextSlot.token_id })
 }
 
 // ─── Helper — pré-remplir les drones en ordres permanents (Sprint 2d, docs/PLANS/PLAN_DRONE.md) ───

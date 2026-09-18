@@ -7785,3 +7785,56 @@ autonome drone — ordres permanents » ; `docs/PLANS/PLAN_DRONE.md` statut mis 
 seul Sprint 3 reste) — pas d'archivage `docs/Old/` tant que le chantier entier n'est pas clos ;
 `docs/ROADMAP.md` ligne Drones réduite au seul Sprint 3 restant ; `client/public/CHANGELOG.md` —
 entrée MJ ajoutée (v238).
+
+---
+
+## Session (Dev) — 2026-09-18 — Ticket INI1 : Surprise critique non gérée, extraction `surpriseService.js`
+
+**Déclenchement** : ticket `INI1` (« Surprise critique (roll=1) → initiative=1 », cluster Initiative,
+jamais investigué). Lecture du code (`COMBAT_SURPRISE_RESULT`, `socketCombatState.js`) : le Test de
+Réaction (LdB p.213-214) faisait une comparaison brute `diceRoll <= entry.base_ini` au lieu du
+pipeline de Test partagé (`resolveTestOutcome`/`getCriticalSuccessBonus`/`applyCriticalSuccessBonus`,
+`shared/polarisTestResolution.js`) — une Réussite critique ne recevait donc jamais le bonus RAW sur
+l'Initiative obtenue.
+
+**Élargi en testant** (Saar, jeu réel, deux retours successifs) :
+1. Le jet PJ n'affichait aucun contexte en chat (`formula:'1d20'` nu, sans `skillLabel`) et le jet
+   auto PNJ (`COMBAT_START`) n'émettait strictement aucun `DICE_RESULT` — silence total. En creusant,
+   les deux chemins avaient une seconde divergence, plus grave : le PNJ ne passait par aucun pipeline
+   de Test (formule `base_ini + roll` au lieu de la marge de réussite RAW, jamais d'échec possible).
+   **Décision structurelle** (question directe de Saar : « un fichier, une responsabilité ? ») :
+   extraction d'un module dédié `server/src/lib/surpriseService.js` (même patron que
+   `gmArbitratedTestService.js`/`woundService.js`/`activeMalusRegistry.js`, même raison — risque de
+   divergence déjà vécu ailleurs, collision PC28, dispatch drone) plutôt qu'un patch local à chaque
+   site.
+2. Une fois le PNJ audible en chat, Saar a signalé que tous les PNJ surpris étaient révélés d'un coup
+   à `COMBAT_START`, avant même le début des déclarations — gameplay gênant (on sait qui va agir avant
+   que ce soit pertinent), symptôme resté invisible tant qu'aucun `DICE_RESULT` n'était émis. Corrigé
+   en déplaçant la résolution PNJ dans `advanceAnnouncementQueue` (`combatTurnEngine.js`, point
+   d'entrée déjà unique de la file d'ANNONCE, partagé par 5 sites) — chaque PNJ surpris est désormais
+   résolu à son propre tour (`base_ini ASC`, même ordre que tout le monde), jamais en bloc.
+
+**Portée explicitement limitée** (décision Saar) : une exo-armure pilotée par un PNJ continue de se
+résoudre à `COMBAT_START` — cas jamais rencontré en jeu (aucune exo réelle en jeu à ce jour), non
+étendu à un chemin non testable en conditions réelles plutôt que deviné.
+
+**Bug corrigé en cours de route** : le blocage PJ ne serait pas apparu — mais en différant la
+résolution PNJ, le bloc de prompt PJ (`COMBAT_ANNOUNCE_START`, filtre `surprise_roll IS NULL`) aurait
+commencé à traiter aussi les PNJ désormais non résolus à ce stade, ouvrant une ligne `combat_pending`
+orpheline (jamais consommable, aucun compte joueur propriétaire). Exclu explicitement
+(`character.type==='pnj'`) avant que ça n'atteigne le jeu réel.
+
+**Testé** : `node --check` (4 fichiers serveur), `npx eslint` (composant client, 0 erreur), `npm run
+build` client propre, `fr.json` validé, `shared/polarisTestResolution.test.mjs` 25/25 (primitives
+réutilisées), `combatTurnEngine.test.mjs` étendu à 27 cas — 2 nouveaux, déterministes (`baseIni=20` →
+succès garanti, `baseIni=0` → échec garanti, sans mocker le dé) couvrant la résolution différée, le
+contenu du `DICE_RESULT`, l'auto-skip et la trace `combat_actions`. **Confirmé fonctionnel en jeu réel
+par Saar (2026-09-18)**, y compris une Réussite critique observée en conditions réelles.
+**Non testé** : exo pilotée par un PNJ (scope exclu, voir ci-dessus).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : faits durables intégrés dans `docs/SYSTEME/COMBAT.md` § « Surprise —
+Test de Réaction » (nouvelle section, le mécanisme n'était pas documenté avant) ; `client/public/
+CHANGELOG.md` — entrée MJ/joueur ajoutée (v239) ; ticket `INI1` à clôturer en base par Saar (script
+fourni, écriture DB jamais faite par Claude).

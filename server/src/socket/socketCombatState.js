@@ -1,12 +1,11 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
-import { parseDice } from '../lib/diceParser.js'
 import { calcAttributeNA, calcSkillTotal } from '../lib/charStats.js'
 import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } from '../lib/combatantContextService.js'
 import { getMutationEffects } from '../services/mutationService.js'
-import { getUserColor } from '../lib/socketUtils.js'
+import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
 import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, advanceAnnouncementQueue, prefillAutonomousDroneOrders } from './combatTurnEngine.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -168,15 +167,35 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // Tri DESC initiative — égalités résolues par Math.random() (LdB : simultanéité)
       rosterData.sort((a, b) => b.base_ini - a.base_ini || Math.random() - 0.5)
 
-      // Construction des lignes roster
-      const rosterRows = rosterData.map(({ token, base_ini, is_pnj, forcedNotSurprised }) => {
+      // Construction des lignes roster — PNJ surpris : Test de Réaction auto côté serveur, même
+      // pipeline RAW et même DICE_RESULT lisible en chat que le jet manuel PJ (surpriseService.js,
+      // INI1, retour Saar 2026-09-18 : avant ce module, ce chemin ne passait par aucun pipeline —
+      // jamais d'échec possible, formule `base_ini + roll` au lieu de la marge de réussite RAW — et
+      // ne diffusait aucun DICE_RESULT, silence total en chat).
+      // Un vrai PNJ (character.type==='pnj') n'est PLUS résolu ici : différé à son tour d'ANNONCE
+      // (advanceAnnouncementQueue, combatTurnEngine.js) — retour Saar 2026-09-18, résoudre tout le
+      // monde d'un coup à COMBAT_START révélait qui va/ne va pas agir avant que ce soit pertinent.
+      // Reste résolu ici, inchangé : une exo-armure pilotée par un PNJ (is_pnj vrai mais
+      // character.type==='exo', son calcul d'Initiative dépend du pilote) — cas jamais rencontré en
+      // jeu, non repris dans ce report, cf. retour Saar sur le périmètre de ce fix.
+      const failedSurprisePnjTokenIds = []
+      const rosterRows = await Promise.all(rosterData.map(async ({ token, base_ini, character, is_pnj, forcedNotSurprised }) => {
         const is_surprised = !forcedNotSurprised && surprisedTokenIds.includes(token.id)
         let surprise_roll = null
         let initiative = base_ini
-        // PNJ surpris : jet auto côté serveur
-        if (is_surprised && is_pnj) {
-          surprise_roll = Math.ceil(Math.random() * 20)
-          initiative = base_ini + surprise_roll
+        let has_announced = false
+        if (is_surprised && is_pnj && character?.type === 'exo') {
+          const outcome = await rollSurpriseTest(base_ini)
+          surprise_roll = outcome.diceRoll
+          initiative = outcome.initiative
+          await emitSurpriseDiceResult(io, campaignId, db, character, outcome)
+          if (!outcome.isSuccess) {
+            // Échec RAW : surpris, ne peut pas agir ce Tour — même traitement que l'échec PJ
+            // (COMBAT_SURPRISE_RESULT) : auto-skip explicite (has_announced + ligne combat_actions
+            // ci-dessous), jamais un blocage silencieux de la file d'ANNONCE.
+            has_announced = true
+            failedSurprisePnjTokenIds.push(token.id)
+          }
         }
         return {
           campaign_id: campaignId,
@@ -186,13 +205,13 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           base_ini,
           initiative,
           status: 'active',
-          has_announced: false,
+          has_announced,
           has_resolved: false,
           // PNJ : déjà en état d'alerte au début du combat (arme au clair) — le
           // GM ajuste ensuite via le roster. PJ : défaut colonne (Rangée), choix au joueur.
           ...(is_pnj ? { state_weapon: 'drawn' } : {}),
         }
-      })
+      }))
 
       // Insertion DB
       await db('combat_state').insert({
@@ -216,6 +235,22 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         for (const row of rows) {
           if (row.state_weapon !== 'holstered') await setCharacterState(trx, row.token_id, 'weapon', row.state_weapon)
           await shadowCheckCharacterState(trx, row.token_id, { position: row.state_position, weapon: row.state_weapon })
+        }
+        // PNJ ayant échoué leur Test de Réaction — même trace que l'échec PJ (COMBAT_SURPRISE_RESULT
+        // plus bas) : une ligne combat_actions 'skip', pas seulement has_announced=true, pour rester
+        // visible dans l'historique/la Résolution comme n'importe quel skip. FK token_id → tokens
+        // uniquement (224_combat_actions_foreign_keys.js), aucune dépendance à combat_roster — ordre
+        // d'insertion sans contrainte.
+        if (failedSurprisePnjTokenIds.length > 0) {
+          await trx('combat_actions').insert(failedSurprisePnjTokenIds.map(tokenId => ({
+            campaign_id: campaignId,
+            token_id: tokenId,
+            type: 'skip',
+            action_key: 'skip',
+            sequence: 99,
+            status: 'skipped',
+            turn_number: 1,
+          })))
         }
         return rows
       })
@@ -368,29 +403,35 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
 
       io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT' })
 
-      // PJ surpris pas encore résolus (surprise_roll IS NULL — les PNJ surpris ont déjà leur jet auto
-      // posé à COMBAT_START) : le prompt de jet de Réaction n'est légitime qu'à partir d'ici, seule
-      // phase où la FSM accepte COMBAT_SURPRISE_RESULT (combatFSM.js) — cf. commentaire COMBAT_START.
-      // Ligne combat_pending durable (même patron que melee_defense/damage/stun, cf. resync
-      // server/src/socket/index.js) pour survivre à une reconnexion, + émission live en best-effort
-      // pour un joueur déjà connecté.
+      // PJ surpris pas encore résolus (surprise_roll IS NULL) : le prompt de jet de Réaction n'est
+      // légitime qu'à partir d'ici, seule phase où la FSM accepte COMBAT_SURPRISE_RESULT
+      // (combatFSM.js) — cf. commentaire COMBAT_START. Ligne combat_pending durable (même patron que
+      // melee_defense/damage/stun, cf. resync server/src/socket/index.js) pour survivre à une
+      // reconnexion, + émission live en best-effort pour un joueur déjà connecté.
+      // Un vrai PNJ (character.type==='pnj') surpris n'a PLUS de jet posé ici depuis retour Saar
+      // 2026-09-18 — différé à son tour d'ANNONCE (advanceAnnouncementQueue) — donc AUSSI
+      // `surprise_roll IS NULL` à ce stade : exclu explicitement ci-dessous, sinon ce bloc lui
+      // ouvrirait une ligne combat_pending orpheline (jamais consommée : COMBAT_SURPRISE_RESULT exige
+      // `character.user_id === user.id`, toujours faux pour un PNJ) et un jet PJ/pilote non résolu
+      // pour un token dont l'issue n'appartient à personne à qui l'adresser.
       const surprisedPending = await db('combat_roster')
         .where({ campaign_id: campaignId, is_surprised: true, status: 'active' })
         .whereNull('surprise_roll')
       if (surprisedPending.length > 0) {
         const roomSockets = await io.in(campaignId).fetchSockets()
         for (const entry of surprisedPending) {
-          await db('combat_pending').insert({
-            campaign_id: campaignId, token_id: entry.token_id, type: 'surprise', payload: {},
-          })
           const token = await db('tokens').where({ id: entry.token_id }).first()
           const character = token?.character_id
             ? await db('characters').where({ id: token.character_id }).first()
             : null
+          if (character?.type === 'pnj') continue
+          await db('combat_pending').insert({
+            campaign_id: campaignId, token_id: entry.token_id, type: 'surprise', payload: {},
+          })
           // PLAN_EXOARMURE.md Lot 3 §10.3 — character?.user_id seul ratait le pilote d'une exo-armure
           // (propriétaire brut ≠ pilote effectif, même famille de bug que Lots 2/2bis) :
           // resolveCombatantIdentity résout déjà correctement les deux cas (humain : son propre
-          // user_id, exo : celui du pilote), sans changement de comportement pour pj/pnj/drone.
+          // user_id, exo : celui du pilote), sans changement de comportement pour pj/exo.
           const targetUserId = character ? (await resolveCombatantIdentity(db, character)).userId : null
           const targetSocket = roomSockets.find(s => s.data.userId === targetUserId)
           if (targetSocket) targetSocket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: entry.token_id })
@@ -490,35 +531,19 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         .where({ campaign_id: campaignId, token_id: tokenId, type: 'surprise' })
         .delete()
 
-      // Génération serveur du d20 — résultat non manipulable par le client
-      const { rolls, total: diceRoll, seed } = await parseDice('1d20')
-      // Test de Réaction : roll ≤ base_ini → succès (LdB Polaris p.213-214)
-      const isSuccess = diceRoll <= entry.base_ini
-      const timestamp = new Date().toISOString()
-
-      // Couleur joueur pour DICE_RESULT
-      const color = await getUserColor(db, user.id)
-
-      // Broadcast DICE_RESULT — chat + animation dés (pas de skillLabel → animation active)
-      io.to(campaignId).emit(WS.DICE_RESULT, {
-        userId: user.id,
-        username: user.username,
-        color,
-        formula: '1d20',
-        rolls,
-        total: diceRoll,
-        isCriticalSuccess: false,
-        isCriticalFail: false,
-        seed,
-        timestamp,
-      })
+      // Test de Réaction (LdB p.213-214) — même autorité que le jet auto PNJ (COMBAT_START,
+      // surpriseService.js, INI1) : jamais une seconde formule locale.
+      const outcome = await rollSurpriseTest(entry.base_ini)
+      const { diceRoll, isSuccess, isCriticalSuccess, mr } = outcome
+      await emitSurpriseDiceResult(io, campaignId, db, character, outcome)
 
       if (isSuccess) {
-        // Succès : initiative = résultat du dé (marge de réussite = le score du dé)
-        console.log(`[DBG] surprise_result: SUCCÈS roll:${diceRoll} ≤ base_ini:${entry.base_ini} → ini:${diceRoll}`)
+        // Succès : initiative = marge de réussite (mr) — le score du dé, majoré du bonus de
+        // Réussite critique si applicable (INI1, sinon mr === diceRoll, comportement inchangé).
+        console.log(`[DBG] surprise_result: SUCCÈS roll:${diceRoll} ≤ base_ini:${entry.base_ini}${isCriticalSuccess ? ' (CRITIQUE)' : ''} → ini:${mr}`)
         const rowsUpdated = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
-          .update({ surprise_roll: diceRoll, initiative: diceRoll, updated_at: db.fn.now() })
+          .update({ surprise_roll: diceRoll, initiative: mr, updated_at: db.fn.now() })
         console.log(`[DBG] surprise_result: rows updated=${rowsUpdated}`)
       } else {
         // Échec : initiative = 0, auto-skip, ne peut pas agir ce tour
@@ -549,7 +574,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
       io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
 
-      console.log(`[WS] combat:surprise_result — ${user.username} token:${tokenId} roll:${diceRoll} success:${isSuccess} ini:${isSuccess ? diceRoll : 0}`)
+      console.log(`[WS] combat:surprise_result — ${user.username} token:${tokenId} roll:${diceRoll} success:${isSuccess} critical:${isCriticalSuccess} ini:${isSuccess ? mr : 0}`)
     } catch (err) {
       console.error('[WS] combat:surprise_result error:', err.message)
     }

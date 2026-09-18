@@ -720,6 +720,44 @@ Tables de valeurs partagées client/serveur (`shared/combatSituationMods.js`) : 
 `CAC_SITUATION_MODS`, `TAILLE_MODS`, `PORTEE_MOD_COMP` — plus de copie locale dupliquée côté client,
 une correction de valeur (errata LdB) devient un seul edit.
 
+### Surprise — Test de Réaction (`server/src/lib/surpriseService.js`)
+
+RAW (LdB p.213-214, `docs/REGLES/REGLESYSCOMBAT.md:179-190`) : phase 1 du premier Tour de combat, un
+personnage risquant d'être surpris fait un Test de Réaction (Seuil = `base_ini`, le niveau de
+Réaction — attribut dérivé, `calcREA = round((ADA_NA+PER_NA)/2) + bonus`, jamais stocké comme un
+attribut simple). Réussite → Initiative = marge de réussite (« le score du dé »), majorée du bonus
+RAW de Réussite critique le cas échéant (p.204). Échec → Initiative = 0, ne peut pas agir ce Tour,
+retrouve son Initiative normale au Tour suivant (`endTurn`, `combatTurnEngine.js`, reset
+`is_surprised`/`initiative:base_ini`).
+
+**Autorité unique** (`surpriseService.js`) : `rollSurpriseTest(baseIni)` (jet + `resolveTestOutcome`/
+`getCriticalSuccessBonus`/`applyCriticalSuccessBonus`, `shared/polarisTestResolution.js` — mêmes
+primitives que tout Test du projet, jamais une comparaison brute) et `emitSurpriseDiceResult(...)`
+(construit le `DICE_RESULT` avec `skillLabel`/`cardType:'surprise'`, carte chat dédiée
+`MessageRendererRegistry.jsx`, identité via `resolveCombatantDisplayIdentity`). Consommée à l'identique
+par les deux déclencheurs possibles — **avant ce module (INI1, retour Saar 2026-09-18), les deux
+chemins avaient divergé** : le PNJ ne passait par aucun pipeline (jamais d'échec possible, formule
+`base_ini + roll` au lieu de la marge de réussite RAW) et aucun des deux ne diffusait de `DICE_RESULT`
+lisible.
+
+- **PJ** — prompt manuel (`COMBAT_SURPRISE_ROLL`, ligne `combat_pending` durable) ouvert à
+  `COMBAT_ANNOUNCE_START` pour tout PJ surpris non résolu, résolu quand le joueur clique
+  (`COMBAT_SURPRISE_RESULT`, `socketCombatState.js`).
+- **PNJ** (`character.type==='pnj'` strict) — **résolu à son propre tour d'ANNONCE**, jamais en bloc à
+  `COMBAT_START` (retour Saar : révéler tous les PNJ d'un coup à l'ouverture du combat spoile qui
+  va/ne va pas agir avant que ce soit pertinent). Hook unique : `advanceAnnouncementQueue`
+  (`combatTurnEngine.js`, point d'entrée déjà partagé par 5 sites) — avant de présenter le prochain
+  slot (`findNextAnnounceSlot`, tri `base_ini ASC`), si c'est un PNJ surpris non résolu, jet immédiat ;
+  échec → `has_announced=true` + ligne `combat_actions` 'skip' (même trace que l'échec PJ), puis
+  ré-avance récursivement vers le vrai prochain slot présentable ; succès → ce même slot continue vers
+  une déclaration normale. Le bloc de prompt PJ à `COMBAT_ANNOUNCE_START` exclut explicitement
+  `character.type==='pnj'` (sinon lignes `combat_pending` orphelines — même prédicat `surprise_roll
+  IS NULL` que les PJ, jamais consommables pour un PNJ sans compte joueur).
+- **Exo piloté par un PNJ** (`is_pnj` vrai via `pilot.type==='pnj'`, mais `character.type==='exo'`) —
+  **non repris dans ce report**, reste résolu à `COMBAT_START` comme avant : cas jamais rencontré en
+  jeu à ce jour (aucune exo-armure réelle en jeu, `EXOARM-MULTIADV1`), décision Saar de ne pas étendre
+  la logique différée à un chemin non testable en conditions réelles.
+
 ### Armement drone — type d'arme et programme (`resolveDroneAssaultAction`)
 
 **Tir vs Corps à corps** : dérivé de `ref_equipment.category === 'Arme de contact'`, jamais de

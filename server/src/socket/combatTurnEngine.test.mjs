@@ -398,6 +398,66 @@ test('advanceAnnouncementQueue — au moins un non-annoncé → émet COMBAT_SLO
   } finally { await fx.cleanup() }
 })
 
+// ─── advanceAnnouncementQueue — PNJ surpris résolu à SON tour, pas à COMBAT_START (retour Saar
+// 2026-09-18, surpriseService.js) : baseIni=20 (Seuil max) → succès garanti (diceRoll 1-20 toujours
+// ≤ 20), baseIni=0 → échec garanti (aucun jet ne peut être ≤ 0), déterministe sans mocker le dé.
+test('advanceAnnouncementQueue — PNJ surpris, Test réussi (baseIni=20, garanti) : résolu et présenté normalement', { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', roster: [
+    { baseIni: 20, announced: false, type: 'pnj', userId: null },
+  ] })
+  const pnjTokenId = fx.roster[0].token.id
+  await db('combat_roster').where({ token_id: pnjTokenId }).update({ is_surprised: true })
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    await advanceAnnouncementQueue(stubIo, fx.campaign.id, pendingMaps)
+
+    const dice = emitted.find(e => e.event === WS.DICE_RESULT)
+    assert.ok(dice, 'DICE_RESULT émis pour le PNJ')
+    assert.equal(dice.payload.cardType, 'surprise')
+    assert.equal(dice.payload.isSuccess, true)
+
+    const slot = emitted.find(e => e.event === WS.COMBAT_SLOT_ADVANCED)
+    assert.ok(slot, 'toujours présenté au MJ (Test réussi → déclaration normale)')
+    assert.equal(slot.payload.tokenId, pnjTokenId)
+
+    const row = await db('combat_roster').where({ token_id: pnjTokenId }).first()
+    assert.ok(row.surprise_roll >= 1 && row.surprise_roll <= 20)
+    assert.equal(row.initiative, row.surprise_roll) // succès sans critique : mr === diceRoll
+    assert.equal(row.has_announced, false) // reste à déclarer, pas auto-skip
+  } finally { await fx.cleanup() }
+})
+
+test('advanceAnnouncementQueue — PNJ surpris, Test échoué (baseIni=0, garanti) : auto-skip, ré-avance vers le vrai prochain slot', { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', roster: [
+    { baseIni: 0, announced: false, type: 'pnj', userId: null }, // PNJ surpris — sera résolu en premier (baseIni le plus bas)
+    { baseIni: 15, announced: false }, // reste à présenter une fois le PNJ auto-skip
+  ] })
+  const pnjTokenId = fx.roster[0].token.id
+  const otherTokenId = fx.roster[1].token.id
+  await db('combat_roster').where({ token_id: pnjTokenId }).update({ is_surprised: true })
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    await advanceAnnouncementQueue(stubIo, fx.campaign.id, pendingMaps)
+
+    const dice = emitted.find(e => e.event === WS.DICE_RESULT)
+    assert.ok(dice, 'DICE_RESULT émis pour le PNJ malgré l\'échec')
+    assert.equal(dice.payload.isSuccess, false)
+
+    const slot = emitted.find(e => e.event === WS.COMBAT_SLOT_ADVANCED)
+    assert.ok(slot, 'ré-avance jusqu\'au vrai prochain slot présentable')
+    assert.equal(slot.payload.tokenId, otherTokenId, 'jamais le PNJ déjà résolu/clos')
+
+    const pnjRow = await db('combat_roster').where({ token_id: pnjTokenId }).first()
+    assert.equal(pnjRow.initiative, 0)
+    assert.equal(pnjRow.has_announced, true) // auto-skip, ne peut pas agir ce Tour (RAW)
+
+    const skipAction = await db('combat_actions').where({ token_id: pnjTokenId, action_key: 'skip' }).first()
+    assert.ok(skipAction, 'trace explicite (combat_actions) — même patron que l\'échec PJ')
+  } finally { await fx.cleanup() }
+})
+
 // ─── Sprint 2d — prefillAutonomousDroneOrders (docs/PLANS/PLAN_DRONE.md §4) ────────────────────────
 // Réglage différencié MJ/joueur (retour Saar en testant, 2026-09-17) : `drone_turn_model_gm` régit un
 // drone sans propriétaire joueur (`userId: null`, style PNJ) ; `drone_turn_model_player` un drone

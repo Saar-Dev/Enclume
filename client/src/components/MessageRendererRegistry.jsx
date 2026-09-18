@@ -322,18 +322,21 @@ function renderDice(msg, ctx) {
           <span style={styles.diceFormula}>{msg.skillLabel}</span>
           <span style={styles.diceTotal}>{msg.total}</span>
         </div>
-        {/* Détail : compétence · difficulté · seuil */}
+        {/* Détail : compétence · difficulté · seuil (ou Seuil seul pour un Test d'Attribut sans
+            décomposition, ex. Surprise — pas de "Compétence"/"Dif." fictifs) */}
         <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
-          {ctx.t(msg.cardType === 'drone_damage'
-            ? 'sidebar.droneActionDetail'
-            : msg.cardType === 'shock_test'
-            ? 'sidebar.shockTestDetail'
-            : 'sidebar.entityActionDetail',
-          {
-            skill: msg.mechanicalTotal,
-            dif: msg.diffLabel,
-            seuil: msg.chancesDeReussite,
-          })}
+          {msg.cardType === 'surprise'
+            ? ctx.t('sidebar.surpriseDetail', { seuil: msg.chancesDeReussite })
+            : ctx.t(msg.cardType === 'drone_damage'
+              ? 'sidebar.droneActionDetail'
+              : msg.cardType === 'shock_test'
+              ? 'sidebar.shockTestDetail'
+              : 'sidebar.entityActionDetail',
+            {
+              skill: msg.mechanicalTotal,
+              dif: msg.diffLabel,
+              seuil: msg.chancesDeReussite,
+            })}
         </div>
         {/* Badge résultat */}
         <div style={{ paddingLeft: '2px' }}>
