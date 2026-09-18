@@ -7,7 +7,7 @@ import {
   computeSeriesPositions, computeActNowPosition,
   pickNextTimelineStep, buildTimelineEntries, endTurn,
   advanceTimeline, registerAutonomousStepResolver,
-  findNextAnnounceSlot, advanceAnnouncementQueue,
+  findNextAnnounceSlot, advanceAnnouncementQueue, prefillAutonomousDroneOrders,
 } from './combatTurnEngine.js'
 
 // Lancement : node --env-file=server/.env --test server/src/socket/combatTurnEngine.test.mjs
@@ -28,8 +28,11 @@ const pendingMaps = { combatTimers: new Map(), combatPreviews: new Map() }
 const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 // Crée un combat minimal : user + campagne + battlemap + N tokens + combat_state + N lignes roster.
-// `roster` : [{ baseIni, ini?, vitesse?, announced?, resolved? }] (ini défaut = baseIni).
-async function createCombatFixture({ turn = 1, phase = 'RESOLUTION', subPhase = 'SLOT_ACTIVE', roster = [] } = {}) {
+// `roster` : [{ baseIni, ini?, vitesse?, announced?, resolved?, type?, userId? }] (ini défaut = baseIni,
+// type défaut 'pj' — Sprint 2d ajoute 'drone' pour prefillAutonomousDroneOrders ; userId défaut gm.id,
+// passer `null` explicitement pour simuler un drone SANS propriétaire joueur — style PNJ,
+// drone_turn_model_gm — cf. DroneWindow.jsx#handleOwnerChange qui ne propose jamais le compte du MJ).
+async function createCombatFixture({ turn = 1, phase = 'RESOLUTION', subPhase = 'SLOT_ACTIVE', roster = [], droneTurnModelGm, droneTurnModelPlayer } = {}) {
   const [gm] = await db('users')
     .insert({ email: `turn-engine-${uniq()}@test.local`, password_hash: 'x', username: 'turn-engine-gm' })
     .returning('*')
@@ -41,12 +44,14 @@ async function createCombatFixture({ turn = 1, phase = 'RESOLUTION', subPhase = 
     .returning('*')
   await db('combat_state').insert({
     campaign_id: campaign.id, battlemap_id: battlemap.id, phase, current_turn: turn, sub_phase: subPhase,
+    ...(droneTurnModelGm ? { drone_turn_model_gm: droneTurnModelGm } : {}),
+    ...(droneTurnModelPlayer ? { drone_turn_model_player: droneTurnModelPlayer } : {}),
   })
 
   const entries = []
   for (const spec of roster) {
     const [character] = await db('characters')
-      .insert({ campaign_id: campaign.id, user_id: gm.id, name: `Perso ${entries.length}`, type: 'pj' })
+      .insert({ campaign_id: campaign.id, user_id: spec.userId !== undefined ? spec.userId : gm.id, name: `Perso ${entries.length}`, type: spec.type ?? 'pj' })
       .returning('*')
     const [token] = await db('tokens')
       .insert({ battlemap_id: battlemap.id, character_id: character.id, label: `T${entries.length}` })
@@ -391,6 +396,107 @@ test('advanceAnnouncementQueue — au moins un non-annoncé → émet COMBAT_SLO
     const state = await db('combat_state').where({ campaign_id: fx.campaign.id }).first()
     assert.equal(state.phase, 'ANNOUNCEMENT') // pas de transition tant qu'il reste un non-annoncé
   } finally { await fx.cleanup() }
+})
+
+// ─── Sprint 2d — prefillAutonomousDroneOrders (docs/PLANS/PLAN_DRONE.md §4) ────────────────────────
+// Réglage différencié MJ/joueur (retour Saar en testant, 2026-09-17) : `drone_turn_model_gm` régit un
+// drone sans propriétaire joueur (`userId: null`, style PNJ) ; `drone_turn_model_player` un drone
+// assigné à un joueur (`userId` défaut = gm.id dans le fixture, peu importe lequel — seul compte
+// non-null vs null, cf. commentaire createCombatFixture).
+
+test('prefillAutonomousDroneOrders — mode classique (les deux réglages) → no-op complet (zéro effet)', { skip }, async () => {
+  const fx = await createCombatFixture({ droneTurnModelGm: 'classique', droneTurnModelPlayer: 'classique', roster: [
+    { baseIni: 12, announced: false, type: 'drone', userId: null },
+    { baseIni: 12, announced: false, type: 'drone' }, // player-owned
+  ] })
+  try {
+    await prefillAutonomousDroneOrders(io, fx.campaign.id, 1)
+    const rosterRows = await db('combat_roster').where({ campaign_id: fx.campaign.id })
+    assert.ok(rosterRows.every(r => r.has_announced === false))
+    assert.equal((await db('combat_actions').where({ campaign_id: fx.campaign.id })).length, 0)
+  } finally { await fx.cleanup() }
+})
+
+test('prefillAutonomousDroneOrders — ordres_permanents (joueur) : drone joueur pré-annoncé, drone MJ classique et PJ non affectés', { skip }, async () => {
+  const fx = await createCombatFixture({ droneTurnModelGm: 'classique', droneTurnModelPlayer: 'ordres_permanents', roster: [
+    { baseIni: 12, announced: false, type: 'drone', userId: null }, // drone MJ — reste classique
+    { baseIni: 12, announced: false, type: 'drone' },                // drone joueur — ordres permanents
+    { baseIni: 8,  announced: false, type: 'pj' },
+  ] })
+  try {
+    const [gmDroneEntry, playerDroneEntry, pjEntry] = fx.roster
+    await prefillAutonomousDroneOrders(io, fx.campaign.id, 3)
+
+    assert.equal((await db('combat_roster').where({ token_id: gmDroneEntry.token.id }).first()).has_announced, false)
+    assert.equal((await db('combat_roster').where({ token_id: playerDroneEntry.token.id }).first()).has_announced, true)
+    assert.equal((await db('combat_roster').where({ token_id: pjEntry.token.id }).first()).has_announced, false)
+
+    const actions = await db('combat_actions').where({ campaign_id: fx.campaign.id })
+    assert.equal(actions.length, 1)
+    assert.equal(actions[0].token_id, playerDroneEntry.token.id)
+    assert.equal(actions[0].action_key, 'drone_auto')
+    assert.equal(actions[0].type, 'assault')
+    assert.equal(actions[0].turn_number, 3)
+    assert.equal(actions[0].status, 'pending')
+  } finally { await fx.cleanup() }
+})
+
+test('prefillAutonomousDroneOrders — ordres_permanents (MJ) : drone MJ pré-annoncé, drone joueur classique non affecté', { skip }, async () => {
+  const fx = await createCombatFixture({ droneTurnModelGm: 'ordres_permanents', droneTurnModelPlayer: 'classique', roster: [
+    { baseIni: 12, announced: false, type: 'drone', userId: null }, // drone MJ — ordres permanents
+    { baseIni: 12, announced: false, type: 'drone' },                // drone joueur — reste classique
+  ] })
+  try {
+    const [gmDroneEntry, playerDroneEntry] = fx.roster
+    await prefillAutonomousDroneOrders(io, fx.campaign.id, 1)
+
+    assert.equal((await db('combat_roster').where({ token_id: gmDroneEntry.token.id }).first()).has_announced, true)
+    assert.equal((await db('combat_roster').where({ token_id: playerDroneEntry.token.id }).first()).has_announced, false)
+
+    const actions = await db('combat_actions').where({ campaign_id: fx.campaign.id })
+    assert.equal(actions.length, 1)
+    assert.equal(actions[0].token_id, gmDroneEntry.token.id)
+  } finally { await fx.cleanup() }
+})
+
+test('prefillAutonomousDroneOrders — drone déjà annoncé (télépiloté ce Tour) → pas re-préposé', { skip }, async () => {
+  const fx = await createCombatFixture({ droneTurnModelPlayer: 'ordres_permanents', roster: [
+    { baseIni: 12, announced: true, type: 'drone' },
+  ] })
+  try {
+    await prefillAutonomousDroneOrders(io, fx.campaign.id, 1)
+    assert.equal((await db('combat_actions').where({ campaign_id: fx.campaign.id })).length, 0)
+  } finally { await fx.cleanup() }
+})
+
+// ─── advanceTimeline — suspend d'un résolveur autonome (Sprint 2d) ne doit pas continuer l'échelle ──
+
+test('advanceTimeline — un résolveur autonome qui retourne { suspend: true } arrête la récursion', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 5, roster: [{ baseIni: 9, ini: 9, announced: true, resolved: true }] })
+  const calls = []
+  registerAutonomousStepResolver(async (io2, cid, step) => {
+    calls.push(step.entry.id)
+    await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'resolved' })
+    return { suspend: true }
+  })
+  try {
+    const { token } = fx.roster[0]
+    const a = await addAction(fx.campaign.id, token.id, { turnNumber: 5 })
+    await db('combat_timeline_entries').insert({
+      campaign_id: fx.campaign.id, turn_number: 5, resolve_on_turn: 5, token_id: token.id,
+      combat_action_id: a.id, phase_position: 900, status: 'scheduled',
+      resolution_snapshot: JSON.stringify({ autoResolve: true }),
+    })
+
+    await advanceTimeline(io, fx.campaign.id, pendingMaps)
+
+    assert.equal(calls.length, 1) // appelé une seule fois — pas de récursion après suspend
+    const state = await db('combat_state').where({ campaign_id: fx.campaign.id }).first()
+    assert.equal(state.phase, 'RESOLUTION') // endTurn n'a pas été atteint (aurait basculé ANNOUNCEMENT)
+  } finally {
+    registerAutonomousStepResolver(null)
+    await fx.cleanup()
+  }
 })
 
 // ─── advanceTimeline — résolution autonome (3d : explosion de grenade différée) ────────────────────

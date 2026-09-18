@@ -8,7 +8,7 @@ import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } from '../lib/combatAttackRoll.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
-import { checkCombatLOS } from '../lib/losService.js'
+import { checkCombatLOS, checkLOSForPrecheck } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
@@ -2890,6 +2890,156 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
+  }
+}
+
+// ─── resolveDroneAutoAction — Sprint 2d, mode `ordres_permanents` (docs/PLANS/PLAN_DRONE.md §4) ────
+// Appelée UNIQUEMENT par resolveAutonomousStep (socketCombatResolution.js) via le registre
+// `registerAutonomousStepResolver`, jamais par un handler socket — RAW : « les drones autonomes [...]
+// réagissent immédiatement », zéro interaction humaine pour déclencher cette résolution (même
+// mécanisme que l'explosion de grenade différée, PLAN_GRENADES.md §3d). Boucle EN MÉMOIRE (aucune
+// ligne combat_timeline_entries supplémentaire), jusqu'à 3 tentatives Détection→[Ami/Ennemi]→Armement,
+// retry -5 rangs d'Initiative sur échec de Détection (12→7→2, LdB p.320). Délègue le tir final à
+// resolveDroneAssaultAction existant — zéro arme/programme/Choc/dégâts dupliqué — et hérite donc de
+// son contrat `{ suspend, emissions }` : une cible PJ suspend la Résolution en attendant
+// COMBAT_DAMAGE_CONFIRM, exactement comme une déclaration manuelle Sprint 2c (aucun code
+// supplémentaire nécessaire ici, `armAwaitingDamage` diffuse déjà AWAITING_DAMAGE tout seul).
+export async function resolveDroneAutoAction(io, campaignId, action, character, pendingMaps) {
+  const emissions = []
+  try {
+    const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
+    const targetTokenId = rosterEntry?.acquired_target_token_id ?? null
+    if (!targetTokenId) {
+      console.log(`[DBG] resolveDroneAutoAction — aucune cible mémorisée, token:${action.token_id} (RAW : reste inerte)`)
+      return { suspend: false, emissions }
+    }
+    // 1. Cible encore valide ? (morte/retirée → ON DELETE SET NULL déjà passé sur acquired_target_token_id,
+    // mais un token supprimé sans repasser par cette contrainte reste une garde de bon sens.)
+    const targetToken = await db('tokens').where({ id: targetTokenId }).first()
+    if (!targetToken) {
+      console.log(`[DBG] resolveDroneAutoAction — cible ${targetTokenId} introuvable, token:${action.token_id}`)
+      return { suspend: false, emissions }
+    }
+
+    // Arme mémorisée par les ordres permanents, sinon repli sur la première par sort_order.
+    // Simplification V1 assumée (§4, V2-b définie) : un drone à plusieurs armes en autonome n'en
+    // utilise qu'une.
+    const droneWeaponRow = rosterEntry.acquired_drone_weapon_inv_id
+      ? await db('drone_weapons').where({ id: rosterEntry.acquired_drone_weapon_inv_id, character_id: character.id }).first()
+      : await db('drone_weapons').where({ character_id: character.id }).orderBy('sort_order', 'asc').first()
+    if (!droneWeaponRow) {
+      console.log(`[DBG] resolveDroneAutoAction — aucune arme drone disponible, token:${action.token_id}`)
+      return { suspend: false, emissions }
+    }
+    const weapon = await fetchDroneWeapon(droneWeaponRow.id)
+    const resolvedAction = { ...action, target_token_id: targetTokenId, drone_weapon_inv_id: droneWeaponRow.id }
+    const isCaCWeapon = weapon.ref_category === 'Arme de contact'
+
+    // Programmes — même colonne `drone_programs.category` que l'armement (Sprint 2c), valeurs
+    // distinctes 'detection'/'ami_ennemi' (vérifié en base, pas une supposition).
+    const detectionProgramme = await db('drone_programs')
+      .where({ character_id: character.id, category: 'detection' })
+      .orderBy('level', 'desc').first()
+    if (!detectionProgramme) {
+      console.log(`[DBG] resolveDroneAutoAction — aucun programme "detection" installé (drone non équipé pour l'autonome), token:${action.token_id}`)
+      return { suspend: false, emissions }
+    }
+    const amiEnnemiProgramme = await db('drone_programs')
+      .where({ character_id: character.id, category: 'ami_ennemi' })
+      .orderBy('level', 'desc').first()
+
+    const userRow = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
+    const droneColor = userRow?.color ?? '#30aaaa'
+    const droneUsername = userRow?.username ?? character.name ?? 'Drone'
+    const userId = character.user_id ?? null
+
+    // 2. Zone de contrôle — vérifiée UNE SEULE FOIS avant la boucle, pas à chaque tentative
+    // (analyse à charge 2026-09-17) : rien ne bouge entre les 3 tentatives d'un seul appel autonome
+    // (même instant RAW, aucun repositionnement) — la revérifier 3× n'aurait jamais changé le
+    // résultat. Range : `resolveRangedDistance` (pure, jamais d'émission hors son tableau jetable).
+    // LOS : **jamais `resolveAttackLOS`/`checkCombatLOS` ici** — cette fonction a des effets de bord
+    // réels (émet directement `COMBAT_DECLARE_ERROR`/`DICE_RESULT` via `io`, consomme des munitions,
+    // déclenche une redirection d'interception) : l'appeler comme simple porte d'entrée aurait spammé
+    // le chat à chaque tentative ratée ET risqué une interception « fantôme » avant même d'atteindre
+    // l'Armement. `checkLOSForPrecheck` est le helper PENSÉ pour ce rôle exact (« vérification pure de
+    // précheck, sans effet de combat », `losService.js`, déjà utilisé par COMBAT_ACTION_PRECHECK) — la
+    // résolution RÉELLE de la LOS (avec ses effets de bord légitimes) reste entièrement à la charge de
+    // `resolveDroneAssaultAction` à l'étape 5, exactement comme pour une déclaration manuelle.
+    const zoneEmissions = []
+    let inZone
+    if (isCaCWeapon) {
+      inZone = (await checkMeleeReach({ action: resolvedAction, character, refRange: weapon.ref_range, emissions: zoneEmissions })).ok
+    } else {
+      const range = await resolveRangedDistance({ action: resolvedAction, character, refRange: weapon.ref_range, emissions: zoneEmissions })
+      inZone = range.ok && await checkLOSForPrecheck(db, action.token_id, targetTokenId)
+    }
+    if (!inZone) {
+      console.log(`[DBG] resolveDroneAutoAction — hors zone de contrôle (portée/LOS), token:${action.token_id}`)
+      return { suspend: false, emissions }
+    }
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      // 3. Test de Détection — même pipeline que tout Test du projet (shared/polarisTestResolution.js),
+      // pas une comparaison brute : sans ça, ce Test n'aurait jamais de réussite/échec critique ni de
+      // risque de Catastrophe sur échec critique, contrairement à l'Armement (§7.3) et à tout autre
+      // Test du système. `programme.level` tient lieu de maîtrise (même convention que l'Armement drone,
+      // « le programme tient lieu de niveau de maîtrise », décision Saar 2026-07-31).
+      const { total: detRoll, rolls: detRolls, seed: detSeed } = await parseDice('1d20')
+      const detOutcomeCrit = applyCriticalSuccessBonus(resolveTestOutcome(detRoll, detectionProgramme.level), getCriticalSuccessBonus({ masteryLevel: detectionProgramme.level }))
+      const detOutcome = await resolveCriticalFailReroll(detOutcomeCrit)
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+        userId, username: droneUsername, color: droneColor,
+        formula: '1d20', rolls: detRolls, total: detRoll,
+        isCriticalSuccess: detOutcome.isCriticalSuccess, isCriticalFail: detOutcome.isCriticalFail,
+        catastropheRisk: detOutcome.catastropheRisk,
+        seed: detSeed, timestamp: new Date().toISOString(),
+        skillLabel: `Détection — ${character.name ?? 'Drone'} (tentative ${attempt + 1}/3)`,
+        mechanicalTotal: detRoll, diffLabel: `Seuil ${detectionProgramme.level}`,
+        chancesDeReussite: detectionProgramme.level, isSuccess: detOutcome.isSuccess,
+      } })
+      // Retour Saar 2026-09-17 — un échec critique de Détection risque une Catastrophe comme
+      // n'importe quel Test du système (même mécanisme que l'Armement ci-dessous), pas réservé aux
+      // seules actions d'attaque.
+      await maybeTriggerCatastrophe(io, campaignId, action.token_id, detOutcome.catastropheRisk, {
+        site: 'drone_detection', actorTokenId: action.token_id, targetTokenId,
+      })
+      if (!detOutcome.isSuccess) continue
+
+      // 4. Test Ami/Ennemi — conditionnel (LdB p.320, le drone de combat standard n'a pas ce
+      // programme) : seulement si `ami_ennemi` est installé, sinon on passe direct à l'Armement.
+      if (amiEnnemiProgramme) {
+        const { total: aeRoll, rolls: aeRolls, seed: aeSeed } = await parseDice('1d20')
+        const aeOutcomeCrit = applyCriticalSuccessBonus(resolveTestOutcome(aeRoll, amiEnnemiProgramme.level), getCriticalSuccessBonus({ masteryLevel: amiEnnemiProgramme.level }))
+        const aeOutcome = await resolveCriticalFailReroll(aeOutcomeCrit)
+        emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+          userId, username: droneUsername, color: droneColor,
+          formula: '1d20', rolls: aeRolls, total: aeRoll,
+          isCriticalSuccess: aeOutcome.isCriticalSuccess, isCriticalFail: aeOutcome.isCriticalFail,
+          catastropheRisk: aeOutcome.catastropheRisk,
+          seed: aeSeed, timestamp: new Date().toISOString(),
+          skillLabel: `Ami/Ennemi — ${character.name ?? 'Drone'} (tentative ${attempt + 1}/3)`,
+          mechanicalTotal: aeRoll, diffLabel: `Seuil ${amiEnnemiProgramme.level}`,
+          chancesDeReussite: amiEnnemiProgramme.level, isSuccess: aeOutcome.isSuccess,
+        } })
+        await maybeTriggerCatastrophe(io, campaignId, action.token_id, aeOutcome.catastropheRisk, {
+          site: 'drone_ami_ennemi', actorTokenId: action.token_id, targetTokenId,
+        })
+        if (!aeOutcome.isSuccess) continue
+      }
+
+      // 5. Armement — délègue entièrement à resolveDroneAssaultAction (Sprint 2c, zéro duplication).
+      // Hérite son `suspend` (cible PJ → AWAITING_DAMAGE) tel quel ; c'est ICI, et ici seulement, que
+      // la LOS/interception réelle (avec ses effets de bord) est évaluée pour de vrai.
+      const shotResult = await resolveDroneAssaultAction(io, campaignId, resolvedAction, null, character, pendingMaps)
+      emissions.push(...shotResult.emissions)
+      return { suspend: shotResult.suspend, emissions }
+    }
+
+    console.log(`[DBG] resolveDroneAutoAction — 3 tentatives épuisées sans Détection/Ami-Ennemi réussi, token:${action.token_id}`)
+    return { suspend: false, emissions }
+  } catch (err) {
+    console.error('[WS] resolveDroneAutoAction error:', err.message)
+    return { suspend: false, emissions }
   }
 }
 

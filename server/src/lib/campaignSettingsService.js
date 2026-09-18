@@ -53,6 +53,24 @@ export const SETTINGS_SCHEMA = {
   // (mécanique neuve, contrairement à encumbrance_enabled qui tournait déjà sans gate) : aucun malus
   // appliqué, aucune entrée UI visible tant que le MJ ne l'active pas explicitement.
   fatigue_enabled: { type: 'boolean', default: false },
+  // Drones — Sprint 2d (docs/PLANS/PLAN_DRONE.md §4). `classique` : un drone occupe son propre slot
+  // d'ANNONCE, déclaration manuelle par son propriétaire/le MJ, comportement Sprint 2c inchangé.
+  // `ordres_permanents` : le drone ne déclare jamais, exécute automatiquement la dernière cible/arme
+  // mémorisée dès le début de l'ANNONCE. **Deux réglages distincts** (retour Saar en testant,
+  // 2026-09-17 — remplace un unique `drone_turn_model` initial) : `_gm` s'applique à un drone sans
+  // propriétaire joueur (`characters.user_id IS NULL`, style PNJ) ; `_player` à un drone assigné à un
+  // joueur — un MJ peut ainsi garder ses propres drones en `classique` pendant que les joueurs jouent
+  // les leurs en `ordres_permanents` (ou l'inverse). Lus à COMBAT_START puis figés sur
+  // `combat_state.drone_turn_model_gm`/`_player` pour toute la durée du combat — même patron que
+  // `action_timer_sec`, jamais de bascule à chaud. Défaut `classique` sur les deux : mécanique neuve,
+  // aucun combat existant ne doit changer de comportement silencieusement. `drone_targeting_mode` ne
+  // s'applique qu'en `ordres_permanents` (`assigne` : cible choisie par un humain via
+  // COMBAT_DRONE_SET_ORDERS ; `spatial` : recherche automatique — design posé, non codé, cf.
+  // PLAN_DRONE.md « Mode spatial ») — reste un réglage unique, la distinction MJ/joueur ne concerne
+  // que QUI décide du tour, pas COMMENT la cible est choisie une fois en ordres permanents.
+  drone_turn_model_gm:     { type: 'string', default: 'classique', enum: ['classique', 'ordres_permanents'] },
+  drone_turn_model_player: { type: 'string', default: 'classique', enum: ['classique', 'ordres_permanents'] },
+  drone_targeting_mode:    { type: 'string', default: 'assigne',   enum: ['assigne', 'spatial'] },
 }
 
 /**

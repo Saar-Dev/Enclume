@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
+import { useCombatStore } from '../stores/combatStore'
+import { useTokenStore } from '../stores/tokenStore'
 import { WS } from '../../../shared/events.js'
 import api from '../lib/api.js'
 import DroneSheet from './DroneSheet.jsx'
@@ -135,6 +137,50 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
     return () => socket.off(WS.DRONE_INTEGRITY_UPDATED, handler)
   }, [socket, character.id])
 
+  // ─── Ordres permanents (Sprint 2d, docs/PLANS/PLAN_DRONE.md §4) ───────────────
+  // Stores globaux (zustand) — jamais de props à faire remonter : DroneWindow s'ouvre aussi hors
+  // combat (CampaignCharacterSheetPage, VaultCharacterPage, sans `socket`) ; `roster`/`tokens` restent
+  // alors vides par défaut, la section ne s'affiche simplement pas (dégradation naturelle, pas un cas
+  // spécial à coder). `tokens` = tokens de la battlemap courante uniquement (tokenStore.js).
+  const roster = useCombatStore(s => s.roster)
+  const droneTurnModelGm = useCombatStore(s => s.droneTurnModelGm)
+  const droneTurnModelPlayer = useCombatStore(s => s.droneTurnModelPlayer)
+  const tokens = useTokenStore(s => s.tokens)
+  const myToken = tokens.find(tk => tk.character_id === character.id) ?? null
+  const rosterEntry = myToken ? roster.find(r => r.token_id === myToken.id) ?? null : null
+  // Réglage différencié MJ/joueur (retour Saar en testant, 2026-09-17) : `character.user_id != null`
+  // est déjà l'autorité « ce drone est-il assigné à un joueur ? » ailleurs dans le chantier (isOwner,
+  // socketCombatAnnouncement.js/socketCombatDrone.js) — jamais réinterprétée différemment ici.
+  const relevantDroneTurnModel = character.user_id != null ? droneTurnModelPlayer : droneTurnModelGm
+  const showStandingOrders = relevantDroneTurnModel === 'ordres_permanents' && !!rosterEntry
+
+  const [ordersError, setOrdersError] = useState(null)
+  const ordersErrorTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(ordersErrorTimerRef.current), [])
+
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ message }) => {
+      clearTimeout(ordersErrorTimerRef.current)
+      setOrdersError(message)
+      ordersErrorTimerRef.current = setTimeout(() => setOrdersError(null), 4000)
+    }
+    socket.on(WS.COMBAT_DRONE_ORDERS_ERROR, handler)
+    return () => socket.off(WS.COMBAT_DRONE_ORDERS_ERROR, handler)
+  }, [socket])
+
+  // patch : { targetTokenId } ou { droneWeaponInvId } — jamais les deux à vide, le serveur remplace
+  // acquired_target_token_id/acquired_drone_weapon_inv_id ensemble (COMBAT_DRONE_SET_ORDERS) : on
+  // renvoie toujours la valeur actuelle du champ non modifié pour ne pas l'effacer par effet de bord.
+  const handleSetOrders = (patch) => {
+    if (!socket || !myToken || !rosterEntry) return
+    socket.emit(WS.COMBAT_DRONE_SET_ORDERS, {
+      tokenId: myToken.id,
+      targetTokenId: 'targetTokenId' in patch ? patch.targetTokenId : (rosterEntry.acquired_target_token_id ?? null),
+      droneWeaponInvId: 'droneWeaponInvId' in patch ? patch.droneWeaponInvId : (rosterEntry.acquired_drone_weapon_inv_id ?? null),
+    })
+  }
+
   // ─── Resize handle bas-droite ──────────────────────────────────────────────
   const resizeState   = useRef(null)
   const resizeAbortRef = useRef(null)
@@ -234,6 +280,45 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
           </button>
         </div>
       </div>
+
+      {/* ── Ordres permanents (Sprint 2d) — bandeau toujours visible, indépendant de l'onglet actif :
+          seul contrôle qui doit rester joignable même si l'onglet ouvert est Armes/Notes/Paramètres. */}
+      {showStandingOrders && (
+        <div style={{ padding: '8px 14px', borderBottom: '1px solid #1e1e2e', background: 'rgba(91,141,238,0.06)', flexShrink: 0 }}>
+          <div style={{ fontSize: '10px', color: '#5b8dee', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+            {t('drone.standingOrdersTitle')}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <select
+              value={rosterEntry.acquired_target_token_id ?? ''}
+              disabled={!canEdit}
+              onChange={e => handleSetOrders({ targetTokenId: e.target.value || null })}
+              style={{ background: '#16162a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '4px 8px' }}
+            >
+              <option value="">{t('drone.standingOrdersNoTarget')}</option>
+              {roster.filter(r => r.token_id !== myToken.id).map(r => (
+                <option key={r.token_id} value={r.token_id}>
+                  {tokens.find(tk => tk.id === r.token_id)?.label ?? '?'}
+                </option>
+              ))}
+            </select>
+            <select
+              value={rosterEntry.acquired_drone_weapon_inv_id ?? ''}
+              disabled={!canEdit}
+              onChange={e => handleSetOrders({ droneWeaponInvId: e.target.value || null })}
+              style={{ background: '#16162a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '4px 8px' }}
+            >
+              <option value="">{t('drone.standingOrdersNoWeapon')}</option>
+              {weapons.map(w => (
+                <option key={w.id} value={w.id}>{w.label_override || w.ref_name}</option>
+              ))}
+            </select>
+          </div>
+          {ordersError && (
+            <div style={{ color: '#e05c5c', fontSize: '10px', marginTop: '4px' }}>{ordersError}</div>
+          )}
+        </div>
+      )}
 
       {/* ── Onglets ── */}
       <div style={{ display: 'flex', borderBottom: '1px solid #1e1e2e', flexShrink: 0 }}>

@@ -23,7 +23,7 @@ import {
 } from './combatTurnEngine.js'
 import {
   resolveMeleeAction, resolveReloadAction,
-  resolveDroneAssaultAction, resolveAssaultAction,
+  resolveDroneAssaultAction, resolveDroneAutoAction, resolveAssaultAction,
   resolveExoStandUpAction,
   confirmMeleeDefense, confirmDamage,
   COMBAT_MODE_LABELS,
@@ -61,17 +61,30 @@ async function flushEmissions(io, socket, campaignId, emissions, preloadedSocket
 async function resolveAutonomousStep(io, campaignId, step, pendingMaps) {
   await db('combat_timeline_entries').where({ id: step.entry.id })
     .update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
-  // Marqueur client (§3d-3) retiré dès que l'entrée est résolue — AVANT les sorties anticipées
-  // (`!action`, `!character`) et l'appel de résolution qui peut lever : le marqueur ne doit jamais
-  // rester collé si l'explosion échoue à se calculer.
-  io.to(campaignId).emit(WS.COMBAT_GRENADE_EXPLODED, { entryId: step.entry.id })
   const action = await db('combat_actions').where({ id: step.entry.combat_action_id }).first()
-  if (!action) return
+  if (!action) return { suspend: false }
   await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })
 
   const token = await db('tokens').where({ id: action.token_id }).first()
   const character = token?.character_id ? await db('characters').where({ id: token.character_id }).first() : null
-  if (!character) return
+  if (!character) return { suspend: false }
+
+  // Sprint 2d (docs/PLANS/PLAN_DRONE.md §4) — drone autonome en `ordres_permanents`, même famille
+  // « autoRésolu » que l'explosion de grenade ci-dessous mais un consommateur DISTINCT (RAW
+  // Détection→[Ami/Ennemi]→Armement, pas une AOE) : branche dédiée, avant le chemin grenade
+  // historique. `socket:null` dans flushEmissions — même patron déjà établi juste plus bas pour
+  // `launcherSocket` (« émission privée sautée » en résolution autonome) : aucune émission de
+  // resolveDroneAutoAction/resolveDroneAssaultAction n'est `to:'socket'`, seulement `room`/`user`.
+  if (action.action_key === 'drone_auto') {
+    const result = await resolveDroneAutoAction(io, campaignId, action, character, pendingMaps)
+    await flushEmissions(io, null, campaignId, result.emissions)
+    return { suspend: result.suspend }
+  }
+
+  // Marqueur client (§3d-3) retiré dès que l'entrée est résolue — AVANT les sorties anticipées
+  // (`!action`, `!character`) et l'appel de résolution qui peut lever : le marqueur ne doit jamais
+  // rester collé si l'explosion échoue à se calculer.
+  io.to(campaignId).emit(WS.COMBAT_GRENADE_EXPLODED, { entryId: step.entry.id })
 
   const sockets = await io.fetchSockets()
   const launcherSocket = character.user_id
@@ -91,6 +104,7 @@ async function resolveAutonomousStep(io, campaignId, step, pendingMaps) {
     } })
     await flushEmissions(io, launcherSocket, campaignId, emissions, sockets)
   }
+  return { suspend: false }
 }
 registerAutonomousStepResolver(resolveAutonomousStep)
 

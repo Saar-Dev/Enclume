@@ -1,3 +1,14 @@
+## v238 — 2026-09-18 — Drones : mode autonome « ordres permanents »
+
+### Combat
+- [add] Un drone peut désormais agir tout seul en combat, sans clic MJ/joueur : dès son Initiative,
+  il tente de détecter une cible, vérifie ami/ennemi, puis tire (jusqu'à 3 tentatives), visible au
+  fil de session comme une action normale.
+- [add] Réglages de campagne : deux bascules classique/ordres permanents, une pour les drones du MJ
+  et une pour les drones des joueurs (indépendantes), figées au début de chaque combat.
+- [add] Fenêtre de fiche drone : bandeau pour choisir la cible et l'arme surveillées quand le drone
+  est en ordres permanents.
+
 ## v237 — 2026-09-18 — Éditeur du monde : blocage des cases déjà occupées
 
 ### Entités

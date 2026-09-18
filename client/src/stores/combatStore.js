@@ -9,6 +9,15 @@ export const useCombatStore = create((set) => ({
   activeSlotIdx: 0,      // ANNOUNCEMENT uniquement (COMBAT_SLOT_ADVANCED) — plus lu en RESOLUTION (Lot B)
   activeTokenId: null,  // token_id du slot actif (ANNOUNCEMENT) ou du pas courant de l'échelle (RESOLUTION)
   announcedActions: [], // [{ tokenId, actionType, initiative, moveTarget, attackTargetId }] — cumul du tour
+  // Sprint 2d (docs/PLANS/PLAN_DRONE.md §4) — figés à COMBAT_START, jamais modifiés en cours de combat
+  // (même patron que phase/currentTurn) : 'classique' | 'ordres_permanents' | null (pas de combat en
+  // cours). Deux réglages distincts (retour Saar en testant, 2026-09-17) : `_gm` pour un drone sans
+  // propriétaire joueur (style PNJ), `_player` pour un drone assigné à un joueur — un MJ peut garder
+  // ses drones en classique pendant que les joueurs jouent les leurs en ordres permanents. Alimentés
+  // uniquement par setCombatState (COMBAT_STARTED/COMBAT_STATE_SYNC), jamais par
+  // onPhaseChanged/onRosterUpdated (setters ciblés, ne passent pas par setCombatState).
+  droneTurnModelGm: null,
+  droneTurnModelPlayer: null,
 
   // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B/C) — alimentée par COMBAT_TIMELINE_UPDATED.
   timelineEntries: [],  // [{ id, token_id, combat_action_id, declaration_group_id, phase_position, status, resolve_on_turn, resolution_snapshot }] — resolution_snapshot.carriedFrom : entrée reportée (M3, CombatTimeline.jsx)
@@ -18,7 +27,7 @@ export const useCombatStore = create((set) => ({
   // purgé par COMBAT_GRENADE_EXPLODED / fin de combat / reconnexion (le serveur ré-émet ensuite).
   grenadeMarkers: [],   // [{ entryId, tokenId, resolvedOrigin:{x,y,z}, explodesOnTurn, scattered }]
 
-  setCombatState: ({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
+  setCombatState: ({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId, droneTurnModelGm, droneTurnModelPlayer }) => set({
     phase,
     subPhase: subPhase ?? null,
     roster: roster ?? [],
@@ -26,6 +35,8 @@ export const useCombatStore = create((set) => ({
     currentTurn: currentTurn ?? 1,
     activeSlotIdx: activeSlotIdx ?? 0,
     activeTokenId: activeTokenId ?? null,
+    droneTurnModelGm: droneTurnModelGm ?? null,
+    droneTurnModelPlayer: droneTurnModelPlayer ?? null,
   }),
 
   // Un seul événement serveur pousse l'intégralité de l'échelle courante à chaque changement (§6quater :
@@ -99,5 +110,7 @@ export const useCombatStore = create((set) => ({
     timelineEntries: [],
     currentStep: null,
     grenadeMarkers: [],
+    droneTurnModelGm: null,
+    droneTurnModelPlayer: null,
   }),
 }))

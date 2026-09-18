@@ -123,6 +123,12 @@ export const WS = {
   COMBAT_ACTION_DECLARED:'combat:action_declared',  // serveur → room
   COMBAT_SKIP_PLAYER:    'combat:skip_player',      // GM → serveur
   COMBAT_TURN_SKIPPED:   'combat:turn_skipped',     // serveur → room
+  // Ordres permanents drone (docs/PLANS/PLAN_DRONE.md Sprint 2d, mode `ordres_permanents`) — fixer/
+  // changer à tout moment la cible surveillée + l'arme utilisée, hors file d'ANNONCE (ne consomme ni
+  // déclaration ni Tour). La visibilité du résultat passe par COMBAT_ROSTER_UPDATED (déjà générique
+  // sur les colonnes du roster), pas un nouvel événement d'affichage dédié.
+  COMBAT_DRONE_SET_ORDERS:   'combat:drone_set_orders',    // MJ ou propriétaire du drone → serveur : { tokenId, targetTokenId, droneWeaponInvId }
+  COMBAT_DRONE_ORDERS_ERROR: 'combat:drone_orders_error',  // serveur → socket : erreur de validation { message }
   // Résolution (Sprint 3/4)
   COMBAT_ACTION_WINDOW:  'combat:action_window',    // serveur → socket joueur actif
   COMBAT_ACTION_CONFIRM: 'combat:action_confirm',   // joueur/GM → serveur

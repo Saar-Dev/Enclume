@@ -8,7 +8,7 @@ import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } f
 import { getMutationEffects } from '../services/mutationService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
-import { startAnnouncementTimers, advanceAnnouncementQueue } from './combatTurnEngine.js'
+import { startAnnouncementTimers, advanceAnnouncementQueue, prefillAutonomousDroneOrders } from './combatTurnEngine.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
 import { getAllModStatusCodes } from '../services/weaponModService.js'
@@ -44,6 +44,12 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // Lire le timer configuré pour cette campagne
       const settings = await getCampaignSettings(db, campaignId)
       const actionTimerSec = settings.action_timer_sec
+      // Sprint 2d (docs/PLANS/PLAN_DRONE.md §4) — même patron que actionTimerSec ci-dessus : figés sur
+      // combat_state pour toute la durée du combat, modifiables seulement entre deux combats. Deux
+      // réglages distincts (retour Saar, 2026-09-17) : `_gm` pour un drone sans propriétaire joueur,
+      // `_player` pour un drone assigné à un joueur — cf. campaignSettingsService.js.
+      const droneTurnModelGm = settings.drone_turn_model_gm
+      const droneTurnModelPlayer = settings.drone_turn_model_player
 
       // Guard — tokens présents sur la carte (hors exclus GM)
       const allTokens = await db('tokens').where({ battlemap_id })
@@ -195,6 +201,8 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         phase: 'ROSTER',
         current_turn: 1,
         action_timer_sec: actionTimerSec,
+        drone_turn_model_gm: droneTurnModelGm,
+        drone_turn_model_player: droneTurnModelPlayer,
       })
 
       // Journal des combats (Lot C) — non critique : un échec ne doit jamais empêcher le combat.
@@ -218,9 +226,15 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // surpris au premier tour", 9e7aa7d5) — émis à COMBAT_ANNOUNCE_START à la place, une fois la
       // phase effectivement ouverte.
 
-      // Broadcast COMBAT_STARTED — sans surprise_roll (PC25)
+      // Broadcast COMBAT_STARTED — sans surprise_roll (PC25). drone_turn_model_gm/_player (Sprint 2d)
+      // inclus dès COMBAT_STARTED — figés pour toute la durée du combat, le client en a besoin dès
+      // l'ouverture de DroneWindow (contrôle « ordres permanents »), pas seulement à la reconnexion
+      // (COMBAT_STATE_SYNC transmet déjà le combat_state complet, donc déjà couvert pour ce cas-là).
       const broadcastRoster = await buildBroadcastRoster(db, insertedRoster)
-      io.to(campaignId).emit(WS.COMBAT_STARTED, { roster: broadcastRoster, phase: 'ROSTER' })
+      io.to(campaignId).emit(WS.COMBAT_STARTED, {
+        roster: broadcastRoster, phase: 'ROSTER',
+        droneTurnModelGm, droneTurnModelPlayer,
+      })
 
       console.log('###### DEBUT COMBAT #############')
       console.log(`[WS] combat:start — ${user.username} → ${tokens.length} participants (campagne ${campaignId})`)
@@ -349,7 +363,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       const [updated] = await db('combat_state')
         .where({ campaign_id: campaignId })
         .update({ phase: 'ANNOUNCEMENT', updated_at: db.fn.now() })
-        .returning('action_timer_sec')
+        .returning(['action_timer_sec', 'current_turn'])
       if (!updated) return
 
       io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT' })
@@ -386,11 +400,14 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // PC17 — timers auto-skip uniquement si action_timer_sec > 0
       await startAnnouncementTimers(io, campaignId, updated.action_timer_sec, user.id, pendingMaps)
 
+      // Sprint 2d — pré-remplir les drones `ordres_permanents` AVANT advanceAnnouncementQueue
+      // (docs/PLANS/PLAN_DRONE.md §4) : un tel drone ne rejoint jamais la file des non-annoncés.
+      await prefillAutonomousDroneOrders(io, campaignId, updated.current_turn)
+
       // LdB p.212 — Lot 0 : file d'ANNONCE centralisée (docs/PLANS/PLAN_DRONE.md §4).
       // `advanceAnnouncementQueue` (pas juste le slot suivant) couvre le cas limite où la file est
-      // déjà vide à l'ouverture de l'ANNONCE — aucun combattant `classique` aujourd'hui, mais point
-      // d'extension nécessaire pour le Sprint 2d (combat entièrement composé de drones en ordres
-      // permanents, qui ne passent jamais par un slot).
+      // déjà vide à l'ouverture de l'ANNONCE — combat entièrement composé de drones en ordres
+      // permanents, qui ne passent jamais par un slot (pré-remplis juste au-dessus).
       await advanceAnnouncementQueue(io, campaignId, pendingMaps)
 
       console.log(`[WS] combat:announce_start — ${user.username} (campagne ${campaignId})`)

@@ -107,6 +107,65 @@ export async function advanceAnnouncementQueue(io, campaignId, pendingMaps) {
   }
 }
 
+// ─── Helper — pré-remplir les drones en ordres permanents (Sprint 2d, docs/PLANS/PLAN_DRONE.md) ───
+// RAW : un drone autonome « réagit immédiatement », il ne « choisit » jamais de passer son tour — donc
+// il ne rejoint JAMAIS la file des non-annoncés (§4 « Décision de fond — pourquoi un drone n'a jamais
+// de Passer »). Appelée au tout début de la phase ANNONCE (COMBAT_ANNOUNCE_START, et dans endTurn juste
+// après le reset du roster) — TOUJOURS avant findNextAnnounceSlot/advanceAnnouncementQueue, jamais
+// après : sinon la file compterait encore ces drones comme « à annoncer » et un combat entièrement
+// composé de drones en `ordres_permanents` resterait bloqué en ANNONCE sans personne à qui la
+// présenter. No-op immédiat si ni l'un ni l'autre réglage n'est en `ordres_permanents` (mode
+// `classique` = Sprint 2c inchangé, zéro effet de cette fonction pour les drones concernés).
+//
+// Deux réglages distincts, pas un seul (retour Saar en testant, 2026-09-17) : `drone_turn_model_gm`
+// s'applique à un drone SANS propriétaire joueur (`c.user_id IS NULL`, style PNJ — contrôlé par le
+// MJ), `drone_turn_model_player` à un drone assigné à un joueur (`c.user_id IS NOT NULL`) — un MJ peut
+// ainsi garder ses drones en `classique` pendant que les joueurs jouent les leurs en
+// `ordres_permanents` (ou l'inverse). Même autorité que `isOwner` ailleurs dans le chantier
+// (socketCombatAnnouncement.js/socketCombatDrone.js) : `user_id` est déjà le signal « ce drone est-il
+// rattaché à un compte joueur ? », jamais réinterprété différemment ici.
+export async function prefillAutonomousDroneOrders(io, campaignId, turnNumber) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+  if (!state) return
+  if (state.drone_turn_model_gm !== 'ordres_permanents' && state.drone_turn_model_player !== 'ordres_permanents') return
+
+  const candidateDrones = await db('combat_roster as roster')
+    .join('tokens as t', 't.id', 'roster.token_id')
+    .join('characters as c', 'c.id', 't.character_id')
+    .where({
+      'roster.campaign_id': campaignId, 'roster.status': 'active',
+      'roster.has_announced': false, 'c.type': 'drone',
+    })
+    .select('roster.token_id', 'c.user_id')
+
+  const pendingDrones = candidateDrones.filter(d => (
+    d.user_id != null ? state.drone_turn_model_player === 'ordres_permanents' : state.drone_turn_model_gm === 'ordres_permanents'
+  ))
+  if (pendingDrones.length === 0) return
+
+  const tokenIds = pendingDrones.map(d => d.token_id)
+  await db('combat_roster')
+    .where({ campaign_id: campaignId })
+    .whereIn('token_id', tokenIds)
+    .update({ has_announced: true, updated_at: db.fn.now() })
+
+  // action_key:'drone_auto' — cible/arme résolues dynamiquement à la Résolution depuis
+  // combat_roster.acquired_target_token_id/acquired_drone_weapon_inv_id (jamais figées ici, un ordre
+  // permanent peut changer entre le pré-remplissage et la Résolution via COMBAT_DRONE_SET_ORDERS).
+  await db('combat_actions').insert(tokenIds.map(token_id => ({
+    campaign_id: campaignId,
+    token_id,
+    type: 'assault',
+    action_key: 'drone_auto',
+    sequence: 3,
+    status: 'pending',
+    turn_number: turnNumber,
+  })))
+
+  const roster = await db('combat_roster').where({ campaign_id: campaignId }).orderBy('initiative', 'desc')
+  io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: await buildBroadcastRoster(db, roster) })
+}
+
 // ─── Helper — skip d'un participant pendant la phase ANNONCE ──────────────────
 // Appelé par COMBAT_SKIP_PLAYER (GM) et par le timer auto-skip (PC17).
 // Race condition guard : re-vérifie has_announced avant d'agir.
@@ -320,7 +379,14 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
         declaration_group_id: groupId,
         phase_position: isDelayed ? null : (carriedOver ? carriedBase - idx * 500 : positions[idx]),
         status: isDelayed ? 'delayed_waiting' : (carriedOver ? 'scheduled' : (positions[idx] <= 0 ? 'lost' : 'scheduled')),
-        resolution_snapshot: carriedOver ? JSON.stringify({ carriedFrom: turnNumber }) : null,
+        // Sprint 2d (docs/PLANS/PLAN_DRONE.md §4) — un drone `drone_auto` (mode `ordres_permanents`)
+        // n'attend jamais de clic humain : même mécanisme `autoResolve` que l'explosion de grenade
+        // différée (PLAN_GRENADES.md §3d), `advanceTimeline` le résout tout seul dès que l'échelle
+        // atteint sa phase. Toujours `ini=12 > 0` (drone) → jamais `carriedOver`, les deux branches ne
+        // se recouvrent pas.
+        resolution_snapshot: carriedOver ? JSON.stringify({ carriedFrom: turnNumber })
+          : action.action_key === 'drone_auto' ? JSON.stringify({ autoResolve: true })
+          : null,
       })
     })
   }
@@ -473,7 +539,14 @@ export async function broadcastCurrentSubPhase(io, campaignId) {
 // (`socketCombatResolution.js`) au chargement (patron registre, comme les mods/dangers). Le moteur ne
 // peut pas importer le résolveur AOE directement (cycle : combatTurnEngine → socketCombatAoe →
 // socketCombatHelpers → combatTurnEngine). Une entrée `resolution_snapshot.autoResolve === true`
-// (explosion de grenade différée, §3d ; plus tard : mines, pièges) se résout sans clic humain.
+// (explosion de grenade différée, §3d ; drone autonome `ordres_permanents`, Sprint 2d,
+// docs/PLANS/PLAN_DRONE.md §4 ; plus tard : mines, pièges) se résout sans clic humain.
+// Contrat de retour `{ suspend }` (Sprint 2d) — la grenade ne suspend jamais (AOE sans défense active),
+// mais un drone autonome peut viser un PJ et déclencher AWAITING_DAMAGE (COMBAT_DAMAGE_PROMPT, même
+// mécanisme qu'une déclaration manuelle) : dans ce cas la ladder ne doit PAS continuer tout de suite,
+// exactement comme le dispatch humain (`resolutionSuspended`, socketCombatResolution.js) ne rappelle
+// pas advanceTimeline. `result?.suspend` : optional chaining, un résolveur qui ne retourne rien
+// (ancien contrat) continue comme avant, comportement inchangé pour tout consommateur existant.
 let autonomousStepResolver = null
 export function registerAutonomousStepResolver(fn) { autonomousStepResolver = fn }
 
@@ -484,11 +557,13 @@ export async function advanceTimeline(io, campaignId, pendingMaps) {
 
     const step = await pickNextTimelineStep(campaignId, turnNumber)
     if (step) {
-      // Entrée autonome → le moteur la résout lui-même et continue l'échelle. Terminaison garantie :
-      // le résolveur marque l'entrée `resolved` avant tout traitement (voir socketCombatResolution.js),
-      // donc l'ensemble `scheduled` autonome décroît strictement à chaque itération.
+      // Entrée autonome → le moteur la résout lui-même et continue l'échelle, sauf suspension (voir
+      // commentaire ci-dessus). Terminaison garantie côté grenade (jamais de suspend) : le résolveur
+      // marque l'entrée `resolved` avant tout traitement (voir socketCombatResolution.js), donc
+      // l'ensemble `scheduled` autonome décroît strictement à chaque itération non suspendue.
       if (step.kind === 'entry' && step.entry.resolution_snapshot?.autoResolve === true && autonomousStepResolver) {
-        await autonomousStepResolver(io, campaignId, step, pendingMaps)
+        const result = await autonomousStepResolver(io, campaignId, step, pendingMaps)
+        if (result?.suspend) return
         return advanceTimeline(io, campaignId, pendingMaps)
       }
       await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
@@ -724,6 +799,11 @@ export async function endTurn(io, campaignId, pendingMaps) {
 
     await setFSMSubPhase(db, campaignId, null)
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
+
+    // Sprint 2d — pré-remplir les drones `ordres_permanents` du NOUVEAU Tour AVANT
+    // advanceAnnouncementQueue (sinon le pré-remplissage écraserait le résultat d'un
+    // advanceAnnouncementQueue déjà émis pour ce Tour — ordre exact du cadrage, PLAN_DRONE.md §4).
+    await prefillAutonomousDroneOrders(io, campaignId, newTurn)
 
     // LdB p.212 — Lot 0 : file d'ANNONCE centralisée. `advanceAnnouncementQueue` (pas juste le slot
     // suivant) couvre aussi le cas limite où le Tour entier vient d'être pré-annoncé (report M3 total

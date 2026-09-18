@@ -11,9 +11,11 @@
 > `docs/SYSTEME/COMBAT.md` (§ « Découpage socketCombatHelpers.js », § « Armement drone », § « Échelle
 > de phases »).
 >
-> **Statut** : Sprint 1 / 1bis / 2a / 2b / 2c **clos, vérifiés en code le 2026-09-16**. **Lot 0 clos et
-> testé le 2026-09-17** (voir §4). Sprint 2d (mode autonome) et Sprint 3 (télépilotage) **non
-> commencés** — seul reste réel du chantier.
+> **Statut** : Sprint 1 / 1bis / 2a / 2b / 2c **clos, vérifiés en code le 2026-09-16**. **Lot 0 clos,
+> testé ET commité le 2026-09-17** (`52bb3f3`, non poussé). **Sprint 2d (mode autonome, backend + UI)
+> CLOS — confirmé fonctionnel en jeu réel par Saar le 2026-09-18** (voir §4 ; faits durables intégrés à
+> `docs/SYSTEME/COMBAT.md` § « Mode autonome drone — ordres permanents »). Seul reste réel du chantier :
+> Sprint 3 (télépilotage), non commencé.
 
 ---
 
@@ -151,7 +153,7 @@ le cas « combat tout-drone en `ordres_permanents` » du Sprint 2d — voir plus
 les 3 fichiers serveur touchés. Non commité — en attente de confirmation fonctionnelle de Saar (jeu réel)
 avant `git add`/commit, comme toute clôture d'un comportement de combat.
 
-### Sprint 2d — Mode autonome (LdB p.320, Guide Technique) — CADRAGE TERMINÉ 2026-09-16, prêt à coder sur validation Saar
+### Sprint 2d — Mode autonome (LdB p.320, Guide Technique) — CODÉ 2026-09-17 (backend + UI), navigateur restant
 
 RAW : « les drones autonomes n'ont pas d'Initiative, mais réagissent immédiatement » — séquence
 Détection → [Ami/Ennemi] → Armement sans intervention MJ/joueur, retry -5 rangs d'Initiative sur échec
@@ -178,6 +180,19 @@ combat — même famille que les autres réglages gelés à l'ouverture d'un com
 `socketCombatState.js`, lu une fois via `getCampaignSettings` puis réutilisé pour tout l'encombrement ;
 mécanisme exact de persistance à reconfirmer au moment de coder). Modifiable entre deux combats,
 jamais en cours de combat (retour Saar) — pas de bascule à chaud à gérer.
+
+> **Révisé en testant (2026-09-17, retour Saar)** : PAS un réglage unique — Saar veut différencier « le
+> MJ peut être en classique et les joueurs en ordres permanents (ou l'inverse) ». Devenu **deux**
+> réglages de campagne, `drone_turn_model_gm` et `drone_turn_model_player`, tous deux figés à
+> `COMBAT_START` sur `combat_state.drone_turn_model_gm`/`_player`. Discriminant : `characters.user_id`
+> — `NULL` (drone sans propriétaire joueur, style PNJ, contrôlé par le MJ) → `_gm` ; non-`NULL` (drone
+> assigné à un joueur) → `_player`. Même autorité déjà utilisée partout ailleurs dans ce chantier pour
+> « ce drone est-il possédé par un joueur ? » (`isOwner`, `socketCombatAnnouncement.js`/
+> `socketCombatDrone.js`) — jamais une seconde définition. Chaque mention de `drone_turn_model` (sans
+> suffixe) plus bas dans ce document, écrite lors du cadrage initial, doit se lire comme « le réglage
+> pertinent selon le propriétaire du drone concerné » — migration 355 remplacée par 356 (`combat_state`
+> déjà en base, migration 355 formellement appliquée avant la révision : correction par une migration
+> neuve, pas une édition en place, `.claude/rules/migrations.md`).
 
 - **Mode `classique`** = **Sprint 2c tel qu'il existe déjà aujourd'hui, sans aucun changement, pour
   tout le monde (MJ et joueur propriétaire)**. Le drone occupe son slot ANNOUNCEMENT et attend une
@@ -255,18 +270,47 @@ l'aveugle. `DroneWindow.jsx`/`DroneDeclareSection.jsx` affichent le nom de la ci
 **Simplifications V1, avec leur V2 définie ci-dessous (§ « V2 différée ») — jamais un renoncement
 silencieux** : un drone à plusieurs armes en autonome n'en utilise qu'une.
 
-#### Résolution — `resolveDroneAutoAction` (nouvelle fonction, `socketCombatHelpers.js`)
-Dispatchée depuis `socketCombatResolution.js` sur `action.action_key === 'drone_auto'` (nouvelle
-branche, avant le dispatch `assault` générique). Boucle **en mémoire**, jusqu'à 3 tentatives (INI
-12 → 7 → 2, option « a » de l'ancien plan — aucune ligne `combat_timeline_entries` supplémentaire) :
+#### Résolution — déclenchement AUTOMATIQUE, pas un dispatch sur clic humain (trouvaille 2026-09-17)
+**Correction du design initial** : `drone_auto` ne doit PAS être une branche de plus dans le dispatch
+« clic humain sur l'étape courante » (`COMBAT_ACTION_PRECHECK`/`COMBAT_ACTION_CONFIRM`,
+`socketCombatResolution.js`) — ce chemin suppose systématiquement une fenêtre ouverte par un joueur.
+RAW : « les drones autonomes […] réagissent immédiatement », zéro interaction humaine. Le moteur a
+déjà EXACTEMENT ce mécanisme, construit pour l'explosion de grenade différée (PLAN_GRENADES.md §3d) :
+une entrée `combat_timeline_entries.resolution_snapshot.autoResolve === true` est prise en charge
+d'elle-même par `advanceTimeline` via le résolveur enregistré (`registerAutonomousStepResolver`,
+`combatTurnEngine.js:456-461`, commentaire d'origine : « plus tard : mines, pièges » — `drone_auto`
+est exactement cette même famille, pas une extension du patron). `buildTimelineEntries` doit donc
+marquer `resolution_snapshot: { autoResolve: true }` sur l'entrée d'une action `action_key ===
+'drone_auto'` (comme le fait déjà `carriedOver` pour son propre cas, même champ) ; le résolveur unique
+déjà enregistré côté `socketCombatResolution.js` (`resolveAutonomousStep`, aujourd'hui grenade
+uniquement) se ramifie sur `action.action_key` pour appeler `resolveDroneAutoAction` au lieu de la
+logique grenade. **Conséquence directe** : aucune fenêtre client, aucun nouveau chemin
+`COMBAT_ACTION_PRECHECK`/`CONFIRM` à écrire pour ce Sprint — le drone agit dès que l'échelle atteint sa
+phase, exactement comme une grenade explose dès que son tour arrive.
+
+**2ᵉ trouvaille en implémentant, dans le même mécanisme** : la grenade ne suspend jamais (AOE, aucune
+défense active) — `advanceTimeline` rappelait donc `autonomousStepResolver` puis se relançait
+immédiatement en boucle, sans jamais vérifier de retour. Un drone autonome PEUT viser un PJ, qui a une
+vraie défense active (`COMBAT_DAMAGE_PROMPT`/`AWAITING_DAMAGE`, exactement le même mécanisme qu'une
+déclaration manuelle Sprint 2c) — sans changement, l'échelle aurait continué à avancer PENDANT que le PJ
+ciblé est censé encore lancer ses dés de dégâts, une vraie régression de synchronisation. Extension
+minimale et rétrocompatible du contrat : `autonomousStepResolver` retourne maintenant `{ suspend }`
+(`resolveAutonomousStep`, `socketCombatResolution.js`), `advanceTimeline` ne se rappelle plus lui-même
+si `result?.suspend` est vrai (`combatTurnEngine.js`) — la grenade (jamais suspendue) continue de se
+comporter exactement comme avant (`result?.suspend` reste `undefined` → faux). Aucune ligne
+supplémentaire nécessaire côté `armAwaitingDamage` : il diffuse déjà lui-même le sous-état FSM, entité-
+agnostique de longue date.
+
+#### `resolveDroneAutoAction` (nouvelle fonction, `socketCombatHelpers.js`)
+Appelée par `resolveAutonomousStep` (voir ci-dessus), jamais directement par un handler socket. Boucle
+**en mémoire**, jusqu'à 3 tentatives (INI 12 → 7 → 2, option « a » de l'ancien plan — aucune ligne
+`combat_timeline_entries` supplémentaire) :
 1. Résoudre `acquired_target_token_id` → token/character cible ; si le token n'existe plus (mort/
    retiré, `ON DELETE SET NULL` déjà passé) → fin immédiate, aucun tir (RAW : cible perdue).
-2. Vérifier portée + LOS réelles — **correction post-cadrage (2026-09-16) : ne pas réinventer cette
-   vérification**, `resolveDroneAssaultAction` (`socketCombatHelpers.js:2769-2791`) la fait déjà pour
-   toute résolution de Tir drone (`resolveRangedDistance` + `resolveAttackLOS`, mêmes helpers que
-   l'humanoïde/l'exo). Réutiliser ces mêmes fonctions pour le check de zone de contrôle avant de
-   lancer le Test de Détection, jamais un nouvel appel à `evaluateWorldVisibility`. Hors zone →
-   tentative suivante (INI -5), ou fin après la 3e.
+2. Vérifier portée + LOS réelles, **une seule fois avant la boucle** (corrigé en analyse à charge
+   2026-09-17, voir encadré ci-dessous — le cadrage du 2026-09-16 prévoyait à tort de la revérifier à
+   chaque tentative avec `resolveAttackLOS`). Hors zone → fin immédiate, aucun tir (rien ne peut changer
+   entre les 3 tentatives d'un même appel autonome).
 3. Si en zone : Test du programme `detection` (`drone_programs` du personnage) — échec → tentative
    suivante ; pas de programme `detection` du tout → fin immédiate (drone non équipé pour l'autonome,
    RAW implicite), logué `[DBG]` seulement (pas de bruit chat pour un non-événement).
@@ -275,35 +319,139 @@ branche, avant le dispatch `assault` générique). Boucle **en mémoire**, jusqu
    suivante. Sinon (pas de programme ami/ennemi) → passer direct à l'Armement.
 5. Armement : **délègue à `resolveDroneAssaultAction` existant** (même arme/programme/Choc/dégâts que
    la déclaration manuelle, Sprint 2c — zéro duplication) avec le `target_token_id` et
-   `drone_weapon_inv_id` (première arme par `sort_order`) résolus dynamiquement ici.
+   `drone_weapon_inv_id` (première arme par `sort_order`) résolus dynamiquement ici. C'est ICI, et
+   seulement ici, que la LOS/interception réelle est évaluée (avec ses effets de bord légitimes).
 Chaque Test (Détection, Ami/Ennemi, Armement) diffuse un `DICE_RESULT` comme un jet normal — visibilité
 chat identique à une attaque manuelle, pas une résolution silencieuse côté serveur (même demande Saar
-« expliquer » : la séquence doit être lisible dans le chat, tentative par tentative).
+« expliquer » : la séquence doit être lisible dans le chat, tentative par tentative). Détection et
+Ami/Ennemi passent par le même pipeline de Test que tout le reste du système (`resolveTestOutcome`/
+`applyCriticalSuccessBonus`/`resolveCriticalFailReroll`, `shared/polarisTestResolution.js`), pas une
+comparaison brute — `programme.level` tient lieu de maîtrise (même convention que l'Armement drone).
+
+**Corrections faites en analyse à charge du code déjà écrit (2026-09-17), avant tout test en jeu réel** :
+- **Bug réel trouvé et corrigé** : appeler `resolveAttackLOS`/`checkCombatLOS` comme simple porte de
+  zone à chaque tentative (jusqu'à 3×) aurait spammé « Ligne de vue bloquée » dans le chat (cette
+  fonction émet directement via `io`, hors de tout tableau d'émissions maîtrisable) et risqué une
+  interception « fantôme » avant même l'Armement (message dupliqué, cible potentiellement différente de
+  celle du vrai tir). Remplacé par `checkLOSForPrecheck` (« vérification pure de précheck, sans effet
+  de combat », `losService.js`, déjà utilisé par `COMBAT_ACTION_PRECHECK`), appelé une seule fois avant
+  la boucle. La LOS réelle reste uniquement dans `resolveDroneAssaultAction` (étape 5).
+- **Incohérence corrigée** : Détection/Ami-Ennemi utilisaient une comparaison brute plutôt que le
+  pipeline universel de Test — jamais de réussite/échec critique, jamais de risque de Catastrophe.
+- **Retour Saar 2026-09-17** : un échec critique de Détection ou d'Ami-Ennemi risque bien une
+  Catastrophe (`maybeTriggerCatastrophe`, sites `'drone_detection'`/`'drone_ami_ennemi'`), exactement
+  comme n'importe quel Test du système — pas réservé aux seules actions d'attaque.
+- Trouvailles mineures notées, non corrigées (hors périmètre) : plusieurs drones `ordres_permanents`
+  partagent la même Initiative (12 fixe) donc le même `phase_position` — `pickNextTimelineStep` n'a pas
+  de départage, défaut préexistant du moteur (déjà vrai pour deux humains à Initiative égale), juste
+  garanti au lieu d'occasionnel, sans conséquence fonctionnelle (chaque drone se résout indépendamment).
+  `acquired_target_token_id` ne s'efface jamais quand la cible tombe/meurt (seulement si le token est
+  supprimé) — un drone pourrait continuer à viser un corps jusqu'à intervention humaine via
+  `COMBAT_DRONE_SET_ORDERS`, sans effet destructeur (pas de tir gaspillé sur un mort si le programme
+  `detection` légitimement s'y oppose déjà — à confirmer en jeu réel).
 
 `DRONE-ARMEMENT-PROGRAM-SPLIT` (programme strict sans repli) n'est **pas retranché** ici — un drone
 autonome dont l'arme ne correspond à aucun programme échoue à l'étape 5 avec le même message qu'en
 déclaration manuelle aujourd'hui ; le ticket reste ouvert, orthogonal à ce Sprint.
 
 #### Fichiers touchés (récapitulatif)
-- Migration : `combat_roster.acquired_target_token_id` (nullable, `ON DELETE SET NULL`, persistant) ;
-  `combat_state.drone_turn_model` (`'classique'|'ordres_permanents'`, figé à `COMBAT_START`) ;
+- Migration : `combat_roster.acquired_target_token_id` **+ `acquired_drone_weapon_inv_id`** (les deux
+  nullable, `ON DELETE SET NULL`, persistants — colonne arme absente de cette liste au premier jet du
+  cadrage alors que le corps du texte l'annonçait déjà, « Met à jour … (+ arme) » ci-dessus, corrigé en
+  implémentant) ; `combat_state.drone_turn_model` (`'classique'|'ordres_permanents'`, figé à `COMBAT_START`) ;
   nouvelle option de campagne `drone_targeting_mode` (`'assigne'|'spatial'`, défaut `'assigne'`, même
   patron que `status_effects_mode`, ne s'applique qu'en `ordres_permanents`) — les champs existent dès
   ce Sprint même si seul `'assigne'` a une implémentation ; `'spatial'` sélectionné doit soit
   fonctionner (Mode spatial livré), soit refuser proprement (pas de comportement silencieusement
   dégradé) tant qu'il n'est pas codé.
-- Nouvel événement socket `COMBAT_DRONE_SET_ORDERS { tokenId, targetTokenId, droneWeaponInvId }` —
-  guard `isGm || isOwner`, utilisable à tout moment (pas de garde de phase/tour) ; `targetTokenId:
-  null` désassigne la cible surveillée (pas d'événement séparé nécessaire — couvre ce qui aurait été
-  une « V2-a » distincte).
-- `combatTurnEngine.js` : Lot 0 (`findNextAnnounceSlot`/`advanceAnnouncementQueue`) + hook au début de
-  phase ANNOUNCEMENT (`COMBAT_ANNOUNCE_START`, `endTurn`) — pré-remplir `has_announced=true` +
-  `drone_auto` pour chaque drone en `ordres_permanents`, avant même que la file ne soit construite.
+- Nouvel événement socket `COMBAT_DRONE_SET_ORDERS { tokenId, targetTokenId, droneWeaponInvId }` +
+  `COMBAT_DRONE_ORDERS_ERROR { message }` — guard `isGm || isOwner`, utilisable à tout moment (pas de
+  garde de phase/tour, mais rejeté si `combat_state.drone_turn_model !== 'ordres_permanents'`) ;
+  `targetTokenId: null` désassigne la cible surveillée (pas d'événement séparé nécessaire — couvre ce
+  qui aurait été une « V2-a » distincte). Fichier dédié `socketCombatDrone.js` (pas
+  `socketCombatAnnouncement.js` — ce n'est ni une déclaration de Tour ni une transition de phase, même
+  logique d'extraction que `combatTurnEngine.js` en son temps), enregistré dans `socketCombat.js` à
+  côté de `registerStateHandlers`/`registerAnnouncementHandlers`/`registerResolutionHandlers`. Diffuse
+  `COMBAT_ROSTER_UPDATED` (réutilise `buildBroadcastRoster`, déjà générique sur les colonnes) pour la
+  visibilité cible/arme requise plus haut — pas de nouvel événement d'affichage à inventer.
+- `combatTurnEngine.js` : Lot 0 (`findNextAnnounceSlot`/`advanceAnnouncementQueue`) + nouvelle fonction
+  `prefillAutonomousDroneOrders(io, campaignId, turnNumber)` appelée au tout début de la phase ANNONCE
+  (`COMBAT_ANNOUNCE_START` dans `socketCombatState.js`, et dans `endTurn` juste après le reset roster)
+  — **avant** `advanceAnnouncementQueue`, jamais après (sinon la file compterait encore ces drones comme
+  « à annoncer »). Pré-remplit `has_announced=true` + une ligne `combat_actions`
+  (`type:'assault'`,`action_key:'drone_auto'`) pour chaque drone actif non-annoncé d'un combat en
+  `ordres_permanents`, puis diffuse `COMBAT_ROSTER_UPDATED`.
+- `buildTimelineEntries` (`combatTurnEngine.js`) : marquer `resolution_snapshot: { autoResolve: true }`
+  sur l'entrée d'une action `action_key === 'drone_auto'` (même champ que `carriedOver`, branche
+  supplémentaire dans le même `rows.push`).
 - `socketCombatHelpers.js` : nouvelle fonction `resolveDroneAutoAction`.
-- `socketCombatResolution.js` : dispatch `action_key==='drone_auto'`.
+- `socketCombatResolution.js` : `resolveAutonomousStep` (résolveur unique déjà enregistré pour la
+  grenade différée) se ramifie sur `action.action_key === 'drone_auto'` — pas un nouveau point de
+  dispatch, extension du point existant.
 - Client : `DroneWindow.jsx`/`DroneDeclareSection.jsx` gagnent un contrôle « ordres permanents »
   (cible + arme, visible seulement si `drone_turn_model==='ordres_permanents'`), plus de bouton
   « Passer » spécifique à concevoir (le drone n'apparaît jamais dans la file d'attente).
+  **Révisé en implémentant (2026-09-17) : uniquement `DroneWindow.jsx`, pas `DroneDeclareSection.jsx`.**
+  Un drone `ordres_permanents` n'a structurellement jamais de tour d'ANNONCE (pré-rempli avant même la
+  construction de la file) — `DroneDeclareSection` ne s'affiche que pendant CE tour, donc ne
+  s'afficherait quasiment jamais pour un tel drone. `DroneWindow` (fenêtre de fiche persistante,
+  ouverte indépendamment du tour, y compris hors combat) est le seul foyer cohérent pour un contrôle
+  « à tout moment ». Bandeau toujours visible sous l'en-tête (indépendant de l'onglet actif), affiché
+  seulement si le réglage **pertinent pour CE drone** (`_gm` si `character.user_id` est `NULL`, sinon
+  `_player`) vaut `'ordres_permanents'` ET une ligne `combat_roster` existe pour ce drone (combat
+  actif) — sinon absent, pas un état vide affiché.
+
+**Codé le 2026-09-17** : `campaignSettingsService.js` (les deux réglages `_gm`/`_player`),
+`SectionGameRules.jsx` (deux toggles classique/ordres permanents, un par réglage, réutilisent le
+patron `.btn-toggle` déjà en place pour `combat_modifiers_mode`/`status_effects_mode`) ;
+`COMBAT_STARTED` transmet désormais `droneTurnModelGm`/`droneTurnModelPlayer` (figés,
+`COMBAT_STATE_SYNC` les avait déjà via le `combat_state` complet) ; `combatStore.js`/
+`useCombatSocket.js` les propagent ; `DroneWindow.jsx` lit `useCombatStore`/`useTokenStore` (stores
+globaux, aucune prop à faire remonter — la fenêtre s'ouvre aussi hors combat, sans `socket`, dégradation
+naturelle à « rien à afficher ») pour résoudre le token/l'entrée roster du drone et choisir le réglage
+pertinent selon `character.user_id`, affiche 2 `<select>`
+(cible parmi le roster courant, arme parmi celles déjà chargées pour l'onglet Armes) synchronisés avec
+`COMBAT_DRONE_SET_ORDERS`/`COMBAT_ROSTER_UPDATED`. Ciblage par sélection dans une liste, pas par clic
+sur la carte — `DroneWindow` est une fenêtre flottante indépendante du canvas 3D, pas le flux de
+déclaration qui a lui l'intégration crosshair ; RAW n'impose aucun mécanisme d'UI précis pour « fixer »
+une cible. `node --check`/`eslint`/`npm run build` propres (une erreur eslint pré-existante non liée,
+`react-hooks/set-state-in-effect` sur du code non touché, vérifiée par stash avant/après). **Non testé
+en navigateur** (Saar) — c'est le premier morceau de ce Sprint qui a réellement besoin d'un test visuel.
+
+**Backend codé et testé le 2026-09-17** (tout ce qui précède sauf le dernier point) : migration 354
+(`combat_roster.acquired_target_token_id`/`acquired_drone_weapon_inv_id`, testée round-trip up/down/up)
++ 356 (`combat_state.drone_turn_model_gm`/`_player` — remplace 355, un seul réglage au premier jet,
+scindé en deux en testant, voir encadré « Révisé en testant » plus haut) ; `drone_turn_model_gm`/
+`_player`/`drone_targeting_mode` dans `campaignSettingsService.js` (`SETTINGS_SCHEMA`, validation
+PUT /campaigns/:id déjà générique) ; les deux lus et figés à `COMBAT_START` (`socketCombatState.js`,
+même patron que `action_timer_sec`) ; `prefillAutonomousDroneOrders` câblée aux deux points d'accroche
+exacts prévus, discrimine chaque drone par `characters.user_id` (`NULL`→`_gm`, sinon→`_player`) ;
+`buildTimelineEntries` marque `autoResolve` ; `resolveDroneAutoAction` codée en entier (retry 3
+tentatives, Détection/Ami-Ennemi sur la même colonne `drone_programs.category` que l'armement —
+valeurs `'detection'`/`'ami_ennemi'` vérifiées en base, pas une supposition — délégation finale à
+`resolveDroneAssaultAction` inchangée) ; `resolveAutonomousStep` ramifiée ; `socketCombatDrone.js` créé
+et enregistré, garde `_gm`/`_player` selon le propriétaire du drone visé. **Confirmé fonctionnel en jeu
+réel par Saar (2026-09-18)** : bandeau ordres permanents, résolution autonome Détection→Ami/Ennemi→
+Armement au chat, suspension correcte sur cible PJ testés en conditions réelles. Tests automatisés :
+`combatTurnEngine.test.mjs` étendu à 25 cas (dont 4 pour `prefillAutonomousDroneOrders` — y compris la
+différenciation MJ/joueur elle-même, testée dans les deux sens — 1 pour la non-régression du contrat
+`suspend`), tous verts (`node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs`) ;
+`campaignSettingsService.test.mjs` toujours vert (5/5) ; `node --check` propre sur tous les fichiers
+serveur/partagés touchés. **Non commité** — chantier inerte en jeu réel tant que l'UI client n'existe
+pas, donc pas encore soumis à confirmation fonctionnelle de Saar au sens de la clôture
+(`AGENTS.md` § Clôture) — voir plus bas pour l'UI, elle-même déjà codée mais pas encore testée
+en navigateur.
+
+**Fragilité pré-existante héritée, notée et non corrigée (hors périmètre de ce Sprint)** :
+`flushEmissions` (`socketCombatResolution.js`) plante si une émission `{to:'user', fallback:'socket'}`
+(ex. `COMBAT_DAMAGE_PROMPT` d'une cible PJ) ne trouve pas le socket de l'utilisateur ET que le
+`socket` appelant est `null` — déjà le cas pour une explosion de grenade autonome dont le lanceur est
+déconnecté (`launcherSocket` peut être `null`), et maintenant aussi pour tout tir `drone_auto` (appelé
+avec `socket:null` par construction, cf. commentaire dans `resolveAutonomousStep`). Risque réel mais
+seulement si la cible PJ est déconnectée au moment précis où un tir la touche — pas introduit par ce
+Sprint, juste étendu à un 2ᵉ appelant. Corriger `flushEmissions` (fallback ultime vers `'room'` au lieu
+d'un crash) serait une aggradation légitime mais orthogonale au chantier Drones — à traiter comme son
+propre sujet si Saar le confirme.
 
 #### V2 différée — définie maintenant, codée plus tard (jamais un renoncement silencieux, retour Saar 2026-09-16)
 

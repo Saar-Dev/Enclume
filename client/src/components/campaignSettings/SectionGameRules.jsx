@@ -18,6 +18,8 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [calendarStartDay, setCalendarStartDay] = useState(initialData.calendar_start_day ?? 1)
   const [calendarStartMonth, setCalendarStartMonth] = useState(initialData.calendar_start_month ?? 1)
   const [calendarStartYear, setCalendarStartYear] = useState(initialData.calendar_start_year ?? 1)
+  const [droneTurnModelGm, setDroneTurnModelGm] = useState(initialData.drone_turn_model_gm ?? 'classique')
+  const [droneTurnModelPlayer, setDroneTurnModelPlayer] = useState(initialData.drone_turn_model_player ?? 'classique')
 
   const handlePnjUnlimitedAmmo = (val) => { setPnjUnlimitedAmmo(val); onChange({ pnj_unlimited_ammo: val }) }
   const handleReloadMode = (val) => { setReloadMode(val); onChange({ reload_mode: val }) }
@@ -31,6 +33,8 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleCalendarStartDay = (val) => { setCalendarStartDay(val); onChange({ calendar_start_day: val }) }
   const handleCalendarStartMonth = (val) => { setCalendarStartMonth(val); onChange({ calendar_start_month: val }) }
   const handleCalendarStartYear = (val) => { setCalendarStartYear(val); onChange({ calendar_start_year: val }) }
+  const handleDroneTurnModelGm = (val) => { setDroneTurnModelGm(val); onChange({ drone_turn_model_gm: val }) }
+  const handleDroneTurnModelPlayer = (val) => { setDroneTurnModelPlayer(val); onChange({ drone_turn_model_player: val }) }
 
   return (
     <section className="card">
@@ -177,6 +181,44 @@ export default function SectionGameRules({ initialData, onChange }) {
               handleCalendarStartYear(isNaN(val) ? 1 : Math.min(9999, Math.max(1, val)))
             }}
             style={{ ...styles.numInput, width: '80px' }} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.droneTurnModelGmLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.droneTurnModelHint')}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          {['classique', 'ordres_permanents'].map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className="btn-toggle"
+              data-active={droneTurnModelGm === mode}
+              style={{ flex: '0 0 auto', padding: '8px 18px' }}
+              onClick={() => handleDroneTurnModelGm(mode)}
+            >
+              {t(`settings.droneTurnModel${mode === 'classique' ? 'Classique' : 'OrdresPermanents'}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.droneTurnModelPlayerLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.droneTurnModelHint')}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          {['classique', 'ordres_permanents'].map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className="btn-toggle"
+              data-active={droneTurnModelPlayer === mode}
+              style={{ flex: '0 0 auto', padding: '8px 18px' }}
+              onClick={() => handleDroneTurnModelPlayer(mode)}
+            >
+              {t(`settings.droneTurnModel${mode === 'classique' ? 'Classique' : 'OrdresPermanents'}`)}
+            </button>
+          ))}
         </div>
       </div>
     </section>

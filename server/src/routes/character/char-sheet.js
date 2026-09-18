@@ -97,7 +97,13 @@ router.use(requireAuth)
 router.param('characterId', async (req, res, next, characterId) => {
   try {
     const character = await db('characters').where({ id: characterId }).first()
-    if (!character) return next(new AppError(404, 'Character not found'))
+    if (!character) {
+      // BETA-37 — instrumentation (pas un fix) : bug non reproductible, characterId envoyé par le
+      // client ne correspond à aucune ligne. Seul signal disponible avant AppError pour distinguer un
+      // UUID malformé, un ID d'une autre campagne/session ou un personnage supprimé entre-temps.
+      console.log('[DBG] BETA-37 — characterId introuvable', { characterId, userId: req.user?.id, path: req.originalUrl })
+      return next(new AppError(404, 'Character not found'))
+    }
 
     // Personnage Coffre-native (campaign_id NULL, vault_id posé) : pas de campaign_members à lire,
     // accès réservé au seul propriétaire (ownership). Ancien gel sur wizard_locked_at retiré

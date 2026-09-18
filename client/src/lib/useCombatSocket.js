@@ -65,8 +65,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         setGmAttackResult(data)
       }
     }
-    const onCombatStarted = ({ roster, phase }) => {
-      setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0 })
+    const onCombatStarted = ({ roster, phase, droneTurnModelGm, droneTurnModelPlayer }) => {
+      setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0, droneTurnModelGm, droneTurnModelPlayer })
       setMode('combat')
     }
     const onCombatEnded = () => {
@@ -115,6 +115,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         actions,
         currentTurn: combatState.current_turn,
         activeTokenId,
+        droneTurnModelGm: combatState.drone_turn_model_gm ?? null,
+        droneTurnModelPlayer: combatState.drone_turn_model_player ?? null,
       })
       clearDeclareError()  // reconnexion — une bannière de refus d'avant la coupure n'a plus de sens
       if (combatState.phase) setMode('combat')  // F-R9-6 : troisième callsite setMode

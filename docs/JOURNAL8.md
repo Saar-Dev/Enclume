@@ -7736,3 +7736,52 @@ fonctionnel »).
 `docs/SYSTEME/ENTITES.md` (§3.1/§3.3) et `docs/SYSTEME/MOTEUR_MONDE.md` (§2.2) ; `docs/ROADMAP.md`/
 `docs/SYSTEME/INDEX.md` nettoyés de la ligne stub périmée ; `client/public/CHANGELOG.md` — entrée
 MJ ajoutée (v237).
+
+---
+
+## Session (Dev) — 2026-09-18 — Clôture Sprint 2d Drones : mode autonome « ordres permanents »
+
+**Contexte** : dernier morceau du chantier Drones (`docs/PLANS/PLAN_DRONE.md`) avant Sprint 3
+(télépilotage). RAW (LdB p.320) : un drone autonome n'a pas d'Initiative propre, réagit immédiatement
+— séquence Détection → Ami/Ennemi → Armement sans intervention MJ/joueur, jusqu'à 3 tentatives (INI
+12 → 7 → 2).
+
+**Décision actée en cours d'implémentation (retour Saar)** : pas un réglage de campagne unique —
+« le MJ peut être en classique et les joueurs en ordres permanents, ou l'inverse ». Devenu deux
+réglages indépendants, `drone_turn_model_gm`/`_player`, discriminés par `characters.user_id` (`NULL`
+→ `_gm`, sinon → `_player`), même autorité déjà en place ailleurs dans ce chantier pour « ce drone
+est-il possédé par un joueur ? ». Migration 355 remplacée par une migration 356 neuve (355 déjà
+appliquée en base avant la révision — correction par migration, pas édition en place,
+`.claude/rules/migrations.md`).
+
+**Trouvaille en implémentant** : le déclenchement ne devait pas être un nouveau dispatch sur clic
+humain, mais réutiliser le mécanisme déjà construit pour l'explosion de grenade différée
+(`registerAutonomousStepResolver`/`autoResolve`, `PLAN_GRENADES.md` §3d) — RAW « réagit
+immédiatement », zéro interaction humaine, même famille que « mines, pièges » déjà anticipée dans le
+commentaire d'origine du moteur. Extension nécessaire et rétrocompatible : le résolveur autonome
+retourne désormais `{ suspend }` (la grenade ne suspend jamais, un drone visant un PJ si — vraie
+défense active).
+
+**Analyse à charge du backend menée avant tout test réel** (étape distincte demandée par Saar) : bug
+réel trouvé et corrigé (revérifier la LOS à chaque tentative via `resolveAttackLOS` aurait spammé le
+chat et risqué une interception fantôme — remplacé par `checkLOSForPrecheck`, une seule fois avant la
+boucle) ; incohérence corrigée (Détection/Ami-Ennemi utilisaient une comparaison brute plutôt que le
+pipeline de Test standard — un échec critique risque maintenant une Catastrophe comme tout Test).
+
+**Testé** : `node --check`/`eslint`/`npm run build` propres ; `combatTurnEngine.test.mjs` étendu à 25
+cas (`node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs`) ;
+`campaignSettingsService.test.mjs` (5/5). **Confirmé fonctionnel en jeu réel par Saar (2026-09-18)** :
+bandeau « ordres permanents » dans `DroneWindow.jsx`, résolution autonome au chat, suspension correcte
+sur cible PJ.
+**Non testé** : Mode `drone_targeting_mode: 'spatial'` (champ présent, non implémenté — refuse
+proprement, prévu V2) ; télépilotage (Sprint 3, hors périmètre).
+**Données** : migrations 354 (`combat_roster.acquired_target_token_id`/`acquired_drone_weapon_inv_id`)
+et 356 (`combat_state.drone_turn_model_gm`/`_player`, remplace la 355 appliquée puis abandonnée).
+**Retour arrière** : `git revert` des commits de ce Sprint si besoin ; migrations réversibles
+(`down()` testé en round-trip).
+
+**Documentation de clôture** : faits durables intégrés dans `docs/SYSTEME/COMBAT.md` § « Mode
+autonome drone — ordres permanents » ; `docs/PLANS/PLAN_DRONE.md` statut mis à jour (Sprint 2d clos,
+seul Sprint 3 reste) — pas d'archivage `docs/Old/` tant que le chantier entier n'est pas clos ;
+`docs/ROADMAP.md` ligne Drones réduite au seul Sprint 3 restant ; `client/public/CHANGELOG.md` —
+entrée MJ ajoutée (v238).
