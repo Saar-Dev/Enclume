@@ -7838,3 +7838,58 @@ par Saar (2026-09-18)**, y compris une Réussite critique observée en condition
 Test de Réaction » (nouvelle section, le mécanisme n'était pas documenté avant) ; `client/public/
 CHANGELOG.md` — entrée MJ/joueur ajoutée (v239) ; ticket `INI1` à clôturer en base par Saar (script
 fourni, écriture DB jamais faite par Claude).
+
+---
+
+## Session (Dev) — 2026-09-18 — Ticket INI2 : Initiative non recalculée après blessure
+
+**Cause** [VÉRIFIÉ] : RAW (`REGLESYSCOMBAT.md:111`) — les malus de blessure « affectent le niveau de
+Réaction du personnage et donc son Initiative de base ». `calcREA` ne les intègre jamais (les
+attributs restent "propres", le malus de blessure est une surcouche appliquée Test par Test via
+`activeMalusRegistry.js`, jamais injectée dans l'Attribut lui-même) — `combat_roster.base_ini` ne
+bougeait donc jamais, blessure ou pas, même acquise avant `COMBAT_START`.
+
+**Dette trouvée en creusant, corrigée au passage** : le calcul "fetch attrs/archétype/avantages +
+`calcREA`" était dupliqué en 5 endroits. Réexamen un par un (demandé explicitement par Saar avant de
+coder, "100% sûr") : seuls 2 étaient de la vraie duplication à corriger (`COMBAT_START` branche
+humanoïde, `GET /battlemaps/:id/combat-ini`) — les 3 autres (`socketDice.js` MACRO_ROLL,
+`char-sheet.js`, branche exo de `COMBAT_START`) réutilisent déjà un contexte multi-valeurs partagé
+(`loadCharacterTestContext` ou leur propre fetch qui sert aussi à autre chose) ; les faire passer par
+la nouvelle fonction aurait dupliqué le fetch DB en plus du contexte déjà partagé — laissés inchangés.
+
+**Piège d'import trouvé en vérifiant, évité avant d'écrire une ligne de code** :
+`combatantContextService.js` importe déjà `damageService.js`, qui importe `woundService.js`. Mettre la
+nouvelle fonction dans `combatantContextService.js` (l'emplacement "naturel", avec ses fonctions
+sœurs `resolveCombatantIdentity` etc.) et la faire importer par `woundService.js` aurait fermé ce
+cycle. Nouveau module feuille dédié à la place : `server/src/lib/reactionService.js`
+(`computeCharacterBaseIni(db, characterId)`), consommé directement par `woundService.js` et les 2
+sites ci-dessus, sans passer par `combatantContextService.js`.
+
+**Ajustement trouvé en implémentant** (annoncé à Saar après coup, pas avant — pas un changement de
+périmètre) : seul `base_ini` est retouché par le hook, jamais `initiative` en direct. Une entrée
+`combat_timeline_entries` déjà construite ce Tour encode `phase_position = initiative × 100` —
+l'écraser à chaud pendant une Résolution en cours aurait pu désynchroniser l'échelle de phases déjà
+posée. Le nouveau `base_ini` prend effet sur l'Initiative réelle au Tour suivant via le reset déjà
+existant d'`endTurn()` — même latence que la récupération après une Surprise ratée (RAW : « au Tour
+suivant, il retrouve son score d'Initiative habituel »), pas une improvisation locale.
+
+**Code** : `server/src/lib/reactionService.js` (nouveau) ; `socketCombatState.js`/`battlemaps.js`
+consomment `computeCharacterBaseIni` ; `woundService.js#applyWound` — hook après le broadcast
+`WOUND_ADDED` : si le personnage a un token `combat_roster.status='active'`, recalcule `base_ini`
+(`computeCharacterBaseIni(...) + calcWoundPenalty(wounds)`), diffuse `COMBAT_ROSTER_UPDATED`. No-op
+silencieux hors combat.
+
+**Testé** : `node --check` (5 fichiers), imports runtime vérifiés sans cycle (`node -e
+"import(...)"`), `combatTurnEngine.test.mjs` 27/27 (aucune régression), `woundService.test.mjs`
+étendu à 8 cas — 2 nouveaux : recalcul déterministe (`grave`=-5, base neutre=3 en fixture sans
+attributs → -2 attendu, vérifié) + confirmation qu'`initiative` n'est jamais touchée en direct ; cas
+hors-combat (no-op, aucun événement émis). **Confirmé fonctionnel en jeu réel par Saar (2026-09-18)**.
+**Non testé** : recalcul multi-tokens (un personnage avec plusieurs tokens actifs simultanément, cas
+rare non rencontré en jeu).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : faits durables intégrés dans `docs/SYSTEME/COMBAT.md` § « Surprise —
+Test de Réaction » (sous-section « Initiative après blessure (INI2) ») ; `client/public/CHANGELOG.md`
+— entrée MJ/joueur ajoutée (v240) ; ticket `INI2` à clôturer en base par Saar (script à fournir,
+écriture DB jamais faite par Claude).

@@ -758,6 +758,26 @@ lisible.
   jeu à ce jour (aucune exo-armure réelle en jeu, `EXOARM-MULTIADV1`), décision Saar de ne pas étendre
   la logique différée à un chemin non testable en conditions réelles.
 
+**Initiative après blessure (INI2)** — RAW (`REGLESYSCOMBAT.md:111`) : les malus de blessure
+« affectent le niveau de Réaction du personnage et donc son Initiative de base ». `calcREA` ne les
+inclut jamais lui-même (les attributs restent "propres", le malus est une surcouche appliquée Test
+par Test via `activeMalusRegistry.js`) — donc `base_ini` ne bougeait jamais avec une blessure, même
+acquise avant `COMBAT_START`. Corrigé par un hook dans `server/src/lib/woundService.js#applyWound`
+(autorité unique déjà en place, 6 points de dégât) : pour tout token actif (`combat_roster.status=
+'active'`) du personnage blessé, recalcule `base_ini = computeCharacterBaseIni(...) +
+calcWoundPenalty(wounds)` (`server/src/lib/reactionService.js`, nouveau module feuille — délibérément
+séparé de `combatantContextService.js` pour ne pas fermer le cycle d'import déjà documenté
+`combatantContextService.js→damageService.js→woundService.js`). **Seul `base_ini` est retouché, jamais
+`initiative` en direct** : une entrée `combat_timeline_entries` déjà construite ce Tour encode
+`phase_position = initiative × 100`, l'écraser à chaud désynchroniserait une Résolution en cours — le
+nouveau `base_ini` prend effet sur l'Initiative réelle au Tour suivant via le reset déjà existant
+d'`endTurn()`, même latence que la récupération après une Surprise ratée. No-op silencieux hors combat
+(aucune ligne `combat_roster` pour ce personnage). `computeCharacterBaseIni` consolide aussi le fetch
+attrs/archétype/avantages dupliqué à `COMBAT_START` (branche humanoïde) et `GET /battlemaps/:id/
+combat-ini` — les sites qui partagent déjà un contexte multi-valeurs (`socketDice.js` MACRO_ROLL,
+`char-sheet.js`) continuent d'appeler `calcREA` directement avec leur `na`/`advantages` déjà chargés,
+pas migrés (les faire passer par ici dupliquerait le fetch, pas l'inverse).
+
 ### Armement drone — type d'arme et programme (`resolveDroneAssaultAction`)
 
 **Tir vs Corps à corps** : dérivé de `ref_equipment.category === 'Arme de contact'`, jamais de

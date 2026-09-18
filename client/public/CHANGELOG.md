@@ -1,3 +1,10 @@
+## v240 — 2026-09-18 — Une blessure en combat réduit désormais l'Initiative
+
+### Combat
+- [fix] Une blessure encaissée en combat réduit maintenant l'Initiative de base du personnage touché
+  (visible immédiatement au roster) — effective sur son Initiative de jeu à partir du Tour suivant.
+  Auparavant, une blessure n'avait jamais d'effet sur l'Initiative.
+
 ## v239 — 2026-09-18 — Surprise (Test de Réaction) : bonus critique, PNJ silencieux, timing
 
 ### Combat

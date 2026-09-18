@@ -6,6 +6,7 @@ import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js
 import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } from '../lib/combatantContextService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
+import { computeCharacterBaseIni } from '../lib/reactionService.js'
 import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, advanceAnnouncementQueue, prefillAutonomousDroneOrders } from './combatTurnEngine.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -141,21 +142,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
             continue
           }
 
-          const cs = await db('char_sheet').where({ character_id: token.character_id }).first()
-          if (!cs) {
+          const computedBaseIni = await computeCharacterBaseIni(db, token.character_id)
+          if (computedBaseIni == null) {
             console.warn(`[COMBAT_START] char_sheet introuvable pour token ${token.id}`)
           } else {
-            const [attrs, archetype, advantages] = await Promise.all([
-              db('char_attributes').where({ char_sheet_id: cs.id }),
-              db('char_archetype').where({ char_sheet_id: cs.id }).first(),
-              getAdvantages(cs.id),
-            ])
-            const genotypeRow = archetype?.genotype_id
-              ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
-              : null
-            const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
-            const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
-            base_ini = calcREA(ada_na, per_na, getAdvantageModForAttr(advantages, 'reaction'))
+            base_ini = computedBaseIni
           }
         } catch (err) {
           console.warn(`[COMBAT_START] Erreur calcul INI token ${token.id}:`, err.message)

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
+import { WS } from '../../../shared/events.js'
 import { applyWound } from './woundService.js'
 import { resolveChanceChoice, listPendingChanceChoices } from './chanceCatastropheChoiceService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (applyWound crée une échéance de guérison à l'insertion)
@@ -67,6 +68,53 @@ test('applyWound (Blessure moyenne) n\'ouvre aucun choix Chance (RAW : grave+ se
     })
     const pending = await listPendingChanceChoices(fixture.campaign.id)
     assert.equal(pending.length, 0)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+// ─── applyWound — recalcul base_ini (INI2, RAW REGLESYSCOMBAT.md:111) ──────────────────────────
+
+test('applyWound recalcule base_ini pour un token en combat actif (grave = -5)', { skip }, async () => {
+  const fixture = await createFixture()
+  const [battlemap] = await db('battlemaps')
+    .insert({ campaign_id: fixture.campaign.id, name: 'BM test woundService' })
+    .returning('*')
+  const [token] = await db('tokens')
+    .insert({ battlemap_id: battlemap.id, character_id: fixture.character.id, label: 'T0' })
+    .returning('*')
+  await db('combat_roster').insert({
+    campaign_id: fixture.campaign.id, token_id: token.id, base_ini: 3, initiative: 3, status: 'active',
+  })
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    await applyWound(stubIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    const row = await db('combat_roster').where({ token_id: token.id }).first()
+    // Aucun char_attributes en fixture -> calcAttributeNA replie sur 3 -> calcREA(3,3,0)=3 ; grave=-5 (WOUND_PENALTIES).
+    assert.equal(row.base_ini, 3 + (-5))
+    assert.equal(row.initiative, 3, 'initiative en direct jamais retouchée (RAW : effectif au Tour suivant)')
+    assert.ok(emitted.some(e => e.event === WS.COMBAT_ROSTER_UPDATED), 'roster rediffusé')
+  } finally {
+    await db('combat_roster').where({ token_id: token.id }).del()
+    await db('tokens').where({ id: token.id }).del()
+    await db('battlemaps').where({ id: battlemap.id }).del()
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound hors combat (aucune ligne combat_roster) : no-op silencieux', { skip }, async () => {
+  const fixture = await createFixture()
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    const result = await applyWound(stubIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    assert.ok(result, 'la blessure elle-même reste appliquée normalement')
+    assert.ok(!emitted.some(e => e.event === WS.COMBAT_ROSTER_UPDATED), 'aucun recalcul hors combat')
   } finally {
     await cleanup(fixture)
   }

@@ -9,6 +9,9 @@ import { emitTokenStatusUpdated } from './statusService.js'
 import { resolveChanceRecipientCharacterId } from './exoPilotService.js'
 import { openChanceChoice, SITE_HANDLERS } from './chanceCatastropheChoiceService.js'
 import { spendChancePoints } from '../services/chanceService.js'
+import { computeCharacterBaseIni } from './reactionService.js'
+import { calcWoundPenalty } from './charStats.js'
+import { buildBroadcastRoster } from './combatRosterBroadcast.js'
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 
@@ -56,6 +59,37 @@ export async function applyWound(io, db, campaignId, {
     shock_test_required,
     worst_wound_severity,
   })
+
+  // INI2 (RAW REGLESYSCOMBAT.md:111 — les malus de blessure « affectent le niveau de Réaction du
+  // personnage et donc son Initiative de base ») : recalcule base_ini pour tout token actif de ce
+  // personnage dans un combat en cours — l'existence d'une ligne combat_roster suffit à détecter un
+  // combat actif (COMBAT_END supprime la table entièrement, pas de flag séparé à vérifier). Seul
+  // base_ini est retouché ici, jamais `initiative` en direct : une entrée combat_timeline_entries déjà
+  // construite ce Tour encode phase_position = initiative × 100 — l'écraser à chaud désynchroniserait
+  // une Résolution en cours. Le nouveau base_ini prend effet sur l'Initiative réelle au Tour suivant
+  // via le reset déjà existant d'endTurn() (initiative: base_ini) — même latence que la récupération
+  // après Surprise ratée (RAW : « au Tour suivant, il retrouve son score d'Initiative habituel »),
+  // pas une improvisation locale. No-op silencieux hors combat (aucune ligne combat_roster trouvée).
+  try {
+    const activeTokenIds = await db('combat_roster as cr')
+      .join('tokens as t', 't.id', 'cr.token_id')
+      .where({ 'cr.campaign_id': campaignId, 't.character_id': characterId, 'cr.status': 'active' })
+      .pluck('cr.token_id')
+    if (activeTokenIds.length > 0) {
+      const cleanBaseIni = await computeCharacterBaseIni(db, characterId)
+      if (cleanBaseIni != null) {
+        const wounds = await db('character_wounds').where({ char_sheet_id: charSheetId })
+        const newBaseIni = cleanBaseIni + calcWoundPenalty(wounds) // calcWoundPenalty ≤ 0
+        await db('combat_roster')
+          .whereIn('token_id', activeTokenIds)
+          .update({ base_ini: newBaseIni, updated_at: db.fn.now() })
+        const roster = await db('combat_roster').where({ campaign_id: campaignId })
+        io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: await buildBroadcastRoster(db, roster) })
+      }
+    }
+  } catch (err) {
+    console.error('[woundService] applyWound — recalcul base_ini après blessure échoué :', err.message)
+  }
 
   // Réduction de gravité par Chance (PLAN_CHANCE.md L5, REGLE_CHANCE.md:112-131) — correction A
   // POSTÉRIORI, jamais un gate avant l'écriture ci-dessus (analyse à charge 2026-09-12, PLAN §7) :
