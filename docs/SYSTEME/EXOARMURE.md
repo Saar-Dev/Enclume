@@ -333,6 +333,21 @@ import circulaire avec les helpers de résolution génériques qu'il réutilise)
   silencieuse jusqu'au correctif 2026-08-27 ci-dessous). Alerte chat `session.initiativeLost`
   (`COMBAT_SYSTEM_NOTICE`, `socketCombatHelpers.js#buildTimelineEntries`) émise pour toute action
   perdue par Initiative insuffisante, générique à tout personnage (pas seulement exo).
+- **Masquage pendant le ciblage** (`CombatExoActionWindow.jsx`, `isSelectingOnMap`) : la fenêtre se
+  masque désormais pendant le Déplacement (destination en attente), **et** pendant le ciblage Tir/CaC
+  (`combatTargetMode`) et la visée de zone (`combatAoeTargetMode`) — même patron que
+  `CombatActionWindow.jsx#isHidden`, dérivé de l'état partagé (`useCombatUIState`), jamais un flag
+  local. Historique : un masquage identique sur `combatTargetMode` avait été ajouté le 2026-08-26 puis
+  **retiré le 2026-08-27** sur un soupçon de régression jamais confirmé ("l'armure n'émet plus aucune
+  action" — cause probable non instrumentée à l'époque). Réappliqué le 2026-09-18 (retour Saar : la
+  fenêtre ne se masquait pas au clic sur Cible) après revérification : `combatTargetMode` se nettoie
+  déjà tout seul (validation de cible, clic Annuler — bouton rendu dans `CombatOverlay.jsx`,
+  indépendamment de cette fenêtre, donc toujours accessible même masquée — et automatiquement à
+  chaque changement de phase/avancée de la file d'annonce, `useCombatSocket.js#onModeReset`) ; le vrai
+  coupable du symptôme de 2026-08-27 est plus probablement l'autre bug exo trouvé le même jour
+  (déclarer une arme sans cible envoyait un payload vide, silencieusement perdu) — corrigé
+  indépendamment depuis et durablement gardé par `canDeclareAttack` (`useExoDeclare.js`). Confirmé
+  fonctionnel en jeu réel (ciblage Tir/CaC, déclaration effective après ciblage).
 
 ---
 

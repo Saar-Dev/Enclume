@@ -1,3 +1,10 @@
+## v241 — 2026-09-18 — Exo-armure : la fenêtre se masque enfin au ciblage
+
+### Combat
+- [fix] La fenêtre de déclaration exo-armure se masque maintenant pendant le choix d'une cible (Tir,
+  CaC ou visée de zone) — auparavant elle restait affichée par-dessus la carte et gênait le clic sur
+  la cible.
+
 ## v240 — 2026-09-18 — Une blessure en combat réduit désormais l'Initiative
 
 ### Combat

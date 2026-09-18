@@ -32,7 +32,7 @@ import api from '../lib/api.js'
 export default function CombatExoActionWindow({
   socket, user, characters, isGm = false,
   onEnterMoveMode, combatMoveMode, pendingMoveSelection,
-  battlemapId, onEnterTargetMode, onEnterAoeTargetMode,
+  battlemapId, onEnterTargetMode, combatTargetMode, combatAoeTargetMode, onEnterAoeTargetMode,
   registerAmbientAttackHandler, showTargetRecap,
 }) {
   const { t } = useTranslation('combat')
@@ -219,17 +219,21 @@ export default function CombatExoActionWindow({
   // clic sur DÉCLARER (mapActions.move: null, tour passé). Cache seulement une fois qu'une destination
   // est réellement en attente (pendingMoveSelection), jamais pendant le simple survol ambiant.
   //
-  // RETIRÉ (2026-08-27) : masquage identique branché sur combatTargetMode (ciblage Tir/CaC explicite)
-  // — régression réelle en jeu (Saar : "l'armure n'émet plus aucune action"), cause probable : ce
-  // gate n'a qu'une sortie normale (bouton Annuler générique, CombatOverlay.jsx:444) ; toute sélection
-  // de cible interrompue sans passer par ce bouton laisse combatTargetMode bloqué sur le token de
-  // l'exo — état partagé (useCombatUIState), pas remis à zéro entre deux Tours ni deux combats tant
-  // que la page n'est pas rechargée — rendant la fenêtre invisible ET non cliquable en permanence.
-  // Ajout fait de ma propre initiative pendant l'analyse à charge, pour un bug purement cosmétique
-  // (légende "Assaut" au lieu de "Corps à corps") — rapport bénéfice/risque plus tenable, retiré
-  // plutôt que patché à chaud. Root cause de fond (comment combatTargetMode doit s'auto-nettoyer)
-  // pas encore investiguée — à reprendre séparément si le besoin de masquage revient.
-  const isSelectingOnMap = combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection
+  // RÉAPPLIQUÉ (2026-09-18, retour Saar : la fenêtre ne se masquait pas au clic sur Cible) — RETIRÉ
+  // une première fois le 2026-08-27 sur un soupçon jamais confirmé ("cause probable", jamais
+  // instrumenté). Revérifié avant de recoder : combatTargetMode se nettoie déjà tout seul (validation
+  // de cible, clic Annuler — CombatOverlay.jsx, rendu indépendamment de cette fenêtre donc toujours
+  // accessible même masquée — ET automatiquement à chaque changement de phase/avancée de la file
+  // d'annonce, useCombatSocket.js#onModeReset) ; le vrai coupable du symptôme de l'époque est bien
+  // plus probablement l'autre bug exo trouvé le même jour (déclarer une arme sans cible envoyait un
+  // payload vide, silencieusement perdu) — déjà corrigé depuis et durablement gardé par
+  // canDeclareAttack (useExoDeclare.js). Même patron que CombatActionWindow.jsx#isHidden : dérivé de
+  // l'état partagé combatTargetMode/combatAoeTargetMode, jamais un flag local (le clic direct sur un
+  // token arme combatTargetMode sans passer par un flag local — même raison documentée là-bas).
+  const isTargeting    = combatTargetMode?.tokenId === playerToken.id
+  const isAoeTargeting = combatAoeTargetMode?.tokenId === playerToken.id
+  const isSelectingOnMap = (combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection)
+    || isTargeting || isAoeTargeting
 
   // Initiative projetée (pastille du pied). Le déplacement + les transitions d'état déclarées au
   // satellite (posture / arme / vitesse, module 3) pèsent — `initialStates` vs `decl`.

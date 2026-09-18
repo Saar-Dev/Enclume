@@ -7891,5 +7891,44 @@ rare non rencontré en jeu).
 
 **Documentation de clôture** : faits durables intégrés dans `docs/SYSTEME/COMBAT.md` § « Surprise —
 Test de Réaction » (sous-section « Initiative après blessure (INI2) ») ; `client/public/CHANGELOG.md`
-— entrée MJ/joueur ajoutée (v240) ; ticket `INI2` à clôturer en base par Saar (script à fournir,
-écriture DB jamais faite par Claude).
+— entrée MJ/joueur ajoutée (v240) ; ticket `INI2` à clôturer en base par Saar
+(`server/src/scripts/resolve_ticket_ini2.js`, déjà commité, écriture DB jamais faite par Claude).
+
+---
+
+## Session (Dev) — 2026-09-18 — Exo-armure : fenêtre non masquée au ciblage (réapplication d'un fix retiré)
+
+**Déclenchement** : retour direct Saar (« la fenêtre EXO-ARMURE ne se masque pas au clic sur CIBLE »).
+Lecture du code avant tout diagnostic (invariant #1) : `CombatExoActionWindow.jsx:215-231` documentait
+un masquage identique **déjà ajouté le 2026-08-26, puis retiré le 2026-08-27** après un retour Saar
+("l'armure n'émet plus aucune action"), avec la note explicite de l'époque « cause probable... root
+cause de fond pas encore investiguée » — une hypothèse jamais confirmée, un repli par prudence.
+
+**Analyse avant de recoder** (demandée explicitement par Saar, historique à charge) : vérifié que
+`combatTargetMode` (état partagé, `useCombatUIState`) se nettoie déjà par plusieurs chemins — clic
+Annuler (bouton rendu dans `CombatOverlay.jsx`, indépendant de la fenêtre elle-même, donc toujours
+accessible même masquée), validation de cible, **et** automatiquement à chaque `COMBAT_PHASE_CHANGED`/
+`COMBAT_SLOT_ADVANCED` (`useCombatSocket.js#onModeReset`) — l'hypothèse « bloqué indéfiniment » de
+2026-08-27 ne correspond pas au code actuel. Trouvaille : le même jour (2026-08-27), un AUTRE bug exo
+avait été corrigé — déclarer une arme sans cible envoyait un payload vide, action perdue en silence
+(`canDeclareAttack`, `useExoDeclare.js`, garde toujours en place aujourd'hui). Hypothèse retenue,
+présentée à Saar avant de coder : le vrai coupable du symptôme de l'époque était plus probablement ce
+second bug (déjà corrigé, indépendamment), pas le masquage lui-même.
+
+**Code** : `CombatOverlay.jsx` passe `combatTargetMode`/`combatAoeTargetMode` aux deux montages de
+`CombatExoActionWindow` (MJ et joueur) — manquaient tous les deux, `combatAoeTargetMode` n'avait
+d'ailleurs jamais été branché du tout (même trou que `combatTargetMode`, trouvé en vérifiant). Réutilise
+le même patron que `CombatActionWindow.jsx#isHidden` : dérivé de l'état partagé, jamais un flag local
+(`isSelectingOnMap` étendu avec `isTargeting`/`isAoeTargeting`).
+
+**Testé** : `eslint` ciblé (2 fichiers) — 0 nouvelle erreur (2 erreurs pré-existantes dans
+`CombatExoActionWindow.jsx`, confirmées par stash avant/après, ticket connu I18N-LINT3 sans rapport) ;
+`npm run build` client propre ; `git diff --check`. **Confirmé fonctionnel en jeu réel par Saar
+(2026-09-18)**, y compris déclaration effective après ciblage (le point sensible de la régression
+2026-08-27).
+**Non testé** : aucun point identifié en suspens.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : faits durables + historique intégrés dans `docs/SYSTEME/EXOARMURE.md`
+(nouveau point sous la liste §5) ; `client/public/CHANGELOG.md` — entrée joueur/MJ ajoutée (v241).
