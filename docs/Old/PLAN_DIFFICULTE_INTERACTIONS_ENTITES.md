@@ -1,5 +1,16 @@
 # PLAN_DIFFICULTE_INTERACTIONS_ENTITES.md — Difficulté et surcharge MJ des interactions d'entité
 
+> **CLOS 2026-09-18.** L1 (surcharge MJ par instance, `EntityInstancePanel.jsx`) et L2 (bandeau
+> Difficulté joueur pendant la visée de Déplacer, `SessionPage.jsx`) codés, validés en jeu réel. L3
+> (aperçu MJ à la conception) s'est avéré déjà couvert par le champ ajouté en L1 (« Seuil de
+> référence »). L4 (généraliser au-delà de Déplacer) satisfait par construction — la lecture passe
+> par `getEffectiveInteractionDifficulty` (`client/src/lib/entityInteractions.js`), générique à toute
+> interaction. Décision prise en cours de route (§3) : pas de repli automatique dérivé du
+> poids/taille — le MJ règle `difficulty_dc` par défaut au blueprint (atelier `/workshop`, déjà
+> possible avant ce chantier, juste jamais fait). Détail durable : `docs/SYSTEME/ENTITES.md`
+> §10.1/§10.5. Piège flexbox transférable trouvé et corrigé en cours de route (un composant partagé
+> par 3 panneaux empêchait tout défilement) : `docs/SYSTEME/REACT.md` P60.
+>
 > **Stub — 2026-09-17.** Chantier identifié en clôturant Lot A2 (preuve `move_type`,
 > `PLAN_ENTITES_INTERACTIVES_ROADMAP.md`) : le mécanisme de déplacement fonctionne (jet, Test de
 > Chance, résolution), mais la Difficulté qu'il applique n'est pas jouable en l'état, et aucune
