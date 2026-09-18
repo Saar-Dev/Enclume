@@ -3,6 +3,12 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
+import {
+  entityOccupant,
+  dynamicOccupantsFromRows,
+  loadBattlemapDynamicOccupants,
+} from '../services/worldMovementService.js'
+import { createOccupancyIndex } from '../../../shared/world/spatialIndex.js'
 import { withEntityScale, normalizeInteractionOverrides } from '../../../shared/world/entityTransform.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
@@ -134,6 +140,26 @@ router.post('/', requireAuth, async (req, res, next) => {
     const initialState = normalizedEntityState(state)
     assertWallPlacementState(blueprint, initialState)
 
+    // Occupation — uniquement les entités au sol (PLAN_BLOCAGE_CASES_OCCUPEES.md §3bis-A : une
+    // entité murale n'a pas d'emprise au sol comparable, l'approximation circulaire du moteur
+    // la surestimerait). current_state_id est toujours 0 à la création (cf. insert ci-dessous).
+    if (placementMode === 'free') {
+      const candidateOccupant = entityOccupant({
+        id: 'candidate',
+        pos_x, pos_y, pos_z,
+        current_state_id: 0,
+        state: initialState,
+        states: blueprint.states || [],
+        geometry: blueprint.geometry || {},
+      })
+      if (candidateOccupant) {
+        const occupants = await loadBattlemapDynamicOccupants(req.params.id)
+        if (!createOccupancyIndex(occupants).canOccupy(candidateOccupant.point, candidateOccupant.actorProfile)) {
+          throw new AppError(409, 'Position already occupied')
+        }
+      }
+    }
+
     const [entity] = await db('entities')
       .insert({
         battlemap_id: req.params.id,
@@ -151,8 +177,6 @@ router.post('/', requireAuth, async (req, res, next) => {
       })
       .returning('*')
     await bumpBattlemapRuntimeRevision(req.params.id)
-
-    // L'occupation dynamique sera relue depuis PostgreSQL par le moteur monde.
 
     // Retourner l'instance avec son blueprint embarqué
     res.status(201).json({
@@ -185,6 +209,8 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       state, notes_gm,
     } = req.body
 
+    const normalizedState = state !== undefined ? normalizedEntityState(state) : undefined
+
     if (state !== undefined || pos_x !== undefined || pos_y !== undefined || pos_z !== undefined || r !== undefined) {
       assertWallPlacementState(blueprint, state !== undefined ? state : entity.state)
     }
@@ -203,7 +229,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       )
     }
     if (disabled_interactions !== undefined) updates.disabled_interactions = disabled_interactions
-    if (state !== undefined) updates.state = JSON.stringify(normalizedEntityState(state))
+    if (state !== undefined) updates.state = JSON.stringify(normalizedState)
     if (notes_gm !== undefined) updates.notes_gm = notes_gm || null
 
     if (Object.keys(updates).length === 0) {
@@ -213,11 +239,62 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     // updated_at après le guard Object.keys — P13
     updates.updated_at = db.fn.now()
 
-    const [updated] = await db('entities')
-      .where({ id: req.params.entityId })
-      .update(updates)
-      .returning('*')
-    await bumpBattlemapRuntimeRevision(entity.battlemap_id)
+    // Occupation — comparaison de VALEUR à la position en base, jamais de présence de champ :
+    // EntityInstancePanel envoie systématiquement pos_x/pos_y/pos_z à chaque sauvegarde, même sans
+    // déplacement réel (PLAN_BLOCAGE_CASES_OCCUPEES.md §3bis). `r` n'entre pas dans le test : le
+    // rayon de collision circulaire ne dépend jamais de la rotation (worldMovementService.js).
+    const nextPosX = updates.pos_x !== undefined ? Number(updates.pos_x) : Number(entity.pos_x)
+    const nextPosY = updates.pos_y !== undefined ? Number(updates.pos_y) : Number(entity.pos_y)
+    const nextPosZ = updates.pos_z !== undefined ? Number(updates.pos_z) : Number(entity.pos_z)
+    const positionChanged = nextPosX !== Number(entity.pos_x)
+      || nextPosY !== Number(entity.pos_y)
+      || nextPosZ !== Number(entity.pos_z)
+    const placementMode = entityPlacementMode(blueprint)
+
+    let updated
+    if (positionChanged && placementMode === 'free') {
+      // Verrou transactionnel — seule la branche qui déplace réellement une entité au sol en a
+      // besoin (§3bis-B) ; même ordre de tables que executeBattlemapTokenMovement
+      // (tokens → entities) pour ne jamais deadlocker avec un déplacement de token concurrent.
+      updated = await db.transaction(async trx => {
+        const nextStateId = updates.current_state_id !== undefined ? updates.current_state_id : entity.current_state_id
+        const tokens = await trx('tokens').where({ battlemap_id: entity.battlemap_id }).forUpdate()
+        const entityRows = await trx('entities').where({ battlemap_id: entity.battlemap_id }).forUpdate()
+        const blueprintIds = [...new Set(entityRows.map(row => row.blueprint_id).filter(Boolean))]
+        const blueprints = blueprintIds.length
+          ? await trx('entity_blueprints').whereIn('id', blueprintIds).select('id', 'states', 'geometry')
+          : []
+        const blueprintById = new Map(blueprints.map(bp => [bp.id, bp]))
+        const entityRowsWithBlueprint = entityRows.map(row => ({
+          ...row,
+          states: blueprintById.get(row.blueprint_id)?.states || [],
+          geometry: blueprintById.get(row.blueprint_id)?.geometry || {},
+        }))
+        const candidateOccupant = entityOccupant({
+          id: entity.id,
+          pos_x: nextPosX, pos_y: nextPosY, pos_z: nextPosZ,
+          current_state_id: nextStateId,
+          state: state !== undefined ? normalizedState : entity.state,
+          states: blueprint?.states || [],
+          geometry: blueprint?.geometry || {},
+        })
+        if (candidateOccupant) {
+          const occupancy = createOccupancyIndex(dynamicOccupantsFromRows(tokens, entityRowsWithBlueprint))
+          if (!occupancy.canOccupy(candidateOccupant.point, candidateOccupant.actorProfile, { excludeIds: [entity.id] })) {
+            throw new AppError(409, 'Position already occupied')
+          }
+        }
+        const [row] = await trx('entities').where({ id: req.params.entityId }).update(updates).returning('*')
+        await bumpBattlemapRuntimeRevision(entity.battlemap_id, trx)
+        return row
+      })
+    } else {
+      ;[updated] = await db('entities')
+        .where({ id: req.params.entityId })
+        .update(updates)
+        .returning('*')
+      await bumpBattlemapRuntimeRevision(entity.battlemap_id)
+    }
 
     res.json({ entity: { ...updated, blueprint } })
   } catch (err) {

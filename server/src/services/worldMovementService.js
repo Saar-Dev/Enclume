@@ -61,6 +61,35 @@ function entityState(entity) {
   return states[entity.current_state_id] ?? states[0] ?? null
 }
 
+// Profil d'occupation d'une entité — autorité unique de cette dérivation (radius/height depuis
+// blueprint.states[current_state_id]/geometry + échelle d'instance), réutilisée telle quelle par
+// dynamicOccupantsFromRows ci-dessous ET par la pose/le déplacement d'entité (entities.js) pour
+// tester le candidat lui-même — jamais une seconde formule dupliquée côté route.
+// `entity` : forme produite par loadBattlemapDynamicOccupants/executeBattlemapTokenMovement
+// (id, pos_x/pos_y/pos_z, current_state_id, state [instance transform/scale, PAS is_blocking],
+// states [tableau blueprint, PORTE is_blocking], geometry [blueprint]).
+// Retourne null si l'état courant n'est pas bloquant (comportement identique à l'exclusion
+// silencieuse déjà en place ci-dessous pour le mouvement des tokens).
+export function entityOccupant(entity) {
+  const state = entityState(entity)
+  if ((state?.is_blocking ?? true) === false) return null
+  const collider = state?.collider || {}
+  const geometry = entity.geometry || {}
+  const scale = normalizeEntityScale(entity.state)
+  const width = Number(collider.width || geometry.width || 1) * scale
+  const depth = Number(collider.depth || geometry.depth || 1) * scale
+  return {
+    id: entity.id,
+    kind: 'entity',
+    point: dbPositionToWorldPoint(entity),
+    actorProfile: {
+      radius: Number(collider.radius ? collider.radius * scale : Math.max(width, depth) / 2),
+      height: Number(collider.height || geometry.height || 1) * scale,
+      maxStepHeight: 0.5,
+    },
+  }
+}
+
 export function dynamicOccupantsFromRows(tokens = [], entities = []) {
   const occupants = []
   for (const token of tokens) {
@@ -73,23 +102,8 @@ export function dynamicOccupantsFromRows(tokens = [], entities = []) {
     })
   }
   for (const entity of entities) {
-    const state = entityState(entity)
-    if ((state?.is_blocking ?? true) === false) continue
-    const collider = state?.collider || {}
-    const geometry = entity.geometry || {}
-    const scale = normalizeEntityScale(entity.state)
-    const width = Number(collider.width || geometry.width || 1) * scale
-    const depth = Number(collider.depth || geometry.depth || 1) * scale
-    occupants.push({
-      id: entity.id,
-      kind: 'entity',
-      point: dbPositionToWorldPoint(entity),
-      actorProfile: {
-        radius: Number(collider.radius ? collider.radius * scale : Math.max(width, depth) / 2),
-        height: Number(collider.height || geometry.height || 1) * scale,
-        maxStepHeight: 0.5,
-      },
-    })
+    const occupant = entityOccupant(entity)
+    if (occupant) occupants.push(occupant)
   }
   return Object.freeze(occupants)
 }

@@ -141,6 +141,15 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     Le serveur rejette la création si le blueprint est de type connector (HTTP 400).
 
+    Depuis 2026-09-18 (PLAN_BLOCAGE_CASES_OCCUPEES, archivé) : le serveur refuse aussi (HTTP 409)
+    la création d'une entité bloquante (placementMode free uniquement) dont l'empreinte chevauche
+    un token ou une autre entité déjà bloquante — même autorité que le déplacement des tokens
+    (canOccupy/actorFootprintsOverlap, shared/world/spatialIndex.js), jamais vérifiée avant à la
+    pose. Une entité non bloquante (state.is_blocking === false) reste empilable sans restriction.
+    Les entités murales (placementMode wall) ne sont pas concernées — l'approximation circulaire du
+    moteur surestimerait un objet plat contre un mur. Sur refus, le client annule le ghost et
+    affiche un message (session.entityPositionOccupied, patron declare_error).
+
     ENTITY_CREATED est émis au socket pour les autres clients.
 
     bumpBattlemapRuntimeRevision est appelé pour invalider le cache du snapshot physique.
@@ -174,6 +183,15 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
 
     L'entité déplacée est exclue de sa propre recherche de support (sinon elle utiliserait sa
     propre hauteur comme sol pendant qu'on la glisse et resterait figée en l'air).
+
+    Depuis 2026-09-18 (PLAN_BLOCAGE_CASES_OCCUPEES, archivé) : même refus d'occupation qu'à la
+    création (§3.1) si la position change réellement, pour une entité bloquante en placementMode
+    free. Le PUT générique (§4.2, EntityInstancePanel) envoie toujours pos_x/pos_y/pos_z même sans
+    déplacement — le serveur compare à la position en base, jamais à la seule présence du champ,
+    pour ne pas re-tester une position inchangée à chaque sauvegarde du panneau. Verrou
+    transactionnel PostgreSQL (.forUpdate(), ordre battlemaps→tokens→entities, symétrique à
+    executeBattlemapTokenMovement) uniquement quand la position change réellement — pas sur les
+    autres champs du panneau.
 
 3.4 Rotation (touche R)
 

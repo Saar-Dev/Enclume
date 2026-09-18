@@ -1,4 +1,5 @@
 import { Suspense, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Edges, MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
@@ -40,6 +41,7 @@ import {
 } from '../lib/surfaceData.js'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 // ─── Constantes — identiques à Canvas3D ──────────────────────────────────────
 const GRID_SIZE = 50
@@ -137,6 +139,8 @@ function EntityEditorScene({
     [surfaceData],
   )
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
+  const { addMessage } = useSessionStore()
+  const { t } = useTranslation()
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
   const [moveGhost, setMoveGhost] = useState(null)
@@ -577,11 +581,21 @@ function EntityEditorScene({
         socket?.emit(WS.ENTITY_CREATED, { entityId: res.data.entity.id })
         setGhostPos(null)
         onBlueprintPlaced?.(res.data.entity)
-      } catch (err) { console.error('[EntityEditor] Erreur pose entité :', err) }
+      } catch (err) {
+        console.error('[EntityEditor] Erreur pose entité :', err)
+        if (err?.response?.status === 409) {
+          addMessage({
+            id: `entity-position-occupied-${Date.now()}`,
+            type: 'declare_error',
+            text: t('session.entityPositionOccupied'),
+            time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          })
+        }
+      }
     }
     canvas.addEventListener('mousedown', onMouseDown)
     return () => canvas.removeEventListener('mousedown', onMouseDown)
-  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity])
+  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity, addMessage, t])
 
   useEffect(() => {
     const onMouseUp = async () => {
@@ -613,11 +627,19 @@ function EntityEditorScene({
         })
       } catch (err) {
         console.error('[EntityEditor] Erreur deplacement :', err)
+        if (err?.response?.status === 409) {
+          addMessage({
+            id: `entity-position-occupied-${Date.now()}`,
+            type: 'declare_error',
+            text: t('session.entityPositionOccupied'),
+            time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          })
+        }
       }
     }
     window.addEventListener('mouseup', onMouseUp)
     return () => window.removeEventListener('mouseup', onMouseUp)
-  }, [entities, socket, updateEntity])
+  }, [entities, socket, updateEntity, addMessage, t])
 
   useEffect(() => {
     const onKey = (e) => {

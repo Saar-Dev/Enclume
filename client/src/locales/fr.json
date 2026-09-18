@@ -254,6 +254,7 @@
     "flamethrowerSelfSplash": "{{label}} — tir en cône à moins de 3 m : le liquide enflammé vous a éclaboussé",
     "stun_blocked": "Action impossible, vous êtes {{statut}}",
     "tokenDropNoSurface": "Aucune surface praticable trouvée à cet endroit — personnage non placé",
+    "entityPositionOccupied": "Position déjà occupée par un autre objet",
     "combatEnd": "Terminer le combat",
     "combatMode": "Mode Combat",
     "combat": "Combat",

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { useEntityStore } from '../stores/entityStore'
+import { useSessionStore } from '../stores/sessionStore'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -51,6 +52,7 @@ function normalizeEntityState(state) {
 export default function EntityInstancePanel({ entity, x, y, onClose, socket = null, editorMode = false }) {
   const { t } = useTranslation()
   const { updateEntity, removeEntity } = useEntityStore()
+  const { addMessage } = useSessionStore()
   const panelRef = useRef(null)
   const blueprint = entity.blueprint
   const placementMode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
@@ -245,10 +247,18 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
       setTimeout(() => setSaved(false), 1500)
     } catch (err) {
       console.error('[EntityInstancePanel] Erreur sauvegarde :', err)
+      if (err?.response?.status === 409) {
+        addMessage({
+          id: `entity-position-occupied-${Date.now()}`,
+          type: 'declare_error',
+          text: t('session.entityPositionOccupied'),
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
     } finally {
       setSaving(false)
     }
-  }, [entity, posX, posY, posZ, rotation, scale, labelOverride, gmOnly, currentStateId, disabledInteractions, interactionOverrides, materialOverrides, notesGm, updateEntity, socket, blueprint?.interactions])
+  }, [entity, posX, posY, posZ, rotation, scale, labelOverride, gmOnly, currentStateId, disabledInteractions, interactionOverrides, materialOverrides, notesGm, updateEntity, socket, blueprint?.interactions, addMessage, t])
 
   const handleDelete = useCallback(async () => {
     setDeleting(true)

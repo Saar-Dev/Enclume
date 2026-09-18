@@ -93,6 +93,13 @@ Redis et son hash de collision ont été supprimés. `shared/world/spatialIndex.
 Plusieurs occupants peuvent partager un bucket d'index sans s'écraser. Toute création,
 suppression, mutation d'état ou déplacement dynamique incrémente `runtime_revision`.
 
+Depuis 2026-09-18, `canOccupy` est consulté à la fois pour les tokens (déplacement, déjà le cas) et
+pour les entités du monde (création **et** déplacement, `POST`/`PUT /api/entities`,
+`server/src/routes/entities.js`) — jusque-là seule la pose de token en consultait une, la pose
+d'une entité écrivait sa position sans aucune vérification. Détail complet : `ENTITES.md` §3.1/3.3.
+
+
+
 Le helper partagé `bumpBattlemapRuntimeRevision` (`server/src/services/worldRuntimeService.js`)
 porte cet incrément hors des services de mouvement eux-mêmes. Il est appelé directement par le
 système Entités (`server/src/socket/socketEntity.js`, `server/src/routes/entities.js`, déjà
