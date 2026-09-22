@@ -38,14 +38,29 @@ export function useCombatUIState() {
   // interaction token hors combat (sélection, drag&drop, menu radial). SessionPage ne passe la prop
   // `onAmbientTokenClick` que si `ambientAttackArmed` — même convention "null quand inactif" que
   // moveTarget / losMode.
+  // { tokenId, handler } | null — le tokenId permet à l'enregistrement de refuser de se faire voler
+  // par un autre déclarant (garde d'exclusivité), et à un nettoyage périmé de ne jamais effacer
+  // l'enregistrement d'un déclarant plus récent (même défaut que la course d'état corrigée dans
+  // Canvas3D.jsx#requestWorldPathPreview — un cleanup ne retire jamais autre chose que SA PROPRE
+  // inscription). Contrairement à combatMoveMode (protégé côté appelant, useAutoMoveMode.js:32), cette
+  // autorité vit ici, au point d'enregistrement unique — aucun appelant ne peut plus l'écraser par
+  // erreur (BUG télépilotage 2026-09-22 : useCombatClickAttack n'avait alors aucune protection).
   const ambientAttackHandlerRef = useRef(null)
   const [ambientAttackArmed, setAmbientAttackArmed] = useState(false)
-  const registerAmbientAttackHandler = useCallback((fn) => {
-    ambientAttackHandlerRef.current = fn
-    setAmbientAttackArmed(!!fn)
+  const registerAmbientAttackHandler = useCallback((tokenId, fn) => {
+    const current = ambientAttackHandlerRef.current
+    if (fn) {
+      if (current && current.tokenId !== tokenId) return // déjà pris par un autre déclarant
+      ambientAttackHandlerRef.current = { tokenId, handler: fn }
+      setAmbientAttackArmed(true)
+    } else {
+      if (!current || current.tokenId !== tokenId) return // nettoyage périmé — pas le nôtre à retirer
+      ambientAttackHandlerRef.current = null
+      setAmbientAttackArmed(false)
+    }
   }, [])
   const handleAmbientTokenClick = useCallback((token, screenX, screenY) => {
-    ambientAttackHandlerRef.current?.(token, screenX, screenY)
+    ambientAttackHandlerRef.current?.handler?.(token, screenX, screenY)
   }, [])
 
   // combatCameraCenter intentionnellement NON reset — caméra reste sur la dernière position

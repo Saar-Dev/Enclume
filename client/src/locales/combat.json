@@ -508,6 +508,12 @@
     "passTurn": "Passer le tour",
     "movementUnavailable": "Déplacement indisponible — {{reason}}"
   },
+  "telepilot": {
+    "sectionTitle": "Télépilotage",
+    "pilotHint": "Télépiloter",
+    "activeBanner": "Vous télépilotez {{name}} — aucune autre action ce Tour",
+    "cancelButton": "Reprendre le contrôle"
+  },
   "common": {
     "targetSection": "Cible",
     "changeButton": "Changer",

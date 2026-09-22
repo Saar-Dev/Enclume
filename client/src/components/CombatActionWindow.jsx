@@ -69,6 +69,14 @@ export default function CombatActionWindow({
   const isStunned   = playerToken?.statuses?.includes('stunned') ?? false
   const isDrone     = playerChar?.type === 'drone'
 
+  // Télépilotage (Sprint 3, PLAN_DRONE.md) — drones possédés par ce compte (character.user_id, même
+  // autorité que Sprint 2c/2d), présents dans ce combat, télépilotables depuis le tour du PJ PILOTE.
+  // Distinct de `isDrone` ci-dessus, qui couvre le tour PROPRE du drone (sa propre déclaration
+  // classique/Sprint 2c, quand playerToken EST le drone).
+  const ownedDroneTokensInRoster = playerTokensInRoster.filter(
+    tk => playerChars.find(c => c.id === tk.character_id)?.type === 'drone'
+  )
+
   // Déclarant légitime — remonté ici (avant les hooks ambiants plus bas, même contrainte d'ordre des
   // hooks que useCombatClickAttack) pour ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) : le survol
   // déplacement ne doit s'armer que si c'est réellement mon tour, jamais tout le temps. Ancien
@@ -184,6 +192,32 @@ export default function CombatActionWindow({
     showTargetRecap,
   })
 
+  // --- Télépilotage (Sprint 3) — sélection du drone piloté, réinitialisée si le token actif change.
+  // `telepilotDeclare` appelé inconditionnellement (règle des hooks — jamais dans un if), comme
+  // `droneDeclare` ci-dessus ; charId/tokenId à null quand aucun drone sélectionné, le hook no-ope
+  // déjà proprement dans ce cas (useDroneDeclare.js, fetch armes gardé par `if (!charId) return`).
+  const [telepilotDroneId, setTelepilotDroneId] = useState(null)
+  useEffect(() => { setTelepilotDroneId(null) }, [playerToken?.id])
+  const telepilotToken = telepilotDroneId ? tokens.find(tk => tk.id === telepilotDroneId) ?? null : null
+  const { allures: telepilotAllures, error: telepilotAlluresError } = useDroneMovementBudget(
+    telepilotToken?.character_id ?? null, !!telepilotDroneId,
+  )
+  const telepilotDeclare = useDroneDeclare({
+    charId:           telepilotToken?.character_id ?? null,
+    tokenId:          telepilotToken?.id ?? null,
+    tokenPos:         telepilotToken ? { x: telepilotToken.pos_x, z: telepilotToken.pos_y } : null,
+    allures:          telepilotAllures,
+    onEnterMoveMode,
+    onEnterTargetMode,
+    onEnterAoeTargetMode,
+    moveHoverEnabled: !!telepilotDroneId && isMyTurnToAct,
+    combatMoveMode,
+    pendingMoveSelection,
+    battlemapId,
+    registerAmbientAttackHandler,
+    showTargetRecap,
+  })
+
   // Déplacement : survol/preview toujours actif par défaut, sans clic préalable sur la tuile
   // (décision Saar, COMBAT-DEPLACEMENT-HOVER) — suspendu pendant ciblage Attaque/CaC et pendant
   // Charge/Retraite (ces deux derniers gèrent leur propre entrée avec des allures restreintes).
@@ -194,7 +228,12 @@ export default function CombatActionWindow({
   const { rearm: rearmMove } = useAutoMoveMode({
     // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — le survol ne s'arme que si c'est réellement mon tour
     // de déclarer/résoudre, jamais tout le temps (isMyTurnToAct, source unique ci-dessus).
-    enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
+    // !telepilotDroneId (2026-09-22) — sans ce terme, le pilote reste "actif" pendant qu'il télépilote
+    // un drone : `combatMoveMode` (armé en premier par défaut, avant même le choix de télépiloter)
+    // n'est jamais libéré, donc telepilotDeclare ci-dessus ne peut jamais s'armer à sa place
+    // (useAutoMoveMode.js:32, `if (combatMoveMode) return`). Le pilote doit être aussi silencieux que
+    // pendant Charge/Retraite/ciblage — RAW « son action ce tour = l'action du drone ».
+    enabled: !isDrone && !telepilotDroneId && allures !== null && !inTargetMode && !inMeleeTargetMode &&
       decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' && isMyTurnToAct,
     allures: effectiveAllures,
     tokenId: playerToken?.id ?? null,
@@ -226,7 +265,10 @@ export default function CombatActionWindow({
   useCombatClickAttack({
     // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — même garde de tour que useAutoMoveMode
     // ci-dessus (isMyTurnToAct) : ce hook jumeau n'avait jamais reçu la contrainte de tour.
-    enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
+    // !telepilotDroneId — même raison que useAutoMoveMode ci-dessus : sans ce terme, un clic direct
+    // sur un ennemi pendant une télépilotage déclenchait l'arme du PILOTE au lieu de celle du drone
+    // (registerAmbientAttackHandler durci séparément, useCombatUIState.js, en défense supplémentaire).
+    enabled: !isDrone && !telepilotDroneId && allures !== null && !inTargetMode && !inMeleeTargetMode &&
       decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' && isMyTurnToAct,
     battlemapId,
     tokenId: playerToken?.id ?? null,
@@ -767,8 +809,10 @@ export default function CombatActionWindow({
   })
   const canDeclare = isDrone
     ? droneDeclare.canDeclare
-    : (assault.valid && melee.valid && reload.valid)
-  const blockReason = isDrone ? null : buildBlockReason({ assault, melee, reload })
+    : telepilotDroneId
+      ? telepilotDeclare.canDeclare
+      : (assault.valid && melee.valid && reload.valid)
+  const blockReason = (isDrone || telepilotDroneId) ? null : buildBlockReason({ assault, melee, reload })
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
@@ -781,6 +825,20 @@ export default function CombatActionWindow({
         tokenId: playerToken.id,
         state: { position: 'standing', weapon: 'holstered', fire_mode: stateFireMode, cover: 'exposed', vitesse: 'normal' },
         mapActions,
+      })
+      return
+    }
+
+    // Télépilotage (Sprint 3, PLAN_DRONE.md) — action exclusive du Tour du PILOTE : `mapActions`
+    // vient du drone ciblé (telepilotDeclare, scopé à son propre token/perso), `tokenId` reste celui
+    // du PILOTE (Initiative, ownership, garde d'ordre de file — socketCombatAnnouncement.js). Le
+    // marqueur `dronePilot` signale au serveur la substitution pilote→drone.
+    if (telepilotDroneId) {
+      const { stateFireMode, mapActions } = telepilotDeclare.buildMapActions()
+      socket.emit(WS.COMBAT_ACTION_DECLARE, {
+        tokenId: playerToken.id,
+        state: { position: 'standing', weapon: 'holstered', fire_mode: stateFireMode, cover: 'exposed', vitesse: 'normal' },
+        mapActions: { ...mapActions, dronePilot: { droneTokenId: telepilotDroneId } },
       })
       return
     }
@@ -1072,8 +1130,43 @@ export default function CombatActionWindow({
 
           {/* Posture / Vitesse / Arme → satellite d'état (CombatDeclareStatePanel, module 3). */}
 
+          {/* Télépilotage (Sprint 3, PLAN_DRONE.md) — visible uniquement sur le tour du PILOTE (pas
+             quand playerToken EST déjà le drone, isDrone ci-dessus). Une ligne `.decl-move` par drone
+             possédé présent dans ce combat (même patron de rangée togglable que la tuile Déplacement
+             ci-dessous, `index.css:1914` — pas un `.btn` générique, cohérence visuelle de la fenêtre)
+             ; la sélectionner remplace intégralement les panneaux humains ci-dessous par ceux du
+             drone (§ « il ne peut rien faire d'autre ce Tour », retour Saar). */}
+          {!isDrone && ownedDroneTokensInRoster.length > 0 && (
+            <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
+              <div style={W.sectionTitle}>{t('telepilot.sectionTitle')}</div>
+              {telepilotDroneId ? (
+                <div
+                  className="decl-move"
+                  data-on="true"
+                  onClick={() => setTelepilotDroneId(null)}
+                  title={t('telepilot.activeBanner', { name: telepilotToken?.label ?? '?' })}
+                >
+                  <span className="decl-move__label">{t('telepilot.activeBanner', { name: telepilotToken?.label ?? '?' })}</span>
+                  <span className="decl-move__val">{t('telepilot.cancelButton')}</span>
+                </div>
+              ) : (
+                ownedDroneTokensInRoster.map(tk => (
+                  <div
+                    key={tk.id}
+                    className="decl-move"
+                    data-on="false"
+                    onClick={() => setTelepilotDroneId(tk.id)}
+                  >
+                    <span className="decl-move__label">{tk.label ?? '?'}</span>
+                    <span className="decl-move__val">{t('telepilot.pilotHint')}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
           {/* ── Corps humain : move-line + liste d'armes groupée (CombatDeclareActionList, module 4). */}
-          {!isDrone && (
+          {!isDrone && !telepilotDroneId && (
             <CombatDeclareActionList
               move={{
                 on: !!moveSelection,
@@ -1089,31 +1182,38 @@ export default function CombatActionWindow({
             />
           )}
 
-          {/* ACTION — drone : DroneDeclareSection. Le PJ humain rend la move-line + la liste d'armes
-             groupée ci-dessus (module 4, D5 « l'arme EST l'action » — plus de grille de tuiles). */}
-          {isDrone && (
+          {/* ACTION — drone (isDrone : propre tour du drone) OU télépilotage (tour du pilote, l'arme
+             sélectionnée/la cible portent alors sur telepilotToken, pas playerToken) :
+             DroneDeclareSection. Le PJ humain rend la move-line + la liste d'armes groupée ci-dessus
+             (module 4, D5 « l'arme EST l'action » — plus de grille de tuiles). */}
+          {(isDrone || telepilotDroneId) && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
               <div style={W.sectionTitle}>{t('sectionTitles.action')}</div>
               <DroneDeclareSection
-                pendingMove={droneDeclare.pendingMove}
-                onMoveToggle={droneDeclare.rearmDroneMove}
-                hasPassed={droneDeclare.hasPassed}
-                onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
-                droneWeapons={droneDeclare.droneWeapons}
-                selectedWeaponId={droneDeclare.selectedDroneWeaponId}
-                onWeaponSelect={droneDeclare.selectDroneWeapon}
-                assaultTargetId={droneDeclare.assaultTargetId}
-                onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
-                aoeDirection={droneDeclare.aoeDirection}
-                aoeIntendedOrigin={droneDeclare.aoeIntendedOrigin}
-                onStartAoeDirection={droneDeclare.handleStartAoeDirection}
+                pendingMove={(isDrone ? droneDeclare : telepilotDeclare).pendingMove}
+                onMoveToggle={(isDrone ? droneDeclare : telepilotDeclare).rearmDroneMove}
+                hasPassed={(isDrone ? droneDeclare : telepilotDeclare).hasPassed}
+                onPassToggle={() => (isDrone ? droneDeclare : telepilotDeclare).setHasPassed(p => !p)}
+                droneWeapons={(isDrone ? droneDeclare : telepilotDeclare).droneWeapons}
+                selectedWeaponId={(isDrone ? droneDeclare : telepilotDeclare).selectedDroneWeaponId}
+                onWeaponSelect={(isDrone ? droneDeclare : telepilotDeclare).selectDroneWeapon}
+                assaultTargetId={(isDrone ? droneDeclare : telepilotDeclare).assaultTargetId}
+                onChooseTarget={() => (isDrone ? droneDeclare : telepilotDeclare).handleChooseTarget(isDrone ? playerToken : telepilotToken)}
+                aoeDirection={(isDrone ? droneDeclare : telepilotDeclare).aoeDirection}
+                aoeIntendedOrigin={(isDrone ? droneDeclare : telepilotDeclare).aoeIntendedOrigin}
+                onStartAoeDirection={(isDrone ? droneDeclare : telepilotDeclare).handleStartAoeDirection}
                 getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
               />
+              {telepilotDroneId && telepilotAlluresError && (
+                <div style={W.mortalWoundBanner}>
+                  {t('droneDeclare.movementUnavailable', { reason: telepilotAlluresError })}
+                </div>
+              )}
             </div>
           )}
 
           {/* ACTIONS RAPIDES */}
-          {!isDrone && (
+          {!isDrone && !telepilotDroneId && (
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>{t('gmDeclareWindow.quickActionsSection')}</div>
             {QUICK_ACTIONS.map(a => {
@@ -1280,7 +1380,7 @@ export default function CombatActionWindow({
         )}
 
         {/* ---- Panneau droit — assaut humanoïde ---- */}
-        {showAssault && !isDrone && (
+        {showAssault && !isDrone && !telepilotDroneId && (
           <div style={{ ...W.assaultPanel, flex: 1, minHeight: 0 }}>
             <AssaultRangedPanel
               weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || t('actionWindow.weaponNameFallback')} (${selectedWeapon.slots?.[0]})` : null}
@@ -1337,9 +1437,9 @@ export default function CombatActionWindow({
         <CombatDeclareErrorBanner />
         <CombatDeclareFooter
           currentInitiative={rosterEntry.initiative}
-          iniDelta={isDrone ? 0 : iniDelta}
-          iniBreakdown={isDrone ? [] : iniBreakdown}
-          hasCompleteAction={isDrone ? droneDeclare.canDeclare : hasCompleteAction}
+          iniDelta={(isDrone || telepilotDroneId) ? 0 : iniDelta}
+          iniBreakdown={(isDrone || telepilotDroneId) ? [] : iniBreakdown}
+          hasCompleteAction={isDrone ? droneDeclare.canDeclare : telepilotDroneId ? telepilotDeclare.canDeclare : hasCompleteAction}
           canDeclare={canDeclare}
           blockReason={blockReason}
           moveDestination={moveSelection ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY } : null}

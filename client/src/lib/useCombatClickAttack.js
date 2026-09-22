@@ -69,7 +69,7 @@ export function useCombatClickAttack({
         screenX != null ? { x: screenX, y: screenY } : null,
       )
     }
-    registerAmbientAttackHandler(handler)
-    return () => registerAmbientAttackHandler(null)
-  }, [enabled, registerAmbientAttackHandler])
+    registerAmbientAttackHandler(tokenId, handler)
+    return () => registerAmbientAttackHandler(tokenId, null)
+  }, [enabled, registerAmbientAttackHandler, tokenId])
 }

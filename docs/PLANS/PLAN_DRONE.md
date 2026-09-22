@@ -14,8 +14,24 @@
 > **Statut** : Sprint 1 / 1bis / 2a / 2b / 2c **clos, vérifiés en code le 2026-09-16**. **Lot 0 clos,
 > testé ET commité le 2026-09-17** (`52bb3f3`, non poussé). **Sprint 2d (mode autonome, backend + UI)
 > CLOS — confirmé fonctionnel en jeu réel par Saar le 2026-09-18** (voir §4 ; faits durables intégrés à
-> `docs/SYSTEME/COMBAT.md` § « Mode autonome drone — ordres permanents »). Seul reste réel du chantier :
-> Sprint 3 (télépilotage), non commencé.
+> `docs/SYSTEME/COMBAT.md` § « Mode autonome drone — ordres permanents »). **Sprint 3 (télépilotage) —
+> cadrage V2 terminé 2026-09-22, non-persistant, aucune migration requise. **Serveur + client CODÉS
+> 2026-09-22** — serveur : `socketCombatAnnouncement.js` déclaration + substitution pilote→drone,
+> `socketCombatResolution.js` mouvement + dispatch assault/melee + plafond de compétence,
+> `socketCombatHelpers.js#resolveDroneAssaultAction` plafond. Client :
+> `CombatActionWindow.jsx` gagne un bouton « Télépiloter <drone> » par drone possédé présent dans le
+> combat (visible sur le tour du PILOTE, `ownedDroneTokensInRoster`), bascule intégrale vers
+> `DroneDeclareSection`/`DroneWeaponPanel` via un second `useDroneDeclare` scopé au drone
+> (`telepilotDeclare`), payload `COMBAT_ACTION_DECLARE` avec `tokenId` du pilote +
+> `mapActions.dronePilot`. `node --check` propre sur les 3 fichiers serveur, `eslint`/`npm run build`
+> propres côté client (aucune régression, warnings pré-existants uniquement). Bug de garde de phase
+> trouvé et corrigé en jeu réel (`combat_timeline_entries` interrogé à tort en phase ANNONCE — n'existe
+> qu'après la transition RÉSOLUTION). **Mécanisme Tir/CaC + déclaration confirmé fonctionnel en jeu
+> réel par Saar le 2026-09-22.** **⚠️ Bug de déplacement signalé le 2026-09-22, non diagnostiqué,
+> non décrit précisément — pris en charge par un autre agent, handoff `temp/TELEPILOTAGE_HANDOFF.md`
+> (zones suspectes : substitution pilote→drone dans la boucle de mouvement `socketCombatResolution.js`
+> ~L384-490, la plus récente et la moins éprouvée des 3 du chantier).** Chantier NON clos. Reste aussi :
+> interception RAW non désactivée en télépiloté (TODO noté, non bloquant), tests.**
 
 ---
 
@@ -497,45 +513,81 @@ conditionnel, délégation à `resolveDroneAssaultAction`) en jeu réel, mais **
 existe dès la V1** (l'option de campagne, posée dès le premier codage) — pas une case vague ajoutée
 après coup.
 
-### Sprint 3 — Télépilotage (LdB p.319) — CADRAGE TERMINÉ 2026-09-16, prêt à coder sur validation Saar
+### Sprint 3 — Télépilotage (LdB p.319) — CADRAGE V2 (revu 2026-09-22, remplace la version 2026-09-16 ci-dessous)
 
 RAW : « le personnage doit utiliser sa Compétence Télépilotage, considérée comme une Compétence
 limitative agissant éventuellement sur le niveau des programmes habituels du drone » ; « quand
 télépiloté, l'initiative = celle du pilote (son action ce tour = l'action du drone) ». Rien de codé,
-ni serveur ni client (recherche exhaustive, §3) ; `TELEPILOTAGE` existe déjà au catalogue.
+ni serveur ni client ; `TELEPILOTAGE` existe déjà au catalogue.
 
-#### Écart assumé vs l'ancien plan archivé — pas de mode persistant
-L'ancien plan (`PLAN_DRONESYSCOMBAT.md` Sprint 3) proposait `combat_roster.state_control_mode`
-(`'autonome'|'telepilote'`, persistant tour après tour, togglé par une action dédiée). **Retenu à la
-place : un choix fait à chaque Tour, au moment de la déclaration, par le pilote — pas d'état à
-synchroniser dans la durée.** Plus simple, aucun risque de désynchronisation (drone/pilote
-déconnecté, changement de pilote en cours de combat), pas de nouvelle colonne enum. Un Tour non
-télépiloté retombe simplement sur le comportement déjà existant du drone selon `drone_turn_model`
-(déclaration manuelle classique, ou exécution des ordres permanents — Sprint 2d).
+**Revu en conversation avec Saar (2026-09-22)** — description précise du flux voulu, différente sur
+plusieurs points du cadrage du 2026-09-16 : action exclusive du Tour (pas combinée avec
+déplacement/tir du pilote lui-même), ouverture immédiate de la fenêtre d'action du DRONE (pas un
+sous-panneau dans la fenêtre du pilote), non-persistant confirmé après analyse à charge comparant
+persistant/non-persistant (le non-persistant est plus proche du texte RAW « ce tour », déjà
+quasi-entièrement cadré, et le risque « une seule action par tour » y est déjà couvert par du code
+existant et testé — voir § Risque ci-dessous). Mode persistant **non abandonné, différé en V2** (§ V2
+différée en fin de section).
 
-#### Lien pilote ↔ drone
-Nouvelle colonne `drone_sheet.owner_character_id UUID REFERENCES characters(id) ON DELETE SET NULL`
-— **distincte** de `character.user_id` du drone lui-même (déjà existant, autorisation de compte pour
-Sprint 2c/2d, inchangé). `owner_character_id` désigne quel **personnage** (PJ) est le pilote RAW
-(dont la Compétence Télépilotage compte), pas quel compte peut éditer/déclarer pour le drone.
-Assignable par le MJ — UI à ajouter dans `DroneSheet.jsx` (onglet Paramètres, sélecteur de personnage
-de la campagne).
+#### Écart assumé vs l'ancien plan archivé — toujours pas de mode persistant en V1
+Confirmé : un choix fait à chaque Tour, par une vraie déclaration serveur — pas d'état à synchroniser
+dans la durée. Un Tour sans télépilotage retombe sur le comportement déjà existant du drone selon
+`drone_turn_model` (déclaration manuelle classique, ou exécution des ordres permanents — Sprint 2d).
 
-#### Déclaration — sur le tour du PILOTE, pas celui du drone
-`CombatActionWindow.jsx` (fenêtre PJ) gagne une option « Télépiloter <nom du drone> » quand
-`character.id === owner_character_id` d'au moins un drone actif dans le combat en cours. Choix arme
-drone + cible : réutiliser directement `DroneDeclareSection.jsx` (déjà utilisé côté MJ pour la
-déclaration manuelle), pas une réécriture.
+#### Lien pilote ↔ drone — simplifié, aucune nouvelle colonne
+**Écart vs le cadrage du 2026-09-16** : pas de `drone_sheet.owner_character_id`. Retenu à la place
+(retour Saar : « on est owner du drone pour le piloter, point ») — **la même autorité que Sprint
+2c/2d** : `character.user_id === user.id` sur le DRONE lui-même. Quiconque contrôle déjà le drone
+(compte) peut le télépiloter ; pas de distinction RAW « pilote » séparée du « propriétaire de compte »
+dans ce projet. Zéro migration pour ce point.
+
+#### Déclaration — action exclusive du Tour, fenêtre du drone reprise telle quelle
+`CombatActionWindow.jsx` (fenêtre PJ) gagne un bouton « Télépiloter » (visible si le PJ possède au
+moins un drone actif dans le combat, `character.user_id === user.id` ; un sélecteur de drone
+s'affiche si plusieurs). **Le choisir remplace intégralement les panneaux du pilote (Tir/CaC/
+déplacement) pour ce Tour** — un pilote qui télépilote ne fait rien d'autre ce Tour, cohérent avec
+« son action ce tour = l'action du drone ».
+
+**Réutilisation totale, zéro nouveau composant de déclaration** — vérifié en lisant le code : le hook
+`useDroneDeclare` (`client/src/lib/useDroneDeclare.js`) est déjà paramétré générique
+(`charId, tokenId, tokenPos, allures`, aucune hypothèse sur « le personnage courant du joueur »).
+`CombatActionWindow.jsx`, en mode Télépiloter, monte `useDroneDeclare` + `DroneDeclareSection.jsx` +
+`DroneWeaponPanel.jsx` avec l'identité du **drone ciblé** (pas du pilote) — exactement les mêmes
+composants que la déclaration classique d'un drone, sans modification. L'ouverture « immédiate » de la
+fenêtre d'action du drone est donc un pur effet client (bascule d'affichage dans la même fenêtre), pas
+un aller-retour serveur.
+
+**Garde, différente selon `drone_turn_model`** (interaction avec le Sprint 2d, inchangée depuis le
+cadrage du 2026-09-17) :
+- `classique` : refuser si `combat_roster.has_announced === true` côté drone (« ce drone a déjà agi ce
+  Tour ») — inchangé, le drone n'a pas encore de slot pris tant que personne ne l'a déclaré.
+- `ordres_permanents` : le drone a **déjà** `has_announced=true` dès le début de Tour (pré-rempli par
+  le Sprint 2d). **Correction (bug trouvé en jeu réel, Saar 2026-09-22, « le moteur drone est hors
+  sol »)** : distinguer via `combat_actions.status` de sa ligne `drone_auto` de ce Tour — **jamais**
+  `combat_timeline_entries` (n'existe pas encore en phase ANNONCE, l'échelle n'est construite qu'à la
+  transition vers RÉSOLUTION, `buildTimelineEntries`/`startResolutionPhase`, `combatTurnEngine.js`).
+  Si `status: 'pending'` (pré-rempli, pas encore repris par `startResolutionPhase`) → **annuler cette
+  ligne** (marquer `status: 'skipped'`, valeur déjà légale pour `combat_actions`) et poursuivre avec le
+  télépilotage normalement ; si aucune ligne `pending` trouvée → refuser (« ce drone a déjà agi ce
+  Tour »), même message que le mode classique. **Les ordres permanents (`acquired_target_token_id`)
+  ne sont jamais effacés par ce remplacement** — seule l'action de ce Tour change de forme ; le Tour
+  suivant sans télépilotage, l'exécution automatique reprend normalement sur les mêmes ordres.
+
+**Un seul point encore ouvert, à trancher au codage (pas bloquant)** : existe-t-il déjà un mécanisme
+générique d'annulation d'une déclaration avant résolution dans ce projet ? Si oui, le réutiliser tel
+quel pour « lâcher » un télépilotage juste déclaré. Si non, en V1 le pilote peut simplement changer
+d'avis côté client tant qu'il n'a pas validé (rien à annuler côté serveur avant soumission) ; aucune
+annulation après soumission n'est prévue, cohérent avec le reste de la déclaration de combat
+aujourd'hui.
 
 **Garde, différente selon `drone_turn_model`** (interaction avec le Sprint 2d, retour Saar 2026-09-17) :
 - `classique` : refuser si `combat_roster.has_announced === true` côté drone (« ce drone a déjà agi ce
   Tour ») — inchangé, le drone n'a pas encore de slot pris tant que personne ne l'a déclaré.
 - `ordres_permanents` : le drone a **déjà** `has_announced=true` dès le début de Tour (pré-rempli par
-  le Sprint 2d, cf. plus haut). Distinguer deux cas via `combat_timeline_entries.status` de son action
-  `drone_auto` de ce Tour : si encore `scheduled`/`delayed_waiting` (pas encore résolue) → **annuler
-  cette entrée** (marquer `skipped`, ou suppression + suppression de la ligne `combat_actions`
-  correspondante — détail à trancher au codage) et poursuivre avec la télépilotage normalement ; si
-  déjà `resolved` → refuser (« ce drone a déjà agi ce Tour »), même message que le mode classique.
+  le Sprint 2d, cf. plus haut). Distinguer via `combat_actions.status` de sa ligne `drone_auto` de ce
+  Tour (jamais `combat_timeline_entries`, cf. § ci-dessus — bug corrigé 2026-09-22) : `status:
+  'pending'` → **annuler cette ligne** (`status: 'skipped'`) et poursuivre avec le télépilotage
+  normalement ; sinon → refuser (« ce drone a déjà agi ce Tour »), même message que le mode classique.
   **Les ordres permanents (`acquired_target_token_id`) ne sont jamais effacés par ce remplacement** —
   seule l'action de ce Tour change de forme ; le Tour suivant sans télépilotage, l'exécution
   automatique reprend normalement sur les mêmes ordres.
@@ -543,9 +595,13 @@ déclaration manuelle), pas une réécriture.
 Payload : `combat_actions` inséré avec `token_id` = celui du **pilote** (pas du drone),
 `action_key: 'drone_telepilot'`, `drone_weapon_inv_id` posé (identifie l'arme ET le drone via
 `drone_weapons.character_id` — aucune colonne supplémentaire nécessaire pour retrouver quel drone).
-**Même transaction** : `combat_roster` du drone → `has_announced=true, status='done'` pour ce Tour
-(déjà vrai en `ordres_permanents`, posé ici pour la première fois en `classique` — pas de slot séparé
-résolu pour lui, RAW « son action ce tour = l'action du drone »).
+**Même transaction** : `combat_roster` du drone → `has_announced=true` pour ce Tour (déjà vrai en
+`ordres_permanents`, posé ici pour la première fois en `classique` — pas de slot séparé résolu pour
+lui, RAW « son action ce tour = l'action du drone »). **`has_announced` uniquement, jamais `status`**
+— corrigé au codage (2026-09-22) : `status` ∈ `{'active','done'}` est un état de COMBAT (vivant/
+retiré), lu par `findNextAnnounceSlot`/`advanceAnnouncementQueue`/`prefillAutonomousDroneOrders`
+(`combatTurnEngine.js`) — le poser à `'done'` retirerait le drone de la file pour le reste du combat
+après un seul télépilotage (aucun site du projet ne pose `status: 'done'`, vérifié avant de coder).
 
 #### Timeline — aucun changement à `combatTurnEngine.js`
 `token_id` de l'action = celui du pilote → `buildTimelineEntries` calcule la position depuis
@@ -555,12 +611,19 @@ déjà natif, zéro modification du moteur de phases.
 #### Résolution — `resolveDroneAssaultAction` réutilisé avec un plafond de compétence, Tir ET CaC
 `socketCombatResolution.js` : nouvelle branche `action_key === 'drone_telepilot'` (posée pour
 `action.type === 'assault'` OU `'melee'` — **Tir et CaC pris en charge symétriquement dès ce Sprint**,
-correction post-relecture : `resolveDroneAssaultAction` gère déjà les deux en interne via
-`isCaCWeapon`, y compris le check de portée de contact `checkMeleeReach` — router le CaC télépiloté
-séparément n'aurait été qu'une coupure de périmètre artificielle, pas une vraie limite technique).
-Résout le character DRONE (via `drone_weapons.character_id`, pas le pilote) et son propre token sur la
-carte (portée/LOS/allonge calculées depuis la position du **drone**, jamais celle du pilote — c'est
-l'appareil qui agit depuis son emplacement) → appelle `resolveDroneAssaultAction`.
+`resolveDroneAssaultAction` gère déjà les deux en interne via `isCaCWeapon`, y compris le check de
+portée de contact `checkMeleeReach` — router le CaC télépiloté séparément n'aurait été qu'une coupure
+de périmètre artificielle, pas une vraie limite technique).
+
+**Étape explicite trouvée manquante dans le cadrage du 2026-09-16 (analyse à charge)** :
+`resolveDroneAssaultAction` lit `action.token_id` pour la portée/LOS (`checkMeleeReach`,
+`resolveRangedDistance`, `resolveAttackLOS` — `socketCombatHelpers.js:2760-2790`), qui doit être celui
+du **drone** ; or `combat_actions.token_id` stocké est celui du **pilote** (§ Payload). Il faut donc
+**réécrire l'objet action avant de déléguer** : `const resolvedAction = { ...action, token_id:
+droneToken.id }`, exactement le patron déjà éprouvé par `resolveDroneAutoAction`
+(`socketCombatHelpers.js` ~L2936, qui construit déjà un `resolvedAction` de cette façon pour son propre
+cas). Résout le character DRONE via `drone_weapons.character_id` (pas le pilote) → appelle
+`resolveDroneAssaultAction(io, campaignId, resolvedAction, ...)`.
 
 **Plafond de compétence — vérifié RAW, pas une extension assumée** (recherche faite 2026-09-17,
 répond aux deux points laissés ouverts par la critique précédente) :
@@ -588,13 +651,25 @@ répond aux deux points laissés ouverts par la critique précédente) :
   `char_skills` n'a pas de ligne pour ce personnage/cette compétence (`charSkillRow?.mastery ?? 0`).
   C'est le comportement RAW correct, pas un trou à combler.
 
-#### Déplacement — inclus dès ce Sprint, pas différé
+#### Déplacement — inclus dès ce Sprint, avec le point de substitution explicite (analyse à charge)
 RAW : le pilote peut déplacer le drone le tour où il le télépilote (« son action ce tour = l'action du
-drone »). La déclaration « Télépiloter » réutilise le même payload qu'une déclaration normale
-(`mapActions.move` + `mapActions.attack`/`melee` combinés, déjà supporté pour un PJ) — `planCombatWorldMovement`
-appelé avec le character/token du **drone** (pas du pilote), budget via `getDroneMovementBudget` (déjà
-livré, correctif `DR2`). Aucune nouvelle mécanique de déplacement à écrire, seulement câbler la bonne
-entité mouvante.
+drone »). `mapActions.move` provient de `useDroneDeclare` (déjà scopé au drone — voir § Déclaration),
+budget via `getDroneMovementBudget` (déjà branché dans `getCharacterMovementBudget` par type,
+`movementBudgetService.js:52-53`, correctif `DR2`).
+
+**Trouvaille de l'analyse à charge, absente du cadrage du 2026-09-16** : `COMBAT_ACTION_DECLARE`
+(`socketCombatAnnouncement.js:84-184`) résout **un seul** `token`/`character` depuis le `tokenId` reçu
+et l'utilise pour la garde d'ownership, la garde de file d'ANNONCE **et** l'appel
+`planCombatWorldMovement(token, character, mapActions.move)` (ligne 179) — le même objet partout. Avec
+`tokenId` envoyé = celui du pilote (§ Payload), le déplacement calculerait sinon la position/le budget
+du **pilote**. Fix requis, jamais mentionné par le cadrage précédent : dans ce handler, quand le
+payload porte le marqueur télépilotage (`dronePilot: { droneTokenId, droneCharacterId,
+droneWeaponInvId }`), résoudre un **second** couple `droneToken`/`droneCharacter` (même requêtes que
+pour `token`/`character`, ciblant `droneTokenId`) et appeler `planCombatWorldMovement(droneToken,
+droneCharacter, mapActions.move)` — `token`/`character` (pilote) restent utilisés pour ownership/ordre
+de file, `droneToken`/`droneCharacter` pour le mouvement et pour construire `combat_actions.drone_weapon_inv_id`.
+C'est le seul fichier serveur non listé par le cadrage du 2026-09-16 alors qu'il porte le seul point
+de couplage réellement bloquant.
 
 #### Interception désactivée en télépiloté
 RAW explicite : le programme réactif `interception` n'est actif qu'en mode autonome. Simple garde côté
@@ -605,6 +680,67 @@ serveur (aucun Test d'interception déclenché quand l'action vient de `action_k
 Montrer les deux identités (pilote + drone) dans le jet plutôt qu'une seule — ex. « Jean (télépilotage)
 — Drone AX tire » — pour que ce soit lisible à la table (le pilote doit voir que c'est bien lui qui a
 agi, le drone reste le sujet mécanique du jet).
+
+#### Troisième point de substitution — trouvé en codant, absent du cadrage (2026-09-22)
+La boucle « actions simples » de `COMBAT_ACTION_CONFIRM` (`socketCombatResolution.js:384-469`)
+sélectionne `combat_actions WHERE token_id = tokenId` (celui envoyé par le client, le **pilote**) et
+exécute `executeBattlemapTokenMovement`/`getCharacterMovementBudget` avec ce même `token`/`character`
+— pour un déplacement télépiloté, elle bougerait donc le token du pilote, pas celui du drone. Ni la
+Déclaration ni la Résolution assault/melee ne couvrent ce cas : c'est un troisième site, indépendant
+des deux déjà identifiés. **Fix retenu** : à la déclaration, poser aussi `drone_weapon_inv_id` sur la
+ligne `combat_actions` de TYPE `move_short`/`move_long` quand télépiloté (réutilise une colonne déjà
+nullable, satisfait `chk_weapon_xor` — aucune des trois FK n'est sinon posée sur une ligne de
+mouvement). À la Résolution, cette boucle résout `droneCharacter`/`droneToken` via
+`drone_weapon_inv_id` quand présent et substitue avant `executeBattlemapTokenMovement`/
+`getCharacterMovementBudget` — même patron que les deux autres points.
+
+#### Risque « le drone n'agit qu'une fois par Tour » — analyse à charge faite, risque bas
+Consigne Saar (2026-09-22) : un drone doit agir soit via `ordres_permanents` (réactif), soit via
+télépilotage, jamais les deux le même Tour. Vérifié par lecture directe avant de coder quoi que ce
+soit :
+- `prefillAutonomousDroneOrders` (`combatTurnEngine.js:175-215`) filtre déjà `roster.has_announced =
+  false` dans sa requête candidate — un drone déjà annoncé (donc déjà télépiloté ce Tour) en est
+  automatiquement exclu. **Un test existe déjà pour ce cas exact** :
+  `combatTurnEngine.test.mjs:522` (« drone déjà annoncé (télépiloté ce Tour) → pas re-préposé ») —
+  écrit pendant Sprint 2d, jamais activé faute de Sprint 3, à dé-skip au codage.
+- Le cas inverse (drone déjà pré-rempli par `ordres_permanents` en tout début de Tour, avant que le
+  pilote n'ait pu télépiloter) est couvert par la garde § Déclaration (annulation de l'entrée
+  `scheduled`/`delayed_waiting`, refus si `resolved`).
+- Non-sujet pour le mode persistant différé en V2 (§ ci-dessous) : le filtre ci-dessus suffit tant que
+  le télépilotage reste une déclaration explicite à chaque Tour — un mode persistant demanderait un
+  filtre supplémentaire dans `prefillAutonomousDroneOrders` (« ce drone est actuellement piloté »),
+  hors périmètre V1.
+
+#### Fichiers touchés (récapitulatif)
+- `socketCombatAnnouncement.js` (`COMBAT_ACTION_DECLARE`) — détection du marqueur `dronePilot`,
+  résolution du second couple `droneToken`/`droneCharacter`, garde owner/déjà-agi/annulation
+  `drone_auto`, substitution dans `planCombatWorldMovement`, insertion `combat_actions` avec
+  `token_id` pilote + `action_key: 'drone_telepilot'` + `drone_weapon_inv_id`, mise à jour
+  `combat_roster` du drone (`has_announced=true` — pas `status`, cf. § ci-dessus) dans la même
+  transaction.
+- `socketCombatResolution.js` — branche `action_key === 'drone_telepilot'` (assault + melee),
+  reconstruction de `resolvedAction` (token_id → drone), plafond de compétence, délégation à
+  `resolveDroneAssaultAction`.
+- `client/src/components/CombatActionWindow.jsx` — bouton/sélecteur « Télépiloter », bascule
+  d'affichage vers `useDroneDeclare` + `DroneDeclareSection.jsx` + `DroneWeaponPanel.jsx` scopés au
+  drone ciblé, construction du payload avec le marqueur `dronePilot`.
+- `client/src/locales/combat.json` — clés i18n du bouton/libellés (aucun texte en dur, `rules/i18n.md`).
+- `combatTurnEngine.test.mjs:522` — dé-skip le test déjà écrit pour Sprint 2d.
+- **Aucune migration** — vérifié : `combat_actions.action_key` est texte libre (pas de `CHECK`),
+  `type` accepte déjà `'assault'`/`'melee'`, `drone_weapon_inv_id` existe déjà. Zéro nouvelle colonne
+  (le lien pilote↔drone réutilise `character.user_id`, § Lien pilote ↔ drone).
+
+#### V2 différée — mode persistant (proposition non retenue pour V1, définie ici pas enterrée)
+Si retenu plus tard : `combat_roster` (ou `combat_state`) gagne une colonne d'état « ce drone est
+actuellement piloté par tel personnage », **exclue du reset `has_announced` de `endTurn`** (même
+famille que `acquired_target_token_id`, précédent déjà en base). `prefillAutonomousDroneOrders` gagne
+un filtre d'exclusion supplémentaire sur cette colonne. Le plafond de compétence (§ Résolution) doit
+être recalculé à chaque Tour piloté au lieu d'une seule fois. Annulation immédiate sur incapacitation
+du pilote (stun/mortelle/mort) : deux points d'ancrage centralisés identifiés (`applyWound`,
+`server/src/lib/woundService.js:27` pour mortelle/mort ; le seul site d'application de `stunned` dans
+`socketCombatAnnouncement.js` pour l'étourdissement) — bas risque, pas de dispersion façon Lot 0.
+Écart RAW à documenter dans `docs/JOURNAL8.md` si codé (Invariant 5, `AGENTS.md`) — le texte RAW décrit
+littéralement un choix « ce tour », la persistance est une extension assumée, pas un texte RAW direct.
 
 ### Dépendance entre 2d et 3
 Aucune dépendance dure — deux façons indépendantes de remplir le tour d'un même drone (son propre

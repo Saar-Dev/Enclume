@@ -29,7 +29,7 @@ import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatEx
 import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/combatRange.js'
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
-import { calcDroneDegatsNets } from '../lib/charStats.js'
+import { calcDroneDegatsNets, calcLimitedSkillTotal } from '../lib/charStats.js'
 import { resolveAttackTargetSize } from '../lib/characterSizeService.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
 import {
@@ -2824,7 +2824,17 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const situationMods = confirmedModifiers?.situation ?? []
     totalModComp += sumRangedSituationMods(situationMods)
     const coverageModifier  = options.coverageModifier ?? 0
-    const chancesDeReussite = programme.level + totalModComp + coverageModifier
+    // Télépilotage (Sprint 3, PLAN_DRONE.md) — Compétence limitative (REGLECOMPETENCE.md:29-34,
+    // ATTRIBUTS.md:209-211) : le niveau du programme est plafonné par le Seuil complet du pilote sur
+    // TELEPILOTAGE quand `options.skillCap` est fourni (télépiloté) ; `undefined`/`null` (déclaration
+    // normale, drone autonome) → aucun changement de comportement, `programme.level` intact. Seul
+    // `chancesDeReussite` est plafonné — `programme.level` reste NON plafonné pour la maîtrise/le
+    // bonus de réussite critique ci-dessous (même règle que `combatantContextService.js:87-98`,
+    // vérifiée avant de coder).
+    const effectiveProgramLevel = options.skillCap != null
+      ? calcLimitedSkillTotal(programme.level, options.skillCap)
+      : programme.level
+    const chancesDeReussite = effectiveProgramLevel + totalModComp + coverageModifier
 
     // 4. Jet D20
     console.log(`[DBG] resolveDroneAssaultAction — avant parseDice`)

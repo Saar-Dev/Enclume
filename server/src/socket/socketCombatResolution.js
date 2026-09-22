@@ -387,16 +387,28 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         .orderBy('sequence', 'asc')
       for (const action of simpleActions) {
         if (action.type === 'move_short' || action.type === 'move_long') {
+          // Télépilotage (Sprint 3, PLAN_DRONE.md) — `action.token_id`/`character`/`token` (portée par
+          // le `for` englobant) restent ceux du PILOTE (Initiative) ; `modifiers.dronePilotTokenId`
+          // (posé à la Déclaration, socketCombatAnnouncement.js) identifie le DRONE qui doit
+          // physiquement bouger. Substitution locale à cette itération uniquement — jamais une
+          // deuxième définition de "qui agit" (même patron que resolveDroneAutoAction).
+          const dronePilotTokenId = action.modifiers?.dronePilotTokenId ?? null
+          const moveToken = dronePilotTokenId
+            ? (await db('tokens').where({ id: dronePilotTokenId }).first()) ?? token
+            : token
+          const moveCharacter = dronePilotTokenId
+            ? (moveToken?.character_id ? (await db('characters').where({ id: moveToken.character_id }).first()) ?? character : character)
+            : character
           let outcome = null
           let moveError = null
           try {
             if (!action.destination_world || !action.movement_gait) {
               throw new RangeError('Intention de déplacement antérieure au moteur de monde')
             }
-            const budget = await getCharacterMovementBudget(character.id, action.movement_gait)
+            const budget = await getCharacterMovementBudget(moveCharacter.id, action.movement_gait)
             outcome = await executeBattlemapTokenMovement({
-              battlemapId: token.battlemap_id,
-              tokenId,
+              battlemapId: moveToken.battlemap_id,
+              tokenId: moveToken.id,
               destination: action.destination_world,
               authorizedBudgetM: budget.budgetM,
             })
@@ -411,7 +423,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           )
           if (outcome?.moved || outcome?.elevatorRuntime?.changed) {
             io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
-              battlemapId: token.battlemap_id,
+              battlemapId: moveToken.battlemap_id,
               runtimeRevision: outcome.runtimeRevision || outcome.elevatorRuntime.runtimeRevision,
               kind: outcome.moved ? 'combat-movement' : 'elevator-clock',
             })
@@ -445,7 +457,9 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
                 effectEvents: outcome.effectEvents,
               },
             })
-            Object.assign(token, outcome.token)
+            // moveToken (pas l'outer `token`, pilote) — sous peine de corrompre son propre état pour
+            // le reste de ce handler avec la position du drone.
+            Object.assign(moveToken, outcome.token)
           }
           const partial = outcome?.result?.status === 'budget'
           if (moveError instanceof MovementBudgetError) {
@@ -456,11 +470,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             // perdu ce Tour, l'échelle continue (l'action est marquée 'resolved' plus bas comme les
             // autres).
             console.warn(`[WS] COMBAT_ACTION_CONFIRM — déplacement impossible (config) token:${tokenId} — ${moveError.message}`)
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: moveError.message, username: token.label })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: moveError.message, username: moveToken.label })
           } else if (!outcome?.moved || partial) {
             console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement ${partial ? 'partiel' : 'bloqué'} token:${tokenId}`)
             socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, {
-              tokenLabel: token.label,
+              tokenLabel: moveToken.label,
               partial,
               worldChanged,
               reason: outcome?.status || 'invalid-world-plan',
@@ -487,6 +501,46 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'resolved', resolved_at: db.fn.now(), updated_at: db.fn.now() })
         await db('combat_actions').where({ id: action.id }).update({ status: 'resolved', updated_at: db.fn.now() })
 
+        // Télépilotage (Sprint 3, PLAN_DRONE.md) — `action.token_id` reste celui du PILOTE (Initiative,
+        // déjà utilisé ci-dessus pour marquer l'entrée résolue), mais c'est le DRONE qui doit résoudre
+        // l'attaque : portée/LOS/armement depuis sa propre position. `dispatchAction`/`dispatchCharacter`
+        // scopés à ce seul bloc de dispatch (jamais l'outer `character`/`token` du handler, qui restent
+        // ceux du pilote pour le reste de la fonction) — même patron que resolveDroneAutoAction
+        // (reconstruction d'un `action` réécrit, `socketCombatHelpers.js`).
+        let dispatchAction = action
+        let dispatchCharacter = character
+        let telepilotSkillTotal = null
+        if (action.action_key === 'drone_telepilot' && action.drone_weapon_inv_id) {
+          const droneWeaponRow = await db('drone_weapons').where({ id: action.drone_weapon_inv_id }).first()
+          const droneCharacterRow = droneWeaponRow ? await db('characters').where({ id: droneWeaponRow.character_id }).first() : null
+          const droneTokenRow = droneCharacterRow ? await db('tokens').where({ campaign_id: campaignId, character_id: droneCharacterRow.id }).first() : null
+          if (droneCharacterRow && droneTokenRow) {
+            dispatchAction = { ...action, token_id: droneTokenRow.id }
+            dispatchCharacter = droneCharacterRow
+            // Plafond de compétence (RAW vérifiée `ATTRIBUTS.md:209-211`, `calcLimitedSkillTotal` —
+            // PLAN_DRONE.md § Résolution) : Seuil complet du PILOTE sur TELEPILOTAGE, calculé une fois
+            // ici (V1 non-persistant — jamais mis en cache au-delà d'une résolution). Même patron de
+            // fetch que `resolveHumanoidTestContext` (`combatantContextService.js:65-85`, autorité
+            // établie « Compétence limitative ») — `char_attributes` est un tableau (une ligne par
+            // Attribut), le genotype passe par `char_archetype.genotype_id → ref_genotypes`, jamais
+            // une colonne `char_sheet.genotype` (n'existe pas).
+            const pilotSheet = await db('char_sheet').where({ character_id: character.id }).first()
+            if (pilotSheet) {
+              const [pilotAttrs, pilotArchetype, pilotMutationEffects, pilotCharSkill, telepilotageRefSkill] = await Promise.all([
+                db('char_attributes').where({ char_sheet_id: pilotSheet.id }),
+                db('char_archetype').where({ char_sheet_id: pilotSheet.id }).first(),
+                getMutationEffects(pilotSheet.id),
+                db('char_skills').where({ char_sheet_id: pilotSheet.id, skill_id: 'TELEPILOTAGE' }).first(),
+                db('ref_skills').where({ id: 'TELEPILOTAGE' }).first(),
+              ])
+              const pilotGeno = pilotArchetype?.genotype_id
+                ? await db('ref_genotypes').where({ id: pilotArchetype.genotype_id }).first()
+                : null
+              telepilotSkillTotal = calcSkillTotal(pilotAttrs, pilotCharSkill, telepilotageRefSkill, pilotGeno, pilotMutationEffects)
+            }
+          }
+        }
+
         // Allure tireur / cible — en mode `auto` seulement : dérivée du mouvement réel déclaré ce
         // Tour (combat_actions.movement_gait), pas du tableau `situation` envoyé par le client.
         // Autorité serveur (RAW p.226-227, PLAN_ALLURE.md A3) : un joueur ne peut ni masquer son
@@ -496,8 +550,13 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         // transformation de `confirmedModifiers` dans ce handler après `gatedModifiers` (portée
         // handler) — celui-ci a besoin de `action`.
         let dispatchModifiers = gatedModifiers
-        if (combatModifiersAuto && !isGm && gatedModifiers && action.type === 'assault' && !action.modifiers?.aoe) {
-          const allure = await resolveRangedAllureKeys(db, campaignId, action.token_id, action.target_token_id, action.turn_number)
+        if (combatModifiersAuto && !isGm && gatedModifiers && dispatchAction.type === 'assault' && !dispatchAction.modifiers?.aoe) {
+          // `action.token_id` (PAS `dispatchAction.token_id`) — Télépilotage : la ligne de mouvement
+          // de ce Tour est stockée en base sous le token du PILOTE (Initiative, cf. Déclaration), donc
+          // c'est bien ce token_id-là qu'il faut interroger pour retrouver l'Allure réellement
+          // déclarée ce Tour, même si `dispatchAction`/`dispatchCharacter` pointent vers le drone pour
+          // tout le reste (résolution physique).
+          const allure = await resolveRangedAllureKeys(db, campaignId, action.token_id, dispatchAction.target_token_id, dispatchAction.turn_number)
           dispatchModifiers = {
             ...gatedModifiers,
             situation: applyDerivedAllureToSituation(gatedModifiers.situation ?? [], allure),
@@ -512,13 +571,13 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         // advanceTimeline, gelant la Résolution jusqu'à la prochaine reconnexion). Toute erreur est
         // maintenant expliquée en chat (cf. retour Saar §2 : « dès qu'un truc marche pas, le système
         // doit dire pourquoi ») et l'échelle avance quand même.
-        console.log(`[DBG] COMBAT_ACTION_CONFIRM — avant résolution entrée ${step.entry.id} type:${action.type} token:${tokenId}`)
+        console.log(`[DBG] COMBAT_ACTION_CONFIRM — avant résolution entrée ${step.entry.id} type:${dispatchAction.type} token:${tokenId}`)
         try {
-          if (action.type === 'assault') {
+          if (dispatchAction.type === 'assault') {
             // Exo (PLAN_EXOARMURE.md §16.4) — même exemption que le drone : aucune UI
             // CombatModifiersWindow câblée pour ce Lot, resolveExoAssaultAction gère
             // confirmedModifiers=null via optional chaining (mêmes valeurs par défaut que le drone).
-            if (!confirmedModifiers && character.type !== 'drone' && character.type !== 'exo') {
+            if (!confirmedModifiers && dispatchCharacter.type !== 'drone' && dispatchCharacter.type !== 'exo') {
               console.warn(`[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers. token:${tokenId}`)
               io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
                 username: token.label ?? 'ce personnage',
@@ -533,11 +592,16 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               // 'assault' avec modifiers.aoe (fusil à pompe en zone, socketCombatAnnouncement.js) n'a
               // jamais de target_token_id scalaire, elle emprunte son propre chemin de bout en bout
               // (couches 1-4, combat_action_targets) plutôt que celui à cible unique.
-              const assaultResult = action.modifiers?.aoe
-                ? await resolveAoeAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
-                : character.type === 'exo'
-                  ? await resolveExoAssaultAction(io, campaignId, action, dispatchModifiers, character, pendingMaps)
-                  : await resolveAssaultAction(io, campaignId, action, dispatchModifiers, character, pendingMaps)
+              // Télépilotage (Sprint 3) — appelé directement (pas via resolveAssaultAction, dont ce
+              // fichier n'a pas la main pour lui faire porter `options.skillCap`) : même délégation
+              // finale que le drone autonome, avec le plafond de compétence en plus.
+              const assaultResult = dispatchAction.modifiers?.aoe
+                ? await resolveAoeAssaultAction(io, campaignId, dispatchAction, gatedModifiers, dispatchCharacter, pendingMaps)
+                : dispatchAction.action_key === 'drone_telepilot'
+                  ? await resolveDroneAssaultAction(io, campaignId, dispatchAction, dispatchModifiers, dispatchCharacter, pendingMaps, { skillCap: telepilotSkillTotal })
+                  : dispatchCharacter.type === 'exo'
+                    ? await resolveExoAssaultAction(io, campaignId, dispatchAction, dispatchModifiers, dispatchCharacter, pendingMaps)
+                    : await resolveAssaultAction(io, campaignId, dispatchAction, dispatchModifiers, dispatchCharacter, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
               if (assaultResult) {
                 await flushEmissions(io, socket, campaignId, assaultResult.emissions)
@@ -548,39 +612,42 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
                 resolutionSuspended = assaultResult.suspend
               }
             }
-          } else if (action.type === 'melee') {
-            if (character.type === 'drone') {
-              const droneResult = await resolveDroneAssaultAction(io, campaignId, action, gatedModifiers, character, pendingMaps)
+          } else if (dispatchAction.type === 'melee') {
+            if (dispatchCharacter.type === 'drone') {
+              // Télépilotage : `options.skillCap` reste `undefined` pour un drone en ordres_permanents
+              // (`telepilotSkillTotal` non calculé plus haut) — `resolveDroneAssaultAction` doit alors
+              // se comporter exactement comme aujourd'hui, cf. § implémentation.
+              const droneResult = await resolveDroneAssaultAction(io, campaignId, dispatchAction, gatedModifiers, dispatchCharacter, pendingMaps, { skillCap: telepilotSkillTotal ?? undefined })
               if (droneResult) {
                 await flushEmissions(io, socket, campaignId, droneResult.emissions)
                 resolutionSuspended = droneResult.suspend
               }
-            } else if (character.type === 'exo') {
+            } else if (dispatchCharacter.type === 'exo') {
               // PLAN_EXOARMURE.md §16.4 (Option B, Saar 2026-08-26) — vraie défense active de la
               // cible, jamais l'auto-résolution simplifiée du CaC drone ci-dessus.
-              const exoMeleeResult = await resolveExoMeleeAction(io, campaignId, action, character, gatedModifiers, pendingMaps)
+              const exoMeleeResult = await resolveExoMeleeAction(io, campaignId, dispatchAction, dispatchCharacter, gatedModifiers, pendingMaps)
               if (exoMeleeResult) {
                 await flushEmissions(io, socket, campaignId, exoMeleeResult.emissions)
                 resolutionSuspended = exoMeleeResult.suspend
               }
             } else {
-              const meleeResult = await resolveMeleeAction(io, campaignId, action, character, gatedModifiers, pendingMaps)
+              const meleeResult = await resolveMeleeAction(io, campaignId, dispatchAction, dispatchCharacter, gatedModifiers, pendingMaps)
               if (meleeResult) {
                 await flushEmissions(io, socket, campaignId, meleeResult.emissions)
                 resolutionSuspended = meleeResult.suspend
               }
             }
-          } else if (action.type === 'exo_stand_up') {
+          } else if (dispatchAction.type === 'exo_stand_up') {
             // PLAN_EXOARMURE.md Lot 2bis §9.3 — auto-résolu comme resolveMeleeDefensePnj (aucune
             // confirmation joueur requise, jet + issue déjà déterminés côté serveur).
-            const standUpResult = await resolveExoStandUpAction(io, campaignId, action, character, pendingMaps)
+            const standUpResult = await resolveExoStandUpAction(io, campaignId, dispatchAction, dispatchCharacter, pendingMaps)
             if (standUpResult) {
               await flushEmissions(io, socket, campaignId, standUpResult.emissions)
               resolutionSuspended = standUpResult.suspend
             }
           }
         } catch (resolveErr) {
-          console.error(`[WS] COMBAT_ACTION_CONFIRM — erreur en résolvant l'entrée ${step.entry.id} (token:${tokenId}, type:${action.type}):`, resolveErr)
+          console.error(`[WS] COMBAT_ACTION_CONFIRM — erreur en résolvant l'entrée ${step.entry.id} (token:${tokenId}, type:${dispatchAction.type}):`, resolveErr)
           io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
             username: token.label ?? 'ce personnage',
             message: `Erreur interne en résolvant cette action (${resolveErr.message}) — le Tour continue, résultat éventuellement incomplet, prévenez le MJ`,

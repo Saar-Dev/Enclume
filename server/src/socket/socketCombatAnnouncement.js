@@ -138,11 +138,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Validation ownership (joueur pour PJ, GM pour PNJ)
-      const token = await db('tokens').where({ id: tokenId }).first()
+      // `let` (pas `const`) — Télépilotage (Sprint 3) réassigne token/character au DRONE piloté juste
+      // après la garde d'ordre de file ci-dessous ; `tokenId` (paramètre brut) n'est lui jamais
+      // réassigné, cf. bloc Télépilotage.
+      let token = await db('tokens').where({ id: tokenId }).first()
       if (!token) return
       // PC27 — entité de décor : ne déclare pas d'action en combat
       if (!token.character_id) return
-      const character = await db('characters').where({ id: token.character_id }).first()
+      let character = await db('characters').where({ id: token.character_id }).first()
       if (!character) return
       if (character.type === 'pnj') {
         if (!isGm) return
@@ -171,6 +174,72 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       if (!firstNonAnnounced || firstNonAnnounced.token_id !== tokenId) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Ce n'est pas encore votre tour de déclarer" })
         return
+      }
+
+      // Télépilotage (Sprint 3, docs/PLANS/PLAN_DRONE.md § Sprint 3) — RAW : « son action ce tour =
+      // l'action du drone ». Le pilote déclare sur SON slot/Initiative (gardes ci-dessus, inchangées),
+      // mais c'est le DRONE qui agit : portée, LOS, déplacement, armement. Substitution explicite de
+      // token/character à partir d'ici — même patron que resolveDroneAutoAction
+      // (socketCombatHelpers.js), jamais une seconde définition de "qui agit". `tokenId` (paramètre
+      // brut de la requête) n'est PAS réassigné : combat_actions.token_id reste celui du PILOTE
+      // (Initiative), seul `token`/`character` (utilisés par tout ce qui suit — mouvement, isDrone/
+      // isExo, validation d'arme, Résolution) pointent désormais vers le drone.
+      let isTelepilot = false
+      if (mapActions?.dronePilot?.droneTokenId) {
+        const droneToken = await db('tokens').where({ id: mapActions.dronePilot.droneTokenId }).first()
+        if (!droneToken?.character_id) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Télépilotage — drone introuvable' })
+          return
+        }
+        const droneCharacter = await db('characters').where({ id: droneToken.character_id }).first()
+        if (!droneCharacter || droneCharacter.type !== 'drone') {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Télépilotage — cible invalide' })
+          return
+        }
+        // Owner uniquement (retour Saar 2026-09-22) — même autorité que Sprint 2c/2d
+        // (`character.user_id === user.id`), aucune colonne séparée « pilote RAW ».
+        if (!droneCharacter.user_id || droneCharacter.user_id !== user.id) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Télépilotage — vous n'êtes pas le propriétaire de ce drone" })
+          return
+        }
+        const droneEntry = await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: droneToken.id })
+          .first()
+        if (!droneEntry) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Télépilotage — ce drone n'est pas dans ce combat" })
+          return
+        }
+        // Invariant — un drone n'agit qu'une fois par Tour, réactif (ordres_permanents) OU télépiloté,
+        // jamais les deux (analyse à charge 2026-09-22). `has_announced` déjà vrai = soit une
+        // déclaration classique déjà faite ce Tour, soit un ordre permanent (Sprint 2d) déjà
+        // pré-rempli par prefillAutonomousDroneOrders.
+        //
+        // Bug corrigé (trouvé en jeu réel, Saar 2026-09-22, « le moteur drone est hors sol ») : on est
+        // TOUJOURS en phase ANNONCE ici (garde plus haut) — `combat_timeline_entries` (l'échelle de
+        // Résolution) n'existe pas encore à ce stade, elle n'est construite qu'à la transition
+        // ANNONCE→RÉSOLUTION (`buildTimelineEntries`, `combatTurnEngine.js:378`, appelé depuis
+        // `startResolutionPhase`). Chercher une entrée de timeline ici trouvait TOUJOURS zéro résultat
+        // → tombait systématiquement dans le refus, même pour un drone légitimement pré-rempli par
+        // `ordres_permanents` sans rien de résolu (d'où « déjà agi » sans aucune trace en chat/logs).
+        // Le seul état pertinent en phase ANNONCE est `combat_actions.status` lui-même : 'pending' =
+        // pré-rempli mais pas encore repris par `startResolutionPhase` (qui ne sélectionne QUE les
+        // lignes 'pending', `combatTurnEngine.js:274-276`) → annulable en le marquant 'skipped', un
+        // statut déjà valide pour cette table (`chk_action_status`) ; absence de ligne 'pending' =
+        // une déclaration classique a déjà posé `has_announced` sans `drone_auto` → refuser.
+        if (droneEntry.has_announced) {
+          const pendingAutoAction = await db('combat_actions')
+            .where({ campaign_id: campaignId, token_id: droneToken.id, action_key: 'drone_auto', turn_number: announceState.current_turn, status: 'pending' })
+            .first()
+          if (pendingAutoAction) {
+            await db('combat_actions').where({ id: pendingAutoAction.id }).update({ status: 'skipped', updated_at: db.fn.now() })
+          } else {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Télépilotage — ce drone a déjà agi ce Tour' })
+            return
+          }
+        }
+        token = droneToken
+        character = droneCharacter
+        isTelepilot = true
       }
 
       let movementDeclaration = null
@@ -671,7 +740,15 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           planned_world_revision: movementDeclaration.worldRevision,
           planned_runtime_revision: movementDeclaration.runtimeRevision,
           planned_budget_m: movementDeclaration.budgetM,
-          modifiers: JSON.stringify({ ini_mod: movementDeclaration.initiativeModifier }),
+          // Télépilotage (Sprint 3) — `token_id` ci-dessus reste celui du PILOTE (Initiative, comme
+          // l'action assault/melee), mais c'est le DRONE qui doit physiquement bouger. `token.id` ici
+          // = celui du drone (réassigné plus haut). Porté en JSONB (pas de nouvelle colonne, pas un
+          // FK arme — un drone sans arme installée peut quand même être déplacé) plutôt que réutilisé
+          // via `drone_weapon_inv_id`, qui suppose une arme sélectionnée.
+          modifiers: JSON.stringify({
+            ini_mod: movementDeclaration.initiativeModifier,
+            ...(isTelepilot ? { dronePilotTokenId: token.id } : {}),
+          }),
           status: 'pending',
         })
       }
@@ -717,7 +794,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
           actionRows.push({
             campaign_id:          campaignId, token_id: tokenId,
-            action_key:           'assault', type: 'assault', sequence: 3,
+            action_key:           isTelepilot ? 'drone_telepilot' : 'assault', type: 'assault', sequence: 3,
             weapon_inv_id:        (isDrone || isExo) ? null : (weaponInvId ?? null),
             offhand_weapon_inv_id: (isDrone || isExo || !isDualWield) ? null : (offhandWeaponInvId ?? null),
             drone_weapon_inv_id:  isDrone ? (droneWeaponInvId ?? null) : null,
@@ -834,7 +911,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             const meleeIsSpecialized = !!(meleeDroneWeaponId || meleeExoWeaponId)
             actionRows.push({
               campaign_id: campaignId, token_id: tokenId,
-              action_key: 'melee', type: 'melee', sequence: 3,
+              action_key: isTelepilot ? 'drone_telepilot' : 'melee', type: 'melee', sequence: 3,
               weapon_inv_id:       meleeIsSpecialized ? null : (firstMelee.weaponInvId ?? null),
               offhand_weapon_inv_id: meleeIsSpecialized ? null : validatedOffhandWeaponInvId,
               drone_weapon_inv_id: meleeDroneWeaponId ?? null,
@@ -939,6 +1016,21 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         await setCharacterState(trx, tokenId, 'position', resolvedPosition)
         await setCharacterState(trx, tokenId, 'weapon', resolvedWeapon)
         await shadowCheckCharacterState(trx, tokenId, { position: resolvedPosition, weapon: resolvedWeapon })
+        // Télépilotage (Sprint 3) — le DRONE (token.id, réassigné plus haut) a sa propre ligne
+        // combat_roster, distincte de celle du pilote (tokenId ci-dessus) : « son action ce tour =
+        // l'action du drone » — il ne peut plus agir séparément ce Tour, même transaction que la
+        // déclaration du pilote. `has_announced` UNIQUEMENT (pas `status`) — `status` ∈
+        // {'active','done'} est un état de COMBAT (vivant/retiré), lu par findNextAnnounceSlot/
+        // advanceAnnouncementQueue/prefillAutonomousDroneOrders (combatTurnEngine.js) : le poser à
+        // 'done' ici retirerait le drone de la file pour le RESTE DU COMBAT après un seul
+        // télépilotage — confondu avec `has_announced` dans le cadrage du 2026-09-16, corrigé en
+        // vérifiant l'usage réel du champ avant de coder (aucun autre site du projet ne pose
+        // `status: 'done'`).
+        if (isTelepilot) {
+          await trx('combat_roster')
+            .where({ campaign_id: campaignId, token_id: token.id })
+            .update({ has_announced: true, updated_at: trx.fn.now() })
+        }
         return rows
       })
 
