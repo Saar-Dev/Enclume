@@ -1,0 +1,60 @@
+{
+  "id": "etats-de-sante.dommages-chutes",
+  "slug": "dommages-chutes",
+  "title": "Chutes",
+  "page": 242,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-chutes.chutes",
+      "title": "Chutes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Dommages d’une chute dépendent principalement de la hauteur :"
+    },
+    {
+      "type": "dataTable",
+      "source": "FALL_DAMAGE_TABLE",
+      "caption": "Dommages de chute selon la hauteur",
+      "headers": [
+        [
+          { "label": "Hauteur" },
+          { "label": "Dégâts" },
+          { "label": "Localisation(s) touchée(s)" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "* Niveau du sol : uniquement si le personnage était en train de courir à l’Allure maximale, ou s’il obtient une Catastrophe sur un Test d’Acrobatie/Équilibre (voir plus bas)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Au-delà de 10D10, il s’agit de dommages massifs..."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Localisations touchées sont déterminées au hasard, sur la table des Localisations du combat à distance. La protection offerte par l’armure est réduite de moitié."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : si le personnage tombe sur un terrain très accidenté/encombré (gravas, ferraille, tessons de verre), les Dommages sont augmentés de 1D10 points."
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui chute, et qui est en mesure de contrôler sa chute*, a le droit de faire un Test d’Acrobatie/Équilibre, avec un malus dont la valeur est égale à la hauteur de la chute × 2 (par exemple -4 pour une chute de 2 mètres). En cas de réussite, les Dommages sont réduits de 1D6 + modificateur de réussite. Au-delà de 5 mètres, il est impossible de réduire les Dommages d’une chute."
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "* Si le MJ n’est pas certain, il peut demander un Test de Réaction. C’est également approprié si la chute est soudaine (par exemple si le sol se dérobe sous les pieds du personnage ou si on le pousse dans le vide par surprise)."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "id": "tests-et-actions.interaction-competences",
+  "slug": "interaction-competences",
+  "title": "Interaction entre compétences",
+  "page": 208,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "De nombreuses interactions peuvent exister entre les Compétences. L’une de ces interactions, en particulier, sera très fréquemment utilisée : c’est la règle des Compétences « limitatives »."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.interaction-competences.limitatives",
+      "title": "Compétences limitatives"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Compétences dites « limitatives » recouvrent des domaines, des connaissances ou des aptitudes spécifiques qui sont utilisés conjointement avec une autre Compétence, de manière complémentaire et dans une même action. Par exemple, se battre au corps à corps en équilibre sur une poutre fait intervenir la Compétence Combat à mains nues, mais aussi la Compétence Acrobatie/Équilibre. De même, faire un discours solennel requiert l’usage de la Compétence Éloquence, mais aussi celui de Langue maternelle (ou de toute autre Compétence linguistique correspondant à la langue dans laquelle le discours est prononcé). Établir une interaction entre deux Compétences utilisées ensemble permet au système de jeu d’être un peu plus cohérent, tout en insistant sur la nécessité de développer ses Compétences de manière harmonieuse et équilibrée."
+    },
+    {
+      "type": "paragraph",
+      "text": "Techniquement, et comme son nom l’indique, le niveau d’une telle Compétence limite celui de la Compétence à laquelle elle est associée. Par exemple, un personnage doté d’un niveau en Acrobatie/Équilibre de 5 et utilisant sa Compétence de Combat à mains nues (possédée à 12) pour se battre en équilibre sur une poutre (ou encore pour réaliser une manœuvre acrobatique en combat) fera son Test avec le niveau 5."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Compétences les plus souvent utilisées en tant que Compétences limitatives sont identifiées par le signe « • ». Vous trouverez dans leur description les exemples qui vous permettront de les utiliser au mieux (voir le chapitre Compétences, page 188). Notez que, la plupart du temps, les Compétences limitatives peuvent également être utilisées seules, en tant que Compétences uniques."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Limitations en cascade",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "La plupart du temps, nous ne parlons que de l’utilisation conjointe de deux Compétences seulement. Si vous le souhaitez, une fois que vous aurez pris l’habitude d’utiliser naturellement le système des Compétences limitatives, vous pourrez même l’étendre à une troisième Compétence, pour certaines actions. Ainsi, la Compétence Furtivité/Déplacement silencieux peut limiter Combat armé, dans le cas où un personnage souhaiterait se débarrasser silencieusement d’une sentinelle. Toutefois, il existe d’autres Compétences qui pourraient limiter Combat armé : ce sont les Compétences d’Arts martiaux. Le personnage peut tout à fait utiliser aussi l’une d’entre elles, dans un Test faisant donc intervenir Furtivité/Déplacement silencieux, Combat armé et une technique d’Arts martiaux ! La règle ne change pas : on prend toujours le niveau de la Compétence la plus basse. Ce genre de cas devrait toutefois être assez rare. Fiez-vous à votre bon sens, et n’hésitez pas à inventer d’autres combinaisons !"
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Échecs différenciés",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Puisque plusieurs Compétences (aux niveaux sans doute différents) sont en jeu, un échec sur une Compétence limitative ne signifie pas forcément que l’action est ratée. Ainsi, le test peut être un échec par rapport au niveau de la Compétence limitative (en théorie plus basse), mais une réussite par rapport à l’autre Compétence. Le MJ est alors libre d’interpréter cela comme il l’entend, en fonction de la situation. Par exemple, dans le cas de l’attaque furtive citée plus haut (Test de Combat armé, limité par Furtivité/Déplacement silencieux), le personnage peut obtenir un échec sur la Compétence limitative, mais une réussite sur la Compétence de Combat armé. Dans ce cas, le MJ peut considérer que l’attaque a tout de même été portée, mais que celle-ci a fait du bruit, ce qui risque d’alerter d’autres sentinelles. Attention, dans certains cas, un échec sur la Compétence limitative se terminera par un échec de l’action toute entière (exemple : sur un Test de Combat armé, limité par Acrobatie/Équilibre, un échec signifie que le personnage… tombe, et ne peut même pas porter d’attaque). Tout cela marche aussi avec la règle des « Limitations en cascade ». Encore une fois, le MJ doit utiliser son bon sens."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Compétences utilisées en soutien",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Il peut arriver qu’une action effectuée avec une Compétence puisse faciliter une autre action, effectuée avec une autre Compétence. Voici quelques exemples :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Un Test de Camouflage peut permettre à un personnage de se fondre dans l’environnement et faciliter ainsi un Test de Furtivité/Déplacement silencieux." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Un Test de Furtivité/Déplacement silencieux peut permettre à un personnage de s’approcher silencieusement d’un adversaire et faciliter ainsi un Test effectué avec une Compétence de combat quelconque." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Un Test d’Analyse empathique peut aider un personnage à trouver une faille chez son interlocuteur et peut ainsi faciliter un Test de Persuasion ou d’Intimidation, etc." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Contrairement à la règle des Compétences limitatives (qui étaient combinées dans une seule action), il s’agit ici de deux actions différentes, effectuées l’une après l’autre. Ainsi, pour reprendre des exemples déjà donnés, il faut différencier le fait de s’approcher silencieusement d’une cible, pour ensuite l’attaquer (deux actions : règle des Compétences utilisées en soutien), du fait de se débarrasser silencieusement d’une cible (une seule action : règle des Compétences limitatives). Évidemment, on peut aussi effectuer une première action en utilisant la règle des Compétences limitatives, puis ensuite deux actions basées sur la règle des Compétences utilisées en soutien. Les associations possibles sont multiples, en fonction des idées des joueurs, et reposent encore une fois sur le bon sens du MJ (celui-ci doit veiller à respecter l’équilibre du jeu, et à éviter les abus)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Techniquement, il faut effectuer un Test pour chacune des Compétences utilisées, dans l’ordre des actions effectuées (Camouflage/Dissimulation puis Furtivité/Déplacement silencieux, par exemple). Si le premier Test est réussi, le personnage peut alors bénéficier du modificateur de réussite obtenu, qui est donc logiquement un bonus (voir le tableau des Marges de réussite ou d’échec), à ajouter aux chances de réussite de son second Test. En cas d’échec, le modificateur d’échec (un malus) réduit les chances de réussite du second Test. N’oubliez pas que le MJ est toujours libre de ne pas accorder de bonus (ou de malus), s’il ne l’estime pas nécessaire."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.interaction-competences.travail-equipe",
+          "title": "Travail en équipe"
+        },
+        {
+          "type": "paragraph",
+          "text": "Plusieurs personnages peuvent travailler en équipe, pour améliorer leurs résultats (par « équipe », nous entendons un groupe de PJ de taille habituelle, c’est-à-dire 4 à 6 personnes). Voici la marche à suivre :"
+        },
+        {
+          "type": "list",
+          "ordered": true,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "**Choisir un chef d’équipe** : c’est en général le personnage qui a les meilleures chances de réussite de base… ou celui qui a su s’imposer. Tous les autres personnages qui participent au travail en équipe vont l’assister (le meneur de jeu est libre de limiter le nombre de personnes pouvant travailler sur une même tâche)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**Tout le monde effectue un Test**. Notez les marges de réussite (ou d’échec) de chacun." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**Les assistants ayant réussi leur Test** peuvent offrir un bonus de travail en équipe correspondant à la moitié de leur modificateur à la marge de réussite (ne pas confondre avec leur marge de réussite). À l’inverse, les assistants ayant échoué imposent eux un malus égal à la moitié de leur modificateur de réussite." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**Si le chef d’équipe a réussi son Test**, les bonus de ses assistants augmentent sa marge de réussite, tandis que leurs malus la réduisent. Ces malus ne peuvent toutefois faire tomber la marge de réussite en dessous de 0, sauf si l’un des assistants obtient une Catastrophe (son modificateur de travail en équipe peut alors entraîner la marge en dessous de 0, la transformant alors en marge d’échec)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**Si le chef d’équipe a raté son Test**, les bonus de ses assistants réduisent sa marge d’échec, tandis que leurs malus l’aggravent. Si les bonus font monter cette marge d’échec au-dessus de 0, elle se transforme alors en marge de réussite." } ] }
+          ]
+        }
+      ]
+    }
+  ]
+}

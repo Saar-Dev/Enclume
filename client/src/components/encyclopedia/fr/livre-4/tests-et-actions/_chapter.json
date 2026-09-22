@@ -1,0 +1,26 @@
+{
+  "slug": "tests-et-actions",
+  "title": "Tests et actions",
+  "pageStart": 201,
+  "pageEnd": 211,
+  "intro": [
+    {
+      "type": "callout",
+      "variant": "quote",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "« Un système ? Quel système ? Moi j’veux juste l’exploser ! Quoi ? Quels dés ? Bon, file-moi ces dés que j’le ventile. Comment ça, je rate ? J’en ai marre ! »"
+        },
+        {
+          "type": "paragraph",
+          "text": "— Un joueur"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : le système de jeu de Polaris 3e édition utilise presque exclusivement des dés à 6, 10 et 20 faces. Quelques petits jetons, utilisés comme marqueurs, peuvent également se révéler utiles."
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "id": "etats-de-sante.poisons-exemples",
+  "slug": "poisons-exemples",
+  "title": "Exemples de poisons",
+  "page": 246,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.poisons-exemples.doom",
+      "title": "Doom"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce poison artificiel est particulièrement virulent et difficile à détecter."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Mode de contamination", "blocks": [ { "type": "paragraph", "text": "Ingestion." } ] },
+        { "label": "Modificateur de détection", "blocks": [ { "type": "paragraph", "text": "Goût (-10), odeur (-7)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "1 heure." } ] },
+        { "label": "Virulence / Évolutions", "blocks": [ { "type": "paragraph", "text": "2D6, puis 1D6 toutes les heures pendant 3 heures." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : nausées, vomissements." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10 et suivants** : apparition de fièvre, les nausées deviennent de plus en plus fortes. À partir du seuil 10 et pour chaque seuil franchi, le personnage perd virtuellement et temporairement 3 points de Constitution. Si cet Attribut tombe à 0, le personnage meurt." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Modificateur de diagnostic", "blocks": [ { "type": "paragraph", "text": "+0." } ] },
+        { "label": "Modificateur de guérison", "blocks": [ { "type": "paragraph", "text": "+0." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "2 000." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.poisons-exemples.dream",
+      "title": "Dream"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce poison plonge ses victimes dans l’inconscience. Il est très discret et ses effets ne se font sentir qu’au bout de plusieurs heures. La victime se sent alors terriblement fatiguée."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Mode de contamination", "blocks": [ { "type": "paragraph", "text": "Ingestion." } ] },
+        { "label": "Modificateur de détection", "blocks": [ { "type": "paragraph", "text": "Goût (+0), odeur (-10)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "2 heures." } ] },
+        { "label": "Virulence / Évolutions", "blocks": [ { "type": "paragraph", "text": "2D6, puis 1D6 toutes les heures pendant 5 heures." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : vertiges et grande fatigue, les malus dus à la fatigue sont augmentés de 2 points." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10** : comme ci-dessus. De plus, en cas d’inactivité, la victime doit réussir un Test de Volonté ou s’endormir." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15** : comme ci-dessus, mais avec un malus de -3." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20** : comme ci-dessus, mais avec un malus de -5." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 25** : comme ci-dessus, mais avec un malus de -7." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Modificateur de diagnostic", "blocks": [ { "type": "paragraph", "text": "-3." } ] },
+        { "label": "Modificateur de guérison", "blocks": [ { "type": "paragraph", "text": "+7." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "1 000." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.poisons-exemples.chyrso",
+      "title": "Chyrso"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce poison artificiel s’attaque lentement à la Force du personnage. Si le niveau de cet Attribut tombe à 3, la victime est incapable de se lever, et s’il tombe à 0, elle est plongée dans le coma. Tout point négatif réduit définitivement le maximum que peut atteindre l’individu dans cet Attribut, le poison ayant détruit de manière irrémédiable une partie de l’organisme. Si la Force d’un personnage arrive à un niveau négatif d’une valeur égale à celle de son niveau normal, il meurt."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Mode de contamination", "blocks": [ { "type": "paragraph", "text": "Ingestion." } ] },
+        { "label": "Modificateur de détection", "blocks": [ { "type": "paragraph", "text": "Goût (+0), odeur (+3)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "1 jour." } ] },
+        { "label": "Virulence / Évolutions", "blocks": [ { "type": "paragraph", "text": "2D6, puis 1D6 tous les jours pendant 5 jours." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : Force -2." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10** : Force -4." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15** : Force -6." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20** : Force -8." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 25** : Force -10." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 30** : Force -12." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Modificateur de diagnostic", "blocks": [ { "type": "paragraph", "text": "+0." } ] },
+        { "label": "Modificateur de guérison", "blocks": [ { "type": "paragraph", "text": "+0." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "4 000." } ] }
+      ]
+    }
+  ]
+}

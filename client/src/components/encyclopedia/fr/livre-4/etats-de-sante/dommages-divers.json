@@ -1,0 +1,44 @@
+{
+  "id": "etats-de-sante.dommages-divers",
+  "slug": "dommages-divers",
+  "title": "Acide, décompression, faim et soif",
+  "page": 242,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-divers.acide",
+      "title": "Acide"
+    },
+    {
+      "type": "paragraph",
+      "text": "La plupart des acides infligent des Dommages progressifs (comme les Dommages dus au feu), à un certain rythme et pendant une certaine période, ou jusqu’à ce que l’agent corrosif soit neutralisé d’une manière ou d’une autre. Les Dommages subis dépendent de la puissance de l’acide. Quand on est soumis à une atmosphère corrosive (les pluies acides de la Surface par exemple), on subit les Dommages jusqu’à ce qu’on sorte de la zone dangereuse. L’effet de l’acide peut alors persister pendant 1D6 Tour(s) de combat (ou jusqu’à la neutralisation de l’agent corrosif). Enfin, certaines substances affectent certains matériaux et pas d’autres. Il est donc utile de préciser si la substance ronge le métal, la chair, etc. Généralement, le produit ou la méthode permettant de neutraliser l’acide est également indiqué."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-divers.decompression",
+      "title": "Décompression"
+    },
+    {
+      "type": "paragraph",
+      "text": "Techniquement, la décompression est susceptible d’affecter l’ensemble du corps mais, pour simplifier, nous localiserons les Dommages physiques dans le Corps. Un personnage qui ne respecte pas les paliers de décompression alors qu’il respire du mélange subit à chaque Tour 1D10 points de Dommages physiques dans le Corps (ces Dommages peuvent même passer à 2D10, si le personnage a manqué plusieurs paliers). Le seul moyen d’arrêter le phénomène est de placer l’individu en caisson hyperbare, ou de le redescendre au dernier palier respecté (si c’est possible…). Le personnage devra alors respecter le temps de décompression nécessaire."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-divers.faim-soif",
+      "title": "Faim et soif"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui souffre de malnutrition ou de sous-alimentation voit ses niveaux de Force, de Constitution et de Volonté divisés par deux. Il gagne d’autre part un niveau de Fatigue automatique par mois (niveau maximum : Très fatigué). Un personnage qui ne mange rien perd 1 point de Force et 1 point de Constitution par semaine. Si l’un de ces deux Attributs tombe en dessous de 3, il meurt d’inanition. Il gagne un niveau de Fatigue automatique par semaine (niveau maximum : Épuisé). Si le personnage recommence à s’alimenter normalement, il lui faudra tout de même quelques semaines, voire quelques mois pour retrouver ses niveaux d’Attributs. Le froid oblige les individus à s’alimenter plus souvent."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le manque d’eau potable a des effets encore plus radicaux : personne ne peut survivre plus de trois jours sans boire, dans des conditions normales (un ou deux jours seulement en cas de forte chaleur). Pour chaque jour passé sans boire, le personnage subit un malus de -5 à tous ses Tests."
+    }
+  ]
+}

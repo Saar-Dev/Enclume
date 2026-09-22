@@ -1,0 +1,72 @@
+{
+  "id": "force-polaris.geographie-du-flux",
+  "slug": "geographie-du-flux",
+  "title": "Géographie du Flux",
+  "page": 264,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Une plongée dans le flux est assez troublante. Les lois physiques y sont totalement inexistantes. Le monde réel s’efface devant un univers chaotique formé de matière ayant plus ou moins de consistance. Certaines créatures émettent des échos facilement identifiables à partir du Flux tandis que d’autres y sont totalement invisibles. L’environnement est toujours instable et on peut y découvrir des terres flottantes, qui l’instant d’après ne seront plus que des masses d’énergie rayonnante. On peut aussi se retrouver sur de vastes plaines infinies, illuminées par des tempêtes d’énergie (psychique ?), puis soudain se retrouver en train de flotter au-dessus du vide. Il est en théorie possible d’établir une cartographie grossière de certaines « régions » du Flux mais jusqu’à présent personne n’y est parvenu. Certaines zones sont toutefois bien connues."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.la-bordure",
+      "title": "La Bordure"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’on en croit de récents rapports d’explorateurs de la surface, on aurait vu une sorte de superposition de notre réalité avec celle du Flux. Les explorateurs décrivent ce qui a été appelé la Bordure, comme une vaste étendue grisâtre, désertique et inquiétante, une sorte de mirage. Les descriptions sont très vagues, car les témoins ont du mal à expliquer cette superposition de deux réalités."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.la-citadelle",
+      "title": "La Citadelle"
+    },
+    {
+      "type": "paragraph",
+      "text": "Certains explorateurs du Flux ont évoqué à maintes reprises l’existence de la « Citadelle », une sorte de montagne noire qui ne change jamais et qui inspire une grande terreur. La montagne, sculptée semble-t-il pour évoquer une sorte de donjon médiéval aux proportions titanesques, se situe toujours dans une région sombre du Flux, une région parcourue de tempêtes psychiques d’une puissance incroyable. Elle serait gardée par de terrifiantes créatures du Flux et on pourrait y entendre la plainte de milliers d’esprits emprisonnés."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.le-maelstrom",
+      "title": "Le Maelström"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le Maelström est un tourbillon gigantesque aspirant inexorablement les voyageurs imprudents vers le néant. Aucun être vivant sain d’esprit ne s’en approche mais le spectacle qu’il offre quand on se trouve à une distance raisonnable est, paraît-il, des plus prodigieux."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.les-phares-psychiques",
+      "title": "Les phares psychiques"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce sont des sortes de havres de paix que l’on trouve un peu partout dans le Flux. Leur origine est des plus mystérieuses mais on raconte que les plus puissants prêtres du Trident seraient capables d’en créer. Aucune créature du Flux ni aucun phénomène destructeur ne peut affecter ceux qui se trouvent à l’abri d’un phare."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.tempetes-psychiques",
+      "title": "Tempêtes psychiques"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les tempêtes psychiques se manifestent de manière totalement imprévisible. Leurs effets peuvent être dramatiques, et même, pour les plus puissantes, affecter l’univers réel en créant une déchirure du Flux."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.geographie-du-flux.le-gouffre-psychique",
+      "title": "Le Gouffre psychique"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le Gouffre psychique est un puits sans fond que l’on trouve dans une région très étrange du Flux. Dans cette région tout est calme, on n’y est jamais soumis à la moindre perturbation et les créatures du Flux ont tendance à l’éviter. Aucun individu ayant plongé dans le puits n’en est ressorti."
+    }
+  ]
+}

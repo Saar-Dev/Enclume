@@ -1,0 +1,83 @@
+{
+  "id": "combat.combat-distance",
+  "slug": "combat-distance",
+  "title": "Combat à distance",
+  "page": 226,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance.test-tir",
+      "title": "Test de tir"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage équipé d’une arme de tir prête à tirer peut attaquer dès sa phase d’action. La notion d’attaquant et de défenseur n’est plus valable dans un combat à distance, car il n’y a pas de Test d’opposition ici. Le Test de tir est un test normal, avec la Compétence appropriée (il s’agit en général d’un Test aléatoire, bien que vous puissiez utiliser la règle des [[Tests non aléatoires|tests-et-actions.tests-non-aleatoires|205]] pour déterminer les résultats moyens d’un personnage qui s’entraîne dans un stand de tir…). Le modificateur de Difficulté dépend essentiellement de deux facteurs : la distance à laquelle se trouve la cible, et la taille de celle-ci. Les deux tableaux ci-dessous indiquent les modificateurs à utiliser :"
+    },
+    {
+      "type": "dataTable",
+      "source": "DISTANCE_TIR_MODIFICATEURS",
+      "caption": "Modificateur au Test de tir selon la distance"
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : Vous trouverez dans le chapitre consacré à l’équipement les portées de tir de chaque arme, exprimées en mètres. Utilisez ces données comme un guide pour vous aider à déterminer un modificateur, plus que comme une loi gravée dans le marbre moléculaire…"
+    },
+    {
+      "type": "dataTable",
+      "source": "TAILLE_CIBLE_MODIFICATEURS",
+      "caption": "Modificateur au Test de tir selon la taille de la cible"
+    },
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Tir en aveugle",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Si un personnage veut tirer en aveugle, dans l’obscurité ou alors que sa cible bénéficie d’une couverture totale (elle est totalement cachée derrière des objets, par exemple), voici la marche à suivre :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Le personnage doit réussir un Test d’Observation (basé sur l’ouïe, la plupart du temps), avec un malus de -5, en opposition à la Compétence Furtivité/Déplacement silencieux de la cible, pour localiser plus précisément cette dernière (le tir est impossible si la cible ne fait pas de bruit)."
+                }
+              ]
+            },
+            {
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Il doit ensuite réussir un Test de tir, avec un malus de -15 + le bonus de réussite du Test d’Observation (ou - le malus d’échec…). Tous les autres modificateurs cités plus haut s’appliquent également."
+                }
+              ]
+            },
+            {
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "En cas de réussite du Test de tir, il doit enfin réussir un Test de Chance, modifié par le bonus de réussite ou le malus d’échec du Test de tir."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "D’autres modificateurs sont possibles, en fonction des circonstances, comme indiqué dans le tableau suivant :"
+    },
+    {
+      "type": "dataTable",
+      "source": "MODIFICATEURS_CIRCONSTANCES_TIR",
+      "caption": "Modificateurs de circonstances au Test de tir"
+    }
+  ]
+}

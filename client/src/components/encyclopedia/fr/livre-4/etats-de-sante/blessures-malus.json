@@ -1,0 +1,57 @@
+{
+  "id": "etats-de-sante.blessures-malus",
+  "slug": "blessures-malus",
+  "title": "Malus aux Tests",
+  "page": 236,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Simplifier la gestion des blessures des PNJ",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Beaucoup de personnages non-joueurs n’ont absolument pas besoin d’un système de blessures aussi détaillé, qui est réservé aux personnages des joueurs, ainsi qu’à leurs adversaires les plus marquants (en gros, un ennemi récurrent, le « grand méchant » du scénario et/ou leurs lieutenants importants). Pour la plupart des adversaires, en cas de blessures, ne tenez compte que de la gravité la plus importante, sans vous encombrer d’une gestion à base de petites cases à cocher."
+        },
+        {
+          "type": "paragraph",
+          "text": "D’autre part, et sauf exceptions, rappelez-vous qu’il n’est pas nécessaire de tuer un adversaire pour le mettre hors de combat : une Blessure critique est largement incapacitante, et même une Blessure grave devrait normalement faire réfléchir l’adversaire à deux fois avant d’attaquer de nouveau (surtout s’il n’est pas vraiment motivé). De là à dire que, dans le feu de l’action et pour des PNJ mineurs, seules les Blessures d’une valeur supérieure à 15 ou 20 points de Dommages font la différence entre un adversaire prêt à attaquer de nouveau et un adversaire hors de combat… il y a un pas que le MJ ne devrait jamais hésiter à franchir, pour le rythme et l’ambiance de la partie."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-malus.malus-tests",
+      "title": "Malus aux Tests"
+    },
+    {
+      "type": "paragraph",
+      "text": "Comme vous l’avez vu plus haut, chaque type de blessure impose un malus à toutes les actions qu’un personnage blessé pourrait entreprendre : c’est la conséquence de la douleur et du stress. Ces malus ne sont pas cumulatifs : quel que soit le nombre de blessures subies (voir [[Seuils de blessures|etats-de-sante.blessures-seuils|235]]), on ne prend en compte que le malus le plus élevé, celui qui correspond à la blessure la plus grave (et ce, même si le personnage a reçu plusieurs blessures de même gravité). Ainsi, pour un personnage ayant reçu une Blessure grave (malus : -5) et deux Blessures critiques (malus : -10), le malus final est de -10."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "À propos des malus dus à l’état de santé",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Tous les éléments qui agissent sur l’état de santé du personnage lui imposent un malus à ses Tests : blessures physiques évidemment, mais aussi — si vous utilisez les règles avancées — la fatigue, le stress, les maladies, etc. Si le personnage subit les effets de plusieurs de ces maux, la règle est simple : les malus ne sont pas cumulatifs, ne prenez donc en compte que le plus important."
+        },
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.blessures-malus.malus-cumulatifs",
+          "title": "Des malus cumulatifs ?"
+        },
+        {
+          "type": "paragraph",
+          "text": "Il peut sembler curieux de n’appliquer qu’un seul malus unique, même si le personnage a reçu plusieurs blessures. L’objectif de cela est d’abord de simplifier la gestion des malus de blessures, afin d’éviter les calculs inutiles. On considère finalement que la blessure la plus grave éclipse toutes les autres (et ce, même si le personnage a reçu plusieurs blessures importantes de même gravité : après tout, si le personnage a déjà un bras cassé, une fracture de plus ou de moins ne change pas grand-chose…). Si vous souhaitez toutefois tenir compte de toutes les blessures, et adopter un système plus réaliste (mais aussi plus incapacitant), vous pouvez par exemple compter un malus supplémentaire de -1 pour chaque Localisation ayant reçu une Blessure grave (ou supérieure) en plus de la première."
+        }
+      ]
+    }
+  ]
+}

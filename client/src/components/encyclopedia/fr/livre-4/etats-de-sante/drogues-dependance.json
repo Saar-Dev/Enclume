@@ -1,0 +1,109 @@
+{
+  "id": "etats-de-sante.drogues-dependance",
+  "slug": "drogues-dependance",
+  "title": "Narco-dommages et dépendance",
+  "page": 247,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-dependance.narco-dommages",
+      "title": "Narco-dommages"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Narco-dommages représentent les effets de la consommation de drogues sur l’organisme ou l’esprit du personnage, sur le long terme. Ils se mesurent par un niveau, qui augmente plus ou moins rapidement selon la consommation. Les Narco-dommages agissent sur les phénomènes d’accoutumance et de dépendance, et favorisent l’apparition des effets secondaires des drogues."
+    },
+    {
+      "type": "paragraph",
+      "text": "Il y a deux moyens de gagner des points de Narco-dommages. Tout d’abord, chaque fois que le niveau d’intoxication du personnage dépasse son niveau actuel de Narco-dommages, le joueur doit effectuer un Test de Constitution : en cas d’échec, le personnage gagne 1 point de Narco-dommages. Ensuite, le personnage gagne automatiquement 1 point de Narco-dommages chaque fois que son niveau d’intoxication atteint ou dépasse 30."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les effets des niveaux de Narco-dommages sont les suivants :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "1 à 4 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "R.A.S. S’il ne consomme pas de drogue, le niveau de Narco-dommages du personnage baisse d’1 point tous les jours." } ]
+        },
+        {
+          "label": "5 à 9 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Dépendance (-2). S’il ne consomme pas de drogue, le niveau de Narco-dommages du personnage baisse d’1 point tous les 2 jours." } ]
+        },
+        {
+          "label": "10 à 14 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Accoutumance (-1). S’il ne consomme pas de drogue, le niveau de Narco-dommages du personnage baisse d’1 point tous les 3 jours." } ]
+        },
+        {
+          "label": "15 à 19 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Dépendance (-4), Accoutumance (-2). Pour perdre des points de Narco-dommages, le personnage ne doit pas consommer de drogue et suivre un traitement de désintoxication léger auprès d’un médecin. Le niveau de Narco-dommages peut alors baisser d’1 point toutes les semaines." } ]
+        },
+        {
+          "label": "20 à 24 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Dépendance (-6), Accoutumance (-3). Pour perdre des points de Narco-dommages, une cure de désintoxication dans un établissement spécialisé est nécessaire. Le personnage ne doit bien entendu pas consommer de drogue. Le niveau de Narco-dommages peut alors baisser d’1 point toutes les deux semaines." } ]
+        },
+        {
+          "label": "25 à 29 points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Dépendance (-8), Accoutumance (-4). Le personnage commence à être sérieusement atteint par les effets des drogues, qui ont des effets physiques et psychologiques durables : pour chaque point au-dessus de 25, il perd temporairement 1 niveau d’Attribut, à déterminer au hasard entre Constitution (affaiblissement et amaigrissement), Intelligence (incapacité croissante à raisonner) ou Volonté (le personnage se transforme peu à peu en zombie). Il subit de plus un malus de -3 à tous ses Tests. Pour perdre des points de Narco-dommages, une hospitalisation avec traitement de désintoxication lourd est nécessaire. Le personnage ne doit bien entendu pas consommer de drogue. Le niveau de Narco-dommages peut alors baisser d’1 point toutes les trois semaines (il récupère ses niveaux d’Attributs perdus au même rythme). Néanmoins, chaque fois que le personnage atteint ce niveau, 1 point de Narco-dommages ne pourra jamais être soigné…" } ]
+        },
+        {
+          "label": "30+ points de Narco-dom.",
+          "blocks": [ { "type": "paragraph", "text": "Le personnage est ravagé par la drogue. Il subit un malus de -5 à tous ses Tests. De plus, chaque fois que le personnage atteint ce niveau, le personnage perd définitivement 1 point sur l’un de ses Attributs (déterminé au hasard). Pour perdre des points de Narco-dommages, une hospitalisation avec traitement de désintoxication lourd est nécessaire. Le personnage ne doit bien entendu pas consommer de drogue. Le niveau de Narco-dommages peut alors baisser d’1 point tous les mois." } ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Les effets de l’Accoutumance et de la Dépendance sont détaillés dans les sections qui suivent."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-dependance.accoutumance",
+      "title": "Accoutumance"
+    },
+    {
+      "type": "paragraph",
+      "text": "Petit à petit, l’organisme s’habitue aux drogues. Le personnage aura donc besoin de doses plus importantes, ou de produits de plus en plus puissants. Le modificateur d’Accoutumance est tout simplement ajouté à la Résistance aux drogues du personnage. Ces modificateurs ne sont pas cumulatifs, ne tenez compte que de celui qui est indiqué au niveau de Narco-dommages atteint par le personnage. Ainsi, si un personnage possédant une Résistance aux drogues de -2 parvient à un niveau de Narco-dommages de 15, son nouveau modificateur de résistance sera de -4."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-dependance.dependance",
+      "title": "Dépendance et effets du manque"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage commence à ressentir les effets du manque à la fin de la période indiquée. Il doit alors réussir un Test de Constitution ou de Volonté (le plus bas des deux), avec une Difficulté égale au modificateur de dépendance de la drogue, aggravé par l’éventuel malus de Dépendance dû au niveau de Narco-dommages :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**En cas de réussite**, le personnage réussit à surmonter les effets du manque." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**En cas d’échec**, le personnage fait une crise de manque. Il est pris de nausées, de vertiges, de tremblements, etc. Plus la marge d’échec est grande, plus la crise sera importante (jusqu’au point où le personnage devra se procurer sa dose par tous les moyens à sa disposition…). Le personnage subit un malus égal au modificateur d’échec à tous ses Tests, jusqu’à ce qu’il ait pris sa dose. Ce malus diminue toutefois d’1 point par jour." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le Test doit être effectué à nouveau à la fin de chaque période de manque, mais le personnage gagne un bonus cumulatif de +2 à chaque fois. Dès qu’il réussit trois Tests successifs, le sevrage est terminé, il ne subira plus les effets du manque (jusqu’à sa prochaine consommation de drogue…)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-dependance.effets-secondaires",
+      "title": "Effets secondaires"
+    },
+    {
+      "type": "paragraph",
+      "text": "La plupart des drogues ont des effets secondaires, physiques ou psychologiques. Lorsque le personnage atteint un seuil d’intoxication présentant un risque d’effets secondaires, le joueur doit lancer 1D20 et comparer le résultat au niveau de Narco-dommages de son personnage : sur un résultat inférieur ou égal, celui-ci est victime des effets secondaires de la drogue. Plus la marge est grande, plus ceux-ci seront importants. Le personnage subit les effets secondaires pendant toute la durée d’effet de la drogue."
+    }
+  ]
+}

@@ -93,21 +93,12 @@ export function calcExoDegatsNets(exoSheet, degautsBruts) {
   return { bld: stats.bld, rd: stats.rd, degatsNets: Math.max(0, degautsBruts - stats.bld + stats.rd) }
 }
 
-// ─── Table des modificateurs de difficulté (LdB p.404) ───────────────────────
-export const DIFFICULTY_MOD_TABLE = [
-  { label: 'Extrêmement facile', mod: +10 },
-  { label: 'Très facile',        mod:  +7 },
-  { label: 'Facile',             mod:  +5 },
-  { label: 'Assez facile',       mod:  +3 },
-  { label: 'Moyen',              mod:   0 },
-  { label: 'Assez difficile',    mod:  -3 },
-  { label: 'Difficile',          mod:  -5 },
-  { label: 'Très difficile',     mod:  -7 },
-  { label: 'Extrêmement difficile', mod: -10 },
-  { label: 'Presque impossible', mod: -13 },
-  { label: 'Surhumain',          mod: -15 },
-  { label: 'Héroïque',           mod: -20 },
-]
+// Table des modificateurs de difficulté (LdB p.404) : DIFFICULTY_MOD_TABLE (doublon avec libellés
+// français en dur, jamais consommée par aucun code serveur — vérifié par grep, docs/ENCYCLOPEDIA_
+// SHARED_INVENTORY.md §7) supprimée 2026-09-22. Autorité unique désormais : DIFFICULTE_ACTION_
+// MODIFICATEURS (shared/polarisUtils.js, clés + modificateur ; libellés FR dans
+// client/src/components/encyclopedia/fr/terms.json côté client uniquement — voir rules/i18n.md,
+// le serveur n'émet jamais de texte FR figé).
 
 // ─── Tables qualitatives (LdB p.113, p.115) ──────────────────────────────────
 

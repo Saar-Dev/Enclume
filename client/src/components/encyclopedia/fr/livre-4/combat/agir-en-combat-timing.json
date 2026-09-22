@@ -1,0 +1,122 @@
+{
+  "id": "combat.agir-en-combat-timing",
+  "slug": "agir-en-combat-timing",
+  "title": "Agir en combat : enchaînements",
+  "page": 217,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat-timing.combiner-actions",
+      "title": "Combiner plusieurs Actions"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il est souvent possible de combiner deux Actions, qui sont alors effectuées dans le même temps, par exemple se déplacer en direction d’un adversaire en tirant sur lui avec une arme à feu. C’est autorisé, tant que l’action globale reste réaliste (ainsi, la combinaison de plus de deux Actions apparaît peu probable). Comme d’habitude, le MJ reste seul juge, et peut même imposer un malus aux Tests nécessaires, dont la Difficulté dépend de la situation et des Actions combinées (ou même imposer un Test d’Attribut à une Action qui ne nécessite normalement aucun Test). Voir aussi [[Malus dus aux Déplacements|combat.deplacements|220]]."
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple : un personnage désarmé veut plonger au sol en effectuant une belle roulade pour se mettre à l’abri des tirs ennemis derrière une cloison blindée. Au passage, il veut tenter de récupérer un pistolet qui traîne au sol, l’arme d’un allié abattu peu de temps auparavant. Il s’agit bien de deux Actions combinées. La première (la chute) nécessite un Test d’Acrobatie/Équilibre. La seconde (ramasser un objet au sol) ne nécessite normalement aucun Test. Le MJ décide que l’action n’est pas des plus aisées. Il décide toutefois de ne pas imposer de malus pour la chute. Le joueur lance les dés et réussit le Test d’Acrobatie/Équilibre. En revanche, le MJ demande ensuite un Test de Coordination, pour la récupération de l’arme au sol. Cette fois, le joueur échoue : le personnage fait une roulade superbe, mais ne parvient pas à récupérer l’arme. Au moins il est à l’abri derrière la paroi blindée…"
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat-timing.retarder-action",
+      "title": "Retarder son Action"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un joueur peut retarder l’Action de son personnage. Celui-ci n’agira pas à la phase d’action qui correspond à son score d’Initiative, mais plus tard dans le Tour. Cela peut être très utile, pour voir comment évoluent les choses au cours du Tour de combat, attendre un événement particulier ou encore en savoir plus sur les intentions d’un autre combattant, de manière à pouvoir réagir en conséquence. De même, tenir un adversaire en joue avec une arme à feu peut être considéré comme une Action retardée. Le personnage peut alors agir à n’importe quelle phase d’Action."
+    },
+    {
+      "type": "paragraph",
+      "text": "S’il décide d’agir à la même phase d’action qu’un autre personnage qui agit, lui, normalement, son Action est considérée comme prioritaire, et est résolue en premier. En revanche, si deux personnages ayant retardé leurs Actions décident d’agir à la même phase, ils sont soumis tous deux à la règle normale des [[Initiatives équivalentes|combat.initiatives-equivalentes|214]]."
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage peut retarder son Action d’un Tour à l’autre. Dans ce cas, il peut agir dès la première phase d’action du Tour suivant, quelle que soit son Initiative."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Précipiter son action",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un personnage peut toujours décider de précipiter son Action, en mettant alors l’accent sur la rapidité plutôt que sur la précision. En terme de jeu, le joueur peut ajouter un bonus de +3 à l’Initiative de son personnage, lui donnant ainsi le droit d’agir trois phases d’action plus tôt que prévu. Il suffit pour cela d’annoncer une Action précipitée lors de l’étape de déclaration d’intentions. En contrepartie de ce bonus en Initiative, le personnage subit un malus de -5 à son Action…"
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple : pris dans une embuscade, un personnage (Initiative = 13) désire dégainer une arme pour se défendre. Dégainer une arme est une Préparation qui coûte normalement 5 points d’Initiative, ce qui ne l’obligerait pas à attendre la phase 13-5 = 8 pour agir… Trop lent ! Il décide alors de précipiter son Action, ce qui lui permet de bénéficier d’un nouveau score d’Initiative de 13+3 = 16, et donc d’attaquer l’un de ses assaillants dès la phase 11, après avoir dégainé (16-5). Le gain de temps n’est pas extraordinaire, mais une fraction de seconde peut faire la différence… À cause de la précipitation, l’attaque se fera toutefois avec un malus de -5."
+        },
+        {
+          "type": "paragraph",
+          "text": "Si l’Action ne nécessite pas de Test (exemple : un déplacement), le MJ peut tout à fait en demander un, avec l’Attribut adapté à la situation (ce Test s’effectue alors sans le malus de -5)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple (suite) : après avoir attaqué, le personnage décide de se mettre à couvert, craignant d’être pris sous un tir croisé. Ici encore, il décide de précipiter son Action, pour effectuer un déplacement. Avec une Initiative de 13, il peut donc agir dès la phase 13+3 = 16. Un Mouvement ne nécessite normalement aucun Test, mais le MJ décide tout de même d’en demander un : le joueur doit réussir un Test d’Agilité (c’est l’Attribut le plus adapté à la situation) pour que son personnage réussisse à se mettre à couvert derrière l’abri le plus proche. Le résultat du Test est sans appel : c’est un échec… Le MJ décide que le personnage trébuche, perdant ainsi le bonus de +3 à son Initiative : il ne pourra commencer son mouvement qu’à la phase 13. Si le Test s’était soldé par une Catastrophe, le personnage aurait même pu s’étaler par terre, à la merci du tir de ses adversaires !"
+        },
+        {
+          "type": "paragraph",
+          "text": "Notez qu’une Action précipitée ne peut pas être retardée."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Effectuer plusieurs attaques par tour",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un joueur désirant que son personnage effectue plus d’une Attaque par Tour de combat doit le déclarer dès l’étape de déclaration d’intention. Un personnage peut effectuer jusqu’à trois Attaques par Tour de combat (c’est le maximum autorisé). Il subit toutefois un malus pour toutes les Attaques du Tour : -5 s’il veut effectuer 2 Attaques, ou -7 pour 3 Attaques."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dans le cas d’Attaques multiples, la première Attaque est effectuée normalement à la phase d’action équivalente au score d’Initiative de base du personnage. Ensuite, les autres Attaques prennent place à intervalles réguliers, tous les 5 points d’Initiative. Un personnage choisissant d’effectuer plus d’une Attaque par tour agira donc aux phases suivantes :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Première Action : score d’Initiative." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Deuxième Action : score d’Initiative -5." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Troisième Action : score d’Initiative -10." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Le joueur peut marquer ces Actions sur l’échelle d’Initiative de sa fiche de personnage, en déposant un marqueur sur chacune des phases d’action concernée. Il faut bien entendu disposer d’une Initiative suffisante pour effectuer les Actions supplémentaires, qui ne peuvent être effectuées qu’à intervalle de 5 points d’Initiative chacune."
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple : un joueur décide que son personnage (Initiative 13) effectuera trois Attaques lors du Tour qui commence. Le personnage peut agir à la phase 13, puis à la phase 13-5 = 8, puis enfin à la phase 8-5 = 3. Sur l’échelle d’Initiative de sa fiche, le joueur pose un marqueur sur chacune des phases d’action suivantes : 13, 8 et 3."
+        },
+        {
+          "type": "paragraph",
+          "text": "Cet intervalle de 5 points doit toujours être respecté. Ainsi, si un personnage décide de retarder une de ses Attaques (ou d’effectuer une Préparation) et donc de décaler son exécution à une phase plus tardive, les Attaques suivantes se trouveront elles aussi décalées d’autant de phases que nécessaire, afin de respecter l’intervalle obligatoire. Dans le même ordre d’idée, une Action précipitée a exactement l’effet inverse : toutes les Attaques suivantes sont décalées… mais dans l’autre sens (notez que le malus dû à la précipitation se cumule avec la pénalité imposée par les Attaques multiples). Une Attaque qui est décalée au-delà de la phase 1 est supprimée. Le malus aux Tests doit alors être ajusté en fonction du nombre total d’Attaques effectuées dans le Tour."
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple (suite) : le personnage peut effectuer trois Attaques, aux phases 13, 8 et 3. Il décide toutefois de retarder sa première Attaque de 3 phases, pour prendre le temps d’observer le déroulement du combat. Il peut désormais agir à la phase 13-3 = 10, puis à la phase 8-3 = 5 (le joueur décale tous ses marqueurs, sur l’échelle d’Initiative). Malheureusement, il perd sa troisième Attaque qui se retrouve décalée au-delà de la phase 1 (la dernière phase d’action du Tour de combat)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Comme vous le verrez un peu plus bas, certaines Attaques sont exclusives, ce qui signifie qu’elles n’autorisent pas d’autres Attaques au cours du Tour de combat (le personnage est donc limité à une seule Attaque). C’est notamment le cas de la Charge ou du Tir en rafale longue."
+        }
+      ]
+    }
+  ]
+}

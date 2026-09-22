@@ -1,0 +1,92 @@
+{
+  "id": "force-polaris.entites",
+  "slug": "entites",
+  "title": "Les Entités",
+  "page": 266,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Nombreuses sont les entités hantant le Flux Polaris. Pour l’instant, seules certaines ont pu être identifiées. Personne ne sait si les habitants du Flux en sont originaires ou s’ils sont l’écho de créatures ou de personnages bien réels. Comme il a été démontré qu’un voyageur du Flux pouvait modifier son apparence, rien ne dit que même les créatures les plus monstrueuses ne soient pas, en fait, l’écho d’êtres humains."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.la-trinite",
+      "title": "La Trinité"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Trinité est une entité des plus mystérieuses, qui est à l’origine du Culte du Trident. En fait, c’est à cause d’elle que l’on peut parler d’un véritable culte, et pas seulement d’une organisation."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.autre",
+      "title": "L’Autre"
+    },
+    {
+      "type": "paragraph",
+      "text": "Entité omniprésente dans le Flux Polaris, l’Autre est un mystère. Il est le principal responsable de toutes les attaques perpétrées contre des voyageurs du Flux. On dit qu’il peut adopter plusieurs formes, comme celle d’un tourbillon noir, celle d’un dragon ou celle d’une jeune femme."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.conscience",
+      "title": "Conscience"
+    },
+    {
+      "type": "paragraph",
+      "text": "On ne sait strictement rien de cette entité, mais tous les voyageurs du Flux ressentent sa sombre présence."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.la-vegetation",
+      "title": "La végétation"
+    },
+    {
+      "type": "paragraph",
+      "text": "Toutes les plantes ont un écho assez puissant dans le Flux Polaris, dont elles sont un élément indispensable. La particularité de la végétation dans cette dimension, est d’adopter une forme totalement différente de celle qu’elle a dans le monde réel. Certaines plantes prennent l’apparence d’entités énergétiques d’une beauté à couper le souffle, tandis que d’autres se transforment en choses grotesques vaguement humanoïdes."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.raine",
+      "title": "Raine"
+    },
+    {
+      "type": "paragraph",
+      "text": "Certains avancent que Raine n’est autre qu’une ancienne prêtresse du Culte du Trident ayant atteint un degré de conscience inconcevable pour la plupart des humains. Cela l’aurait rendu folle et elle hanterait désormais le Flux Polaris à la recherche d’esprits à détruire ou à tourmenter."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.ombre",
+      "title": "Ombre"
+    },
+    {
+      "type": "paragraph",
+      "text": "Entité indépendante ? Incarnation de l’Autre ? Alter ego terrestre de Raine ? Ombre est un mystère. La seule certitude que l’on ait à son sujet c’est que certains membres du Soleil noir la considèrent comme totalement indépendante de l’Autre et qu’ils la reconnaissent comme leur véritable maîtresse."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.le-corail",
+      "title": "Le corail"
+    },
+    {
+      "type": "paragraph",
+      "text": "La puissance psychique du corail dans le Flux Polaris est énorme. Elle équivaut presque à celle dégagée par l’ensemble des mammifères marins. À tel point que le corail réclame à lui seul toute une région du Flux dans laquelle il se manifeste sous la forme d’une gigantesque sphère lumineuse suspendue dans l’éther et autour de laquelle gravitent des milliers de créatures constituées d’énergie dont on ne sait pas grandchose. Il est indéniable que le corail est vital à l’équilibre du Flux et qu’il est un élément fondamental de son écosystème."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.entites.les-mammiferes",
+      "title": "Les mammifères"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les mammifères constituent une des trois composantes majeures du Flux Polaris (avec la végétation et le corail). Ils sont omniprésents sous forme de flux d’énergie pouvant adopter une forme très proche de celle qu’on leur connaît dans la réalité, quand ils décident de plonger dans cette autre dimension."
+    }
+  ]
+}

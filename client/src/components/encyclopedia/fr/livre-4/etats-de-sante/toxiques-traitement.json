@@ -1,0 +1,61 @@
+{
+  "id": "etats-de-sante.toxiques-traitement",
+  "slug": "toxiques-traitement",
+  "title": "Traitement des maladies et poisons",
+  "page": 245,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-traitement.traitement",
+      "title": "Traitement des maladies et des poisons"
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour pouvoir soigner correctement une maladie ou un empoisonnement, il faut d’abord reconnaître le mal : le médecin doit réussir un Test de Médecine, avec une Difficulté correspondant au modificateur de diagnostic de la maladie ou du poison en question. Dans le cas des empoisonnements, néanmoins, le MJ peut accorder un bonus au Test, si la source ou la substance toxique est identifiée. En cas de réussite, il reconnaît les symptômes et sait quels sont les soins à apporter (si le traitement est connu). En cas d’échec, il ne sait pas comment soigner le mal (le MJ peut l’autoriser à faire des recherches sur les bases de données médicales, ou à contacter des confrères pour en savoir plus, mais pendant ce temps, la maladie ou l’empoisonnement progresse…). Sur une Catastrophe, le médecin peut même se tromper dans son diagnostic, et appliquer des soins inefficaces sans s’en rendre tout de suite compte."
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour traiter une maladie ou un empoisonnement, il faut avoir accès aux médicaments, au sérum et/ou au matériel médical approprié (sinon, aucun traitement n’est possible). Dès que le mal a été diagnostiqué, et que le traitement approprié est appliqué, le malade peut effectuer un Test de Constitution par période d’évolution de la maladie ou de l’empoisonnement, puis un Test par jour lorsque le mal s’est stabilisé et ne se développe plus. La Difficulté du Test est égale au modificateur de guérison de la maladie ou du poison, auquel on ajoute le modificateur de réussite obtenu par le médecin lors de son diagnostic. En cas de réussite, le niveau de maladie ou d’empoisonnement du personnage baisse d’un nombre de points équivalent à son modificateur de réussite. En cas d’échec, le niveau reste stable (sur une Catastrophe, il peut même augmenter d’1D6 points)."
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Patchs anti-poison",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les poisons se développent généralement plus vite que les maladies, mais ils peuvent être jugulés plus facilement par un patch anti-poison (ou un sérum anti-venin). Il existe deux sortes de patchs :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Les patchs spécifiques à un poison, une toxine ou un venin déterminé, qui neutralisent complètement celui-ci mais restent inefficaces contre les autres." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Les patchs universels, qui peuvent être utilisés contre tout poison mais ne fait que diviser le nombre de points d’empoisonnement par deux." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Les patchs anti-poison peuvent être administrés immédiatement et agissent rapidement (quelques minutes). Notez toutefois que les petites stations et les navires ne disposent pas forcément de ce genre de produits."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Sans diagnostic correct, et donc sans traitement approprié, le personnage peut toutefois s’en remettre à la guérison naturelle. Il subit toutefois un malus supplémentaire de -7 à son modificateur de guérison."
+    },
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Traitement expérimental",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un médecin qui n’a pas reconnu la maladie ou le poison (ou qui a affaire à un mal inconnu) peut tenter d’administrer un traitement expérimental au malade. Pour cela, il effectue un Test de Médecine, avec une Difficulté égale au modificateur de diagnostic de la maladie. En cas de réussite, son modificateur de réussite permet de diminuer d’autant le malus de -7 imposé au malade, à cause d’une maladie ou d’un poison mal diagnostiqué (jusqu’à un modificateur maximum de +0). Les risques sont nombreux, cependant : en cas d’échec, le malus d’échec est ajouté au niveau de maladie du personnage soigné…"
+        }
+      ]
+    }
+  ]
+}

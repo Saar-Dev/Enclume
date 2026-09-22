@@ -1,0 +1,218 @@
+{
+  "id": "tests-et-actions.chance-depense",
+  "slug": "chance-depense",
+  "title": "Chance : dépense et regain",
+  "page": 210,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.chance-depense.defier-destin",
+      "title": "Défier le destin…"
+    },
+    {
+      "type": "paragraph",
+      "text": "Se soumettre à un Test de Chance, c’est évidemment courir le risque d’échouer. Au lieu de cela, les joueurs peuvent choisir d’utiliser directement la Chance pour intervenir sur les événements et forcer les choses à tourner en faveur de leurs personnages. Pour cela, au lieu de jeter un dé, les joueurs dépensent volontairement des points de Chance, faisant ainsi diminuer le niveau de Chance de leur personnage… Dépenser 1 point de Chance permet d’acheter les événements bénéfiques suivants :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Coup de pouce",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Avant un Test de Compétence ou d’Attribut, le joueur peut dépenser 1 point de Chance pour gagner un bonus exceptionnel de +5. Il y a toutefois une contrepartie : quel que soit le résultat du dé, la marge de réussite du Test est automatiquement de 0 (si le bonus amène les chances de réussite d’un personnage à 20 ou plus, inutile donc de lancer le dé). Une éventuelle Réussite critique doit également être ignorée. Le « Coup de pouce » concerne en priorité les Tests aléatoires, puisque le hasard n’intervient pas dans les Tests non aléatoires, mais un MJ magnanime peut éventuellement autoriser la dépense d’un point de Chance pour améliorer les chances de réussite d’un tel Test de 2 points… Cela ne concerne évidemment pas les Tests de Chance, puisqu’il suffit normalement de dépenser un point de Chance pour obtenir le bénéfice d’un « Événement favorable » (voir ci-dessous)."
+            }
+          ]
+        },
+        {
+          "label": "Événement favorable",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le joueur force les événements à tourner en faveur de son personnage. Il peut s’agir des conséquences d’un Test de Chance réussi (dans ce cas, le joueur dépense d’emblée 1 point de Chance au lieu de faire le Test), mais aussi d’une suggestion du joueur, qui désire voir son personnage bénéficier d’une opportunité spécifique. Pour reprendre les exemples cités plus haut, cela peut être obtenir le secours d’un navire de passage, pouvoir se débarrasser de ses liens grâce à un outil tranchant, mais aussi obtenir une aide inespérée au cours d’un combat, trouver une sortie de secours permettant de s’échapper d’un guet-apens, profiter d’un appel d’urgence des forces de l’ordre pour se soustraire à un contrôle d’identité, etc. Comme vous le voyez, les possibilités sont nombreuses et, surtout, laissées à l’initiative des joueurs qui peuvent ainsi prendre en main le destin de leur personnage. Comme d’habitude, le MJ est libre de refuser ce qu’il veut, dans l’intérêt de la partie et/ou de son scénario, tout en veillant à ce que les demandes des joueurs soient réalistes et cohérentes."
+            }
+          ]
+        },
+        {
+          "label": "Indice",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Dans le même ordre d’idée, un joueur peut aussi utiliser la Chance pour avoir l’occasion d’obtenir un indice sur le scénario en cours, si les personnages n’avancent pas au cours d’une enquête par exemple. Le MJ peut alors orienter les joueurs, glisser un indice supplémentaire dans le scénario, ou encore suggérer une piste qui n’a pas été explorée ou que les joueurs ont oubliée."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour résumer, quand un joueur décide volontairement d’utiliser la Chance de son personnage, il doit dépenser 1 point. Quand c’est le MJ qui demande à un joueur d’effectuer un Test de Chance, cela n’entraîne aucune perte. Évidemment, plus les joueurs dépensent de points de Chance, et plus les Tests de Chance de leurs personnages seront difficiles… Heureusement, il existe des moyens de regagner des points de Chance (voir plus bas). Un personnage dont le niveau de Chance est descendu à 3 ne peut plus dépenser de point de Chance. Il devra attendre de retrouver un niveau supérieur ou égal à 4 pour pouvoir de nouveau dépenser des points (en revanche, il peut toujours effectuer des Tests de Chance)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Attention, lorsque les événements sont profitables pour l’ensemble du groupe de personnages, tous les joueurs doivent dépenser un point de Chance. C’est notamment le cas pour bon nombre des « Événements favorables » cités ci-dessous, ainsi que pour la plupart des « Indices » supplémentaires donnés par le MJ. Si un joueur ne peut plus dépenser de points de Chance (car le niveau de Chance de son personnage est tombé à 3), quelqu’un d’autre doit en dépenser un pour lui…"
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.chance-depense.survivre",
+      "title": "… et survivre un jour de plus"
+    },
+    {
+      "type": "paragraph",
+      "text": "L’univers de Polaris est dangereux et les combats y sont rudes et mortels. Pourtant, les personnages-joueurs sont les héros de l’histoire et, malgré le réalisme assumé de ce système, il serait dommage qu’ils succombent dès la première heure de jeu… La Chance permet de moduler la mortalité des blessures et de permettre ainsi aux personnages de survivre plus facilement aux affrontements. En terme de jeu, dès que le personnage subit une Blessure grave ou plus, la dépense d’1 point de Chance permet de réduire le niveau de blessure d’un degré de gravité : une Blessure critique devient par exemple une Blessure grave, ou une Blessure grave une Blessure moyenne. Il est même possible de dépenser jusqu’à 2 points de Chance d’un seul coup, pour réduire la gravité d’une blessure de deux degrés (ainsi, suite à une Blessure mortelle, dépenser 2 points de Chance permet de ne subir qu’une Blessure grave). Il est toujours possible de dépenser des points de Chance en cas de « Mort subite », pour éviter que le personnage ne meure (dans ce cas, il ne subit qu’une Blessure critique)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : si le niveau de gravité auquel on réduit la blessure ne peut plus accepter de nouvelles blessures (toutes les cases disponibles ont été cochées), le joueur doit dépenser d’autres points de Chance pour diminuer encore le degré de gravité (ignorer dans ce cas la restriction de 2 points dépensés au maximum ; il est alors exceptionnellement possible de réduire des blessures inférieures aux Blessures graves). Si le joueur ne peut plus dépenser de points de Chance, ou si toutes les cases du compteur de blessures sont pleines, il est impossible de réduire la blessure."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Maladies, poisons, drogues, irradiations…",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "La Chance fonctionne aussi pour ces choses-là, qui peuvent à la longue être tout aussi mortelles qu’une balle en plein cœur. Le système fonctionne sur le même principe : 1 point de Chance permet de réduire le niveau de maladie, d’empoisonnement, d’intoxication ou d’irradiation de 5 points. Comme d’habitude, il n’est pas possible de dépenser plus de 2 points de Chance en une seule fois."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.chance-depense.regagner",
+      "title": "Regagner des points de Chance"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il y a plusieurs moyens de regagner des points de Chance :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.chance-depense.malchanceux",
+      "title": "Être malchanceux"
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque fois que le personnage obtient une Catastrophe (Marge d’échec de 15 ou plus), lors d’un Test aléatoire, il regagne 1 point de Chance (sauf si son niveau de Chance est déjà de 15 ou plus). Notez que le joueur peut aussi choisir de ne pas gagner de point de Chance, et de refaire son Test."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.chance-depense.bonne-idee",
+      "title": "Bonne idée / Interprétation remarquable"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si un joueur contribue à faire avancer de manière significative le scénario ou la partie, par une bonne idée ou une initiative originale, le MJ peut octroyer 1 point de Chance à son personnage. De même, si un joueur se distingue particulièrement par l’interprétation de son personnage au cours d’une scène importante, en améliorant véritablement l’ambiance de cette dernière, son personnage mérite 1 point de Chance… Le MJ reste bien entendu seul juge des actions qui peuvent être récompensées ainsi et nous l’encourageons à trouver un équilibre qui corresponde à son groupe de jeu. Normalement, chaque joueur ne devrait pouvoir bénéficier d’une telle récompense qu’une ou deux fois par scénario (ou par séance de jeu, si le rythme des parties est particulièrement espacé ou le scénario particulièrement long)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.chance-depense.accomplissement",
+      "title": "Accomplissement du scénario ou de l’histoire"
+    },
+    {
+      "type": "paragraph",
+      "text": "À la fin de chaque scénario ou de chaque épisode important d’une campagne, le MJ peut attribuer un ou plusieurs points de Chance aux joueurs, en fonction de leur degré de réussite dans la résolution du scénario et de leur implication dans l’histoire (il faut aussi prendre en compte les histoires personnelles des personnages et la situation générale du groupe : alliés et ennemis, affaires en cours, recherches et quêtes diverses…). Voici le barème indicatif à appliquer :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "0 point",
+          "blocks": [
+            { "type": "paragraph", "text": "Les personnages n’ont pas du tout atteint leurs objectifs (ils sont par exemple passés à côté du scénario)." }
+          ]
+        },
+        {
+          "label": "1 point",
+          "blocks": [
+            { "type": "paragraph", "text": "Les personnages ont tout juste atteint leurs objectifs, ou alors ont échoué de justesse (ils ont par exemple résolu le scénario, sans toutefois comprendre réellement le dessous des cartes)." }
+          ]
+        },
+        {
+          "label": "2 points",
+          "blocks": [
+            { "type": "paragraph", "text": "Les personnages ont atteint leurs objectifs (ils ont par exemple résolu le scénario, en mettant à jour l’intégralité de l’intrigue : secrets, personnages impliqués, conséquences, etc.)." }
+          ]
+        },
+        {
+          "label": "Bonus *",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "Excellente stratégie / cohésion du groupe." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "Réussite parfaite / Objectifs dépassés : intrigues secondaires résolues, obtention de bonus supplémentaires (nouveaux alliés, meilleure récompense, etc.)." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "Scénario / intrigue difficile ou particulièrement dangereux." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "Mission accomplie sans aucun « dommage collatéral »." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "Épisode clé ou point culminant de la campagne (point culminant, conclusion, confrontation ultime avec un ennemi puissant et récurrent, etc.)." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "Découverte de l’un des secrets de l’univers de Polaris…" } ] }
+              ]
+            },
+            { "type": "paragraph", "text": "**+1 point / bonus**" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "* Un ou deux bonus maximum conseillé(s) par scénario."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Personnages héroïques",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Chaque personnage peut avoir un niveau de Chance pouvant aller jusqu’à 25. Les points supérieurs à 20 ne peuvent toutefois être utilisés que pour réduire les blessures subies (voir « … et survivre un jour de plus », plus haut), et ne sont pas pris en compte lors des Tests de Chance (on considère que le niveau de Chance du personnage est égal à 20, même s’il possède un niveau réel supérieur)."
+        }
+      ]
+    },
+
+    {
+      "type": "paragraph",
+      "text": "Note : dans tous les cas, le niveau maximum qu’un personnage puisse avoir en Chance est de 20 (vous pouvez aussi appliquer la règle optionnelle « Personnages héroïques » ci-dessus)."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Chance de groupe",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Tous les points gagnés au-dessus de 20 sont ajoutés à une réserve commune, appartenant au groupe tout entier (un joueur peut être chargé de gérer cette « Chance de groupe »). Chaque joueur peut y puiser selon ses besoins, avec l’accord du reste du groupe. Cette méthode est notamment utile lorsque des personnages ont un niveau de Chance particulièrement bas."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.chance-depense.pnj",
+      "title": "Chance des PNJ"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les personnages non-joueurs aussi ont un niveau de Chance, qui dépend de leur importance dans le scénario ou la campagne. Ainsi, le MJ peut considérer que les « simples figurants » (les passants anonymes, les hommes de main…) ont un niveau de Chance de 10. Ils peuvent effectuer des Tests de Chance, si nécessaire, mais ne peuvent pas dépenser de points. Des personnages plus importants (comme un ennemi récurrent, ou ses lieutenants) peuvent avoir un niveau de Chance de 15, voire même plus dans le cas d’un personnage vraiment important, et peuvent, eux, dépenser des points de Chance, à l’instar des PJ. Le MJ est libre de limiter cette dépense aux simples réductions de niveaux de blessures ou de leur permettre d’utiliser aussi les autres options dont les PJ bénéficient."
+    }
+  ]
+}

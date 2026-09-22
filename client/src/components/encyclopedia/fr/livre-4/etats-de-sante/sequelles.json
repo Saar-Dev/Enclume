@@ -1,0 +1,126 @@
+{
+  "id": "etats-de-sante.sequelles",
+  "slug": "sequelles",
+  "title": "Séquelles",
+  "page": 240,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Séquelles",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les blessures les plus importantes (Blessures critiques, mortelles et Membres détruits) peuvent laisser des séquelles irréversibles (certaines étant d’ailleurs évidentes, pour un Membre détruit notamment). Pour chaque blessure présentant un risque de séquelle, lancez 1D10 dans la table appropriée, ci-dessous. Il faudra peut-être adapter les effets indiqués en fonction de la situation et des causes de la blessure (blessures par arme tranchante, par arme contondante, par balle, etc.)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dans la plupart des cas, une opération chirurgicale — coûteuse — peut régler le problème (chirurgie esthétique, reconstruction d’organe, implantations de nouveaux organes, remplacements cybernétiques, etc.). Les pertes de niveaux d’Attributs sont toutefois définitives."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.sequelles.tete",
+          "title": "Blessures à la tête"
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_TETE_GRAVES_TABLE",
+          "caption": "Blessures graves (Tête)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Note : les Blessures graves touchant d’autres Localisations ne laissent que des cicatrices, sans autre effet secondaire."
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_TETE_CRITIQUES_TABLE",
+          "caption": "Blessures critiques (Tête)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_TETE_MORTELLES_TABLE",
+          "caption": "Blessures mortelles (Tête)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "paragraph",
+          "text": "**Règle optionnelle (personnage aveugle)** : un personnage définitivement aveugle (à la suite d’une infirmité, d’un accident ou d’une blessure) gagne un bonus de +3, applicable sur les Tests de Perception concernant directement l’ouïe, le toucher et l’odorat."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.sequelles.corps",
+          "title": "Blessures au corps"
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_CORPS_CRITIQUES_TABLE",
+          "caption": "Blessures critiques (Corps)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_CORPS_MORTELLES_TABLE",
+          "caption": "Blessures mortelles (Corps)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.sequelles.bras",
+          "title": "Blessures aux bras"
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_BRAS_CRITIQUES_TABLE",
+          "caption": "Blessures critiques (Bras)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_BRAS_MORTELLES_TABLE",
+          "caption": "Blessures mortelles (Bras)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_BRAS_MEMBRE_DETRUIT_TABLE",
+          "caption": "Membres détruits (Bras)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.sequelles.jambes",
+          "title": "Blessures aux jambes"
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_JAMBES_CRITIQUES_TABLE",
+          "caption": "Blessures critiques (Jambes)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_JAMBES_MORTELLES_TABLE",
+          "caption": "Blessures mortelles (Jambes)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        },
+        {
+          "type": "dataTable",
+          "source": "SEQUELLES_JAMBES_MEMBRE_DETRUIT_TABLE",
+          "caption": "Membres détruits (Jambes)",
+          "headers": [ [ { "label": "1D10" }, { "label": "Effet" } ] ]
+        }
+      ]
+    }
+  ]
+}

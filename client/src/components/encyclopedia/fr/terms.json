@@ -1,0 +1,108 @@
+{
+  "difficulteAction": {
+    "extremementFacile":    "Extrêmement facile",
+    "tresFacile":           "Très facile",
+    "facile":               "Facile",
+    "assezFacile":          "Assez facile",
+    "moyen":                "Moyen",
+    "assezDifficile":       "Assez difficile",
+    "difficile":            "Difficile",
+    "tresDifficile":        "Très difficile",
+    "extremementDifficile": "Extrêmement difficile",
+    "presqueImpossible":    "Presque impossible",
+    "surhumain":            "Surhumain",
+    "heroique":             "Héroïque"
+  },
+
+  "marge": {
+    "deJustesse":     "De justesse",
+    "correct":        "Correct",
+    "assezBon":       "Assez bon",
+    "bon":            "Bon",
+    "tresBon":        "Très bon",
+    "excellent":      "Excellent",
+    "parfait":        "Parfait",
+    "extraordinaire": "Extraordinaire",
+    "heroique":       "Héroïque",
+    "legendaire":     "Légendaire",
+    "mediocre":       "Médiocre",
+    "assezMauvais":   "Assez mauvais",
+    "mauvais":        "Mauvais",
+    "tresMauvais":    "Très mauvais",
+    "execrable":      "Exécrable",
+    "catastrophique": "Catastrophique"
+  },
+
+  "typeAction": {
+    "precision": "Précision",
+    "equilibre": "Équilibre",
+    "furtivite": "Furtivité",
+    "vigilance": "Vigilance"
+  },
+
+  "portee": {
+    "bout_portant": "Bout portant",
+    "courte":       "Courte portée",
+    "moyenne":      "Moyenne portée",
+    "longue":       "Longue portée",
+    "extreme":      "Portée extrême"
+  },
+
+  "taille": {
+    "minuscule":   "Minuscule (environ 30 cm)",
+    "tres_petite": "Très petite (environ 50 cm)",
+    "petite":      "Petite (environ 1 m)",
+    "moyenne":     "Moyenne (taille humaine)",
+    "grande":      "Grande (environ 3 m)",
+    "tres_grande": "Très grande (environ 5 m)",
+    "enorme":      "Énorme (environ 7 m)",
+    "gigantesque": "Gigantesque (10 m et +)"
+  },
+
+  "situationTirCategorie": {
+    "cible_deplacement":  "Cible en déplacement",
+    "tireur_deplacement": "Tireur en déplacement",
+    "couverture":         "Couverture",
+    "obscurite":          "Obscurité"
+  },
+
+  "situationTirSituation": {
+    "cible_allure_moyenne":   "Allure moyenne",
+    "cible_allure_rapide":    "Allure rapide",
+    "cible_allure_maximale":  "Allure maximale",
+    "tireur_allure_lente":    "Allure lente",
+    "tireur_allure_moyenne":  "Allure moyenne",
+    "tireur_allure_rapide":   "Allure rapide",
+    "tireur_allure_maximale": "Allure maximale",
+    "couverture_partielle":   "Partielle (50 % du corps)",
+    "couverture_importante":  "Importante (75 % du corps)",
+    "obscurite_legere":       "Légère",
+    "obscurite_importante":   "Importante",
+    "obscurite_totale":       "Totale"
+  },
+
+  "localisation": {
+    "tete":         "Tête",
+    "corps":        "Corps",
+    "bras_droit":   "Bras droit",
+    "bras_gauche":  "Bras gauche",
+    "jambe_droite": "Jambe droite",
+    "jambe_gauche": "Jambe gauche"
+  },
+
+  "graviteBlessure": {
+    "legere":   "Légère",
+    "moyenne":  "Moyenne",
+    "grave":    "Grave",
+    "critique": "Critique",
+    "mortelle": "Mortelle"
+  },
+
+  "localisationGenerique": {
+    "tete":       "Tête",
+    "corps":      "Corps",
+    "bras":       "Bras",
+    "jambes":     "Jambes",
+    "brasJambes": "Bras / Jambes"
+  }
+}

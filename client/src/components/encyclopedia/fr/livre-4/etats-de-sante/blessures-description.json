@@ -1,0 +1,212 @@
+{
+  "id": "etats-de-sante.blessures-description",
+  "slug": "blessures-description",
+  "title": "Description et effets des blessures",
+  "page": 235,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Vous trouverez ci-dessous la description des dommages et des traumatismes qui correspondent à chaque type de blessure. Dès qu’un personnage reçoit une blessure, il en subit immédiatement les effets, qui peuvent changer en fonction de l’importance des dégâts et de la Localisation touchée."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.malus",
+      "title": "Malus aux Tests par gravité"
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque gravité de blessure impose un malus fixe à tous les Tests du personnage blessé — voir [[Malus aux Tests|etats-de-sante.blessures-malus|236]] pour la règle de cumul entre plusieurs blessures."
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_MALUS_TABLE",
+      "caption": "Malus aux Tests par gravité de blessure",
+      "headers": [
+        [
+          { "label": "Gravité" },
+          { "label": "Malus" }
+        ]
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.legeres",
+      "title": "Blessures légères"
+    },
+    {
+      "type": "paragraph",
+      "text": "Contusions, petites coupures, brûlures au premier degré peu étendues… Ces blessures sont légèrement douloureuses, mais pas au point de gêner sérieusement un personnage. Elles guérissent toutes seules en général et ont très peu de risques de s’aggraver."
+    },
+    {
+      "type": "paragraph",
+      "text": "Aggravation : [[Suractivité|etats-de-sante.aggravation.suractivite|239]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.moyennes",
+      "title": "Blessures moyennes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Muscles froissés, entorses légères, coupures assez profondes n’ayant toutefois pas touché de vaisseaux sanguins importants, brûlures au second degré (ou au premier degré, étendues)… Ces blessures ne sont pas dangereuses en tant que telles, mais la douleur qu’elles occasionnent commence à être vraiment gênante. Il y a d’autre part des risques (peu élevés, néanmoins) pour que ces blessures s’aggravent, mais surtout dans le cas de conditions insalubres (infections) ou de suractivité."
+    },
+    {
+      "type": "paragraph",
+      "text": "Aggravation : [[Infection|etats-de-sante.aggravation.infection|239]], [[Suractivité|etats-de-sante.aggravation.suractivite|239]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.graves",
+      "title": "Blessures graves"
+    },
+    {
+      "type": "paragraph",
+      "text": "Muscles ou tendons déchirés, entorses ou luxations graves, os fêlés, coupures profondes ayant atteint un vaisseau sanguin d’importance moyenne, brûlures étendues au second degré… Ces blessures ont causé des dégâts importants, sans être toutefois mortelles dans l’immédiat. La douleur est très prononcée, et les effets commencent à être réellement handicapants (le blessé peut difficilement utiliser un bras ou une jambe blessée, il respire très difficilement avec des côtes fêlées et sera peut-être étourdi ou même inconscient à la suite d’une blessure à la tête). Mal soignées, il y a de bonnes chances pour que ces blessures s’aggravent, ce qui est également systématique en cas de suractivité."
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_EFFETS_GRAVE",
+      "caption": "Effets (Blessures graves)",
+      "headers": [
+        [
+          { "label": "Localisation" },
+          { "label": "Allure max" },
+          { "label": "Malus Test de Choc" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Séquelles : Tête seulement (voir [[Séquelles|etats-de-sante.sequelles|240]])."
+    },
+    {
+      "type": "paragraph",
+      "text": "Aggravation : [[Infection|etats-de-sante.aggravation.infection|239]], [[Suractivité|etats-de-sante.aggravation.suractivite|239]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.critiques",
+      "title": "Blessures critiques"
+    },
+    {
+      "type": "paragraph",
+      "text": "Fractures, arrachements ligamentaires graves, éclats d’os ayant perforé un organe ou un vaisseau sanguin important, blessures profondes avec hémorragie importante, brûlures étendues au troisième degré, organe (non vital) endommagé… Ces blessures ont causé de très importants dégâts, qui vont s’aggraver inexorablement si elles ne sont pas soignées. Le blessé est très souvent étourdi, voire inconscient, et a besoin de soins rapides. En l’absence de soins, un très sérieux handicap ou même la mort parfois, est inévitable à plus ou moins court terme."
+    },
+    {
+      "type": "paragraph",
+      "text": "Stabilisation nécessaire, mais seulement sur les blessures pouvant causer une hémorragie : blessures par balle ou par arme blanche, coupure, perforation, etc. C’est au MJ de décider si une blessure présente ou non de tels risques (voir [[Stabilisation|etats-de-sante.stabilisation|236]])."
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_EFFETS_CRITIQUE",
+      "caption": "Effets (Blessures critiques)",
+      "headers": [
+        [
+          { "label": "Localisation" },
+          { "label": "Allure max" },
+          { "label": "Malus Test de Choc" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Séquelles (voir [[Séquelles|etats-de-sante.sequelles|240]])."
+    },
+    {
+      "type": "paragraph",
+      "text": "Aggravation : [[Infection|etats-de-sante.aggravation.infection|239]], [[Suractivité|etats-de-sante.aggravation.suractivite|239]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.mortelles",
+      "title": "Blessures mortelles"
+    },
+    {
+      "type": "paragraph",
+      "text": "Fractures ouvertes, plaies extrêmement profondes et étendues, hémorragies importantes, brûlures au troisième degré sur l’ensemble du corps, organe vital gravement touché (cœur, poumons, cerveau…)… Ces blessures sont extrêmement graves, et même habituellement fatales, même si la mort n’est pas forcément immédiate, surtout si des organes vitaux sont touchés (Tête et Corps). Le blessé est le plus souvent inconscient. Même s’il ne meurt pas sur le coup, il a besoin de soins immédiats, sinon, la mort est irrémédiable, à court, voire à très court terme, en fonction des organes touchés. Si par chance il survit, les séquelles seront extrêmement importantes."
+    },
+    {
+      "type": "paragraph",
+      "text": "Stabilisation nécessaire ! Mort imminente ! (voir [[Stabilisation|etats-de-sante.stabilisation|236]])."
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_EFFETS_MORTELLE",
+      "caption": "Effets (Blessures mortelles)",
+      "headers": [
+        [
+          { "label": "Localisation" },
+          { "label": "Allure max" },
+          { "label": "Malus Test de Choc" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Séquelles (voir [[Séquelles|etats-de-sante.sequelles|240]])."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.mort-subite",
+      "title": "Mort subite"
+    },
+    {
+      "type": "paragraph",
+      "text": "Corps déchiqueté, tête tranchée, poumons, cœur ou cerveau détruit… à ce niveau de blessure (souvent dû à un accident, une explosion, une chute mortelle…), aucun espoir n’est plus permis. Le personnage meurt sur le coup."
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette sixième gravité (seuil de 30 points de Dommages) n’est pas modélisée dans le moteur — voir [[Seuils de blessures|etats-de-sante.blessures-seuils|234]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-description.membre-detruit",
+      "title": "Membre détruit"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si une blessure équivalente à « Mort subite » est localisée sur un Bras ou une Jambe, le membre en question est arraché ou irrémédiablement détruit (le personnage sera paralysé et ne retrouvera plus l’usage de ce membre). Le personnage ne meurt pas tout de suite, mais subit les effets suivants :"
+    },
+    {
+      "type": "paragraph",
+      "text": "Stabilisation nécessaire ! Mort imminente ! (voir [[Stabilisation|etats-de-sante.stabilisation|236]])."
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_EFFETS_MEMBRE_DETRUIT",
+      "caption": "Effets (Membre détruit)",
+      "headers": [
+        [
+          { "label": "Localisation" },
+          { "label": "Allure max" },
+          { "label": "Malus Test de Choc" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Séquelles (voir [[Séquelles|etats-de-sante.sequelles|240]])."
+    },
+
+    {
+      "type": "paragraph",
+      "text": "Les règles concernant les différents effets des blessures — malus aux Tests, Choc, Stabilisation, Aggravation, Séquelles — sont développées dans les sections qui suivent : [[Malus aux Tests|etats-de-sante.blessures-malus|236]], [[Choc|etats-de-sante.choc|237]], [[Stabilisation|etats-de-sante.stabilisation|236]], [[Aggravation|etats-de-sante.aggravation|239]], [[Séquelles|etats-de-sante.sequelles|240]]."
+    }
+  ]
+}

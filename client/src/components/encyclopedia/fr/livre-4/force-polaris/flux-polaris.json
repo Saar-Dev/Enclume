@@ -1,0 +1,42 @@
+{
+  "id": "force-polaris.flux-polaris",
+  "slug": "flux-polaris",
+  "title": "Le Flux Polaris",
+  "page": 263,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Dans un rapport remis à Déméter, le prêtre Thadeus Thorn décrit cette dimension comme un gigantesque cyclone d’énergie multicolore palpitant. Il évoque également la présence de choses aux formes indistinctes qu’il suppose être la matérialisation des cauchemars des êtres vivants. Il continue en parlant de secteurs noirs, impénétrables, dont la seule vue peut mener à la folie. Enfin, il mentionne un point central à cette dimension qui pourrait être l’émanation psychique d’une chose ayant, par sa seule puissance mentale, créé le Flux Polaris. Le spectacle est de toute beauté mais terriblement inquiétant. La présence psychique des mammifères marins et des océans « vivants » est constante."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.flux-polaris.le-flux",
+      "title": "Le Flux"
+    },
+    {
+      "type": "paragraph",
+      "text": "On connaît encore peu de choses sur le Flux Polaris. Il semble que cela soit une dimension parallèle constituée d’énergie psychique, mais aussi d’une sorte d’écho intangible généré par toute chose. Les travaux de scientifiques ont ainsi démontré qu’une simple pierre pouvait générer un écho dans le Flux Polaris, ce qui tendrait à démontrer qu’il serait non seulement constitué d’énergie psychique mais aussi d’ondes, de rayonnements et de tout ce qui appartient au domaine de l’immatériel et de l’invisible. Certains chercheurs estiment qu’il s’agit d’une vibration anormale de la réalité."
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce qui inquiète terriblement la communauté scientifique et les prêtres du Trident, c’est que le Flux devient de plus en plus perméable et qu’il arrive que les deux réalités se superposent. Les témoignages de « pénétration » physique aux abords du Flux se multiplient et des biologistes ont récemment découvert une nouvelle espèce de murène qui ne serait pas tout à fait matérielle. De là à penser qu’il s’agit d’une créature échappée du Flux…"
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "force-polaris.flux-polaris.a-propos",
+          "title": "À PROPOS DU FLUX POLARIS"
+        },
+        {
+          "type": "paragraph",
+          "text": "Cette section vous présente un aperçu très général du Flux Polaris et des règles qui le régissent. Un supplément futur sera entièrement consacré à cette dimension mystérieuse ; toutes les informations qui suivent peuvent toutefois servir de sources d’inspiration pour les MJ qui voudraient développer cet aspect de l’univers de jeu."
+        }
+      ]
+    }
+  ]
+}

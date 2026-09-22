@@ -1,0 +1,103 @@
+{
+  "id": "etats-de-sante.irradiations",
+  "slug": "irradiations",
+  "title": "Irradiations",
+  "page": 249,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.irradiations.niveaux",
+      "title": "Niveaux et effets des radiations"
+    },
+    {
+      "type": "paragraph",
+      "text": "Tout comme les drogues, les maladies et les poisons, les radiations font monter le niveau d’irradiation du personnage. Chaque seuil apporte son lot de problèmes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Seuil 5",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation légère. Le personnage perd temporairement 2 points de Constitution, jusqu’à ce que son niveau d’irradiation soit redescendu en dessous de ce seuil. Il souffre ponctuellement de nausées." }
+          ]
+        },
+        {
+          "label": "Seuil 10",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation moyenne. Comme ci-dessus, mais la perte est de 3 points. De plus, le personnage est considéré comme Légèrement fatigué (malus de -2 aux actions), et souffre ponctuellement de nausées, de maux de tête, de diarrhées et de vomissements. Des tâches rougeâtres sont visibles sur sa peau." }
+          ]
+        },
+        {
+          "label": "Seuil 15",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation grave. Comme ci-dessus, mais la perte est de 5 points. Le personnage est Fatigué (malus de -4), et souffre des mêmes symptômes que ceux du seuil précédent, qui se produisent toutefois plus fréquemment." }
+          ]
+        },
+        {
+          "label": "Seuil 20",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation très grave. Comme ci-dessus, mais la perte est de 7 points (son niveau normal de Constitution est par ailleurs réduit d’1 point de manière permanente). Le personnage est Très fatigué (malus de -6) et souffre de symptômes extrêmement violents (perte de la pilosité, ulcères cutanés, problèmes de digestion et de déshydratation, troubles respiratoires et toux sanglantes, etc.)." }
+          ]
+        },
+        {
+          "label": "Seuil 25",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation critique. Comme ci-dessus, mais la perte est de 10 points (son niveau normal de Constitution est par ailleurs réduit de 2 points de manière permanente). Le personnage est Épuisé (malus de -8) ; les symptômes atteignent un degré de gravité extrême (nécrose de la peau, hémorragies internes…), nécessitant une surveillance médicale constante." }
+          ]
+        },
+        {
+          "label": "Seuil 30",
+          "blocks": [
+            { "type": "paragraph", "text": "Irradiation mortelle. Le personnage souffre toujours d’une perte temporaire de 10 points de Constitution. Passé ce seuil, le personnage est rongé par les radiations et son état évolue rapidement : tous les deux jours, son niveau normal de Constitution est réduit d’1 point." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Notez que les pertes temporaire de Constitution ne sont pas cumulables : le personnage subit seulement la perte correspondant au seuil atteint. Si la perte temporaire fait descendre le niveau de Constitution à moins de 3 points, le personnage sombre dans l’inconscience. Si les pertes définitives amènent le niveau de Constitution à moins de 3 points, le personnage meurt."
+    },
+    {
+      "type": "paragraph",
+      "text": "Notez enfin que les radiations ont un autre effet pervers : elles s’accumulent dans l’organisme. Ainsi, à chaque fois que l’un des seuils précédents est franchi, le personnage subit 1 point d’irradiation permanente, qui ne pourra jamais être traité."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.irradiations.dommages",
+      "title": "Dommages dus aux radiations"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le gain de points d’irradiation dépend d’abord de la puissance de la source :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**1D6** : radiations légères (dues par exemple à des fuites radioactives légères)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**2D6** : radiations importantes (dues par exemple à un incident dans un laboratoire, une centrale nucléaire)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**3D6** : radiations massives (explosion d’une bombe atomique ou d’un réacteur nucléaire)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "L’irradiation est ensuite aggravée par le temps d’exposition : un personnage qui reste dans une zone irradiée subit à nouveau les dégâts de base tous les mois pour une source de radiations légères, toutes les semaines pour une source de radiations importantes, et tous les jours pour une source de radiations massives."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.irradiations.traitement",
+      "title": "Traitement des irradiations"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le niveau d’irradiation ne baisse pas tant que le personnage n’a pas été traité. Le traitement ne peut se faire que dans un hôpital spécialisé (le genre d’établissement que l’on ne trouve que dans les grandes cités, donc). Le personnage peut alors perdre 1 niveau de radiations tous les 3 jours. Il récupère également les points de Constitution temporairement perdus. En revanche, les points d’irradiation définitifs ne pourront jamais être soignés, tout comme les pertes définitives de Constitution. Un personnage irradié au-delà du niveau 30 est normalement condamné : tout ce que les traitements peuvent faire, c’est ralentir la perte définitive de points de Constitution."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "force-polaris.utiliser-pouvoir",
+  "slug": "utiliser-pouvoir",
+  "title": "Utiliser un pouvoir Polaris",
+  "page": 253,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Pour utiliser un pouvoir de la Force Polaris, il faut effectuer un Test avec la Compétence correspondant au pouvoir employé :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Sur une réussite**, le pouvoir est déclenché et produit les effets attendus. La marge de réussite permet d'augmenter les effets du pouvoir. Voir [[Pouvoirs du Polaris|force-polaris.pouvoirs-polaris]], plus bas."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Sur un échec**, le pouvoir n'est pas déclenché, mais il ne se produit rien de plus. Le personnage a bien réussi à contrôler la Force Polaris, mais pas à lui donner une forme. Au MJ de décider si cette énergie disparaît discrètement, ou s'il y a quelques effets secondaires visibles (crépitements d'électricité statique, odeur d'ozone, bourdonnement dans l'air, etc.)."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

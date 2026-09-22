@@ -1,0 +1,203 @@
+{
+  "id": "combat.surprise",
+  "slug": "surprise",
+  "title": "Surprise",
+  "page": 214,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Lorsqu’un personnage (ou une créature) est attaqué de manière soudaine, il court le risque d’être surpris et de ne pas pouvoir se défendre correctement. Une embuscade, un piège, une tentative d’assassinat (ou d’enlèvement), une attaque inattendue (ou par derrière), une grenade dégoupillée qui roule sur le sol au milieu du groupe, un prédateur silencieux des fonds marins qui a décidé de varier son menu, et bien d’autres événements encore sont des situations qui peuvent mettre un personnage en péril, s’il reste paralysé par la surprise ou la peur."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.surprise.test-reaction",
+      "title": "Test de Réaction"
+    },
+    {
+      "type": "paragraph",
+      "text": "En terme de jeu, tous les personnages risquant d’être surpris (a priori tous les personnages n’étant pas au courant de l’attaque) doivent faire un Test (aléatoire) de Réaction (Difficulté moyenne, mais divers éléments peuvent affecter cela, voir plus bas). La réussite ou l’échec de ce Test a un effet direct sur le score d’Initiative du personnage lors du premier Tour de combat :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "En cas de réussite, le personnage dispose d’un score d’Initiative égal à sa marge de réussite*."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "En cas d’échec, le personnage est surpris et ne peut pas agir pendant ce Tour de combat. Au début du Tour de combat suivant, il retrouve son score d’Initiative habituel."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "* Il s’agit bien de la marge de réussite (en d’autres termes, le score du dé…) et non du bonus de réussite."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le meneur de jeu peut appliquer tous les modificateurs (bonus ou malus) qu’il estime nécessaires sur le niveau de Réaction des personnages, en fonction de la situation. Ainsi, s’ils peuvent voir leurs adversaires se ruer sur eux, en courant sur une distance assez importante, un bonus s’impose (les personnages ont en effet un peu plus de temps pour réagir). En revanche, s’ils sont victimes d’une attaque particulièrement rapide ou surprenante, ils pourront recevoir un malus. Bien entendu, les malus dus aux blessures ou à la fatigue s’appliquent aussi."
+    },
+    {
+      "type": "paragraph",
+      "text": "Notez enfin qu’il existe des cas où le Test de Réaction doit être fait pour les deux adversaires (ou groupes d’adversaires), dans le cas notamment où ils se rencontrent de manière inattendue. En cas de double échec, les deux personnages/groupes restent stupéfaits un temps (lors du premier Tour de combat), avant de pouvoir agir de nouveau, sans avoir à refaire de Test de Réaction (lors du second Tour de combat, avec une Initiative normale)."
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple 1 : un personnage en armure de plongée s’approche silencieusement de l’entrée d’une grotte sous-marine. Celle-ci, toutefois, n’est autre que l’antre d’un prédateur des mers. Le personnage et la créature, risquant d’être surpris tous les deux, doivent effectuer un Test de Réaction."
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple 2 : au détour d’un couloir désert, sur la station d’Équinoxe, un jeune trafiquant tombe nez à nez avec un Veilleur… qui n’est autre que l’un de ses pires ennemis. Les deux personnages doivent réussir leur Test de Réaction pour agir dans les meilleures conditions."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.surprise.attaques-surprise",
+      "title": "Attaques par surprise et embuscades"
+    },
+    {
+      "type": "paragraph",
+      "text": "Attaquer un adversaire par surprise est un moyen efficace de prendre l’avantage. Si l’attaquant est en mesure d’attaquer son adversaire sans se découvrir (en attaquant de dos, par exemple), il a directement droit à une attaque gratuite : il n’a alors pas à tenir compte de son Initiative et attaque forcément le premier, en bénéficiant de tous les bonus appropriés (visée, attaque à bout portant, charge, etc.). Il doit tout de même réussir un Test de Compétence (dans le cas d’un combat au contact, le personnage « surpris » est considéré comme « sans défense ». Voir [[Combat au contact|combat.combat-contact-tactiques.sans-defense|223]]). Après cette attaque gratuite, le personnage attaqué peut faire un Test de Réaction en suivant les règles habituelles. S’il n’a pas eu de chance, il souffrira sans doute d’un malus dû à la blessure qu’il vient de recevoir…"
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple 1 : dans une grande rue d’une grande cité sous-marine, en compagnie de ses amis, un diplomate de la République du Corail est victime du tir d’un sniper, situé à 100 mètres de là et bien camouflé (donc virtuellement impossible à détecter). Du fait de sa position, le tireur a bénéficié d’une attaque gratuite. Tous les membres du groupe visé doivent maintenant effectuer un Test de Réaction. Le diplomate souffre toutefois du malus dû à sa blessure. Ses amis, eux, n’ont pas de malus particuliers."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "En revanche, si l’attaquant se découvre au moment de l’attaque (en surgissant de sa cachette dans le champ de vision de sa victime, par exemple), il n’a pas droit à une attaque gratuite, mais bénéficie tout de même d’un bonus de +5 à son Initiative lors du premier Tour de combat."
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple 2 : un agent de sécurité d’une petite station est chargé d’appréhender un voleur qui sévit depuis trop longtemps. Il attend le passage du malfrat, tapi dans l’ombre. Lorsque le voleur arrive à sa portée, l’agent de sécurité se rue sur lui, pour tenter de l’immobiliser, sans être particulièrement discret. Ayant donc surpris le mouvement, le voleur a conscience que quelqu’un se jette sur lui : il a droit à un Test de Réaction normal. Néanmoins, l’agent de sécurité bénéficie lui d’un bonus de +5 à son Initiative…"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Notez qu’une attaque par surprise ou une embuscade utilise habituellement des Compétences de discrétion, telles que Camouflage/Dissimulation, Furtivité/Déplacement silencieux ou Discrétion/Filature. Elles seront alors utilisées dans un Test d’opposition, contre la Compétence Observation de l’adversaire."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.surprise.reperer-danger",
+      "title": "Repérer le danger"
+    },
+    {
+      "type": "paragraph",
+      "text": "À tout moment, un joueur peut demander à ce que son personnage analyse son environnement, à la recherche d’un éventuel danger. Diverses Compétences peuvent être utilisées pour cela, en fonction de la situation (liste non exhaustive !) :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test d’Observation, avec les modificateurs (dus à l’Avantage Sens amélioré ou au Désavantage Sens diminué, notamment) et les éventuelles Compétences limitatives appropriées (Connaissance d’un environnement naturel, par exemple), peut permettre de détecter une anomalie dans l’environnement. Il peut s’agir d’indices directs (par exemple des gens qui tentent de se cacher, en préparant visiblement un mauvais coup), ou indirects, signe d’une source potentielle de danger (par exemple, une crevasse sous-marine, qui pourrait très bien abriter un prédateur marin, ou un banc de poissons qui change subitement de direction, comme pour éviter une menace, etc.)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test de Système de sécurité peut permettre de repérer les caméras ou les systèmes d’alarme divers."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test de Pièges peut permettre de repérer les pièges (par exemple un minuscule fil tendu au ras du sol et relié à une mine) ou d’identifier des objets ayant pu être piégés (une porte, une caisse, etc.)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test d’Analyse empathique peut permettre de savoir si le comportement d’un individu ou d’un groupe d’individus est suspect (on peut alors accorder à l’individu en question un Test de Volonté, pour savoir s’il arrive à garder son calme sans montrer de signe de tension. Dans ce cas, son modificateur de réussite ou d’échec agit comme un bonus ou un malus sur le Test de Sens de la psychologie)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test de Tactique, au cours d’un affrontement ou de l’exploration d’une zone dangereuse peut permettre de repérer les lieux pouvant abriter des adversaires ou des tireurs embusqués, ou bien les points faibles du lieu (qui pourraient être attaqués en premier, lors d’un assaut)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Test de Filature/Discrétion peut permettre de mettre en place une procédure de contre-filature (observer attentivement la foule, revenir sur ses pas, tourner en rond…) pour repérer une tentative de filature efficace (celle utilisée par exemple par des espions ou des agents de sécurité, qui agissent en équipe et en se relayant pour éviter de se faire repérer)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Etc."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Un échec signifie immanquablement que le personnage n’a rien remarqué (ce qui ne veut pas dire qu’il n’y a rien : le personnage peut toujours se tenir sur ses gardes ou se mettre en état d’alerte, voir plus bas). En cas de réussite, le personnage repère ses adversaires, et ne sera donc pas surpris. Il agira donc normalement lors du premier Tour de combat, sans avoir à faire de Test de Réaction."
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple : en pleine négociation avec un groupe de contrebandiers, un receleur d’Équinoxe se rend compte (Test d’Analyse empathique réussi) que l’un d’eux est particulièrement nerveux, passant sans cesse d’un pied sur l’autre, et suant à grosses gouttes. Le receleur s’attend au pire et ordonne discrètement au garde du corps le plus proche de se tenir prêt… Quelques secondes plus tard, le contrebandier suspect sort soudain une arme : un agent de sécurité infiltré ! Mis à part ce dernier, tous les personnages présents doivent faire un Test de Réaction, sauf le receleur et le garde du corps averti, qui agiront normalement."
+        }
+      ]
+    }
+  ]
+}

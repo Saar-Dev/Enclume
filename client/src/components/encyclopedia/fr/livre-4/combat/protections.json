@@ -1,0 +1,117 @@
+{
+  "id": "combat.protections",
+  "slug": "protections",
+  "title": "Protections",
+  "page": 230,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.protections.armures-simples",
+      "title": "Protections et armures simples"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il s’agit de toutes les protections et armures corporelles non mécanisées : vêtements renforcés, gilets pare-balles, combinaisons de combat, etc. Ces équipements bien utiles réduisent les dégâts reçus, en absorbant un nombre de points de Dommages égal à leur valeur de protection. Les protections simples ne protègent que certaines Localisations. Ainsi, un gilet pare-balles ne protège que le Corps, tandis qu’un casque ne protège que la tête. On peut donc toujours tenter de viser une Localisation qui n’est pas protégée pour infliger plus de dommages."
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans la plupart des cas, le cumul des armures n’est pas permis (entasser plusieurs couches de protection limiterait beaucoup trop les mouvements du personnage). Le MJ est toutefois libre d’interpréter les choses à sa guise, en accordant un bonus à la valeur de protection la plus élevée, si cela semble approprié."
+    },
+    {
+      "type": "paragraph",
+      "text": "Vous trouverez de plus amples renseignements sur les protections et armures simples dans le chapitre Équipement, page 272."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Champs de force personnels",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les champs de force personnels sont des équipements extrêmement élaborés, qui enveloppent le personnage d’un champ protecteur. Techniquement, ils couvrent toutes les Localisations du corps et fonctionnent comme les protections simples : leur niveau de protection est retranché à la somme des points de Dommages physiques reçus."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.protections.boucliers",
+      "title": "Boucliers"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les boucliers ne sont plus guère utilisés dans l’univers de Polaris, mais un personnage peut toujours recourir à une telle protection. L’utilisation des boucliers est différente selon le type de combat : au contact ou à distance."
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans un combat au contact, l’utilisation d’un « bouclier » (quel qu’il soit), impose un malus au Test d’attaque de l’adversaire. Ce malus doit être choisi par le meneur de jeu, en fonction de la taille et de l’efficacité du bouclier, par exemple :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**-3** : petit bouclier (30-50 cm de diamètre)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**-5** : bouclier de taille moyenne (50 cm à 1 m)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**-7** : grand bouclier (un bouclier anti-émeute par exemple)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans un combat à distance, avec des armes à feu notamment, le bouclier n’impose aucun malus au Test d’attaque de l’adversaire. Le bouclier fonctionne alors exactement comme une protection simple, qui protège automatiquement un certain nombre de Localisations :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Petit bouclier** : seulement le Bras tenant le bouclier (et éventuellement 1 Localisation — Corps ou Tête — grâce à un Test réussi de Chance)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Bouclier de taille moyenne** : Bras tenant le bouclier + 1 Localisation (Corps, Tête ou Jambe du côté du bouclier)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Grand bouclier** : Bras tenant le bouclier + 2 Localisations (Corps, Tête ou Jambe du côté du bouclier)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Sur les Localisations protégées, le bouclier offre alors une valeur de Protection (retranchée aux Dommages reçus), déterminée par le MJ en fonction de la solidité de l’objet (de 3 à 10 points en général). Cette protection n’est valable que si l’attaque peut être interceptée par le bouclier (ainsi, si le personnage subit un tir venant de l’arrière, le bouclier sera inefficace)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : contre des armes de jet ou de traits (arcs, arbalètes, lance-harpons…), les boucliers fonctionnent selon les règles du combat au contact (l’attaquant subit un malus pour toucher le défenseur)."
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Boucliers improvisés",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Il est parfois possible d’utiliser un objet improvisé comme bouclier (une plaque de métal, une chaise ou un tabouret, une table basse, etc.). La valeur de protection offerte et le malus imposé au Test d’attaque au contact de l’adversaire dépendent de la nature et de la taille de l’objet, mais dans la plupart des cas, le personnage recevra aussi un malus à son propre Test d’attaque, à cause de la maniabilité toute relative de son « bouclier »…"
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Barrières",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "On appelle « barrière » tout élément physique susceptible de protéger un personnage situé derrière : parois, portes, vitres blindées, etc. Une barrière fonctionne comme une protection simple : elle absorbe un certain nombre de points de Dommages, en fonction de sa solidité (et de son épaisseur). La valeur de protection peut ainsi varier de 3 points pour des matériaux peu résistants (paroi de plastique, contreplaqué, verre épais…) à 10 ou plus, pour des matériaux renforcés. Il revient au MJ de fixer une valeur précise si nécessaire, tout en gardant à l’esprit qu’il existe dans l’univers de Polaris des matériaux extrêmement solides (l’acier ou le verre moléculaire notamment), totalement insensibles aux armes normales et qui ne peuvent être détruits qu’à l’explosif ou à la roquette…"
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Tirer sur une cible dans l’eau",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "L’eau offre une protection très efficace contre un grand nombre d’armes (nous parlons ici des tirs effectués à l’air libre contre une cible située sous l’eau). Tous les petits projectiles physiques ont tendance à dévier de leur trajectoire en heurtant l’eau, et à partir en vrille. De plus, leur vitesse est fortement ralentie par la résistance du milieu liquide. Pour chaque épaisseur de 5 centimètres d’eau, un personnage utilisant une arme non prévue pour le tir sous-marin subit un malus de -1 à son Test de tir, et les dommages sont réduits de 2 points. Certaines armes seront même totalement inefficaces (il suffit par exemple d’un seul centimètre d’eau pour stopper les lasers)."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "id": "tests-et-actions.tests-opposition",
+  "slug": "tests-opposition",
+  "title": "Tests d’opposition",
+  "page": 207,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Dans les deux types de Tests présentés plus haut, le personnage est confronté à la Difficulté d’une action. Parfois, cependant, il se trouvera confronté à un autre personnage : on parle alors de Test d’opposition. Ce type de Test est notamment utilisé lors des combats au corps à corps, par exemple (voir le chapitre [[Combat|combat|222]])."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.tests-opposition.resolution",
+      "title": "Résolution d’un Test d’opposition"
+    },
+    {
+      "type": "paragraph",
+      "text": "Après avoir déterminé les chances de réussite de base des protagonistes, lancez un D20 pour chacun d’entre eux. Comme pour un Test normal, un résultat inférieur ou égal aux chances de réussite est une réussite, et un résultat supérieur un échec. Les règles de Réussites ou d’Échecs critiques s’appliquent aussi, à l’identique."
+    },
+    {
+      "type": "paragraph",
+      "text": "Déterminez ensuite le résultat de l’opposition par les règles suivantes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si l’un des deux personnages seulement réussit son Test**, il sort naturellement vainqueur de l’opposition (dans le cas d’un combat au corps à corps, par exemple, il touche son adversaire)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si les deux personnages ont réussi leur Test**, le vainqueur de l’opposition est celui qui a obtenu le meilleur résultat sur le dé ou le total final le plus élevé à la suite d’éventuelles Réussites critiques (il faut donc faire un jet de dé en dessous de ses chances de réussite, mais au-dessus du jet de l’adversaire). Le vainqueur réussit évidemment son action (dans le cas d’un combat au corps à corps, par exemple, il touche comme précédemment son adversaire, mais celui-ci s’est visiblement mieux défendu, ce qui réduira sans doute la Marge de réussite du vainqueur)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si les deux personnages ont réussi leur Test et obtiennent le même résultat** sur le dé ou le même total final à la suite d’éventuelles Réussites critiques, c’est une « égalité ». Ils réussissent tous les deux leur action, sans parvenir pour autant à se départager (dans le cas d’un combat au corps à corps, par exemple, chacun d’entre eux porte un coup à l’autre, de manière simultanée). Note : si vous souhaitez tout de même départager les deux personnages, ou si les circonstances interdisent une telle égalité (exemple : les personnages mesurent leur rapidité lors d’une course de vitesse chronométrée au dixième de seconde près, excluant en théorie toute possibilité d’égalité), déterminez le vainqueur au hasard, en lançant un D20 (le plus haut résultat l’emporte, relancez si nécessaire !)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si les deux personnages ont raté leur Test**, c’est un « match nul », personne n’ayant réussi à prendre l’ascendant sur l’autre. Ils ratent leur action tous les deux (dans le cas d’un combat au corps à corps, par exemple, aucun des deux ne parvient à toucher l’autre). Note : si les circonstances imposent le fait qu’il y ait logiquement un vainqueur (deux personnages mesurent leur force au bras de fer, leur rapidité à la course de vitesse ou leurs capacités de réflexion au cours d’une partie de jeu d’échecs par exemple), ignorez ce résultat et refaites le Test (ou alors, effectuez tout simplement un Test d’opposition non aléatoire, voir ci-dessous)."
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.tests-opposition.marges",
+      "title": "Marges de réussite ou d’échec"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le calcul de la Marge de réussite d’un Test d’opposition diffère selon l’issue de la confrontation :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si l’un des deux personnages seulement réussit son Test**, la Marge de réussite du vainqueur est égale au résultat de son jet de dé (éventuellement amélioré par une Réussite critique)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Si les deux personnages ont réussi leur Test**, avec tout de même un vainqueur et un vaincu, la Marge de réussite du vainqueur est égale au nombre de points obtenus au-dessus du résultat du vaincu (toujours en tenant compte des éventuelles Réussites critiques de l’un ou de l’autre), tandis que la Marge de réussite du vaincu est égale à 0."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Dans le cas d’une égalité**, la Marge de réussite de chacun est égale à 0."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La Marge d’échec se calcule normalement (c’est le nombre de points au-dessus des chances de réussite)."
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Tests d’opposition non aléatoires",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Si vous le souhaitez, vous pouvez également utiliser le principe des Tests non aléatoires pour résoudre un Test d’opposition. Ce n’est qu’un moyen plus rapide de mesurer directement les capacités respectives des deux personnages qui s’affrontent dans des conditions normales. Vous pouvez notamment utiliser cette méthode si le suspens d’un Test aléatoire normal n’a pas lieu d’être, si les deux personnages s’affrontent dans les conditions habituelles d’un Test non aléatoire (pas de stress, pas de danger immédiat, etc.) ou encore si le résultat de l’opposition doit forcément déterminer un vainqueur (ou une égalité au pire). Ainsi, si deux personnages font un bras de fer ou une course de vitesse l’un contre l’autre, le plus fort ou le plus rapide gagne, logiquement."
+        },
+        {
+          "type": "paragraph",
+          "text": "Pour résoudre un Test d’opposition non aléatoire, rien de plus simple : le personnage qui possède les meilleures chances de réussite gagne l’opposition. Plus la différence entre les deux valeurs est grande, plus le vainqueur gagne facilement et/ou rapidement. La Marge de réussite (ou d’échec) d’un tel Test est tout simplement égale à la différence entre les chances de réussite des personnages. Si les chances de réussite sont identiques, le MJ peut décréter une égalité (ou un match nul, au choix) si cela est adapté à la situation. S’il faut forcément un vainqueur, le MJ est libre de le déterminer au hasard (la Marge de réussite du vainqueur étant alors égale à 0, ce qui correspond à une réussite « De justesse »)."
+        },
+        {
+          "type": "paragraph",
+          "text": "**Note au MJ** : si vous hésitez sur le type de Test à utiliser (aléatoire ou non aléatoire), optez toujours pour le Test aléatoire, comme d’habitude. De même, si l’un des deux personnages désire « prendre des risques », le Test devient aléatoire."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.tests-opposition.modificateurs",
+      "title": "Modificateurs de Difficulté"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les personnages qui s’affrontent lors d’un Test d’opposition peuvent tout à fait recevoir des modificateurs de Difficulté sur leurs chances de réussite (qu’il s’agisse de Tests aléatoires ou non aléatoires). Chacun peut même avoir son propre modificateur de Difficulté, selon sa situation : un personnage peut souffrir d’une Blessure qui diminue ses chances de réussite, un combattant peut être gêné par une lumière aveuglante ou au contraire bénéficier d’une meilleure allonge dans le cas d’un combat à l’arme blanche, etc."
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "id": "etats-de-sante.fatigue",
+  "slug": "fatigue",
+  "title": "Fatigue",
+  "page": 250,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Fatigue",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Comme vous pourrez le voir, les règles de Fatigue restent volontairement floues, beaucoup de choses étant laissées à l’appréciation du meneur de jeu (d’où le statut de « règles avancées »). Nous aurions pu élaborer un système beaucoup plus précis, basé par exemple sur des points de Fatigue que les personnages auraient pu perdre peu à peu, en fonction de leurs actions et de leurs efforts… Mais finalement, nous avons abandonné cette option, pour une raison très simple : cette « couche » de complexité supplémentaire nous a semblé un peu trop lourde. La plupart des jeux de rôle existants ne s’encombrent d’ailleurs pas de règles sur la Fatigue, alors qu’il s’agit logiquement d’une donnée fondamentale pour des personnages amenés à se battre, à agir dans le stress et à vivre toutes sortes d’aventures périlleuses… Ainsi donc, plutôt que de proposer un système qui ne sera pas utilisé, nous avons préféré proposer un outil plus simple, plus axé sur l’ambiance que sur la gestion technique qui risquait d’être un peu laborieuse."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.etats",
+          "title": "États de Fatigue"
+        },
+        {
+          "type": "paragraph",
+          "text": "Voici les différents états de Fatigue qu’un personnage peut ressentir, ainsi que leurs effets :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "label": "Normal", "blocks": [ { "type": "paragraph", "text": "Le personnage n’est absolument pas fatigué." } ] },
+            { "label": "Légèrement fatigué", "blocks": [ { "type": "paragraph", "text": "Le personnage commence à ressentir les effets de la Fatigue, sans que ceux-ci soient encore trop graves. Il est légèrement essoufflé (après un effort physique), ou un peu affaibli (après une nuit trop courte par exemple). Il souffre d’un malus de -3 à tous ses Tests." } ] },
+            { "label": "Fatigué", "blocks": [ { "type": "paragraph", "text": "Les effets de la Fatigue se font maintenant vraiment sentir. Le personnage est très essoufflé et n’est pas au meilleur de sa forme. Il souffre d’un malus de -5 à tous ses Tests." } ] },
+            { "label": "Très fatigué", "blocks": [ { "type": "paragraph", "text": "La fatigue est désormais un réel handicap, forçant le personnage à ralentir ses efforts et à reprendre des forces en se reposant. Il souffre d’un malus de -7 à tous ses Tests (vitesse de déplacement maximum : Allure rapide)." } ] },
+            { "label": "Épuisé", "blocks": [ { "type": "paragraph", "text": "Le personnage est épuisé, il doit absolument se reposer et ne peut faire que des tâches simples. Il souffre d’un malus de -10 à tous ses Tests (vitesse de déplacement maximum : Allure moyenne)." } ] },
+            { "label": "À bout de force", "blocks": [ { "type": "paragraph", "text": "À ce niveau là, le personnage est extrêmement faible et puise dans ses dernières forces. Il souffre toujours du malus de -10 à tous ses Tests (vitesse de déplacement maximum : Allure lente), mais risque en plus de s’évanouir. À chaque action causant de la fatigue, il doit effectuer un Test de Résistance au Choc. Il risque donc d’être étourdi ou de s’écrouler de fatigue, inconscient." } ] }
+          ]
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.quand",
+          "title": "Quand demander un Test de Fatigue ?"
+        },
+        {
+          "type": "paragraph",
+          "text": "La notion de « Fatigue » couvre autant la Fatigue physique due à un effort soutenu sur une longue durée (ou au contraire à un effort bref mais intense), que les effets affaiblissants dus à des causes diverses : le manque de sommeil ou de nourriture, la maladie, etc. Dès qu’un personnage se lance dans une de ces activités (ou dès qu’il ne dort pas assez), il court le risque de se fatiguer. Les règles de Fatigue reposent sur un principe simple : dès que le MJ estime qu’un Test de Fatigue est nécessaire, alors c’est le bon moment pour en demander un."
+        },
+        {
+          "type": "paragraph",
+          "text": "De plus, outre la nécessité d’un Test de Fatigue, il faut aussi s’interroger sur la fréquence des Tests. En effet, la Fatigue s’exprime sur la durée et elle ne peut vraiment être prise en compte qu’en cas d’effort soutenu, sur une durée plus ou moins longue. Pour simuler cela, le MJ devra imposer de nouveaux Tests de Fatigue, à une fréquence plus ou moins fixe et régulière."
+        },
+        {
+          "type": "paragraph",
+          "text": "Voici quelques exemples de situations appropriées pour un Test de Fatigue, avec la fréquence de ceux-ci :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Lors d’une **course-poursuite**, alors que le personnage tente de rattraper un fuyard — ou d’échapper à ses poursuivants — dans les rues d’une grande cité. Fréquence : tous les 3 Tours de combat." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Lors d’un **combat au corps à corps**, lorsque celui-ci dure un peu (voir Fatigue en combat). Fréquence : tous les 5 Tours de combat." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Lorsque le personnage **manque de sommeil**, soit parce qu’il ne peut pas se reposer, soit parce qu’il tente de veiller (pour assurer un tour de garde, par exemple). Fréquence : toutes les heures, à partir du moment où le personnage lutte contre le sommeil." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Lors de toute **activité mentale demandant un effort de concentration** (par exemple résoudre un problème complexe en un temps relativement court, ou bien piloter un navire en restant très longtemps aux commandes sans prendre de repos). Fréquence : toutes les heures." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Tout au long d’une **journée de travail harassant**, par exemple travailler dans une mine ou effectuer des réparations longues sur un véhicule, sans pouvoir se reposer ou prendre son temps. Les conditions de travail sont rudes dans l’univers de Polaris. Le travail est pénible et abrutissant, épuisant pour le corps comme pour l’esprit, et forçant de nombreux ouvriers à noyer leur fatigue dans l’alcool ou les drogues. Fréquence : toutes les 2 heures." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Et, bien entendu, lors de toute **activité physique de longue durée**, par exemple nager sur une longue distance (sans l’assistance d’une armure mécanisée, évidemment). Fréquence : toutes les 10 minutes si le personnage avance à une vitesse moyenne, ou tous les 3 Tours de combat s’il nage le plus vite possible !" } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Cette liste est non exhaustive, bien sûr, et les fréquences indiquées ne sont qu’indicatives, mais le meneur de jeu peut s’en inspirer pour mettre en scène ses propres situations. Comme vous le voyez, ces règles reposent énormément sur l’interprétation du MJ. C’est à lui de doser la fréquence et la difficulté des Tests de Fatigue, en fonction de la situation et de ses besoins, et surtout en veillant à rester juste et équitable. N’oubliez pas quel est le véritable objectif des règles de Fatigue : renforcer l’ambiance et faire comprendre aux joueurs que leur personnage n’est pas un surhomme infatigable. Inutile pour autant d’accabler inutilement les PJ, en faisant en sorte qu’ils s’évanouissent dès qu’ils se mettent à courir sur cinquante mètres."
+        },
+        {
+          "type": "paragraph",
+          "text": "Le MJ doit donc prendre le temps d’apprivoiser ces règles, et de se les approprier. Il est notamment invité à garder un œil sur les niveaux de Fatigue du groupe, car tous les personnages ne sont pas égaux dans leur résistance à l’effort, et même à espacer les Tests si cela semble nécessaire (sans oublier non plus que les personnages non-joueurs peuvent eux aussi subir les effets de la Fatigue !). Tout dépend également du style de jeu de chacun : il est logique que les Tests de Fatigue soient assez fréquents pour une ambiance « Réaliste » (forçant ainsi les joueurs à gérer les efforts de leur personnage), mais ils devraient l’être un peu moins dans une ambiance « Intermédiaire »… et enfin plutôt rares (voir inexistants !) dans un style « Héroïque »."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.test",
+          "title": "Test de Fatigue"
+        },
+        {
+          "type": "paragraph",
+          "text": "La Fatigue peut avoir des causes multiples, et pour y résister, un personnage peut solliciter des capacités physiques ou mentales différentes selon les cas. Ainsi, lors d’un Test de Fatigue, le personnage peut être soumis à :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Un **Test de Constitution**, s’il s’agit de tester sa résistance physiologique (exemple : un travail physique pénible)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Un **Test de Volonté**, s’il s’agit de mesurer sa concentration (exemple : une longue période de veille)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Un **Test d’Endurance**, s’il faut mesurer sa résistance à l’effort lors d’une activité physique (course, combat, etc.)." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Note : en cas d’hésitation, le MJ peut demander un Test avec une valeur équivalant à la moyenne de la Constitution et de la Volonté."
+        },
+        {
+          "type": "paragraph",
+          "text": "Il est toujours possible de donner un modificateur de Difficulté au Test de Fatigue, en fonction notamment de l’intensité de l’action en cours. Ainsi, une action peu intense, où le personnage a la possibilité de se reposer, peut être considérée comme facile (et donc bénéficier d’un bonus). Au contraire, une action très intense, au cours de laquelle le personnage est obligé de s’investir au maximum peut être jugée comme difficile, et donc imposer un malus."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.compteur",
+          "title": "Compteur de Fatigue"
+        },
+        {
+          "type": "paragraph",
+          "text": "Le Compteur de Fatigue (présent en Annexe p. 400 et sur la fiche de personnage du Dossier de personnage) permet de garder la trace du niveau de fatigue actuel du personnage. Chaque état de Fatigue est divisé en trois cases, chacune indiquant un modificateur (négatif, bien souvent). Nous vous conseillons d’utiliser un marqueur pour visualiser l’évolution du niveau de Fatigue du personnage. Au départ, pour un personnage qui n’est pas fatigué, le marqueur est posé sur la première case du compteur (état Normal, case +0)."
+        },
+        {
+          "type": "paragraph",
+          "text": "L’utilisation de ce compteur est extrêmement simple, et dépend du résultat obtenu lors du Test de Fatigue décrit plus haut :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "**Le Test demandé est raté** : l’état de Fatigue du personnage monte d’un niveau (et non pas d’une case), passant par exemple de Normal à Légèrement fatigué. Le marqueur est alors posé sur la première case du nouvel état de Fatigue." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**Le Test demandé est réussi** : l’état de Fatigue du personnage ne change pas de niveau. En revanche, le marqueur avance d’une case, passant par exemple de la case « +0 » à la case « -5 ». Ce malus sera appliqué au prochain Test de Fatigue demandé par le MJ, le rendant ainsi un peu plus difficile. Si le marqueur est déjà sur la case « -10 », il ne bouge pas : le joueur fait tous ses Tests avec un malus de -10, et l’état de Fatigue de son personnage ne bouge pas jusqu’à ce qu’il rate son Test." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "En cas de Catastrophe, la Fatigue monte d’un niveau, comme d’habitude, mais le marqueur doit être placé sur la deuxième case du nouvel état (c’est-à-dire sur la case « -5 » et non « +0 »). À l’inverse, avec une marge de Réussite particulièrement élevée (15 et plus), le personnage bénéficie d’un « second souffle », qui lui fait oublier un temps sa Fatigue : le marqueur est déplacé d’une case vers la gauche, réduisant ainsi le niveau de Fatigue général."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note : les Tests de Fatigue ne sont pas affectés par le malus que les différents états de Fatigue imposent aux autres Tests du personnage. Ainsi, un personnage Légèrement fatigué engagé en combat souffre d’un malus de -3 lors de ses Tests de combat, à cause de la Fatigue, mais son prochain Test de Fatigue ne subira pas ce malus, en plus du malus habituel indiqué sur les cases du Compteur."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lorsqu’un personnage atteint le dernier état de Fatigue, À bout de force, il ne peut normalement tenter aucune action fatigante. Il doit s’arrêter et se reposer pour reprendre des forces. S’il décide toutefois d’agir et d’entreprendre une activité fatigante, le Test habituel de Fatigue est remplacé par un Test de Résistance au Choc, avec le malus indiqué dans le tableau. En cas d’échec, il subit les effets du Choc : Étourdissement pendant 1D6 Tour(s) de combat, ou Évanouissement pendant 1D6 minute(s). En cas de réussite, le marqueur est simplement déplacé d’une case vers la droite."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note (maladies) : certaines maladies entraînent une augmentation forcée du niveau de Fatigue (voir [[Maladies et poisons|etats-de-sante.toxiques-fonctionnement|244]]). Dans ce cas, le marqueur de Fatigue est bien entendu posé sur la première case de l’état de Fatigue en question. On considère que le personnage subit les effets de cette Fatigue en permanence, tant que la maladie n’a pas été soignée."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.combat",
+          "title": "Fatigue et combat"
+        },
+        {
+          "type": "paragraph",
+          "text": "Ces règles de Fatigue ont été conçues pour éviter d’avoir à tenir un compte précis de l’état de Fatigue des personnages à chaque Tour de combat. Si le MJ veut utiliser les règles de fatigue en combat, il doit comme d’habitude demander régulièrement des Tests, au fil du déroulement de l’affrontement. La plupart du temps, seuls les combats au contact sont sujets aux Tests de Fatigue… mais il peut y avoir des exceptions (exemple : un combat à distance très animé, où les personnages sont obligés de se déplacer beaucoup, de courir, de changer de position, etc.)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Lors d’un Test de combat au contact, le MJ peut raisonnablement demander un Test de Fatigue tous les 5 Tours de combat. Il peut même accorder un bonus à un combattant qui a plutôt privilégié la défense, et infliger un malus à un personnage qui a misé sur un style plutôt offensif. Certaines formes de combat, comme la lutte au corps à corps, ou encore pire la lutte sous l’eau sans armure mécanisée, sont des activités particulièrement épuisantes car elles sollicitent toute la puissance physique des combattants. Dans ce cas, il est également possible d’infliger un malus aux combattants."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.fatigue.recuperation",
+          "title": "Récupération"
+        },
+        {
+          "type": "paragraph",
+          "text": "Un personnage ne peut récupérer et donc baisser son niveau de Fatigue qu’à partir du moment où il se repose. Voici les temps de repos nécessaires :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "label": "Légèrement fatigué", "blocks": [ { "type": "paragraph", "text": "Quelques minutes." } ] },
+            { "label": "Fatigué", "blocks": [ { "type": "paragraph", "text": "15 minutes." } ] },
+            { "label": "Très fatigué", "blocks": [ { "type": "paragraph", "text": "Une heure." } ] },
+            { "label": "Épuisé", "blocks": [ { "type": "paragraph", "text": "Quelques heures." } ] },
+            { "label": "À bout de force", "blocks": [ { "type": "paragraph", "text": "Une grosse nuit de sommeil." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Dès que le personnage a pu se reposer correctement pendant la durée indiquée, son niveau de Fatigue baisse d’un niveau. Si le repos n’a pas été complet, ou si les conditions de repos ont été mauvaises, le MJ peut décider de simplement déplacer le marqueur de Fatigue d’une case ou deux, sans permettre au personnage de baisser d’un niveau de Fatigue."
+        }
+      ]
+    }
+  ]
+}

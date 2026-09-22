@@ -1,0 +1,56 @@
+{
+  "id": "etats-de-sante.dommages-assommants",
+  "slug": "dommages-assommants",
+  "title": "Dommages étourdissants et assommants",
+  "page": 243,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-assommants.regle",
+      "title": "Dommages étourdissants et assommants"
+    },
+    {
+      "type": "paragraph",
+      "text": "En plus des Dommages physiques habituels, certaines armes sont capables de causer des « Dommages de Choc » capables d’étourdir ou d’assommer un personnage. Il s’agit en général d’armes lourdes et/ou contondantes, qui créent ces Dommages étourdissants lorsqu’elles touchent la tête de l’adversaire. La marche à suivre est simple, lorsqu’une attaque avec une telle arme est localisée sur la Tête :"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Faites le jet de dés correspondant aux Dommages physiques de l’arme** et comparez comme d’habitude le total aux seuils de blessure du personnage. Notez l’éventuelle blessure qui en résulte (ne vous occupez pas du Choc à cette étape)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Faites ensuite le jet de dés correspondant aux Dommages additionnels de Choc de l’arme** (la Résistance aux blessures du personnage s’applique). Ajoutez ces Dommages additionnels au total de Dommages physiques obtenu précédemment."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Comparez ce nouveau total aux seuils de blessure de l’adversaire** : celui-ci doit tout simplement effectuer un Test de Résistance au Choc, correspondant au seuil de blessure atteint (voir [[Description et effets des blessures|etats-de-sante.blessures-description|235]]), et en subir les éventuels effets."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Dommages de Choc ne sont que virtuels, ils ne causent pas de blessures physiques mais augmentent la Difficulté du Test de résistance au Choc. Ainsi, on peut frapper quelqu’un avec une matraque, en ne lui causant qu’une grosse bosse (Dommages physiques faibles), mais l’assommer tout de même (Dommages de Choc importants)."
+    },
+    {
+      "type": "paragraph",
+      "text": "N’oubliez pas qu’avec une arme normale, créer des Dommages additionnels de Choc n’est possible que sur un coup localisé à la tête. Quelques armes cependant ne causent que des Dommages de Choc (les armes électriques par exemple). Dans ce cas, la procédure ne change pas, il suffit juste de comparer les Dommages de Choc aux seuils de blessure du personnage, et d’appliquer le malus indiqué au Test de résistance au Choc. La victime ne subira que les effets de celui-ci."
+    }
+  ]
+}

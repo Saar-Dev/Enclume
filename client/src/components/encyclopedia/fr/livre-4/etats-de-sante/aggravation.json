@@ -1,0 +1,134 @@
+{
+  "id": "etats-de-sante.aggravation",
+  "slug": "aggravation",
+  "title": "Aggravation des blessures",
+  "page": 239,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.aggravation.intro",
+      "title": "Aggravation des blessures"
+    },
+    {
+      "type": "paragraph",
+      "text": "Toute blessure non soignée (ou mal soignée) est susceptible de s’aggraver, et d’entraîner des désagréments plus ou moins importants (ou même la mort du personnage dans le cas des Blessures mortelles). Deux facteurs peuvent entraîner une Aggravation : l’infection et la suractivité."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.aggravation.infection",
+      "title": "Infection"
+    },
+    {
+      "type": "paragraph",
+      "text": "À partir d’un certain degré de gravité, les blessures risquent de s’infecter (ou de générer d’autres complications comparables), si elles ne sont pas soignées (voir [[Soins et guérison|etats-de-sante.soins-guerison|238]]). Tous les deux jours, et pour chaque Localisation présentant une ou plusieurs blessures susceptibles de s’infecter et qui n’a pas été soignée correctement, le joueur doit effectuer un Test de Constitution pour son personnage, avec le modificateur indiqué ci-dessous, et appliquer les effets correspondant au résultat obtenu."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.aggravation.infection-moyennes",
+      "title": "Blessures moyennes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Modificateur de +5 au Test de Constitution."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Test réussi** : pas d’infection sur cette Localisation, la guérison se poursuit normalement." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Test raté** : infection légère, le joueur doit cocher une case de blessure supplémentaire sur la ligne des Blessures moyennes (avec le risque de dépasser la capacité de cette ligne, et donc de subir une blessure de gravité supérieure)." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.aggravation.infection-graves",
+      "title": "Blessures graves"
+    },
+    {
+      "type": "paragraph",
+      "text": "Aucun modificateur au Test de Constitution, mais un malus cumulatif de -2 pour chaque case de blessure cochée en plus de la première."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Test réussi** : les blessures de la Localisation en question ne s’infectent pas, mais pour chaque période de deux jours qui passe sans que la blessure ait été correctement soignée, le Test de Constitution subit un malus cumulatif de -2 (aucun malus le premier jour, -2 le deuxième jour, -4 le troisième jour, etc.)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Test raté** : infection légère, les blessures de la Localisation s’infectent légèrement. Le joueur doit cocher une case de blessure supplémentaire sur la ligne des Blessures graves." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.aggravation.infection-critiques",
+      "title": "Blessures critiques"
+    },
+    {
+      "type": "paragraph",
+      "text": "Modificateur de -5 au Test de Constitution, plus un malus cumulatif de -2 pour chaque case de blessure cochée en plus de la première."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Test réussi** : malgré la réussite, les blessures de la Localisation s’infectent inévitablement par manque de soins. Le joueur doit cocher une case de blessure supplémentaire sur la ligne des Blessures critiques." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Test raté** : les blessures de la Localisation s’infectent. Le joueur doit cocher une case de blessure supplémentaire sur la ligne des Blessures critiques. De plus, pour chaque période de deux jours qui passe sans que la blessure ait été correctement soignée, le Test de Constitution subit un malus cumulatif de -2 (aucun malus le premier jour, -2 le deuxième jour, -4 le troisième jour, etc.)." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.aggravation.infection-mortelles",
+      "title": "Blessures mortelles / Membres détruits"
+    },
+    {
+      "type": "paragraph",
+      "text": "Modificateur de -10 au Test de Constitution, plus un malus cumulatif de -2 pour chaque case de blessure cochée en plus de la première."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Test réussi** : malgré la réussite, les blessures de la Localisation s’infectent inévitablement par manque de soins, et dégénèrent en gangrène avancée. Le blessé survit pendant un nombre d’heures égal à sa Constitution, puis meurt d’une septicémie (empoisonnement du sang à cause de l’infection). Si la blessure est localisée sur une jambe ou un bras, l’amputation est inévitable pour sauver le blessé. Dans les autres Localisations, il n’y a rien à faire, à part peut-être une opération chirurgicale doublée de soins médicaux de très haute technologie." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Test raté** : comme ci-dessus, mais le blessé ne peut survivre qu’un nombre d’heures égal à la moitié de son niveau de Constitution." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : si le personnage se trouve dans un environnement particulièrement insalubre (rue, navire, ou pire, égouts), le meneur de jeu peut même imposer un malus supplémentaire (de -3 à -5, selon la situation)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.aggravation.suractivite",
+      "title": "Suractivité"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage blessé est censé se reposer (et se faire soigner…), pour récupérer de ses blessures. S’il reste actif, physiquement, ses blessures ne peuvent que s’aggraver. Bien entendu, le degré d’activité physique nécessaire pour causer une telle aggravation dépend de la gravité de la blessure :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures légères** : activités physiques très intensives (combats incessants, entraînement intensif, travail physique éprouvant…)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures moyennes** : activités physiques intensives (entraînement ou travail physique normal)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures graves** : la plupart des activités et travaux physiques." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures critiques** : tout ce qui peut empêcher un personnage de se reposer calmement…" } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est au MJ de juger si l’activité d’un personnage est susceptible d’aggraver ses blessures, en se basant sur les indications ci-dessus. S’il juge qu’une aggravation pour cause de suractivité est plausible, le joueur doit alors cocher une case supplémentaire sur la ligne correspondant à la blessure la plus grave. Si plusieurs Localisations comportent des blessures de même gravité, la Localisation touchée est tirée au sort."
+    }
+  ]
+}

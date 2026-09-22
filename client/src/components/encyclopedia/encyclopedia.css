@@ -1,0 +1,827 @@
+/* encyclopedia.css — Styles dédiés à la fenêtre Encyclopédie.
+   Ne redéfinit pas les tokens : les consomme depuis index.css.
+   Préfixe : encyclo- (voir docs/ENCYCLOPEDIA_CONTEXT.md §4). */
+
+/* ── Layout global ─────────────────────────────────────── */
+
+.encyclo-viewer {
+  min-height: 100vh;
+  padding: var(--space-lg);
+}
+
+/* Override : .app-shell (index.css) pose overflow:hidden, ce qui casse
+   position:sticky sur .encyclo-nav (l'ancêtre devient scroll-container).
+   On restaure le scroll au niveau racine pour cette page. */
+.encyclo-viewer.app-shell {
+  overflow: visible;
+}
+
+.encyclo-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  align-items: start;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 1024px) {
+  .encyclo-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Navigation gauche ─────────────────────────────────── */
+
+.encyclo-nav {
+  position: sticky;
+  top: var(--space-lg);
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow-y: auto;
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.encyclo-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-sm);
+}
+
+.encyclo-nav-title {
+  font: 600 11px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .15em;
+  color: var(--color-primary);
+}
+
+.encyclo-nav-glossary-link {
+  font: 500 10px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--text-muted);
+  transition: color .15s, border-color .15s;
+}
+
+.encyclo-nav-glossary-link:hover {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.encyclo-nav-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Livre (bouton toggle) ─────────────────────────────── */
+
+.encyclo-nav-book-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.encyclo-nav-book {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font: 600 13px/1.3 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.encyclo-nav-book:hover {
+  background: var(--wiz-glass);
+  color: var(--wiz-white);
+  filter: none;
+  box-shadow: none;
+}
+
+.encyclo-nav-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Chapitres ─────────────────────────────────────────── */
+
+.encyclo-nav-book-chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 18px;
+  margin-top: 2px;
+}
+
+.encyclo-nav-chapter {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font: 500 12px/1.3 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.encyclo-nav-chapter:hover {
+  background: var(--wiz-glass);
+  color: var(--text-primary);
+  filter: none;
+  box-shadow: none;
+}
+
+.encyclo-nav-chapter.is-active {
+  color: var(--color-primary);
+  font-weight: 600;
+  background: var(--color-primary-muted);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+
+/* ── Articles ──────────────────────────────────────────── */
+
+.encyclo-nav-chapter-articles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 12px;
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
+.encyclo-nav-article {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font: 400 11px/1.4 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: color .15s, background .15s;
+}
+
+.encyclo-nav-article:hover {
+  color: var(--text-primary);
+  background: var(--wiz-glass);
+}
+
+.encyclo-nav-article.is-active {
+  color: var(--color-primary);
+  background: rgba(47,215,255,.06);
+  font-weight: 500;
+}
+
+/* Séparateur de groupe — texte seul, non interactif (pas un 4e niveau de nav, juste un repère
+   visuel dans la liste plate d'articles, cf. décision 2026-09-22 : accordéon rejeté). */
+.encyclo-nav-group-divider {
+  padding: 8px 8px 2px;
+  font: 700 9px/1.3 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  opacity: .7;
+}
+
+/* Le premier séparateur de la liste n'a pas besoin de marge de séparation avec ce qui précède
+   (rien au-dessus) — ciblé via la position du wrapper, pas du séparateur lui-même (toujours
+   premier enfant de son wrapper, :first-child seul ne distinguerait pas le tout premier groupe). */
+.encyclo-nav-chapter-articles > div:first-child .encyclo-nav-group-divider {
+  padding-top: 2px;
+}
+
+/* ── Contenu droite ────────────────────────────────────── */
+
+.encyclo-content {
+  min-width: 0;
+}
+
+.encyclo-card {
+  padding: var(--space-xl);
+}
+
+/* ── États (chargement / erreur / vide) ───────────────── */
+
+.encyclo-loading,
+.encyclo-empty {
+  padding: var(--space-xl) 0;
+  text-align: center;
+  color: var(--text-muted);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
+.encyclo-error {
+  padding: var(--space-md);
+  background: rgba(224,91,91,.08);
+  border-left: 3px solid var(--color-danger-soft);
+  border-radius: var(--radius-xs);
+  color: var(--color-danger-soft);
+  font: 400 12px/1.5 var(--font-ui);
+}
+
+/* ── Chapitre ──────────────────────────────────────────── */
+
+.encyclo-chapter-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 300;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--wiz-white);
+  text-shadow: 0 0 12px rgba(47,215,255,.35);
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.encyclo-intro {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  font-style: italic;
+}
+
+/* ── Article ───────────────────────────────────────────── */
+
+.encyclo-article {
+  margin-bottom: var(--space-xl);
+}
+
+.encyclo-article-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.encyclo-article-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.encyclo-article-page {
+  font: 400 11px/1 var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.encyclo-article-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ── Blocs : titres ───────────────────────────────────── */
+
+.encyclo-heading {
+  color: var(--text-primary);
+  margin: var(--space-lg) 0 var(--space-sm);
+}
+
+.encyclo-heading-2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: .06em;
+}
+
+.encyclo-heading-3 {
+  font: 600 16px/1.3 var(--font-ui);
+  color: var(--color-primary);
+  letter-spacing: .04em;
+}
+
+.encyclo-heading-4 {
+  font: 600 14px/1.3 var(--font-ui);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.encyclo-heading-5 {
+  font: 600 13px/1.3 var(--font-ui);
+  color: var(--text-secondary);
+  letter-spacing: .04em;
+}
+
+/* ── Blocs : paragraphe ───────────────────────────────── */
+
+.encyclo-paragraph {
+  font: 400 14px/1.7 var(--font-ui);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ── Blocs : listes ───────────────────────────────────── */
+
+.encyclo-list {
+  padding-left: var(--space-lg);
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.encyclo-list-ordered {
+  list-style: decimal;
+}
+
+.encyclo-list-ordered > .encyclo-list-item::marker {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.encyclo-list-unordered {
+  list-style: none;
+  padding-left: 0;
+}
+
+.encyclo-list-item {
+  margin-bottom: var(--space-sm);
+  line-height: 1.7;
+}
+
+.encyclo-list-unordered > .encyclo-list-item {
+  position: relative;
+  padding-left: var(--space-lg);
+}
+
+.encyclo-list-unordered > .encyclo-list-item::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--color-primary);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.encyclo-list-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.encyclo-list-item > .encyclo-paragraph,
+.encyclo-list-item > .encyclo-list {
+  margin-top: var(--space-xs);
+}
+
+/* Listes imbriquées : retrait supplémentaire */
+.encyclo-list .encyclo-list {
+  margin-top: var(--space-xs);
+  padding-left: var(--space-md);
+}
+
+/* ── Blocs : encadrés ─────────────────────────────────── */
+
+.encyclo-callout {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+}
+
+/* Label (marqueur RAW : OPTIONNEL, RÈGLE AVANCÉE) — badge pill en haut */
+.encyclo-callout-label {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-bottom: var(--space-sm);
+  border-radius: 3px;
+  font: 700 9px/1.4 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  background: rgba(255,255,255,.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.encyclo-callout-title {
+  font: 700 11px/1.3 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--color-primary);
+  margin: 0 0 var(--space-sm);
+}
+
+.encyclo-callout-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.encyclo-callout-body .encyclo-paragraph {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ── Variants d'encadré ───────────────────────────────── */
+
+/* sidebar — encadré d'information générale (défaut) */
+.encyclo-callout-sidebar {
+  background: rgba(47,215,255,.04);
+  border-left-color: var(--wiz-blue-bright);
+}
+
+/* example — exemple de règle, sobre, ne doit pas attirer l'œil */
+.encyclo-callout-example {
+  background: rgba(255,255,255,.02);
+  border-left-color: var(--text-muted);
+}
+
+.encyclo-callout-example .encyclo-callout-body .encyclo-paragraph {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* optional — option de règle, en or */
+.encyclo-callout-optional {
+  background: rgba(245,197,66,.04);
+  border-left-color: var(--color-gold);
+}
+
+.encyclo-callout-optional .encyclo-callout-label {
+  background: rgba(245,197,66,.10);
+  border-color: rgba(245,197,66,.35);
+  color: var(--color-gold);
+}
+
+.encyclo-callout-optional .encyclo-callout-title {
+  color: var(--color-gold);
+}
+
+/* rule — règle avancée, en orange (attention attirée) */
+.encyclo-callout-rule {
+  background: rgba(240,160,75,.04);
+  border-left-color: var(--color-warning);
+}
+
+.encyclo-callout-rule .encyclo-callout-label {
+  background: rgba(240,160,75,.10);
+  border-color: rgba(240,160,75,.35);
+  color: var(--color-warning);
+}
+
+.encyclo-callout-rule .encyclo-callout-title {
+  color: var(--color-warning);
+}
+
+/* note — note de bas de page, discret, compact */
+.encyclo-callout-note {
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--border-subtle);
+  border-radius: 0;
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-sm) 0;
+}
+
+.encyclo-callout-note .encyclo-callout-body .encyclo-paragraph {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* quote — citation d'ouverture de chapitre, manuscrite */
+.encyclo-callout-quote {
+  background: transparent;
+  border: none;
+  border-left: 3px solid var(--border-subtle);
+  border-radius: 0;
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-md) 0;
+}
+
+.encyclo-callout-quote .encyclo-callout-body .encyclo-paragraph {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ── Blocs : tableau sourcé ───────────────────────────── */
+
+.encyclo-datatable {
+  margin: var(--space-md) 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(255,255,255,.015);
+}
+
+.encyclo-datatable-caption {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255,255,255,.03);
+  border-bottom: 1px solid var(--border-subtle);
+  font: 600 11px/1.3 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--color-primary);
+}
+
+.encyclo-datatable-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 13px/1.5 var(--font-ui);
+  color: var(--text-primary);
+}
+.encyclo-datatable-head {
+  background: rgba(47,215,255,.04);
+}
+
+.encyclo-datatable-header-cell {
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  font: 600 11px/1.3 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-primary);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.encyclo-datatable-header-cell:first-child {
+  text-align: left;
+}
+
+.encyclo-datatable-header-cell:last-child {
+  border-right: none;
+}
+
+.encyclo-datatable-cell {
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.encyclo-datatable-table tr:last-child .encyclo-datatable-cell {
+  border-bottom: none;
+}
+
+.encyclo-datatable-table tr:nth-child(even) .encyclo-datatable-cell {
+  background: rgba(255,255,255,.02);
+}
+
+.encyclo-datatable-cell-key {
+  color: var(--text-primary);
+}
+
+.encyclo-datatable-cell-silhouette {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.encyclo-datatable-cell-range {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.encyclo-datatable-cell-signed {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.encyclo-datatable-cell-key-success {
+  color: var(--color-primary);
+}
+
+.encyclo-datatable-cell-signed-success {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.encyclo-datatable-cell-key-failure {
+  color: var(--color-warning);
+}
+
+.encyclo-datatable-cell-signed-failure {
+  font-family: var(--font-mono);
+  color: var(--color-warning);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.encyclo-datatable-missing {
+  padding: var(--space-sm);
+  background: rgba(255,107,107,.08);
+  border: 1px dashed var(--color-danger);
+  border-radius: var(--radius-xs);
+  color: var(--color-danger);
+  font: 500 11px/1.5 var(--font-mono);
+}
+
+/* ── Liens wiki ────────────────────────────────────────── */
+
+.encyclo-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--color-primary-muted);
+  transition: color .15s, border-color .15s;
+}
+
+.encyclo-link:hover {
+  color: var(--wiz-blue-mid);
+  border-bottom-color: var(--wiz-blue-mid);
+}
+
+.encyclo-link-broken {
+  color: var(--color-warning);
+  border-bottom: 1px dotted var(--color-warning);
+}
+
+/* ── Bloc inconnu (dev) ───────────────────────────────── */
+
+.encyclo-unknown {
+  padding: var(--space-sm);
+  background: rgba(255,107,107,.1);
+  border: 1px dashed var(--color-danger);
+  border-radius: var(--radius-xs);
+  color: var(--color-danger);
+  font: 500 11px/1.5 var(--font-mono);
+}
+
+/* ── Page Glossaire ───────────────────────────────────── */
+
+.encyclo-glossary-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-lg) 0;
+  position: relative;
+  z-index: 1;
+}
+
+.encyclo-glossary-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.encyclo-glossary-page-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 300;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--wiz-white);
+  text-shadow: 0 0 12px rgba(47,215,255,.35);
+  margin: 0;
+}
+
+.encyclo-glossary-page-back {
+  font: 500 12px/1 var(--font-ui);
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--color-primary-muted);
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+
+.encyclo-glossary-page-back:hover {
+  color: var(--wiz-blue-mid);
+  border-bottom-color: var(--wiz-blue-mid);
+}
+
+.encyclo-glossary-page-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.encyclo-glossary-page-book {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.encyclo-glossary-page-book-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  color: var(--color-primary);
+  margin: 0;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.encyclo-glossary-page-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-left: var(--space-md);
+}
+
+.encyclo-glossary-page-chapter-title {
+  font: 600 15px/1.3 var(--font-ui);
+  color: var(--text-primary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.encyclo-glossary-page-article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-left: var(--space-md);
+}
+
+.encyclo-glossary-page-article-title {
+  font: 500 13px/1.4 var(--font-ui);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.encyclo-glossary-page-sections {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.encyclo-glossary-page-section {
+  font: 400 12px/1.5 var(--font-ui);
+}
+
+.encyclo-glossary-page-section a {
+  display: block;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius-xs);
+  transition: color .15s, background .15s;
+}
+
+.encyclo-glossary-page-section a:hover {
+  color: var(--color-primary);
+  background: var(--wiz-glass);
+}
+
+.encyclo-glossary-page-section-level-3 a {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.encyclo-glossary-page-section-level-4 a {
+  padding-left: 20px;
+}
+
+.encyclo-glossary-page-section-level-5 a {
+  padding-left: 36px;
+  font-size: 11px;
+}
+
+.encyclo-glossary-page-section-level-callout a {
+  padding-left: 20px;
+  font-style: italic;
+  color: var(--color-gold);
+}

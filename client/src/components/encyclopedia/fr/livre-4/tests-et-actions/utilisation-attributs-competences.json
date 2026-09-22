@@ -1,0 +1,48 @@
+{
+  "id": "tests-et-actions.utilisation-attributs-competences",
+  "slug": "utilisation-attributs-competences",
+  "title": "Utilisation des attributs et des compétences",
+  "page": 202,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.utilisation-attributs-competences.quand-recourir",
+      "title": "Quand recourir à un Test ?"
+    },
+    {
+      "type": "paragraph",
+      "text": "La plupart des actions courantes que votre personnage sera amené à accomplir ne demanderont pas de Test : marcher, parler, ouvrir une porte non verrouillée, etc. Si l’action ne peut être ratée, elle réussira automatiquement (à l’inverse, si l’action est impossible, elle échouera immanquablement). En revanche, dès que l’issue d’une action est incertaine, il faut recourir à un Test de Compétence (ou d’Attribut, mais techniquement cela revient au même). On pourrait croire par ailleurs qu’une action jugée « très facile » ne va pas demander de Test, puisque le personnage va sûrement réussir. C’est vrai dans une situation normale, c’est-à-dire quand le personnage travaille au calme, sans être pressé et avec du matériel adapté, si nécessaire. Toutefois, toutes les situations ne sont pas normales. Certaines sont même particulièrement stressantes, comme un combat ou une situation urgente où le temps est compté (par exemple une réparation de fortune sur un navire qui est en train de prendre l’eau de toutes parts…). Dans ce cas, la panique et la précipitation peuvent contribuer à faire échouer une action jugée pourtant facile. Dans ces conditions, le Test prend tout son sens, même s’il s’agit d’une action qui serait impossible à rater en temps normal."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.utilisation-attributs-competences.tests-competences",
+      "title": "Tests de Compétences"
+    },
+    {
+      "type": "paragraph",
+      "text": "En terme de jeu, les chances de réussite d’une action basée sur une Compétence sont égales au niveau global de celle-ci, c’est-à-dire :"
+    },
+    {
+      "type": "paragraph",
+      "text": "**Niveau de base (dépend des Attributs) + niveau de la Compétence**"
+    },
+    {
+      "type": "paragraph",
+      "text": "Rappel : les Compétences dont le niveau est « X » ne peuvent pas faire l’objet d’un Test (voir X : compétences réservées, page 188). Celui-ci est automatiquement voué à l’échec."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.utilisation-attributs-competences.tests-attributs",
+      "title": "Tests d’Attributs"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il arrive parfois qu’un Test ne se rapporte pas à une Compétence, mais directement à un Attribut. Il s’agit dans ce cas de tester la capacité naturelle du personnage, plus qu’un quelconque savoir-faire acquis. On peut par exemple tester la Force d’un personnage, pour savoir s’il arrivera à soulever un objet particulièrement lourd, ou bien sa Perception, pour savoir s’il parviendra à percevoir un son ou une odeur particulière. Dans ce cas, vous utiliserez tout simplement le niveau de l’Attribut en question."
+    }
+  ]
+}

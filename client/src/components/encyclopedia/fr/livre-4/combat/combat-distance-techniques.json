@@ -1,0 +1,142 @@
+{
+  "id": "combat.combat-distance-techniques",
+  "slug": "combat-distance-techniques",
+  "title": "Combat à distance : techniques de tir",
+  "page": 227,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance-techniques.coup-par-coup",
+      "title": "Techniques de tir au coup par coup"
+    },
+    {
+      "type": "paragraph",
+      "text": "La plupart des armes peuvent tirer en mode « coup par coup », certaines n’ayant d’ailleurs que ce mode de tir. Un personnage a le choix entre les techniques de tir au coup par coup décrites ci-dessous."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.tir-simple",
+      "title": "Tir simple"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le tireur lève son arme, vise à peine… et tire une seule balle. À part se tirer une balle dans le pied en sortant son arme, c’est ce qu’on peut faire de plus simple. Techniquement, c’est également la technique de tir la moins efficace dans une vraie fusillade, puisque le tireur ne bénéficie pas d’un véritable temps de visée (ce n’est pas encore un tir instinctif, mais presque), et ne peut pas corriger son tir. Le seul avantage d’un tir simple est d’économiser ses munitions, tout en bénéficiant d’une Initiative normale."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.tir-repetition",
+      "title": "Tir à répétition"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est probablement la technique de tir rapide la plus efficace au coup par coup. Le personnage ne se contente pas d’une seule balle, mais tire rapidement plusieurs fois. À chaque nouveau tir, il peut corriger sa visée, tout en accroissant ses chances de toucher sa cible (même si le tir n’est pas extrêmement précis). Bien entendu, l’objectif est d’envoyer un maximum de projectiles dans une cible, en un minimum de temps. Ce n’est toutefois pas très économe en munitions… Lors d’un tir à répétition, le personnage choisit le nombre de balles qu’il va tirer (2 minimum). Il gagne ensuite un bonus de +1 pour son Test de tir pour chaque balle tirée en plus de la première (bonus maximum +3). Le personnage peut également décider de tirer plus de 4 balles (jusqu’à un maximum de 10) : dans ce cas-là, pour chaque groupe de 3 balles supplémentaires tirées, il peut bénéficier d’un des effets suivants : soit un bonus additionnel de +1 au Test de tir (qui s’ajoute au bonus initial de +3, pouvant ainsi le faire monter à +5), soit un bonus aux dommages de +3 (à courte portée seulement)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.tir-vise",
+      "title": "Tir visé (action exclusive)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Avec cette technique, le personnage prend le temps d’ajuster son tir, au détriment de son Initiative. Il ne peut tirer qu’une seule balle, et doit être immobile. Le tir visé utilise le principe des « Actions retardées » : à partir de sa phase d’action habituelle, et pour chaque tranche de 2 points d’Initiative sacrifiée, le personnage gagne un bonus de +1 à son Test de tir (bonus maximum +5)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance-techniques.modes-automatique",
+      "title": "Modes de tir automatique"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les armes automatiques peuvent tirer en rafale. Un personnage qui souhaite effectuer un tir en mode automatique doit utiliser la Compétence Armes de poing ou Fusils/Armes d’épaule (selon l’arme), limitée par la Compétence Tir automatique. Changer le mode de tir d’une arme est une Préparation qui coûte 3 points d’Initiative. En fonction du modèle et des capacités de l’arme, le personnage aura le choix entre deux types de rafale, courte et longue :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.rafale-courte",
+      "title": "Rafale courte"
+    },
+    {
+      "type": "paragraph",
+      "text": "Certaines armes automatiques proposent ce mode de tir. Il s’agit d’une rafale limitée à 3 balles, qui offrent une partie des avantages d’un tir automatique tout en évitant le gaspillage de munitions. Un personnage qui utilise ce mode de tir peut choisir l’un des deux effets suivants : soit il gagne un bonus de +3 à son Test de tir, soit il bénéficie d’un bonus de +5 aux dommages (à bout portant ou courte portée seulement)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.rafale-longue",
+      "title": "Rafale longue (action exclusive)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les armes pouvant être utilisées en rafales longues sont capables de tirer tant que le personnage appuie sur la gâchette, ou jusqu’à épuisement des munitions. Le personnage choisit le nombre de balles tirées (5 au moins, 20 au maximum ; si l’arme n’est pas en mesure de tirer au moins 5 balles, traiter cela comme une rafale courte). Ensuite, pour chaque groupe de 5 balles tirées, le personnage gagne un bonus de +2 à son Test de tir, ainsi qu’un bonus de +2 aux dommages (à bout portant ou courte portée seulement)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.combat-distance-techniques.rafale-multi",
+      "title": "Rafale longue sur plusieurs adversaires (action exclusive)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un tir en rafale en arc de cercle peut permettre de toucher plusieurs adversaires, à portée courte ou moyenne seulement. Pour chaque groupe de 5 balles, le personnage peut prendre un adversaire différent pour cible. L’écart entre chaque cible ne peut toutefois pas dépasser 3 mètres (le personnage peut toutefois consacrer l’un de ses groupes de 5 balles pour couvrir la distance supplémentaire). Il doit alors effectuer un Test de tir pour chaque cible, sans modificateur à courte portée, et avec un malus de -5 à portée moyenne."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Viser avec une arme automatique",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "La nécessité de viser avec une arme tirant en mode automatique est moins cruciale qu’avec un tir au coup par coup, les bonus offerts par les rafales compensant efficacement l’imprécision des tirs. Si le meneur de jeu le souhaite, il peut toutefois appliquer les règles du Tir visé aux tirs automatiques."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance-techniques.tir-suppression",
+      "title": "Tir de suppression"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le tir de suppression (ou tir de couverture) vise à arroser une zone d’un tir soutenu (ou un endroit précis, comme une porte) pour forcer l’adversaire à rester à couvert ou pour lui interdire tout déplacement. Les armes automatiques sont les plus adaptées pour le tir de couverture, grâce à l’usage de la rafale longue ou d’une série de rafales courtes (assimilables à une rafale longue). En mode au coup par coup, seul un tir à répétition est capable d’assurer un tir de suppression, encore faut-il disposer d’assez de munitions."
+    },
+    {
+      "type": "paragraph",
+      "text": "Un tir de suppression arrose une zone de base d’environ 3 mètres. Le joueur doit choisir le nombre de balles tirées par son personnage, et effectue un Test de tir normal. Pour chaque groupe de 5 balles, le personnage peut couvrir 3 mètres supplémentaires, ou bénéficier d’un bonus de +2 à son Test de tir. Notez les modificateurs de réussite ou d’échec."
+    },
+    {
+      "type": "paragraph",
+      "text": "Tout adversaire se trouvant dans la zone de tir (ou tentant de la traverser) doit alors effectuer un Test de Chance, avec un niveau modifié par le bonus ou le malus du tireur. Contrairement à l’habitude, un bonus de réussite va réduire le niveau de Chance de l’adversaire, alors qu’un malus d’échec va au contraire l’augmenter. Une couverture partielle, l’obscurité ou un gaz bloquant la vision peuvent offrir un bonus de +3 à +10 au Test de Chance, au gré du MJ. En cas d’échec, le personnage à découvert reçoit une balle, localisée au hasard. Un PJ à découvert pris sous un tir de suppression peut toujours dépenser un point de Chance pour réussir ce Test, mais il devrait vite alors se mettre à l’abri, si ses adversaires maintiennent leur tir de suppression lors des prochains Tours de combat !"
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : le tir de suppression est évidemment une action exclusive."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance-techniques.tir-precision",
+      "title": "Tir de précision (snipers)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le tir de précision est un tir à grande distance, effectué par le biais d’une arme équipée d’un appareil de visée. Même s’il s’agit en théorie à la fois d’un « tir simple » et d’un « tir visé », le tir de précision échappe en fait aux règles habituelles des tirs au coup par coup (le tir automatique est inutile à grande distance). La seule chose dont il faut se souvenir, concernant les tirs de précision, c’est que le tireur a besoin de temps pour adopter une position de tir stable, régler sa lunette, calculer la compensation nécessaire pour corriger la « chute » de la balle en fonction de la distance, viser la cible, etc. Plus la distance est longue, plus le temps nécessaire est important, de quelques Tours de combat pour un tir à courte portée, à plusieurs minutes pour un tir à portée extrême. Le MJ est seul juge…"
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "id": "combat.organisation",
+  "slug": "organisation",
+  "title": "Organisation du combat",
+  "page": 212,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.organisation.tours-de-combat",
+      "title": "Tours de combat"
+    },
+    {
+      "type": "paragraph",
+      "text": "Dès le moment où un personnage (ou une créature) décide d’entreprendre une action violente à l’encontre d’un autre personnage, le temps de la narration ralentit subitement, tandis que la description des actions des combattants se fait plus précise et plus détaillée. La durée du combat est désormais composée d’un ou plusieurs segments de temps appelés « Tours de combat ». Les Tours de combat sont des artifices permettant de mieux gérer le déroulement des événements (attaques, mouvements, etc.), et ont chacun une durée approximative de 5 à 6 secondes. Évidemment, quand le combat est terminé (faute de combattants, ou une fois la menace écartée), le découpage du temps en Tours de combat n’a plus lieu d’être."
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "LE TEMPS N’EST PAS SI IMPORTANT QUE CELA",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "En réalité, le temps est élastique au cours d’un combat. Ainsi, lorsque deux combattants armés chacun d’une arme à feu se font face pour se tirer dessus à bout portant, il est plus que probable que tout sera terminé en moins de deux secondes. En revanche, lors d’un combat au corps à corps, alors que les deux combattants se tournent autour, chacun cherchant la faille dans la défense de l’autre, il peut s’écouler vingt secondes avant que l’un des deux ne décide de prendre l’initiative. Fixer la durée du Tour de combat à 5 ou 6 secondes n’est donc utile que lorsque le passage du temps est lui-même crucial, et que les joueurs veulent avoir une idée plus précise du passage du temps : un compte à rebours, une durée limitée pour accomplir une action, un personnage qui doit retenir son souffle, etc."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.organisation.initiative",
+      "title": "L’Initiative"
+    },
+    {
+      "type": "paragraph",
+      "text": "L’Initiative permet de déterminer l’ordre dans lequel les combattants agissent. Le score d’Initiative de base dépend du niveau de Réaction d’un personnage (voir [[Initiative|combat.initiative|213]])."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.organisation.phases-action",
+      "title": "Phases d’action"
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque Tour de combat est divisé en « phases d’action ». Le nombre total de phases d’action dans un Tour de combat est égal au niveau d’Initiative le plus élevé parmi les combattants. Chaque personnage peut agir à la phase d’action qui correspond à son niveau d’Initiative. Une fois que tout le monde a agi, le Tour de combat est terminé."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.organisation.resume-tour",
+      "title": "Résumé du déroulement d’un Tour de combat"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        {
+          "label": "Surprise (si nécessaire)",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Si un ou plusieurs combattants risquent d’être surpris par leurs adversaires (embuscade, attaque soudaine, etc.), ils doivent effectuer un Test de Réaction, pour voir s’ils peuvent agir et dans quelle mesure. Les personnages ayant raté leur Test au premier Tour de combat retrouveront leur score d’Initiative normal au Tour suivant. Voir la section [[Surprise|combat.surprise]]."
+            }
+          ]
+        },
+        {
+          "label": "Initiative de base",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Chaque joueur détermine l’Initiative de base de son personnage, qui est normalement égale à son niveau de Réaction, sauf bonus ou malus particuliers."
+            }
+          ]
+        },
+        {
+          "label": "Déclarations d’intentions & modification de l’Initiative",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Dans l’ordre croissant des niveaux d’Initiative (les plus lents en premiers), chaque joueur, y compris le MJ pour ses propres PNJ, déclare rapidement mais précisément les intentions de son personnage (se déplacer, attaquer, etc.). Si la déclaration du joueur impose une modification de l’Initiative de son personnage, celle-ci prend effet immédiatement. Le nouveau niveau d’Initiative est appelé « niveau actuel », par rapport au niveau de base (celui du début du Tour)."
+            },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                {
+                  "label": "Plusieurs Attaques",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Un joueur désirant que son personnage accomplisse plus d’une Attaque dans le Tour de combat doit l’annoncer à cette étape. Il place les marqueurs supplémentaires nécessaires sur l’échelle d’Initiative. Voir [[Effectuer plusieurs Attaques par Tour|combat.agir-en-combat|218]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Initiatives équivalentes",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Si plusieurs personnages peuvent agir à la même phase d’action, et que les Actions ne sont pas considérées comme simultanées, les déclarations d’intention doivent être faites dans l’ordre croissant des Initiatives (les plus lents annoncent leur Action en premier, permettant ainsi aux plus rapides de réagir en conséquence). Voir [[Initiatives équivalentes|combat.initiatives-equivalentes|214]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Précipiter son Action (optionnel)",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Le joueur peut décider de précipiter l’Action de son personnage. Celui-ci gagne immédiatement un bonus de +3 à son niveau d’Initiative, mais son Action subira un malus à cause de la précipitation. Voir [[Précipiter son Action|combat.agir-en-combat|218]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Retarder son Action",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Le joueur peut décider de retarder l’Action de son personnage. Celui-ci agira plus tard dans le Tour de Combat, à n’importe quelle phase d’action. Voir [[Retarder son Action|combat.agir-en-combat|218]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Préparation",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Certaines Actions demandent une Préparation, c’est-à-dire un geste, un mouvement qui va la retarder (par exemple sortir une arme ou viser). Voir [[Préparations|combat.agir-en-combat|216]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Choix d’un Mode de combat (combat au contact seulement)",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "À cette étape, le joueur peut également choisir (ou modifier) un Mode de combat pour son personnage. Voir la règle optionnelle des [[Modes de combat|combat.combat-contact|223]]."
+                    }
+                  ]
+                },
+                {
+                  "label": "Modifications de l’Initiative",
+                  "blocks": [
+                    {
+                      "type": "paragraph",
+                      "text": "Certains événements peuvent modifier l’Initiative du personnage. Le nouveau score d’Initiative est appelé « score actuel » (par opposition au score de base, celui du début du Tour)."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Résolution des Actions",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Les Actions déclarées sont alors résolues dans l’ordre décroissant des niveaux d’Initiative (les plus rapides en premier), à leur phase d’action respective. Ainsi, le personnage ayant le plus haut score d’Initiative peut agir dès la première phase d’action. Les joueurs effectuent alors chacun à leur tour les Tests nécessaires (les Tests d’attaque, par exemple), puis le MJ décrit l’Action et son résultat. Plus la marge de réussite (ou d’échec) est importante, et plus la description devra être spectaculaire (avec la complicité du MJ, un joueur expérimenté peut même décrire lui-même l’Action de son personnage !). Les effets de l’Action (les blessures infligées par exemple, et tous les problèmes qu’elles posent !) sont applicables immédiatement."
+            }
+          ]
+        },
+        {
+          "label": "Fatigue (si nécessaire ; règles avancées seulement)",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Si le MJ utilise les règles avancées de Fatigue, tous les personnages impliqués dans le combat effectuent leur Test de résistance à la Fatigue."
+            }
+          ]
+        },
+        {
+          "label": "Fin du Tour ou fin du combat",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Une fois que tous les personnages ont effectué leur(s) Action(s), on recommence à l’étape 2 (Initiative) ou on met fin au combat si nécessaire."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Vous trouverez dans les sections qui suivent la description détaillée de chacun des éléments d’un Tour de combat, ainsi que les exemples appropriés."
+    }
+  ]
+}

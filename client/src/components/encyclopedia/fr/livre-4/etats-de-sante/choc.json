@@ -1,0 +1,123 @@
+{
+  "id": "etats-de-sante.choc",
+  "slug": "choc",
+  "title": "Choc",
+  "page": 237,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Choc",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les Blessures les plus sérieuses peuvent étourdir un personnage, ou même le plonger dans l’inconscience, à cause des dommages physiques, mais aussi de la douleur et de la peur. Vous pouvez utiliser ou non ces règles, en fonction du degré de réalisme que vous souhaitez introduire dans vos parties. Sachez toutefois que les Tests de Choc sont utilisés dans les règles sur les dommages assommants (voir [[Dommages étourdissants et assommants|etats-de-sante.dommages-assommants|243]])."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.choc.effets",
+          "title": "Effets du Choc"
+        },
+        {
+          "type": "paragraph",
+          "text": "La Résistance au Choc d’un personnage se compose de deux valeurs : le Seuil d’Étourdissement et le Seuil d’Inconscience. Effectuer un Test de Choc revient à lancer 1D20, et à comparer le résultat avec ces deux seuils :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Si le résultat est **inférieur ou égal au Seuil d’Étourdissement**, le Test est réussi. Le personnage ne subit pas les effets du Choc." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Si le résultat est **supérieur au Seuil d’Étourdissement, tout en restant inférieur ou égal au Seuil d’Inconscience**, le personnage est Étourdi." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Si le résultat est **supérieur au Seuil d’Inconscience**, le personnage est Inconscient." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Attention, certaines blessures imposent un malus au Test de Choc (voir [[Description et effets des blessures|etats-de-sante.blessures-description|235]]). Ce malus est rappelé sur la fiche de personnage, à côté des cases de blessures."
+        },
+        {
+          "type": "heading",
+          "level": 5,
+          "id": "etats-de-sante.choc.etourdi",
+          "title": "Étourdi"
+        },
+        {
+          "type": "paragraph",
+          "text": "Un personnage **Étourdi** est sonné et désorienté. Il ne peut plus attaquer (mais peut toujours tenter de se défendre) et subit un malus de -5 à toutes ses actions (en plus du malus normal occasionné par la blessure). Titubant et chancelant, sa vitesse de déplacement maximum est l’Allure moyenne, au maximum (s’il veut se déplacer à une vitesse plus élevée, il doit réussir un Test d’Adaptation ou tomber au sol)."
+        },
+        {
+          "type": "heading",
+          "level": 5,
+          "id": "etats-de-sante.choc.inconscient",
+          "title": "Inconscient"
+        },
+        {
+          "type": "paragraph",
+          "text": "Un personnage **Inconscient** s’est tout simplement évanoui. Il ne peut bien entendu ni agir, ni se déplacer, et n’est pas du tout conscient de ce qui se passe autour de lui."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "etats-de-sante.choc.duree",
+          "title": "Durée du Choc"
+        },
+        {
+          "type": "paragraph",
+          "text": "La durée de l’Étourdissement ou de l’Inconscience dépend de la gravité de la Blessure qui a entraîné le Test de Choc, ainsi que de sa Localisation (un Échec critique suivi d’une Catastrophe peut aggraver les choses), comme indiqué dans la table ci-dessous."
+        },
+        {
+          "type": "dataTable",
+          "source": "CHOC_DUREE_TABLE",
+          "caption": "Étourdissement, inconscience et catastrophes",
+          "headers": [
+            [
+              { "label": "Gravité" },
+              { "label": "Localisation" },
+              { "label": "Étourdissement" },
+              { "label": "Inconscience" },
+              { "label": "Catastrophe" }
+            ]
+          ]
+        },
+        {
+          "type": "heading",
+          "level": 5,
+          "id": "etats-de-sante.choc.stabilisation-necessaire",
+          "title": "Stabilisation nécessaire"
+        },
+        {
+          "type": "paragraph",
+          "text": "**Stabilisation nécessaire** : le personnage ne peut pas reprendre ses esprits tant que sa blessure n’a pas été stabilisée."
+        },
+        {
+          "type": "heading",
+          "level": 5,
+          "id": "etats-de-sante.choc.coma-leger",
+          "title": "Coma léger"
+        },
+        {
+          "type": "paragraph",
+          "text": "**Coma léger** : le personnage ne peut être réanimé tant que le coma n’est pas terminé. Le joueur doit alors effectuer un Test de Chance toutes les 1D6 heures : en cas de réussite, le personnage sort du coma. Au-delà d’une journée sans réussite, le Test doit être effectué une fois par jour, et au-delà d’une semaine, une fois par semaine… Des moyens médicaux de haute technologie peuvent tout à fait offrir un bonus aux Tests de Chance (de +1 à +5, au choix du MJ)."
+        },
+        {
+          "type": "heading",
+          "level": 5,
+          "id": "etats-de-sante.choc.coma-profond",
+          "title": "Coma profond"
+        },
+        {
+          "type": "paragraph",
+          "text": "**Coma profond** : le personnage ne peut être réanimé tant que le coma n’est pas terminé. En cas de coma léger, le joueur doit alors effectuer un Test de Chance par jour, avec un niveau divisé par deux : en cas de réussite, le personnage sort du coma. Au-delà de 7 jours sans réussite, le Test doit être effectué une fois par semaine, et au-delà de 4 semaines, une fois par mois… Des moyens médicaux de haute technologie peuvent tout à fait offrir un bonus aux Tests de Chance (de +1 à +5, au choix du MJ)."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note : un personnage Inconscient qui se réveille est automatiquement Étourdi pendant 1D6 minutes."
+        }
+      ]
+    }
+  ]
+}

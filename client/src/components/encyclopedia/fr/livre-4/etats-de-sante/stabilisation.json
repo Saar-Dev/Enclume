@@ -1,0 +1,78 @@
+{
+  "id": "etats-de-sante.stabilisation",
+  "slug": "stabilisation",
+  "title": "Stabiliser une blessure",
+  "page": 236,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.stabilisation.necessaire",
+      "title": "Stabilisation nécessaire !"
+    },
+    {
+      "type": "paragraph",
+      "text": "Sur les blessures les plus importantes (Blessures critiques, mortelles et Membre détruit), l’hémorragie et/ou les dommages aux organes vitaux peuvent avoir des conséquences dramatiques, et même une mort rapide (et pas forcément sans douleur) sur les blessures les plus extrêmes. Toutes ces blessures demandent une stabilisation immédiate, grâce à un Test de Premiers soins réussi (voir [[Stabiliser une blessure|etats-de-sante.stabilisation.comment|237]]). Sans stabilisation (ou en cas d’échec au Test de Premiers soins), les conséquences sont les suivantes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Blessure critique",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Outre les effets normaux de la blessure, le personnage n’aura pas de complications pendant un nombre de minutes égal au double de son niveau de Constitution. Au-delà, il doit réussir un Test de Constitution. En cas de réussite, il dispose d’une nouvelle période de (5 + modificateur de réussite) minutes sans aggravation supplémentaire, avant de devoir refaire un Test de Constitution. En cas d’échec, le personnage a perdu trop de sang : la Blessure critique se transforme en Blessure mortelle. Note : la stabilisation n’est nécessaire que sur les Blessures critiques présentant un risque d’hémorragie (c’est le cas sur une coupure ou une perforation, mais pas forcément sur une fracture ou une brûlure, par exemple)."
+            }
+          ]
+        },
+        {
+          "label": "Blessure mortelle / Membre détruit",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le personnage peut survivre pendant un nombre de minutes égal à son niveau de Constitution avant de mourir."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Après la mort, seul un équipement médical de très haute technologie (et les médecins compétents qui vont avec) peut permettre de ramener un personnage à la vie par réanimation, à condition que la durée de la mort ne soit pas supérieure à une dizaine de minutes (une fois ce temps passé, les cellules du cerveau sont irrémédiablement endommagées)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.stabilisation.comment",
+      "title": "Stabiliser une blessure"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Compétence Premiers soins permet de soigner les blessures mineures (voir Premiers soins, page 199), mais aussi et surtout de stabiliser toutes celles qui ont besoin de l’être (c’est donc une Compétence nécessaire à tout bon urgentiste…) : les Blessures critiques avec hémorragie, les Blessures mortelles et les Membres détruits."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage qui tente de stabiliser une blessure doit effectuer un Test de Premiers soins, avec le malus suivant :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures critiques** : +0." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures mortelles (Bras, Jambe) ou Membres détruits** : -3." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Blessures mortelles (Tête, Corps)** : -5." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Blessures doivent être traitées Localisation par Localisation, les degrés de gravité les plus élevés étant logiquement prioritaires. Si, sur le Compteur de blessures, la ligne du degré de blessure traitée comporte plus d’une case cochée, l’intervenant subit un malus supplémentaire de -2 au Test de Premiers soins. Chaque tentative nécessite un temps d’intervention de base de 10 minutes, auquel il faut retrancher le modificateur de réussite, ou ajouter le modificateur d’échec. D’autre part, l’intervenant doit avoir une trousse médicale complète à sa disposition, sinon il subit un malus supplémentaire de -5 à son Test de Premiers soins."
+    },
+    {
+      "type": "paragraph",
+      "text": "En cas de réussite, la blessure a été stabilisée. Une Blessure mortelle reste toutefois extrêmement préoccupante, et nécessite une attention constante de la part de l’intervenant. Le MJ peut fort bien demander de nouveaux Tests de Premiers soins si la situation l’exige (par exemple au bout d’un nombre de minutes égal au niveau de Constitution du blessé). Un personnage ayant reçu une telle blessure devrait en effet être immédiatement emmené à l’hôpital ou confié à un chirurgien compétent et équipé du matériel nécessaire. En cas d’échec, la stabilisation a échoué, et l’intervenant a perdu du temps (n’oubliez pas que la durée de survie du blessé est limitée)."
+    }
+  ]
+}

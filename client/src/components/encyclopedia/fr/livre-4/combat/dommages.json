@@ -1,0 +1,112 @@
+{
+  "id": "combat.dommages",
+  "slug": "dommages",
+  "title": "Dommages",
+  "page": 229,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Dès qu’un personnage touche son adversaire à la suite d’un Test de combat, à mains nues ou avec une arme, il est en mesure de lui infliger des Dommages physiques. La démarche est très simple : il faut d’abord déterminer la Localisation touchée, puis faire un jet de Dommages."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.dommages.points-dommages",
+      "title": "Points de dommages et blessures"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui touche son adversaire lui inflige un nombre de points de Dommages physiques égal à :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Combat au contact** : Dommages de l’arme + modificateur de réussite + modificateur de Dommages au contact du personnage."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Combat à distance** : Dommage de l’arme + modificateur de réussite."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "À ce total de Dommages de base, il faut ensuite ajouter le modificateur de Résistance aux Dommages du personnage touché. Un personnage fort et résistant va ainsi réduire les dégâts, alors que ceux-ci seront peut-être aggravés chez un personnage plus faible. Le total final doit être comparé aux seuils de blessure du personnage : chaque tranche de 5 points de Dommages fait augmenter la gravité de la blessure. La blessure infligée correspond au plus haut seuil dépassé. Le fonctionnement des blessures et leurs effets sont traités en détail dans le chapitre [[État de santé|etats-de-sante|234]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.dommages.localisation",
+      "title": "Localisation des dommages"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Localisation touchée est ensuite déterminée par un jet d’1D20 dans la table ci-dessous (présente aussi sur la fiche de personnage). Bien sûr, si la Localisation touchée est évidente, inutile de recourir à un jet de dé. Vous pouvez remarquer que les Dommages sont différenciés en fonction du type de combat. La raison est simple : en combat au contact, les coups ont tendance à atteindre plus souvent le haut du corps, et moins les jambes. Vous pouvez simplement vous contenter de la Localisation du combat à distance, si vous le souhaitez. Dans certaines situations, il faudra peut-être adapter un peu le résultat, notamment si la Localisation touchée est protégée par un objet ou un élément du décor offrant une couverture."
+    },
+    {
+      "type": "dataTable",
+      "source": "LOCALISATION_DOMMAGES_TABLE",
+      "caption": "Tableau de localisation des dommages",
+      "headers": [
+        [
+          { "label": "Distance", "colspan": 2 },
+          { "label": "Contact (optionnel)", "colspan": 2 }
+        ],
+        [
+          { "label": "1D20" },
+          { "label": "Localisation" },
+          { "label": "1D20" },
+          { "label": "Localisation" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le joueur coche alors l’une des cases correspondant au niveau de blessure reçu, sur la Localisation touchée. La gestion des cases de blessure est abordée en détail dans le chapitre [[État de santé|etats-de-sante|234]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.dommages.viser-localisation",
+      "title": "Viser une Localisation précise"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il est en général difficile de viser une Localisation précise, car le combat est surtout une affaire d’opportunité : les combattants touchent là où ils peuvent… Si un combattant décide de toucher un endroit précis sur le corps de son adversaire, appliquez les malus suivants :"
+    },
+    {
+      "type": "dataTable",
+      "source": "AIMED_LOCATION_MALUS",
+      "caption": "Malus pour viser une Localisation précise",
+      "headers": [
+        [
+          { "label": "" },
+          { "label": "Localisation" },
+          { "label": "Malus" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour un endroit bien spécifique du corps (épaule, ventre, main, genou, etc.), le malus est laissé à l’appréciation du meneur de jeu, généralement entre -7 et -10."
+    },
+    {
+      "type": "paragraph",
+      "text": "Tous ces malus ne sont là qu’à titre indicatif et devront être adaptés selon la situation."
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "id": "tests-et-actions.tests-non-aleatoires",
+  "slug": "tests-non-aleatoires",
+  "title": "Tests non aléatoires",
+  "page": 205,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Tests non aléatoires",
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.aleatoire-ou-non",
+          "title": "Tests aléatoires ou non aléatoires ?"
+        },
+        {
+          "type": "paragraph",
+          "text": "Il est d’usage dans la plupart des jeux de rôle de résoudre chaque action pouvant donner lieu à un test par un jet de dé. Parfois, cela crée des situations pas tout à fait logiques : ainsi, on ne peut imaginer que, dans des conditions normales (dont nous parlions au tout début de ce chapitre), un personnage avec des chances de réussite très correctes (entre 13 et 15, par exemple) et tentant une action de Difficulté « Moyenne » (+0) ait encore une chance sur trois ou quatre d’obtenir un échec. Ce n’est en effet pas du tout ce qu’on pourrait attendre d’un tel personnage, qui est sans doute considéré comme un expert, selon notre échelle des valeurs : des Attributs sans doute bien supérieurs à la moyenne (14 ou 15) et une Compétence maîtrisée au niveau +10, à peu près."
+        },
+        {
+          "type": "paragraph",
+          "text": "Ces règles avancées vous proposent de faire la distinction entre deux types de situation : d’une part, les situations normales, courantes, où le hasard n’intervient pas et où seules comptent les capacités du personnage et, d’autre part, les situations inhabituelles, stressantes, où le hasard peut décider de la réussite ou de l’échec d’une action. Pour simuler de manière convenable ces deux situations bien différentes, nous vous proposons d’utiliser deux types de Tests bien distincts : les Tests non aléatoires et les Tests aléatoires. Notez que vous connaissez déjà le fonctionnement des Tests aléatoires : ils vous ont été présentés plus haut."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.circonstances-non-alea",
+          "title": "Circonstances des Tests non aléatoires"
+        },
+        {
+          "type": "paragraph",
+          "text": "Si vous décidez d’utiliser ces règles avancées, considérez que les Tests non aléatoires s’appliquent naturellement aux actions entreprises dans des conditions normales, c’est-à-dire lorsque le personnage agit…"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "**dans de bonnes conditions** (avec les outils adaptés, dans un endroit calme, avec tout le temps nécessaire, etc.)," } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**sans être soumis au stress** (et donc sans agir dans l’urgence, ni subir les événements, ni souffrir d’une quelconque pression psychologique)," } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**sans être directement exposé à un événement ou un danger quelconque** qui ne laisserait aucun droit à l’erreur, ni être limité à une tentative unique (le personnage doit pouvoir tâtonner, expérimenter, échouer et recommencer plusieurs fois avant de réussir) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "**dans l’idée d’obtenir un résultat moyen correspondant à ses capacités**, sans chercher à « se dépasser » ni prendre de risque particulier (qui aurait pu lui permettre d’obtenir un meilleur résultat, au prix d’un danger supplémentaire)." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Ces quatre éléments sont absolument nécessaires pour que le Test puisse être qualifié de « non aléatoire ». Si l’un d’eux manque à l’appel, le Test devient alors « aléatoire ». En cas de doute sur la nature du Test à appliquer, utilisez les règles habituelles des Tests aléatoires et lancez les dés…"
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.circonstances-alea",
+          "title": "Circonstances des Tests aléatoires"
+        },
+        {
+          "type": "paragraph",
+          "text": "Les Tests aléatoires s’appliquent naturellement aux actions entreprises dans le stress et/ou l’urgence, par exemple un combat, ou toute autre situation où le temps presse, ou qui présente un danger évident et générant de fait une tension psychologique chez les personnages. Lors des Tests non aléatoires décrits plus haut, le personnage a du temps devant lui : il peut se tromper et échouer plusieurs fois avant de réussir, mais on ne s’occupe que du résultat final, et non du nombre de tentatives nécessaires à la réussite du Test. Ici, chaque tentative compte, puisque le temps devient le plus souvent un facteur crucial : tout échec signifie que le personnage perd du temps, ce qui est problématique lorsqu’il est engagé en combat (son adversaire risque de le toucher avant lui), lors de toute situation urgente (rappelez-vous des « comptes à rebours » dont nous parlions plus haut : une bombe qui menace d’exploser, une évacuation d’urgence sur un navire qui sombre, etc.), ou encore au cours d’une action dangereuse à l’issue forcément aléatoire (franchir d’un bond un précipice vraiment large, ou tenter d’esquiver une attaque mortelle à coup sûr). Ce dernier point entre tout à fait dans le cadre des Tests aléatoires, car le personnage n’a pas droit à l’erreur (ne pas être directement exposé à un danger quelconque est d’ailleurs l’une des quatre conditions nécessaires à un Test non aléatoire)."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.difficulte",
+          "title": "Difficulté de l’action"
+        },
+        {
+          "type": "paragraph",
+          "text": "Comme dans le cas des Tests aléatoires, le meneur de jeu doit définir une Difficulté pour l’action tentée par le personnage."
+        },
+        {
+          "type": "dataTable",
+          "source": "DIFFICULTE_NON_ALEATOIRE_SEUILS",
+          "caption": "Degré de difficulté de l’action et seuil associé (Test non aléatoire)"
+        },
+        {
+          "type": "paragraph",
+          "text": "Ici toutefois, la Difficulté ne se traduit pas par un modificateur, mais par un seuil, une valeur fixe."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.resolution",
+          "title": "Résolution d’un Test non aléatoire"
+        },
+        {
+          "type": "paragraph",
+          "text": "Ce type de Test correspond finalement à une simple vérification : dans une situation normale, le personnage est-il capable de réussir telle ou telle action ? Le Test non aléatoire a pour seul but de répondre à cette question, de manière simple et rapide, sans avoir à jeter un seul dé (celui-ci, représentant le facteur aléatoire, est en effet inutile ici). Le hasard n’intervenant pas ici, seules les capacités du personnage comptent. L’issue du Test est donc relativement prévisible : soit le personnage est assez doué pour accomplir l’action, soit il n’a pas les compétences pour cela."
+        },
+        {
+          "type": "paragraph",
+          "text": "Pour résoudre un Test non aléatoire, calculez les chances de réussite de base du personnage, et comparez-les à la valeur correspondant à la Difficulté de l’Action. Si les chances de réussite du personnage sont supérieures ou égales à la valeur de la Difficulté, le Test est réussi, sinon c’est un échec. Notez que le tableau des Difficultés peut aussi être lu dans l’autre sens : en fonction des chances de réussite de base du personnage, il vous indique quelles sont les Difficultés qu’il est capable de surmonter pour réussir une action. Cela constitue donc aussi un guide très précieux pour le joueur lui-même."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dans la mesure du possible, le MJ ne devrait jamais révéler la Difficulté d’un Test non aléatoire (voir l’encadré MJ : gardez les Difficultés pour vous !). En effet, le seul moyen de savoir si une action va être réussie ou non est le plus souvent de tenter sa chance. Le temps passé à essayer de réussir une action est aussi un facteur important lors des Tests non aléatoires, en terme de jeu, mais aussi d’ambiance. Si l’échec apparaît tout de suite comme une évidence grâce à la comparaison des chances de réussite et de la Difficulté de l’action, le joueur risque de refuser tout de suite que son personnage perde son temps sur cette action, ce qui n’est pas très cohérent. Bien entendu, si l’action est particulièrement difficile, le personnage se rendra vite compte que toute tentative est inutile."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.marges",
+          "title": "Marges de réussite ou d’échec"
+        },
+        {
+          "type": "paragraph",
+          "text": "La Marge de réussite d’un Test non aléatoire est égale au nombre de points excédant la valeur de la Difficulté du Test. Le degré de réussite correspondant indique le résultat final de l’action. Il est de plus possible d’améliorer ce résultat de base : voir Prendre son temps et Prendre des risques, ci-dessous."
+        },
+        {
+          "type": "paragraph",
+          "text": "La Marge d’échec d’un Test non aléatoire est égale au nombre de points manquants pour réussir l’action. Le degré d’échec correspondant indique le résultat final de l’action. Toutefois, même dans le cas d’un échec, le personnage peut persévérer, et tenter d’améliorer sa performance pour réussir son action, en choisissant de Prendre son temps (voir ci-dessous). Avant la résolution du Test, il peut aussi choisir d’emblée de Prendre des risques, pour tenter le tout pour le tout (voir plus bas)."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.actions-impossibles",
+          "title": "Actions impossibles"
+        },
+        {
+          "type": "paragraph",
+          "text": "Les actions qui ne peuvent être réussies ni par un Test normal, ni par le biais des règles Prendre son temps et Prendre des risques sont évidemment tout simplement impossibles à réaliser. Le personnage sait tout de suite qu’une telle action est automatiquement vouée à l’échec, sans avoir à tenter sa chance."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.prendre-son-temps",
+          "title": "Prendre son temps"
+        },
+        {
+          "type": "paragraph",
+          "text": "Il est tout à fait possible de prendre son temps afin d’améliorer le résultat de l’action. En plus du temps de base nécessaire à l’utilisation de la Compétence, chaque période de temps équivalente permet d’ajouter un bonus de +2 aux chances de réussite du personnage (jusqu’à un bonus maximum de +6, qui correspond donc à trois périodes supplémentaires). Le personnage peut ainsi soit réussir une action auparavant vouée à l’échec, soit améliorer sa marge de réussite."
+        },
+
+        {
+          "type": "heading",
+          "level": 4,
+          "id": "tests-et-actions.tests-non-aleatoires.prendre-des-risques",
+          "title": "Prendre des risques"
+        },
+        {
+          "type": "paragraph",
+          "text": "Même lorsque toutes les conditions sont réunies pour un Test non aléatoire, un personnage peut toujours Prendre des risques, et utiliser le système habituel des Tests aléatoires. L’objectif est ici de gagner du temps, tout en essayant d’obtenir une meilleure Marge de réussite (soit par le biais d’un bon jet de dé, soit par la règle des Réussites critiques, propre aux Tests aléatoires). En choisissant de faire un Test aléatoire, le personnage risque cependant d’obtenir une Marge de réussite moins importante que celle qu’il aurait obtenue avec un Test non aléatoire normal. Évidemment, il risque aussi d’échouer (dans certains cas, il pourra toujours faire une nouvelle tentative : voir [[Nouvelles tentatives et compte à rebours|tests-et-actions.nouvelles-tentatives|205]]), ou pire d’obtenir un « Échec critique »."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "etats-de-sante.dommages-feu",
+  "slug": "dommages-feu",
+  "title": "Feu",
+  "page": 243,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-feu.feu",
+      "title": "Feu"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Dommages dus au feu dépendent de l’intensité de celui-ci, ainsi que du temps d’exposition, mesuré en Tours de combat, jusqu’à ce que les flammes soient éteintes ou que le personnage ne soit plus exposé à celles-ci :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Une petite flamme** : 1D6/Tour, sur la Localisation exposée." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Un feu de taille moyenne** : 1D10/Tour, sur la Localisation exposée. Des vêtements qui prennent feu sur un personnage infligent ce genre de dommages." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Un grand feu** : 2D10/Tour, sur 1D3 Localisation(s). Un personnage aspergé de liquide inflammable auquel on met le feu subit ce genre de dommages (c’est, de plus, un feu très difficile à étouffer)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Un brasier** : 3D10/Tour." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Certaines tenues de protection ignifugées permettent de réduire considérablement les dommages dus au feu. N’oubliez pas non plus qu’un incendie peut aussi avoir d’autres effets néfastes : fumées toxiques, asphyxiantes et aveuglantes, chaleur intense ou même raréfaction de l’oxygène dans un lieu clos ! Enfin, être confronté à un feu important est un événement qui peut être extrêmement stressant, notamment pour les personnages vulnérables (les hybrides par exemple) ou pour la plupart des animaux, qui feront tout pour prendre la fuite."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Blessures dues au feu",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les blessures infligées par les flammes sont atroces ; elles s’infectent terriblement vite et, surtout, sont intolérables pour l’organisme. La Difficulté des soins subit un malus de -5 et le temps de guérison est doublé, sauf si la victime est plongée dans une cuve de guérison ou si elle est traitée avec un medkit antibrûlure (c’est la même chose qu’un medkit, mais spécialisé dans les brûlures). Les Tests contre l’infection (s’il y en a) doivent être effectués tous les jours, avec un malus supplémentaire de -3. Enfin, en cas de blessure au visage, les séquelles sont radicales : à cause des cicatrices, le personnage perd 1 point de Présence par Blessure grave, 3 points par Blessure critique et 5 points par Blessure mortelle. Il faudra une lourde et coûteuse opération de chirurgie esthétique pour réparer tout cela."
+        }
+      ]
+    }
+  ]
+}

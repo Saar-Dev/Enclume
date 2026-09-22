@@ -1,0 +1,12 @@
+{
+  "id": "force-polaris.choc-polaris",
+  "slug": "choc-polaris",
+  "title": "Choc Polaris",
+  "page": 253,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Utiliser la Force Polaris est assez éprouvant pour l'organisme. Après chaque libération de la Force Polaris, qu'elle soit volontaire ou involontaire (voir [[Libération involontaire|force-polaris.liberation-involontaire]], ci-contre), le personnage doit réussir un Test de Choc. Celui-ci intervient après la tentative d'utilisation du pouvoir, ou après la tentative de contrôle de la libération involontaire. Les points du modificateur de réussite obtenus à l'issue du Test de Maîtrise de la Force Polaris – et qui n'ont pas été utilisés pour réduire le temps d'activation du pouvoir – s'ajoutent au Test de Choc. En cas d'échec, il risque d'être étourdi pendant 1D6 Tour(s), ou de tomber inconscient pendant 1D6 minute(s). Certains éléments peuvent avoir un effet sur le Test de Choc (un pouvoir incontrôlé ou un incident Polaris, notamment). Voyez les détails dans les sections qui suivent."
+    }
+  ]
+}

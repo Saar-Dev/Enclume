@@ -1,0 +1,1350 @@
+{
+  "id": "force-polaris.liste-pouvoirs",
+  "slug": "liste-pouvoirs",
+  "title": "Liste des pouvoirs",
+  "page": 255,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.alteration-temporelle",
+      "title": "Altération temporelle"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Altération temporelle", "blocks": [ { "type": "paragraph", "text": "2D6 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage et toutes les créatures vivantes (ainsi que l’équipement qu’elles portent) se situant dans la zone d’effet sont transportés dans le futur ou le passé. Ceux qui subissent cet effet réapparaissent à l’endroit exact où ils étaient auparavant. Si, par exemple, ils étaient dans un croiseur, ils réapparaîtront dans le croiseur, même si celui-ci s’est déplacé."
+    },
+    {
+      "type": "paragraph",
+      "text": "Quand il s’effectue dans le futur, le déplacement temporel ne pose pas de problème majeur. Le personnage (et ce qui se trouve dans la sphère) cesse d’exister pendant quelques Tours avant de réapparaître. En revanche, il lui est impossible de faire ultérieurement un saut dans le passé dans la période de temps où il « n’existait pas ». Il réapparaîtra automatiquement juste avant son saut dans le futur."
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour un déplacement dans le passé, les choses sont un peu plus complexes. Le personnage annule en fait purement simplement ce qui s’est passé entre le moment où il active son pouvoir et le moment où il réapparaît dans le passé. Deux même corps ne pouvant cohabiter dans le même espace-temps, le personnage se retrouve donc dans son propre corps, à l’endroit qu’il occupait dans le passé. S’il est accompagné par d’autres personnages, ils se retrouvent également dans leur corps à l’endroit où ils se trouvaient dans le passé. Les objets transportés regagnent leur place initiale. Si un personnage est transporté mort à un moment où il ne l’était pas, il ne se souviendra de rien. Le personnage se souviendra de ce qui s’est passé dans le futur, mais les choses ne se passeront pas forcément exactement de la même façon, car rien n’est écrit… Le MJ est encouragé à faire en sorte que se reproduisent les mêmes événements, mis à part quelques légers détails."
+    },
+    {
+      "type": "paragraph",
+      "text": "La manipulation du temps est dangereuse, et chaque saut peut créer une « chimère temporelle ». Après chaque saut, il faut lancer 1D100 dans la table ci-dessous :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "1D100" },
+        { "key": "text", "label": "Effet" }
+      ],
+      "rows": [
+        { "roll": "01-60", "text": "R.A.S. : tout se passe bien." },
+        { "roll": "61-90", "text": "Échos du passé : le personnage réussit son saut temporel, mais les échos de ce qui a été et de ce qui aurait dû être persistent. S’il a fait un saut vers le passé, il verra un vague spectre de lui-même agir comme il l’a fait avant de faire son saut. Cette chimère n’a aucun impact sur la nouvelle réalité, mais elle peut s’avérer extrêmement perturbante. Ce phénomène est visible de tous." },
+        { "roll": "91-92", "text": "Phénomène exceptionnel : effectuez un jet sur la table des phénomènes exceptionnels." },
+        { "roll": "93-94", "text": "Autre dimension : le personnage (et tout ce qu’il transporte) se retrouve dans une dimension parallèle qui est, le plus souvent, une réalité horriblement déformée et cauchemardesque (mais cela peut aussi être une réalité entièrement différente et paisible). Il va falloir survivre tant que la chimère fait effet. Après cela, tout redevient normal." },
+        { "roll": "95-96", "text": "Déphasage temporel : pendant tout le temps que dure cette chimère, le temps est déphasé. Il s’écoule différemment pour chaque chose. Certains personnages seront accélérés, d’autres ralentis, une goutte d’eau pourra mettre un temps infini à tomber tandis qu’une autre goutte tombera normalement. Pour chaque chose (importante pour l’action en cours) ou personnage, et à chaque Tour de combat, il faut lancer un dé. Un résultat pair indique une accélération (on double la vitesse et les actions d’un personnage), un résultat impair indique une décélération (on réduit de moitié). Le chaos engendré par ce phénomène impose un malus de -5 aux Tests de chaque personnage." },
+        { "roll": "97-98", "text": "Décalage dans le Flux : le personnage réussit son saut mais réapparaît à la frontière du Flux." },
+        { "roll": "99-100", "text": "Lacération du temps : chaque personnage transporté dans le passé ou dans le futur rajeunit (1-5) ou vieillit (6-10) de 1 an." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour un saut dans le passé, une chimère temporelle dure le temps qui sépare l’arrivée dans le passé du départ dans le futur. Pour saut dans le futur, la chimère dure un temps égal au saut temporel séparant le passé du futur."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.attaque-psychique",
+      "title": "Attaque psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Malus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "+0 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce phénomène force les êtres vivants présents dans la zone d’effet à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 1D6 Tours de combat, ou inconscientes pendant 1D6 minutes."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si ce pouvoir est libéré accidentellement, le personnage à l’origine de l’incident Polaris n’est pas affecté."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.barriere-force",
+      "title": "Barrière de force"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Protection", "blocks": [ { "type": "paragraph", "text": "5 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 m² +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet crée une barrière de force, capable d’absorber un certain nombre de points de dommages. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades), à 1D10 mètres. Si elle apparaît sur un individu, ce dernier est poussé hors de la zone d’effet. Si elle apparaît dans une structure, même en partie, elle peut toutefois l’endommager."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : un personnage en armure sera repoussé tandis qu’un drone, un véhicule ou un robot subiront (1D10 + niveau de protection) points de dommages."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.barriere-moleculaire",
+      "title": "Barrière moléculaire"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Protection", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "7 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 m² +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet crée une barrière moléculaire, capable d’absorber un certain nombre de points de dommages. À la différence de la Barrière de force, la Barrière moléculaire peut être endommagée : sa valeur de protection est réduite d’1 point pour chaque tranche de 5 points de dommages. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir. Le fait qu’elle apparaisse sur un individu ou sur une structure n’a aucune conséquence."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades), à 1D10 m."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.barriere-psychique",
+      "title": "Barrière psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Bonus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "+1 +/- modif. de réussite." } ] },
+        { "label": "Bonus en Volonté contre les attaques mentales", "blocks": [ { "type": "paragraph", "text": "+0 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 m² +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 m +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet crée une barrière psychique. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir. La barrière psychique offre un bonus contre les attaques psychiques de Choc (de type Attaque psychique, Dague psychique, Lames psychiques…) et augmente la Volonté de ceux qui se trouvent derrière contre toute attaque mentale (de type Contrôle mental)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades) à 1D10 mètres. Le fait qu’elle apparaisse sur un individu ou sur une structure n’a aucune incidence."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.bete-du-flux",
+      "title": "Bête du flux"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Distance max. d’apparition de la créature", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Puissance de la créature", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce terrifiant pouvoir permet de créer un passage entre notre monde et celui du flux Polaris (pour certains, il permet en fait de matérialiser l’imaginaire d’un individu). Il existe une grande variété de bêtes du flux, mais elles ont toutes une apparence démoniaque. Ces créatures ont une caractéristique unique (sauf si le MJ choisit d’utiliser une créature du Flux plus détaillée) : la Puissance. Tous leurs Attributs et Compétences sont égaux à leur Puissance. Elles infligeront 2D10 points de dégât, plus leur Modificateur de dommages en corps à corps. Le personnage qui contrôle ce pouvoir peut donner des ordres à la créature."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si ce pouvoir n’est pas contrôlé, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge…"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.brouillage",
+      "title": "Brouillage"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Malus", "blocks": [ { "type": "paragraph", "text": "-3 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "50 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée des perturbations qui brouillent tous les appareils de détection et de transmission dans une sphère centrée autour du personnage, leur infligeant un malus."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.cauchemar",
+      "title": "Cauchemar"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 mètres de diamètre +/- (2 m × modif. de réussite)." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "50 mètres +/- (10 m × modif. de réussite)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir inflige de terribles visions de cauchemar à tout individu se trouvant dans la zone d’effet du phénomène. La victime doit effectuer un Test de Volonté, en opposition à la puissance du phénomène. En cas d’échec, elle est terrorisée par ces visions pendant la durée du pouvoir et subit un malus de -10 à toutes ses actions (sur une Catastrophe, elle peut même gagner une phobie définitive, à déterminer aléatoirement). Le personnage contrôlant ce pouvoir peut déplacer la zone d’effet."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.champ-force",
+      "title": "Champ de force"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Protection", "blocks": [ { "type": "paragraph", "text": "5 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet entoure un personnage et tout ce qui se trouve autour de lui d’un champ de force sphérique, capable d’absorber un certain nombre de points de dommages. La sphère de protection se déplace avec le personnage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.champ-moleculaire",
+      "title": "Champ moléculaire"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Protection", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "7 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet crée un champ moléculaire de forme sphérique, capable d’absorber un certain nombre de points de dommages. À la différence du Champ de force, le Champ moléculaire peut être endommagé : sa valeur de protection est réduit d’1 point pour chaque tranche de 5 points de dommages. La sphère de protection se déplace avec le personnage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.champ-psychique",
+      "title": "Champ psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Bonus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "+1 +/- modif. de réussite." } ] },
+        { "label": "Bonus en Volonté contre les attaques mentales", "blocks": [ { "type": "paragraph", "text": "+0 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 m² +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet effet entoure un personnage, et tout ce qui se trouve autour de lui, d’un champ psychique sphérique qui offre un bonus contre les attaques psychiques de Choc (de type Attaque psychique, Dague psychique, Lames psychiques…), et qui augmente la Volonté de ceux qui se trouvent derrière contre toute attaque mentale (de type Contrôle mental). La sphère de protection se déplace avec le personnage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.controle-mental",
+      "title": "Contrôle mental"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Portée max.", "blocks": [ { "type": "paragraph", "text": "50 mètres + (10 m × modif. de réussite)." } ] },
+        { "label": "Zone d’effet (libération accidentelle)", "blocks": [ { "type": "paragraph", "text": "1 m par niveau de puissance du phénomène (utiliser le modificateur d’échec)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir complexe, qui agit sur l’esprit de la victime, peut avoir trois utilisations différentes : la neutralisation mentale, le contrôle mental et l’emprise mentale. Dans tous les cas, la Volonté de la victime s’oppose à la puissance du phénomène. L’utilisation de ce pouvoir demande une concentration totale."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Neutralisation mentale** : le personnage utilisant le pouvoir tente tout simplement de stopper l’activité mentale de sa victime. Celle-ci doit réussir un Test de Volonté, en opposition à la puissance de l’effet Polaris. En cas de réussite, la victime diminue la puissance du phénomène d’un nombre de points égal à son modificateur de réussite. Le personnage utilisant le pouvoir peut continuer à l’attaquer s’il le souhaite, mais avec cette puissance réduite (sinon, il faudra activer de nouveau le pouvoir). En cas d’échec, la victime est neutralisée : elle reste debout, les bras ballants et totalement hébétée, sans rien faire et sans comprendre ce qui se passe autour d’elle. Le phénomène dure un nombre de Tours de combat égal au modificateur d’échec de la cible."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Contrôle mental** : pour contrôler une cible, il faut d’abord l’avoir neutralisée. Le personnage peut alors forcer la victime à refaire un Test de Volonté, en opposition à la puissance du pouvoir (notez qu’il est possible que celle-ci ait été réduite auparavant par la victime, lors de la phase de neutralisation). En cas de réussite, la victime diminue la puissance du phénomène d’un nombre de points égal à son modificateur de réussite (mais le personnage utilisant le pouvoir peut continuer à utiliser le pouvoir). Sur un échec, le personnage peut prendre le contrôle de l’esprit de la victime, pendant un nombre de Tours de combat égal à la marge d’échec de sa cible, et lui donner des ordres simples."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Emprise mentale** : cet effet est une manipulation lente, qui permet de contrôler un individu à plus long terme et, surtout, de modifier sa perception de la réalité. Elle ne peut s’effectuer que sur un sujet inconscient. Il faut se concentrer près de la victime pendant 2 heures pour 5 points de puissance du phénomène. La victime doit alors effectuer un Test de Volonté, en opposition à la puissance du pouvoir. Si elle réussit, elle est consciente de la tentative de manipulation et s’éveille immédiatement. Si, en revanche, c’est la tentative de contrôle qui est réussie, le joueur peut répartir son modificateur de réussite entre la durée de la domination (en jours), et une réduction temporaire de la Volonté de la victime. Tant que le niveau de cet Attribut est supérieur à 3, la victime pourra toujours effectuer un Test de Volonté (à son niveau temporaire) en opposition à la Volonté du personnage utilisant le pouvoir pour se libérer du Contrôle mental, à chaque fois qu’elle devra obéir à un ordre quelconque. Il lui suffit alors simplement de remporter l’opposition pour se libérer. Notez que la victime ne perd de la Volonté que contre le personnage utilisant le pouvoir, et uniquement pendant la période de contrôle ; cet Attribut reste intact face à tout autre adversaire."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si, lors d’un des Tests d’opposition ci-dessus, le personnage obtient une Catastrophe, il subit un malus équivalent à son modificateur d’échec à son Test de Résistance au Choc."
+    },
+    {
+      "type": "paragraph",
+      "text": "La libération involontaire de ce pouvoir génère une sphère psychique d’un diamètre égal à la puissance du phénomène, en mètres. Tous ceux qui se trouvent dans cette zone (y compris l’utilisateur du pouvoir) subissent une attaque mentale dévastatrice, et doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. Le modificateur de réussite de cette attaque indique le nombre de points de Volonté perdu par les victimes. Si leur Volonté tombe en dessous de 3, ils sont plongés dans un état cataleptique dont il est très difficile de sortir (traiter cela comme un coma profond, voir [[Choc|etats-de-sante.choc|237]], dans le chapitre État de santé, page 237). Si la Volonté reste égale à 3 ou plus, les points perdus se récupèrent au rythme de 1 point par heure."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.dague-psychique",
+      "title": "Dague psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Malus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "- 3 +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée une dague psychique qui se matérialise au bout du poing de l’utilisateur. Le personnage doit alors utiliser sa Compétence de Combat à mains nues pour toucher sa victime et la forcer à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 1D6 Tours de combat, ou inconscientes pendant 1D6 minutes."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il libère des Lames psychiques (voir page 259)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.dechirure-du-flux",
+      "title": "Déchirure du flux"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "15 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Portée max.", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Une déchirure du flux provoque une fissure dans la réalité, et ouvre un passage sur l’univers du Flux Polaris. Le problème est que, même contrôlé, on ne sait jamais ce qui va en résulter… La puissance du pouvoir détermine la puissance de l’effet libéré. Quand une déchirure de Flux apparaît, il faut lancer 2D10 :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "2-8", "blocks": [ { "type": "paragraph", "text": "Bête du flux (voir description de l’effet ; si le pouvoir est contrôlé, le personnage peut donner des ordres à la créature)." } ] },
+        { "label": "9-10", "blocks": [ { "type": "paragraph", "text": "Onde Polaris (voir description de l’effet)." } ] },
+        { "label": "11-16", "blocks": [ { "type": "paragraph", "text": "Passage (voir description de l’effet)." } ] },
+        { "label": "17", "blocks": [ { "type": "paragraph", "text": "Tempête du flux (voir description de l’effet)." } ] },
+        { "label": "18", "blocks": [ { "type": "paragraph", "text": "Vortex physique (voir description de l’effet)." } ] },
+        { "label": "19", "blocks": [ { "type": "paragraph", "text": "Vortex psychique (voir description de l’effet)." } ] },
+        { "label": "20", "blocks": [ { "type": "paragraph", "text": "Deux effets simultanés." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, la déchirure a lieu dans un rayon de 1D100 mètres autour du personnage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.desintegration-moleculaire",
+      "title": "Désintégration moléculaire"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Dommages", "blocks": [ { "type": "paragraph", "text": "2D10 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance)." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir terrifiant permet de désintégrer la matière. Le phénomène inflige des Dommages physiques à toutes les créatures vivantes présentes dans la zone d’effet (de forme sphérique). Attention, les blessures infligées sont définitives ! Une victime subissant une Blessure grave, par exemple, voit une de ses cases de blessures graves cochée définitivement, et ne pourra pas se remettre de cette blessure ! Seul un restructurateur moléculaire (une machine généticienne), ou le pouvoir Régénération moléculaire (voir plus bas) peuvent le soigner. Les armures et les protections ne sont pas efficaces contre ce pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, le personnage libérant l’effet n’est pas affecté."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.destructuration",
+      "title": "Déstructuration"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet à un personnage de déstructurer temporairement la matière. Dans la zone d’effet, le personnage peut déstructurer les êtres vivants dont le niveau de Force est inférieur ou égal à la puissance du phénomène, ou les objets inanimés dont le poids en kilogrammes est inférieur ou égal à cinq fois la puissance du phénomène. Une chose déstructurée est encore visible mais elle n’est plus solide. La matière est immatérielle. On peut ainsi franchir n’importe quel obstacle (sauf les champs d’énergie). Aucune attaque ne peut l’affecter, sauf les armes énergétiques. Une créature déstructurée peut voler. Un restructurateur de matière (appareil généticien) permet de se restructurer instantanément. De plus, un personnage peut tenter d’utiliser ce pouvoir à son tour pour inverser automatiquement le processus."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère d’effet (quels que soient sa taille ou son volume) est déstructuré (y compris le personnage libérant l’effet). Les créatures vivantes doivent réussir un Test de Volonté, en opposition à la puissance du phénomène, pour retrouver sa cohésion. Chaque victime a droit à un Test par Tour de combat, jusqu’à la fin de la durée de l’effet, jusqu’à ce qu’elle réussisse. Si elle rate tous ses Tests, elle a droit à un dernier Test de Chance, sinon sa cohésion moléculaire se désagrège. Elle est alors désintégrée. Pour du matériel (robots, machines et drones également), la restructuration se fait automatiquement au bout de 1D6 minutes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.disruption-moleculaire",
+      "title": "Disruption moléculaire"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Dommages", "blocks": [ { "type": "paragraph", "text": "2D10 +/- modif. de réussite (2 Localisations touchées, déterminées au hasard sur la table de localisation des attaques à distance)." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce phénomène inflige des Dommages physiques à tout ce qui se trouve dans la zone d’effet (de forme sphérique). Ces dommages peuvent être soignés normalement. Les armures et les protections ne sont pas efficaces contre ce pouvoir."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.foudre",
+      "title": "Foudre"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Dommages physiques", "blocks": [ { "type": "paragraph", "text": "2D10+3 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance)." } ] },
+        { "label": "Attaque IEM", "blocks": [ { "type": "paragraph", "text": "le malus au Test de panne est égal à -3, moins le modif. de réussite." } ] },
+        { "label": "Portée max.", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet (libération accidentelle)", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre + modif. d’échec." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de libérer un éclair infligeant des Dommages physiques à une cible. S’il s’agit d’un appareil électronique, celui-ci est soumis à une attaque IEM (« Impulsion électromagnétique »), qui impose un Test de panne (voir le chapitre Équipement, page 273). Les armures et les protections agissent normalement contre ce pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, l’attaque affecte tout ce qui se trouve dans la zone d’effet, y compris le personnage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.guerison-psychique",
+      "title": "Guérison psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène (élimination des suggestions hypnotiques)", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée (annulation du stress)", "blocks": [ { "type": "paragraph", "text": "3 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : le personnage peut utiliser ce pouvoir sur lui-même."
+    },
+    {
+      "type": "paragraph",
+      "text": "Grâce à ce pouvoir, le personnage peut annuler les effets de Choc (étourdissement et inconscience). Il est même possible de faire sortir quelqu’un du coma (voir « Choc », dans le chapitre « État de santé »), mais l’utilisateur du pouvoir subira alors un malus de -3 si la cible est plongée dans un coma léger, et de -5 en cas de coma profond. Cet effet est instantané."
+    },
+    {
+      "type": "paragraph",
+      "text": "Une utilisation plus complexe de ce pouvoir permet de débarrasser l’esprit d’une cible de toute trace de suggestion hypnotique ou de domination mentale (imposé par exemple par le pouvoir Contrôle mental). Pour cela, il faut que la puissance du phénomène soit supérieure à la Volonté de l’individu ayant implanté la suggestion hypnotique (dans le cas de l’hypnose) ou à la puissance du Contrôle mental. Il faut également passer du temps avec le personnage ciblé : 1 heure pour 5 points de la puissance du pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Enfin, ce pouvoir peut également être utilisé pour annuler temporairement les effets du stress, de la peur, de la panique, etc."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il est l’équivalent d’une Attaque psychique."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.guerison-moleculaire",
+      "title": "Guérison moléculaire"
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : le personnage peut utiliser ce pouvoir sur lui-même."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage peut guérir des blessures physiques (Localisation par Localisation). Le Test de Guérison moléculaire subit les mêmes malus dus à la gravité de la blessure que les Tests de Premiers soins ou de Médecine (voir Soins et guérison, dans le chapitre État de santé, page 237). Si le Test est réussi, la Localisation soignée récupère immédiatement un nombre de cases de blessures équivalent au modificateur de réussite. Ce pouvoir peut aussi être utilisé pour stabiliser une blessure (les malus de stabilisation des blessures s’appliquant aussi). En cas de réussite, la blessure est stabilisée, mais il faudra tout de même la soigner ou réutiliser le pouvoir pour la guérir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il est l’équivalent d’une Disruption moléculaire."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.lames-energie",
+      "title": "Lames d’énergie"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Nombre de lames d’énergie", "blocks": [ { "type": "paragraph", "text": "1 + modif. de réussite." } ] },
+        { "label": "Dommages", "blocks": [ { "type": "paragraph", "text": "2D10, +2 points par lame supplémentaire. Il est possible de répartir les lames d’énergie pour attaquer plusieurs adversaires." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée un certain nombre de lames d’énergie qui infligent des Dommages physiques. Si le pouvoir est contrôlé, le PJ choisit ses victimes tant qu’il peut les voir. Le Test d’attaque s’effectue avec la Compétence Lames d’énergie. Les armures et les protections agissent normalement contre ce pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, les lames attaquent 1D4 cible(s) au hasard à chaque Tour de combat. Il faut effectuer un Test d’attaque avec une « Compétence » de 10 + modif. de réussite."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.lames-psychiques",
+      "title": "Lames psychiques"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Nombre de lames psychiques", "blocks": [ { "type": "paragraph", "text": "1 + modif. de réussite." } ] },
+        { "label": "Malus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "Test normal pour la première lame, puis -2 par lame supplémentaire. Il est possible de répartir les lames psychiques pour attaquer plusieurs adversaires." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée un certain nombre de lames d’énergie qui obligent les victimes à effectuer un Test de Résistance au Choc. Si le pouvoir est contrôlé, le PJ choisit ses victimes tant qu’il peut les voir. Le Test d’attaque s’effectue avec la Compétence Lames psychiques. Les armures et les protections sont inefficaces contre ce pouvoir."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, les lames attaquent 1D4 cible(s) au hasard à chaque Tour de combat. Il faut effectuer un Test d’attaque avec une « Compétence » de 10 + modif. de réussite."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.mangeur-esprit",
+      "title": "Mangeur d’esprit"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Distance max. d’apparition de la créature", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Puissance de la créature", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir est semblable à Bête du flux, mais il permet d’appeler un mangeur d’esprit, une créature immatérielle cauchemardesque qui ne possède qu’un seuil de mort (30) et qu’un seul Attribut, la Volonté, dont le niveau est égal à la puissance du phénomène. Si le PJ contrôle le pouvoir, il peut donner des ordres à la créature."
+    },
+    {
+      "type": "paragraph",
+      "text": "La créature n’est vulnérable qu’aux attaques énergétiques. Elle agit toujours en premier et n’attaque qu’une seule fois par Tour de combat. Elle se déplace à une vitesse égale à sa Volonté, en mètres. Quand elle attaque, elle tente de dévorer l’esprit de sa proie. Cette attaque doit être résolue par un Test de Volonté en opposition entre la créature et sa victime. Si la créature gagne, elle absorbe un nombre de points de Volonté égal à son modificateur de réussite. S’il y a égalité, ou si la victime l’emporte, il ne se passe rien. Si la Volonté de la victime tombe à 0, elle n’est plus qu’une enveloppe vide. Sinon, elle regagnera immédiatement tous ses points de Volonté une fois la créature partie ou détruite. Détruire un mangeur d’esprit libère un effet incontrôlé d’Attaque psychique, à une puissance égale à la Volonté de la créature."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le PJ ne contrôle pas ce pouvoir, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge…"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.masse-de-destruction",
+      "title": "Masse de destruction"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Distance max. d’apparition de la créature", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Taille de la créature", "blocks": [ { "type": "paragraph", "text": "1 m² +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet épouvantable pouvoir permet de créer une déchirure de la réalité et de libérer une masse gélatineuse noire qui détruit tout ce qui vit. Si le PJ contrôle le pouvoir, il peut donner des ordres à la créature pendant la durée de l’effet. La masse de destruction est indestructible, et se déplace toujours à une vitesse d’1 mètre par Tour de combat. Tout ce qu’elle rencontre subit 3D10 points de Dommages physiques sur 1 Localisation déterminée au hasard sur la table de localisation des attaques à distance. Si la victime ne bouge pas, la masse gélatineuse touchera une Localisation supplémentaire à chaque Tour de combat."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les blessures qu’elle inflige sont définitives (voir Désintégration moléculaire). La taille de la créature dépend de la marge de réussite."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le PJ ne contrôle pas ce pouvoir, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge pendant la durée de l’effet."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.modification-masse",
+      "title": "Modification de la masse"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "marge de réussite du Test (ou marge d’échec en cas de libération accidentelle)." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet d’augmenter ou de réduire la masse d’un individu ou d’un objet. Le poids de la cible peut ainsi être modifié d’une valeur maximale égale à (puissance du phénomène) × 10 kg. Physiquement, la cible ne change pas, et garde la même taille."
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans le cas d’une augmentation de masse, le MJ est libre de réduire les mouvements du personnage, en fonction du poids supplémentaire. Si la puissance du phénomène est supérieure à la Force de la cible, celle-ci est coulée au sol à cause de son propre poids et ne peut plus se déplacer. De plus, elle doit effectuer à chaque Tour de combat un Test de Résistance au Choc, avec un malus égal à la différence entre sa Force et la puissance de l’effet. Si la victime perd connaissance, elle subit à chaque Tour de combat des Dommages physiques équivalents à 1D10, plus la différence entre sa Force et la puissance de l’effet (localisé dans le Corps), à cause de l’écrasement des tissus vivants."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si on réduit la masse, le MJ est libre d’augmenter les capacités de déplacement de la cible. Notez que si son poids tombe à 0, le personnage peut flotter."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans une sphère dont le diamètre est égal à la portée autour du personnage voit sa masse réduite ou augmentée par l’intensité du phénomène. À chaque Tour de combat, pendant toute la durée de l’effet, le MJ lance 1D10. La masse est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.modification-pression",
+      "title": "Modification de la pression"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "5 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La pression est augmentée ou diminuée de l’équivalent de 100 mètres de profondeur pour chaque point de puissance du phénomène, dans une zone d’effet de forme sphérique."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère autour du personnage subit les effets de la pression. À chaque tour, pendant toute la durée de l’effet, le MJ lance 1D10. La pression est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.modification-temperature",
+      "title": "Modification de la température"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "marge de réussite du Test (ou marge d’échec en cas de libération accidentelle)." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "10 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La température est augmentée ou diminuée de 2 degrés pour chaque point de puissance du pouvoir, dans une zone d’effet de forme sphérique."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère autour du personnage subit les effets de la température. À chaque tour, pendant toute la durée de l’effet, le MJ lance 1D10. La température est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.obliteration-psychique",
+      "title": "Oblitération psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Malus au Test de Résistance au Choc", "blocks": [ { "type": "paragraph", "text": "+0 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir vise à détruire la conscience d’une cible, et force les êtres vivants présents dans la zone d’effet à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 2D6 Tours de combat, ou inconscientes pendant 2D6 minutes. Si elles tombent inconscientes, les victimes perdent un nombre de points de Volonté équivalent au modificateur d’échec obtenu lors du Test de Résistance au Choc. Si leur Volonté tombe à moins de 3, elles sont plongées dans un coma profond et quasi définitif. Seul un restructurateur moléculaire (machine généticienne), ou le pouvoir Régénération moléculaire (voir plus bas) peuvent le soigner."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si ce pouvoir est libéré accidentellement, le personnage à l’origine de l’incident Polaris n’est pas affecté."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.ondes-de-choc",
+      "title": "Ondes de choc"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Nombre d’ondes de choc", "blocks": [ { "type": "paragraph", "text": "1 + modif. de réussite." } ] },
+        { "label": "Dommages (par onde de choc)", "blocks": [ { "type": "paragraph", "text": "2D10 +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir libère des vagues de choc concentriques qui s’étendent autour du personnage. Ces vagues dévastent tout sur leur passage. Si l’effet est contrôlé, le personnage libère un certain nombre d’ondes de choc, chacune infligeant des Dommages physiques. Ces dommages sont toutefois réduits de 2 points par mètre d’éloignement par rapport au personnage. Les vagues se succèdent à un intervalle de 3 points d’Initiative. L’effet se déplace avec le personnage. Tant qu’il n’est pas détruit, un obstacle peut bloquer ces vagues."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, le personnage doit reprendre le contrôle en réussissant un Test de Maîtrise de la Force Polaris, pour arrêter l’émission des ondes de choc. Il ne subit lui-même aucun dommage."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.ondes-de-choc-psychiques",
+      "title": "Ondes de choc psychiques"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Nombre d’ondes de choc psychiques", "blocks": [ { "type": "paragraph", "text": "1 + modif. de réussite." } ] },
+        { "label": "Dommages additionnels de Choc (par onde de choc)", "blocks": [ { "type": "paragraph", "text": "3D10 +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir est identique à Ondes de choc, mais il n’inflige que des Dommages additionnels de Choc. Aucun obstacle ne peut bloquer ces vagues."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.onde-polaris",
+      "title": "Onde Polaris"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "1 +/- modif. de réussite." } ] },
+        { "label": "Dommages", "blocks": [ { "type": "paragraph", "text": "voir Attaque psychique, Disruption moléculaire et Pulsion électromagnétique." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "L’Onde Polaris est un des pouvoirs les plus puissants qui soient. Il cumule les effets des pouvoirs Attaque psychique, Disruption moléculaire et Pulsion électromagnétique. De plus, il projette dans le futur ou dans le passé tous ceux qui se trouvent dans la sphère d’effet. Le saut temporel est totalement aléatoire. Quand le pouvoir prend fin, l’onde réapparaît et renvoie les personnages à leur point de départ, au moment exact où ils ont disparu. Même contrôlé, celui qui libère cet effet ne peut le déplacer. Celui-ci est forcément centré autour du personnage, qui subit également le déplacement temporel (mais pas les autres effets). Les personnages sont transportés soit dans le futur (1-5 sur 1D10), soit dans le passé (6-10 sur 1D10). Pour déterminer l’importance du saut temporel, lancez 2D10 dans le tableau ci-dessous :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "2D10" },
+        { "key": "text", "label": "Effet" }
+      ],
+      "rows": [
+        { "roll": "1-5", "text": "Puissance du phénomène, en heures." },
+        { "roll": "6-10", "text": "Puissance du phénomène, en années." },
+        { "roll": "11-14", "text": "Puissance du phénomène, en dizaines d’années." },
+        { "roll": "15-17", "text": "Puissance du phénomène, en centaines d’années." },
+        { "roll": "18-19", "text": "Puissance du phénomène, en milliers d’années." },
+        { "roll": "20", "text": "Puissance du phénomène, en million d’années." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Les personnages restent bloqués dans le futur ou le passé pendant un certain temps déterminé par le tableau ci-dessous (il s’agit de la période qui s’écoule lors du saut temporel, dans une époque passée ou future, et non du temps pendant lequel ils disparaissent). Lancez 2D10 pour déterminer la durée du séjour :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "2D10" },
+        { "key": "text", "label": "Durée" }
+      ],
+      "rows": [
+        { "roll": "1-5", "text": "Puissance du phénomène × 1D10 Tours de combat." },
+        { "roll": "6-10", "text": "Puissance du phénomène × 1D10 minutes." },
+        { "roll": "11-14", "text": "Puissance du phénomène × 1D10 heures." },
+        { "roll": "15-17", "text": "Puissance du phénomène × 1D10 jours." },
+        { "roll": "18-19", "text": "Puissance du phénomène × 1D10 semaines." },
+        { "roll": "20", "text": "Puissance du phénomène × 1D10 mois." }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.pacification-excitation",
+      "title": "Pacification/Excitation"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "L’utilisateur de ce pouvoir peut modifier l’état d’esprit d’une cible, soit pour l’apaiser, soit pour la rendre folle furieuse (au choix). Tous ceux qui se trouvent dans la zone d’effet (sauf celui qui a libéré le pouvoir) doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. En cas d’échec, l’utilisateur du pouvoir choisit l’effet qu’à le pouvoir sur eux. Ce pouvoir ne peut être déplacé et est toujours centré autour de celui qui l’a libéré (ce dernier n’est pas affecté). Une cible apaisée est incapable de combattre et se calme instantanément, même si on l’attaque (elle tente uniquement de se défendre). Une cible rendue folle furieuse attaque la cible la plus proche d’elle, même s’il s’agit d’un ami."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, chaque cible potentielle est soit apaisée (1-5 sur 1D10), soit folle furieuse (6-10 sur 1D10)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.passage",
+      "title": "Passage"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée une déchirure entre notre monde et celui du Flux Polaris. Il est possible d’emprunter ce passage pour se déplacer instantanément d’un point du globe à un autre. Le passage reste ouvert dans les deux sens pendant toute la durée de l’effet et accepte des êtres vivants de taille humaine. Si le pouvoir est contrôlé, le personnage choisit sa destination (il doit obligatoirement être allé dans cet endroit)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Par un Passage, un individu voyage au travers du Flux pour se rendre d’un point à un autre, mais cela comporte certains dangers. Tout d’abord, quand un passage s’ouvre, il y a toujours un risque qu’il permette à une créature du Flux d’entrer dans notre monde. À chaque tour, le MJ lance 1D10. S’il obtient un 1, une créature apparaît. Lancez alors 2D10 sur la table suivante :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "2D10" },
+        { "key": "text", "label": "Créature" }
+      ],
+      "rows": [
+        { "roll": "1-15", "text": "Bête du flux." },
+        { "roll": "16-17", "text": "Mangeur d’esprit." },
+        { "roll": "18-19", "text": "Masse de destruction." },
+        { "roll": "20", "text": "Entité (voir Le Flux Polaris, page 265)." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La créature aura une puissance égale à 2D10 et restera pendant 1D10 Tours de combat."
+    },
+    {
+      "type": "paragraph",
+      "text": "Enfin, chaque personnage qui utilise le Passage peut se perdre physiquement dans le Flux. Il faut effectuer un Test de Volonté pour éviter cela. Si le pouvoir est contrôlé, l’utilisateur gagne pour ce Test un bonus égal à son modificateur de réussite. Tout individu échouant à ce Test de Volonté se perd dans le Flux. Il faut alors lancer 2D10 pour savoir ce qui lui arrive :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "2D10" },
+        { "key": "text", "label": "Résultat" }
+      ],
+      "rows": [
+        { "roll": "2-11", "text": "Réapparaît à l’endroit où s’est ouvert le passage 1D10 minutes plus tard." },
+        { "roll": "12-15", "text": "Possédé." },
+        { "roll": "16-17", "text": "Prisonnier de l’Autre (voir Prescience)." },
+        { "roll": "18-19", "text": "Réapparaît n’importe où dans le monde." },
+        { "roll": "20", "text": "Perdu à jamais (il peut être récupéré par un personnage se plongeant délibérément dans le Flux)." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage possédé peut réapparaître tout à fait normalement comme si rien ne s’était passé (1-5 sur 1D10) ou 1D100 minutes plus tard (6-10 sur 1d10). Tout individu empruntant un Passage peut volontairement choisir de se plonger physiquement dans le Flux Polaris. La possession, la plongée dans le Flux et la récupération d’un personnage perdu dans le Flux sont détaillées dans la section Le Flux Polaris, page 265."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, la destination est totalement inconnue (remarquez qu’il suffit de ne pas s’engouffrer dans le passage pour ne pas prendre de risques)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.perturbation-realite",
+      "title": "Perturbation de la réalité"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Malus aux actions", "blocks": [ { "type": "paragraph", "text": "-1 - modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La réalité semble distordue sous l’effet de cette perturbation. Les distances ne sont plus estimables, les sens sont perturbés, etc. Pendant toute la durée du pouvoir, toutes les actions effectuées dans la sphère d’effet subissent un malus."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.prescience",
+      "title": "Prescience"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet d’entrevoir un avenir proche. En se concentrant sur une action, un individu, un événement, un lieu, etc., on peut percevoir une image très floue du futur (en cas de déclenchement involontaire, c’est au MJ de déterminer à quoi ou à qui se rapportera cette vision). Un personnage qui utilise ce pouvoir se retrouve plongé dans la Force Polaris, et son esprit ne fait plus qu’un avec l’océan et les mammifères marins. Ce phénomène est une expérience à la fois magnifique et terriblement inquiétante, dans un univers où la présence sinistre de « l’Autre », une entité mystérieuse qui hante le Polaris, est omniprésente."
+    },
+    {
+      "type": "paragraph",
+      "text": "Avant de faire le Test, le joueur doit choisir une unité de temps, qui déterminera le modificateur de Difficulté :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Seconde", "blocks": [ { "type": "paragraph", "text": "+0" } ] },
+        { "label": "Tour de combat", "blocks": [ { "type": "paragraph", "text": "-3" } ] },
+        { "label": "Minute", "blocks": [ { "type": "paragraph", "text": "-5" } ] },
+        { "label": "Heure", "blocks": [ { "type": "paragraph", "text": "-7" } ] },
+        { "label": "Jours", "blocks": [ { "type": "paragraph", "text": "-10" } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "À l’issue du Test, l’utilisateur du pouvoir peut entrevoir le futur, jusqu’à un nombre d’unités de temps équivalent à sa marge de réussite. Si ce pouvoir n’est pas contrôlé, lancez 1D10 dans la table suivante pour déterminer la portée de la vision :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "1D10" },
+        { "key": "text", "label": "Portée de la vision" }
+      ],
+      "rows": [
+        { "roll": "1-2", "text": "1D100 secondes." },
+        { "roll": "3-4", "text": "1D100 tours." },
+        { "roll": "5-6", "text": "1D100 minutes." },
+        { "roll": "7-8", "text": "1D100 heures." },
+        { "roll": "9-10", "text": "1D100 jours." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir dure un nombre de Tours de combat égal à la moitié du niveau de maîtrise du personnage dans la Compétence Prescience."
+    },
+    {
+      "type": "paragraph",
+      "text": "L’utilisation du pouvoir permet surtout de ressentir des impressions, des sentiments ou des sensations, et non des images vraiment précises. Ainsi, on percevra plutôt une impression vague de danger, plutôt que la nature exacte du danger. Plus la période visée est lointaine, plus les visions seront floues. Néanmoins, le joueur peut sacrifier quelques points de sa marge de réussite pour obtenir plus de détails : son personnage verra donc moins loin dans le futur, mais sa vision sera plus précise. À titre indicatif, le meneur de jeu peut par exemple ajouter un détail — tout en restant relativement vague — pour chaque tranche de 2 points sacrifiée."
+    },
+    {
+      "type": "paragraph",
+      "text": "Sur une Catastrophe (que le pouvoir soit déclenché volontairement ou non), il y a toujours 1 chance sur 20 (1 sur 1D20) d’embrasser le futur dans sa totalité. Cela est généralement terrible pour le malheureux qui doit effectuer un Test d’Intelligence. Le modificateur de réussite de ce jet déterminera le nombre de points de Volonté et d’Intelligence PERDUS par le personnage… En effet, il aura eu pleinement conscience des choses qu’il a vues, bien qu’il soit ensuite incapable de s’en souvenir. Si le Test d’Intelligence est raté, la victime perd connaissance pendant 1D10 heures. Son Intelligence et sa Volonté tombent à 1 et se régénéreront au rythme de 1 point toutes les heures."
+    },
+    {
+      "type": "paragraph",
+      "text": "Enfin, une personne utilisant ce pouvoir peut avoir à affronter l’Autre (voir Les Entités, dans Le Flux Polaris, page 266). Ce dernier a une chance sur 20 d’intervenir (1 sur 1D20). Dans ce cas, l’utilisateur ressentira une présence terriblement angoissante. Il subira immédiatement une attaque psychique, et devra remporter un Test de Volonté en opposition à une Volonté de 20. Le modificateur de réussite du vainqueur réduit alors temporairement la Volonté de l’opposant. Si le personnage réussit le Test d’opposition, il peut alors se désengager et reprendre conscience sans autre effet secondaire. Sinon, le duel continue, par le biais d’autres Tests d’opposition. Si la Volonté du personnage tombe à moins de 3, celui-ci se retrouve prisonnier de l’Autre. Ce dernier peut choisir de le détruire (on refait un duel, la victime peut donc avoir une autre chance de reprendre conscience), de l’emprisonner (la victime est plongée dans le coma), ou de la manipuler (la victime est sous la domination de l’Autre. Elle peut, chaque jour, effectuer un Test de Volonté, avec un malus de -20, qui est toutefois réduit d’1 point par semaine. Une réussite permet de se libérer de la domination de l’Autre)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.prison-mentale",
+      "title": "Prison mentale"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "L’effet de ce pouvoir s’attaque à l’esprit de tout ce qui se trouve dans une sphère autour du personnage. Le pouvoir se libère instantanément mais ses effets peuvent se prolonger dans le temps. La victime doit faire un Test de Volonté en opposition à la puissance du phénomène. Si elle obtient la meilleure marge de réussite (ou en cas d’égalité), rien ne se passe. Si elle échoue, son esprit est emprisonné dans le Flux pendant un nombre de Tours égal à la marge de réussite du phénomène. Pire, à la fin du temps d’emprisonnement, il faut refaire le Test d’opposition, mais la puissance du phénomène est réduite d’1 point. Quand un personnage est victime de ce pouvoir, son esprit est emprisonné dans son propre corps. Il ne perçoit plus son environnement et ne peut plus contrôler son organisme. Son corps est inerte tant qu’il est sous l’effet de sa prison mentale."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si ce pouvoir n’est pas contrôlé, il affecte également celui qui le libère."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.pulsion-electromagnetique",
+      "title": "Pulsion électromagnétique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Attaque IEM", "blocks": [ { "type": "paragraph", "text": "le malus au Test de panne est égal au modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "100 mètre de diamètre +/- (100 m × modif. de réussite)." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "100 mètres +/- (100 m × modif. de réussite)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de libérer une onde électromagnétique dans la zone d’effet. Il faut effectuer un Test de panne pour tous les appareils électroniques (voir le chapitre Équipement, page 273)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.regeneration-moleculaire",
+      "title": "Régénération moléculaire"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Zone d’effet (libération accidentelle)", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. d’échec." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de régénérer des tissus endommagés. L’utilisation la plus commune de ce pouvoir est le soin des dégâts permanents (dus par exemple à une Désintégration moléculaire ou une Oblitération psychique). Dans ce cas, on utilise ce pouvoir comme un pouvoir de guérison normal, mais il ne peut être utilisé QUE pour soigner des dégâts permanents (voir Guérison moléculaire ou Guérison psychique)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet aussi de ralentir le vieillissement. Chaque année, l’utilisateur peut tenter de neutraliser le vieillissement de l’année écoulée. S’il réussit son Test de Régénération moléculaire, son corps n’a pas vieilli ; s’il échoue, il vieillit normalement ; s’il obtient un échec critique, il vieillit d’1 an supplémentaire. Le Test subit toutefois un malus d’une valeur égale à l’âge du personnage divisé par 5 (par exemple -7 à 35 ans)."
+    },
+    {
+      "type": "paragraph",
+      "text": "La libération incontrôlée de ce pouvoir peut avoir des effets dramatiques. En effet, les volutes d’énergie qui s’échappent de l’utilisateur peuvent être soit bleutées (tout va bien, les personnages bénéficient d’une régénération normale), soit rougeâtres (et là, il y a un problème). Dans ce dernier cas, toute personne et toute chose dans la zone d’effet subit l’équivalent d’une Désintégration moléculaire (le bonus aux dommages est égal au modificateur d’échec de l’individu à l’origine de l’incident Polaris), qui crée des blessures permanentes…"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sensibilite-psychique",
+      "title": "Sensibilité psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de localiser les êtres vivants dans un certain rayon. Le personnage peut effectuer un Test de Compétence pour savoir s’il détecte ou non un être vivant. Le Test est modifié par la différence entre l’Attribut Volonté de l’utilisateur et l’Attribut Volonté de la cible. De plus, l’utilisateur bénéficie d’un bonus à tous ses Tests de Perception, égal à son modificateur de réussite."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il parasite tous les modes de perception des individus situés dans la zone de détection (y compris le personnage), qui subissent une pénalité à toutes leurs actions, égale au modificateur d’échec."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.siphon-energie",
+      "title": "Siphon d’énergie"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir annule toute énergie dans la zone d’effet, pendant toute la durée du phénomène."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sonscan",
+      "title": "Sonscan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres de diamètre +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de localiser et d’analyser plusieurs cibles dans un certain périmètre. Le joueur peut effectuer un Test avec un niveau équivalent à la puissance du phénomène. En cas de réussite, il localise les cibles présentent dans le périmètre, sa marge de réussite indiquant la précision de son analyse."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il parasite tous les modes de perception des individus situés dans la zone de détection (y compris le personnage), qui subissent une pénalité à toutes leurs actions, égale au modificateur d’échec."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sphere-gravite",
+      "title": "Sphère de gravité"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée autour du personnage une sphère de gravité attirant vers elle tout ce qui se trouve dans la zone d’effet. Tout objet dont le poids est inférieur ou égal à (puissance du phénomène × 10 kg) se rapproche du personnage. Les êtres vivants peuvent résister à la force d’attraction en réussissant un Test de Force en opposition contre la puissance du phénomène. S’ils réussissent, ils peuvent s’éloigner d’une distance maximale égale à leur modificateur de réussite. Le Test doit être refait à chaque Tour de combat. Pour les objets, la vitesse d’attraction en mètres par Tour est égale à la différence entre le poids de l’objet et la puissance du phénomène (en dizaines de kg). Toute personne se trouvant sur la trajectoire d’un corps attiré risque de subir entre 1 et 3D10 points de Dommages physiques, selon la vitesse et le poids de l’objet (un Test de Coordination permet d’éviter ça). Le personnage utilisant le pouvoir peut annuler l’attraction sur tout ce qui se trouve à moins d’1 mètre de lui."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, il n’arrête rien du tout et peut se retrouver écrasé par tout ce qui a été attiré. Dans ce cas, non seulement il subit les dommages des objets qui le heurtent mais en plus, à chaque Tour, la base des dommages est augmentée d’1 point à cause de l’écrasement."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sphere-repulsion-organique",
+      "title": "Sphère de répulsion organique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée autour du personnage une sphère qui empêche tout élément organique d’approcher. Toute créature organique tentant d’y pénétrer doit réussir un Test de Force en opposition à la puissance du phénomène. Si elle réussit son jet, elle peut avancer d’une distance maximale égale à son modificateur de réussite. Toute créature organique se trouvant dans la sphère au moment où le pouvoir est utilisé n’est pas affectée."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le pouvoir n’est pas contrôlé, toute créature organique se trouvant entre le personnage et la limite du périmètre d’effet est violemment projetée hors de la sphère (à traiter comme une chute). Si une créature organique est coincée par un obstacle qui l’empêche de quitter la zone d’effet, elle subit 2D10 points de Dommages physiques dus à l’écrasement par Tour de combat."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sphere-temporelle",
+      "title": "Sphère temporelle"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "5 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée une sphère isolant ce qui se trouve dedans de ce qui se trouve à l’extérieur. En fait, le temps s’écoule différemment à l’intérieur de la sphère et à l’extérieur, plus vite ou moins vite, au choix du personnage. Rien ne peut franchir la barrière de la sphère pendant que le pouvoir agit. Si le temps passe plus vite à l’intérieur, le nombre de Tours qui se seront écoulés dans la sphère sera égal à la puissance du phénomène pour chaque Tour écoulé à l’extérieur. Si le temps passe moins vite à l’intérieur, le nombre de tours qui se seront écoulés à l’extérieur sera égal à la puissance du phénomène pour chaque tour écoulé dans la sphère. La durée de l’effet est comptée en fonction du passage du temps le plus lent. Il est impossible de se déplacer avec la sphère."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.sphere-terreur",
+      "title": "Sphère de terreur"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée autour du personnage une sphère qui oblige toute créature qui y entre (amie ou ennemie) à réussir un Test de Volonté en opposition à la puissance du phénomène. En cas d’échec, la victime est terrorisée pendant 1D10 Tours."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.telekinesie",
+      "title": "Télékinésie"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet (libération accidentelle)", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. d’échec." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de déplacer des objets par la pensée. La « Force télékinétique » du personnage est égale à la puissance du phénomène, et est comparable à l’Attribut Force d’un individu."
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce potentiel peut être utilisé pour déplacer ou soulever des objets, comme s’il s’agissait de l’Attribut Force de n’importe quel personnage. Pour effectuer une attaque avec un objet manipulé à distance, le personnage doit effectuer un nouveau Test de Télékinésie. Même chose pour des manipulations délicates, mais le MJ est libre de lui imposer des malus en fonction de la difficulté de sa tâche (notez qu’utiliser une arme à feu est une manipulation jugée délicate…). Tous les équipements des personnages qui ne sont pas bien accrochés peuvent être arrachés. On peut arracher un objet des mains d’un individu mais, dans ce cas, il faut effectuer un Test en opposition entre la puissance du phénomène et la Force du personnage tenant l’objet. Un personnage peut tenter de dépasser les limites de son potentiel télékinétique, mais il doit alors effectuer un Test de Résistance au Choc avec un malus égal au nombre de points supérieurs à son niveau de Force télékinétique."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, ce pouvoir est dévastateur. Pendant toute la durée du phénomène, tous les objets qui se trouvent autour du personnage dans la zone d’effet et dont le poids peut être déplacé par le niveau de Force équivalent à la puissance du phénomène se mettent à voler dans tous les sens. Toute personne se trouvant dans la zone subit entre 1 et 3D10 points de Dommages physiques. Les victimes peuvent tenter d’esquiver les objet par des Tests de Coordination."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.teleportation",
+      "title": "Téléportation"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres de diamètre +/- modif. de réussite." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "30 mètres +/- (10 m × modif. de réussite)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir permet de téléporter un personnage ou un objet d’un poids égal à (puissance du phénomène × 10 kg), et se trouvant dans la zone d’effet. Un personnage qui contrôle le phénomène peut choisir la direction. Un personnage téléporté dans un objet ou un mur réapparaît à côté. Par contre, on peut tout à fait téléporter quelqu’un sous l’eau."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, la direction est déterminée aléatoirement par un jet d’1D10 (1 : haut, 2 : bas, 3 : est, 4 : ouest, 5 : nord, 6 : sud, 7 : nord-est, 8 : sud-est, 9 : sud-ouest, 10 : nord-ouest)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.tempete-du-flux",
+      "title": "Tempête du flux"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Dommages physiques", "blocks": [ { "type": "paragraph", "text": "2D10 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 mètres +/- (10 m × modif. de réussite)." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Une tempête du Flux est généralement signe de désastre. Ce pouvoir crée de terribles perturbations dans le Flux, qui se matérialisent dans la réalité par un maelström, aussi bien sous l’eau qu’à l’air libre. Autour du personnage libérant l’effet, le maelström s’étend sur un rayon dépendant de la puissance du phénomène. Le personnage est à l’abri (même si le pouvoir n’est pas contrôlé) ainsi que tous ceux qui se trouvent dans un rayon de 1 mètre autour de lui. L’effet commence par un tourbillon de vapeurs sombres qui se mettent à tourner tout autour du personnage, puis des éclairs frappent tout ce qui se trouve dans la zone d’effet. Chaque cible potentielle doit réussir à chaque Tour un Test de Chance. Si ce Test est raté, un éclair la frappe de plein fouet en infligeant des Dommages physiques. De plus, l’éclair inflige des dommages à tout ce qui se trouve autour du point d’impact. Les dégâts sont réduits de 2 points par mètre d’éloignement."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.tourbillon",
+      "title": "Tourbillon"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Portée", "blocks": [ { "type": "paragraph", "text": "100 mètres +/- (100 m × modif. de réussite)." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée un siphon (voir le chapitre L’univers sous-marin, page 69) de taille égale à la puissance du phénomène, en mètres. Il n’est pas centré autour du personnage et apparaît dans les mêmes conditions qu’un siphon normal. Un personnage qui le contrôle peut déplacer le centre du phénomène. Attention ! Ce pouvoir ne permet pas de contrôler un siphon formé naturellement."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.tourbillon-de-mort",
+      "title": "Tourbillon de mort"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Dommages physiques", "blocks": [ { "type": "paragraph", "text": "2D10 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Déplacement", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce pouvoir crée un tourbillon d’énergie crépitante noire, qui se déplace plus ou moins rapidement. Tout ce qui entre en contact avec ce phénomène subit des Dommages physiques. Aucune armure ne protège contre cet effet."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, la direction est déterminée aléatoirement par un jet d’1D10 (1-2 : ne bouge pas, 3 : est, 4 : ouest, 5 : nord, 6 : sud, 7 : nord-est, 8 : sud-est, 9 : sud-ouest, 10 : nord-ouest)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.vortex-psychique",
+      "title": "Vortex psychique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "12 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Un Vortex est une déchirure dans la réalité, donnant directement sur l’univers du Flux. Quand il se crée, toutes les créatures vivantes se trouvant dans la zone d’effet du Vortex doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. Si la victime obtient la plus haute marge de réussite, elle peut tenter de fuir le périmètre dangereux. Dans le cas contraire, elle perd autant de points de Volonté que le modificateur de réussite obtenu par le phénomène. Elle peut toutefois encore tenter de quitter le périmètre dangereux si sa Volonté n’est pas tombée à 3 ou moins. Si elle y parvient, elle récupère tous ses points de Volonté. Si la Volonté d’un personnage tombe à 3 ou moins, son esprit est aspiré dans le Flux. L’esprit est perdu à jamais, sauf si d’autres tentent de le récupérer (voir Le Flux Polaris, page 265)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Si l’effet n’est pas contrôlé, le vortex apparaît à 1D10 mètres du personnage dans une direction aléatoire."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "force-polaris.liste-pouvoirs.vortex-physique",
+      "title": "Vortex physique"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Puissance du phénomène", "blocks": [ { "type": "paragraph", "text": "10 +/- modif. de réussite." } ] },
+        { "label": "Zone d’effet", "blocks": [ { "type": "paragraph", "text": "5 mètres +/- modif. de réussite." } ] },
+        { "label": "Portée max. du centre de la zone d’effet", "blocks": [ { "type": "paragraph", "text": "15 m +/- modif. de réussite." } ] },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "5 Tours de combat +/- modif. de réussite." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le Vortex physique est identique au Vortex psychique, mais il aspire la matière. Les êtres vivants peuvent tenter de résister, en effectuant un Test de Force en opposition à la puissance du phénomène. Si une victime potentielle obtient la meilleure marge de réussite, elle peut avancer d’un nombre de mètres équivalent à son modificateur de réussite. Si c’est le Vortex qui obtient la plus haute marge, la victime est attirée vers la déchirure, d’un nombre de mètres égal au modificateur de réussite du phénomène. Si une victime s’accroche à quelque chose, on soustrait la Force du personnage à la puissance du phénomène avant d’effectuer le Test décrit ci-dessus. Mais si la victime remporte le duel, elle ne peut se déplacer qu’en s’accrochant à autre chose, et donc mètre par mètre. Pour les objets et les créatures inconscientes, le Vortex est capable de déplacer 10 kg par point de puissance."
+    }
+  ]
+}

@@ -1,0 +1,224 @@
+{
+  "id": "etats-de-sante.drogues-exemples",
+  "slug": "drogues-exemples",
+  "title": "Exemples de drogues",
+  "page": 248,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-exemples.algue-neurotrope",
+      "title": "Algue neurotrope"
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette drogue stimule les facultés intellectuelles et intuitives d’un individu. L’algue est consommée par de nombreux jeunes chercheurs ou par des personnes ayant des postes à responsabilité."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Modificateurs de détection", "blocks": [ { "type": "paragraph", "text": "Goût (-7), vue (-5), odeur (-7)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "Immédiat." } ] },
+        { "label": "Puissance", "blocks": [ { "type": "paragraph", "text": "2D6." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : bonus de +2 aux Tests liés à l’Intelligence ou à l’Adaptation (cela fonctionne aussi pour toute Compétence ayant l’un de ces deux Attributs comme Attribut lié)." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10 (effets secondaires)** : le bonus passe à +3." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15 (surdose)** : maux de tête, troubles de la concentration (malus de -4 à tous les Tests). Empoisonnement +1D6." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20 (surdose)** : inconscience. Empoisonnement +2D6." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "8 heures." } ] },
+        {
+          "label": "Effets secondaires (seuil 10)",
+          "blocks": [
+            { "type": "paragraph", "text": "Les effets secondaires de cette drogue sont des troubles du raisonnement et une perte complète de sentiments." },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 1 à 9** : esprit embrumé, le personnage ne peut pas avancer dans ses travaux." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 10 à 14** : raisonnement erroné, malus de -5 aux Tests liés à l’Intelligence." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 15 et +** : perte des sentiments, pulsions sadiques. Le personnage doit effectuer des Tests de Volonté pour se contrôler, chaque fois qu’il est sous pression." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Manque", "blocks": [ { "type": "paragraph", "text": "30 jours." } ] },
+        { "label": "Modificateurs de dépendance", "blocks": [ { "type": "paragraph", "text": "-5." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "2 000." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-exemples.algue-vulcain",
+      "title": "Algue Vulcain"
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette drogue procure une sensation de bien-être à celui qui la consomme."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Modificateurs de détection", "blocks": [ { "type": "paragraph", "text": "Goût (-7), vue (-10), odeur (-5)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "Immédiat." } ] },
+        { "label": "Puissance", "blocks": [ { "type": "paragraph", "text": "3D6." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : bonus de +2 aux Tests liés à la Force et à la Volonté (cela fonctionne pour toute Compétence ayant l’un de ces deux Attributs comme Attribut lié)." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10 (effets secondaires)** : en plus du bonus ci-dessus, le personnage ignore les malus dus aux blessures ou à la fatigue." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15 (surdose)** : tremblements, nausées (malus de -4 à tous les Tests). Empoisonnement +1D6." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20 (surdose)** : inconscience. Empoisonnement +1D6." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "6 heures." } ] },
+        {
+          "label": "Effets secondaires (seuil 10)",
+          "blocks": [
+            { "type": "paragraph", "text": "Les effets secondaires de cette drogue engendrent des hallucinations et des troubles du comportement." },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 1 à 9** : hallucinations, le personnage voit des choses et parle à des gens qui n’existent pas." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 10 à 14** : les hallucinations deviennent terrifiantes, et le personnage devient sujet à la claustrophobie." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 15 et +** : le personnage vit dans un monde imaginaire peuplé d’hallucinations affreuses. Ses crises de claustrophobie deviennent extrêmement graves, le forçant par exemple à réussir des Tests de Volonté pour se contrôler, et éviter d’enlever une armure de plongée ou d’ouvrir un sas donnant sur la mer…" } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Manque", "blocks": [ { "type": "paragraph", "text": "3 jours." } ] },
+        { "label": "Modificateurs de dépendance", "blocks": [ { "type": "paragraph", "text": "-7." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "2 000." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-exemples.kraken",
+      "title": "Kraken"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est la drogue la plus fréquente dans les bas quartiers. Elle est consommée par les plus jeunes, qui vivent en marge de la société. Elle procure un sentiment d’invincibilité."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Modificateurs de détection", "blocks": [ { "type": "paragraph", "text": "Goût (-5), vue (-3), odeur (+0)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "Immédiat." } ] },
+        { "label": "Puissance", "blocks": [ { "type": "paragraph", "text": "2D6." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : bonus de +1 aux Tests liés à la Constitution, la Force, la Coordination et à la Volonté (cela fonctionne pour toute Compétence ayant l’un de ces Attributs comme Attribut lié)." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10 (effets secondaires)** : le bonus passe à +2, le personnage ignore les malus dus aux blessures ou à la fatigue." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15 (surdose)** : nausées, vomissements (malus de -4 à tous les Tests). Empoisonnement." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20 (surdose)** : étourdissement. Empoisonnement +1D6." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 25 (surdose)** : inconscience. Empoisonnement +2D6." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "2 heures." } ] },
+        {
+          "label": "Effets secondaires (seuil 10)",
+          "blocks": [
+            { "type": "paragraph", "text": "Les effets secondaires de cette drogue engendrent de nombreux troubles du comportement, favorisant les actes totalement irraisonnés." },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 1 à 9** : nervosité importante." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 10 à 14** : le personnage devient de plus en plus agité, il bégaie en parlant et ses gestes sont plus saccadés." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 15 et +** : le personnage est hyper-actif, il réagit immédiatement à tout ce qui se passe autour de lui, en effectuant la première action qui lui passe par la tête, sans prendre conscience de ses actes." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Manque", "blocks": [ { "type": "paragraph", "text": "1 jour." } ] },
+        { "label": "Modificateurs de dépendance", "blocks": [ { "type": "paragraph", "text": "-5." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "100." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-exemples.psycho-plancton",
+      "title": "Psycho-plancton"
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette drogue très répandue fait disparaître les effets de la fatigue et permet de voir la vie en rose, même à 20 000 mètres de profondeur."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Modificateurs de détection", "blocks": [ { "type": "paragraph", "text": "Goût (-7), vue (-3), odeur (-10)." } ] },
+        { "label": "Délai d’action", "blocks": [ { "type": "paragraph", "text": "Immédiat." } ] },
+        { "label": "Puissance", "blocks": [ { "type": "paragraph", "text": "2D6." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : bonus de +2 aux Tests de résistance à la Fatigue." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10 (effets secondaires)** : bonus de +4 aux Tests de résistance à la Fatigue. Les malus dus à la Fatigue sont divisés par deux." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15 (surdose)** : maux de tête, saignements de nez, étourdissements (malus de -3 à tous les Tests). Empoisonnement +1D6." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20 (surdose)** : inconscience. Empoisonnement +2D6." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Durée", "blocks": [ { "type": "paragraph", "text": "10 heures." } ] },
+        {
+          "label": "Effets secondaires (seuil 10)",
+          "blocks": [
+            { "type": "paragraph", "text": "Les effets secondaires se traduisent par une plus grande susceptibilité du sujet, qui peut aller jusqu’à se transformer en tueur psychopathe pour une simple remarque. C’est assez rare mais cela arrive de temps en temps dans les mines sous-marines." },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 1 à 9** : grande susceptibilité." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 10 à 14** : paranoïa." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Marge de 15 et +** : paranoïa aigue, pouvant déboucher sur une fureur homicide ou un suicide. Le personnage doit effectuer des Tests de Volonté pour se contrôler, chaque fois qu’il est sous pression." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Manque", "blocks": [ { "type": "paragraph", "text": "7 jours." } ] },
+        { "label": "Modificateurs de dépendance", "blocks": [ { "type": "paragraph", "text": "-3." } ] },
+        { "label": "Coût d’une dose", "blocks": [ { "type": "paragraph", "text": "800." } ] }
+      ]
+    }
+  ]
+}

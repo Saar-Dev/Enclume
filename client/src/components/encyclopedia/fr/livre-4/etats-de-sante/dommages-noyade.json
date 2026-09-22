@@ -1,0 +1,22 @@
+{
+  "id": "etats-de-sante.dommages-noyade",
+  "slug": "dommages-noyade",
+  "title": "Noyade et asphyxie",
+  "page": 244,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-noyade.noyade",
+      "title": "Noyade / Asphyxie"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage commence à se noyer ou à s’asphyxier quand il n’a plus de points de Souffle (voir [[Souffle|etats-de-sante.souffle|241]]). Il sombre alors dans l’inconscience en 2D6 Tours de combat, et subit toutes les complications de la noyade (arrêt respiratoire, puis arrêt cardiaque). Si rien n’est fait pour lui, le personnage meurt au bout de quelques minutes (5 à 7 minutes environ). Avant cela, un personnage compétent en Premiers soins peut toutefois tenter de le réanimer (à condition d’avoir le matériel de secours nécessaire) ; son Test subit toutefois un malus égal au double du nombre de minutes qui se sont écoulées depuis que l’individu a cessé de respirer (chaque tentative de réanimation prend 3 minutes). Au-delà de 7 à 8 minutes, aucun espoir n’est plus permis (sauf si on utilise un équipement médical de très haute technologie)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : dans une eau glaciale (0 °C ou moins), les chances de survie sont légèrement supérieures, car le froid conserve mieux les cellules du cerveau. Le malus du Test de Premiers soins est alors simplement égal au nombre de minutes d’asphyxie."
+    }
+  ]
+}

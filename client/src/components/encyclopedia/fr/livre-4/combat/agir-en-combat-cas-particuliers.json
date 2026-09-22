@@ -1,0 +1,98 @@
+{
+  "id": "combat.agir-en-combat-cas-particuliers",
+  "slug": "agir-en-combat-cas-particuliers",
+  "title": "Agir en combat : cas particuliers",
+  "page": 219,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat-cas-particuliers.sous-eau",
+      "title": "Agir et combattre sous l’eau"
+    },
+    {
+      "type": "paragraph",
+      "text": "En dessous de 200 mètres de profondeur, il n’y a plus assez de lumière pour voir quoi que ce soit sans appareils spéciaux. Sans dispositif d’éclairage, seuls les hybrides arrivent encore à s’orienter dans les ténèbres sous-marines, à condition de pouvoir compter sur une source lumineuse proche (les lumières d’une station, par exemple). Dans l’obscurité totale, les hybrides ne voient pas plus qu’un humain normal. Avec un projecteur, la luminosité est améliorée, mais reste faible dans certaines zones. Un plongeur ne peut pas utiliser son ouïe ou son odorat sous l’eau (en revanche, les hybrides ou les créatures sous-marines le peuvent). Bien entendu, une visière de sécurité abaissée sur une armure prive aussi le personnage de la vue."
+    },
+    {
+      "type": "paragraph",
+      "text": "Lors d’un combat au contact, sans arme, seule la lutte est véritablement efficace : à cause de la résistance de l’eau, les coups n’ont que peu d’effets — dommages divisés par deux — si le combattant n’utilise pas d’arme blanche (certaines créatures peuvent également compter sur leurs armes naturelles). Un personnage en armure mécanisée ne subit pas cette limitation."
+    },
+    {
+      "type": "paragraph",
+      "text": "Enfin, il n’est pas possible d’effectuer plusieurs Attaques par Tour de combat sous l’eau : les personnages sont limités à une seule Attaque. Les hybrides ne sont pas concernés, mais ils ne peuvent effectuer qu’un maximum de deux Attaques par Tour."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat-cas-particuliers.plusieurs-membres",
+      "title": "Attaque des créatures possédant plusieurs membres"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les créatures (ou les mutants) dotés de plus de deux bras ont droit à une Attaque au contact supplémentaire par Tour de combat, pour chaque paire de bras en plus (ainsi, avec quatre bras, la créature ou le personnage peut porter deux attaques). Les monstres dotés de plusieurs membres offensifs ont droit à une Attaque distincte par membre offensif, à son rang d’Initiative (une araignée faucheuse, par exemple, peut attaquer deux adversaires au contact en même temps, avec chacune de ses deux pattes). Ces créatures restent toutefois limitées à une seule Attaque, en cas de lutte au corps à corps."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : une créature (ou un mutant) ayant plusieurs membres bénéficie d’un bonus de +2 par membre supplémentaire, lors du combat au corps à corps ou de l’utilisation des techniques de lutte."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les créatures dotées de tentacules, comme les pieuvres, ont elles aussi la capacité d’effectuer plusieurs Attaques indépendantes les unes des autres. Chacune de ces Attaques est considérée comme portée par un adversaire différent, même pour la lutte au corps à corps (c’est souvent le cas des attaques effectuées avec des tentacules). Généralement, une pieuvre utilise six tentacules pour attaquer (les deux autres lui permettant soit de s’accrocher, soit de se stabiliser). Cela signifie qu’elle pourra attaquer six adversaires différents. Si la créature attaque le même adversaire avec plusieurs de ses membres, chaque attaque est effectuée séparément. La force avec laquelle la victime est maintenue par le monstre et les effets de l’attaque de lutte dépendent du nombre de membres ayant réussi l’attaque."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Catastrophes en combat",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Obtenir une Catastrophe en combat n’est jamais une bonne nouvelle. Voici quelques exemples de conséquences possibles, en plus de l’échec de l’action, pour pimenter un peu la situation (lancez 1D10 et n’hésitez pas à adapter selon la situation) :"
+        },
+        {
+          "type": "list",
+          "ordered": true,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Maladresse : le personnage perd toutes ses actions pendant le Tour suivant." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Arme inutilisable : l’arme tombe au sol (armes blanches), s’enraye (armes à feu), ou se casse (armes de mauvaise qualité, mais aussi cordes d’arcs ou d’arbalète). Le personnage peut aussi perdre son bouclier. Note : réparer une arme à feu enrayée est une Action complexe qui prend 3 Tours de combat, et qui nécessite un Test réussi avec la Compétence d’arme correspondante." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Mauvaise cible : le personnage touche une autre cible que celle qu’il visait (la plus proche, qu’il s’agisse d’un allié ou d’un ennemi)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Oups ! : le personnage s’inflige lui-même des dommages (armes blanches)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Position désavantageuse : le personnage s’expose un peu trop ; tous ses adversaires ont un bonus de +5 pour le toucher." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Confusion : le personnage subit un malus de -5 à toutes ses actions pendant 2 Tours de combat." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Boum ! : surcharge, explosion d’une batterie ou d’une munition (endommageant peut-être l’arme au passage)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Panne d’un système." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Mon œil ! : le personnage ne voit plus rien pendant 1 Tour, pour une raison ou pour une autre (sang ou sueur dans les yeux, insecte dans l’œil, etc.)." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Déséquilibre : le personnage trébuche ou se prend les pieds dans un obstacle au sol et tombe." } ] }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Combat tactique",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Nous n’insisterons jamais assez : au cours d’un affrontement, rares sont les combattants ayant une vision globale satisfaisante de la situation. D’où l’intérêt d’avoir avec soi un « coordinateur tactique », un officier en général (du moins dans les groupes de combat hiérarchisés : armées, mercenaires, police ou même pirates). Il est toujours possible d’élaborer une tactique avant le combat, et de suivre celle-ci à la lettre, mais en cas de situation inattendue ou si les choses tournent mal, la désorganisation sera sans doute totale, sauf si quelqu’un se charge de prendre les commandes, d’organiser le groupe et d’improviser en cas d’imprévu."
+        },
+        {
+          "type": "paragraph",
+          "text": "Une coordination tactique est de toute façon indispensable pour que plusieurs individus ou groupes puissent mener des actions de combat coordonnées, par exemple lancer une attaque simultanée en deux points différents, effectuer un tir croisé, ou lancer un tir de suppression pour couvrir un autre groupe qui se déplace sur le lieu de l’affrontement. En plus d’une meilleure organisation générale, les combattants peuvent également bénéficier d’une meilleure analyse de la situation grâce à la présence d’un coordinateur tactique et à son travail de centralisation des informations (nombre et position des adverses, zones dangereuses, etc.). Un officier compétent peut par ailleurs rallier des combattants en déroute, par un Test de Commandement réussi."
+        },
+        {
+          "type": "paragraph",
+          "text": "La Compétence à utiliser est Tactique (Opérations commandos, Combat naval ou Combat terrestre, en fonction du type d’affrontement). Un Test réussi permet d’organiser les groupes de combat de manière efficace (qu’il s’agisse d’individus, de groupes de combat ou de navires). Sur un échec, aucune décision n’est prise (et une Catastrophe indique la mise en œuvre d’une mauvaise manœuvre). Le coordinateur tactique doit toutefois consacrer un ou plusieurs Tours de combat (selon l’estimation du meneur de jeu, en fonction de la complexité de la situation) pour observer l’affrontement. La transmission des ordres peut se faire en un nombre de Tours de combat équivalent."
+        },
+        {
+          "type": "paragraph",
+          "text": "Bien entendu, il faut pouvoir d’une part communiquer avec ses équipiers (soit directement, soit par le biais de communicateurs), et avoir une vision sur le terrain de l’affrontement. Le MJ peut donner un malus au coordinateur tactique si celui-ci agit en aveugle. Il devra alors demander des rapports de situation à ses hommes. Notez que, dans certains cas, le coordinateur tactique peut suivre l’action à distance, par exemple grâce à l’utilisation de caméras vidéo ou de drones espions."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "combat.initiatives-equivalentes",
+  "slug": "initiatives-equivalentes",
+  "title": "Initiatives équivalentes",
+  "page": 214,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Lorsque deux personnages sont en mesure d’agir à la même phase d’action, la priorité va au personnage possédant le niveau de Réaction le plus élevé (prenez en compte les malus divers tels que ceux dus aux blessures ou à la Fatigue). L’Action du personnage le plus rapide doit être entièrement résolue avant celle de l’autre combattant. En cas d’égalité des niveaux de Réaction, considérez que les deux Actions sont simultanées (s’il s’agit de deux attaques, les deux personnages risquent donc de se blesser mutuellement !). Au besoin, les Déclarations d’intention peuvent être faites en secret, notées sur un morceau de papier."
+    }
+  ]
+}

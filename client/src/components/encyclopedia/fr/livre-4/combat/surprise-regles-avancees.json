@@ -1,0 +1,83 @@
+{
+  "id": "combat.surprise-regles-avancees",
+  "slug": "surprise-regles-avancees",
+  "title": "Surprise : règles avancées et optionnelles",
+  "page": 216,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Anticiper le danger",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Anticiper le danger permet de ne pas être pris totalement au dépourvu, en cas d’attaque soudaine. Un personnage peut adopter deux attitudes pour cela :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "label": "Se tenir sur ses gardes",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Se méfier de tout et être attentif au moindre détail permet de réagir plus vite, si les choses tournent mal, à condition d’être concentré et maître de soi. Un personnage méfiant qui se tient sur ses gardes (le joueur doit l’indiquer au MJ, et le répéter au besoin) doit effectuer un Test de Volonté avant de faire son Test de Réaction. En cas de réussite, le modificateur de réussite agit comme un bonus sur le Test de Réaction qui suit. En cas d’échec, le personnage fait son Test de Réaction normalement."
+                }
+              ]
+            },
+            {
+              "label": "Être en état d’alerte",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "C’est le niveau ultime de la méfiance. Un personnage en état d’alerte se tient prêt, arme au poing, à attaquer tout ennemi à sa portée (ou à répondre à tout geste menaçant de la part d’un ennemi qu’il tient en joue). En terme de jeu, il ne sera pas surpris en cas d’attaque venant de la zone qu’il surveille, et bénéficie de plus d’un bonus de +5 à son score d’Initiative, pour le premier Tour de combat. Il y a toutefois des inconvénients, car cet état d’esprit est relativement stressant. Tout d’abord, un personnage en état d’alerte ne peut rien faire d’autre qu’observer (s’il tente une autre action, il sera déconcentré et perdra tous les bénéfices de l’état d’alerte), et son déplacement est limité*. De plus, s’il est victime d’une attaque qu’il ne voit pas venir (de la part d’un adversaire qui s’approche furtivement de dos, par exemple), son Test de Réaction (Surprise) subit un malus de -3, à cause de la concentration extrême. Notez aussi qu’un personnage en état d’alerte ne surveille activement qu’une zone relativement précise, tandis que le stress a tendance à réduire son champ de vision (le MJ peut donc lui imposer des malus, en cas de Test de Perception visuelle portant sur une zone non surveillée). Enfin, toujours à cause du stress, si le personnage surprend le moindre mouvement dans la zone qu’il surveille, il devra réussir un Test de Volonté. En cas de réussite, il contrôle ses nerfs. En cas d’échec, il attaque automatiquement la personne ou la créature détectée, qu’il s’agisse d’un ennemi ou d’un allié… Sur une Catastrophe, il peut même paniquer totalement (et vider son chargeur par exemple). Notez qu’un simple Test d’Observation raté, dans l’obscurité notamment, peut aussi laisser croire au personnage que « quelque chose a bougé »…"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "* Il ne peut se déplacer qu’à l’Allure lente (voir [[Déplacements et mouvements|combat.deplacements|220]])."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Nouveaux adversaires dans le combat",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Il peut arriver qu’un Test de Réaction soit nécessaire pendant le combat lui-même, si jamais un ou plusieurs combattants risquent d’être surpris par l’arrivée inattendue de nouveaux adversaires. L’issue du Test indique les possibilités des personnages :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "En cas de réussite, le personnage n’est pas surpris, et pourra même attaquer ses nouveaux adversaires, au même titre que les anciens, s’il décide de changer d’intention (voir [[Changer d’intention|combat.declaration-intention|214]], optionnel)."
+                }
+              ]
+            },
+            {
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "En cas d’échec, le personnage est surpris. Il ne peut tenter aucune Attaque contre ses nouveaux adversaires. Si jamais le MJ estime que le personnage ne peut même pas les détecter (ils arrivent de dos, par exemple), alors ceux-ci peuvent tout à fait porter une attaque gratuite."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

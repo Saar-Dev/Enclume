@@ -1,0 +1,181 @@
+{
+  "id": "combat.combat-contact-tactiques",
+  "slug": "combat-contact-tactiques",
+  "title": "Combat au contact : tactiques",
+  "page": 223,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact-tactiques.deux-armes",
+      "title": "Se battre avec deux armes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage peut se battre avec deux armes, une dans chaque main, à condition de pouvoir les manier (voir le chapitre Équipement, page 277). En tant qu’Attaquant, il bénéficie alors d’un bonus de +3 à ses Tests de combat au contact (il a plus d’opportunités d’attaque). S’il utilise la Compétence Arts martiaux (Techniques offensives), il peut même tenter de porter gratuitement une attaque supplémentaire lors de sa phase d’action (voir [[Arts martiaux|combat.arts-martiaux|224]], plus bas). S’il est Défenseur, et qu’il utilise la Compétence Arts martiaux (Techniques défensives), le personnage peut également utiliser la technique « Combat à deux armes » pour gagner un bonus de +3 lors du Test d’opposition. Il ne gagne pas de bonus s’il n’utilise pas Arts martiaux."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact-tactiques.sans-defense",
+      "title": "Attaquer un personnage sans défense"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si un personnage ne peut pas voir son assaillant, ou s’il n’a pas conscience de l’attaque, il ne peut pas se défendre de manière active. Inutile dans ce cas de recourir à un Test d’opposition : l’Attaquant doit réussir un Test simple, avec un bonus de +5."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Attaquer à mains nues un personnage armé",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Il est très dangereux d’attaquer à mains nues un personnage armé d’une arme blanche ou d’une arme à feu. Si vous souhaitez simuler cela, considérez qu’un Défenseur qui remporte le Test d’opposition peut choisir d’infliger des dommages à son adversaire (comme s’il était Attaquant). Il procède alors à un jet de dommages (voir [[Dommages|combat.dommages|229]])."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Modes de combat au contact",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Lorsqu’un personnage est en mesure d’effectuer une Action de combat au contact, il peut choisir un « Mode de combat » particulier, chacun ayant ses avantages et ses inconvénients :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "label": "Normal",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "C’est le mode de combat par défaut. Le personnage tente de toucher l’adversaire, sans toutefois prendre de risques inutiles pour éviter d’être touché. Il n’y a aucun modificateur particulier."
+                }
+              ]
+            },
+            {
+              "label": "Défensif",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Le personnage choisit de se défendre plutôt que d’attaquer. Pour cela, il doit obligatoirement retarder son Action (voir [[Retarder son Action|combat.agir-en-combat-timing.retarder-action|218]]) et attendre la prochaine Attaque de son adversaire. Il gagne alors un bonus de +3 lors du Test d’opposition, mais ne peut pas effectuer d’Attaque."
+                }
+              ]
+            },
+            {
+              "label": "Retraite",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Le personnage se protège au maximum et fait tout pour éviter d’être touché. Comme pour le Mode défensif ci-dessus, le personnage doit retarder son Action et ne peut pas attaquer. En cas d’attaque, il gagne un bonus de +5 lors du Test d’opposition. En revanche, il doit pouvoir reculer et perdre du terrain pour maintenir une certaine distance avec son adversaire (ce déplacement est gratuit). Si le personnage ne peut pas faire ce déplacement, traitez la situation comme un Mode défensif normal. Ce Mode de combat peut aussi permettre à un personnage de se déplacer sans cesse et de tourner autour de l’adversaire tout en restant hors de portée de ses coups."
+                }
+              ]
+            },
+            {
+              "label": "Offensif",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Le personnage mise tout sur l’attaque, au détriment de sa défense, et gagne un bonus de +3 à ses Tests d’attaque. En revanche, jusqu’à ce qu’il puisse changer de Mode de combat (à sa prochaine Action), le personnage subit un malus de -5 lors du Test d’opposition s’il est attaqué."
+                }
+              ]
+            },
+            {
+              "label": "Charge (action exclusive)",
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Le personnage se rue véritablement sur son adversaire. Il gagne un bonus de +3 à son Test d’attaque, ainsi qu’un bonus de +3 aux dommages, s’il touche. En revanche, jusqu’à ce qu’il puisse changer de Mode de combat (à sa prochaine Action), le personnage subit un malus de -7 lors du Test d’opposition s’il est attaqué. Pour effectuer une Charge, le personnage doit prendre de l’élan : il ne doit pas se trouver directement engagé au contact (c’est-à-dire à moins de 3 mètres de son adversaire), et doit au moins effectuer un « Déplacement court », qui sera gratuit toutefois (c’est normalement une Préparation qui devrait lui coûter 3 points d’Initiative). Si le personnage se trouve à une distance supérieure encore, la Charge est toujours possible : le meneur de jeu est libre de considérer cela comme une Préparation, entraînant la perte de 3 à 5 points d’Initiative selon la situation. Sous l’eau, seuls les hybrides, les créatures marines et les plongeurs équipés d’hydrojets peuvent charger. Attention : une Charge est une action exclusive, qui ne permet pas au personnage d’attaquer plusieurs fois par Tour (voir [[Effectuer plusieurs Attaques par Tour|combat.agir-en-combat-timing|218]])."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Un Mode de combat ne peut être choisi ou modifié que lors de l’étape de déclaration d’intention : le personnage doit attendre une phase d’action où il peut agir pour choisir ou modifier son Mode de combat. Sinon, il est considéré comme étant par défaut en Mode « normal », ou toujours dans le Mode d’attaque qu’il avait précédemment choisi."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note : si vous ne souhaitez pas utiliser ces options, toute attaque au contact sera traitée comme une Attaque effectuée dans le Mode de combat « normal »."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact-tactiques.plusieurs-adversaires",
+      "title": "Combat contre plusieurs adversaires"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage confronté à plusieurs adversaires subit un malus lors de ses Tests d’opposition, que ce soit pour l’attaque ou pour la défense. Ce malus dépend du nombre total d’adversaires auquel il est confronté :"
+    },
+    {
+  "type": "dataTable",
+  "source": "COMBAT_MULTIPLE_ADVERSAIRES_MALUS",
+  "caption": "Malus au Test d’opposition selon le nombre d’adversaires",
+  "headers": [
+    [
+      { "label": "Adversaires" },
+      { "label": "Malus" }
+    ]
+  ]
+},
+    {
+      "type": "paragraph",
+      "text": "On considère qu’un personnage ne peut pas avoir plus de 4 adversaires en même temps dans un combat au contact (au-delà, les combattants se gênent mutuellement)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact-tactiques.allonge",
+      "title": "Allonge"
+    },
+    {
+      "type": "paragraph",
+      "text": "En raison de leur taille, certaines armes apportent un bonus d’allonge lors du Test d’opposition de combat au contact (voir le chapitre consacré à l’équipement, page 277). En attaque comme en défense, elles permettent en effet de frapper ou de tenir l’adversaire à distance. Lorsque deux combattants bénéficient chacun d’un bonus d’allonge, le bonus le moins important doit être soustrait au bonus le plus important : le personnage disposant de l’arme la plus longue doit alors utiliser ce bonus minoré."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le bonus d’allonge est à double tranchant toutefois :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Si le personnage bénéficiant du bonus d’allonge perd le Test d’opposition, son adversaire peut alors en profiter pour casser la distance. L’arme du personnage sera alors beaucoup moins facile à manœuvrer au corps à corps."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Dans un endroit confiné, ou dans une situation où les mouvements du personnage sont restreints, le maniement de certaines armes longues (notamment les armes longues à deux mains, telles que les bâtons de combat) peut être problématique. Cela est toutefois soumis à l’interprétation du MJ."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans ces cas-là, le bonus d’allonge se transforme en malus."
+    }
+  ]
+}

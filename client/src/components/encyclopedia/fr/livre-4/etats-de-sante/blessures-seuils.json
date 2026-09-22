@@ -1,0 +1,83 @@
+{
+  "id": "etats-de-sante.blessures-seuils",
+  "slug": "blessures-seuils",
+  "title": "Seuils de blessures",
+  "page": 234,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-seuils.seuils",
+      "title": "Seuils de blessures"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les blessures physiques sont classées selon leur degré de gravité. À chaque gravité de blessure est associé un « seuil de blessure » fixe. Dès que la somme de points de dommages physiques reçus atteignent ou dépassent l’un de ces seuils, le personnage reçoit la blessure correspondante :"
+    },
+    {
+      "type": "dataTable",
+      "source": "BLESSURE_SEUILS_TABLE",
+      "caption": "Seuils de blessures physiques",
+      "headers": [
+        [
+          { "label": "Seuil" },
+          { "label": "Gravité" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le RAW prévoit une sixième gravité au seuil de 30 points de Dommages — Mort subite, ou Membre détruit si la Localisation touchée est un bras ou une jambe. Cette règle n’est pas encore modélisée dans le moteur (voir docs/ROADMAP.md)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : n’oubliez pas que les règles de Chance permettent de réduire la gravité des blessures subies (voir [[Chance|tests-et-actions.chance-depense|210]])."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.blessures-seuils.compteur",
+      "title": "Compteur de blessures (fiche de personnage)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le nombre total de blessures qu’un personnage peut recevoir est limité. Dès que son personnage est blessé, le joueur doit alors cocher l’une des cases du compteur de blessures présent sur la fiche de personnage, correspondant à la Localisation touchée et à la gravité de la blessure."
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans chaque Localisation, lorsque toutes les cases d’une ligne sont cochées et que le personnage subit une nouvelle blessure de cette gravité, le joueur doit alors :"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "Cocher une case dans le degré de gravité supérieur." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Effacer les blessures notées dans les cases de la ligne complète." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "On considère en effet que l’ensemble des blessures subies à un certain niveau de gravité finit par constituer une blessure de gravité supérieure."
+    },
+    {
+      "type": "dataTable",
+      "source": "COMPTEUR_BLESSURES_TABLE",
+      "caption": "Compteur de blessures (fiche de personnage)",
+      "headers": [
+        [
+          { "label": "Localisation" },
+          { "label": "Légère" },
+          { "label": "Moyenne" },
+          { "label": "Grave" },
+          { "label": "Critique" },
+          { "label": "Mortelle" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Rappel : les règles de Localisation des blessures se trouvent dans le chapitre Combat, section [[Dommages|combat.dommages|229]]."
+    }
+  ]
+}

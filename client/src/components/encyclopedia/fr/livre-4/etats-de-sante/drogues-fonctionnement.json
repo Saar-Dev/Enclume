@@ -1,0 +1,84 @@
+{
+  "id": "etats-de-sante.drogues-fonctionnement",
+  "slug": "drogues-fonctionnement",
+  "title": "Drogues : niveaux et caractéristiques",
+  "page": 247,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-fonctionnement.niveaux",
+      "title": "Niveaux et effets des drogues"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les drogues fonctionnent comme les maladies et les poisons : chaque produit inflige un certain nombre de points d’intoxication, que l’on compare avec les niveaux habituels (5, 10, 15, etc.). Plus le seuil atteint est élevé, plus les effets de la drogue seront importants. Une dose normale de drogue produit des effets à peu près attendus, car elle est prévue pour agir à un certain seuil. Au-delà, il y a risque de surdose (la fameuse overdose), qui a des conséquences plus ou moins néfastes selon le seuil atteint. Notez que chaque dose supplémentaire prise en plus de la première augmente la puissance de la drogue de 1D6."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.drogues-fonctionnement.caracteristiques",
+      "title": "Caractéristiques des drogues"
+    },
+    {
+      "type": "paragraph",
+      "text": "À l’instar des maladies et des poisons, les drogues ont des effets, qui se déclenchent à certains seuils d’intoxication, des modificateurs de détection, ainsi qu’un délai d’action (généralement très court). Elles possèdent par ailleurs d’autres caractéristiques :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.drogues-fonctionnement.puissance",
+      "title": "Puissance"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est le nombre de points d’intoxication, exprimé en D6, que la drogue inflige au personnage. Comme d’habitude, la Résistance aux drogues du personnage vient modifier le nombre de points d’intoxication reçu."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.drogues-fonctionnement.duree",
+      "title": "Durée"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est le temps d’action de la drogue. Dès que celui-ci s’est écoulé, les effets de la drogue se dissipent rapidement : le personnage perd alors 5 points d’intoxication par heure."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.drogues-fonctionnement.manque",
+      "title": "Manque"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est la période au bout de laquelle le personnage va commencer à se sentir en manque, après la dissipation des effets de la drogue. Voir [[Dépendance et effets du manque|etats-de-sante.drogues-dependance|248]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.drogues-fonctionnement.dependance",
+      "title": "Modificateur de dépendance"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce modificateur agit sur le Test de résistance au manque. Voir [[Dépendance et effets du manque|etats-de-sante.drogues-dependance|248]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.drogues-fonctionnement.effets-secondaires",
+      "title": "Effets secondaires"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce sont les effets secondaires néfastes de la drogue, qui deviennent plus fréquents avec le temps. Voir Effets secondaires, page 248."
+    }
+  ]
+}

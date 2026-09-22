@@ -1,0 +1,30 @@
+{
+  "id": "combat.initiative",
+  "slug": "initiative",
+  "title": "Initiative",
+  "page": 213,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.initiative.initiative-base",
+      "title": "Initiative de base"
+    },
+    {
+      "type": "paragraph",
+      "text": "En terme de jeu, le score d’Initiative de base d’un personnage est tout simplement égal à son niveau de Réaction. Toutefois, divers éléments peuvent affecter ce score de base, et principalement les malus dus à un mauvais état de santé (Blessures, Fatigue, maladies) : ces modificateurs affectent le niveau de Réaction du personnage et donc son Initiative de base. Voir le chapitre [[État de santé|etats-de-sante|234]]."
+    },
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Initiative en armure mécanisée",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un personnage en armure mécanisée est isolé de l’extérieur et a naturellement tendance à réagir moins rapidement qu’un individu normal. Pour simuler cela, vous pouvez comparer la Réaction du personnage et son niveau de Manœuvre d’armure (avec la spécialité appropriée) et utiliser le plus bas des deux pour déterminer l’Initiative du personnage."
+        }
+      ]
+    }
+  ]
+}

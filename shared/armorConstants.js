@@ -54,6 +54,18 @@ export const LOC_TABLE = [
   { max: 17, slot: 'JD' },
   { max: 20, slot: 'JG' },
 ]
+// Table de localisation des dommages — variante Contact (LdB p.229, OPTIONNEL).
+// Même forme que LOC_TABLE (variante Distance) : `max` = borne haute du 1D20,
+// `slot` = identifiant d'armure interne (voir SLOT_TO_WOUND_LOCATION pour le
+// mapping vers les localisations RAW, LOCATION_LABELS pour les libellés).
+export const LOC_TABLE_CONTACT = [
+  { max: 4,  slot: 'T'  },
+  { max: 10, slot: 'C'  },
+  { max: 13, slot: 'BD' },
+  { max: 16, slot: 'BG' },
+  { max: 18, slot: 'JD' },
+  { max: 20, slot: 'JG' },
+]
 
 // Viser une Localisation précise (LdB p.229-230, docs/BUGIDENTIFIE.md COM9) — malus au Test pour
 // choisir la zone touchée au lieu du 1D20 aléatoire. Clés = mêmes que SLOT_TO_WOUND_LOCATION/

@@ -1,0 +1,274 @@
+{
+  "id": "combat.agir-en-combat",
+  "slug": "agir-en-combat",
+  "title": "Agir en combat : les Actions",
+  "page": 216,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat.types-actions",
+      "title": "Types d’Actions"
+    },
+    {
+      "type": "paragraph",
+      "text": "Au cours du Tour de combat, chaque personnage a la possibilité d’effectuer l’une des Actions suivantes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un Déplacement, pour se déplacer sur le lieu du combat. Voir la section [[Déplacements et mouvements|combat.deplacements|220]]."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Une Action de combat, souvent une Attaque au corps à corps ou avec une arme de combat à distance. Voir les sections [[Combat au contact|combat.combat-contact|222]], Arts martiaux et [[Combat à distance|combat.combat-distance|226]]."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Tout autre Action simple pouvant être raisonnablement effectuée en moins de 5 ou 6 secondes. Voir la section [[Actions simples|combat.agir-en-combat.actions-simples|217]]."
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat.actions-gratuites",
+      "title": "Actions gratuites"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les « Actions gratuites » sont des actions très rapides, qui ne ralentissent pas le personnage : prononcer un mot (ou crier), lâcher un objet ou une arme au sol, etc. Tout ce qui peut être accompli au moyen d’un geste simple et unique, tout ce qui peut être dit avec un seul mot peut être considéré comme une Action gratuite. Comme il s’agit d’actes quasi instantanés, on considère qu’un personnage peut toujours effectuer une Action gratuite, avant, pendant ou après une Action normale."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat.preparations",
+      "title": "Préparations"
+    },
+    {
+      "type": "paragraph",
+      "text": "L’ordre d’action des combattants en fonction des scores d’Initiative est un facteur important, assurant aux personnages les plus rapides l’opportunité d’agir en premier. Pourtant, dans certaines situations, un personnage ne pourra pas agir directement quand arrivera son tour, tout simplement parce qu’il aura besoin d’effectuer des gestes ou des mouvements supplémentaires, nécessaires à l’accomplissement d’une Action. Il faut par exemple dégainer une arme avant de pouvoir s’en servir, ou bien passer un peu de temps à viser afin de réussir un tir précis. Ces actes, qui vont retarder l’Action, sont appelés « Préparations ». En termes de jeu, les Préparations modifient l’Initiative du personnage, en la réduisant : l’Action prévue se produira plus tard dans le Tour de combat. Le personnage peut donc perdre le bénéfice de l’Initiative, au profit d’un autre combattant. Vous trouverez dans les sections qui suivent tous les exemples utiles pour gérer les Actions nécessitant une Préparation, ainsi que les malus affectant l’Initiative."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : si une Préparation réduit l’Initiative du personnage à 0 ou moins, l’Action qui aurait dû être effectuée au cours de ce Tour de combat est reportée au Tour suivant. Le personnage agit en premier et son Action bénéficie de la Préparation."
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour résumer, dès qu’un personnage peut agir au cours du Tour de combat (c’est-à-dire à la phase d’action correspondant à son score d’Initiative de base), il peut accomplir une Action, qui peut éventuellement être ralentie par une ou plusieurs Préparations. Il a également droit à une Action gratuite. Lors des combats, la tâche du MJ est de traduire les déclarations d’intention des joueurs en Actions, Préparations et Actions gratuites. Vous trouverez dans les sections qui suivent les exemples d’Actions et de Préparations les plus couramment utilisées lors des combats (avec les modificateurs d’Initiative appropriés, dans le cas des Préparations)."
+    },
+    {
+      "type": "callout",
+      "variant": "example",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Exemple : un marchand endetté, craignant pour sa sécurité, a engagé deux gardes du corps pour le protéger. Le groupe se rend actuellement à un rendez-vous dans un bar, à la demande d’un des créanciers du marchand. Dans un passage bondé de monde, l’un des gardes du corps remarque soudain des gens louches qui s’approchent rapidement, armés et fendant la foule… Le rendez-vous était un piège ! Plutôt rapide, le garde du corps a une Initiative de 15. De plus, ayant détecté ses adversaires à temps, il ne risque pas d’être surpris. Il pourra donc agir dès la phase 15, au tout début du Tour de combat. Son premier acte est une Action gratuite, qu’il peut effectuer à la phase 15 : il crie pour alerter le deuxième garde, ainsi que le marchand, qui eux n’avaient rien remarqué du tout. Son deuxième acte est une Préparation : il doit dégainer son arme, ce qui va lui coûter 5 points d’Initiative (le joueur déplace donc le marqueur d’Initiative sur sa fiche de personnage) : il ne pourra donc se servir de son arme qu’à partir de la phase 10, le fait de devoir dégainer l’ayant ralenti…"
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Utiliser une arme lente",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Certaines armes sont plus lentes que d’autres, les armes lourdes notamment ou celles qui demandent d’être armées avant un tir : une arme de jet, de trait ou même un fusil qui doit être épaulé. Si vous voulez gérer cela avec précision, l’utilisation de ces armes impose un malus à l’Initiative (de -2 à -5 en général). Comme leur nom l’indique, les armes d’épaule sont conçues pour un tir épaulé et manquent de précision lors des « tirs de la hanche » (voir [[Tir instinctif|combat.combat-distance|228]], dans Combat à distance). C’est tout l’avantage des armes telles que les pistolets-mitrailleurs, qui n’imposent aucun malus à l’Initiative car elles n’ont pas besoin d’être épaulées : le tireur peut tirer directement de la hanche. Un personnage peut tout à fait garder un fusil épaulé, prêt à tirer : il ne subit alors pas le malus à l’Initiative, mais son déplacement est alors limité à l’Allure moyenne (c’est la position classique du soldat ou de l’agent des forces spéciales de la police, qui explorent méthodiquement un lieu, arme épaulée pour faire face immédiatement à toute menace)."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Voici quelques exemples de Préparations courantes, avec les malus à l’Initiative correspondants :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Dégainer une arme",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -5, ou -3 si le personnage se tient prêt à dégainer, main sur l’arme."
+            }
+          ]
+        },
+        {
+          "label": "Saisir un objet",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -3 s’il est à portée de main, -5 à -10 s’il est à quelques pas de là."
+            }
+          ]
+        },
+        {
+          "label": "Venir au corps à corps pour saisir son adversaire",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -3 (voir [[Lutte|combat.combat-contact|225]], dans Arts martiaux)."
+            }
+          ]
+        },
+        {
+          "label": "Prononcer une phrase courte, donner des ordres brefs",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -3."
+            }
+          ]
+        },
+        {
+          "label": "Observer le combat",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "On considère qu’un combattant n’est conscient que de son ou de ses adversaires les plus proches, situés dans son champ de vision. Pour chaque tranche de 5 points d’Initiative sacrifiée, le personnage peut obtenir une (et une seule) information précise sur son environnement, par exemple la configuration générale des lieux (issues les plus proches, objet ou mobilier pouvant servir de couverture, etc.), le nombre exact d’adversaires visibles, leur équipement, leur tactique (s’ils en ont une), leurs renforts éventuels, etc."
+            }
+          ]
+        },
+        {
+          "label": "Tenter de repérer un objet, une arme, une personne, un endroit, etc.",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Pour chaque tranche de 5 points d’Initiative sacrifiée, le personnage a droit à un Test d’Observation pour repérer ce qu’il cherche."
+            }
+          ]
+        },
+        {
+          "label": "Utiliser un mécanisme simple",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -3 à -5 (par exemple actionner un interrupteur, ouvrir une porte)."
+            }
+          ]
+        },
+        {
+          "label": "Changer le mode de tir d’une arme à feu",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Initiative -3."
+            }
+          ]
+        },
+        {
+          "label": "Tirer depuis une couverture",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un personnage à couvert bénéficie d’un abri plus ou moins important (ses adversaires ont des malus pour l’attaquer). En revanche, cela ne facilite pas ses propres tirs : il subit un malus à l’Initiative de -3 à -5, selon sa position."
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat.actions-simples",
+      "title": "Actions simples courantes"
+    },
+    {
+      "type": "paragraph",
+      "text": "À titre d’exemple, voici quelques Actions simples couramment utilisées en combat. Sauf avis contraire du meneur de jeu, toutes ces Actions peuvent être accomplies en un Tour de combat :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Recharger une arme ; certaines armes peuvent même demander plusieurs Tours pour être rechargées (ce sont donc des Actions complexes, voir plus bas)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Sortir un objet d’un sac."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Préparer et lancer une grenade."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Observer attentivement le combat pour mettre une tactique au point."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Donner des ordres précis et complets."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Toutes les actions sont simultanées",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "N’oubliez pas que les personnages ne sont pas figés dans le temps. Celui qui a l’Initiative agit plus rapidement que les autres, mais ceux-ci ne sont pas « gelés » pendant qu’il accomplit son action. Un personnage qui entame un déplacement ne va pas bouger instantanément de 10 mètres avant que quiconque ne puisse agir. Non : il débute son action avant les autres (c’est un fait), mais il lui faut ensuite un certain temps pour la mener à bien. Dans certains cas, d’autres personnages pourront donc éventuellement intercepter son action, même s’ils agissent plus tard dans le Tour de combat."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.agir-en-combat.actions-complexes",
+      "title": "Actions complexes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Actions effectuées en combat sont des mouvements ou des gestes rapides : attaquer, tirer, se déplacer sur quelques mètres… Elles peuvent toutes être effectuées en quelques secondes. Les Tours de combat eux-mêmes ne durent qu’une poignée de secondes. Les affrontements se gèrent donc avec des unités de temps très courtes et dans la grande majorité des cas, ils se termineront rapidement, car personne n’est immortel. Dans le contexte bien particulier du combat, que faire d’un personnage qui décide de se lancer dans une action longue et/ou complexe, impossible à réaliser en moins de cinq secondes, par exemple soigner un blessé, pirater un ordinateur, neutraliser un système de sécurité ou réparer un véhicule ?"
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans ce genre de cas, le meneur de jeu doit estimer lui-même le temps nécessaire à la réalisation de l’Action, en faisant confiance à son bon sens. Si l’action en question peut être effectuée en « quelques Tours de combat », alors sa résolution peut être parfaitement intégrée au déroulement du combat. Ne vous occupez pas de l’Initiative du personnage (sauf s’il doit, pour une raison ou pour une autre, effectuer une Action de combat classique) : il va consacrer l’intégralité de ses prochains Tours de combat à son Action longue, et ne pourra rien faire d’autre. Il peut bien sûr toujours interrompre cette Action pour participer au combat. En revanche, si l’Action nécessite vraiment beaucoup de temps — quelques minutes, voire quelques dizaines de minutes… —, la réponse est simple : ne vous en souciez pas. Résolvez le combat d’abord, puis traitez le reste ensuite."
+    }
+  ]
+}

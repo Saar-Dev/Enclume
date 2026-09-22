@@ -1,0 +1,42 @@
+{
+  "id": "force-polaris.pouvoir-incontrole",
+  "slug": "pouvoir-incontrole",
+  "title": "Pouvoir incontrôlé",
+  "page": 253,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Comme vous l'avez vu plus haut, activer un pouvoir nécessite de libérer la Force Polaris et de la contrôler (Test de Maîtrise de la Force Polaris), puis de la modeler pour créer un effet spécifique (Test de la Compétence du pouvoir). Tout cela prend un peu de temps, de 1 à 4 Tours de combat, selon la marge de réussite obtenue. Il est toutefois possible d'agir beaucoup plus rapidement, en libérant la Force Polaris sans vraiment chercher à la contrôler… En termes de jeu, le joueur ne fait aucun Test de Maîtrise de la Force Polaris, mais effectue directement un Test avec la Compétence associée au pouvoir activé."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le seul avantage de cette méthode, c'est sa rapidité : le pouvoir est instantanément activé, et peut donc être déclenché dès que le personnage a l'Initiative. Il y a toutefois de nombreux risques :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le Test de Choc subit un malus de -5 (que le pouvoir soit activé ou non)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Un échec au Test de Compétence entraîne un jet dans la liste des incidents Polaris. De plus, le risque de voir survenir un événement vraiment catastrophique est aggravé. En effet, le résultat du jet d'incident Polaris doit être augmenté de 10 points (20 points en cas de Catastrophe)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : certains personnages n'ont pas le choix, et ne peuvent qu'activer des pouvoirs incontrôlés. La plupart du temps, il s'agit d'individus porteur d'un Polaris latent non maîtrisé : ils peuvent activer un des pouvoirs du Polaris, mais sont incapables de contrôler l'énergie du Polaris (jusqu'à ce qu'ils puissent développer la Compétence Maîtrise de la Force Polaris)."
+    }
+  ]
+}

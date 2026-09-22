@@ -1,0 +1,85 @@
+{
+  "id": "tests-et-actions.chance",
+  "slug": "chance",
+  "title": "Chance",
+  "page": 209,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "La Chance est un Attribut qui peut être utilisé à l’initiative du meneur de jeu, afin de déterminer si un événement peut affecter un personnage ou un groupe de personnages. De leur côté, les joueurs eux-mêmes peuvent aussi utiliser la Chance, afin qu’une situation néfaste tourne finalement à leur avantage."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.chance.tester-evenement",
+      "title": "Tester un événement aléatoire"
+    },
+    {
+      "type": "paragraph",
+      "text": "Lorsque le MJ veut savoir si un événement va affecter ou non un personnage, il peut demander un Test de Chance au joueur concerné (ou effectuer lui-même le Test, si le résultat doit rester secret, ou si le Test concerne l’un de ses personnages non-joueurs). L’événement en question peut tout aussi bien être bénéfique que néfaste. Voici quelques exemples pouvant donner lieu à un Test de Chance :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "Un individu fou furieux ouvre le feu au hasard sur les clients d’un bar, dans lequel les PJ se trouvent. L’un d’entre eux va-t-il recevoir une balle perdue ?" } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Les PJ pénètrent dans le repaire d’un de leurs adversaires. Celui-ci a aléatoirement piégé le lieu avec des mines. L’un des PJ risque-t-il de déclencher l’un des pièges ?" } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Un groupe de commando de surface doit faire une sortie urgente, à l’air libre. Les conditions climatiques extérieures sont-elles clémentes — pour une fois —, ou une terrible tempête radioactive balaie-t-elle la région ?" } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Les PJ accostent sur une station, à bord d’un navire volé. Les autorités vont-elles se montrer méfiantes ?" } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Les PJ enquêtent sur un gang de trafiquants d’Équinoxe. Ils décident de capturer au hasard l’un des membres du gang pour lui soutirer une information précise. Leur captif connaissait-il cette information ?" } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Les PJ sont membres d’un équipage pirate, qui décide d’attaquer un navire au hasard. La cargaison sera-t-elle intéressante ?" } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Il est également possible de demander un Test à l’ensemble du groupe de personnages, si l’événement concerne tout le monde (c’est notamment le cas dans les quatre derniers exemples). Dans ce cas, les choses tournent en faveur des personnages si la majorité du groupe obtient une réussite, et se gâtent dans le cas contraire (en cas d’égalité, tirez le résultat à pile ou face…)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Notez que le recours à un Test de Chance peut très bien être suscité par les joueurs eux-mêmes, à la suite de leurs interrogations et leurs suggestions. Ils peuvent par exemple se demander si leurs personnages, dont le navire dérive à la suite d’une grave panne de moteur, ont des chances de croiser la route d’un autre navire qui pourrait leur porter assistance. Ou encore, le joueur d’un personnage enfermé au fond d’un entrepôt, les mains attachées par une corde synthétique, pourrait très bien décider que son alter ego se met à la recherche d’un outil ou même d’un simple morceau de métal assez tranchant pour se libérer de ses liens. Suite à ce type de demande, le MJ peut très bien résoudre le problème par un Test de Chance, à condition bien entendu que la suggestion soit réaliste, raisonnable et cohérente avec l’environnement."
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans tous les cas, le Test à effectuer est un Test aléatoire normal : le joueur doit lancer un D20 et obtenir un résultat inférieur ou égal au niveau de Chance de son personnage. Si le Test est réussi, les événements tournent évidemment en faveur du ou des personnages."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Marge de réussite ou d’échec",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "S’il le souhaite, et si cela est approprié, le MJ peut prendre en compte la Marge de réussite ou d’échec (ainsi que les éventuelles Catastrophes), afin de déterminer plus précisément les effets de l’événement. Par exemple, à l’issue d’un Test de Chance destiné à déterminer si le personnage déclenche ou non un piège explosif, une Catastrophe pourrait augmenter les dommages causés par la bombe, tandis qu’une réussite « Excellente » peut lui permettre de détecter et même de récupérer le dispositif, pour l’utiliser plus tard. S’il obtient une réussite « De justesse », il marche sur le piège… mais celui-ci n’explosera pas tant que le personnage ne bouge pas, le forçant donc à attendre un spécialiste qui pourra désamorcer la bombe. Soyez inventifs !"
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "rule",
+      "label": "RÈGLE AVANCÉE",
+      "title": "Modificateurs",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Selon la probabilité de l’événement, le MJ peut tout à fait accorder un bonus ou bien au contraire un malus au Test de Chance, sur le principe des modificateurs de Difficulté des Tests habituels. Voici quelques exemples :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "Événement plus que probable : +7 à +10." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Événement probable : +3 à +5." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Événement incertain : +0." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Événement assez improbable : -3 à -5." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Événement très improbable : -7 à -10." } ] },
+            { "blocks": [ { "type": "paragraph", "text": "Événement totalement improbable : -13 à -15." } ] }
+          ]
+        }
+      ]
+    }
+  ]
+}

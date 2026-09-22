@@ -1,0 +1,72 @@
+{
+  "id": "etats-de-sante.dommages-froid",
+  "slug": "dommages-froid",
+  "title": "Froid",
+  "page": 243,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.dommages-froid.froid",
+      "title": "Froid"
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans les fonds marins, le froid est un danger redoutable. Nul besoin d’être plongé dans une eau glacée pour en ressentir les effets : quelques générateurs en panne et c’est toute une station ou tout un navire qui se refroidit lentement… Le froid est de plus en plus dangereux au fur et à mesure que la température baisse, pouvant plonger un personnage dans l’inconscience ou même créer des engelures terribles :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Froid (entre 10 et 15 °C)",
+          "blocks": [
+            { "type": "paragraph", "text": "À cette température, le froid n’a pas encore de réels effets physiques, mais épuise l’organisme. Le personnage doit se soumettre à un Test de résistance à la Fatigue (Constitution) toutes les 2 heures." }
+          ]
+        },
+        {
+          "label": "Très froid (entre 5 et 10 °C)",
+          "blocks": [
+            { "type": "paragraph", "text": "Même chose que ci-dessus, mais le Test doit être effectué toutes les heures." }
+          ]
+        },
+        {
+          "label": "Glacial (aux alentours de 0 °C)",
+          "blocks": [
+            { "type": "paragraph", "text": "Même chose que ci-dessus, mais le Test doit être effectué toutes les demi-heures. De plus, à cette température, le froid crée des Dommages physiques :" },
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Au bout d’une heure, les Bras et les Jambes sont touchés en premier** : ces Localisations subissent 1D10 points de Dommages physiques. Ensuite, pour chaque heure supplémentaire passée dans un tel environnement, le personnage subit une nouvelle attaque du froid sur ces Localisations, mais les dommages augmentent d’1D10 à chaque fois (2D10 la deuxième heure, 3D10 la troisième heure, etc.). Si le froid inflige une Blessure critique, l’amputation de quelques doigts et/ou orteils est inévitable. Une Blessure mortelle ou supérieure peut nécessiter l’amputation d’un membre." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Au bout de deux heures, les dommages s’étendent au Corps et à la Tête**, qui subissent à leur tour des Dommages physiques, à chaque heure, en suivant les mêmes règles que précédemment (1D10, puis 2D10, 3D10, etc.)." } ] }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Froid extrême (en dessous de 0 °C)",
+          "blocks": [
+            { "type": "paragraph", "text": "Personne ne peut survivre à des températures aussi basses, sans protections adéquates. Pour chaque tranche de 5 °C en dessous de 0 °C, vous pouvez appliquer les règles ci-dessus, en divisant à chaque fois les temps indiqués par deux." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le personnage effectue une action fatigante (courir, nager, se battre, etc.), le MJ est libre de demander des Tests de Résistance à la Fatigue de manière beaucoup plus fréquente. Notez que ces règles concernent les effets du froid à l’air libre : si le personnage est dans l’eau (ou si ses vêtements sont mouillés), tous les temps indiqués plus haut doivent être divisés par deux."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : pour les blessures dues au gel, le MJ peut, s’il le souhaite, appliquer les règles optionnelles des [[Blessures dues au feu|etats-de-sante.dommages-feu|243]], plus haut."
+    },
+    {
+      "type": "paragraph",
+      "text": "Une station ou un navire de taille moyenne offre habituellement une température moyenne de 20 °C. En cas de panne du système de chauffage, le MJ peut mettre en scène la baisse progressive et régulière de la température, en fonction de la situation. Un personnage habillé normalement subit normalement les effets du froid. Avec des vêtements chauds, la température peut être considérée comme étant supérieure de 5 à 15 degrés, selon leur qualité. Un personnage vêtu de vêtements ou d’une combinaison adaptée au grand froid peut même annuler les effets de la température (jusqu’à un certain niveau). Un personnage qui porte une armure de plongée n’a normalement aucun problème mais, si le système de chauffage tombe en panne, il commencera à subir les effets du froid très rapidement."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : les hybrides (de tout type) ne ressentent pas les effets du froid lorsqu’ils sont sous l’eau."
+    }
+  ]
+}

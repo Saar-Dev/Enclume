@@ -1,0 +1,83 @@
+{
+  "id": "etats-de-sante.maladies-exemples",
+  "slug": "maladies-exemples",
+  "title": "Exemples de maladies",
+  "page": 246,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.maladies-exemples.peste-ecarlate",
+      "title": "Peste écarlate"
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette maladie terrifiante et heureusement très rare fait pourrir l’organisme. Son temps d’incubation étant assez lent, un porteur peut très bien contaminer plusieurs stations sans le savoir."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Mode de contamination", "blocks": [ { "type": "paragraph", "text": "Cette maladie se transmet par tous les vecteurs possibles et imaginables." } ] },
+        { "label": "Modificateur de contagion", "blocks": [ { "type": "paragraph", "text": "+0 à -5, selon la force du virus." } ] },
+        { "label": "Période d’incubation", "blocks": [ { "type": "paragraph", "text": "1D4 semaines." } ] },
+        { "label": "Virulence / Évolutions", "blocks": [ { "type": "paragraph", "text": "3D6, puis 1D6+3 par semaine pendant 3 semaines." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : démangeaisons, apparition de plaques rougeâtres." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 10** : apparition de petits boutons rouges sur l’abdomen, la gorge et l’entrejambe. Ces petits boutons ne démangent absolument pas et peuvent passer inaperçus si un personnage, pour une raison ou une autre, ne se lave pas complètement. Accès de fièvre très brefs." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15** : formation de bubons écarlates, fièvre de cheval. Présence -3, Force, Constitution et Coordination -2." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20** : Présence -5, Force, Constitution et Coordination -3." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 25** : le corps est boursouflé et entièrement envahi par les bubons. Le corps commence à se décomposer. Présence -10, Force, Constitution et Coordination -5." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Modificateur de diagnostic", "blocks": [ { "type": "paragraph", "text": "+0." } ] },
+        { "label": "Modificateur de guérison", "blocks": [ { "type": "paragraph", "text": "-3." } ] }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.maladies-exemples.grippe-bleue",
+      "title": "Grippe bleue"
+    },
+    {
+      "type": "paragraph",
+      "text": "Plus fréquente que la peste écarlate, la grippe bleue ne se transmet que par contact direct ou indirect entre deux individus. Elle est rarement mortelle."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "label": "Mode de contamination", "blocks": [ { "type": "paragraph", "text": "Contact." } ] },
+        { "label": "Modificateur de contagion", "blocks": [ { "type": "paragraph", "text": "+0 à -5, selon la force du virus." } ] },
+        { "label": "Période d’incubation", "blocks": [ { "type": "paragraph", "text": "2 jours." } ] },
+        { "label": "Virulence / Évolutions", "blocks": [ { "type": "paragraph", "text": "2D6, puis 1D6 tous les quatre jours pendant 8 jours." } ] },
+        {
+          "label": "Seuils / Effets",
+          "blocks": [
+            {
+              "type": "list",
+              "ordered": false,
+              "items": [
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : migraines, légère fièvre, vomissements." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 15** : fièvre de cheval, vomissements, corps douloureux, la peau devient légèrement bleuâtre. Force, Constitution, Coordination et Volonté -3." } ] },
+                { "blocks": [ { "type": "paragraph", "text": "**Seuil 20** : Force, Constitution, Coordination et Volonté -5." } ] }
+              ]
+            }
+          ]
+        },
+        { "label": "Modificateur de diagnostic", "blocks": [ { "type": "paragraph", "text": "+3." } ] },
+        { "label": "Modificateur de guérison", "blocks": [ { "type": "paragraph", "text": "+0." } ] }
+      ]
+    }
+  ]
+}

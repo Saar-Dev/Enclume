@@ -1,0 +1,311 @@
+{
+  "id": "combat.arts-martiaux",
+  "slug": "arts-martiaux",
+  "title": "Arts martiaux et techniques spéciales",
+  "page": 224,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.arts-martiaux.utilisation",
+      "title": "Utilisation des arts martiaux"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Compétences d’Arts martiaux représentent des techniques de combat avancées, offrant de nombreuses opportunités aux combattants entraînés. N’oubliez pas que les Compétences d’Arts martiaux sont des Compétences limitatives, qui agissent sur Combat à mains nues ou Combat armé (par souci de simplification, nous ne faisons pas de différence entre les deux types de technique dans les explications suivantes)."
+    },
+    {
+      "type": "paragraph",
+      "text": "En terme de jeu, lors de chaque Tour de combat, un personnage qui choisit d’utiliser une Compétence limitative d’Arts martiaux peut bénéficier de l’effet d’une (et d’une seule) des Techniques décrites ci-dessous."
+    },
+    {
+      "type": "paragraph",
+      "text": "Certaines de ces Techniques de combat peuvent toutefois être utilisées librement, sans recourir aux Compétences limitatives d’Arts martiaux. Tout le monde peut tenter de faire une clé de bras ou de se libérer d’une saisie, néanmoins, sans entraînement martial spécifique, ces techniques seront difficiles à employer et surtout très mal maîtrisées. À chaque fois, les règles précisent les conditions d’utilisation libre de ces Techniques de combat (certaines sont d’ailleurs impossibles à utiliser sans entraînement)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.arts-martiaux.offensives",
+      "title": "Techniques offensives"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui décide d’utiliser Arts martiaux (Techniques offensives) doit avoir l’Initiative sur son adversaire et combattre en Mode normal, en Mode offensif ou Charger. Pour le Tour de combat en cours, il peut choisir l’une des Techniques martiales suivantes :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.frappe-puissante",
+      "title": "Frappe puissante"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage entraîné aux Techniques offensives est habitué à frapper efficacement avec toutes les parties du corps : mains, coudes, pieds, genoux, tibias, tête… Il gagne un bonus de +3 aux dommages (en cas de Charge, ce bonus s’ajoute au bonus initial de +3, pour le porter à +6)."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.frappe-incapacitante",
+      "title": "Frappe incapacitante"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage frappe un point vital particulièrement douloureux (par exemple le nez, la tempe, le bout du menton, l’articulation de la mâchoire, la gorge, le plexus solaire, le foie, les parties génitales… Ça fait mal, hein ?). Il inflige des Dommages normaux, mais oblige toutefois son adversaire à effectuer un Test de Résistance au Choc avec un malus de -5 (quelle que soit la gravité de la Blessure. Si celle-ci impose un Test de Résistance au Choc, les malus se cumulent). Voir la section [[Choc|etats-de-sante|237]], dans le chapitre État de santé."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.frappe-precise",
+      "title": "Frappe précise"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage délivre un coup précis et maîtrisé. Tous les malus de visée décrits dans la section « Localisation des dommages », « Viser une Localisation précise », sont réduits de 3 points."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : non applicable (le personnage suit les règles habituelles)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.enchainement",
+      "title": "Enchaînement"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage effectue un enchaînement de coups. Comme le prévoit la règle des Attaques multiples (voir [[Agir en combat : les Actions|combat.agir-en-combat-timing|218]], Effectuer plusieurs Attaques par Tour), il peut réaliser jusqu’à trois Attaques, mais il utilise toutefois les malus suivants : première Attaque à +0 et seconde Attaque à -3 (deux Attaques) ; première Attaque à -3, deuxième Attaque à -5 et troisième Attaque à -7 (trois Attaques)."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : non applicable (le personnage suit les règles habituelles)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.combat-deux-armes-off",
+      "title": "Combat à deux armes"
+    },
+    {
+      "type": "paragraph",
+      "text": "En plus du bonus normal de +3 à ses Tests de combat (voir [[Combat au contact|combat.combat-contact-tactiques.deux-armes|223]], Se battre avec deux armes), le personnage peut tenter de porter une attaque supplémentaire gratuite : il doit pour cela réussir un autre Test de combat avec un malus de -5 (les deux Tests sont limités par Arts martiaux). Son adversaire se défend normalement contre la deuxième attaque."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.balayage",
+      "title": "Balayage"
+    },
+    {
+      "type": "paragraph",
+      "text": "D’un coup de pied précis et rapide, le personnage effectue un balayage sur son adversaire. Celui-ci doit réussir un Test de Coordination. En cas de réussite, le personnage est légèrement déséquilibré, et perd (5 + bonus de réussite) points d’Initiative sur sa prochaine Action (si son Initiative tombe en dessous de zéro, les points de malus restants sont répercutés sur l’Initiative du Tour de combat suivant). Sur un échec, sa marge d’échec est aggravée par le bonus de réussite de l’attaquant. Avec un échec normal, le personnage est fortement déséquilibré : il subit le même malus à l’Initiative décrit plus haut et sa prochaine Action souffrira de plus d’un malus de -5. Sur une Catastrophe, il chute au sol…"
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : l’attaquant doit réussir un Test de combat avec un malus de -5. Si l’adversaire réussit son Test de Coordination, rien ne se passe. En cas d’échec, il subit le malus à l’Initiative, mais pas le malus au Test de combat. En cas de Catastrophe, il chute."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.arts-martiaux.defensives",
+      "title": "Techniques défensives"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui décide d’utiliser Arts martiaux (Techniques défensives) doit combattre en Mode normal, en Mode défensif ou faire Retraite. Pour le Tour de combat en cours, il peut choisir l’une des Techniques martiales suivantes :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.garde-combat",
+      "title": "Garde de combat"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage a appris à optimiser sa garde, de manière à se défendre plus facilement et à laisser le moins possible de points vulnérables à découvert. Son adversaire subit un malus de -3 lors du Test d’opposition."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.contre-attaque",
+      "title": "Contre attaque simultanée (Mode défensif seulement)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui a choisi (pour une raison ou pour une autre) de combattre en Mode défensif ne peut normalement pas attaquer. Cette Technique martiale lui permet de se défendre s’il est attaqué par son adversaire, mais aussi de contre-attaquer dans le même mouvement. Il doit pour cela réussir un autre Test de combat avec un malus de -5 (la Compétence de combat utilisée est toujours limitée par Arts martiaux). Son adversaire se défend normalement contre cette attaque. Le personnage ne peut contre-attaquer qu’une seule fois par Tour de jeu."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.esquive",
+      "title": "Esquive (Retraite seulement)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Cette Technique martiale permet au personnage de bénéficier du bonus de +5 dû à la Retraite, sans toutefois être obligé de reculer et de perdre du terrain."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.combat-deux-armes-def",
+      "title": "Combat à deux armes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage utilise sa deuxième arme pour parer les attaques de son adversaire. Il gagne un bonus de +3 lors du Test d’opposition."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.adversaires-multiples",
+      "title": "Défense contre des adversaires multiples"
+    },
+    {
+      "type": "paragraph",
+      "text": "L’utilisation de cette Technique permet au personnage d’être plus efficace contre plusieurs adversaires. Tous les malus de combat contre des adversaires multiples sont diminués de 3 points (voir [[Combat contre plusieurs adversaires|combat.combat-contact-tactiques.plusieurs-adversaires|224]])."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : impossible."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.degagement",
+      "title": "Dégagement / Défense contre une saisie"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le personnage est victime d’une saisie par un adversaire (sur les vêtements, les bras ou les poignets, les cheveux…), ou si celui-ci tente de l’étrangler, de lui enserrer les bras, etc., cette Technique permet de réagir immédiatement. Si l’adversaire utilise Arts martiaux (Lutte) pour effectuer cette prise, les deux personnages doivent faire un Test de combat au contact en opposition, comme d’habitude. Sinon, le personnage attaqué peut effectuer un Test simple d’Arts martiaux (Techniques défensives). En cas de réussite, le personnage se libère. Si l’adversaire n’a pas fait de Test, ou s’il a échoué lors du Test d’opposition, le personnage peut enchaîner directement sur un Test simple d’Arts martiaux (Lutte) pour effectuer une clé ou projeter son adversaire (voir plus bas), ou sur un Test simple de combat pour porter une Attaque. Note : si le personnage est attaqué par surprise, les règles de Surprise s’appliquent (voir la section correspondante)."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : le personnage n’a pas d’autre solution que d’effectuer un Test de Force en opposition avec son adversaire. Si ce dernier utilise la Compétence Arts martiaux (Lutte), le personnage ne peut se dégager que si l’autre échoue à son Test."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.menace-arme",
+      "title": "Défense contre la menace d’une arme"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le personnage est menacé par un adversaire portant une arme (et situé à portée de frappe), il peut tenter d’effectuer un Test d’Arts martiaux (Techniques défensives) en opposition à la Réaction de l’attaquant. En cas de réussite, le personnage échappe au contrôle de l’adversaire. Si celui-ci est équipé d’une arme blanche, la situation se transforme alors en combat normal. S’il est équipé d’une arme à feu, le personnage se trouve de toute façon à sa merci, sauf s’il bénéficie d’un abri proche. En revanche, si l’adversaire échoue lors du Test d’opposition, le personnage peut s’emparer de son arme et renverser la situation !"
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : n’y pensez même pas…"
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.arts-martiaux.lutte",
+      "title": "Lutte"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Compétence Arts martiaux (Lutte) recouvre toutes les Techniques de combat au corps à corps : clés, immobilisations, projections… C’est aussi la méthode de combat au sol la plus efficace, et c’est la seule utilisable sous l’eau, où les coups sont interdits en raison de la forte résistance du milieu liquide. Un personnage qui décide d’utiliser la Lutte ne peut combattre que dans les Modes offensif, normal et défensif, et doit absolument être au corps à corps, c’est-à-dire en mesure de saisir son adversaire. Effectuer une saisie nécessite de réussir un Test de combat au contact, en opposition à son adversaire. Une saisie doit être considérée comme une Préparation, qui coûte 3 points d’Initiative. Pour le Tour de combat en cours, il peut choisir l’une des Techniques martiales suivantes :"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.cle-immobilisation",
+      "title": "Clé / Immobilisation"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le personnage effectue une clé — par luxation ou torsion — sur l’une des articulations de son adversaire, debout ou au sol. La plupart du temps, il s’agit d’une clé portant sur l’une des articulations du bras (épaule, coude, poignet, doigt…), mais toutes les autres articulations sont susceptibles de subir ce petit désagrément (genou, cheville, et même hanches ou cervicales !). Le meneur de jeu est libre de juger de la situation, et d’imposer les malus qu’il juge nécessaires. Pour faire une clé, le personnage doit réussir le Test de combat au contact en opposition, contre un adversaire qui, lui, échoue à ce Test. De plus, si la Force du personnage est inférieure à celle de l’adversaire, sa marge de réussite doit être au moins égale au double de la différence entre les deux niveaux de Force. Une fois la clé effectuée, l’adversaire est soumis, à cause de la douleur, et le personnage peut maintenir la clé autant de temps que nécessaire. Il peut toutefois aller plus loin et infliger librement des dommages, qui peuvent aller de la Blessure moyenne (légère entorse ou luxation) à la blessure critique (articulation déboîtée ou fracture), en passant par la Blessure grave (une luxation plus importante… ou des doigts cassés). Une clé de cervicales peut même se solder par la mort de l’adversaire… Encore une fois, le meneur de jeu doit interpréter la situation à sa guise."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : faire une clé sans entraînement est toujours possible, mais difficile, car le personnage ne connaît pas les bons points d’appui, et utilise plus sa force qu’une véritable technique. Il doit réussir un Test de combat au contact avec un malus de -5 à -7 (selon la difficulté de la clé), contre un adversaire qui échoue à ce Test. Il doit ensuite réussir à chaque Tour de combat un Test de Force en opposition avec la Force de son adversaire, ou la Compétence Arts martiaux (Techniques défensives), pour maintenir la clé. Il ne peut infliger de réels dommages qu’après trois réussites successives."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.etranglement",
+      "title": "Étranglement"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un étranglement vise à étouffer un adversaire et/ou à couper la circulation sanguine qui alimente le cerveau par une pression sur le cou, soit avec les mains, soit avec l’avant-bras (dans le cas d’une attaque par derrière). Les étranglements utilisent les mêmes règles que les clés (voir plus haut). Les dommages infligés sont différents toutefois : un étranglement soutenu pendant 2 Tours de combat provoque une petite syncope de l’adversaire (il s’évanouit pendant 1D6 minutes). Un étranglement soutenu pendant un nombre de Tours égal à la moitié de la Constitution de la victime entraîne sa mort… Note : si le personnage est attaqué par surprise, les règles de Surprise s’appliquent (voir la section correspondante)."
+    },
+    {
+      "type": "paragraph",
+      "text": "**Utilisation libre** : voir les règles applicables aux clés. L’utilisation d’une corde pour étrangler un adversaire et d’une attaque par surprise réussie permet de supprimer les malus."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "combat.arts-martiaux.projection",
+      "title": "Projection"
+    },
+    {
+      "type": "paragraph",
+      "text": "Une projection consiste à faire chuter son adversaire, de manière plus ou moins élégante. Les projections utilisent les mêmes règles que les clés (voir plus haut). Les effets sont toutefois différents : le personnage peut choisir d’infliger (1D6 + bonus de réussite + Modificateur de Dommages en corps à corps) à son adversaire, sur une Localisation au hasard, à cause de la chute. En fonction de la situation, le MJ est libre de réduire ou d’augmenter ces Dommages."
+    },
+    {
+      "type": "paragraph",
+      "text": "Rappel : une créature (ou un mutant) ayant plusieurs membres bénéficie d’un bonus de +2 par membre supplémentaire, lors du combat au corps à corps ou de l’utilisation des techniques de lutte."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "À propos de la Lutte sous l’eau",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Quand deux personnages se battent sous l’eau, vous pouvez considérer que toutes les règles de Lutte (et de défense contre les saisies) s’appliquent, à l’exception des projections. Toutes les Actions de combat utilisant la Lutte subissent toutefois un malus de -5, parce que les techniques de combat sous l’eau ne sont pas nombreuses en raison de l’absence d’appui au sol, capital en combat et de l’extrême mobilité des combattants (un combat sous l’eau est un combat en trois dimensions !)."
+        }
+      ]
+    }
+  ]
+}

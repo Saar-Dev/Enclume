@@ -6,6 +6,7 @@ import combat from './locales/combat.json'
 import charSheet from './locales/charSheet.json'
 import builder from './locales/builder.json'
 import tickets from './locales/tickets.json'
+import encyclopedia from './locales/encyclopedia.json'
 
 i18n
   .use(initReactI18next)
@@ -18,6 +19,7 @@ i18n
         charSheet: charSheet,
         builder: builder,
         tickets: tickets,
+        encyclopedia: encyclopedia,
       },
     },
     lng: 'fr',

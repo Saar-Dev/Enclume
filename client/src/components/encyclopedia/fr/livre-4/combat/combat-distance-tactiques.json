@@ -1,0 +1,144 @@
+{
+  "id": "combat.combat-distance-tactiques",
+  "slug": "combat-distance-tactiques",
+  "title": "Combat à distance : tactiques",
+  "page": 228,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-distance-tactiques.deux-armes",
+      "title": "Tirer avec deux armes"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage peut utiliser deux armes de poing, une dans chaque main, à condition de pouvoir les manier (voir le chapitre Équipement, page 277). Il bénéficie alors des effets suivants :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Tir simple, Tir à répétition, Rafale courte",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le personnage gagne soit un bonus de +3 au Test de tir (dans le cas du Tir simple, ce bonus annule donc le malus), soit la possibilité d’attaquer deux cibles. Il fait dans ce cas deux Tests de tir, le second (celui qui correspond à la main non directrice) étant fait avec des chances de réussite divisées par deux."
+            }
+          ]
+        },
+        {
+          "label": "Rafale longue, Tir de suppression",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le personnage gagne un bonus de +5 au Test de tir."
+            }
+          ]
+        },
+        {
+          "label": "Rafale longue sur plusieurs adversaires",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le personnage peut utiliser la seconde arme de manière indépendante, pour attaquer des adversaires supplémentaires. Il fait dans ce cas deux Tests de tir, le second (celui qui correspond à la main non directrice) étant fait avec des chances de réussite divisées par deux."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : il est impossible de faire un Tir visé avec deux armes…"
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Tir instinctif",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Lors d’un tir instinctif, le personnage ne prend même pas le temps de viser, sacrifiant la précision au profit de la rapidité. Un tel tir est tout simplement une Action précipitée : le personnage gagne un bonus de +3 à son Initiative, mais subit un malus de -5 à son Test de tir. Utilisé avec une arme d’épaule, le tir instinctif est tout simplement un « tir de la hanche » : l’arme n’est pas épaulée (cette Préparation coûte 3 points d’Initiative), le tireur peut donc agir à son Initiative normale, mais va manquer de précision."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Balles perdues !",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Le concept de « balle perdue » peut devenir très intéressant (ou très problématique, selon les points de vue) lors des fusillades. Les choses s’aggravent dans les endroits confinés, et/ou avec l’utilisation de tirs automatiques. Or, dans le monde de Polaris, les espaces réduits, les coursives étroites et les passages bondés de monde ne sont pas si rares… Et les personnages équipés d’armes à feu non plus. En raison de tout cela, le meneur de jeu ne devrait pas hésiter à demander de temps en temps un « Test de balle perdue » (sans trop en abuser non plus), dans les cas suivants notamment :"
+        },
+        {
+          "type": "paragraph",
+          "text": "Le personnage est pris dans une fusillade :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "dans un endroit confiné ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "près d’éléments immédiatement dangereux (munitions, produits dangereux, conduites d’eau brûlante ou d’azote liquide, etc.) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "sous un feu nourri ou sous des tirs en rafales ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "se trouve juste derrière une personne venant de recevoir une blessure par balle (le projectile risque de traverser et de le toucher)." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Le personnage fait usage d’une arme à feu :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "dans un endroit plein de monde ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "dans un endroit comportant des éléments sensibles et fragiles (notamment l’appareillage électronique ou scientifique d’une salle de contrôle, d’une salle des machines, d’un poste de pilotage, d’un laboratoire, etc.) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "dans un endroit comportant des éléments dangereux (munitions, produits dangereux, explosifs…) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "et utilise un feu nourri ou des tirs en rafales…" } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "D’une manière générale, si deux de ces conditions (ou plus !) sont réunies, le MJ peut logiquement estimer que le risque de balle perdue est bien réel. Dans ce cas, le personnage impliqué (le tireur, la victime ou les deux…) doit effectuer un Test de Chance, avec les modificateurs que le MJ estime nécessaires. Sur une réussite, tout va bien. En cas d’échec, il se produit un événement malheureux, qui dépend de l’importance de la marge d’échec et de l’interprétation du MJ :"
+        },
+        {
+          "type": "paragraph",
+          "text": "Le personnage sous le feu :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "subit un effet collatéral plus ou moins gênant, par exemple une balle vient percer une conduite, provoquant un jet de vapeur brûlante entraînant un léger malus lors des actions suivantes (échec de justesse) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "reçoit un éclat de métal arraché par les projectiles, causant 1D10 points de dommages (marge d’échec peu importante) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "reçoit une balle qui ricoche, cas fréquent dans les espaces réduits, causant des dommages normaux, minorés d’1D10 toutefois (marge d’échec moyenne) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "reçoit une balle perdue (ou une balle qui a traversé le corps fragile du type de devant), causant des dommages normaux (marge d’échec importante ou Catastrophe)." } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Le personnage qui tire :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            { "blocks": [ { "type": "paragraph", "text": "touche une cible différente de celle qu’il visait (appliquez les mêmes résultats que ci-dessus, en fonction de la marge d’échec du tireur) ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "touche un élément dangereux, causant des désagréments plus ou moins importants en fonction de sa marge d’échec : une épaisse fumée emplit la pièce (et/ou les extincteurs anti-incendie se mettent en marche) et gêne la vision, un réservoir de carburant ou des réserves d’alcool sont touchés et commencent à prendre feu, des munitions explosent, des produits dangereux (gaz toxiques, produits contaminés ou irradiés, azote liquide, etc.) se répandent dans la pièce, etc. ;" } ] },
+            { "blocks": [ { "type": "paragraph", "text": "touche un appareil sensible, dont l’utilité sera d’autant plus importante que la marge d’échec sera élevée : source de lumière, alimentation électrique, générateur, moteur, commandes, ordinateur de bord, tableau de contrôle, commandes d’un navire, etc. Une fusillade dans un poste de pilotage ou une salle des générateurs peut immobiliser un navire ou plonger une petite station dans le noir et le froid pendant des heures, voire des jours !" } ] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Le meneur de jeu doit bien entendu adapter ces exemples à la situation. Vous remarquerez qu’à aucun moment nous ne parlons du risque que présenterait un projectile traversant une coque de navire ou une baie vitrée… tout simplement parce que cela n’arrive JAMAIS. Les matériaux utilisés dans la construction des navires ou des stations sont prévus pour résister à des pressions inouïes, et ne se feront sûrement pas trouer par une balle, même blindée. Les gens et tous les appareils sensibles qui sont à l’intérieur, en revanche…"
+        }
+      ]
+    }
+  ]
+}

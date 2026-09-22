@@ -23,6 +23,8 @@ import AdminTicketsPage from './pages/AdminTicketsPage'
 import AdminLogsPage from './pages/AdminLogsPage'
 import ReportTicketPage from './pages/ReportTicketPage'
 import MePage from './pages/MePage'
+import EncyclopediaPage from './components/encyclopedia/EncyclopediaPage'
+import GlossaryPage from './components/encyclopedia/GlossaryPage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -103,6 +105,14 @@ export default function App() {
         {/* Catalogue ref_equipment, lecture seule, ouvert à tout utilisateur — docs/ROADMAP.md */}
         <Route path="/equipment" element={
           <ProtectedRoute><EquipmentCatalogPage /></ProtectedRoute>
+        } />
+        {/* Encyclopédie — RAW du LdB Polaris, lecture seule — docs/PLANS/PLAN_ENCYCLOPEDIA.md */}
+        <Route path="/encyclopedia" element={
+          <ProtectedRoute><EncyclopediaPage /></ProtectedRoute>
+        } />
+        {/* Glossaire — index des sections ciblables, accessible depuis la nav Encyclopédie */}
+          <Route path="/encyclopedia/glossary" element={
+          <ProtectedRoute><GlossaryPage /></ProtectedRoute>
         } />
         {/* Création directement dans le Coffre, sans campagne — même WizardCreationPage que
             /campaigns/:campaignId/creation, campaignId simplement absent des params */}

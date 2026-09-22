@@ -1,0 +1,214 @@
+{
+  "id": "tests-et-actions.resolution-tests",
+  "slug": "resolution-tests",
+  "title": "Résolution des tests",
+  "page": 203,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "tests-et-actions.resolution-tests.resolution",
+      "title": "Résolution des Tests (Tests aléatoires)"
+    },
+    {
+      "type": "paragraph",
+      "text": "**Note au MJ** : les Tests présentés dans cette section sont résolus avec un D20. Pour cette raison, ils sont appelés Tests aléatoires, par opposition aux Tests non aléatoires, présentés plus bas et qui font partie des règles avancées. Vous pouvez tout à fait ignorer les règles avancées et ne jouer qu’avec les Tests aléatoires."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.difficulte",
+      "title": "Difficulté de l’action"
+    },
+    {
+      "type": "paragraph",
+      "text": "Pendant que le joueur vérifie le niveau de la Compétence ou de l’Attribut utilisé pour le Test, le meneur de jeu (MJ) détermine la Difficulté de l’action. Il n’y a pas vraiment de règle établie pour cela, sinon celle du bon sens du meneur de jeu. Par convention, nous adopterons l’échelle des Difficultés suivante, et si l’un des termes du tableau ci-dessous semble parfaitement définir l’action entreprise, alors c’est très certainement le bon choix :"
+    },
+    {
+      "type": "dataTable",
+      "source": "DIFFICULTE_ACTION_MODIFICATEURS",
+      "caption": "Degré de difficulté de l’action et modificateur associé"
+    },
+    {
+      "type": "paragraph",
+      "text": "Comme vous le voyez, à chaque Difficulté est associé un modificateur (bonus ou un malus), à appliquer aux chances de réussite de base du personnage, pour obtenir les chances de réussite finales de l’action :"
+    },
+    {
+      "type": "paragraph",
+      "text": "**Chances de réussite finales = chances de réussite de base + modificateur de Difficulté**"
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Affiner les modificateurs",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Les valeurs du tableau ci-dessous sont basées sur une échelle fréquente dans ce système de jeu, avec des paliers généralement fixés à 0, 3, 5, 7 ou 10, par tranche de 10 points (ainsi, on continue ensuite avec 13, 15, 17, etc.). Cette progression et ces valeurs de référence sont faciles à retenir, mais vous êtes bien entendu libres d’utiliser vos propres modificateurs. Ainsi, si pour telle ou telle action, vous trouvez qu’un bonus de +3 serait un peu trop généreux et qu’un +2 voire un +1 ferait l’affaire… ne vous gênez pas !"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La Compétence ou l’Attribut utilisé et la Difficulté sont les seuls éléments à connaître pour effectuer un Test. De fait, dans la suite du texte, les Tests nécessaires seront souvent résumés ainsi : Compétence (Difficulté ou bonus/malus), par exemple Escalade (Difficile ou -7)."
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "MJ : gardez les Difficultés pour vous !",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Lors de la résolution d’un Test, n’hésitez jamais à garder les Difficultés secrètes de temps en temps, surtout lorsque celles-ci ne sont pas évidentes à deviner. Vous pouvez donner de vagues indications à vos joueurs (« Ça a l’air plutôt facile », « Ça semble vraiment difficile »), sans leur révéler de valeurs chiffrées. En fonction de leurs chances de réussite de base et de leurs jets de dés, vous déterminerez vous-même l’issue du Test. Un peu de suspens ne fait jamais de mal (et, au cas où vous en auriez besoin, vous pourrez ainsi plus facilement « tricher » pour arranger les résultats à votre convenance…). N’hésitez pas non plus à effectuer certains Tests à la place de vos joueurs (les Tests de Perception, notamment), surtout dans les cas où leur personnage n’est pas censé savoir ce qui se trame (une embuscade, par exemple)."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.jet-de",
+      "title": "Jet de dé"
+    },
+    {
+      "type": "paragraph",
+      "text": "Pour connaître l’issue du Test, lancez un D20 :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "Si le résultat du dé est inférieur ou égal aux chances de réussite du Test, l’action est réussie." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Si le résultat du dé est supérieur aux chances de réussite du Test, l’action se solde par un échec." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans les deux cas, le dé génèrera peut-être un résultat particulier : une Réussite ou un Échec critique (voir plus bas)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : même si les chances de réussite sont égales ou supérieures à 20, vous devez lancer le dé. Le résultat indique en effet la Marge de réussite (et peut même donner lieu, le cas échéant, à une Réussite critique)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.marges",
+      "title": "Marges de réussite ou d’échec"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Marge de réussite d’un Test réussi est égale au résultat du dé (c’est une lecture directe : il faut donc obtenir le jet de dé le plus haut possible, en dessous de ses chances de réussite). Le degré de réussite correspondant dans le tableau de référence ci-dessous indique le résultat de l’action. Cette Marge de réussite peut être améliorée par une Réussite critique."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Marge d’échec d’un Test raté est égale au nombre de points en trop, par rapport aux chances de réussite du personnage (en tenant compte du modificateur de Difficulté). Le degré d’échec correspondant dans le tableau de référence ci-dessous indique le résultat de l’action. Cette Marge d’échec peut être aggravée par un Échec critique (voir plus bas)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Plus la marge est élevée, plus la réussite de l’action est retentissante ou plus l’échec est dramatique, comme l’indiquent les tableaux ci-dessous :"
+    },
+    {
+      "type": "dataTable",
+      "source": "MR_TABLE",
+      "caption": "Marges de réussite et d’échec"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les degrés de réussite ou d’échec sont des termes imagés, qui permettent notamment au meneur de jeu de décrire plus précisément le résultat de l’action : il s’agit d’abord d’un guide et d’un outil de narration au service de l’ambiance. Le MJ est toutefois libre d’improviser comme il le souhaite à partir de ces termes, en accordant par exemple un événement bénéfique à un personnage qui réussit particulièrement bien son action (ou un événement néfaste dans le cas inverse)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les réussites « De justesse », notamment, peuvent être particulièrement intéressantes : le personnage réussit son action mais passe à un cheveu de l’échec, ce qui peut avoir des conséquences ou des effets secondaires inattendus et pas forcément agréables. Par exemple, après avoir franchi un puits profond d’un seul bond, il agrippe le bord opposé d’extrême justesse et se retrouve suspendu dans le vide. Ou bien, après avoir réussi à crocheter une serrure, il casse son matériel de crochetage. Ou encore, après avoir échappé à une torpille, il heurte un rocher, abîmant son véhicule ou son armure… Le MJ ne doit pas oublier cependant que le personnage a tout de même réussi son action : il s’agit juste de pimenter un peu le jeu, pas d’accabler les personnages !"
+    },
+    {
+      "type": "paragraph",
+      "text": "D’une manière générale, gardez à l’esprit qu’une bonne marge de réussite améliore la qualité du résultat de l’action ou la rapidité avec laquelle le personnage l’exécute. Une très bonne marge peut même permettre d’améliorer ces deux aspects en même temps ! Ainsi, réparer un véhicule avec une réussite « Extraordinaire » peut signifier que le personnage a accompli le travail en deux fois moins de temps que prévu, ou bien que la qualité de ses réparations est telle qu’il a même réussi à améliorer pour un temps les capacités de l’engin ! Bien entendu, en cas d’échec, c’est le phénomène inverse qui se produit : le personnage perd du temps et/ou son échec provoque des retombées néfastes. Par exemple, rater un Test d’Intimidation avec un Échec « Exécrable » pourrait se traduire par de mauvaises rumeurs et des moqueries à propos du personnage, qui auront vite fait le tour de toute la station…"
+    },
+    {
+      "type": "paragraph",
+      "text": "La dernière colonne du tableau indique les modificateurs de réussite ou d’échec, qui dépendent de la marge obtenue et qui sont utilisés par certaines règles du système de jeu. Ils agissent soit comme un bonus, soit comme un malus. Chaque fois que ces modificateurs sont utilisés, les règles le précisent. Ainsi, par exemple, le modificateur de réussite est ajouté en bonus aux dommages infligés en combat, à l’issue d’une attaque réussie."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.critiques",
+      "title": "Réussites et échecs critiques"
+    },
+
+    {
+      "type": "heading",
+      "level": 5,
+      "id": "tests-et-actions.resolution-tests.reussite-critique",
+      "title": "Réussite critique"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le résultat du dé indique exactement la même valeur que les chances de réussite finales (en prenant donc en compte le modificateur de Difficulté), vous obtenez une Réussite critique. Dans ce cas, vous pouvez ajouter le niveau de maîtrise (et non le niveau global) à la valeur obtenue précédemment pour augmenter votre Marge de réussite, ce qui vous permettra sans doute d’obtenir un résultat bien meilleur. Attention, il s’agit bien d’une augmentation de la Marge de réussite et non pas du résultat du dé : même si le résultat final est supérieur aux chances de réussite du personnage, celui-ci a bel et bien réussi son action. Note : dans le cas des Tests d’Attributs (qui n’ont pas de niveau de maîtrise), ajoutez simplement un bonus correspondant à la moitié du niveau de l’Attribut testé à la marge de réussite du personnage."
+    },
+
+    {
+      "type": "heading",
+      "level": 5,
+      "id": "tests-et-actions.resolution-tests.echec-critique",
+      "title": "Échec critique"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le dé indique « 20 », c’est un Échec critique. Relancez alors le D20 et ajoutez le résultat à la Marge d’échec initiale du Test, ce qui aggrave encore le degré d’échec. Attention, si la Marge d’échec atteint ou dépasse 15, le personnage risque de provoquer une Catastrophe (c’est-à-dire un événement particulièrement dramatique, voir Catastrophes, ci-dessous)."
+    },
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Catastrophes",
+      "id": "tests-et-actions.resolution-tests.catastrophes",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Une marge d’échec de 15 points ou plus peut entraîner une Catastrophe, si le MJ le souhaite. Il s’agit d’un effet secondaire néfaste de l’échec. Par exemple, le personnage peut avoir un accident avec le véhicule qu’il pilote, ou bien son arme s’enraye, se brise ou tombe au sol lors d’un combat, ou encore on l’accuse de tricher lors d’un Test de Jeu, etc. C’est au MJ de définir le résultat exact d’une Catastrophe, mais comme son nom l’indique, c’est toujours un événement dramatique, qui dépasse de loin les effets d’un simple échec."
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.chances-superieures-20",
+      "title": "Chances de réussite supérieures à 20"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si les chances de réussite finales du Test sont égales ou supérieures à 20, aucun Échec critique n’est possible (c’est plutôt une bonne nouvelle). Le joueur doit tout de même lancer un dé pour obtenir sa marge de réussite. S’il obtient un « 20 », il s’agit donc forcément d’une Réussite critique (et non pas d’un Échec critique)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.actions-impossibles",
+      "title": "Actions impossibles"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si les chances de réussite d’un personnage tombent en dessous de 1, l’action est automatiquement vouée à l’échec. Si le meneur de jeu a gardé le modificateur de Difficulté secret et que le personnage tente l’action, le joueur doit tout de même lancer un D20 : le résultat du dé indique la Marge d’échec."
+    },
+    {
+      "type": "paragraph",
+      "text": "Rappel : une action faisant appel à une Compétence dont le niveau est encore « X » échoue automatiquement (le personnage sait automatiquement que cette action va échouer)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "tests-et-actions.resolution-tests.difficulte-supplementaire",
+      "title": "S’imposer une Difficulté supplémentaire"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un joueur peut toujours décider que son personnage tente une action plus difficile que l’action de base, en général pour obtenir un résultat spécifique ou plus intéressant, par exemple viser une partie spécifique du corps de l’adversaire en combat, réaliser une action un peu plus rapidement que prévu ou fouiller une pièce sans faire de désordre, de manière à ce que le propriétaire ne s’aperçoive pas que quelqu’un est entré chez lui. Dans ce cas, le MJ est libre d’augmenter la Difficulté d’un ou plusieurs degrés (une action « Moyenne » peut ainsi passer à « Malaisée » ou « Assez difficile »). Bien entendu, le MJ peut aussi accorder ce genre de bonus si le personnage obtient une Marge de réussite particulièrement remarquable, mais il est plus intéressant de laisser les joueurs prendre eux-mêmes des risques."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "slug": "etats-de-sante",
+  "title": "États de santé",
+  "pageStart": 234,
+  "pageEnd": 251,
+  "intro": [
+    {
+      "type": "callout",
+      "variant": "quote",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "« J’ai retrouvé, dans les ruines d’une cité de l’ancien temps, un petit bout de papier plastifié qui disait : “Ne sortez jamais sans vos préservatifs !”. Les gens d’avant étaient sacrément sensés, et poètes aussi. Il ne faut en effet jamais sortir sans son patch de stabilisation, et je trouve que le terme “préservatif” est plus approprié que “patch”, pour désigner cette petite merveille qui vous empêche de perdre tout votre sang. »"
+        },
+        {
+          "type": "paragraph",
+          "text": "— LISVAR RICK, pilleur de ruines"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans l’univers de Polaris, les combats sont violents et dangereux. Les personnages seront confrontés à de nombreux périls, et tôt ou tard, cela finira bien par arriver : l’un d’eux va ramasser un sale coup, dû à une balle de gros calibre, aux crocs d’une créature vicieuse ou aux effets d’un virus microscopique et mortel. Si jamais cela se produit, vous êtes sur le bon chapitre…"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les règles de blessures présentées ici sont volontairement détaillées, pour accroître le sentiment de réalisme et d’âpreté de l’univers de Polaris. Si vous ne souhaitez pas vous encombrer de détails, n’hésitez pas à simplifier et à vous passer des nombreuses règles optionnelles qui parsèment ce chapitre. **La seule règle véritablement importante, ici, est celle des seuils de blessures physiques.** Elle permet d’établir un lien entre les points de dommages reçus et la gravité de la blessure subie. Le reste n’est composé que de développements logiques, qui ne doivent surtout pas vous ralentir."
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "id": "combat.declaration-intention",
+  "slug": "declaration-intention",
+  "title": "Déclaration d'intention",
+  "page": 214,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.declaration-intention.regle",
+      "title": "Déclaration d’intention et modification de l’Initiative"
+    },
+    {
+      "type": "paragraph",
+      "text": "La déclaration d’intention est liée à l’Initiative : dès que chacun a déterminé l’Initiative de base de son personnage, le meneur de jeu doit interroger les joueurs sur les intentions de leur personnage, dans l’ordre croissant des Initiatives. Il parle lui-même pour ses PNJ. Ainsi, les joueurs qui dirigent les personnages les plus rapides peuvent prendre connaissance des intentions des autres protagonistes, et réagir en conséquence. À l’inverse, les joueurs des personnages les plus lents sont obligés de déclarer leurs intentions sans avoir une bonne vision d’ensemble du combat. Pour simuler l’ambiance stressante d’un vrai combat et entretenir un bon rythme de jeu, le meneur de jeu est vivement encouragé à obliger ses joueurs à s’exprimer rapidement, et surtout clairement, sur les intentions de leur personnage. Si le joueur hésite, le MJ peut même lui faire perdre 2 ou 3 points d’Initiative ! (Réservez tout de même ça à des joueurs expérimentés…)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Certaines déclarations peuvent modifier l’Initiative du personnage :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Ainsi, si le joueur choisit de faire agir son personnage plus rapidement que prévu, il s’agit d’une « Action précipitée ». Le personnage bénéficie d’un bonus à son Initiative, mais la précipitation lui imposera toutefois un malus lors de la résolution de son Action. Voir [[Précipiter son Action|combat.agir-en-combat-timing|218]] (optionnel)."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "De même, certaines Actions nécessitent une « Préparation », avant de pouvoir être accomplies. Les Préparations sont des petites actions qui ralentissent le personnage avant qu’il puisse agir, par exemple dégainer une arme, viser, se relever après une chute, etc. Voir [[Préparations|combat.agir-en-combat.preparations|216]]."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Si la déclaration du joueur entraîne une modification de l’Initiative de son personnage, celle-ci prend effet immédiatement : le marqueur doit être déplacé tout de suite sur l’échelle d’Initiative. Lors de la résolution des Actions, le personnage gagnera ou perdra peut-être des places, lorsque sa phase d’action viendra. Un joueur assez discipliné et précis peut même annoncer une Préparation, puis laisser la parole au prochain si son personnage perd l’Initiative."
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Changer d’intention",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Si, au cours du combat, le joueur décide de changer d’intention, il doit effectuer un Test d’Adaptation. En cas de réussite, le joueur peut changer l’action de son personnage (avec l’accord du MJ). En cas d’échec, il est obligé de se conformer à sa déclaration d’intention initiale. Sur une Catastrophe, le personnage est confus, et ne fait rien du tout pendant ce Tour de combat…"
+        }
+      ]
+    }
+  ]
+}

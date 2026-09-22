@@ -1,0 +1,176 @@
+{
+  "id": "etats-de-sante.toxiques-fonctionnement",
+  "slug": "toxiques-fonctionnement",
+  "title": "Fonctionnement des maladies et poisons",
+  "page": 244,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Il existe une multitude de maladies et de poisons, aux effets très divers. Techniquement, les maladies et les empoisonnements sont gérés par les mêmes règles, à quelques détails près."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-fonctionnement.niveau",
+      "title": "Niveau de maladie ou d’empoisonnement"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le niveau de maladie ou d’empoisonnement représente les effets de ces maux sur le personnage. Chez un individu sain, ces niveaux sont à 0, mais s’il tombe malade ou s’il est victime d’un empoisonnement, le niveau de maladie ou d’empoisonnement va augmenter — plus ou moins rapidement —, représentant la progression du mal. À l’instar des seuils de Blessures physiques, dès que ce niveau atteint un certain seuil, le personnage subit les effets correspondants à la maladie en question. Voici l’échelle des niveaux de maladie et d’empoisonnement (comparable à celle des blessures) :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 5** : légèrement malade ou empoisonnement léger. Le personnage est considéré comme Légèrement fatigué (malus de -2 aux actions)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 10** : moyennement malade ou empoisonnement moyen. Le personnage est Fatigué (malus de -4)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 15** : gravement malade ou empoisonnement grave. Le personnage est Très fatigué (malus de -6)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 20** : très gravement malade. Le personnage est Épuisé (malus de -8)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 25** : état critique. Le personnage est À bout de force (malus de -10)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "**Seuil 30** : stade ultime." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le premier effet commun à toutes les maladies et tous les poisons est l’affaiblissement du personnage, qui se traduit par une augmentation de son niveau de Fatigue, entraînant un malus à toutes ses actions, tant que le niveau de maladie ou d’empoisonnement ne baisse pas. Il ne s’agit pas forcément d’un véritable état de fatigue, cela peut aussi être des vertiges, une douleur, des nausées, etc."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : si vous n’utilisez pas les règles avancées de Fatigue, appliquez juste les malus."
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque maladie ou poison a ensuite des effets spécifiques, qui se déclenchent dès que le niveau correspondant atteint ou franchit certains seuils (tous les seuils n’ont pas forcément d’effets associés). Ainsi, si les premiers symptômes d’une maladie apparaissent au seuil 5, le personnage en subira les effets dès que son niveau de maladie atteindra 5 ou dépassera 5 points. Les maladies et les poisons peuvent entraîner une diminution du niveau d’un ou plusieurs Attribut(s). En règle générale, cette perte est temporaire : le personnage retrouve ses niveaux habituels après guérison."
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage qui possède un niveau de maladie ou d’empoisonnement de 30 ne peut plus lutter contre les effets du mal. De plus, il gagne chaque jour un nouveau point de maladie ou d’empoisonnement, tant que son niveau n’est pas redescendu en dessous de 30. Dans le cas des maladies ou des poisons mortels, le personnage meurt dès que le niveau correspondant atteint ou dépasse 30…"
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-fonctionnement.caracteristiques",
+      "title": "Caractéristiques d’une maladie ou d’un poison"
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.contamination",
+      "title": "Mode de contamination"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il s’agit de la manière dont la maladie se propage (par les voies respiratoires, par le contact avec la peau d’un malade, par des germes déposés sur des objets, etc.), ou de la manière dont le poison doit être administré à la victime pour faire effet (simple contact, ingestion, inhalation, injection, morsure, etc.)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.contagion",
+      "title": "Modificateur de contagion (maladies seulement)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce modificateur représente la facilité avec laquelle une maladie se propage (il est positif si la maladie est bénigne et négatif si elle est très contagieuse). Il agit sur le Test de contamination (voir [[Contracter une maladie|etats-de-sante.toxiques-contamination|245]])."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.detection",
+      "title": "Modificateur(s) de détection (poisons seulement)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Certains poisons ont une odeur, un goût ou un aspect particulier, et peuvent être détectés, notamment s’ils sont mêlés à une boisson ou un aliment. Ces modificateurs agissent sur les chances de réussite d’un personnage qui tente de déceler une substance toxique, par le goût, la vue ou l’odorat. Voir [[Être victime d’un empoisonnement|etats-de-sante.toxiques-contamination|245]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.incubation",
+      "title": "Période d’incubation (maladies) ou délai d’action (poisons)"
+    },
+    {
+      "type": "paragraph",
+      "text": "C’est tout simplement le temps que met la maladie à se déclarer, et à développer ses premiers symptômes, ou le temps nécessaire à l’action d’un poison. Un individu peut incuber plusieurs jours sans se rendre compte de sa maladie, alors que les poisons ont des effets plus immédiats (certains peuvent agir instantanément, d’autres mettent plus de temps, mais en général pas plus de quelques heures)."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.virulence",
+      "title": "Virulence / Évolution"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il s’agit de la puissance de la maladie ou du poison, qui se traduit par une augmentation du niveau correspondant. Cette augmentation est en général déterminée par le jet d’un certain nombre de D6. Maladies et empoisonnements évoluent également au fil du temps, à mesure qu’ils se développent ou se propagent dans l’organisme du personnage. Ces évolutions font encore augmenter le niveau de maladie ou d’empoisonnement, à une certaine fréquence et pour un certain temps, mais un traitement médical approprié peut enrayer le mal. Voir [[Évolution des maladies et empoisonnements|etats-de-sante.toxiques-fonctionnement.evolution|245]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.seuils",
+      "title": "Seuils / Effets"
+    },
+    {
+      "type": "paragraph",
+      "text": "Il s’agit des effets nocifs de la maladie ou du poison, et des seuils auxquels ceux-ci se manifestent, lors de l’évolution du niveau correspondant."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.diagnostic",
+      "title": "Modificateur de diagnostic"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce modificateur agit sur les chances de réussite d’un personnage qui tente de reconnaître une maladie ou un empoisonnement, grâce à ses symptômes ou ses effets. Il s’agit d’un bonus si la maladie ou la substance toxique est très connue, ou au contraire d’un malus si elle est difficile à diagnostiquer (ou peu connue). Voir [[Traitement des maladies et poisons|etats-de-sante.toxiques-traitement|245]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "etats-de-sante.toxiques-fonctionnement.guerison",
+      "title": "Modificateur de guérison"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ce modificateur agit sur les chances de guérison du malade, lors du traitement de sa maladie ou de son empoisonnement. Les maladies difficiles à soigner, peu connues ou réputées « incurables » ont donc un malus de guérison particulièrement important. Voir [[Traitement des maladies et poisons|etats-de-sante.toxiques-traitement|245]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-fonctionnement.evolution",
+      "title": "Évolution des maladies et des empoisonnements"
+    },
+    {
+      "type": "paragraph",
+      "text": "Après avoir contracté une maladie, ou après avoir été empoisonné, le personnage n’en ressent d’abord pas les effets, pendant la période d’incubation ou le délai d’action. Le mal se développe ensuite en fonction de sa virulence et de ses éventuelles évolutions : le niveau de maladie ou d’empoisonnement augmente alors du nombre de points indiqués, puis — le cas échéant — évolue à une certaine fréquence et pendant un certain temps, entraînant des augmentations supplémentaires. Par exemple, une maladie peut se déclarer à la fin de la période d’incubation en faisant augmenter le niveau de maladie de 2D6 points, puis évoluer ensuite, causant par exemple 1D6 points de maladie supplémentaires chaque semaine, pendant deux semaines (au final, le personnage va donc recevoir 4D6 points de maladie, en l’espace de deux semaines). Après ses éventuelles évolutions, une maladie ou un poison ne progresse plus."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : ici encore, le MJ peut garder secrète la progression du niveau de maladie ou d’empoisonnement et ne décrire au joueur que les symptômes de la maladie, au fur et à mesure de leur apparition."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Attributs secondaires Résistance aux maladies et Résistance aux poisons représentent la résistance (ou au contraire la vulnérabilité) de l’organisme du personnage face aux agents pathogènes ou aux substances toxiques. Ils modifient le total de points de maladie/poison reçu, à chaque fois que la maladie ou l’empoisonnement progresse, c’est-à-dire lors de sa déclaration ainsi que lors de chacune de ses éventuelles évolutions. Ainsi, dans l’exemple donné ci-dessus, la Résistance aux maladies s’applique une première fois sur les 2D6 points de maladie suivant l’incubation, puis ensuite sur chacun des D6 jetés au cours des deux semaines suivantes. Si le personnage a une Résistance aux maladies de -2, il ne gagnera donc que 2D6-2 points de maladie, puis 2 × 1D6-2 points ensuite."
+    },
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Surdose de poison",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Une dose de poison suffit à produire un effet sur un individu normal. En cas de surdose, les effets sont cependant aggravés : chaque dose supplémentaire de poison augmente les dommages dus à l’empoisonnement d’1D6 points."
+        }
+      ]
+    }
+  ]
+}

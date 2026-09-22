@@ -1,0 +1,42 @@
+{
+  "id": "force-polaris.liberer-controler",
+  "slug": "liberer-controler",
+  "title": "Libérer et contrôler la Force Polaris",
+  "page": 252,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "En termes de jeu, il faut d'abord effectuer un Test de Maîtrise de la Force Polaris, pour savoir si le personnage parvient à libérer la Force Polaris tout en la contrôlant :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Sur une réussite**, le personnage libère la Force et garde le contrôle sur celle-ci. Il peut dès lors modeler la Force Polaris pour utiliser un pouvoir précis (voir [[Utiliser un pouvoir Polaris|force-polaris.utiliser-pouvoir]]). La marge de réussite sert alors à réduire le temps nécessaire à l'activation de ce pouvoir (voir les détails ci-dessous), et/ou à limiter les effets du Choc (voir [[Choc Polaris|force-polaris.choc-polaris|253]])."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "**Sur un échec**, l'effet Polaris est mal maîtrisé, ce qui peut avoir des conséquences plus ou moins importantes. Le joueur doit alors immédiatement effectuer un jet (sans modificateur) dans la liste des incidents Polaris, pour déterminer ce qui se produit (voir [[Incidents Polaris|force-polaris.incidents-polaris|253]])."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Libérer la Force Polaris est une Action exclusive, qui nécessite un Tour de combat complet, pendant lequel le personnage ne peut donc rien faire d'autre que se concentrer. Reste ensuite à modeler cette énergie brute, pour créer les effets du pouvoir que l'on veut lancer. Activer un pouvoir requiert 3 Tours de combat ; c'est une Action complexe pendant laquelle le personnage doit rester concentré. Si le personnage est distrait, il doit réussir un Test de Volonté pour rester concentré, sinon la libération de la Force Polaris ou l'activation du pouvoir échoue (sans autres conséquences). Dans la plupart des cas, une blessure reçue met un terme à la concentration."
+    },
+    {
+      "type": "paragraph",
+      "text": "Il est toutefois possible de diminuer le temps d'activation des pouvoirs grâce à la marge de réussite obtenue lors du Test de Maîtrise de la Force Polaris : chaque point du modificateur de réussite permet de diminuer le temps nécessaire d'un Tour de combat. Ainsi, une marge de réussite de 5 points (modificateur +/-2) permet de gagner 2 Tours de combat (le personnage n'aura donc besoin que d'un Tour au final pour activer son pouvoir). Si le temps nécessaire descend à 0 Tours de combat, le Pouvoir peut être activé dès le Tour suivant la libération de la Force Polaris, au rang d'Initiative normal du personnage."
+    }
+  ]
+}

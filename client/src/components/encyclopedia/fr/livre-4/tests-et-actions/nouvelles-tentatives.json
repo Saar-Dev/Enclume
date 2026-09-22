@@ -1,0 +1,63 @@
+{
+  "id": "tests-et-actions.nouvelles-tentatives",
+  "slug": "nouvelles-tentatives",
+  "title": "Nouvelles tentatives et compte à rebours",
+  "page": 205,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Un Test aléatoire représente toujours une tentative unique pour réussir une action. Toutefois, si le personnage échoue, rien ne l’empêche de tenter à nouveau sa chance, à condition que cela soit possible. Voici quelques idées pour gérer les nouvelles tentatives :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Des conséquences directes",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Souvent, un Test aléatoire ne laisse pas le droit à l’erreur et a des conséquences néfastes directes pour le personnage en cas d’échec. Ainsi par exemple, échouer à un Test d’Escalade peut signifier que le personnage est tombé et s’est éventuellement fait mal. Dans ce cas, il a peut-être reçu une Blessure physique (cheville foulée, voire membre cassé…) qui rend plus difficile ou même impossible toute nouvelle tentative."
+            }
+          ]
+        },
+        {
+          "label": "Les effets du stress",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Le stress peut rendre les nouvelles tentatives plus difficiles, à mesure que le personnage s’énerve ou se décourage au fil de ses échecs. S’il veut être particulièrement méchant (ou si la situation l’exige !), le MJ est libre d’augmenter la Difficulté de l’action à chaque nouvelle tentative, en ajoutant un malus cumulatif de -1 à chaque fois (ou même de -3, dans une situation vraiment pressante), ou pire, en augmentant carrément le degré de Difficulté (mais là, c’est du sadisme)."
+            }
+          ]
+        },
+        {
+          "label": "Des adversaires plus méfiants",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Dans le cas des Compétences sociales utilisées en opposition (voir [[Tests d’opposition|tests-et-actions.tests-opposition|207]], plus bas), par exemple Intimidation, Éloquence/Persuasion, etc., un échec peut signifier que le personnage n’a pas été pris au sérieux. Dans ce cas, il est logique que toute nouvelle tentative soit impossible ou que la Difficulté augmente (comme dans le cas précédent). Vous pouvez par exemple imposer un modificateur de Difficulté supplémentaire, égal au Malus d’échec du test précédant (ainsi, plus le personnage se montrera maladroit et plus il aura du mal à remonter la pente…)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "La technique du « compte à rebours » est une variante avancée. Dans certaines situations, le temps qui s’écoule est souvent un facteur crucial pour les personnages. Chaque échec peut ainsi augmenter le risque de voir survenir un événement malheureux, dont voici quelques exemples :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "Le passage d’une patrouille, alors que le groupe de PJ tente de forcer illégalement un lieu." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "L’explosion d’une bombe, dont le minuteur défile inexorablement, alors que les PJ tentent de la désamorcer." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Un ennemi qui est près de lâcher une torpille sur leur navire immobilisé par une avarie temporaire que le mécanicien du bord essaie désespérément de réparer." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Un navire touché qui prend l’eau, menaçant d’engloutir tous les personnages qui ne seront pas assez rapides pour enfiler leur armure de plongée, etc." } ] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans ce genre de cas, le MJ ne doit jamais hésiter à fixer une limite de temps, qui se traduit en fait par un nombre maximum de tentatives. Les PJ peuvent recommencer leur action tant qu’il leur reste des tentatives. Obtenir une Catastrophe peut même signifier que les personnages perdent une ou deux tentatives supplémentaires. S’ils ne réussissent pas l’action, l’événement prévu survient (les forces de sécurité arrivent, la bombe explose, etc.). Pour l’intérêt du jeu, le MJ devrait définir un nombre maximum de tentatives en rapport avec la Difficulté de l’action, de manière à laisser une échappatoire aux personnages (qui pourront fuir — si c’est possible ! —, s’ils craignent de ne jamais réussir cette action). De tels comptes à rebours sont excellents pour l’ambiance !"
+    }
+  ]
+}

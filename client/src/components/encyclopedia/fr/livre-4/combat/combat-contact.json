@@ -1,0 +1,132 @@
+{
+  "id": "combat.combat-contact",
+  "slug": "combat-contact",
+  "title": "Combat au contact",
+  "page": 222,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Le combat au contact concerne aussi bien l’affrontement à mains nues et la lutte au corps à corps que l’utilisation des armes blanches (ou des objets divers utilisés comme armes)."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact.attaquant-defenseur",
+      "title": "Attaquant et Défenseur"
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans les règles qui suivent, le personnage qui lance l’attaque est appelé « Attaquant ». Son adversaire est logiquement appelé « Défenseur ». Notez qu’un Défenseur peut avoir retardé ses Actions (dans ce cas, le Défenseur se contente d’attendre l’attaque, en y étant préparé). Les Actions retardées au contact sont notamment utilisées pour les modes de combat défensifs (voir [[Modes de combat|combat.combat-contact-tactiques|223]])."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact.distance-combat",
+      "title": "Distance de combat"
+    },
+    {
+      "type": "paragraph",
+      "text": "Un personnage est considéré comme « engagé au contact » lorsqu’il se trouve à 3 mètres ou moins de son adversaire (plus précisément : quand les deux adversaires — de taille humaine — se trouvent tous deux à l’intérieur d’un cercle de 3 mètres de diamètre). S’il se trouve à une distance supérieure à 3 mètres, il devra effectuer un Déplacement pour venir à distance. Selon la distance à parcourir, il s’agit soit d’une simple « Déplacement court » (une Préparation qui coûte 3 points d’Initiative et qui concerne un déplacement de 3 mètres ou moins), soit d’une véritable Action de Déplacement (qui nécessitera un Tour de combat, à moins que le personnage ne soit en mesure d’effectuer une « Charge » sur son adversaire, voir plus loin). Le Déplacement court peut également être utile pour se désengager, et se maintenir hors de portée de l’adversaire. Attention, cela nécessite toutefois d’avoir l’espace nécessaire pour se déplacer !"
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : certaines armes peuvent apporter un bonus à l’attaque, à cause de leur taille : voir [[Allonge|combat.combat-contact-tactiques|224]]."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.combat-contact.test-combat",
+      "title": "Test de combat au contact"
+    },
+    {
+      "type": "paragraph",
+      "text": "Une « attaque » au contact ne se limite pas à un seul coup : il s’agit plutôt d’un court assaut, composé d’une série de frappes, de manœuvres et de feintes destinées à trouver une ouverture dans la garde de l’adversaire. Cela doit être résolu par un Test d’opposition entre les deux combattants, qui utilisent chacun la Compétence adaptée à la technique de combat choisie ou à l’arme qu’ils portent : Armes lourdes, Combat armé ou Combat à mains nues (chacune pouvant éventuellement être limitée par une Compétence d’Arts martiaux)."
+    },
+    {
+      "type": "paragraph",
+      "text": "Voici les différents cas de figure :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "L’Attaquant réussit son Test, le Défenseur rate : l’attaque passe. Si l’Attaquant utilise la Compétence Arts martiaux (Techniques offensives ou Lutte), il peut effectuer une Technique de combat (voir [[Arts martiaux|combat.arts-martiaux|224]], plus bas). Un jet de dommages est normalement nécessaire à la suite de l’attaque (voir [[Dommages|combat.dommages|229]])."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "L’Attaquant rate son test, le Défenseur réussit : l’attaque ne passe pas. Si le Défenseur utilise la Compétence Arts martiaux (Techniques défensives ou Lutte), il peut effectuer une Technique de combat (voir [[Arts martiaux|combat.arts-martiaux|224]])."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "L’Attaquant et le Défenseur ratent tous les deux leur Test : rien ne se passe."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "L’Attaquant et le Défenseur réussissent tous les deux leur Test : comme d’habitude, le vainqueur est celui qui a obtenu la meilleure marge de réussite (se reporter aux cas de figure ci-dessus). En cas d’égalité, rien ne se passe."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Note : dans le cas d’Attaques simultanées (voir [[Initiatives équivalentes|combat.initiatives-equivalentes|214]]), les combattants sont considérés tous deux comme « Attaquants ». Les deux Attaques ne sont alors pas résolues grâce à un Test d’opposition, mais au moyen d’un Test simple, effectué sous la Compétence appropriée. Si les deux personnages réussissent leur attaque, ils s’infligent mutuellement des dommages…"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le meneur de jeu est libre d’appliquer tous les modificateurs nécessaires en fonction de la situation, en cas d’avantage ou de désavantage tactique, par exemple :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        { "blocks": [ { "type": "paragraph", "text": "Être attaqué par le côté : -3 (ou par-dessus/dessous, en combat sous-marin notamment)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Être attaqué alors qu’on est au sol : -5." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Être attaqué dans une position désavantageuse : -3 à -5 (ne pas avoir assez de place pour bouger à son aise ou utiliser une arme de grande taille dans un endroit confiné, par exemple)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Attaque depuis une position avantageuse : +3 (position surélevée, protection, etc.)." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Utiliser sa main non directrice : -5." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Combattre sur un terrain instable ou en équilibre : les actions du personnage sont limitées par son niveau en Acrobatie/Équilibre." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Combattre avec une mauvaise luminosité : -3 à -5." } ] },
+        { "blocks": [ { "type": "paragraph", "text": "Etc." } ] }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Combat en aveugle",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Si un personnage veut combattre dans le noir total ou si sa vision est obscurcie d’une manière ou d’une autre, le meneur de jeu peut lui demander de réussir un Test d’Observation (basé sur l’ouïe, la plupart du temps) au début de chaque Tour de combat. En cas d’échec, le personnage ne peut attaquer. En cas de réussite, il peut tenter de porter une Attaque (et une seule), mais il souffrira d’un malus de -7. Dans tous les cas, le personnage doit être à distance de combat."
+        }
+      ]
+    }
+  ]
+}

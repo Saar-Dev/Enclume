@@ -1,0 +1,227 @@
+{
+  "id": "combat.deplacements",
+  "slug": "deplacements",
+  "title": "Déplacements et mouvements",
+  "page": 220,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.deplacements.se-deplacer",
+      "title": "Se déplacer en combat"
+    },
+    {
+      "type": "paragraph",
+      "text": "Une Action de Déplacement peut être utilisée chaque fois qu’un personnage désire effectuer un déplacement significatif sur le lieu du combat : se rapprocher ou s’éloigner de quelque chose ou de quelqu’un, trouver une meilleure position tactique ou un meilleur abri, etc. Beaucoup d’Actions incluent naturellement des déplacements, le combat au corps à corps par exemple (un combattant statique est un combattant mort, ou alors très résistant…), mais cela ne concerne en général que des déplacements sur de très courtes distances, négligeables donc à l’échelle du terrain de combat. Ainsi, s’il est inutile de mesurer les déplacements de deux combattants qui s’affrontent sur un ring ou dans une pièce exiguë (les distances sont trop courtes), les Actions de déplacement prennent tout leur sens lorsque les personnages doivent se battre sur un terrain plus vaste : une grande salle de bar, un hangar, les couloirs d’une station, en milieu sous-marin, etc."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.deplacements.allures",
+      "title": "Allures de déplacement"
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque fois qu’il désire se déplacer en combat, un personnage a le choix entre quatre allures différentes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Allure lente",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "C’est l’Allure d’un personnage dont les mouvements sont ralentis par un terrain difficile (décombres, terrain glissant, boue épaisse, végétation dense, passage étroit, eau jusqu’à la taille, etc.). Le personnage peut aussi choisir de se déplacer prudemment, en raison d’un terrain dangereux (mines, pièges, équilibre instable, débris de tôle tranchante, etc.). L’Allure lente est également recommandée pour les personnages désirant se déplacer silencieusement (pas de malus au Test de Furtivité/Déplacement silencieux)."
+            }
+          ]
+        },
+        {
+          "label": "Allure moyenne",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "C’est la vitesse de déplacement normale d’un personnage en combat. Notez que l’Allure moyenne peut entraîner un malus à tous les Tests de Compétences réclamant un peu de précision et de stabilité, par exemple Furtivité/Déplacement silencieux, Acrobatie/Équilibre, Tests de tir, etc. (voir l’encadré Malus dus aux Déplacements, ci-dessous)."
+            }
+          ]
+        },
+        {
+          "label": "Allure rapide",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Cette Allure permet à un personnage de parcourir une distance plus importante, au pas de course. Cette Allure augmente encore les malus pour les Actions nécessitant précision ou vigilance. C’est aussi la vitesse d’un personnage qui tente de courir tout en étant chargé et/ou encombré (armure, sacs, armes militaires de type fusil d’assaut, matériel divers…)."
+            }
+          ]
+        },
+        {
+          "label": "Allure maximale",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "C’est l’Allure d’un personnage qui court le plus vite possible sur un terrain plat et dégagé, en ligne droite (ou presque) et sans être encombré d’aucune manière. Cette Allure n’est donnée qu’à titre indicatif, au cas où vous en auriez besoin, car il ne s’agit pas toujours d’un mode de déplacement adapté au combat. Le personnage ne peut en effet rien faire d’autre que courir, tout en se trouvant bien plus exposé aux dangers du combat et aux accidents de toute sorte. Il ne peut pas non plus effectuer de brusques changements de direction, et aura sans doute besoin d’une certaine distance pour s’arrêter (à moins de se jeter au sol…)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : les Allures lentes et moyennes permettent aussi de se déplacer accroupi derrière une couverture (caisses, tables, etc.) pour être moins vulnérable aux tirs ennemis."
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Malus dus aux déplacements (actions combinées)",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un grand nombre d’Actions peuvent être combinées avec un Déplacement, comme expliqué dans la section [[Combiner plusieurs Actions|combat.agir-en-combat-timing.combiner-actions|217]]. Le tableau ci-dessous vous donne les malus à appliquer lorsque le personnage se déplace (ces modificateurs vous sont donnés à titre indicatif, ignorez-les et appliquez vos propres modificateurs si vous le jugez nécessaire). Déterminez simplement la nature générale de l’Action tentée, et appliquez le malus correspondant à l’Allure du personnage."
+        },
+        {
+          "type": "dataTable",
+          "source": "DEPLACEMENT_ACTION_MALUS",
+          "caption": "Malus aux Tests selon l’Allure de déplacement"
+        }
+      ]
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.deplacements.sol",
+      "title": "Déplacements au sol"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le tableau qui suit indique les distances de déplacement maximum (en mètres) au sol. Les Allures lentes à rapides dépendent de la Coordination du personnage et l’Allure maximale dépend du niveau de la Compétence Athlétisme :"
+    },
+    {
+      "type": "dataTable",
+      "source": "DISTANCES_DEPLACEMENT_SOL",
+      "caption": "Distances de déplacement au sol (en mètres)"
+    },
+    {
+      "type": "paragraph",
+      "text": "Ces valeurs sont surtout indicatives et ne sont véritablement utiles que lorsque vous avez besoin de gérer les distances de manière très précise. Le reste du temps, n’hésitez pas à les arrondir pour simplifier le jeu. Certaines de ces distances de déplacement peuvent d’autre part paraître courtes, mais n’oubliez pas qu’il s’agit là de mouvements effectués par des personnages sous adrénaline, esquivant, parant, zigzaguant entre les zones dangereuses et recherchant au contraire les meilleures zones de couverture pour éviter de prendre une balle perdue…"
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "combat.deplacements.eau",
+      "title": "Déplacements sous l’eau"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le système des Allures s’applique également aux déplacements sous l’eau. Évidemment, les hybrides sont nettement avantagés par rapport aux humains normaux (les techno-hybrides étant néanmoins légèrement moins performants que les hybrides naturels et les géno-hybrides). Comme pour les déplacements au sol, les Allures lentes, moyennes et rapides sont définies par le niveau de Coordination du personnage, tandis que l’Allure maximale dépend du niveau de la Compétence Athlétisme. Notez toutefois que les hybrides naturels peuvent substituer leur Compétence Hybride à leur Compétence Athlétisme, en ce qui concerne les déplacements sous l’eau, ce qui leur donne un petit avantage supplémentaire (voir tableau ci-dessous)."
+    },
+    {
+  "type": "dataTable",
+  "source": "DISTANCES_DEPLACEMENT_EAU",
+  "caption": "Distances de déplacement sous l’eau (en mètres)",
+  "headers": [
+    [
+      { "label": "COO / Athlétisme (ou Hybride)", "rowspan": 2 },
+      { "label": "Lente",   "colspan": 3 },
+      { "label": "Moyenne", "colspan": 3 },
+      { "label": "Rapide",  "colspan": 3 },
+      { "label": "Max",     "colspan": 3 }
+    ],
+    [
+      { "label": "Hum." }, { "label": "TH" }, { "label": "Hyb." },
+      { "label": "Hum." }, { "label": "TH" }, { "label": "Hyb." },
+      { "label": "Hum." }, { "label": "TH" }, { "label": "Hyb." },
+      { "label": "Hum." }, { "label": "TH" }, { "label": "Hyb." }
+    ]
+  ]
+},
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Déplacements en apesanteur",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Si jamais les personnages doivent effectuer un déplacement en apesanteur, considérez que leur vitesse de déplacement de base est celle de l’allure moyenne (sans moyen de propulsion particulier). Attention cependant : sans assistance, les personnages ont besoin d’un appui pour s’élancer et ne peuvent absolument pas changer de direction pendant le déplacement…"
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Déplacements courts",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Quelle que soit l’Allure à laquelle on se déplace, les déplacements inférieurs à 3 mètres peuvent être considérés comme des Préparations, s’ils sont effectués avant une Action notamment. Ils coûtent alors 3 points d’Initiative."
+        },
+        {
+          "type": "paragraph",
+          "text": "Exemple : un personnage (Initiative de base : 14) désire engager un autre combattant au contact. Il lui faut pour cela parcourir 3 mètres pour se rapprocher de son adversaire : le MJ estime que pour une distance aussi courte, il n’y a pas de quoi dépenser une Action de Déplacement. Ce Déplacement de 3 mètres sera donc considéré comme une Préparation pour l’Attaque au contact qui suit, occasionnant une perte de 3 points d’Initiative. L’Attaque aura donc lieu à la phase d’action 14-3 = 11. Notez que si l’adversaire possède un score d’Initiative supérieur à 11, c’est lui qui pourra attaquer en premier : il a en effet eu le temps de se préparer au combat pendant le déplacement de l’autre combattant."
+        },
+        {
+          "type": "paragraph",
+          "text": "Si vous ne souhaitez pas gérer les déplacements de manière aussi précise, vous pouvez tout simplement considérer que les déplacements de 3 mètres ou moins sont négligeables, à l’échelle du combat, et les assimiler à des Actions gratuites."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "title": "Position du personnage",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Un personnage peut terminer un Déplacement ou toute autre Action dans n’importe quelle position (debout, accroupi, à genou, allongé…). Il est parfois utile de courir et de plonger au sol pour éviter le feu ennemi ! Tout changement de position important (plonger ou se relever, notamment), effectué avant une Action (de n’importe quel type) peut en revanche être considéré comme une Préparation :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "label": "S’accroupir / Se redresser",
+              "blocks": [ { "type": "paragraph", "text": "Init. -3*" } ]
+            },
+            {
+              "label": "Se jeter à terre, plonger",
+              "blocks": [ { "type": "paragraph", "text": "Init. -5*" } ]
+            },
+            {
+              "label": "Se découvrir / Se mettre à couvert",
+              "blocks": [ { "type": "paragraph", "text": "Init. -3. Pour tirer depuis une couverture, derrière un mur ou un objet quelconque par exemple." } ]
+            },
+            {
+              "label": "Se relever",
+              "blocks": [ { "type": "paragraph", "text": "Init. -10. Après une chute ou à partir de la position allongée. Si le personnage est encombré, ce mouvement peut même prendre un Tour complet." } ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "* Gratuit si cela termine un Déplacement."
+        }
+      ]
+    },
+
+    {
+      "type": "callout",
+      "variant": "sidebar",
+      "title": "Ramper",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Une fois allongé au sol, un personnage peut ramper. Si vous avez besoin de savoir à quelle vitesse il peut se déplacer, considérez qu’il peut parcourir une distance équivalente à celle de l’Allure lente, s’il tente de se déplacer le plus rapidement possible, et seulement la moitié de cette distance, s’il se déplace avec précaution (pour être furtif, par exemple)."
+        }
+      ]
+    }
+  ]
+}

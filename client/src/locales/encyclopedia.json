@@ -1,0 +1,10 @@
+{
+  "nav": {
+    "title": "Encyclopédie"
+  },
+  "states": {
+    "loading": "Chargement…",
+    "errorGeneric": "Erreur de chargement",
+    "empty": "Aucun contenu à afficher."
+  }
+}

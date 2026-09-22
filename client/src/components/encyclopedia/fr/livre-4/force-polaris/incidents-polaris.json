@@ -1,0 +1,70 @@
+{
+  "id": "force-polaris.incidents-polaris",
+  "slug": "incidents-polaris",
+  "title": "Incidents Polaris",
+  "page": 253,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Un « incident Polaris » est la conséquence d’une libération involontaire ou mal contrôlée de la Force Polaris. Si cela se produit, le joueur doit lancer 1D100 et consulter la liste suivante. Plus le nombre obtenu est grand, plus les effets seront dévastateurs…"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "roll", "label": "1D100" },
+        { "key": "text", "label": "Effet" }
+      ],
+      "rows": [
+        { "roll": "01-03", "text": "Altération de la température : la température grimpe ou baisse de 10 degrés, pendant 1D6 Tours de combat." },
+        { "roll": "04-06", "text": "Altération mineure de la gravité : la gravité est légèrement altérée. Les gens se sentent plus lourds ou plus légers et les objets les plus légers (plume) flottent ou (gobelet en plastique) sont légèrement écrasés. Tous les personnages subissent un malus de -3 à leurs actions pendant 1D6 Tours de combat." },
+        { "roll": "07-09", "text": "Altération mineure de la pression : la pression est légèrement augmentée ou diminuée pendant 1D6 Tours de combat. Tous les personnages — sauf les hybrides, les mutants amphibies et les individus en armures de plongée — doivent réussir un Test de Volonté ou être dérangés par le phénomène (-3 aux actions pendant 3 Tours de combat)." },
+        { "roll": "10-12", "text": "Bruits : des bruits mystérieux résonnent tout autour du personnage pendant 1D6 Tours, altérant les communications et les sons entendus." },
+        { "roll": "13-15", "text": "Démangeaisons : les gens sont pris de démangeaisons soudaines (malus de -3 aux actions pendant 1D6 Tours)." },
+        { "roll": "16-18", "text": "Choc structurel mineur : la structure dans laquelle les personnages se trouvent subit quelques dommages (des canalisations se mettent à fuir, des parois se fissurent, les vitres explosent, certains éléments internes se fragilisent, etc.). Il faudra réparer pour que le problème ne s’aggrave pas." },
+        { "roll": "19-21", "text": "Illuminations : la luminosité augmente inexplicablement." },
+        { "roll": "22-24", "text": "Onde de choc mineure : l’atmosphère est parcourue d’une onde de choc de faible intensité, infligeant 1D10 points de dommages aux personnages." },
+        { "roll": "25-27", "text": "Pannes mineures : des appareils sans importance tombent en panne, les armes à feu s’enrayent momentanément (1D6 Tours de combat)." },
+        { "roll": "28-30", "text": "Perturbation mineure de la réalité : la réalité est très légèrement déformée. Les droites ne sont plus tout à fait droites, les courbes sont accentuées, les distances sont légèrement altérées (ce qui entraîne une pénalité de -5 aux actions)." },
+        { "roll": "31-33", "text": "Pourrissement : la nourriture pourrit et l’eau croupit." },
+        { "roll": "34-36", "text": "Saignements : le personnage et les gens qui l’entourent se mettent à saigner du nez, des oreilles ou des yeux (effet déstabilisant et inquiétant, qui entraîne un malus de -3 aux actions pendant 3 Tours de combat)." },
+        { "roll": "37-39", "text": "Courant d’air : toute la zone est parcourue par un souffle d’air glacé (assez puissant pour infliger un malus de -3 aux actions pendant 1D4 Tours de combat)." },
+        { "roll": "40-42", "text": "Tremblement de structure mineur : la structure vibre légèrement comme sous l’effet d’un très léger tremblement de terre." },
+        { "roll": "43-45", "text": "Choc Polaris mineur : le personnage à l’origine de la libération de la Force Polaris subit un malus de -5 à son Test de Choc." },
+        { "roll": "46-48", "text": "Électricité : de petits arcs électriques courent sur les surfaces métalliques, infligeant 1D10 points de dégâts à tous les personnages présents." },
+        { "roll": "49-51", "text": "Vertiges : le personnage à l’origine de la libération de la Force Polaris est pris de vertiges, et ne peut pas agir pendant 1 Tour de combat." },
+        { "roll": "52-54", "text": "Tremblements : le personnage à l’origine de la libération de la Force Polaris est pris d’un léger tremblement (pénalité de -3 à toutes ses actions pendant 1D6 Tours de combat)." },
+        { "roll": "55-56", "text": "Altération majeure de la température : la température augmente ou baisse de 20 degrés, pendant 1D4 Tours de Combat." },
+        { "roll": "57-58", "text": "Altération majeure de la gravité : la gravité est fortement augmentée ou diminuée. Les personnages subissent un malus de -5 à leurs actions, et leur vitesse de déplacement est divisée par deux. Autour d’eux, des objets se mettent à voler ou sont écrasés." },
+        { "roll": "59-60", "text": "Altération majeure de la pression : la pression est fortement augmentée ou diminuée pendant 1D4 Tours de combat. Tous les personnages — sauf les hybrides, les mutants amphibies et les individus en armures de plongée — subissent un malus de -5 à leurs actions, ainsi que 2D10 points de dommages physiques (localisés dans le Corps), à cause des dégâts occasionnés par la pression à leurs organes internes." },
+        { "roll": "61-62", "text": "Désorientation : le personnage à l’origine de la libération de la Force Polaris est totalement désorienté, et ne peut pas agir pendant 1D4 Tours de combat." },
+        { "roll": "64-65", "text": "Bruits assourdissants : des bruits assourdissants résonnent dans la zone, empêchant toute communication pendant 1D6 Tours de combat." },
+        { "roll": "66-67", "text": "Décharge électrique : toutes les surfaces métalliques dans la zone sont parcourues d’électricité. Tous ceux qui se trouvent dessus et qui ne sont pas isolés subissent 2D10 points de Dommages physiques." },
+        { "roll": "68-69", "text": "Blessures : le personnage à l’origine de la libération de la Force Polaris subit 2D10 points de Dommages physiques. Ceux qui l’entourent subissent l’effet « 34-36. Saignements »." },
+        { "roll": "70-71", "text": "Illumination aveuglante : une lumière aveuglante inonde la zone, inflige un malus de -5 pour toute action nécessitant la vue." },
+        { "roll": "72-73", "text": "Choc Polaris majeur : le personnage à l’origine de la libération de la Force Polaris subit un malus de -10 à son Test de Choc." },
+        { "roll": "74-75", "text": "Hurlement strident : un hurlement strident brise toutes les structures fragiles (verres, cadrans, etc.). Tous les êtres vivants présents ne peuvent rien faire d’autre que se boucher les oreilles pendant 1 Tour de combat." },
+        { "roll": "76-77", "text": "Tremblements incontrôlables : le personnage à l’origine de la libération de la Force Polaris est pris de violents tremblements (pénalité de -5 à toutes ses actions)." },
+        { "roll": "78-79", "text": "Pannes majeures : des appareils importants tombent en panne. Les armes à feu s’enrayent et doivent être réparées par un Test réussi d’Intelligence." },
+        { "roll": "80-81", "text": "Onde de choc majeure : l’atmosphère est parcourue par une grosse onde de choc, infligeant 2D10 points de dommages aux personnages." },
+        { "roll": "82-83", "text": "Perturbation majeure de la réalité : la réalité est déformée. Les droites ne sont plus droites, les courbes sont accentuées, les distances sont altérées (malus de -7 à toutes les actions pendant 1D6 Tours de combat)." },
+        { "roll": "84-85", "text": "Choc structurel majeur : la structure dans laquelle les personnages se trouvent subit d’importants dommages (les canalisations explosent, les parois se brisent ou se déforment, certains éléments internes sont détruits, etc.). Il faut impérativement réparer au plus vite, sinon la structure elle-même est en danger." },
+        { "roll": "86-87", "text": "Souffle majeur : un vent fort souffle dans toute la zone, infligeant un malus de -5 aux actions pendant 1D6 Tours de combat. Tous les objets assez légers volent dans la zone." },
+        { "roll": "88-89", "text": "Spasme : le personnage à l’origine de la libération de la Force Polaris est pris de violents spasmes (pénalité d’1d10 à toutes ses actions)." },
+        { "roll": "90-99", "text": "Libération accidentelle d’un pouvoir : un pouvoir de la Force Polaris se déclenche aléatoirement. Faites un tirage sur la table de libération accidentelle (plus bas). Le pouvoir touche indistinctement alliés et ennemis, et sa « marge de réussite » est tout simplement égale à la marge d’échec du personnage (le modificateur d’échec augmente les effets de chacun des paramètres du pouvoir : zone d’effet, dommages, etc.)." },
+        {
+          "roll": "100 et +",
+          "text": "Déclenchement d’un phénomène exceptionnel : l’échec du personnage provoque l’apparition d’un phénomène extrêmement étrange et dangereux (selon les mêmes modalités que pour l’événement « 90-99. Libération accidentelle »). Relancez 1D10 pour en déterminer la nature :",
+          "subItems": [
+            "1. Déchirure du flux.",
+            "2. Désintégration moléculaire.",
+            "3. Oblitération psychique.",
+            "4-7. Onde Polaris.",
+            "8. Tempête de flux.",
+            "9. Vortex psychique.",
+            "10. Vortex physique."
+          ]
+        }
+      ]
+    }
+  ]
+}

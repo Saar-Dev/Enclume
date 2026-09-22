@@ -1,0 +1,12 @@
+{
+  "id": "force-polaris.liberation-involontaire",
+  "slug": "liberation-involontaire",
+  "title": "Libération involontaire",
+  "page": 253,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "La Force Polaris peut parfois être libérée involontairement, à cause du stress, de la peur, de la douleur ou d'autres facteurs psychologiques (être confronté à une phobie par exemple). Si le MJ estime qu'un traumatisme physique ou psychologique subit par un personnage est assez violent pour qu'une libération incontrôlée de la Force Polaris soit possible (il est aussi possible d'utiliser les règles de [[Moral|combat.moral|232]], dans le chapitre Combat, page 232), le personnage doit effectuer un Test de Maîtrise de la Force Polaris. En cas d'échec, il y a libération involontaire : il faut faire un jet dans la liste des [[Incidents Polaris|force-polaris.incidents-polaris|253]]. Pour éviter ce genre d'incident, ceux qui possèdent ce don portent souvent des appareils inhibiteurs, qui offrent un bonus au Test de Maîtrise de la Force Polaris. Les effets exacts d'un pouvoir libéré accidentellement sont déterminés par la marge d'échec du personnage."
+    }
+  ]
+}

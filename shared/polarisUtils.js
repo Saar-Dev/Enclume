@@ -451,3 +451,124 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
     poolTotal,
   };
 }
+
+// Table de Difficulté de l'Action (LdB p.201-202) — modificateur appliqué au Seuil d'un Test
+// avant résolution (voir polarisTestResolution.js, qui reçoit un seuil déjà modifié).
+// Ajouté pour l'Encyclopédie (Phase 3) : aucune consommation moteur à ce jour — même statut
+// que DEPLACEMENT_ACTION_MALUS, conservé ici pour ne pas perdre la donnée RAW avant branchement.
+export const DIFFICULTE_ACTION_MODIFICATEURS = [
+  { key: 'extremementFacile',    modifier:  10 },
+  { key: 'tresFacile',           modifier:   7 },
+  { key: 'facile',               modifier:   5 },
+  { key: 'assezFacile',          modifier:   3 },
+  { key: 'moyen',                modifier:   0 },
+  { key: 'assezDifficile',       modifier:  -3 },
+  { key: 'difficile',            modifier:  -5 },
+  { key: 'tresDifficile',        modifier:  -7 },
+  { key: 'extremementDifficile', modifier: -10 },
+  { key: 'presqueImpossible',    modifier: -13 },
+  { key: 'surhumain',            modifier: -15 },
+  { key: 'heroique',             modifier: -20 },
+]
+
+// Table de Difficulté de l'Action pour les Tests non aléatoires (LdB p.206) — seuil fixe à
+// atteindre (pas un modificateur appliqué au Seuil). Même échelle de degrés que
+// DIFFICULTE_ACTION_MODIFICATEURS, mêmes clés : le domaine terms.difficulteAction est partagé.
+// 'heroique' porte `seuil: null` = action impossible sur un Test non aléatoire (le RAW indique
+// "Impossible *", la note précisant que ce degré ne peut intervenir que sur un Test aléatoire).
+// Ajouté pour l'Encyclopédie (Phase 3) : aucune consommation moteur à ce jour.
+export const DIFFICULTE_NON_ALEATOIRE_SEUILS = [
+  { key: 'extremementFacile',    seuil:  1 },
+  { key: 'tresFacile',           seuil:  3 },
+  { key: 'facile',               seuil:  5 },
+  { key: 'assezFacile',          seuil:  7 },
+  { key: 'moyen',                seuil: 10 },
+  { key: 'assezDifficile',       seuil: 13 },
+  { key: 'difficile',            seuil: 15 },
+  { key: 'tresDifficile',        seuil: 17 },
+  { key: 'extremementDifficile', seuil: 20 },
+  { key: 'presqueImpossible',    seuil: 23 },
+  { key: 'surhumain',            seuil: 25 },
+  { key: 'heroique',             seuil: null },
+]
+
+// ─── Distances de déplacement (LdB p.221) ───────────────────────────────────
+// Ajouté pour l'Encyclopédie (Phase 3). Les allures générales sont déjà calculées
+// par calcAllureMoy/calcAllures ci-dessus ; ces deux tables sont la version brute
+// du RAW, utilisée pour l'affichage de la table complète.
+// La dernière ligne (« 26 et + ») présente des formules (valeurs textuelles),
+// pas des valeurs chiffrées : reproduites telles quelles depuis le RAW.
+// Aucune consommation moteur à ce jour — même statut que DEPLACEMENT_ACTION_MALUS.
+
+// Déplacements au sol — distances maximum en mètres.
+// COO détermine les Allures lente/moyenne/rapide ; Athlétisme détermine l'Allure max.
+export const DISTANCES_DEPLACEMENT_SOL = [
+  { coo: '3-5',    lente: 3, moyenne: 6,  rapide: 12, max: 24 },
+  { coo: '6-10',   lente: 4, moyenne: 8,  rapide: 16, max: 32 },
+  { coo: '11-15',  lente: 5, moyenne: 10, rapide: 20, max: 40 },
+  { coo: '16-20',  lente: 6, moyenne: 12, rapide: 24, max: 48 },
+  { coo: '21-25',  lente: 7, moyenne: 14, rapide: 28, max: 56 },
+  { coo: '26 et +', lente: 'Allure Moy. / 2', moyenne: '+2 m tous les 5 niveau', rapide: 'Allure Moy. × 2', max: 'Allure Moy. × 4' },
+]
+
+// Déplacements sous l'eau — distances maximum en mètres.
+// Subdivision par type de personnage sous chaque Allure :
+//   hum = humains normaux ; th = techno-hybrides ; hyb = hybrides naturels ou géno-hybrides.
+// COO (ou Compétence Hybride pour les hybrides naturels) détermine les Allures
+// lente/moyenne/rapide ; Athlétisme (ou Hybride) détermine l'Allure max.
+// La dernière ligne présente des formules par Allure (pas par type) : valeurs textuelles.
+export const DISTANCES_DEPLACEMENT_EAU = [
+  {
+    coo: '3-5',
+    lente:   { hum: 0.5, th: 2,  hyb: 3 },
+    moyenne: { hum: 1,   th: 4,  hyb: 6 },
+    rapide:  { hum: 2,   th: 8,  hyb: 12 },
+    max:     { hum: 3,   th: 16, hyb: 24 },
+  },
+  {
+    coo: '6-10',
+    lente:   { hum: 1, th: 3,  hyb: 4 },
+    moyenne: { hum: 2, th: 6,  hyb: 8 },
+    rapide:  { hum: 4, th: 12, hyb: 16 },
+    max:     { hum: 6, th: 24, hyb: 32 },
+  },
+  {
+    coo: '11-15',
+    lente:   { hum: 1, th: 4,  hyb: 5 },
+    moyenne: { hum: 3, th: 8,  hyb: 10 },
+    rapide:  { hum: 6, th: 16, hyb: 20 },
+    max:     { hum: 9, th: 32, hyb: 40 },
+  },
+  {
+    coo: '16-20',
+    lente:   { hum: 2, th: 5,  hyb: 6 },
+    moyenne: { hum: 4, th: 10, hyb: 12 },
+    rapide:  { hum: 8, th: 20, hyb: 24 },
+    max:     { hum: 12, th: 40, hyb: 48 },
+  },
+  {
+    coo: '21-25',
+    lente:   { hum: 3, th: 6,  hyb: 7 },
+    moyenne: { hum: 5, th: 12, hyb: 14 },
+    rapide:  { hum: 10, th: 24, hyb: 28 },
+    max:     { hum: 15, th: 48, hyb: 56 },
+  },
+  {
+    coo: '26 et +',
+    lente:   'Allure moyenne / 2',
+    moyenne: '+2 m tous les 5 niveaux',
+    rapide:  'Allure moyenne × 2',
+    max:     'Allure moyenne × 4',
+  },
+]
+// Table de malus de combat contre plusieurs adversaires (LdB p.223) — malus au Test
+// d'opposition (attaque comme défense) selon le nombre total d'adversaires au contact.
+// Le RAW borne à 4 adversaires simultanés : au-delà, les combattants se gênent
+// mutuellement et le cas n'est plus représenté.
+// Ajouté pour l'Encyclopédie (Phase 3) : aucune consommation moteur à ce jour — même
+// statut que DEPLACEMENT_ACTION_MALUS, conservé ici pour ne pas perdre la donnée RAW.
+export const COMBAT_MULTIPLE_ADVERSAIRES_MALUS = [
+  { adversaires: 2, malus:  -5 },
+  { adversaires: 3, malus:  -7 },
+  { adversaires: 4, malus: -10 },
+]

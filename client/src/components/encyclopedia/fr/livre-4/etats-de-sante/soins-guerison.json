@@ -1,0 +1,55 @@
+{
+  "id": "etats-de-sante.soins-guerison",
+  "slug": "soins-guerison",
+  "title": "Durée de guérison et soins",
+  "page": 238,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Pour chaque gravité de blessure, le tableau ci-dessous indique les temps de guérison et les types de soins nécessaires."
+    },
+    {
+      "type": "paragraph",
+      "text": "Chaque blessure possède une durée de guérison, exprimée en jours ou en semaines. C’est la durée minimum nécessaire pour qu’une blessure diminue et se transforme en une blessure de gravité inférieure. Ainsi, au bout de 3 semaines, une Blessure mortelle a la possibilité de se transformer en Blessure critique. Les Blessures voient leur gravité décroître peu à peu, jusqu’à disparaître totalement."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : un Membre détruit devient une Blessure critique."
+    },
+    {
+      "type": "paragraph",
+      "text": "Néanmoins, pour qu’une blessure guérisse aussi facilement, il faut pour cela que certaines conditions soient remplies. La plupart des blessures nécessitent des soins médicaux, notamment. C’est même impératif pour certaines d’entre elles. Comme l’indique la colonne Soins nécessaires, toutes peuvent être traitées par un Test de Médecine, les moins graves peuvent également être soignées par un simple Test de Premiers soins. Enfin, les plus graves nécessitent aussi un Test réussi de Chirurgie avant toute phase de soins médicaux."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le tableau indique également le modificateur de Difficulté à appliquer au Test, en fonction de la gravité de la blessure. Notez que ces Difficultés correspondent à des conditions de soins correctes : un environnement sain, du matériel médical et des médicaments disponibles, un bloc opératoire normalement équipé. Si le médecin est obligé de soigner un blessé sans matériel approprié (instruments et pansements stériles, médicaments, etc.), les malus peuvent être augmentés de 3 à 5 points, selon la situation. Un chirurgien sans matériel ne peut pas opérer le blessé… Dans ce dernier cas, le MJ peut soumettre le personnage à un Test contre l’infection, ou aggraver les séquelles des blessures. À l’inverse, le MJ peut diminuer les malus, si le blessé est soigné dans un hôpital disposant d’une grande technologie médicale."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les blessures sont traitées Localisation par Localisation, quel que soit le nombre de cases cochées sur chaque ligne de blessure (pour simplifier, disons qu’en fait le médecin guérit un « bras » ou une « jambe », plutôt qu’une « blessure sur le bras » ou « sur la jambe »…). Chaque case de blessure cochée en plus de la première impose toutefois un malus cumulatif supplémentaire de -2 au Test à effectuer. De plus, certaines blessures exigent des Soins constants, ce qui signifie que le Test de Médecine doit être effectué chaque semaine."
+    },
+    {
+      "type": "paragraph",
+      "text": "En cas de réussite, la guérison est en bonne voie, et le blessé se remet normalement. S’il est arrivé à la fin de la période de guérison qui correspond à sa blessure, celle-ci diminue d’un niveau de gravité. Un échec force le blessé à effectuer un (et un seul) Test de Constitution pour la période en cours, pour lutter contre les effets de l’Infection (voir [[Infection|etats-de-sante.aggravation.infection|239]])… Une Catastrophe équivaut à une absence totale de soins : le blessé est alors entièrement soumis aux règles d’Infection, et doit donc effectuer un Test de Constitution tous les deux jours pendant la période de guérison en cours."
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Blessures légères guérissent naturellement toutes seules, et certaines blessures de gravité moyenne (Blessures moyennes et graves) peuvent éventuellement se passer de soins médicaux. Le blessé ne peut alors compter que sur ses capacités de guérison naturelle. Néanmoins, toutes les blessures non soignées ET réclamant des soins risquent de s’aggraver par l’infection (voir [[Infection|etats-de-sante.aggravation.infection|239]])."
+    },
+    {
+      "type": "dataTable",
+      "source": "DUREE_GUERISON_SOINS_TABLE",
+      "caption": "Durée de guérison et soins nécessaires",
+      "headers": [
+        [
+          { "label": "Blessures" },
+          { "label": "Durée de guérison" },
+          { "label": "Guérison naturelle ?" },
+          { "label": "Soins nécessaires" },
+          { "label": "Difficulté" },
+          { "label": "Soins constants ?" }
+        ]
+      ]
+    }
+  ]
+}

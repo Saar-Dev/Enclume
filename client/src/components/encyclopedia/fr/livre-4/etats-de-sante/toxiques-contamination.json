@@ -1,0 +1,37 @@
+{
+  "id": "etats-de-sante.toxiques-contamination",
+  "slug": "toxiques-contamination",
+  "title": "Contracter une maladie ou un empoisonnement",
+  "page": 245,
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-contamination.contracter",
+      "title": "Contracter une maladie"
+    },
+    {
+      "type": "paragraph",
+      "text": "Dès que le personnage est susceptible d’être en contact avec la maladie, par le biais de son mode de contamination, il doit effectuer un Test de contamination : il s’agit tout simplement d’un Test de Constitution, avec une Difficulté égale au modificateur de contagion. En cas d’échec, le personnage a contracté la maladie. En cas de réussite, il ne tombe pas malade. Néanmoins, s’il reste longtemps en contact avec la maladie, le MJ peut parfaitement demander de nouveaux Tests de contamination."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : il peut être intéressant d’effectuer ces Tests en secret, afin que le joueur ne se doute de rien."
+    },
+
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "etats-de-sante.toxiques-contamination.empoisonnement",
+      "title": "Être victime d’un empoisonnement"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le cas des poisons est plus simple, car il n’y a pas de Test de contamination à faire. En effet, dès que le poison est administré au personnage par le biais de son mode de contamination, le personnage est automatiquement empoisonné."
+    },
+    {
+      "type": "paragraph",
+      "text": "Un poison peut cependant être détecté, quand il est placé dans une boisson, un aliment, etc. Le personnage doit alors effectuer un Test de Pharmacologie ou de Connaissance des poisons, avec une Difficulté égale au modificateur de détection approprié (en fonction du sens utilisé). Un personnage qui n’est pas compétent en Pharmacologie ou en Connaissance des poisons peut toujours effectuer un Test de Perception (toujours avec les mêmes modificateurs) : en cas de réussite, il se rendra compte qu’il y a un goût ou une odeur bizarre, sans pouvoir être plus précis. Enfin, dans la plupart des cas, une analyse chimique effectuée avec Pharmacologie ou Chimie permettra généralement de détecter la substance toxique (sans forcément l’identifier à coup sûr)."
+    }
+  ]
+}

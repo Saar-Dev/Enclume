@@ -1,0 +1,26 @@
+{
+  "id": "force-polaris.pouvoirs-polaris",
+  "slug": "pouvoirs-polaris",
+  "title": "Pouvoirs du Polaris",
+  "page": 255,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Chaque pouvoir fait l’objet d’une Compétence, dont le niveau de base (qui commence à « X ») est calculé d’après l’Intelligence et la Volonté du personnage."
+    },
+    {
+      "type": "paragraph",
+      "text": "En règle générale, le personnage n’a jamais le contrôle complet du phénomène qu’il libère, mais les points du modificateur de réussite obtenu à la suite du Test de Compétence permettent de modifier les paramètres du pouvoir (zone d’effet, durée, dommages, etc.). Ainsi, avec un pouvoir qui possède une zone d’effet de « 5 mètres +/- modif. de réussite », un personnage ayant obtenu un modificateur de réussite de +/-3 peut par exemple augmenter la zone d’effet à 5+3 = 8 mètres, ou au contraire la réduire de 5-3 = 2 mètres. Le personnage peut ainsi modifier chacun des paramètres du pouvoir (notez qu’il peut n’utiliser qu’une partie du modificateur : un personnage qui obtient un modificateur de +/-3 peut ainsi se contenter de modifier un paramètre d’1, 2 ou 3 points, ou même ne rien modifier du tout)."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "force-polaris.pouvoirs-polaris.decouvrir-apprendre",
+      "title": "DÉCOUVRIR ET APPRENDRE DE NOUVEAUX POUVOIRS"
+    },
+    {
+      "type": "paragraph",
+      "text": "Contrairement aux autres Compétences, les pouvoirs de la Force Polaris sont souvent des techniques jalousement gardées, qui ne s’apprennent pas dans les livres. Pour développer un nouveau pouvoir, il faut l’apprendre auprès d’un professeur, ce qui peut être difficile si le personnage ne fait pas partie d’une organisation telle que le Culte du Trident. On peut également imaginer qu’il soit possible de découvrir tout seul un nouveau pouvoir, à force d’expérimenter et de s’entraîner, mais cela ne se fera ni sans efforts, ni sans dommages collatéraux à cause des nombreuses libérations accidentelles… Il n’y a pas vraiment de règles établies pour l’une ou l’autre méthode : tout repose sur le bon vouloir du meneur de jeu, lui seul pouvant autoriser un personnage à développer plus ou moins facilement de nouveaux pouvoirs. Cela peut également donner lieu à d’intéressants scénarios."
+    }
+  ]
+}
