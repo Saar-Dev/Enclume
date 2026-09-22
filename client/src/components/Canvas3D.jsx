@@ -5,6 +5,7 @@ import { useGLTF } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
+import axios from 'axios'
 import api from '../lib/api.js'
 import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { WS } from '../../../shared/events.js'
@@ -731,7 +732,15 @@ function Scene({
   const [currentPath, setCurrentPath] = useState([])
   const currentPathRef = useRef([])
   currentPathRef.current = currentPath
-  const previewRequestRef = useRef(0)
+  // Annulation réelle (AbortController, patron déjà utilisé dans le projet pour drag/resize —
+  // DroneWindow.jsx, ExoSheetWindow.jsx, CharacterWindow.jsx, DicePanel.jsx) plutôt qu'un compteur
+  // maison : BUG-DEPLACEMENT2 (2026-09-22) — l'ancien garde-fou rejetait une réponse dès qu'une
+  // requête plus RÉCENTE avait été LANCÉE (pas seulement si une réponse plus récente était déjà
+  // ARRIVÉE) ; pendant un survol continu (une requête par pas de 0,375 m), chaque réponse arrivait
+  // donc structurellement périmée et `currentPath` ne se mettait jamais à jour tant que la souris
+  // bougeait. Une seule requête en vol à la fois, la précédente est réellement annulée avant que la
+  // suivante ne parte.
+  const previewAbortRef = useRef(null)
 
   const voxelsRef = useRef(voxels)
   voxelsRef.current = voxels
@@ -770,6 +779,10 @@ function Scene({
   // par-dessus le ciblage (retour Saar 2026-07-31).
   useEffect(() => {
     if (!combatMoveMode || combatTargetMode || combatAoeTargetMode || losMode?.active || moveTarget) {
+      // Sans cet abort, une réponse déjà en vol au moment de la sortie du mode pouvait arriver après
+      // coup et repeupler currentPath — le compteur maison ne protégeait pas contre ce cas (aucune
+      // NOUVELLE requête n'était lancée pour l'invalider). Même mécanisme que requestWorldPathPreview.
+      previewAbortRef.current?.abort()
       setCombatCursorPos(null)
       setCurrentPath([])
       lastCellRef.current = null
@@ -896,14 +909,15 @@ function Scene({
   })
 
   const requestWorldPathPreview = useCallback(async (mode, destination) => {
-    const requestId = ++previewRequestRef.current
+    previewAbortRef.current?.abort()
+    const controller = new AbortController()
+    previewAbortRef.current = controller
     try {
       const res = await api.post(`/battlemaps/${battlemapId}/world-path-preview`, {
         token_id: mode.tokenId,
         destination,
         budget_m: Number(mode.allures?.max) || 0,
-      })
-      if (requestId !== previewRequestRef.current) return
+      }, { signal: controller.signal })
       const result = res.data?.result
       if (!result?.plan) {
         currentPathRef.current = []
@@ -927,7 +941,9 @@ function Scene({
       currentPathRef.current = path
       setCurrentPath(path)
     } catch (error) {
-      if (requestId !== previewRequestRef.current) return
+      // Requête remplacée par un survol plus récent (abort() ci-dessus) — pas une erreur, la
+      // requête qui l'a supplantée porte déjà (ou portera) le résultat à afficher.
+      if (axios.isCancel(error)) return
       currentPathRef.current = []
       setCurrentPath([])
       if (error?.response?.status !== 409) console.error('Erreur preview déplacement monde :', error)
@@ -1053,6 +1069,7 @@ function Scene({
       setAmbientHoverTokenId(prev => (prev === (occupyingToken?.id ?? null) ? prev : (occupyingToken?.id ?? null)))
       if (occupyingToken) {
         if (lastCellRef.current !== null) {
+          previewAbortRef.current?.abort()
           lastCellRef.current = null
           setCombatCursorPos(null)
           currentPathRef.current = []
