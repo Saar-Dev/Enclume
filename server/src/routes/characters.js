@@ -80,9 +80,13 @@ router.get('/', requireAuth, async (req, res) => {
       .whereNull('char_sheet.wizard_locked_at')
   })
 
-  // Les joueurs ne voient pas non plus les personnages masqués
+  // Les joueurs ne voient pas non plus les personnages masqués — sauf les leurs : `visible` gate
+  // l'exposition aux AUTRES joueurs, jamais au propriétaire lui-même (ex. import Coffre→campagne,
+  // toujours visible:false à l'arrivée, cf. vaultService.js#cloneCharacterDeep « Piège P5 »).
   if (!isGm) {
-    query.where('characters.visible', true)
+    query.where(function () {
+      this.where('characters.visible', true).orWhere('characters.user_id', req.user.id)
+    })
   }
 
   const characters = await query

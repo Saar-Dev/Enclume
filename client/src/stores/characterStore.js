@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useAuthStore } from './authStore'
 
 export const useCharacterStore = create((set) => ({
   characters: [],
@@ -34,11 +35,14 @@ export const useCharacterStore = create((set) => ({
   })),
 
   // Ajout ou remplacement — handler WS CHARACTER_UPDATED
-  // Si visible:false et non-GM → retirer du store (le joueur ne doit plus voir ce character)
+  // Si visible:false et non-GM et non-propriétaire → retirer du store (le joueur ne doit plus voir
+  // ce character) — `visible` gate l'exposition aux AUTRES joueurs, jamais au propriétaire lui-même
+  // (même autorité que characters.js#GET, cf. « Piège P5 »).
   // Si le character existe déjà → remplace (mise à jour)
   // Si le character n'existe pas → ajoute (nouvellement visible pour un joueur)
   upsertCharacter: (character) => set((state) => {
-    if (!character.visible && !state.isGm) {
+    const isOwner = character.user_id && character.user_id === useAuthStore.getState().user?.id
+    if (!character.visible && !state.isGm && !isOwner) {
       return { characters: state.characters.filter(c => c.id !== character.id) }
     }
     const exists = state.characters.find(c => c.id === character.id)
