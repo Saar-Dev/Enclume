@@ -12,6 +12,7 @@
           "pageStart": 201,
           "pageEnd": 211,
           "articles": [
+            { "id": "tests-et-actions.introduction",                     "slug": "introduction",                     "title": "Introduction",                                "page": 201 },
             { "id": "tests-et-actions.utilisation-attributs-competences", "slug": "utilisation-attributs-competences", "title": "Utilisation des attributs et des compétences", "page": 202 },
             { "id": "tests-et-actions.resolution-tests",                 "slug": "resolution-tests",                 "title": "Résolution des tests",                        "page": 203 },
             { "id": "tests-et-actions.nouvelles-tentatives",              "slug": "nouvelles-tentatives",              "title": "Nouvelles tentatives et compte à rebours",    "page": 205 },
@@ -28,6 +29,7 @@
           "pageStart": 212,
           "pageEnd": 233,
           "articles": [
+            { "id": "combat.introduction",                    "slug": "introduction",                    "title": "Introduction",                                "page": 212 },
             { "id": "combat.organisation",                    "slug": "organisation",                    "title": "Organisation du combat",                      "page": 212 },
             { "id": "combat.initiative",                      "slug": "initiative",                      "title": "Initiative",                                  "page": 213 },
             { "id": "combat.declaration-intention",           "slug": "declaration-intention",           "title": "Déclaration d'intention",                     "page": 214 },
@@ -56,6 +58,7 @@
           "pageStart": 234,
           "pageEnd": 251,
           "articles": [
+            { "id": "etats-de-sante.introduction",           "slug": "introduction",           "title": "Introduction",                                "page": 234 },
             { "id": "etats-de-sante.blessures-seuils",       "slug": "blessures-seuils",       "title": "Seuils de blessures",                         "page": 234, "group": "Blessures physiques" },
             { "id": "etats-de-sante.blessures-description",  "slug": "blessures-description",  "title": "Description et effets des blessures",         "page": 235, "group": "Blessures physiques" },
             { "id": "etats-de-sante.blessures-malus",        "slug": "blessures-malus",        "title": "Malus aux Tests",                             "page": 236, "group": "Blessures physiques" },
@@ -95,6 +98,7 @@
           "pageStart": 252,
           "pageEnd": 267,
           "articles": [
+            { "id": "force-polaris.introduction",                 "slug": "introduction",                 "title": "Introduction",                                 "page": 252 },
             { "id": "force-polaris.maitrise-force-polaris",       "slug": "maitrise-force-polaris",       "title": "Maîtriser l'effet Polaris",                    "page": 252 },
             { "id": "force-polaris.liberer-controler",            "slug": "liberer-controler",            "title": "Libérer et contrôler la Force Polaris",        "page": 252 },
             { "id": "force-polaris.utiliser-pouvoir",             "slug": "utiliser-pouvoir",             "title": "Utiliser un pouvoir Polaris",                  "page": 253 },

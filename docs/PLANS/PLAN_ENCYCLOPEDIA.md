@@ -2,7 +2,8 @@
 
 > Fenêtre « Encyclopédie » du projet Enclume — présentation du RAW du LdB Polaris
 > en articles navigables, fidèle au livre, zéro dérive avec les données de l'app.
-> Dernière mise à jour : 2026-09-22 (audit + segmentation États de santé + tables restantes)
+> Dernière mise à jour : 2026-09-23 (intro de chapitre → article à part entière, `_chapter.json`
+> supprimé — préparation de l'accès in-game)
 
 ---
 
@@ -37,16 +38,22 @@ ou hors session. Granularité fine motivée par cet usage.
         _index.json
         terms.json              ← libellés de tableaux (cf. CONVERSION §4.9)
         livre-4/
-          combat/             (20 articles + _chapter.json)
-          tests-et-actions/   (8 articles + _chapter.json)
-          etats-de-sante/     (31 articles + _chapter.json)
-          force-polaris/      (statut à clarifier)
+          combat/             (21 articles, dont introduction)
+          tests-et-actions/   (9 articles, dont introduction)
+          etats-de-sante/     (26 articles, dont introduction)
+          force-polaris/      (14 articles dont introduction, 1 corrompu — voir §6)
           experience/         (à convertir)
       en/                     (vide)
 
 Le `_index.json` porte la carte de navigation complète, y compris les
 articles non encore convertis (visibles dans la nav, non cliquables
 fonctionnellement tant que le fichier n'existe pas).
+
+**Plus de fichier `_chapter.json`** (supprimé 2026-09-23) : la citation/texte de cadrage de chaque
+chapitre est un article normal comme un autre (`<chapitre>.introduction`), toujours en première
+position dans `articles[]`. Avant, `_chapter.json` portait `title`/`pageStart`/`pageEnd` (déjà
+dupliqués dans `_index.json`) et `intro` (affiché en plus du premier article, jamais comme un article
+à part) — le tout retiré, `_index.json` seul porte désormais la nav.
 
 ---
 
@@ -58,9 +65,8 @@ fonctionnellement tant que le fichier n'existe pas).
       ChapterList.jsx                ← nav 3 niveaux
       ArticleView.jsx                ← vue article (+ scroll sur ancre)
       BlockRenderer.jsx              ← dispatcher de blocs
-      contentLoader.js               ← getIndex, loadChapterMeta, loadArticle,
-                                       loadGlossary, findChapterMeta, findArticleMeta,
-                                       resolveWikiTarget
+      contentLoader.js               ← getIndex, loadArticle, loadGlossary,
+                                       findArticleMeta, resolveWikiTarget
       inlineParser.jsx               ← liens wiki + gras/italique
       dataSources.js                 ← whitelist des sources shared/ (+ transforms)
       encyclopedia.css
@@ -102,10 +108,10 @@ Différés :
 
 | Chapitre | Statut |
 |---|---|
-| Tests et actions | ✔ 8/8 |
-| Combat | ✔ 20/20 |
-| États de santé | ✔ 25/25 (segmenté depuis 31 le 2026-09-22, voir §7 Phase 2bis) |
-| Force Polaris | 13/13 fichiers présents, **1 corrompu** : `maitrise-force-polaris.json` contient en réalité le texte de « Choc Polaris » (même id que `choc-polaris.json`) — l'article n'a jamais été rédigé. Confirmé 2026-09-22, doc précédente (« statut à clarifier ») obsolète. |
+| Tests et actions | ✔ 9/9 (dont introduction) |
+| Combat | ✔ 21/21 (dont introduction) |
+| États de santé | ✔ 26/26 (segmenté depuis 31 le 2026-09-22, voir §7 Phase 2bis ; + introduction 2026-09-23) |
+| Force Polaris | 13/14 articles structurellement sains (dont introduction), **audit complet fait 2026-09-22** (voir détail ci-dessous) — **1 fichier corrompu** (`maitrise-force-polaris.json`) + 1 dette de segmentation (`liste-pouvoirs.json`). Le bug des 8 tableaux invisibles est résolu (voir plus bas). |
 | Expérience | Index posé, 0 article |
 
 **Total converti : voir `node tools/validate-encyclopedia.mjs`** (compte les articles réels à chaque
@@ -115,6 +121,36 @@ section en premier lieu).
 ### Livres 1-2-3
 
 Non communiqués. Non bloquant.
+
+### Audit Force Polaris (2026-09-22)
+
+Premier audit qualité complet de ce chapitre (les autres l'avaient déjà eu — bilan initial pour États
+de santé, relecture visuelle de Saar pour Combat/Tests et actions). Trois trouvailles :
+
+1. **`maitrise-force-polaris.json` corrompu** (déjà connu) — contient mot pour mot le texte de
+   `choc-polaris.json` (même id/slug/titre au champ page près). L'article « Maîtriser l'effet Polaris »
+   (RAW p.252) n'a en réalité jamais été rédigé. Bloqué sur le texte RAW (pas encore fourni par Saar).
+2. **Résolu 2026-09-22** : 8 blocs `dataTable` (`incidents-polaris.json`, `table-liberation-
+   accidentelle.json`, 6× `liste-pouvoirs.json`) utilisaient un schéma `columns`/`rows` en dur — la
+   forme « éditoriale pure » déjà anticipée par `ENCYCLOPEDIA_CONVERSION.md` §3 mais jamais
+   implémentée côté composant (`DataTableBlock.jsx` ne rendait que le schéma `source`-driven, retour
+   `null` silencieux sinon). `DataTableBlock.jsx` porte désormais un second chemin de rendu
+   (`EditorialDataTable`, `block.columns`/`block.rows`, gère aussi `row.subItems` pour la ligne « 100
+   et + » d'Incidents Polaris). Les 8 tables vérifiées structurellement (script jetable :
+   colonnes/lignes cohérentes, aucune ambiguïté avec `source`) + `tools/validate-encyclopedia.mjs`
+   (mêmes 2 erreurs préexistantes, aucune nouvelle) + build client vert. **Non testé** : rendu visuel
+   réel en navigateur (à valider par Saar). `tools/validate-encyclopedia.mjs` ne détecte toujours pas
+   ce genre de cas (il valide index/fichiers/liens, pas le schéma interne d'un bloc) — limite connue,
+   pas corrigée ici.
+3. **`liste-pouvoirs.json` : 44 pouvoirs dans un seul fichier (1350 lignes)** — même défaut de
+   granularité qui a motivé la segmentation d'États de santé (31→25 articles), jamais appliqué ici.
+   Chaque pouvoir a son propre `heading` niveau 2 + id d'ancre, donc le découpage en un article par
+   pouvoir serait mécanique, mais pas fait.
+
+Reste sain : les 6 articles de mécanique (Maîtriser/Libérer-contrôler/Utiliser un pouvoir/Choc
+Polaris/Pouvoir incontrôlé/Libération involontaire) et les 3 articles de lore (Flux Polaris/Géographie
+du Flux/Entités) — aucune désync, aucun lien mort, aucune valeur RAW dupliquant `shared/` (le chapitre
+n'a aucun équivalent moteur à ce jour).
 
 ### Tables `shared/` — chapitre États de santé
 
@@ -132,7 +168,9 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
 
 **Phase 2 — Conversion chapitre par chapitre** : EN COURS
 - Chapitres complets : Tests et actions, Combat, États de santé (segmenté 2026-09-22)
-- Prochain : Force Polaris (13/13 fichiers présents, 1 à corriger/réécrire — voir §6)
+- Prochain : Force Polaris — audité 2026-09-22 (voir §6). (a) fix rendu `DataTableBlock.jsx` (schéma
+  éditorial) **fait 2026-09-22**. Restent : (b) réécriture `maitrise-force-polaris.json` (attend le
+  RAW p.252 de Saar), (c) segmentation `liste-pouvoirs.json`
 
 **Phase 2bis — Segmentation États de santé** : TERMINÉE (2026-09-22)
 - 31 → 25 articles (6 fusions de fratries mono-page, 3 renommages de cohérence maladies-*→toxiques-*)
@@ -140,6 +178,35 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
   `ChapterList.jsx`) — décision actée : pas de 4ᵉ niveau d'accordéon
 - Outil pérenne `tools/validate-encyclopedia.mjs` (index/fichiers + liens `[[...]]`, à relancer après
   tout renommage futur)
+
+**Phase 2ter — Intro de chapitre → article à part entière** : TERMINÉE (2026-09-23)
+- Déclenché en préparant l'accès in-game (fenêtre encyclopédie) : le patron « h1 chapitre + intro
+  affichés en plus du premier article » ne passait pas à l'échelle d'une petite fenêtre, et dupliquait
+  déjà `title`/`pageStart`/`pageEnd` entre `_chapter.json` et `_index.json`.
+- 4 nouveaux articles `<chapitre>.introduction` (citation + texte de cadrage RAW, déplacés tels quels,
+  aucune réécriture sauf 2 apostrophes droites → typographiques sur Force Polaris, déjà la norme
+  documentée §CONVERSION §4), en première position de `articles[]`. Titre **« Introduction »** pour
+  les 4 (pas le nom du chapitre — corrigé après relecture Saar : « Combat » comme titre de chapitre
+  ET comme titre de son premier article était redondant et sans valeur informative dans la nav).
+- **Correction de contenu (Combat)** : le chapitre Combat était le seul des 4 sans citation
+  d'ouverture — signal qui aurait dû être interrogé avant d'écrire le fichier (les 3 autres en ont une,
+  pas de raison RAW pour que Combat fasse exception) plutôt que recopié tel quel comme si l'absence
+  était normale. Saar a fourni le texte manquant (BARAL FAADHI, instructeur de combat) — ajouté, avec
+  normalisation des 2 césures PDF visibles dans le texte source (« suffi t » → « suffit », « fl ingue »
+  → « flingue ») et de l'attribution (`--` → `—`, apostrophes droites → typographiques), conforme aux
+  standards déjà en vigueur (`ENCYCLOPEDIA_CONVERSION.md` §4).
+- `_chapter.json` supprimé (4 fichiers) ainsi que tout le code qui ne servait qu'à ça :
+  `loadChapterMeta`/`CHAPTER_META_MODULES`/`findChapterMeta` (`contentLoader.js`), état `chapterMeta`
+  + effet de chargement + memo `isFirstArticle` (`EncyclopediaPage.jsx`, retire au passage un des deux
+  `react-hooks/set-state-in-effect` déjà connus comme dette), CSS mortes `.encyclo-chapter-title`/
+  `.encyclo-intro`.
+- **Changement de comportement assumé** (validé Saar) : arriver sur un chapitre affiche désormais
+  seulement l'introduction, plus le premier article de fond en même temps qu'avant — un clic
+  supplémentaire est nécessaire. Les liens wiki vers un chapitre entier (`[[Combat|combat|222]]` etc.,
+  déjà présents dans le corpus) atterrissent désormais sur l'introduction plutôt que sur l'ancien
+  premier article — cohérent avec le nouveau comportement.
+- Vérifié : `tools/validate-encyclopedia.mjs` (mêmes 2 erreurs préexistantes, 69 articles au lieu de
+  65), `eslint`, `npm run build`.
 
 **Phase 3 — Injection données shared/** : TERMINÉE pour États de santé (2026-09-22)
 - Vertical slice terminée :
@@ -217,6 +284,12 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
   fois, `blessures-description`/`blessures-effets` et `force-polaris.maitrise-force-polaris`). Toujours
   vérifier avec `tools/validate-encyclopedia.mjs`, jamais supposer qu'un fichier présent = fichier
   correct.
+- **Résolu 2026-09-22** : un bloc `dataTable` éditorial (`columns`/`rows`, sans `source`) ne rendait
+  rien (`DataTableBlock.jsx` ne testait que `block.source`, retour `null` silencieux sinon) — trouvé
+  en auditant Force Polaris (8 tables invisibles sur 3 fichiers). `DataTableBlock.jsx` porte désormais
+  un second chemin de rendu pour ce schéma (`EditorialDataTable`). Le validateur ne détecte toujours
+  pas ce genre de cas (il ne valide pas le schéma interne d'un bloc) — toujours vérifier visuellement
+  qu'un `dataTable` fraîchement écrit s'affiche réellement, pas seulement que le JSON est valide.
 
 ---
 

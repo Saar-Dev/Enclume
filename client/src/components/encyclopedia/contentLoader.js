@@ -1,12 +1,15 @@
 // contentLoader.js — Chargement du contenu Encyclopédie.
 //
-// Trois niveaux :
+// Deux niveaux :
 //   - Index (léger) : import statique, contient la structure de navigation complète
-//   - Meta de chapitre : _chapter.json (titre, intro, plage de pages)
+//     (titre/pages de chapitre inclus — plus de fichier _chapter.json séparé,
+//     supprimé 2026-09-23 : la citation/texte de cadrage de chaque chapitre est
+//     désormais un article normal comme un autre, `<chapitre>.introduction`,
+//     toujours en première position dans `articles[]`)
 //   - Article : fichier JSON individuel chargé à la demande
 //
-// Le glob multi-niveaux matche les articles dans les sous-dossiers de chapitre
-// (ex. fr/livre-4/combat/organisation.json) et exclut les _chapter.json.
+// Le glob matche les articles dans les sous-dossiers de chapitre
+// (ex. fr/livre-4/combat/organisation.json).
 //
 // loadGlossary() : parcourt tous les articles en parallèle, extrait les sections
 // ciblables (headings avec id + callouts avec id), retourne un arbre
@@ -26,19 +29,10 @@ export function getIndex(lang = 'fr') {
   return index
 }
 
-const CHAPTER_META_MODULES = import.meta.glob('./*/livre-*/*/_chapter.json')
 const ARTICLE_MODULES = import.meta.glob([
   './*/livre-*/*/*.json',
   '!./*/livre-*/*/_*.json',
 ])
-
-export async function loadChapterMeta(lang, bookSlug, chapterSlug) {
-  const key = `./${lang}/${bookSlug}/${chapterSlug}/_chapter.json`
-  const loader = CHAPTER_META_MODULES[key]
-  if (!loader) throw new Error(`Meta de chapitre introuvable : ${key}`)
-  const mod = await loader()
-  return mod.default
-}
 
 export async function loadArticle(lang, bookSlug, chapterSlug, articleSlug) {
   const key = `./${lang}/${bookSlug}/${chapterSlug}/${articleSlug}.json`
@@ -112,14 +106,6 @@ function extractSections(blocks) {
 }
 
 // ─── Utilitaires ─────────────────────────────────────────
-
-export function findChapterMeta(index, bookSlug, chapterSlug) {
-  const book = index.books.find(b => b.slug === bookSlug)
-  if (!book) return null
-  const chapter = book.chapters.find(c => c.slug === chapterSlug)
-  if (!chapter) return null
-  return { book, chapter }
-}
 
 export function findArticleMeta(index, articleId) {
   for (const book of index.books) {

@@ -1,9 +1,9 @@
 {
-  "slug": "tests-et-actions",
-  "title": "Tests et actions",
-  "pageStart": 201,
-  "pageEnd": 211,
-  "intro": [
+  "id": "tests-et-actions.introduction",
+  "slug": "introduction",
+  "title": "Introduction",
+  "page": 201,
+  "blocks": [
     {
       "type": "callout",
       "variant": "quote",

@@ -1,0 +1,26 @@
+{
+  "id": "combat.introduction",
+  "slug": "introduction",
+  "title": "Introduction",
+  "page": 212,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "quote",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "« Le combat est un art… Il ne suffit pas d’être grand et fort, il faut aussi être rapide et précis. Il faut savoir garder son sang-froid et se montrer lucide, même quand on pisse le sang. Il faut maîtriser le rythme de l’affrontement, les déplacements et les distances. Il faut être capable de lire la tactique de l’adversaire, de découvrir ses points faibles et de neutraliser ses points forts. Bon évidemment, une lame de 30 centimètres d’acier trempé ou un flingue chargé jusqu’à la gueule de munitions perforantes, ce sont tout de même de sacrés avantages. »"
+        },
+        {
+          "type": "paragraph",
+          "text": "— BARAL FAADHI, instructeur de combat"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Dans l’univers de Polaris, les combats sont inévitables. Il y a là dehors trop de gens et de créatures mal intentionnés pour que les personnages-joueurs puissent se prétendre à l’abri du danger. Les règles présentées dans ce chapitre mettent l’accent sur la tactique, et prennent en compte bon nombre de cas particuliers, mais comme d’habitude, n’hésitez jamais à ignorer une partie du système si cela vous permet d’aller droit à l’essentiel, de donner plus de rythme à la partie et de forcer les joueurs à prendre des décisions critiques dans le stress et la précipitation. Après tout, les combats dans Polaris ne sont pas censés être des parties de plaisir, mais des affrontements furieux, rapides, violents… et mortels."
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 {
-  "slug": "etats-de-sante",
-  "title": "États de santé",
-  "pageStart": 234,
-  "pageEnd": 251,
-  "intro": [
+  "id": "etats-de-sante.introduction",
+  "slug": "introduction",
+  "title": "Introduction",
+  "page": 234,
+  "blocks": [
     {
       "type": "callout",
       "variant": "quote",
