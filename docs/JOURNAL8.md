@@ -8035,3 +8035,70 @@ sous ce même nom, `empêcher de poser une ENTITÉ sur une case occupée`, 2026-
 git, renommé) ; fait durable intégré à `docs/SYSTEME/MOTEUR_MONDE.md` §7 ; `docs/ROADMAP.md` —
 ligne retirée (chantier clos) ; `client/public/CHANGELOG.md` — entrée MJ ajoutée (v243) ; mémoire de
 session mise à jour (`project_combat_window_drag_handle` Round 7).
+
+## Session (Dev) — 2026-09-23 — Forme de collision des entités : cercle → forme explicite
+
+**Root cause** [VÉRIFIÉ code + données réelles] : `entityOccupant()` (`worldMovementService.js`,
+autorité unique du profil de collision d'une entité) modélisait toute entité comme un cercle
+(repli `max(width,depth)/2` en l'absence de `collider` configuré — soit 100 % du catalogue actuel).
+Correct pour un objet ~carré, faux pour un objet allongé : « Lot de caisses assorties »
+(`width=2,259m, depth=1,049m`) calculait un rayon de 1,13 m, bloquant un token à 1 m sur son côté
+étroit alors que l'objet ne fait que 0,52 m du centre à son bord réel dans ce sens. Cercle réutilisé
+par simplicité de l'interface acteur (`actorProfile{radius,height}`), jamais un choix délibéré pour
+les entités.
+
+**Catalogue futur hétérogène** (confirmé par Saar) : tonneau réellement cylindrique (le cercle est
+la forme CORRECTE pour lui), sous-marin/lit/table/chaises/évier/bac plutôt rectangulaires — pas un
+simple remplacement cercle→rectangle, un discriminant de forme extensible.
+
+**Processus de cadrage, explicitement demandé par Saar avant tout code** : deux analyses à charge
+indépendantes par des agents frais (sans le contexte de cadrage), chacune sommée de vérifier les
+affirmations du plan contre le vrai code plutôt que de faire confiance au texte.
+- **1ʳᵉ passe** : 5 trous, dont un bug factuel dur — `entity.r` n'a PAS la convention `tokens.r`
+  (0-3/90°, pas 0-7/45°, confondues à tort dans la v1) ; `normalizeActorProfile` aurait jeté
+  silencieusement les champs de forme, cassant le broad-phase ; rectangle-vs-rectangle atteignable
+  via `entities.js`, non couvert ; deuxième autorité de profil de collision dans
+  `worldForcedMovementService.js` ; convention d'origine (`floor-center` vs coin) ignorée.
+- **2ᵉ passe** : 4/5 corrections confirmées solides (vérifiées contre le code réel) ; la 5ᵉ
+  (intégration `worldForcedMovementService.js`) sous-spécifiée au point de régresser
+  silencieusement si codée telle quelle (geometry jamais chargée, objet enveloppe passé au lieu du
+  profil plat, `null` non géré) — corrigée avec 3 précisions exactes.
+- Bonne surprise : corriger la convention de rotation a *simplifié* l'algorithme — avec seulement
+  4 orientations possibles (0/90/180/270°), un rectangle d'entité est toujours axis-aligned, donc
+  aucune trigonométrie nécessaire nulle part (clamp axis-aligned pour cercle-vs-rectangle,
+  `boundsIntersect` déjà existant réutilisé tel quel pour rectangle-vs-rectangle).
+
+**Trouvailles en codant, au-delà des deux revues** — grep exhaustif systématique plutôt qu'un
+correctif site par site :
+1. `loadBattlemapDynamicOccupants` (fonction la PLUS utilisée du moteur monde : pathfinding,
+   placement, déplacement de tokens) ne sélectionnait jamais `entities.r` — sans ce correctif,
+   aucune entité tournée n'aurait jamais son échange largeur/profondeur appliqué dans le chemin le
+   plus emprunté du jeu réel.
+2. `entities.js` (création ET déplacement d'entité) : les candidats testés avant écriture ne
+   transmettaient pas non plus `r` — un commentaire existant affirmait explicitement le contraire
+   (« r n'entre pas dans le test »), vrai avant ce plan, faux depuis. Corrigé, commentaire mis à
+   jour.
+3. Régression trouvée en LANÇANT les tests existants (pas par une revue) : un test de
+   `worldForcedMovementService.test.mjs` comptait implicitement sur l'ancien défaut
+   `entityProfile = {}` — cassé en changeant le défaut vers `null` (sémantique « entité non
+   bloquante, aucun test pour elle-même »). Corrigé en rendant le test explicite + nouveau test
+   dédié au cas `null`.
+
+**Design retenu** : `collider.shape` explicite et extensible (`circle`/`rect`, capsule documentée
+V2 — sous-marin/tonneau couché, pas construite). Défaut `rect` pour tout blueprint non configuré —
+strictement plus sûr qu'un cercle pour la quasi-totalité du catalogue actuel et futur. Acteur
+(token) toujours un cercle, inchangé. `normalizeActorProfile`/`actorFootprintsOverlap`
+(`shared/world/spatialIndex.js`) dispatchent selon la forme de chaque occupant ; rayon "enveloppe"
+(demi-diagonale) conservé pour le broad-phase (`actorBoundsAt`), jamais un faux négatif possible.
+
+**Testé** : `node --check` sur les 4 fichiers serveur/partagés touchés, 623 tests verts
+(`shared/**/*.test.mjs` complet + les 3 fichiers serveur touchés, 0 échec). **Confirmé fonctionnel
+en jeu réel par Saar (2026-09-23)**.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit applicable, aucune dépendance externe.
+
+**Documentation de clôture** : `docs/Old/PLAN_FORME_COLLISION_ENTITES.md` marqué CLOS puis archivé
+(vérifié `docs/Old/` avant archivage — leçon du chantier précédent, cf. mémoire de session) ; fait
+durable intégré à `docs/SYSTEME/MOTEUR_MONDE.md` §7 ; `docs/ROADMAP.md` — ligne retirée (chantier
+clos) ; `client/public/CHANGELOG.md` — entrée joueur/MJ ajoutée (v244) ; mémoire de session mise à
+jour (`project_combat_window_drag_handle` Round 7).

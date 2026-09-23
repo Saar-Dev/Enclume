@@ -518,11 +518,17 @@ MJ inchangées). Détail archivé `docs/Old/PLAN_PLACEMENT_TOKEN_MJ.md` (à ne p
 `docs/Old/PLAN_BLOCAGE_CASES_OCCUPEES.md`, chantier différent et déjà clos plus tôt : empêcher de
 poser une ENTITÉ sur une case occupée).
 
-**Forme de collision des entités** : le profil de collision d'une entité (`entityOccupant`,
-`worldMovementService.js`) modélise toute entité comme un cercle (repli `max(width,depth)/2`),
-correct pour un objet ~carré mais faux pour un objet allongé (vérifié : un pack de caisses
-2,26 m × 1,05 m calcule un rayon de 1,13 m, bloquant un token à 1 m sur son côté étroit). Cadrage
-terminé 2026-09-22, pas encore codé — voir `docs/PLANS/PLAN_FORME_COLLISION_ENTITES.md`.
+**Forme de collision des entités — CLOS 2026-09-23** : le profil de collision d'une entité
+(`entityOccupant`, `worldMovementService.js`) modélisait toute entité comme un cercle (repli
+`max(width,depth)/2`), correct pour un objet ~carré mais faux pour un objet allongé (pack de
+caisses 2,26 m × 1,05 m → rayon 1,13 m calculé, bloquait un token à 1 m sur son côté étroit).
+Corrigé : `collider.shape` explicite (`circle`/`rect`, capsule notée V2 — un tonneau reste
+correctement un cercle) ; défaut `rect` pour tout blueprint non configuré (largeur/profondeur
+échangées selon `entity.r`, 0-3/90° — pas la convention 0-7/45° des tokens ; centre corrigé selon
+la convention d'origine du blueprint). `normalizeActorProfile`/`actorFootprintsOverlap`
+(`shared/world/spatialIndex.js`) dispatchent désormais cercle-cercle/cercle-rectangle/
+rectangle-rectangle selon la forme de chaque occupant — un acteur (token) reste toujours un
+cercle. Détail archivé `docs/Old/PLAN_FORME_COLLISION_ENTITES.md`.
 
 ### 7.1 Tranche d'étage affichée
 

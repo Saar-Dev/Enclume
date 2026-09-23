@@ -7,6 +7,7 @@ import {
   actorFootprintsOverlap,
   createOccupancyIndex,
   createSpatialIndex,
+  normalizeActorProfile,
   segmentGeometryInterval,
 } from './spatialIndex.js'
 
@@ -194,4 +195,79 @@ test('le narrow phase suit le profil vertical et l épaisseur variable d un mur'
     { x: 0.5, y: 1.25, z: -0.2 },
     sharedFace,
   ), null)
+})
+
+// PLAN_FORME_COLLISION_ENTITES.md — un cercle basé sur max(width,depth)/2 sur-estimait le blocage
+// d'une entité allongée. Chiffres réels du plan (« Lot de caisses assorties »,
+// width=2,259m/depth=1,049m → halfWidth=1,1295/halfDepth=0,5245).
+test('un token sur le côté étroit d’une entité allongée n’est plus bloqué (ancien rayon buggé : 1,13m)', () => {
+  const rectProfile = { shape: 'rect', halfWidth: 1.1295, halfDepth: 0.5245, height: 0.86, maxStepHeight: 0.5 }
+  const entityPoint = { x: 0, y: 0.125, z: 0 }
+  const tokenPoint = { x: 0, y: 0.125, z: 1 } // 1m du centre sur l'axe court (depth) — visuellement libre
+  const tokenProfile = { radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+
+  // Ancien comportement (cercle, rayon max(2.259,1.049)/2 = 1,1295) : 1 < 1,1295+0,35 → bloqué à tort.
+  assert.equal(actorFootprintsOverlap(tokenPoint, tokenProfile, entityPoint, rectProfile), false)
+
+  const occupants = createOccupancyIndex([{ id: 'crate-pack', point: entityPoint, actorProfile: rectProfile }])
+  assert.equal(occupants.canOccupy(tokenPoint, tokenProfile), true)
+})
+
+test('un token vraiment posé contre le côté étroit de la même entité reste bloqué', () => {
+  const rectProfile = { shape: 'rect', halfWidth: 1.1295, halfDepth: 0.5245, height: 0.86, maxStepHeight: 0.5 }
+  const entityPoint = { x: 0, y: 0.125, z: 0 }
+  const tokenPoint = { x: 0, y: 0.125, z: 0.8 } // 0,8m du centre — dans le rayon du token (0,35) au-delà du bord (0,5245)
+  const tokenProfile = { radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+
+  assert.equal(actorFootprintsOverlap(tokenPoint, tokenProfile, entityPoint, rectProfile), true)
+  const occupants = createOccupancyIndex([{ id: 'crate-pack', point: entityPoint, actorProfile: rectProfile }])
+  assert.equal(occupants.canOccupy(tokenPoint, tokenProfile), false)
+})
+
+test('un token proche du COIN d’une entité rectangulaire est jugé par la vraie géométrie, pas le rayon enveloppe', () => {
+  // À 1,1m en diagonale (X et Z), hors de portée d'un cercle inscrit dans le rectangle mais dans
+  // l'enveloppe (demi-diagonale ~1,245m) — vérifie que le narrow-phase clamp (pas juste le broad-phase)
+  // tranche correctement au coin, cas jamais couvert par un simple test cercle-cercle.
+  const rectProfile = { shape: 'rect', halfWidth: 1.1295, halfDepth: 0.5245, height: 0.86, maxStepHeight: 0.5 }
+  const entityPoint = { x: 0, y: 0.125, z: 0 }
+  const cornerFar = { x: 1.5, y: 0.125, z: 1.0 } // clamp → (1.1295, 0.5245), distance ≈ 0,54m > 0,35 → libre
+  const cornerNear = { x: 1.3, y: 0.125, z: 0.7 } // clamp → (1.1295, 0.5245), distance ≈ 0,26m < 0,35 → bloqué
+  const tokenProfile = { radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+
+  assert.equal(actorFootprintsOverlap(cornerFar, tokenProfile, entityPoint, rectProfile), false)
+  assert.equal(actorFootprintsOverlap(cornerNear, tokenProfile, entityPoint, rectProfile), true)
+})
+
+test('rectangle vs rectangle (deux entités) — chevauchement réel bloque, un écart suffisant libère', () => {
+  const profileA = { shape: 'rect', halfWidth: 1.1295, halfDepth: 0.5245, height: 0.86, maxStepHeight: 0.5 }
+  const profileB = { shape: 'rect', halfWidth: 0.4, halfDepth: 0.4, height: 0.5, maxStepHeight: 0.5 }
+  const pointA = { x: 0, y: 0.125, z: 0 }
+
+  // Écart : bords à halfWidthA(1.1295)+halfWidthB(0.4)=1.5295 sur X — 1.6 > 1.5295 → libre.
+  assert.equal(actorFootprintsOverlap(pointA, profileA, { x: 1.6, y: 0.125, z: 0 }, profileB), false)
+  // Chevauchement : 1.4 < 1.5295 → bloqué.
+  assert.equal(actorFootprintsOverlap(pointA, profileA, { x: 1.4, y: 0.125, z: 0 }, profileB), true)
+})
+
+test('non-régression : un profil shape:\'circle\' explicite se comporte identiquement à l’ancien défaut implicite', () => {
+  const profileA = { shape: 'circle', radius: 0.35, height: 1.8, maxStepHeight: 0.5 }
+  const profileB = { shape: 'circle', radius: 0.414, height: 0.518, maxStepHeight: 0.5 }
+  const pointA = { x: 1, y: 0.125, z: 1 }
+  const pointB = { x: 1.3, y: 0.125, z: 1 }
+  assert.equal(actorFootprintsOverlap(pointA, profileA, pointB, profileB), true)
+  assert.equal(actorFootprintsOverlap(pointA, profileA, { x: 3, y: 0.125, z: 1 }, profileB), false)
+})
+
+test('broad-phase : le rayon enveloppe d’un profil rect est la demi-diagonale, jamais moins', () => {
+  const rectProfile = normalizeActorProfile({ shape: 'rect', halfWidth: 1.1295, halfDepth: 0.5245 })
+  assert.ok(Math.abs(rectProfile.radius - Math.hypot(1.1295, 0.5245)) < 1e-9)
+
+  // Un occupant à la limite de l'enveloppe (mais hors de la vraie forme rectangulaire) doit rester
+  // un candidat du broad-phase (queryBounds) — c'est le narrow-phase qui l'élimine ensuite, jamais
+  // le broad-phase lui-même (sur-ensemble garanti, aucun faux négatif).
+  const bounds = actorBoundsAt({ x: 0, y: 0, z: 0 }, rectProfile)
+  assert.ok(bounds.max.x - bounds.min.x >= 2 * 1.1295)
+  const occupants = createOccupancyIndex([{ id: 'crate-pack', point: { x: 0, y: 0, z: 0 }, actorProfile: rectProfile }])
+  const farCornerQuery = actorBoundsAt({ x: 1.5, y: 0, z: 1.0 }, { radius: 0.35, height: 1.8, maxStepHeight: 0.5 })
+  assert.deepEqual(occupants.queryBounds(farCornerQuery).map(o => o.id), ['crate-pack'])
 })

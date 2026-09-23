@@ -1,3 +1,11 @@
+## v244 — 2026-09-23 — Les caisses allongées ne bloquent plus le passage à côté
+
+### Carte
+- [fix] Un token peut désormais se tenir juste à côté d'un objet allongé (ex. un pack de caisses)
+  sans être bloqué — auparavant, la zone de blocage était calculée comme si l'objet était un
+  cercle de la taille de son côté le plus long, ce qui le faisait déborder très largement sur les
+  côtés courts. L'objet reste correctement bloquant si on se tient réellement dessus ou contre lui.
+
 ## v243 — 2026-09-23 — Placement de token MJ : validé par défaut
 
 ### Carte

@@ -147,6 +147,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       const candidateOccupant = entityOccupant({
         id: 'candidate',
         pos_x, pos_y, pos_z,
+        // r — PLAN_FORME_COLLISION_ENTITES.md : une entité rectangulaire lit désormais sa rotation
+        // pour échanger largeur/profondeur ; `r ?? 0` reproduit exactement ce qui sera écrit en
+        // base juste après (ligne ~170), jamais une valeur différente du candidat réellement posé.
+        r: r ?? 0,
         current_state_id: 0,
         state: initialState,
         states: blueprint.states || [],
@@ -241,11 +245,14 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
 
     // Occupation — comparaison de VALEUR à la position en base, jamais de présence de champ :
     // EntityInstancePanel envoie systématiquement pos_x/pos_y/pos_z à chaque sauvegarde, même sans
-    // déplacement réel (PLAN_BLOCAGE_CASES_OCCUPEES.md §3bis). `r` n'entre pas dans le test : le
-    // rayon de collision circulaire ne dépend jamais de la rotation (worldMovementService.js).
+    // déplacement réel (PLAN_BLOCAGE_CASES_OCCUPEES.md §3bis). `r` ENTRE désormais dans le test
+    // (PLAN_FORME_COLLISION_ENTITES.md) : une entité rectangulaire échange largeur/profondeur
+    // selon sa rotation — l'ancien commentaire ("r n'entre pas dans le test, le rayon circulaire
+    // ne dépend jamais de la rotation") ne vaut plus que pour une entité shape:'circle'.
     const nextPosX = updates.pos_x !== undefined ? Number(updates.pos_x) : Number(entity.pos_x)
     const nextPosY = updates.pos_y !== undefined ? Number(updates.pos_y) : Number(entity.pos_y)
     const nextPosZ = updates.pos_z !== undefined ? Number(updates.pos_z) : Number(entity.pos_z)
+    const nextR = updates.r !== undefined ? Number(updates.r) : Number(entity.r)
     const positionChanged = nextPosX !== Number(entity.pos_x)
       || nextPosY !== Number(entity.pos_y)
       || nextPosZ !== Number(entity.pos_z)
@@ -273,6 +280,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
         const candidateOccupant = entityOccupant({
           id: entity.id,
           pos_x: nextPosX, pos_y: nextPosY, pos_z: nextPosZ,
+          r: nextR,
           current_state_id: nextStateId,
           state: state !== undefined ? normalizedState : entity.state,
           states: blueprint?.states || [],

@@ -9,6 +9,7 @@ import {
 import { createOccupancyIndex, createSpatialIndex } from '../../../shared/world/spatialIndex.js'
 import {
   dynamicOccupantsFromRows,
+  entityOccupant,
   getBattlemapNavigationGraph,
 } from './worldMovementService.js'
 import {
@@ -57,7 +58,10 @@ export function resolveRigidPairSteps({
   actorStart,
   actorProfile = {},
   entityStart,
-  entityProfile = {},
+  // null = entité actuellement non bloquante (état courant, entityOccupant() côté appelant) —
+  // aucun profil à tester pour elle-même, jamais un faux profil générique inventé pour combler
+  // (PLAN_FORME_COLLISION_ENTITES.md point 4.3).
+  entityProfile = null,
   destination,
   maxSteps,
   occupants = [],
@@ -93,9 +97,9 @@ export function resolveRigidPairSteps({
     const nextEntity = nearestStablePoint(graph, entityCandidate, maxSnapDistance)
     if (!nextActor || !nextEntity) break
     if (!spatial.isSegmentClear(actorEnd, nextActor, actorProfile)) break
-    if (!spatial.isSegmentClear(entityEnd, nextEntity, entityProfile)) break
+    if (entityProfile && !spatial.isSegmentClear(entityEnd, nextEntity, entityProfile)) break
     if (!occupancy.canOccupy(nextActor, actorProfile, { excludeIds: excludeOccupantIds })) break
-    if (!occupancy.canOccupy(nextEntity, entityProfile, { excludeIds: excludeOccupantIds })) break
+    if (entityProfile && !occupancy.canOccupy(nextEntity, entityProfile, { excludeIds: excludeOccupantIds })) break
 
     actorSegments.push(Object.freeze({
       id: `forced:${step}`,
@@ -114,17 +118,6 @@ export function resolveRigidPairSteps({
     actorEnd,
     entityEnd,
     actorSegments: Object.freeze(actorSegments),
-  })
-}
-
-function entityProfile(entity) {
-  const states = entity.states || []
-  const state = states[entity.current_state_id] ?? states[0] ?? null
-  const collider = state?.collider || {}
-  return Object.freeze({
-    radius: Number(collider.radius || Math.max(collider.width || 1, collider.depth || 1) / 2),
-    height: Number(collider.height || 1),
-    maxStepHeight: Number(collider.maxStepHeight || 0.5),
   })
 }
 
@@ -153,12 +146,17 @@ export async function executeBattlemapRigidPairMovement({
 
     const blueprintIds = [...new Set(entityRows.map(row => row.blueprint_id).filter(Boolean))]
     const blueprints = blueprintIds.length
-      ? await trx('entity_blueprints').whereIn('id', blueprintIds).select('id', 'states')
+      // 'geometry' — sans elle, entityOccupant() (autorité unique du profil de collision, seule
+      // source pour la largeur/profondeur en l'absence de collider configuré) retombe sur
+      // width=depth=1 codé en dur pour toute entité, peu importe sa vraie taille
+      // (PLAN_FORME_COLLISION_ENTITES.md point 4.1 — trouvé par l'analyse à charge).
+      ? await trx('entity_blueprints').whereIn('id', blueprintIds).select('id', 'states', 'geometry')
       : []
     const blueprintById = new Map(blueprints.map(row => [row.id, row]))
     const entities = entityRows.map(row => ({
       ...row,
       states: blueprintById.get(row.blueprint_id)?.states || [],
+      geometry: blueprintById.get(row.blueprint_id)?.geometry || {},
     }))
     const entity = entities.find(row => row.id === entityId)
     const runtimeContext = await loadBattlemapRuntimeContext(battlemap, trx)
@@ -169,7 +167,10 @@ export async function executeBattlemapRigidPairMovement({
       actorStart: dbPositionToWorldPoint(token),
       actorProfile,
       entityStart: dbPositionToWorldPoint(entity),
-      entityProfile: entityProfile(entity),
+      // entityOccupant() — autorité unique (worldMovementService.js), jamais l'enveloppe entière
+      // {id,kind,point,actorProfile} en tant que "profil" : null si l'état courant de l'entité
+      // n'est pas bloquant (résolveRigidPairSteps traite alors null comme "aucun test pour elle").
+      entityProfile: entityOccupant(entity)?.actorProfile ?? null,
       destination,
       maxSteps,
       occupants: dynamicOccupantsFromRows(tokens, entities),

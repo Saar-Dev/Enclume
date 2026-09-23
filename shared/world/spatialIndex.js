@@ -53,14 +53,39 @@ export function pointInBounds(point, value, epsilon = EPSILON) {
     && p.z >= bounds.min.z - epsilon && p.z <= bounds.max.z + epsilon
 }
 
+// PLAN_FORME_COLLISION_ENTITES.md — un acteur (token, humanoïde/drone/exo) est toujours un cercle
+// (`shape` absent ou 'circle'). Une entité peut être un rectangle axis-aligned (`shape: 'rect'`,
+// `halfWidth`/`halfDepth` — jamais un angle intermédiaire, les entités n'ont que 4 orientations
+// possibles, cf. entityOccupant). `radius`, même pour un profil `rect`, reste TOUJOURS porté : pour
+// une forme rectangulaire il vaut la demi-diagonale (`Math.hypot(halfWidth, halfDepth)`), une
+// enveloppe garantie ≥ tout point du rectangle — c'est ce qui alimente le broad-phase
+// (`actorBoundsAt`/`segmentBlockers`, tous deux inchangés, ils ne lisent que `.radius`) sans jamais
+// perdre un candidat réel (aucun faux négatif possible, seulement des faux positifs que le
+// narrow-phase, `actorFootprintsOverlap` ci-dessous, élimine). Ne jamais jeter `shape`/`halfWidth`/
+// `halfDepth` ici : c'est la seule fonction par laquelle un profil transite avant tout usage.
 export function normalizeActorProfile(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new TypeError('actorProfile doit être un objet')
   }
+  const height = positiveNumber(input.height ?? 1.8, 'actorProfile.height')
+  const maxStepHeight = positiveNumber(input.maxStepHeight ?? 0.5, 'actorProfile.maxStepHeight')
+  if (input.shape === 'rect') {
+    const halfWidth = positiveNumber(input.halfWidth, 'actorProfile.halfWidth')
+    const halfDepth = positiveNumber(input.halfDepth, 'actorProfile.halfDepth')
+    return deepFreeze({
+      shape: 'rect',
+      halfWidth,
+      halfDepth,
+      radius: Math.hypot(halfWidth, halfDepth),
+      height,
+      maxStepHeight,
+    })
+  }
   return deepFreeze({
+    shape: 'circle',
     radius: positiveNumber(input.radius ?? 0.35, 'actorProfile.radius'),
-    height: positiveNumber(input.height ?? 1.8, 'actorProfile.height'),
-    maxStepHeight: positiveNumber(input.maxStepHeight ?? 0.5, 'actorProfile.maxStepHeight'),
+    height,
+    maxStepHeight,
   })
 }
 
@@ -89,6 +114,35 @@ export function actorFootprintsOverlap(pointA, profileA, pointB, profileB) {
   const profA = normalizeActorProfile(profileA)
   const profB = normalizeActorProfile(profileB)
   if (a.y >= b.y + profB.height - EPSILON || b.y >= a.y + profA.height - EPSILON) return false
+
+  const rectA = profA.shape === 'rect'
+  const rectB = profB.shape === 'rect'
+
+  // Rectangle vs rectangle (entité vs entité, ex. entities.js posant/déplaçant une entité à côté
+  // d'une autre) — toujours axis-aligned (4 orientations seulement, jamais d'angle intermédiaire),
+  // donc un simple chevauchement de boîtes suffit : boundsIntersect (déjà existant, vrai test 3D)
+  // convient tel quel, pas de fonction dédiée. La tranche Y ci-dessus est déjà vérifiée mais
+  // boundsIntersect la revérifie sans risque (min.y/max.y construits identiquement).
+  if (rectA && rectB) {
+    return boundsIntersect(
+      { min: { x: a.x - profA.halfWidth, y: a.y, z: a.z - profA.halfDepth },
+        max: { x: a.x + profA.halfWidth, y: a.y + profA.height, z: a.z + profA.halfDepth } },
+      { min: { x: b.x - profB.halfWidth, y: b.y, z: b.z - profB.halfDepth },
+        max: { x: b.x + profB.halfWidth, y: b.y + profB.height, z: b.z + profB.halfDepth } },
+    )
+  }
+
+  // Cercle (toujours l'acteur, ou une entité shape:'circle') vs rectangle (entité shape:'rect') —
+  // clamp du centre du cercle aux demi-étendues du rectangle (axis-aligned, cf. ci-dessus), puis
+  // distance de ce point le plus proche au centre du cercle comparée à son rayon. Cas particulier
+  // trivial du cercle-vs-rectangle-orienté général : aucune rotation à défaire ici.
+  if (rectA || rectB) {
+    const [circle, circlePoint, rect, rectPoint] = rectA ? [profB, b, profA, a] : [profA, a, profB, b]
+    const closestX = Math.min(Math.max(circlePoint.x, rectPoint.x - rect.halfWidth), rectPoint.x + rect.halfWidth)
+    const closestZ = Math.min(Math.max(circlePoint.z, rectPoint.z - rect.halfDepth), rectPoint.z + rect.halfDepth)
+    return Math.hypot(circlePoint.x - closestX, circlePoint.z - closestZ) < circle.radius - EPSILON
+  }
+
   const radiusSum = profA.radius + profB.radius
   return Math.hypot(a.x - b.x, a.z - b.z) < radiusSum - EPSILON
 }
