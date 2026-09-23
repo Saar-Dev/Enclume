@@ -148,6 +148,19 @@ export const RES_NAT_TABLE = [
   { min: 18, max: 19, res: -4 },
   { min: 20, max: 21, res: -5 },
 ]
+// Table Modificateur de Dommages en corps à corps — Force (LdB p.113)
+export const FORCE_MOD_DOMMAGES_TABLE = [
+  { min: 1,  max: 2,  mod: -6 },
+  { min: 3,  max: 4,  mod: -4 },
+  { min: 5,  max: 6,  mod: -2 },
+  { min: 7,  max: 8,  mod: -1 },
+  { min: 9,  max: 11, mod:  0 },
+  { min: 12, max: 13, mod: +1 },
+  { min: 14, max: 15, mod: +2 },
+  { min: 16, max: 17, mod: +3 },
+  { min: 18, max: 19, mod: +4 },
+  { min: 20, max: 21, mod: +5 },
+]
 
 function lookupTable(table, value, prop) {
   const row = table.find(r => value >= r.min && value <= r.max)

@@ -7,6 +7,28 @@
       "pageEnd": 271,
       "chapters": [
         {
+          "slug": "personnages-et-statistiques",
+          "title": "Personnages et statistiques",
+          "pageStart": 112,
+          "pageEnd": 114,
+          "articles": [
+            { "id": "personnages-et-statistiques.introduction",              "slug": "introduction",              "title": "Introduction",                                   "page": 112 },
+
+            { "id": "personnages-et-statistiques.attributs-principaux",      "slug": "attributs-principaux",      "title": "Attributs principaux",                            "page": 113, "group": "Attributs" },
+            { "id": "personnages-et-statistiques.chance",                    "slug": "chance",                    "title": "Chance",                                          "page": 113, "group": "Attributs" },
+
+            { "id": "personnages-et-statistiques.reaction",                  "slug": "reaction",                  "title": "Réaction",                                        "page": 113, "group": "Attributs dérivés" },
+            { "id": "personnages-et-statistiques.modificateur-dommages",     "slug": "modificateur-dommages",     "title": "Modificateur de dommages en corps à corps",       "page": 113, "group": "Attributs dérivés" },
+            { "id": "personnages-et-statistiques.resistance-choc",           "slug": "resistance-choc",           "title": "Résistance au choc",                              "page": 113, "group": "Attributs dérivés" },
+            { "id": "personnages-et-statistiques.resistance-dommages",       "slug": "resistance-dommages",       "title": "Résistance aux dommages",                         "page": 114, "group": "Attributs dérivés" },
+            { "id": "personnages-et-statistiques.resistances-naturelles",    "slug": "resistances-naturelles",    "title": "Résistances naturelles",                          "page": 114, "group": "Attributs dérivés" },
+            { "id": "personnages-et-statistiques.souffle",                   "slug": "souffle",                   "title": "Souffle",                                         "page": 114, "group": "Attributs dérivés" },
+
+            { "id": "personnages-et-statistiques.competences",               "slug": "competences",               "title": "Compétences",                                     "page": 114, "group": "Compétences" },
+            { "id": "personnages-et-statistiques.competences-reservees",     "slug": "competences-reservees",     "title": "Compétences réservées et difficiles à apprendre", "page": 114, "group": "Compétences" }
+          ]
+        },
+        {
           "slug": "tests-et-actions",
           "title": "Tests et actions",
           "pageStart": 201,

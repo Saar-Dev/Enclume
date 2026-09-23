@@ -1,0 +1,30 @@
+{
+  "id": "personnages-et-statistiques.introduction",
+  "slug": "introduction",
+  "title": "Introduction",
+  "page": 112,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "quote",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "« Suivant ! Ah, enfin quelqu’un qui a l’air en bonne santé. Mouais, à première vue, t’as les qualités physiques requises. Tu sais te servir d’une arme ou piloter une armure de combat, des trucs du genre ? Non ? Pourquoi tu me fais perdre mon temps alors, crétin ? T’as vu ce qu’il y avait d’écrit, au-dessus de la porte ? Ouais, c’est exactement ça, au moins tu sais lire. Bon, t’as pas l’air trop con, c’est déjà ça. Alors, c’est quoi ton domaine, à toi ? La médecine ? Ah oui, en effet, ça peut toujours servir, dans notre branche… Bon, ben signe ça… T’inquiète, t’es même pas obligé de mettre ton vrai nom. Tout le monde se fout de ton passé ou de ta véritable identité ici, et personne n’a besoin de savoir ce qui t’a poussé à venir t’engager chez nous… Suivant ! »"
+        },
+        {
+          "type": "paragraph",
+          "text": "— Un recruteur au service d’une compagnie de mercenaires, quelque part sur Équinoxe"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "À faire."
+    },
+    {
+      "type": "paragraph",
+      "text": "Sauf mention contraire, les valeurs décimales issues d’un calcul sont arrondies à l’entier inférieur : 0,5 arrondit vers le bas."
+    }
+  ]
+}

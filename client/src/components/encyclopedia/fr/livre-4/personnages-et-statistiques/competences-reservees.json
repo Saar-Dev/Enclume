@@ -1,0 +1,20 @@
+{
+  "id": "personnages-et-statistiques.competences-reservees",
+  "slug": "competences-reservees",
+  "title": "Compétences réservées et difficiles à apprendre",
+  "page": 114,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Certaines Compétences sont impossibles à utiliser sans formation préalable (il faut par exemple avoir appris une langue étrangère pour pouvoir la comprendre). Ces Compétences sont dites « réservées », et leur niveau de maîtrise de départ est noté « X »."
+    },
+    {
+      "type": "paragraph",
+      "text": "Il existe également des Compétences particulièrement difficiles à apprendre (à la différence des Compétences courantes, dont le niveau de maîtrise initial est de +0). Celles-ci couvrent souvent des aptitudes, des connaissances ou des techniques très spécialisées, qu’il est difficile de maîtriser (les sciences ou la médecine par exemple). Le niveau de maîtrise de départ de ces Compétences s’exprime alors par un malus de -3, qui indique que le personnage ne maîtrise pas encore toutes les bases élémentaires nécessaires et qu’il doit terminer son apprentissage avant de pouvoir développer un vrai niveau de maîtrise."
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : une Compétence réservée est toujours une Compétence difficile à apprendre. Augmenter d’un point le niveau d’une Compétence à « X » la fait passer à -3."
+    }
+  ]
+}

@@ -39,14 +39,12 @@
 | `paragraph` | `text` | Supporte `[[...]]` et `**gras**`/`*italique*` (voir §5). |
 | `list` | `ordered`, `items[]` (chaque item : `label?`, `blocks[]`) | Récursif — un item peut contenir n'importe quel bloc, y compris un autre `list` ou `dataTable`. |
 | `callout` | `variant`, `label?`, `title?`, `id?`, `blocks[]` | Titre rendu en vrai `h4` (pas un `<div>`, corrigé 2026-09-22) — poser un `id` si le callout doit être ciblable/listé au glossaire. `blocks[]` récursif comme `list`. Retourne `null` (rien de rendu) si ni label, ni titre, ni contenu. |
-| `dataTable` | `source`, `caption?`, `headers?` | `source` = nom de constante whitelisté dans `dataSources.js`. **`headers` est obligatoire pour tout rendu de colonnes visible** — un bloc sans `headers` ne plante pas mais n'affiche aucun `<thead>` (bug silencieux vécu 3 fois). |
+| `dataTable` | `source`, `caption?`, `headers?` — **ou** `columns`, `rows`, `caption?` | Deux schémas distincts, jamais les deux à la fois. **Sourcé** : `source` = nom de constante whitelisté dans `dataSources.js` ; `headers` obligatoire pour tout rendu de colonnes visible (un bloc sans `headers` ne plante pas mais n'affiche aucun `<thead>`, bug silencieux vécu 3 fois). **Éditorial pur** (table narrative sans valeur de règle moteur, ex. jet 1D100 aléatoire) : `columns` = `[{ key, label }]`, `rows` = `[{ [key]: string, subItems?: string[] }]` (`subItems` pour un jet secondaire imbriqué dans une ligne). Rendu par `EditorialDataTable` dans `DataTableBlock.jsx` (ajouté 2026-09-22 — ce chemin était déjà décidé ci-dessous mais jamais implémenté, 8 tables restées invisibles sur Force Polaris avant correction). |
 
 Variants de callout : `sidebar`, `example`, `optional`, `rule`, `note`, `quote`.
 
 ### Différés
 
-- `table` (éditorial pur, sans source `shared/`) — décision : `dataTable` sert de placeholder en
-  attendant, pas de bloc `table` séparé.
 - `dataList`, `entityCard` (catalogues SQL — armes, compétences, carrières, pouvoirs) — Phase 6.
 - `reference` (bibliographique) — non prioritaire.
 

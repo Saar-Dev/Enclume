@@ -24,6 +24,10 @@ import {
   COMBAT_MULTIPLE_ADVERSAIRES_MALUS,
   DISTANCES_DEPLACEMENT_SOL,
   DISTANCES_DEPLACEMENT_EAU,
+  RD_TABLE,
+  RES_NAT_TABLE,
+  AN_TABLE,
+  FORCE_MOD_DOMMAGES_TABLE,
 } from '../../../../shared/polarisUtils.js'
 import {
   PORTEE_MOD_COMP,
@@ -127,7 +131,8 @@ export const DATA_SOURCES = {
     data: AIMED_LOCATION_MALUS,
     transform: transformAimedLocationMalus,
   },
-    BLESSURE_SEUILS_TABLE: {
+
+  BLESSURE_SEUILS_TABLE: {
     data: BLESSURE_SEUILS_TABLE,
     termsDomain: 'graviteBlessure',
     cells: ['key', 'seuil'],
@@ -232,8 +237,39 @@ export const DATA_SOURCES = {
     data: { ground: FALL_DAMAGE_GROUND_LEVEL, paliers: FALL_DAMAGE_TABLE },
     transform: transformFallDamage,
   },
-}
 
+  RESISTANCE_DOMMAGES_TABLE: {
+    data: RD_TABLE,
+    transform: transformResistanceDommages,
+  },
+
+  RESISTANCE_NATURELLE_TABLE: {
+    data: RES_NAT_TABLE,
+    transform: transformResistanceNaturelle,
+  },
+
+  APTITUDE_NATURELLE_TABLE: {
+    data: AN_TABLE,
+    transform: transformAptitudeNaturelle,
+  },
+  MODIFICATEUR_DOMMAGES_TABLE: {
+    data: FORCE_MOD_DOMMAGES_TABLE,
+    transform: transformModificateurDommages,
+  }
+}
+// transformModificateurDommages — FORCE_MOD_DOMMAGES_TABLE (shared/polarisUtils.js, LdB p.113)
+// aplatie en lignes « Force | Modificateur de Dommages en corps à corps ». La dernière ligne du RAW
+// (« Etc. +1 tous les 2 niveaux ») est ajoutée manuellement : la constante shared/ s'arrête à 21,
+// la formule de dépassement n'est pas figée en table.
+function transformModificateurDommages(data) {
+  const kinds = ['range', 'signed']
+  const rows = data.map(row => ({
+    kinds,
+    cells: [`${row.min}-${row.max}`, formatSigned(row.mod)],
+  }))
+  rows.push({ kinds: ['range', 'key'], cells: ['Etc.', '+1 tous les 2 niveaux'] })
+  return { rows }
+}
 
 export function getDataTableRows(sourceName) {
   const source = DATA_SOURCES[sourceName]
@@ -690,6 +726,49 @@ function transformFallDamage(data) {
   rows.push({ kinds, cells: ['Au-delà', '+1D10 / mètre', '1D3+3'] })
 
   return { rows }
+}
+
+// transformResistanceDommages — RD_TABLE (shared/polarisUtils.js, LdB p.114) aplatie en lignes
+// « FOR+CON | Résistance aux Dommages ». La dernière ligne du RAW (« Etc. -1 tous les 4 niveaux »)
+// est ajoutée manuellement : la constante shared/ s'arrête à 41, la formule de dépassement vit
+// dans calcResistanceDommages() — le texte RAW est reproduit tel quel.
+function transformResistanceDommages(data) {
+  const kinds = ['range', 'signed']
+  const rows = data.map(row => ({
+    kinds,
+    cells: [`${row.min}-${row.max}`, formatSigned(row.rd)],
+  }))
+  rows.push({ kinds: ['range', 'key'], cells: ['Etc.', '-1 tous les 4 niveaux'] })
+  return { rows }
+}
+
+// transformResistanceNaturelle — RES_NAT_TABLE (shared/polarisUtils.js, LdB p.114) aplatie en
+// lignes « Résultat | Résistance naturelle ». Dernière ligne « Etc. » ajoutée manuellement, même
+// raison que ci-dessus — la formule de dépassement vit dans calcResistanceNaturelle().
+function transformResistanceNaturelle(data) {
+  const kinds = ['range', 'signed']
+  const rows = data.map(row => ({
+    kinds,
+    cells: [`${row.min}-${row.max}`, formatSigned(row.res)],
+  }))
+  rows.push({ kinds: ['range', 'key'], cells: ['Etc.', '-1 tous les 2 niveaux'] })
+  return { rows }
+}
+
+// transformAptitudeNaturelle — AN_TABLE (shared/polarisUtils.js, LdB p.114) aplatie en lignes
+// « Attribut | Aptitude naturelle ». Toutes les plages sont dans la constante ; pas de ligne
+// manuelle. Le dernier palier (min: 25, max: Infinity) est rendu « 25 » comme le RAW.
+function transformAptitudeNaturelle(data) {
+  const kinds = ['range', 'signed']
+  return {
+    rows: data.map(row => ({
+      kinds,
+      cells: [
+        row.max === Infinity ? String(row.min) : (row.min === row.max ? String(row.min) : `${row.min}-${row.max}`),
+        formatSigned(row.an),
+      ],
+    })),
+  }
 }
 
 // ─── Formatage des cellules ──────────────────────────────

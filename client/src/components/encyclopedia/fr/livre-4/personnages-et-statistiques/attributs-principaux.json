@@ -1,0 +1,75 @@
+{
+  "id": "personnages-et-statistiques.attributs-principaux",
+  "slug": "attributs-principaux",
+  "title": "Attributs principaux",
+  "page": 113,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Les aventuriers de Polaris sont définis par un certain nombre d’Attributs physiques et mentaux, dont les scores initiaux pourront par la suite être modifiés par différents événements ou par la technologie et les mutations. Ces Caractéristiques permettent d’avoir une estimation des capacités d’un personnage. Il existe huit Attributs principaux :"
+    },
+    {
+      "type": "paragraph",
+      "text": "La Force (FOR) est une mesure de la puissance brute d’un individu, sa capacité musculaire."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Constitution (CON) caractérise l’endurance d’un individu, sa santé, sa résistance à l’effort physique, aux poisons, aux maladies, aux traumatismes, aux conditions extrêmes."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Coordination (COO) détermine comme son nom l’indique la coordination neuromusculaire du personnage, mais aussi plus largement son agilité physique, son sens de l’équilibre, la fluidité et la précision de ses gestes, de ses mouvements et de ses déplacements."
+    },
+    {
+      "type": "paragraph",
+      "text": "L’Adaptation (ADA) représente la capacité du personnage à s’adapter à son environnement, et notamment à une situation qui change brutalement, les réflexes issus de son instinct de survie et la rapidité de sa réflexion."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Perception (PER) détermine l’acuité des cinq sens du personnage, mais aussi sa vigilance, l’attention qu’il porte à son environnement ou au comportement des gens, sa capacité à remarquer les petits détails du monde qui l’entoure."
+    },
+    {
+      "type": "paragraph",
+      "text": "L’Intelligence (INT) mesure les capacités mentales d’un individu. C’est aussi sa faculté d’assimilation de nouvelles connaissances."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Volonté (VOL) détermine la résistance mentale d’une personne, sa capacité à maîtriser ses réactions en situation de stress et le temps pendant lequel elle peut maintenir sa concentration sur une action quelconque. C’est aussi sa persévérance, sa force de caractère et sa volonté de survivre face à l’adversité."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Présence (PRE) est une mesure de l’aura dégagée par une personne, de son charisme. Son importance est vitale dans toutes les actions relationnelles : séduire, impressionner, commander, intimider… Plus largement, cet attribut est utile pour s’intégrer dans un groupe, engager le dialogue avec des inconnus ou se faire de nouvelles relations, car il détermine également la confiance et la sympathie que le personnage est capable d’inspirer (qu’il soit sincère ou non est un autre sujet)."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "personnages-et-statistiques.attributs-principaux.niveau-attributs",
+      "title": "Niveau des Attributs"
+    },
+    {
+      "type": "paragraph",
+      "text": "Les Attributs sont notés sur 20 :"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "niveau",     "label": "Niveau" },
+        { "key": "equivalent", "label": "Équivalent" }
+      ],
+      "rows": [
+        { "niveau": "1 - 2",   "equivalent": "Insignifiant" },
+        { "niveau": "3 - 5",   "equivalent": "Très faible" },
+        { "niveau": "6 - 8",   "equivalent": "Faible" },
+        { "niveau": "9 - 12",  "equivalent": "Moyen" },
+        { "niveau": "13 - 15", "equivalent": "Fort" },
+        { "niveau": "16 - 18", "equivalent": "Très fort" },
+        { "niveau": "19 - 20", "equivalent": "Exceptionnel" },
+        { "niveau": "21 et +", "equivalent": "Surhumain" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : pour les personnages-joueurs, un Attribut ne peut jamais descendre en dessous de 3. Si, au cours de la création du personnage, un modificateur devait faire descendre le score d’un Attribut à moins de 3, n’en tenez pas compte. Plus tard, au cours du jeu, si un des Attributs venait à descendre en dessous de 3, le personnage doit être considéré comme injouable tant que le score n’est pas remonté à 3 ou plus (en espérant que ce soit possible…)."
+    }
+  ]
+}

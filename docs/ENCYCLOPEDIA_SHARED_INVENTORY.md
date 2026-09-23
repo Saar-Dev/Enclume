@@ -4,7 +4,7 @@
 > **Documentaire uniquement** — ne contient aucune valeur de règle, uniquement des pointeurs.
 > Si une table `shared/` change, ce fichier ne change pas.
 >
-> Dernière mise à jour : 2026-09-22 (v1 — incomplet, voir §5).
+> Dernière mise à jour : 2026-09-23 (v1 — incomplet, voir §5 ; chapitre Personnages et statistiques §4bis).
 > Voir `docs/ENCYCLOPEDIA_CONTEXT.md` §4 et `docs/PLAN_ENCYCLOPEDIA.md` §5 pour les invariants.
 
 ---
@@ -75,15 +75,33 @@ dupliquerait l'information sans rien ajouter).
 
 ---
 
+## 4bis. Chapitre — Personnages et statistiques (LdB p.112-114)
+
+| Nom RAW (article JSON) | Constante `shared/` | Fichier | Statut |
+|---|---|---|---|
+| `APTITUDE_NATURELLE_TABLE` (article competences) | `AN_TABLE` | `polarisUtils.js` | branché (2026-09-23 — existait déjà, était orpheline) |
+| `RESISTANCE_DOMMAGES_TABLE` (article resistance-dommages) | `RD_TABLE` | `polarisUtils.js` | branché (2026-09-23 — existait déjà, était orpheline) |
+| `RESISTANCE_NATURELLE_TABLE` (article resistances-naturelles) | `RES_NAT_TABLE` | `polarisUtils.js` | branché (2026-09-23 — existait déjà, était orpheline) |
+| `MODIFICATEUR_DOMMAGES_TABLE` (article modificateur-dommages) | `FORCE_MOD_DOMMAGES_TABLE` | `polarisUtils.js` | branché (2026-09-23, **créée** — n'existait nulle part) |
+
+**Note** : `FORCE_MOD_DOMMAGES_TABLE` n'a **aucun consommateur moteur** (grep sur `shared/`, `server/src/`,
+`client/src/` : aucune autre occurrence d'un modificateur de dommages en corps à corps lié à la Force).
+Elle est aujourd'hui une donnée RAW pure, pas la représentation d'une règle appliquée. Si le moteur
+combat applique ce modificateur ailleurs sous un autre nom, c'est une duplication à réconcilier ;
+sinon, c'est une règle RAW non implémentée — dans les deux cas, à trancher hors encyclopédie.
+Les lignes « Etc. » des trois tables à plafond (RD, Résistance naturelle, Modificateur) sont
+ajoutées à la main dans les `transform*` de `dataSources.js` (la formule de dépassement n'est pas
+figée en table côté `shared/`).
+
+---
+
 ## 5. Tables `shared/` orphelines (aucun article identifié)
 
 Ces tables existent dans `shared/` (repérées par grep), aucune n'est branchée à ce jour. À examiner lors des conversions à venir.
+(`AN_TABLE`, `RD_TABLE`, `RES_NAT_TABLE` ont quitté cette liste le 2026-09-23 — voir §4bis.)
 
 | Constante `shared/` | Fichier | Notes |
 |---|---|---|
-| `AN_TABLE` | `polarisUtils.js` | Table na → Aptitude Naturelle — utile pour article attributs (Livre 1-2-3 ?) |
-| `RD_TABLE` | `polarisUtils.js` | Résistance aux Dommages — cible probable : États de santé / attributs |
-| `RES_NAT_TABLE` | `polarisUtils.js` | Résistance naturelle — idem |
 | `CAC_SITUATION_MODS` | `combatSituationMods.js` | Modificateurs CaC — cible probable : combat-contact |
 | `EXO_RD_TABLE` | `exoConstants.js` | Table exo-armure (chapitre non communiqué) |
 | `EXO_CONTACT_DAMAGE_TABLE` | `exoConstants.js` | idem |

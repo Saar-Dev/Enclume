@@ -1,0 +1,107 @@
+{
+  "id": "personnages-et-statistiques.competences",
+  "slug": "competences",
+  "title": "Compétences",
+  "page": 114,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Les Compétences représentent les connaissances et les savoir-faire d’un personnage, dans des domaines bien précis (les actions physiques, les sciences, les techniques, les armes…)."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "personnages-et-statistiques.competences.aptitudes-naturelles",
+      "title": "Aptitudes naturelles et niveau de base des Compétences"
+    },
+    {
+      "type": "paragraph",
+      "text": "Lors de l’utilisation d’une Compétence, le personnage sollicite aussi ses capacités naturelles ou ses talents innés, représentés par ses Attributs. Par exemple, l’Intelligence d’un personnage entre en jeu lorsque celui-ci fait appel à ses Compétences de connaissances, de même que la Force et la Coordination sont importantes pour les Compétences liées aux activités physiques, au combat, etc. À chaque Attribut est donc associé un niveau d’Aptitude naturelle, qui sera utilisé dans le calcul du niveau de base des Compétence (voir plus bas). La table ci-dessous indique l’Aptitude naturelle associée à l’Attribut en fonction du niveau de celui-ci :"
+    },
+    {
+      "type": "dataTable",
+      "source": "APTITUDE_NATURELLE_TABLE",
+      "headers": [
+        [
+          { "label": "Attribut" },
+          { "label": "Aptitude naturelle" }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Le niveau de base d’une Compétence, qui représente les facilités et l’aisance naturelle du personnage lors de l’utilisation de celle-ci, dépend directement des Aptitudes naturelles. Chaque Compétence est en effet associée à deux Attributs (un seul parfois). Le niveau de base d’une Compétence est tout simplement égal à la somme des Aptitudes naturelles dépendant de ces deux Attributs. S’il n’y a qu’un seul Attribut associé, multipliez simplement l’Aptitude naturelle correspondante par deux."
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "niveau",      "label": "Niveau de base" },
+        { "key": "equivalence", "label": "Équivalence" }
+      ],
+      "rows": [
+        { "niveau": "0 ou moins", "equivalence": "mauvais, le personnage n’est pas du tout doué pour cette Compétence, et peut même être sérieusement handicapé par des Attributs trop bas." },
+        { "niveau": "1 à 2",      "equivalence": "médiocre." },
+        { "niveau": "3 à 4",      "equivalence": "moyen." },
+        { "niveau": "5 à 6",      "equivalence": "doué" },
+        { "niveau": "7 à 8",      "equivalence": "très doué." },
+        { "niveau": "9 et plus",  "equivalence": "génial." }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "personnages-et-statistiques.competences.niveau-maitrise",
+      "title": "Niveau de maîtrise des Compétences"
+    },
+    {
+      "type": "paragraph",
+      "text": "Si le niveau de base représente en quelque sorte l’aisance naturelle et innée d’un personnage dans telle ou telle Compétence, le niveau de maîtrise représente ses acquis, son savoir-faire et son expérience. Seuls l’étude ou l’entraînement permettent de développer le niveau de maîtrise d’une Compétence. Celui-ci est exprimé sous la forme d’un bonus. Plus ce bonus est élevé, plus le personnage est expérimenté."
+    },
+    {
+      "type": "paragraph",
+      "text": "Le niveau « +0 » est le niveau par défaut de toutes les Compétences communes, que tous les personnages sont capables d’utiliser naturellement (par exemple : Persuasion ou Escalade)."
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "niveau",      "label": "Niveau de maîtrise" },
+        { "key": "equivalence", "label": "Équivalence" }
+      ],
+      "rows": [
+        { "niveau": "+0",        "equivalence": "Inexpérimenté" },
+        { "niveau": "+1 à +5",   "equivalence": "Débutant" },
+        { "niveau": "+6 à +10",  "equivalence": "Confirmé, expert" },
+        { "niveau": "+11 à +15", "equivalence": "Maître" }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "personnages-et-statistiques.competences.niveau-global",
+      "title": "Niveau global des Compétences"
+    },
+    {
+      "type": "paragraph",
+      "text": "Le niveau global des Compétences est tout simplement égal à la somme du niveau de base et du niveau de maîtrise. C’est sur ce niveau global que seront effectués les Tests de Compétences (voir le chapitre consacré au système de jeu). Notez que le niveau global d’une Compétence peut être négatif, en raison d’une Aptitude naturelle médiocre et/ou d’une Compétence difficile à apprendre…"
+    },
+    {
+      "type": "dataTable",
+      "columns": [
+        { "key": "niveau",      "label": "Niveau global" },
+        { "key": "equivalence", "label": "Équivalence" }
+      ],
+      "rows": [
+        { "niveau": "0 et -",   "equivalence": "Aucune connaissance" },
+        { "niveau": "1-5",      "equivalence": "Connaissances de base" },
+        { "niveau": "6-10",     "equivalence": "Connaissances moyennes" },
+        { "niveau": "11-15",    "equivalence": "Connaissances approfondies" },
+        { "niveau": "16-20",    "equivalence": "Érudition ou maîtrise exceptionnelle" },
+        { "niveau": "21 et +",  "equivalence": "Génie" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Note : une compétence réservée (X) aura un niveau global uniquement si on maîtrise cette compétence."
+    }
+  ]
+}

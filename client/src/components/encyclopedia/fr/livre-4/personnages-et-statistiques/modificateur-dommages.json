@@ -1,0 +1,22 @@
+{
+  "id": "personnages-et-statistiques.modificateur-dommages",
+  "slug": "modificateur-dommages",
+  "title": "Modificateur de dommages en corps à corps",
+  "page": 113,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Le Modificateur de Dommages en corps à corps s’applique aux Dommages infligés par le personnage en combat au corps à corps, lorsqu’il attaque à mains nues ou à l’aide d’une arme blanche. Cet Attribut dépend de la Force du personnage :"
+    },
+    {
+      "type": "dataTable",
+      "source": "MODIFICATEUR_DOMMAGES_TABLE",
+      "headers": [
+        [
+          { "label": "Force" },
+          { "label": "Modificateur de Dommages en corps à corps" }
+        ]
+      ]
+    }
+  ]
+}

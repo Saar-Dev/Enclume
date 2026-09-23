@@ -2,7 +2,7 @@
 
 > Fenêtre « Encyclopédie » du projet Enclume — présentation du RAW du LdB Polaris
 > en articles navigables, fidèle au livre, zéro dérive avec les données de l'app.
-> Dernière mise à jour : 2026-09-23 (accès in-game — fenêtre + glossaire intégré)
+> Dernière mise à jour : 2026-09-23 (accès in-game — fenêtre + glossaire intégré ; chapitre Personnages et statistiques)
 
 ---
 
@@ -115,6 +115,7 @@ Différés :
 | Combat | ✔ 21/21 (dont introduction) |
 | États de santé | ✔ 26/26 (segmenté depuis 31 le 2026-09-22, voir §7 Phase 2bis ; + introduction 2026-09-23) |
 | Force Polaris | 13/14 articles structurellement sains (dont introduction), **audit complet fait 2026-09-22** (voir détail ci-dessous) — **1 fichier corrompu** (`maitrise-force-polaris.json`) + 1 dette de segmentation (`liste-pouvoirs.json`). Le bug des 8 tableaux invisibles est résolu (voir plus bas). |
+| Personnages et statistiques | ✔ 11/11 (dont introduction), LdB p.112-114, ajouté 2026-09-23 — voir §7 Phase 2quinquies |
 | Expérience | Index posé, 0 article |
 
 **Total converti : voir `node tools/validate-encyclopedia.mjs`** (compte les articles réels à chaque
@@ -170,7 +171,8 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
 **Phase 1 — Vertical slice** : TERMINÉ
 
 **Phase 2 — Conversion chapitre par chapitre** : EN COURS
-- Chapitres complets : Tests et actions, Combat, États de santé (segmenté 2026-09-22)
+- Chapitres complets : Tests et actions, Combat, États de santé (segmenté 2026-09-22), Personnages
+  et statistiques (2026-09-23)
 - Prochain : Force Polaris — audité 2026-09-22 (voir §6). (a) fix rendu `DataTableBlock.jsx` (schéma
   éditorial) **fait 2026-09-22**. Restent : (b) réécriture `maitrise-force-polaris.json` (attend le
   RAW p.252 de Saar), (c) segmentation `liste-pouvoirs.json`
@@ -259,6 +261,34 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
 - **Non testé par Claude** : rendu réel navigateur — testé et confirmé par Saar au fil de la
   construction (bouton, réduction nav, positions ✕/titre, chevauchement ✕/contenu). Le
   glossaire intégré (round 2) reste à confirmer par Saar.
+
+**Phase 2quinquies — Chapitre « Personnages et statistiques »** : TERMINÉE (2026-09-23)
+- LdB p.112-114 : 11 articles (`introduction`, `attributs-principaux`, `chance`, `reaction`,
+  `modificateur-dommages`, `resistance-choc`, `resistance-dommages`, `resistances-naturelles`,
+  `souffle`, `competences`, `competences-reservees`), même patron « introduction = article » que les
+  4 autres chapitres (Phase 2ter), séparateurs de groupe (`Attributs` / `Attributs dérivés` /
+  `Compétences`) via `_index.json:articles[].group`. Pas de `_chapter.json`.
+- 4 tables branchées sur `shared/` (`dataSources.js`) : `APTITUDE_NATURELLE_TABLE` (`AN_TABLE`),
+  `RESISTANCE_DOMMAGES_TABLE` (`RD_TABLE`), `RESISTANCE_NATURELLE_TABLE` (`RES_NAT_TABLE`) — les 3
+  existaient déjà, orphelines — et `MODIFICATEUR_DOMMAGES_TABLE` (`FORCE_MOD_DOMMAGES_TABLE`, **créée**
+  dans `polarisUtils.js`). Détail : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md` §4bis.
+- Les autres tableaux du chapitre (`attributs-principaux.json` ×1, `competences.json` ×3) utilisent le
+  schéma éditorial `columns`/`rows` (Phase 2, `EditorialDataTable`) — pas de valeur moteur associée.
+- **Point de vigilance — `FORCE_MOD_DOMMAGES_TABLE` sans consommateur moteur** : aucune autre
+  occurrence d'un modificateur de dommages CaC lié à la Force dans `shared/`/`server/src/`/
+  `client/src/`. Donnée RAW pure pour l'instant ; règle possiblement non implémentée côté combat
+  (à trancher hors encyclopédie, ne pas ouvrir de second moteur ici).
+- **Incohérence de métadonnées, non tranchée** : le chapitre (pages 112-114) est rangé sous le livre
+  `livre-4` (« Le système », `pageStart: 201`/`pageEnd: 271` dans `_index.json`), et placé en premier.
+  Les pages du chapitre sont hors de la plage du livre — soit le chapitre appartient à un autre livre
+  du LdB (Livres 1-2-3 « non communiqués »), soit la plage du livre est à élargir. Aucun code ne lit
+  `pageStart`/`pageEnd` (grep `client/src`) : sans effet runtime, mais à corriger avec Saar quand le
+  découpage en livres sera arrêté.
+- Vérifié : `node tools/validate-encyclopedia.mjs` — 80 articles, 0 erreur sur le nouveau chapitre (11
+  fichiers = 11 entrées d'index, aucun orphelin, aucun lien cassé) ; seules les 2 erreurs
+  préexistantes subsistent. Contrôle manuel complémentaire (le validateur ne le fait pas) : les 4
+  `source` de `dataTable` existent dans `dataSources.js`. **Non vérifié** : valeurs des 4 tables et
+  texte des 11 articles relus contre le RAW p.112-114 ; rendu navigateur (Saar).
 
 **Phase 3 — Injection données shared/** : TERMINÉE pour États de santé (2026-09-22)
 - Vertical slice terminée :

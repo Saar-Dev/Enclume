@@ -1,0 +1,23 @@
+{
+  "id": "personnages-et-statistiques.souffle",
+  "slug": "souffle",
+  "title": "Souffle",
+  "page": 114,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Cet Attribut permet de déterminer pendant combien de temps un personnage peut retenir sa respiration avant de s’asphyxier. Ne négligez pas cette caractéristique pour les hybrides, car ils peuvent aussi avoir à retenir leur souffle s’ils sont soumis à des gaz."
+        },
+        {
+          "type": "paragraph",
+          "text": "Le Souffle se calcule par la formule suivante : (Constitution+Volonté)/2, en Tours de combat."
+        }
+      ]
+    }
+  ]
+}

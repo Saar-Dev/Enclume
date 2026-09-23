@@ -1,0 +1,20 @@
+{
+  "id": "personnages-et-statistiques.reaction",
+  "slug": "reaction",
+  "title": "Réaction",
+  "page": 113,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Les Attributs secondaires dérivent des Attributs principaux."
+    },
+    {
+      "type": "paragraph",
+      "text": "Cet Attribut représente la rapidité de réaction d’un personnage, lorsque la rapidité d’action devient capitale. La Réaction est notamment utilisée en combat, pour déterminer le score d’Initiative du personnage (c’est-à-dire le moment où il pourra agir), ainsi que lors des événements soudains et inattendus, pour déterminer s’il est capable de réagir à temps pour éviter une éventuelle catastrophe (exemple : le personnage découvre un piège, l’un de ses ennemis sort une arme, une grenade roule dans la pièce, etc.)."
+    },
+    {
+      "type": "paragraph",
+      "text": "La Réaction est la moyenne de l’Adaptation et de la Perception : (ADA+PER)/2."
+    }
+  ]
+}

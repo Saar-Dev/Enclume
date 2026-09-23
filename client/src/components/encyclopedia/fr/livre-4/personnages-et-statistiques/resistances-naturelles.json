@@ -1,0 +1,44 @@
+{
+  "id": "personnages-et-statistiques.resistances-naturelles",
+  "slug": "resistances-naturelles",
+  "title": "Résistances naturelles",
+  "page": 114,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Il s’agit d’un ensemble de modificateurs qui, tout comme la Résistance aux dommages, représente la résistance (ou la vulnérabilité) du personnage à l’un des quatre éléments suivants : les poisons, les maladies, les drogues, les radiations. Pour chaque Résistance naturelle, appliquez les formules suivantes :"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        {
+          "label": "Résistance aux poisons, aux maladies et aux radiations",
+          "blocks": [
+            { "type": "paragraph", "text": "niveau de CON" }
+          ]
+        },
+        {
+          "label": "Résistance aux drogues",
+          "blocks": [
+            { "type": "paragraph", "text": "(CON+VOL)/2" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Cherchez ensuite le modificateur correspondant dans le tableau ci-dessous :"
+    },
+    {
+      "type": "dataTable",
+      "source": "RESISTANCE_NATURELLE_TABLE",
+      "headers": [
+        [
+          { "label": "Résultat" },
+          { "label": "Résistance naturelle" }
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "personnages-et-statistiques.chance",
+  "slug": "chance",
+  "title": "Chance",
+  "page": 113,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "La Chance est un Attribut un peu particulier, qui représente la capacité du personnage à bénéficier (ou non…) de temps à autre d’un petit coup de pouce du destin. Les règles de Chance sont amplement détaillées dans le chapitre consacré au système de jeu, mais sachez toutefois qu’utiliser sa Chance permet d’éviter certains événements malheureux, de relancer des dés lors de tests malchanceux, de réduire la gravité de certaines blessures ou même d’obtenir des indices et des petits bonus supplémentaires de la part du MJ ! Ce n’est donc pas un Attribut à négliger… Le score de Chance est exprimé par un niveau, sur 20."
+    }
+  ]
+}

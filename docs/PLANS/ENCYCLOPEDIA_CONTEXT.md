@@ -1,7 +1,7 @@
 # ENCYCLOPEDIA — Mémoire externe de conversation
 
 > Fichier de référence stable pour le chantier « Encyclopédie » du projet Enclume.
-> Dernière mise à jour : 2026-09-22 (audit qualité + segmentation États de santé + tables restantes)
+> Dernière mise à jour : 2026-09-23 (chapitre Personnages et statistiques ; précédemment : audit qualité + segmentation États de santé + tables restantes)
 
 ---
 
@@ -216,6 +216,8 @@ classes `.encyclo-datatable-*`).
 
 ### Livre 4 (pages 201-271)
 
+0. Personnages et statistiques (112-114) — CONVERTI (2026-09-23, 11 articles) ⚠ pages hors de la plage
+   201-271 du livre : rangement sous `livre-4` à confirmer (voir `PLAN_ENCYCLOPEDIA.md` §7 Phase 2quinquies)
 1. Tests et actions (201) — CONVERTI
 2. Combat (212) — CONVERTI
 3. États de santé (234) — CONVERTI
@@ -241,6 +243,10 @@ signale toute désync.
 
 **États de santé (25/25, segmenté depuis 31 le 2026-09-22)** — voir `docs/PLANS/PLAN_ENCYCLOPEDIA.md`
 §7 Phase 2bis pour le détail des fusions/renommages. Toutes les tables RAW connues branchées.
+
+**Personnages et statistiques (11/11, ajouté 2026-09-23)** — voir `PLAN_ENCYCLOPEDIA.md` §7 Phase
+2quinquies. 4 tables branchées (`AN_TABLE`, `RD_TABLE`, `RES_NAT_TABLE` + `FORCE_MOD_DOMMAGES_TABLE`
+créée, sans consommateur moteur).
 
 **Force Polaris (13/13 fichiers, 1 corrompu)** — `maitrise-force-polaris.json` contient en réalité
 le texte de « Choc Polaris » ; l'article n'a jamais été rédigé. À corriger avant de considérer ce
@@ -351,7 +357,10 @@ Trois docs portent le projet pour une reprise à froid :
 - `ENCYCLOPEDIA_CONVERSION.md` — règles de conversion précises
 
 Prochain travail (état 2026-09-22) :
-- Force Polaris : réécrire `maitrise-force-polaris.json` (contenu corrompu, contient « Choc Polaris »)
+- Force Polaris : audité 2026-09-22. Fixé : rendu `dataTable` éditorial (8 tables invisibles →
+  visibles, `DataTableBlock.jsx`). Restent : réécrire `maitrise-force-polaris.json` corrompu (attend
+  le RAW p.252 de Saar), segmenter `liste-pouvoirs.json` (44 pouvoirs/1350 lignes) — détail
+  `PLAN_ENCYCLOPEDIA.md` §6
 - Audit paramètres moteur Combat (Préparations, Enchaînement, modificateurs de contact) — pas encore
   tranché si c'est un vrai gap ou des exemples RAW appropriés en l'état
 - Froid/Feu (États de santé) — investigation des constantes moteur avant tout branchement

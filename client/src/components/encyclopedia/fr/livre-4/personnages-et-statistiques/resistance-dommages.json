@@ -1,0 +1,22 @@
+{
+  "id": "personnages-et-statistiques.resistance-dommages",
+  "slug": "resistance-dommages",
+  "title": "Résistance aux dommages",
+  "page": 114,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Cet Attribut représente la résistance du personnage aux blessures physiques et modifie la somme de Dommages reçus. La Résistance aux Dommages dépend de la Force et de la Constitution du personnage :"
+    },
+    {
+      "type": "dataTable",
+      "source": "RESISTANCE_DOMMAGES_TABLE",
+      "headers": [
+        [
+          { "label": "FOR+CON" },
+          { "label": "Résistance aux Dommages" }
+        ]
+      ]
+    }
+  ]
+}

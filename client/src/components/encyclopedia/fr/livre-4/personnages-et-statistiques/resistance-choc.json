@@ -1,0 +1,37 @@
+{
+  "id": "personnages-et-statistiques.resistance-choc",
+  "slug": "resistance-choc",
+  "title": "Résistance au choc",
+  "page": 113,
+  "blocks": [
+    {
+      "type": "callout",
+      "variant": "optional",
+      "label": "OPTIONNEL",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Cet Attribut représente la résistance du personnage au choc traumatique et psychologique consécutif à une blessure. On l’utilise aussi pour déterminer la résistance aux dommages contondants qui peuvent étourdir voire assommer un personnage. La Résistance au Choc est composée de deux valeurs :"
+        },
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            {
+              "label": "Seuil d’Étourdissement",
+              "blocks": [
+                { "type": "paragraph", "text": "(FOR+CON+VOL)/3" }
+              ]
+            },
+            {
+              "label": "Seuil d’Inconscience",
+              "blocks": [
+                { "type": "paragraph", "text": "valeur du seuil d’Étourdissement +10" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
