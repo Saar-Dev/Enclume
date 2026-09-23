@@ -509,10 +509,20 @@ de leurs rayons — trouvé en jeu réel (caisse à 0,90 m bloquant un nœud de 
 rayon combiné). Régression couverte par 2 tests avec des données réelles de campagne
 (`spatialIndex.test.mjs`).
 
-**Limite connue, non actionnée** : un token peut être posé sur une case déjà occupée par une entité
-(chevauchement circulaire réel, pas un bug de `canOccupy`) — rien n'empêche le placement initial, la
-détection n'intervient qu'au moment du déplacement suivant. Demande produit non cadrée : voir
-`docs/PLANS/PLAN_BLOCAGE_CASES_OCCUPEES.md` (stub).
+**Placement de token MJ — CLOS 2026-09-23** : le drag&drop MJ passait par `/tokens/:id/teleport`
+(bypass spatial total, ni snap au graphe de navigation ni `canOccupy`), devenu le chemin par défaut
+de tout drag normal — placement hors-grille, chevauchement réel possible avec une entité. Corrigé :
+`POST /tokens/:id/place` (nouvelle route, réutilise `resolveBattlemapPlacement`) devient le défaut
+du drag MJ ; `/teleport` reste disponible via `Shift` tenue (bypass explicite et conscient, capacités
+MJ inchangées). Détail archivé `docs/Old/PLAN_PLACEMENT_TOKEN_MJ.md` (à ne pas confondre avec
+`docs/Old/PLAN_BLOCAGE_CASES_OCCUPEES.md`, chantier différent et déjà clos plus tôt : empêcher de
+poser une ENTITÉ sur une case occupée).
+
+**Forme de collision des entités** : le profil de collision d'une entité (`entityOccupant`,
+`worldMovementService.js`) modélise toute entité comme un cercle (repli `max(width,depth)/2`),
+correct pour un objet ~carré mais faux pour un objet allongé (vérifié : un pack de caisses
+2,26 m × 1,05 m calcule un rayon de 1,13 m, bloquant un token à 1 m sur son côté étroit). Cadrage
+terminé 2026-09-22, pas encore codé — voir `docs/PLANS/PLAN_FORME_COLLISION_ENTITES.md`.
 
 ### 7.1 Tranche d'étage affichée
 

@@ -1,3 +1,23 @@
+## v243 — 2026-09-23 — Placement de token MJ : validé par défaut
+
+### Carte
+- [fix] Déplacer un token à la souris (MJ, hors combat) atterrit désormais toujours sur une position
+  valide de la carte — auparavant un token pouvait se retrouver hors-grille ou en chevauchement avec
+  une caisse, ce qui perturbait ensuite ses déplacements.
+- [add] Garder `Shift` enfoncée en lâchant un token force un placement libre, sans restriction
+  (comportement identique à avant) — utile pour poser volontairement un token derrière un obstacle.
+
+## v242 — 2026-09-22 — Drones : télépilotage
+
+### Combat
+- [add] Un personnage possédant un drone peut désormais le télépiloter pendant son propre Tour : un
+  bouton « Télépiloter » ouvre directement la fenêtre d'action du drone (Tir, Corps à corps ou
+  déplacement) à la place de ses propres actions ce Tour-là.
+- [add] Le niveau du programme d'armement utilisé est plafonné par la Compétence Télépilotage du
+  pilote (Compétence limitative, RAW).
+- [fix] Un drone en mode « ordres permanents » télépiloté ce Tour n'exécute plus en double son
+  action automatique préprogrammée.
+
 ## v241 — 2026-09-18 — Exo-armure : la fenêtre se masque enfin au ciblage
 
 ### Combat

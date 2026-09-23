@@ -7,6 +7,8 @@ import { removeTokens } from '../lib/tokenLifecycle.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { resolveBattlemapPlacement } from '../services/worldMovementService.js'
+import { loadBattlemapRuntimeContext } from '../services/worldEffectService.js'
+import { syncTokenElevatorPassenger } from '../services/worldElevatorService.js'
 
 const router = Router({ mergeParams: true })
 
@@ -100,6 +102,90 @@ router.post('/', requireAuth, async (req, res) => {
   })
 
   res.status(201).json({ token })
+})
+
+// POST /api/tokens/:id/place — placement validé (snap au point libre le plus proche via le
+// graphe de navigation + canOccupy), réservé au MJ. Sœur validée de /teleport (bypass brut) —
+// PLAN_PLACEMENT_TOKEN_MJ.md (docs/Old/) : le drag&drop MJ normal passait par /teleport par défaut,
+// échappant totalement au moteur monde (placement hors-grille). Devient le chemin par défaut ;
+// /teleport reste disponible (Shift tenue côté client) pour un bypass explicite et conscient.
+router.post('/:id/place', requireAuth, async (req, res, next) => {
+  try {
+    const token = await db('tokens').where({ id: req.params.id }).first()
+    if (!token) throw new AppError(404, 'Token not found')
+    const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+      .first()
+    if (!member) throw new AppError(403, 'GM only')
+    if (token.position_space !== 'world-feet') {
+      throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+
+    let placement
+    try {
+      placement = await resolveBattlemapPlacement({ battlemap, destination: req.body.destination })
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw new AppError(400, error.message)
+      }
+      throw error
+    }
+    if (!placement) throw new AppError(409, 'No free walkable surface near destination')
+
+    let updated
+    let runtimeRevision
+    await db.transaction(async trx => {
+      const currentMap = await trx('battlemaps').where({ id: token.battlemap_id }).forUpdate().first()
+      const currentToken = await trx('tokens').where({ id: token.id }).forUpdate().first()
+      if (!currentMap || !currentToken) throw new AppError(409, 'World state changed before placement')
+      ;[updated] = await trx('tokens')
+        .where({ id: token.id })
+        .update({
+          ...worldPointToDbPosition(placement),
+          position_space: 'world-feet',
+          updated_at: trx.fn.now(),
+        })
+        .returning('*')
+      // Resynchronise l'état passager d'ascenseur selon la position RÉELLE atteinte (même primitive
+      // que executeBattlemapTokenMovement, le chemin déjà validé) — contrairement à /teleport qui
+      // détache toujours en bloc (bypass brut, position potentiellement hors physique), un placement
+      // validé peut légitimement atterrir sur une cabine.
+      const runtimeContext = await loadBattlemapRuntimeContext(currentMap, trx)
+      await syncTokenElevatorPassenger({
+        trx,
+        battlemap: currentMap,
+        tokenId: token.id,
+        end: placement,
+        snapshot: runtimeContext.snapshot,
+        runtimeStates: runtimeContext.runtimeState.featureStates,
+      })
+      const [runtime] = await trx('battlemaps')
+        .where({ id: token.battlemap_id })
+        .update({ runtime_revision: Number(currentMap.runtime_revision || 0) + 1 })
+        .returning('runtime_revision')
+      runtimeRevision = runtime.runtime_revision
+    })
+
+    const io = req.app.get('io')
+    io.to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
+      tokenId: updated.id,
+      pos_x: updated.pos_x,
+      pos_y: updated.pos_y,
+      pos_z: updated.pos_z,
+      position_space: updated.position_space,
+      updated_at: updated.updated_at,
+      worldMovement: { runtimeRevision },
+    })
+    io.to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: token.battlemap_id,
+      runtimeRevision,
+      kind: 'token-placed',
+    })
+    res.json({ token: updated, runtimeRevision, coordinateSpace: 'world-feet' })
+  } catch (error) {
+    next(error)
+  }
 })
 
 // POST /api/tokens/:id/teleport — bypass spatial explicite, réservé au MJ.

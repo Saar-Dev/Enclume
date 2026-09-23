@@ -271,8 +271,12 @@ function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, contro
       const destination = dragRef.current.destination
       if (!destination) return
       try {
+        // PLAN_PLACEMENT_TOKEN_MJ.md (docs/Old/) — même bascule que Canvas3D.jsx : placement validé par
+        // défaut, Shift tenue force le bypass /teleport explicitement.
         const res = isGm
-          ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+          ? (e.shiftKey
+              ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+              : await api.post(`/tokens/${token.id}/place`, { destination }))
           : await api.post(`/battlemaps/${battlemapId}/world-move`, {
               token_id: token.id,
               destination,

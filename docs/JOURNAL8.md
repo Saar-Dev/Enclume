@@ -7593,7 +7593,10 @@ navigation dont la somme des rayons circulaires n'était que 0,764 m. Corrigé p
 échec. Un second cas rejoué par Saar (PNJ2 immobile) s'est révélé être un vrai chevauchement
 circulaire (token posé sur une caisse) — pas un bug, mais a fait remonter une demande produit non
 cadrée : une mécanique empêchant de poser un token sur une case déjà occupée. Notée
-`docs/PLANS/PLAN_BLOCAGE_CASES_OCCUPEES.md` (stub), pas actionnée.
+`docs/PLANS/PLAN_BLOCAGE_CASES_OCCUPEES.md` (stub) — nom en collision avec un chantier déjà clos
+sous ce même nom (empêcher de poser une ENTITÉ sur une case occupée) ; la résolution réelle de ce
+point (placement de TOKEN) vit finalement sous `docs/Old/PLAN_PLACEMENT_TOKEN_MJ.md`, CLOS
+2026-09-23.
 
 **Testé** : arbitrage de clic token/entité/connecteur, garde `blocksEntityClick`, curseur + Échap
 pour les 5 modes de visée, poignées des 3 fenêtres de déclaration, déplacement combat après le
@@ -7932,3 +7935,103 @@ le même patron que `CombatActionWindow.jsx#isHidden` : dérivé de l'état part
 
 **Documentation de clôture** : faits durables + historique intégrés dans `docs/SYSTEME/EXOARMURE.md`
 (nouveau point sous la liste §5) ; `client/public/CHANGELOG.md` — entrée joueur/MJ ajoutée (v241).
+
+---
+
+## Session (Dev) — 2026-09-22 — Clôture Sprint 3 Drones : télépilotage (dernier morceau du chantier)
+
+**Contexte** : dernier Sprint du chantier Drones (`docs/PLANS/PLAN_DRONE.md`), après Sprint 2d (mode
+autonome, clos 2026-09-18 ci-dessus). RAW (LdB p.319) : le pilote utilise sa Compétence Télépilotage
+(limitative sur le programme du drone), Initiative = celle du pilote, « son action ce tour = l'action
+du drone ». Cadrage revu en conversation avec Saar le jour même : action exclusive du Tour, non
+persistant (mode persistant différé en V2, jamais demandé), lien pilote↔drone = même autorité que
+Sprint 2c/2d (`character.user_id`), pas de nouvelle colonne.
+
+**Trois points de substitution pilote→drone trouvés en codant** (absents du cadrage initial,
+`combat_actions.token_id` reste celui du pilote pour l'Initiative, mais chaque effet physique doit
+cibler le drone) : déclaration (`socketCombatAnnouncement.js`, budget/position de mouvement du drone),
+résolution assault/melee (`socketCombatResolution.js`, `resolvedAction` reconstruit avec le
+`token_id` du drone, même patron que `resolveDroneAutoAction`), et un troisième site non anticipé —
+la boucle « actions simples » de mouvement en Résolution, qui aurait déplacé le token du pilote au lieu
+du drone sans le même correctif.
+
+**Deux bugs trouvés et corrigés avant clôture, jeu réel (même session)** :
+1. Garde de phase : `ordres_permanents` distinguait un drone déjà agi via `combat_timeline_entries`,
+   qui n'existe pas encore en phase ANNONCE (n'est construit qu'à la transition RÉSOLUTION) — corrigé
+   en lisant `combat_actions.status` de la ligne `drone_auto` pré-remplie à la place.
+2. Arbitrage ambiant : `CombatActionWindow.jsx` instancie `useAutoMoveMode`/`useCombatClickAttack` 3×
+   (pilote / drone en tour propre / drone télépiloté) ; la condition `enabled` du pilote (préexistante)
+   n'avait jamais été mise à jour avec `!telepilotDroneId`, le laissant actif en permanence pendant le
+   télépilotage et empêchant le drone de s'armer — même défaut dupliqué dans les deux hooks jumeaux.
+   Root cause générique : aucune valeur unique ne dérive « quel rôle est actif », chaque site réécrit sa
+   propre négation à la main. Corrigé + durci : `registerAmbientAttackHandler` (`useCombatUIState.js`)
+   refuse désormais explicitement un écrasement par un autre déclarant (garde d'exclusivité par
+   `tokenId`) — `useCombatClickAttack` n'avait aucune protection équivalente à celle de
+   `useAutoMoveMode`.
+
+**Plafond de compétence** : `calcLimitedSkillTotal` (déjà réutilisé pour Manœuvre d'armure/Exo)
+plafonne le Seuil, jamais la maîtrise/le bonus de critique — vérifié RAW (`ATTRIBUTS.md:209-211`),
+pas une extension assumée.
+
+**Testé** : `node --check` propre sur les fichiers serveur touchés, `eslint`/`npm run build` propres
+côté client. **Confirmé fonctionnel en jeu réel par Saar (2026-09-22)** : déclaration, Tir/CaC ET
+déplacement télépilotés.
+**Non testé** : automatisé (pas de nouveau test unitaire dédié à cette session — le test déjà écrit
+pendant Sprint 2d pour le cas « drone déjà télépiloté ce Tour, pas re-préposé »,
+`combatTurnEngine.test.mjs:522`, tourne déjà sous le flag global `DATABASE_URL`, rien à dé-skip).
+Interception RAW en télépiloté (mécanique d'interception absente du moteur, indépendamment de ce
+Sprint — non bloquant, non traité ici).
+**Données** : aucune migration (colonnes déjà existantes, `action_key`/`type` texte libre).
+**Retour arrière** : `git revert` du commit `1054814` si besoin, aucune dépendance externe.
+
+**Documentation de clôture** : faits durables intégrés dans `docs/SYSTEME/COMBAT.md` § « Télépilotage
+drone » ; `docs/PLANS/PLAN_DRONE.md` marqué CLOS en tête puis archivé `docs/Old/PLAN_DRONE.md`
+(2026-09-23, sur décision de Saar — écrase l'ancienne version périmée du même nom qui y vivait, sans
+valeur historique restante une fois ce chantier clos) ; `docs/ROADMAP.md` — ligne Drones retirée
+(chantier clos) ; mémoire de session mise à jour. `client/public/CHANGELOG.md` — entrée joueur/MJ
+ajoutée (v242).
+
+## Session (Dev) — 2026-09-23 — Placement de token MJ hors combat : validé par défaut
+
+**Root cause** [VÉRIFIÉ code] : tout drag&drop de token par le MJ passait par
+`POST /tokens/:id/teleport` — bypass spatial explicite (ni snap au graphe de navigation, ni
+`canOccupy`), conçu pour des cas rares (replacer un token legacy, poser derrière un mur verrouillé)
+mais devenu le chemin par défaut de tout drag normal. Comme les tests se font depuis le compte MJ,
+chaque déplacement hors combat échappait totalement au moteur monde — placement hors-grille,
+tokens finissant en chevauchement réel avec une entité (caisse), pathfinding qui « galère » ensuite
+sur ces positions invalides. Le joueur (`/world-move`) était déjà validé, non concerné.
+
+**Décision produit écartée avant codage** : un mode persistant à 3 états (« tout permis » / « MJ
+restreint » / « Mode Joueur ») togglé par commande chat, proposé par Saar puis écarté après analyse
+critique — même classe de risque qu'un bug trouvé la veille (arbitrage ambiant pilote/drone
+télépiloté, `project_combat_window_drag_handle` Round 7) : un état qui reste actif après que le
+contexte a changé, parce que rien ne force à y repenser. Retenu à la place : pas de mode, un geste
+explicite par action (patron pro standard — snap par défaut, touche modificatrice tenue pour forcer
+le placement libre ponctuellement).
+
+**Correctif** : nouvelle route `POST /api/tokens/:id/place` (sœur validée de `/teleport`, même
+fichier/montage de routeur) — appelle `resolveBattlemapPlacement` (déjà utilisé à la création de
+token, snap au point libre le plus proche via graphe de navigation + `canOccupy`), écrit la
+position dans une transaction avec verrous (`forUpdate`), resynchronise l'état passager d'ascenseur
+via `syncTokenElevatorPassenger` (même primitive que `executeBattlemapTokenMovement`, le chemin
+déjà validé — plus correct que le détachement brutal de `/teleport`, un placement validé pouvant
+légitimement atterrir sur une cabine). Client (`Canvas3D.jsx`/`Canvas2D.jsx`, `handlePointerUp`) :
+drag normal du MJ → `/place` (défaut) ; `Shift` tenue pendant le drop → `/teleport` (bypass
+explicite, comportement et capacités du MJ inchangés, juste devenu un geste conscient). Vérifié
+avant codage qu'aucune touche modificatrice n'était déjà prise ailleurs dans la scène 3D (grep
+exhaustif + config `MapControls`).
+
+**Testé** : `node --check` serveur propre, `eslint`/`npm run build` client propres (0 nouveau
+problème). **Confirmé fonctionnel en jeu réel par Saar (2026-09-23)**.
+**Non testé** : aucun scénario ascenseur/cabine exercé en jeu réel (vérifié en conception
+uniquement) ; `Canvas2D.jsx` non testé en jeu réel (même changement que `Canvas3D.jsx`, modificateur
+confirmé libre par grep mais pas rejoué).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit applicable, aucune dépendance externe.
+
+**Documentation de clôture** : `docs/Old/PLAN_PLACEMENT_TOKEN_MJ.md` marqué CLOS puis archivé
+(nom final — `PLAN_BLOCAGE_CASES_OCCUPEES.md` écrasait par erreur un chantier déjà clos et commité
+sous ce même nom, `empêcher de poser une ENTITÉ sur une case occupée`, 2026-09-18 ; restauré depuis
+git, renommé) ; fait durable intégré à `docs/SYSTEME/MOTEUR_MONDE.md` §7 ; `docs/ROADMAP.md` —
+ligne retirée (chantier clos) ; `client/public/CHANGELOG.md` — entrée MJ ajoutée (v243) ; mémoire de
+session mise à jour (`project_combat_window_drag_handle` Round 7).

@@ -1287,8 +1287,14 @@ function Scene({
     if (!destination) return
 
     try {
+      // PLAN_PLACEMENT_TOKEN_MJ.md (docs/Old/) — le drag&drop MJ passe par défaut par un placement VALIDÉ
+      // (snap au point libre le plus proche, moteur monde) plutôt que par /teleport (bypass brut,
+      // ni snap ni canOccupy) — Shift tenue force explicitement le bypass (geste conscient, jamais
+      // un mode persistant qu'on pourrait oublier de désarmer, cf. mémoire du bug de télépilotage).
       const res = isGm
-        ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+        ? (e.shiftKey
+            ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+            : await api.post(`/tokens/${token.id}/place`, { destination }))
         : await api.post(`/battlemaps/${battlemapId}/world-move`, {
             token_id: token.id,
             destination,
