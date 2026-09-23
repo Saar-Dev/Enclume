@@ -41,6 +41,7 @@ import { getAvailableInteractions, getEffectiveInteractionDifficulty } from '../
 import { resolveActingToken } from '../lib/actingToken.js'
 import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
+import EncyclopediaWindow from '../components/encyclopedia/EncyclopediaWindow.jsx'
 import ExchangeWindow from '../components/ExchangeWindow'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
@@ -107,6 +108,7 @@ function SessionContent({ campaignId }) {
   const [tradeInitialContext, setTradeInitialContext] = useState(null)
   const [exchangeWindowOpen,  setExchangeWindowOpen]  = useState(false)
   const [exchangeContext,     setExchangeContext]     = useState(null)
+  const [encyclopediaWindowOpen, setEncyclopediaWindowOpen] = useState(false)
   const [activeEditorTab, setActiveEditorTab] = useState('world') // 'world' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
@@ -819,6 +821,7 @@ function SessionContent({ campaignId }) {
           onRepairDecision={handleRepairDecision}
           onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
           onOpenExchange={(ctx) => { setExchangeContext(ctx ?? null); setExchangeWindowOpen(true) }}
+          onOpenEncyclopedia={() => setEncyclopediaWindowOpen(true)}
         />
       )}
 
@@ -1377,6 +1380,14 @@ function SessionContent({ campaignId }) {
           myCharId={myCharId}
           characters={characters}
           initialContext={tradeInitialContext}
+        />
+      )}
+
+      {/* ─── EncyclopediaWindow — RAW Polaris en jeu (Sidebar > Outils) ─── */}
+      {encyclopediaWindowOpen && (
+        <EncyclopediaWindow
+          sidebarWidth={sidebarVisible ? sidebarWidth : 0}
+          onClose={() => setEncyclopediaWindowOpen(false)}
         />
       )}
 

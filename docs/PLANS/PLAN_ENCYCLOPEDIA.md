@@ -2,8 +2,7 @@
 
 > Fenêtre « Encyclopédie » du projet Enclume — présentation du RAW du LdB Polaris
 > en articles navigables, fidèle au livre, zéro dérive avec les données de l'app.
-> Dernière mise à jour : 2026-09-23 (intro de chapitre → article à part entière, `_chapter.json`
-> supprimé — préparation de l'accès in-game)
+> Dernière mise à jour : 2026-09-23 (accès in-game — fenêtre + glossaire intégré)
 
 ---
 
@@ -60,9 +59,12 @@ dupliqués dans `_index.json`) et `intro` (affiché en plus du premier article, 
 ## 4. Architecture client
 
     client/src/components/encyclopedia/
-      EncyclopediaPage.jsx           ← page racine
-      GlossaryPage.jsx               ← page glossaire (route dédiée)
-      ChapterList.jsx                ← nav 3 niveaux
+      EncyclopediaPage.jsx           ← route standalone (habillage plein écran)
+      EncyclopediaViewer.jsx         ← contenu réel (nav + article), extrait 2026-09-23
+      EncyclopediaWindow.jsx         ← fenêtre en jeu (Sidebar > Outils), monte le Viewer
+      GlossaryPage.jsx               ← route standalone glossaire (habillage)
+      GlossaryViewer.jsx             ← contenu réel du glossaire, extrait 2026-09-23
+      ChapterList.jsx                ← nav 3 niveaux, réductible, `embedded` prop
       ArticleView.jsx                ← vue article (+ scroll sur ancre)
       BlockRenderer.jsx              ← dispatcher de blocs
       contentLoader.js               ← getIndex, loadArticle, loadGlossary,
@@ -80,7 +82,8 @@ dupliqués dans `_index.json`) et `intro` (affiché en plus du premier article, 
       en/                            ← données (vide)
 
 Routes : `/encyclopedia` et `/encyclopedia/glossary` dans `App.jsx`,
-protégées par `ProtectedRoute`.
+protégées par `ProtectedRoute`. Accès in-game (sans route, overlay) : Sidebar > Outils >
+Encyclopédie → `EncyclopediaWindow.jsx`, monté dans `SessionPage.jsx` — voir §7 Phase 2quater.
 
 i18n : namespace `encyclopedia` dans `i18n.js` + `locales/encyclopedia.json`.
 
@@ -208,6 +211,55 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
 - Vérifié : `tools/validate-encyclopedia.mjs` (mêmes 2 erreurs préexistantes, 69 articles au lieu de
   65), `eslint`, `npm run build`.
 
+**Phase 2quater — Accès in-game (fenêtre)** : TERMINÉE, version minimale (2026-09-23)
+- Déclencheur : l'Encyclopédie n'avait aucun point d'entrée dans l'app hors l'URL directe
+  (`bug_tickets` `ENCYCLOPEDIE-NOT-INTEGRATED`, priorité basse — le cœur de la trouvaille est
+  résolu, ticket à clore par Saar).
+- `EncyclopediaViewer.jsx`/`GlossaryViewer.jsx` extraits de `EncyclopediaPage.jsx`/
+  `GlossaryPage.jsx` (contenu réel, réutilisable) — les pages standalone deviennent de simples
+  habillages autour, comportement inchangé pour l'usage hors session.
+- `EncyclopediaWindow.jsx` : overlay in-app (jamais de popup navigateur), 80% de la zone
+  playground (sidebar exclue, `sidebarWidth` — même valeur déjà envoyée à `CombatOverlay`),
+  recalculée au redimensionnement navigateur, z-index 9000 (aligné sur `CharacterWindow.jsx`).
+  Pas de barre de titre (redondante avec le titre déjà porté par `ChapterList.jsx`) — seul un ✕
+  flottant, patron identique au bouton de fermeture de la Sidebar principale.
+- **Version minimale assumée** : taille fixe, pas de drag/resize/réduction de la fenêtre
+  elle-même. Conception détaillée déjà actée pour une passe ultérieure (redimensionnable +
+  mémoire de taille/article jusqu'à fermeture, sans `localStorage` + réduction en pastille par
+  double-clic sur l'en-tête, coin bas-droit de la zone playground) — pas codée, pas prioritaire
+  tant que cette version n'a pas été suffisamment éprouvée en jeu réel.
+- Branchement : `Sidebar.jsx` (item « Encyclopédie » dans le dropdown Outils déjà existant, à
+  côté de Commerce — accessible à tous les joueurs, pas réservé MJ) → `SessionPage.jsx` (état +
+  montage conditionnel, même schéma que `TradeWindow`).
+- Fix CSS générique posé au passage : `.encyclo-nav` utilisait `max-height: calc(100vh - ...)`
+  (viewport-relatif), cassait dans une fenêtre bornée. Remplacé par une variable CSS
+  `--encyclo-scroll-height` (défaut `100vh`, la fenêtre la redéfinit à sa propre hauteur) — zéro
+  changement pour la page standalone.
+- Nav réductible (`ChapterList.jsx`) : bouton « avant le titre, réduit à un rail de 40px avec
+  juste le bouton » pour réagrandir (jamais de disparition complète). État éphémère, non
+  persisté. S'applique aux deux contextes (composant partagé).
+- **Glossaire intégré à la fenêtre** (pas juste masqué, un vrai deuxième round après retour
+  Saar « on ne peut pas l'intégrer inGame ? ») : `EncyclopediaViewer` porte un état interne
+  `showGlossary`, la section cliquée résout via `resolveWikiTarget()` (même mécanisme que les
+  liens wiki cross-article) et pose le hash manuellement (pas de `<a href>` natif ici) —
+  `ArticleView` scrolle ensuite normalement, rien de dupliqué.
+- **Bug préexistant trouvé et corrigé au passage** : les liens du glossaire vers un article
+  (`/encyclopedia#id`) n'avaient jamais vraiment fonctionné, en session comme hors session —
+  rien ne résolvait le hash de l'URL au montage d'`EncyclopediaViewer` (toujours le premier
+  article par défaut, indépendamment de la section cliquée) ; `ArticleView` cherchait ensuite
+  l'ancre dans le mauvais article et ne la trouvait jamais. `EncyclopediaViewer` résout
+  désormais ce hash au montage (`computeInitialSelection`, réutilise `resolveWikiTarget`) — un
+  lien direct vers `/encyclopedia#chapitre.article.section` fonctionne enfin, standalone comme
+  en jeu.
+- Vérifié : `tools/validate-encyclopedia.mjs` (mêmes 2 erreurs préexistantes), `eslint`
+  (dette `set-state-in-effect` préexistante déplacée avec son effet, sinon propre — une
+  erreur `react-hooks/preserve-manual-memoization` transitoire, corrigée en remplaçant un
+  `useMemo` sur une lecture impure de `window.location.hash` par des initialiseurs paresseux
+  `useState`), `npm run build`.
+- **Non testé par Claude** : rendu réel navigateur — testé et confirmé par Saar au fil de la
+  construction (bouton, réduction nav, positions ✕/titre, chevauchement ✕/contenu). Le
+  glossaire intégré (round 2) reste à confirmer par Saar.
+
 **Phase 3 — Injection données shared/** : TERMINÉE pour États de santé (2026-09-22)
 - Vertical slice terminée :
   - `dataSources.js` (whitelist + transform MR_TABLE)
@@ -290,6 +342,13 @@ et du statut : `docs/ENCYCLOPEDIA_SHARED_INVENTORY.md`.
   un second chemin de rendu pour ce schéma (`EditorialDataTable`). Le validateur ne détecte toujours
   pas ce genre de cas (il ne valide pas le schéma interne d'un bloc) — toujours vérifier visuellement
   qu'un `dataTable` fraîchement écrit s'affiche réellement, pas seulement que le JSON est valide.
+- **Résolu 2026-09-23** : un lien vers `/encyclopedia#chapitre.article.section` (glossaire ou tout
+  lien externe direct) n'a jamais réellement fonctionné — rien ne résolvait le hash de l'URL au
+  montage d'`EncyclopediaViewer`, toujours le premier article par défaut quel que soit le hash ;
+  `ArticleView` cherchait ensuite l'ancre dans le mauvais article. Corrigé par
+  `computeInitialSelection()` (réutilise `resolveWikiTarget`) en initialiseur paresseux des `useState`
+  de sélection — jamais un `useMemo` ici, le React Compiler refuse de memoizer une lecture impure de
+  `window.location.hash` (`react-hooks/preserve-manual-memoization`).
 
 ---
 

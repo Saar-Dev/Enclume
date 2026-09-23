@@ -49,6 +49,7 @@ export default function Sidebar({
   onRepairDecision,
   onOpenTrade,
   onOpenExchange,
+  onOpenEncyclopedia,
 }) {
   const { t } = useTranslation()
   const { isGm } = useCharacterStore()
@@ -195,6 +196,9 @@ export default function Sidebar({
               </button>
               <button className="sidebar-tools-dropdown-item enabled" onClick={() => { setToolsOpen(false); onOpenTrade?.() }}>
                 {t('session.commerce')}
+              </button>
+              <button className="sidebar-tools-dropdown-item enabled" onClick={() => { setToolsOpen(false); onOpenEncyclopedia?.() }}>
+                {t('session.encyclopedia')}
               </button>
             </div>
           )}

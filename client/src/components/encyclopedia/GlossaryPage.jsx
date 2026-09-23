@@ -1,83 +1,34 @@
-// GlossaryPage.jsx — Page dédiée au glossaire de l'Encyclopédie.
+// GlossaryPage.jsx — Page dédiée au glossaire de l'Encyclopédie (route standalone).
 //
-// Affiche l'arbre des sections ciblables, groupé par livre → chapitre →
-// article → sections. Chaque section est un lien vers l'article correspondant
-// avec son ancre, ce qui déclenche le scroll automatique dans ArticleView.
+// Habillage (titre + retour) autour du contenu réel (GlossaryViewer.jsx, extrait 2026-09-23
+// pour être aussi montable dans EncyclopediaViewer.jsx en mode embedded — fenêtre en jeu).
 //
 // Route : /encyclopedia/glossary — protégée, comme l'Encyclopédie.
 //
-// Chargement : loadGlossary() parcourt tous les articles en parallèle au
-// montage. Coût unique par visite, pas de cache persistant (rechargé à
-// chaque ouverture).
+// Le clic sur une section navigue en SPA vers /encyclopedia#id (pas un <a href> en dur comme
+// avant 2026-09-23) : EncyclopediaViewer résout désormais ce hash au montage pour sélectionner
+// le bon article — un vrai bug corrigé au passage, pas juste un changement de goût. Avant, le
+// hash restait inerte (l'Encyclopédie ouvrait toujours son premier article par défaut) et
+// ArticleView cherchait l'ancre dans le mauvais article sans jamais la trouver.
 
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { loadGlossary } from './contentLoader.js'
+import { useNavigate } from 'react-router-dom'
+import GlossaryViewer from './GlossaryViewer.jsx'
 import './encyclopedia.css'
 
 export default function GlossaryPage() {
-  const [glossary, setGlossary] = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    loadGlossary('fr')
-      .then(g => { if (!cancelled) setGlossary(g) })
-      .catch(err => { if (!cancelled) setError(err.message || 'Erreur de chargement') })
-    return () => { cancelled = true }
-  }, [])
+  const navigate = useNavigate()
 
   return (
     <div className="app-shell encyclo-viewer">
       <div className="encyclo-glossary-page">
         <header className="encyclo-glossary-page-header">
           <h1 className="encyclo-glossary-page-title">Glossaire</h1>
-          <Link to="/encyclopedia" className="encyclo-glossary-page-back">
+          <button type="button" className="encyclo-glossary-page-back" onClick={() => navigate('/encyclopedia')}>
             ← Retour à l'Encyclopédie
-          </Link>
+          </button>
         </header>
 
-        {error && <div className="encyclo-error">{error}</div>}
-
-        {!error && !glossary && (
-          <div className="encyclo-loading">Chargement…</div>
-        )}
-
-        {!error && glossary && glossary.length === 0 && (
-          <div className="encyclo-empty">Aucune section ciblable.</div>
-        )}
-
-        {!error && glossary && glossary.length > 0 && (
-          <div className="encyclo-glossary-page-content">
-            {glossary.map(book => (
-              <section key={book.slug} className="encyclo-glossary-page-book">
-                <h2 className="encyclo-glossary-page-book-title">{book.title}</h2>
-
-                {book.chapters.map(chapter => (
-                  <div key={chapter.slug} className="encyclo-glossary-page-chapter">
-                    <h3 className="encyclo-glossary-page-chapter-title">{chapter.title}</h3>
-
-                    {chapter.articles.map(article => (
-                      <div key={article.id} className="encyclo-glossary-page-article">
-                        <h4 className="encyclo-glossary-page-article-title">{article.title}</h4>
-                        <ul className="encyclo-glossary-page-sections">
-                          {article.sections.map(section => (
-                            <li
-                              key={section.id}
-                              className={`encyclo-glossary-page-section encyclo-glossary-page-section-level-${section.level ?? 'callout'}`}
-                            >
-                              <a href={`/encyclopedia#${section.id}`}>{section.title}</a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        )}
+        <GlossaryViewer onSelectSection={(id) => navigate(`/encyclopedia#${id}`)} />
       </div>
     </div>
   )

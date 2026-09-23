@@ -18,7 +18,7 @@
 
 .encyclo-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: auto 1fr;
   gap: var(--space-lg);
   max-width: 1400px;
   margin: 0 auto;
@@ -38,7 +38,12 @@
 .encyclo-nav {
   position: sticky;
   top: var(--space-lg);
-  max-height: calc(100vh - 2 * var(--space-lg));
+  width: 280px;
+  /* --encyclo-scroll-height : hauteur du contexte de scroll qui porte cette nav — 100vh par
+     défaut (page standalone, scroll au niveau document). EncyclopediaWindow.jsx la redéfinit
+     à sa propre hauteur (fenêtre bornée, pas tout l'écran) — sans ça la nav pourrait dépasser
+     les bords de la fenêtre au lieu de scroller en interne. */
+  max-height: calc(var(--encyclo-scroll-height, 100vh) - 2 * var(--space-lg));
   overflow-y: auto;
   background: var(--wiz-glass);
   border: 1px solid var(--wiz-glass-border);
@@ -51,7 +56,6 @@
 .encyclo-nav-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-sm);
   padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border-subtle);
@@ -65,7 +69,29 @@
   color: var(--color-primary);
 }
 
+.encyclo-nav-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  font: 600 11px/1 var(--font-ui);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+
+.encyclo-nav-collapse-toggle:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 .encyclo-nav-glossary-link {
+  margin-left: auto;
   font: 500 10px/1 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -78,6 +104,30 @@
 .encyclo-nav-glossary-link:hover {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
+}
+
+/* Variante <button> (mode embedded — voir ChapterList.jsx) : reset des styles natifs de
+   bouton, .encyclo-nav-glossary-link porte déjà l'apparence visuelle partagée avec le lien. */
+.encyclo-nav-glossary-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Nav réduite — rail étroit, seul le bouton pour la réagrandir reste visible
+   (jamais de disparition complète, voir ChapterList.jsx). */
+.encyclo-nav-collapsed {
+  width: 40px;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-sm) 0;
+}
+
+.encyclo-nav-collapsed .encyclo-nav-collapse-toggle {
+  width: 24px;
+  height: 24px;
 }
 
 .encyclo-nav-tree {
@@ -702,10 +752,14 @@
 }
 
 .encyclo-glossary-page-back {
+  background: none;
+  border: none;
+  border-bottom: 1px dotted var(--color-primary-muted);
+  padding: 0;
   font: 500 12px/1 var(--font-ui);
   color: var(--color-primary);
   text-decoration: none;
-  border-bottom: 1px dotted var(--color-primary-muted);
+  cursor: pointer;
   transition: color .15s, border-color .15s;
   white-space: nowrap;
 }
@@ -780,36 +834,99 @@
   font: 400 12px/1.5 var(--font-ui);
 }
 
-.encyclo-glossary-page-section a {
+.encyclo-glossary-page-section-btn {
   display: block;
+  width: 100%;
   padding: 2px 8px;
+  background: none;
+  border: none;
   color: var(--text-muted);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   border-radius: var(--radius-xs);
+  cursor: pointer;
   transition: color .15s, background .15s;
 }
 
-.encyclo-glossary-page-section a:hover {
+.encyclo-glossary-page-section-btn:hover {
   color: var(--color-primary);
   background: var(--wiz-glass);
 }
 
-.encyclo-glossary-page-section-level-3 a {
+.encyclo-glossary-page-section-level-3 .encyclo-glossary-page-section-btn {
   color: var(--text-secondary);
   font-weight: 500;
 }
 
-.encyclo-glossary-page-section-level-4 a {
+.encyclo-glossary-page-section-level-4 .encyclo-glossary-page-section-btn {
   padding-left: 20px;
 }
 
-.encyclo-glossary-page-section-level-5 a {
+.encyclo-glossary-page-section-level-5 .encyclo-glossary-page-section-btn {
   padding-left: 36px;
   font-size: 11px;
 }
 
-.encyclo-glossary-page-section-level-callout a {
+.encyclo-glossary-page-section-level-callout .encyclo-glossary-page-section-btn {
   padding-left: 20px;
   font-style: italic;
   color: var(--color-gold);
+}
+
+/* ── Glossaire intégré (embedded uniquement, EncyclopediaViewer.jsx) ────── */
+
+.encyclo-glossary-embedded {
+  position: relative;
+  z-index: 1;
+}
+
+.encyclo-glossary-embedded-back {
+  margin-bottom: var(--space-md);
+}
+
+/* ── Fenêtre en jeu (EncyclopediaWindow.jsx) ──────────────
+   Version minimale : taille fixe, pas de drag/resize/réduction (à venir dans une
+   passe ultérieure, testée séparément — 2026-09-23). */
+
+.encyclo-window {
+  position: fixed;
+  z-index: 9000;
+  background: var(--bg-panel, #111120);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+
+/* Pas de barre de titre (ChapterList.jsx porte déjà « Encyclopédie » dans son propre
+   en-tête — une deuxième aurait été redondante, retour Saar 2026-09-23) : juste un ✕
+   flottant, même patron que le bouton de fermeture de la Sidebar principale. */
+.encyclo-window-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  font-size: 16px;
+}
+
+.encyclo-window-body {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
+/* Dans la fenêtre, .encyclo-layout n'a pas besoin de se centrer sur une grande largeur de
+   page — le conteneur est déjà borné par la fenêtre elle-même. */
+.encyclo-window-body .encyclo-layout {
+  max-width: none;
+  margin: 0;
+}
+
+/* Le ✕ flottant (top:8px, voir .encyclo-window-close) chevauche sinon le haut de l'article
+   (titre + numéro de page) — seule la colonne de droite en a besoin, la nav a déjà sa propre
+   marge via le padding de .encyclo-nav (retour Saar 2026-09-23). */
+.encyclo-window-body .encyclo-content {
+  padding-top: var(--space-xl);
 }

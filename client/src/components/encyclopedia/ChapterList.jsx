@@ -11,7 +11,13 @@
 //     (le parent sélectionne le premier article du chapitre)
 //   - clic sur article → onSelectArticle(bookSlug, chapterSlug, articleSlug)
 //
-// Le lien « Glossaire » en haut ouvre la page dédiée /encyclopedia/glossary.
+// Glossaire en haut : lien vers la page dédiée /encyclopedia/glossary normalement, ou
+// bouton `onOpenGlossary` si `embedded` (fenêtre en jeu) — une navigation React Router y
+// démonterait toute la session (Canvas3D compris), remplacé par une vue interne à
+// EncyclopediaViewer.jsx (voir handleGlossarySelect, GlossaryViewer.jsx).
+//
+// Nav réductible : bouton « en tête de l'en-tête, jamais de disparition complète (le bouton
+// pour réagrandir reste visible dans le rail réduit) — état local, non persisté.
 //
 // i18n : namespace 'encyclopedia' (voir locales/encyclopedia.json).
 
@@ -26,12 +32,15 @@ export default function ChapterList({
   activeArticleSlug,
   onSelectChapter,
   onSelectArticle,
+  embedded = false,
+  onOpenGlossary,
 }) {
   const { t } = useTranslation('encyclopedia')
 
   const [openBooks, setOpenBooks] = useState(() => {
     return activeBookSlug ? new Set([activeBookSlug]) : new Set()
   })
+  const [collapsed, setCollapsed] = useState(false)
 
   const toggleBook = (slug) => {
     setOpenBooks(prev => {
@@ -42,13 +51,42 @@ export default function ChapterList({
     })
   }
 
+  if (collapsed) {
+    return (
+      <aside className="encyclo-nav encyclo-nav-collapsed">
+        <button
+          type="button"
+          className="encyclo-nav-collapse-toggle"
+          onClick={() => setCollapsed(false)}
+          title={t('nav.expand')}
+        >
+          »
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="encyclo-nav">
       <div className="encyclo-nav-header">
+        <button
+          type="button"
+          className="encyclo-nav-collapse-toggle"
+          onClick={() => setCollapsed(true)}
+          title={t('nav.collapse')}
+        >
+          «
+        </button>
         <span className="encyclo-nav-title">{t('nav.title')}</span>
-        <Link to="/encyclopedia/glossary" className="encyclo-nav-glossary-link">
-          Glossaire
-        </Link>
+        {embedded ? (
+          <button type="button" className="encyclo-nav-glossary-link encyclo-nav-glossary-btn" onClick={onOpenGlossary}>
+            {t('nav.glossary')}
+          </button>
+        ) : (
+          <Link to="/encyclopedia/glossary" className="encyclo-nav-glossary-link">
+            {t('nav.glossary')}
+          </Link>
+        )}
       </div>
 
       <nav className="encyclo-nav-tree">

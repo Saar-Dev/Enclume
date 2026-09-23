@@ -234,6 +234,7 @@
     "rollInfectionFor": "Test de Constitution — {{location}}",
     "repairRollLabel": "Réparer {{item}}",
     "commerce": "Commerce",
+    "encyclopedia": "Encyclopédie",
     "userJoined": "{{username}} a rejoint la session",
     "userLeft": "{{username}} a quitté la session",
     "dualWieldAmmoOutPrimary": "Main directrice à sec — tir simple avec la main non directrice, bonus deux armes annulé.",

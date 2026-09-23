@@ -1,6 +1,10 @@
 {
   "nav": {
-    "title": "Encyclopédie"
+    "title": "Encyclopédie",
+    "collapse": "Réduire la navigation",
+    "expand": "Afficher la navigation",
+    "glossary": "Glossaire",
+    "backToArticles": "Retour aux articles"
   },
   "states": {
     "loading": "Chargement…",
