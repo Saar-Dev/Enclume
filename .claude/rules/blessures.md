@@ -1,7 +1,9 @@
 ---
 description: Blessures, promotions, pénalités et interaction avec les armures
 paths:
-  - "server/src/**/*blessure*.js"
+  - "server/src/lib/damageService.js"
+  - "shared/woundConstants.js"
+  - "shared/armorConstants.js"
   - "server/src/**/*wound*.js"
   - "server/src/**/*armure*.js"
   - "client/src/**/*Blessure*.jsx"

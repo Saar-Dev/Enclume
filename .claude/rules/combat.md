@@ -1,9 +1,10 @@
 ---
 description: Combat, FSM, actions, portée et contrat spatial avec le moteur monde
 paths:
-  - "server/src/services/combat*.js"
-  - "server/src/services/*Combat*.js"
-  - "server/src/routes/combat*.js"
+  - "server/src/socket/socketCombat*.js"
+  - "server/src/lib/combat*.js"
+  - "server/src/lib/damageService.js"
+  - "server/src/lib/surpriseService.js"
   - "client/src/**/*Combat*.jsx"
   - "client/src/stores/*combat*.js"
   - "shared/**/*combat*.js"
