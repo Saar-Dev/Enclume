@@ -3,8 +3,20 @@
 > Rédigé 2026-09-23 (v1) ; **réécrit le même jour (v2)** après analyse à charge + lecture complète des
 > chemins de tir + recherche externe (§9) ; **v2.1** = analyse à charge de la v2 intégrée (coffre, CaC
 > drone, roster, obstacle géométrique, Lot 2). Dette RAW d'origine : `docs/SYSTEME/COMBAT_FLUX.md` §7.4.
-> Code : seules les étapes structurelles 0a/0b sont écrites (§7bis), non commitées. Les marqueurs `[VÉRIFIÉ]` = lu dans le code / la base ; `[HYPOTHÈSE]` /
-> `[INCONNU]` = à trancher au codage, jamais présumé.
+> Les marqueurs `[VÉRIFIÉ]` = lu dans le code / la base ; `[HYPOTHÈSE]` / `[INCONNU]` = à trancher au codage, jamais présumé.
+>
+> **ÉTAT (2026-09-24, fin de journée)** : **Lot 1 (tir simple) commité `d75907b`** et **Lot 2 (grenades / explosifs) commité `b2cf98d`**,
+> poussés ; validés en jeu par Saar (drone qui perd, drone qui gagne à percussion) ; reste en **beta test** avec joueurs : grenade à
+> minuterie + drone gagnant, effets de bord. **Lot 3 (CRD) non commencé.** Clôture Règle 10 (archivage, `SYSTEME/COMBAT.md`,
+> `COMBAT_FLUX.md` §7.4, ROADMAP, JOURNAL8, CHANGELOG, `VOCABULARY.md`) **non faite** : à faire à la fin des lots.
+>
+> **Comment lire ce fichier** : §0-§6 = conception d'origine ; §7ter, §7quater et ses sous-sections = **journal chronologique des décisions
+> prises en test** (elles PRÉVALENT sur §0-§6 en cas de divergence). Divergences connues : (1) « vise son protégé » d'une grenade = distance
+> ≤ `GRENADE_PROTECTION_AIM_RADIUS_M` (réglable), plus « case exacte » (§4.1-1, Q-F, Q-I pour les grenades) ; (2) le drone se déplace dès
+> qu'il tente, sauf sur un tir raté (Q-B) ; (3) décor ignoré pour l'occupation, seuls les tokens bloquent (§7ter) ;
+> (4) `isInterposed` exige un Test réussi. **À consigner au JOURNAL8 à la clôture** : moitié des dommages BRUTS arrondie à l'inférieur,
+> marge d'attaque d'une grenade = Test de Coordination, rayon réglable (valeur finale), interception sur la trajectoire réelle,
+> un seul protecteur par attaque, pas de cascade, aucun modificateur sur le Test d'Interception, décor ignoré.
 
 ## 0. En clair (pour Saar)
 
@@ -282,7 +294,8 @@ Test de Coordination (`coord.mr` = la « marge de l'attaque ») → dispersion �
 entre `:581` et `:583`**, donc **avant** la séparation : **un seul point pour les deux modes de
 détonation**. Conséquence utile : la ré-entrée au Tour+1 (`resolvedOrigin` déjà posé) ne repasse jamais par
 ce bloc — aucun drapeau nécessaire, aucun risque de seconde interception à l'explosion.
-1. **« Vise son protégé » (Q-F)** : une grenade n'a **aucun token cible** (`targetTokenId: null`, seul un
+1. **[REMPLACÉ 2026-09-24 — le modèle « à la case » ci-dessous est abandonné : « vise son protégé » = point visé à moins de
+   `GRENADE_PROTECTION_AIM_RADIUS_M` (1,5 m, réglable) des pieds du protégé, voir §7quater] « Vise son protégé » (Q-F)** : une grenade n'a **aucun token cible** (`targetTokenId: null`, seul un
    point visé `aoe.intendedOrigin` est envoyé, `buildDeclarePayload.js:208-216`, `socketCombatAnnouncement.js:776`)
    `[VÉRIFIÉ]`. Elle **vise un protégé** quand le **point visé** (avant dispersion) tombe **dans sa case**
    (`cellOfPoint(point visé) = case du protégé`, même étage) — modèle « à la case », sans tolérance de
@@ -352,7 +365,7 @@ minuterie par défaut) → validation → Lot 3 (CRD). Lot 2 et Lot 3 n'ont aucu
 séparément (règle 10 : PLAN archivé + `SYSTEME/COMBAT.md` + `SYSTEME/COMBAT_FLUX.md` §7.4 + ROADMAP +
 JOURNAL8 + CHANGELOG à la clôture, **avant** d'écrire « CLOS »).
 
-## 7bis. Avancement (2026-09-23) — étapes 0a et 0b faites, NON commitées
+## 7bis. Avancement (2026-09-23) — étapes 0a et 0b faites (historique ; commitées avec le Lot 1, `d75907b`)
 - **0b (fait, testé)** : `shared/world/gridCells.js` (`cellOfPoint`, `cellsCrossedBySegment`, `createSegmentCellPredicate`, 13 tests) ;
   `navigation.js` : option `destinationPredicate` + borne `maxCostM` sur `findNavigationPath` / `planWorldPath` (8 tests ajoutés,
   les 9 existants inchangés) ; relais dans `planBattlemapTokenMovement` (`worldMovementService.js`, sans test : demande la base).
@@ -407,7 +420,7 @@ JOURNAL8 + CHANGELOG à la clôture, **avant** d'écrire « CLOS »).
 - Limite assumée : ce sont des inspirations de **forme** (accroche unique nommée, compteur de réactions,
   pause/reprise — déjà présente chez nous via `AWAITING_DAMAGE`), pas des modèles à recopier.
 
-## 10. Restant à vérifier avant de coder
+## 10. Restant à vérifier avant de coder (historique : vérifié au fil du Lot 1 et du Lot 2 ; ne reste ouvert que le Lot 3)
 - Lot 1 : le **prédicat de candidature** (case traversée par le segment, hauteur compatible ; trajectoire
   qui change d'étage ou traverse un obstacle ; cases partielles des pièces à contour courbe, dont la dalle
   est un `footprint` découpé, `worldCompiler.js:776-781`) — pur, testable sur `shared/world` avant tout

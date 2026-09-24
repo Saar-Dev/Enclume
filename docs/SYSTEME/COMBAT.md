@@ -836,6 +836,63 @@ comme tout Test du système ; Armement délègue à `resolveDroneAssaultAction` 
 visible seulement si le réglage pertinent pour ce drone vaut `ordres_permanents` ET qu'une ligne
 `combat_roster` existe (combat actif).
 
+### Drone d'interception (bouclier) — Lots 1 et 2, `PLANS/PLAN_DRONE_INTERCEPTION.md`
+
+RAW (`REGLES/REGLEDRONE.md`, « Drone bouclier ») : test avec le niveau d'interception du drone ; si sa marge de
+réussite est supérieure à celle de l'attaque, il s'interpose et est traité comme un obstacle ; contre une arme
+de zone il absorbe la moitié des dommages ; inutile au corps à corps. Réaction, pas action de Tour : aucune
+déclaration, aucun ordre permanent. Flux : `COMBAT_FLUX.md` §7.4. Services : `SERVICES_COMBAT.md`.
+
+**Lien de protection** — table `drone_interception_targets` (`drone_character_id`, `protected_character_id`, PK
+composite, FK `characters` en cascade, CHECK drone ≠ protégé, index sur le protégé ; migrations 357-359, dont
+la catégorie catalogue `interception` renommée par `name`). Persistant, porté par le drone ; un drone protège
+plusieurs personnages (PJ, PNJ, exo-armure — l'exo protège déjà son pilote). Routes `GET|POST|DELETE
+/char-sheet/:characterId/drone/interception-targets[/:protectedId]` (`droneIsGmOrOwner`), validation dans le
+noyau pur (`linkRejectionReason`), section « Protection » de la fiche drone (`DroneProtectionSection.jsx`).
+La table est déclarée dans `EXCLUDED_TABLES` du coffre (garde `assertRegistryUpToDate`).
+
+**Décision** — noyau pur `shared/droneInterception.js` (aucun accès base), coquille
+`server/src/lib/droneInterceptionService.js`. Motifs d'inéligibilité (premier échoué retenu) : `melee`,
+`no_program`, `destroyed`, `no_token`, `hidden` (couche MJ), `other_battlemap`, `is_target`, `telepiloted`,
+`speed_missing`, `unreachable`. Un seul protecteur par attaque : le meilleur niveau d'interception (égalité →
+`droneTokenId`), pas de cascade. `isInterposed` : Test **réussi** ET marge **strictement** supérieure.
+
+**Tir simple** — accroche unique par famille de tireur, moment « touché, avant dégâts » :
+`finalizeAssaultHitOutcome` (humanoïde, y compris après un choix de Chance) et `finalizeAssaultOutcome`
+(drone/exo/télépilotage ; paramètre `attackKind` explicite car il sert aussi le corps à corps d'un drone).
+`resolveProtectorInterposition` substitue `action.target_token_id` par le drone : les chemins « cible drone »
+existants font le reste. Le protégé doit être **la cible** du tir. Les protecteurs éligibles sont retirés de
+l'interception géométrique de `losService` (`filterProtectorInterceptors`).
+
+**Déplacement** — le drone rejoint au plus court une case que la trajectoire traverse, avec sa vitesse
+maximale (`getCharacterMovementBudget(…, 'max')`) : `destinationPredicate` + `maxCostM` de `findNavigationPath`,
+cases traversées par `shared/world/gridCells.js`, seuls les **tokens** bloquent (`ignoreEntityOccupants`).
+Il se déplace dès qu'il **tente**, avant le Test, réussi ou non ; jamais sur un tir raté. Déplacement émis via
+`emitExecutedTokenMovement` (`movedKind: 'drone-interposition'`), gratuit (aucun compteur de mouvement par Tour).
+
+**Grenade (Lot 2)** — accroche entre le Test de Coordination et la séparation percussion/minuterie de
+`resolveAoeAssaultAction` (`resolveGrenadeInterposition`) : un seul point pour les deux modes. Elle « vise un
+protégé » quand le point visé est à moins de `GRENADE_PROTECTION_AIM_RADIUS_M` (réglage, `shared/droneInterception.js`,
+1,5 m au départ) de ses pieds, même étage ; marge d'attaque = Test de Coordination (négative si le lancer est
+raté) ; trajectoire réelle (lanceur → impact après dispersion). Succès : la grenade **tombe aux pieds du drone**
+(`aoe.resolvedOrigin` = sa position après déplacement, `aoe.interposedDroneTokenId` persisté avec
+`throwModifiersUpdate`, relu au Tour+1) ; `finalizeAoeResolution` applique `halveExplosionDamage` (moitié des
+dommages **bruts**, arrondie à l'inférieur) à la ligne de ce drone seul. Cônes et jets non recentrés ; tireur
+exo/drone lançant une grenade non câblé.
+
+**Chat** — chaque branche est dite (`COMBAT_SYSTEM_NOTICE`, clés `session.drone*` de `fr.json`, variantes
+`_zone`) : inéligibilité et motif, portée impossible, déplacement ou « déjà en position », Test (carte
+« Interception — <drone> ») puis « s'interpose » / « rate son Test » / « réussit mais marge insuffisante »,
+tir raté sur un protégé, grenade ne visant aucun protégé, moitié absorbée, drone absent de la zone, dégâts
+encaissés (`buildDroneDamageNotice` : gravité, intégrité avant → après, destruction).
+
+**Simplifications actées** (`JOURNAL8.md`) : pas de registre de mouvement par Tour, drone aérien traité comme
+au sol, aucun modificateur sur le Test, décor ignoré, un seul protecteur, pas de cascade. **Non couvert** :
+CRD multi-drones (Lot 3, plafond 4 et −1 par interception supplémentaire).
+
+**Statut** : Lots 1 et 2 validés en jeu par Saar le 2026-09-24 (drone qui perd, drone qui gagne à percussion) ;
+grenade à minuterie avec drone gagnant et effets de bord en beta test.
+
 ---
 
 ## Attaques multiples — CaC 4b et Tir Multi (Session 165)

@@ -310,6 +310,17 @@ Si !needsDefenseWait → avance dans combat_timeline_entries (pickNextTimelineSt
       ammo_remaining -= bullet_count (min 0)
     UPDATE char_inventory (pas d'EMIT INVENTORY_UPDATED ici)
 
+[8bis] Drone protecteur (résolution du Tir touché, avant dégâts) — resolveProtectorInterposition()
+    Si isSuccess et cible = protégé d'au moins un drone (drone_interception_targets) :
+      éligibilité (shared/droneInterception.js) → portée (destinationPredicate, vitesse max)
+      → déplacement (avant le Test, TOKEN_MOVED) → Test d'Interception (DICE_RESULT)
+      → réussi ET marge > mr : action.target_token_id = drone (la suite est celle d'une cible drone)
+      → sinon : le tir suit sa route vers le protégé
+      chaque étape → COMBAT_SYSTEM_NOTICE (session.drone*), emissions de l'appelant, après le jet d'attaque
+    Si !isSuccess et cible protégée : reportProtectedMiss() — un message, aucun déplacement
+    Même hook dans finalizeAssaultOutcome (tireur drone/exo/télépilotage, attackKind explicite)
+    Détail : COMBAT.md « Drone d'interception (bouclier) »
+
 [9] Résolution
     Si !isSuccess :
       PJ  → COMBAT_ATTACK_PLAYER_RESULT { hit:false }
@@ -625,13 +636,19 @@ Drone abîmé (integrite faible) → rdInput faible → rd POSITIF (noyau durci)
 
 ### `resolveDroneIntegrityLoss`
 ```
-severity : detruit(≥30) / mortelle(≥25) / critique(≥20) / grave(≥15) / moyenne(≥10) / legere(≥5)
+severity : detruit(≥30, propre au drone) sinon woundSeverityForDamage(degatsNets) — table RAW partagée
+           BLESSURE_SEUILS_TABLE (shared/woundConstants.js) : mortelle(≥25) / critique(≥20) / grave(≥15) / moyenne(≥10) / legere(≥5)
 damages[severity][premier false] = true  (JSONB case cochée)
-newIntegrite = detruit ? 0 : max(0, integrite - 1)
+newIntegrite = detruit ? 0 : max(0, integrite - 1)     // 1 touche = 1 point, même sous 5 de dégâts nets
 Si detruit → DELETE combat_roster (retrait du roster immédiat)
 UPDATE drone_sheet { damages, integrite_actuelle }
 EMIT DRONE_INTEGRITY_UPDATED
+RETURN { severity, previousIntegrite, newIntegrite, detruit }
 ```
+Le compte rendu au chat est construit par l'APPELANT (`buildDroneDamageNotice`, `lib/droneDamageNotice.js` : clés
+`session.droneDamaged` / `droneDamagedNoWound` / `droneDestroyed`), poussé dans son `emissions[]` après ses propres
+messages — jamais émis depuis cette fonction, il passerait avant « le drone s'interpose ». Adopté aux 5 sites de
+`socketCombatHelpers.js` et à la zone (`finalizeAoeResolution`).
 
 ---
 
@@ -694,7 +711,7 @@ EMIT DRONE_INTEGRITY_UPDATED
 | §7.1 | INI télépiloté = INI pilote | Drone toujours INI 12 | Sprint télépilotage |
 | §7.2 | Séquence Détection→Ami/Ennemi→Armement | Non implémenté | Sprint Drones 2d |
 | §7.4 | Programme esquive : test d'opposition | Test simple forcé (sans esquive) | Sprint futur |
-| §7.4 | Programme interception | Non implémenté | Sprint futur |
+| ~~§7.4~~ | Programme interception | **Résolu (Lots 1-2, 2026-09-24)** — tir simple et grenades ; reste le CRD multi-drones (Lot 3) : `PLANS/PLAN_DRONE_INTERCEPTION.md`, `COMBAT.md` « Drone d'interception » | Lot 3 : basse |
 | §6.9 | Arts Martiaux | Non implémenté V1 | Hors scope |
 
 ---

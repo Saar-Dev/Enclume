@@ -1,6 +1,7 @@
 SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 
-    Dernière mise à jour : 2026-07-21 — ajout renvoi vers @MODING (mods d'armes).
+    Dernière mise à jour : 2026-09-24 — services du drone d'interception ajoutés à l'arborescence (§1).
+    Précédemment : 2026-07-21 — ajout renvoi vers @MODING (mods d'armes).
     Audit de compréhension approfondie 2026-08-26 (suite) : §7 corrigé (advanceSlot périmé →
     advanceTimeline/pickNextTimelineStep) ; signature resolveTargetHit (forcedSlotCode,
     treatAsContact) et table TRANSITIONS de combatFSM.js (dont COMBAT_ACT_NOW/COMBAT_DELAYED_PASS)
@@ -23,6 +24,13 @@ server/src/lib/
 ├── woundUtils.js       — utilitaires blessures (isShockTestRequired, resolveWoundInsertion, etc.)
 ├── (mrTable.js n'existe plus — corrigé 2026-08-26, voir §5)
 ├── combatFSM.js        — machine à états du combat (transitions, guards, sub_phase)
+├── droneInterceptionService.js — drone d'interception : noyau commun tir/grenade (éligibilité, portée, déplacement,
+│                         Test, chat), resolveProtectorInterposition, resolveGrenadeInterposition, reportProtectedMiss,
+│                         filterProtectorInterceptors (COMBAT.md « Drone d'interception »)
+├── droneDamageNotice.js — buildDroneDamageNotice : message de chat « le drone encaisse » (gravité, intégrité), pur
+├── tokenMovementEmitter.js — buildTokenMovedPayload / emitExecutedTokenMovement : TOKEN_MOVED d'un déplacement exécuté
+├── criticalFailReroll.js — resolveCriticalFailReroll (extrait de socketCombatHelpers.js) : relance d'un échec critique
+├── droneTelepilotState.js — isDroneTelepilotedThisTurn : ce drone est-il télépiloté ce Tour ?
 └── socketUtils.js      — getUserColor, checkTokenOwnership
 
 Tous ces services respectent les conventions suivantes :

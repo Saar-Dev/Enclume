@@ -8236,3 +8236,75 @@ est désormais dérivé de ce registre (constaté (iii) du Lot 1a, résolu).
 client (0 problème), `npm run build` OK, `git diff --check`. **Non testé** : scénario en jeu (retirer Enflammé et
 Décompression en un clic ; Corrodé ouvre toujours son formulaire ; Hypothermie inchangée) — à faire par Saar.
 **Données** : aucune. **Retour arrière** : `git revert` du commit applicable.
+---
+
+## Session (Dev) — 2026-09-24 — Drone d'interception, Lot 1 : le drone bouclier s'interpose sur un tir
+
+**Origine** : dette RAW `COMBAT_FLUX.md` §7.4 (« Programme interception — non implémenté »). RAW `REGLEDRONE.md` « Drone
+bouclier » : Test avec le niveau d'interception ; si sa marge de réussite est supérieure à celle de l'attaque, le drone
+s'interpose ; inutile au corps à corps. Cadrage complet (plan v2.1, analyse à charge, recherche : midi-qol pour les
+réactions à des moments nommés du pipeline, rpg-toolkit pour la pause/reprise) puis code, commit `d75907b`.
+
+**Décisions de règle (Saar, 2026-09-23/24)** : le drone n'intervient que sur ce qui **vise son protégé** ; il rejoint au
+plus court une case que la trajectoire traverse, avec sa vitesse maximale, et **se déplace dès qu'il tente**, avant le Test,
+réussi ou non — mais **jamais sur un tir raté** ; un drone protège plusieurs personnages, lien persistant ; l'exo est
+protégée (elle protège déjà son pilote) ; aucune exception « tir ami » ; un drone d'interception ne « passe » pas
+(réaction, pas action de Tour) ; **le décor ne bloque pas le drone, seuls les tokens** (option B).
+**Simplifications actées (écarts au RAW ou lectures)** : pas de registre de mouvement par Tour (le déplacement d'interposition
+est gratuit) ; drone aérien traité comme au sol (`mode_deplacement` est narratif, décision du 2026-08-28) ; un seul
+protecteur par attaque (meilleur niveau, égalité → identifiant), pas de cascade ; aucun modificateur sur le Test
+d'Interception ; le drone doit **réussir** son Test ET dépasser strictement la marge d'attaque ; un drone télépiloté ce Tour
+ne s'interpose pas.
+
+**Architecture** : noyau pur `shared/droneInterception.js` (éligibilité, choix du protecteur, décision) ; coquille
+`server/src/lib/droneInterceptionService.js` ; accroche unique par famille de tireur (`finalizeAssaultHitOutcome`,
+`finalizeAssaultOutcome` avec `attackKind` explicite car il sert aussi le corps à corps d'un drone) ; navigation à
+destination par prédicat + borne de coût, cases traversées `gridCells.js`, `ignoreEntityOccupants`, émetteur partagé
+`tokenMovementEmitter.js` ; table `drone_interception_targets` (migrations 357-359) exclue du coffre ; routes REST + section
+« Protection » de la fiche drone. Chat : chaque étape est dite (clés `session.drone*`), y compris les refus et les tirs
+ratés ; messages de dégâts d'un drone (gravité, intégrité) aux 5 sites de dégâts, gravité issue de la table RAW partagée
+(`woundSeverityForDamage`).
+
+**Corrigé au passage** : notices système de même clé et de même milliseconde perdues (id client) ; alerte « Initiative ≤ 0 :
+Action reportée » émise à tort pour tout drone en ordres permanents (`buildTimelineEntries` déduisait le report de
+`resolution_snapshot != null`, or `drone_auto` y pose `{ autoResolve: true }`).
+
+**Testé** : 669 tests `shared/**` + tests purs serveur ; rejeu en lecture seule sur la carte de test ; en jeu (Saar) : drone
+qui perd, drone qui gagne (MR 7 contre marge 8), déplacement visible, messages. **Non testé** : effets de bord avec joueurs
+(beta test). **Données** : migrations 357-359 appliquées (catalogue : catégorie `interception` par `name`). **Retour arrière** :
+`git revert d75907b` (les `down()` des migrations sont écrits).
+
+---
+
+## Session (Dev) — 2026-09-24 — Drone d'interception, Lot 2 : grenades et explosifs
+
+**Origine** : RAW « s'il réussit à bloquer une arme affectant une zone [...] il absorbe la moitié des dommages ». Commit
+`b2cf98d`.
+
+**Décisions de règle (Saar, 2026-09-24)** : le drone ne distingue pas un explosif d'un projectile (même règle « au plus
+court ») ; contre une grenade il l'**attrape en vol : elle tombe à ses pieds** et explose là, tout de suite (percussion) ou
+au Tour suivant (minuterie) ; il prend **la moitié des dommages BRUTS, avant blindage et RD, arrondie à l'inférieur, et lui
+seul** — les autres cibles de la zone, protégé compris, prennent les dégâts normaux ; la **marge de l'attaque est celle du
+Test de Coordination du lancer** (négative si le lancer est raté : un lancer raté est facile à intercepter) ; le drone joue
+sur la **trajectoire réelle**, après dispersion. **« Vise son protégé » = point visé à moins de
+`GRENADE_PROTECTION_AIM_RADIUS_M` (1,5 m au départ) des pieds du protégé**, même étage : décision prise après le test en jeu
+du modèle « case exacte », jugé ridicule (point visé à 1,43 m de la cible mais dans la case voisine, aucun drone ne réagissait).
+Le rayon est une **constante réglable** (`shared/droneInterception.js`) à ajuster aux tests ; **valeur finale à consigner ici
+après le beta test**. Un tir n'active toujours le drone que si le protégé en est la cible.
+
+**Trouvaille de conception** : `isInterposed` devait exiger un Test **réussi** — contre un lancer de grenade raté (marge
+négative), un Test de drone raté « moins négatif » passait à tort.
+
+**Non couvert** : cônes et jets (fusil à pompe, lance-flammes : pas de recentrage), grenade lancée par une exo-armure ou un
+drone (non câblé), CRD multi-drones (Lot 3 : plafond 4, −1 par interception supplémentaire).
+
+**Testé** : 671 tests `shared/**` (dont `isInterposed`, `halveExplosionDamage`, `aimedAtProtected` par distance) ; rejeu en
+lecture seule ; en jeu (Saar) : drone qui perd (jet 17 contre Seuil 10, grenade qui suit sa trajectoire), drone qui gagne à
+percussion (jet 2 contre lancer raté, grenade tombée aux pieds du drone, persistée en base). **Non testé** : grenade à
+minuterie avec drone gagnant et explosion du Tour+1, effets de bord — beta test avec joueurs. **Données** : aucune migration.
+**Retour arrière** : `git revert b2cf98d`.
+
+**Constats hors chantier** (tickets : `server/src/scripts/create_tickets_20260924_drone_beta_findings.js`, à lancer par Saar) :
+fenêtre Chance PNJ « Catastrophe — … » peu claire ; message figé « L'ordre a changé entre-temps » ; badge « succès » sur la
+durée d'étourdissement ; 403 sur les blessures d'un PNJ côté joueur ; drone : −1 d'intégrité à chaque touche même sous 5 de
+dégâts nets, à confronter au RAW. Un token « mort » restait cible d'une zone : transmis à la session « Gestion MORT ».

@@ -165,6 +165,7 @@ Le dossier `shared/world/` fournit désormais :
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
+- `gridCells.js` : cases traversées par un segment et prédicat de case (§5.4) ;
 - `visibility.js` : logique pure de ligne de vue et couverture (`traceVisibility`,
   `checkWorldLineOfSight`, `checkWorldCoverage`, `findWorldInterceptors`, profils de posture) —
   consommée par `server/src/services/worldVisibilityService.js` (§8, ajouté 2026-08-26) ;
@@ -392,6 +393,30 @@ explicite.
 Le même service traite déplacement de combat, déplacement libre autorisé et mouvement forcé. Seul
 un déplacement administratif du MJ peut contourner la navigation, avec une commande distincte de
 type téléportation.
+
+### 5.4 Destination par prédicat, borne de coût, occupation sans décor `[EXISTANT — 2026-09-24]`
+
+Ajouts rétrocompatibles pour un déplacement dont la destination n'est pas un point connu mais « la
+case la moins chère qui vérifie une condition » (premier consommateur : le drone d'interception,
+`COMBAT.md`) :
+
+- **`destinationPredicate`** (`findNavigationPath`, `planWorldPath`, `planBattlemapTokenMovement`) :
+  fonction `node → booléen`, exclusive avec `to` (`TypeError` si les deux sont donnés). Dijkstra retourne le
+  premier nœud atteint qui la vérifie, donc le moins coûteux. En mode prédicat `maxCostM` = le budget
+  autorisé : l'expansion s'arrête au-delà (`nextCost > maxCostM` ignoré), sinon une recherche sans candidat
+  atteignable parcourrait toute la carte.
+- **`shared/world/gridCells.js`** : géométrie de cases pure — `cellOfPoint` (case = `floor(x), floor(z)`, un
+  nœud de navigation par cellule entière), `cellsCrossedBySegment` (supercover d'Amanatides & Woo : un passage
+  par un coin compte les deux cases, chaque case porte ses rapports d'entrée/sortie),
+  `createSegmentCellPredicate(from, to, { bodyHeight })` (case traversée ET altitude de la ligne dans
+  `[y, y + bodyHeight]` du nœud). Un segment nul ne traverse qu'une case.
+- **`ignoreEntityOccupants`** (`planBattlemapTokenMovement`, `executeBattlemapTokenMovement`) : les entités de
+  décor ne comptent pas comme occupants, seuls les tokens bloquent. Réservé à un besoin explicite ; le
+  déplacement ordinaire garde l'occupation complète.
+- **Émission d'un déplacement exécuté** : `server/src/lib/tokenMovementEmitter.js`
+  (`buildTokenMovedPayload`, `emitExecutedTokenMovement`) — la Résolution de combat et l'interposition d'un
+  drone partagent le même `TOKEN_MOVED` ; les autres sites d'émission (routes `battlemaps`/`characters`/`tokens`,
+  `socketToken`, `socketEntity`) restent à consolider (hors périmètre du chantier drone).
 
 ---
 

@@ -160,6 +160,9 @@ GET /drone/weapons	Liste des armes
 POST /drone/weapons	Ajoute (catalogue ou custom)
 PUT /drone/weapons/:wid	Modifie
 DELETE /drone/weapons/:wid	Supprime
+GET /drone/interception-targets	Personnages protégés par ce drone + candidats (même campagne, pj/pnj/exo)
+POST /drone/interception-targets	Ajoute un protégé { protected_character_id } → 201 { target } (GM ou propriétaire ; validation `linkRejectionReason`)
+DELETE /drone/interception-targets/:protectedId	Retire un protégé → 204 (GM ou propriétaire)
 7. Pièges
 Code	Description
 P-VISIBLE	Personnages non verrouillés (wizard_locked_at IS NULL) masqués pour tous. visible=false masqué pour joueurs uniquement.

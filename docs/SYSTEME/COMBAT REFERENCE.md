@@ -642,7 +642,7 @@ Pas d'attributs. Pas de maîtrise. Pas de calcul AN/NA. Le niveau du programme e
 | `armement_distance` | Attaque à distance | Cible acquise | D20 ≤ niveau → touché. Résolution dommages standard |
 | `armement_contact` | Attaque au contact | Cible acquise + drone en portée CaC | D20 ≤ niveau → touché. Résolution dommages standard |
 | `esquive` | Défense contre attaque CaC | Attaqué au contact | D20 ≤ niveau → esquive (test d'opposition). **Déclenché automatiquement** si le programme est présent. Mise à couvert = déplacement standard (pas de test `esquive`). |
-| `interception` | S'interposer contre tir/explosion | Attaque ranged sur entité alliée dans la zone | D20 ≤ niveau interception ET MR(interception) > MR(attaque) → drone s'interpose (obstacle, absorbe tout). **Binaire : tout ou rien. Mode autonome uniquement. Inutile au CaC (LdB p.247).** |
+| `interception` | S'interposer contre tir/explosion | Attaque ranged sur entité alliée dans la zone | Test réussi (D20 ≤ niveau interception) ET MR(interception) > MR(attaque) → drone s'interpose. **Tir : il encaisse le tir entier. Explosif (grenade) : la grenade tombe à ses pieds et lui seul absorbe la moitié des dommages bruts.** Mode autonome uniquement (jamais télépiloté ce Tour). Inutile au CaC (LdB p.247). **Implémenté (Lots 1-2)** : `COMBAT.md` « Drone d'interception ». |
 | `pilotage` | Déplacement (mode autonome) | Tour du drone | Pas de test requis — déplacement selon `drone_sheet.vitesse` |
 | `medical` | Premiers soins / Chirurgie | Personnage blessé à portée | D20 ≤ niveau → soin (hors combat principalement) |
 | `reparation` | Restaurer intégrité d'un drone | Drone endommagé à portée | D20 ≤ niveau → restauration partielle |
@@ -711,7 +711,7 @@ degats_nets = max(0, degats_bruts - blindage - rd)
 | Télépilotage : `min(programme_armement_drone, TELEPILOTAGE_proprio)` | LdB p.319 | À implémenter (sprint télépilotage) |
 | Télépilotage : pas de Détection/Ami-Ennemi — cible directe | LdB p.319 | À implémenter (sprint télépilotage) |
 | Esquive programme (défense CaC) | LdB p.100 (drones de combat) | À implémenter |
-| Interception programme — mode autonome uniquement, inutile au CaC | LdB p.247-248 | À implémenter |
+| Interception programme — mode autonome uniquement, inutile au CaC | LdB p.247-248 | ✅ Implémenté (2026-09-24, tir + grenade) — `COMBAT.md` « Drone d'interception » ; CRD multi-drones (Lot 3) non implémenté |
 | Programmes réactifs + interruption (INI = assaillant) | LdB p.281 + p.319 | Hors scope V1 — §7.5 |
 | Une seule localisation | LdB p.319 | Défini dans `PLAN_DRONE.md` |
 | Blindage = armure directe | LdB p.319 | Défini dans `PLAN_DRONE.md` |

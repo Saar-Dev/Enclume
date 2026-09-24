@@ -1,3 +1,22 @@
+## v249 — 2026-09-24 — Drone d'interception : le drone bouclier s'interpose
+
+### Combat
+- [add] Un drone équipé du programme « Interception » peut protéger un ou plusieurs personnages (joueur, PNJ ou
+  exo-armure) : nouvelle section « Protection » sur la fiche du drone. Quand un tir **touche** un protégé, le
+  drone se déplace (à sa vitesse maximale) jusqu'à la trajectoire du tir, puis fait un Test d'Interception. S'il
+  réussit **et** fait mieux que l'attaquant, c'est lui qui encaisse le tir à la place du protégé. Jamais au corps
+  à corps, jamais si le drone est télépiloté ce Tour. Sur un tir raté, le drone ne bouge pas.
+- [add] Grenades : si le point visé est à moins de 1,5 m d'un protégé, son drone tente d'attraper la grenade.
+  S'il réussit, elle tombe à ses pieds (tout de suite pour une grenade à percussion, au Tour suivant pour une
+  grenade à minuterie) et lui seul absorbe la moitié des dégâts de l'explosion ; les autres personnages de la
+  zone, protégé compris, prennent les dégâts normaux. Un lancer raté est plus facile à intercepter.
+- [add] Le chat raconte chaque étape : pourquoi un drone n'intervient pas, son déplacement, son Test (avec les
+  deux marges), ce qu'il encaisse (gravité de la blessure, intégrité avant → après, destruction).
+- [change] Un drone touché indique désormais au chat sa gravité de blessure et son intégrité, quel que soit le
+  tireur (PNJ, joueur, drone, exo-armure, corps à corps).
+- [fix] Deux messages système identiques arrivant au même instant n'en affichaient qu'un seul.
+- [fix] Un drone en ordres permanents annonçait à tort « Initiative ≤ 0 : Action reportée » à chaque combat.
+
 ## v247 — 2026-09-24 — Retrait direct de « Enflammé » et « Décompression »
 
 ### Combat
