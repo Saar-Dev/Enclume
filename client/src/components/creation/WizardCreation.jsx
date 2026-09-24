@@ -15,6 +15,7 @@ import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
 import StepMaterielEtBiens from './StepMaterielEtBiens'
 import WizardReview from './WizardReview'
+import WizardFinalizeConfirm from './WizardFinalizeConfirm'
 import StepTutorial from './StepTutorial'
 import WizardStepErrorBoundary from './WizardStepErrorBoundary.jsx'
 import { SocketProvider } from '../../lib/SocketContext.jsx'
@@ -104,6 +105,7 @@ export default function WizardCreation() {
   const [stepError, setStepError] = useState(null)
   const [finalizing, setFinalizing] = useState(false)
   const [advancing, setAdvancing] = useState(false)
+  const [confirmFinalizeOpen, setConfirmFinalizeOpen] = useState(false)
 
   // Reprise d'un personnage existant — route /campaigns/:campaignId/creation/:sheetId (Lot A3,
   // docs/PLAN_WIZARDCOLLAB.md §6.2). MJ ouvrant le brouillon d'un joueur, ou lien direct de reprise.
@@ -225,8 +227,8 @@ export default function WizardCreation() {
     }
   }
 
-  const handleTerminate = async () => {
-    if (pcDispo > 0 && !window.confirm(t('wizard.finalize_pc_remaining_confirm', { n: pcDispo }))) return
+  const finalizeCreation = async () => {
+    if (finalizing) return
     setFinalizing(true)
     setStepError(null)
     try {
@@ -242,8 +244,17 @@ export default function WizardCreation() {
     } catch (err) {
       setStepError(extractErrorMessage(err, t))
       setFinalizing(false)
+      setConfirmFinalizeOpen(false)
     }
   }
+
+  // Des PC non dépensés demandent une confirmation explicite (fenêtre WizardFinalizeConfirm) ;
+  // sans reliquat, la finalisation part directement.
+  const handleTerminate = () => {
+    if (pcDispo > 0) setConfirmFinalizeOpen(true)
+    else finalizeCreation()
+  }
+  const cancelFinalizeConfirm = useCallback(() => setConfirmFinalizeOpen(false), [])
 
   // Reprise en cours (ou échouée) — jamais Step0Method (démarrage neuf) pour une reprise ciblée.
   if (urlSheetId && urlSheetId !== sheetId) {
@@ -421,6 +432,15 @@ export default function WizardCreation() {
         )}
       </WizardStepErrorBoundary>
       </div>
+
+      {confirmFinalizeOpen && (
+        <WizardFinalizeConfirm
+          pcRemaining={pcDispo}
+          busy={finalizing}
+          onConfirm={finalizeCreation}
+          onCancel={cancelFinalizeConfirm}
+        />
+      )}
 
       {peekOpen && peekCharacter && (
         <CharacterWindow

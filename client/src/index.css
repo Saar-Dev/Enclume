@@ -3056,6 +3056,47 @@ Convention :
   margin-bottom: 8px;
 }
 
+/* ── Wizard — confirmation de finalisation (PC non dépensés) ────── */
+.wiz-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+}
+.wiz-confirm-modal {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--wiz-bg-2);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--wiz-radius);
+  box-shadow: var(--shadow-md);
+}
+.wiz-confirm-title {
+  color: var(--wiz-white);
+  font-size: 15px;
+  font-weight: 700;
+}
+.wiz-confirm-text {
+  margin: 0;
+  color: var(--wiz-metal-1);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.wiz-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ── Wizard shell (steps 1-5, sans image de fond) ────────────────── */
 .wiz-shell {
   /* --wiz-* : voir Section 3 (promues globalement) */
