@@ -1,6 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import { getCampaignSettings } from './campaignSettingsService.js'
 import { evaluateBattlemapVisibility } from '../services/worldVisibilityService.js'
+import { filterProtectorInterceptors } from './droneInterceptionService.js'
 
 async function loadVisibility(db, sourceToken, targetToken) {
   if (sourceToken.battlemap_id !== targetToken.battlemap_id) return { status: 'cross-battlemap' }
@@ -19,8 +20,12 @@ async function loadVisibility(db, sourceToken, targetToken) {
 // consulté (ligne dégagée ET ligne bloquée : le moteur monde ne distingue pas « mur bloquant » de
 // « cible hors de portée » sous le même signal status:'blocked', un mur qui bloque réellement tout
 // ne laisse remonter aucun intercepteur non plus — sans conséquence pratique).
-async function redirectToInterceptor(io, db, campaignId, character, interceptors) {
-  const interceptorId = interceptors[0]?.actorId
+async function redirectToInterceptor(io, db, campaignId, character, interceptors, { action, targetToken }) {
+  // Un drone qui protège la cible ET peut intercepter passe par son Test d'interposition (finalisation du
+  // tir, lib/droneInterceptionService.js), pas par cette redirection automatique. Un protecteur inéligible
+  // sur la ligne reste un obstacle comme avant (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.4).
+  const remaining = await filterProtectorInterceptors(campaignId, { action, targetToken, interceptors })
+  const interceptorId = remaining[0]?.actorId
   if (!interceptorId) return null
   const first = await db('tokens').where({ id: interceptorId }).select('id', 'label').first()
   if (!first) return null
@@ -76,7 +81,7 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
     // faire capoter le tir si quelqu'un se trouve sur le vecteur : munitions consommées, jet complet
     // contre l'intercepteur (même patron que l'interposition sur ligne dégagée ci-dessous), jamais un
     // abandon muet du tir. worldVisibilityService calcule déjà les intercepteurs dans tous les cas.
-    const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [])
+    const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [], { action, targetToken: tgtToken })
     if (redirected) {
       await spendAmmo(db, action, character, settings)
       return redirected
@@ -89,7 +94,7 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
     return { result: 'blocked' }
   }
 
-  const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [])
+  const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [], { action, targetToken: tgtToken })
   if (redirected) return redirected
 
   return { result: 'clear', coverageModifier: visibility.coverage.modifier }

@@ -1,7 +1,9 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice, rollDamageFormula } from '../lib/diceParser.js'
-import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
+import { resolveCriticalFailReroll } from '../lib/criticalFailReroll.js'
+import { resolveProtectorInterposition, reportProtectedMiss } from '../lib/droneInterceptionService.js'
+import { resolveTestOutcome, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -12,9 +14,9 @@ import { checkCombatLOS, checkLOSForPrecheck } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
+import { DEFENSELESS_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { runPanneTest, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
 import { resolveActiveComputer, computeOrdinateurStats } from '../../../shared/computerStats.js'
-import { DEFENSELESS_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { selectDisconnectedSystems } from '../../../shared/exoSystemsCapacity.js'
 import { exposeToIemSurvival } from '../lib/iemSurvivalService.js'
 import { randomInt } from 'crypto'
@@ -43,7 +45,8 @@ import { EXO_PRONE_RECOVERY_TABLE } from '../../../shared/exoConstants.js'
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
-import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
+import { SEVERITY_COLORS, isTestBlockingWound, woundSeverityForDamage } from '../../../shared/woundConstants.js'
+import { buildDroneDamageNotice, DRONE_DESTROYED_DAMAGE } from '../lib/droneDamageNotice.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 import {
   RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation,
@@ -117,16 +120,9 @@ export const COMBAT_MODE_LABELS = {
   defensif: 'Mode défensif', retraite: 'Mode retraite',
 }
 
-// ─── Helper — retest d'Échec critique (RAW p.204, docs/PLAN_TEST_CRITIQUE.md) ─────────────────────
-// computeAttackRoll (noyau pur) ne peut pas faire ce second jet lui-même (pas d'I/O dans le noyau,
-// PLAN_RW_SYSCOMBAT.md §2.1.c) — chaque site qui appelle computeAttackRoll sur un jet frais (attaque
-// ou défense, jamais une relecture depuis combat_pending) passe son résultat ici juste après.
-// Sans effet si l'issue n'est pas un Échec critique.
-export async function resolveCriticalFailReroll(outcome) {
-  if (!outcome.isCriticalFail) return outcome
-  const { total: reroll } = await parseDice('1d20')
-  return applyCriticalFailReroll(outcome, reroll)
-}
+// resolveCriticalFailReroll : voir lib/criticalFailReroll.js (réexporté ici — les importeurs existants, dont
+// socketCombatAoe.js et socketCombatExo.js, ne changent pas).
+export { resolveCriticalFailReroll }
 
 // Arme l'attente de dégâts d'un token (PLAN_RW_SYSCOMBAT.md §2.5, Lot 3) — factorise l'insert
 // combat_pending/setFSMSubPhase/broadcastCurrentSubPhase/comptage identique aux 3 sites qui la posent
@@ -692,12 +688,12 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
 async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
   const {
     degautsBruts, characterIdCible, targetTokenId, tokenId,
-    tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed,
+    tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed, targetName,
   } = ctx
   const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
   if (!droneSheet) return
   const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-  await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+  const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
   if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
     rollLoc: null, locLabel: null,
     degautsBruts, degatsNets: degatsNetsDrone,
@@ -715,6 +711,8 @@ async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
     chancesDeReussite: degatsNetsDrone,
     isSuccess: degatsNetsDrone > 0,
   })
+  const droneNotice = buildDroneDamageNotice({ droneName: targetName, degatsNets: degatsNetsDrone, outcome: droneOutcome })
+  io.to(campaignId).emit(droneNotice.event, droneNotice.data)
   io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
     tireurId: tokenId, cibleId: targetTokenId,
     localisation: null,
@@ -1987,7 +1985,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
     attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
     weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
-    attackerUsername, attackerColor, userId,
+    attackerUsername, attackerColor, userId, defenderCharacterName,
   } = ctx
   const hit = rollAttaque <= chancesAttaque
   emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
@@ -2008,7 +2006,8 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
       const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
       if (droneSheet) {
         const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-        await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+        const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+        emissions.push(buildDroneDamageNotice({ droneName: defenderCharacterName, degatsNets: degatsNetsDrone, outcome: droneOutcome }))
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId: attackerTokenId, cibleId: targetTokenId,
           localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
@@ -2218,7 +2217,7 @@ export async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
   const {
     attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
     weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
-    characterIdCible,
+    characterIdCible, defenderCharacterName,
   } = ctx
   const hit = rollAttaque <= chancesAttaque
   emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
@@ -2243,7 +2242,8 @@ export async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
       // déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
       const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
       const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-      await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+      const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+      emissions.push(buildDroneDamageNotice({ droneName: defenderCharacterName, degatsNets: degatsNetsDrone, outcome: droneOutcome }))
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: attackerTokenId, cibleId: targetTokenId,
         localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
@@ -2896,7 +2896,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // immédiate, pas de `suspend`/SITE_HANDLERS pour ce site.
     const formula = weapon.effective_formula ? weapon.effective_formula.replace(/\s/g, '') : ''
 
-    return await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
+    return await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions, attackKind: isCaCWeapon ? 'melee' : 'ranged' })
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
@@ -3060,15 +3060,23 @@ export async function resolveDroneAutoAction(io, campaignId, action, character, 
 // (échec → COMBAT_ATTACK_RESULT ; succès → identification cible + dispatch drone/exo/pnj/pj),
 // factorisée ici plutôt que dupliquée une seconde fois (invariant #3). Appelée immédiate ou depuis
 // un SITE_HANDLERS.* différé. Re-fetch la cible fraîche en DB, jamais un instantané en cache.
-export async function finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions }) {
+export async function finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions, attackKind }) {
   if (!isSuccess) {
     emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
       tireurId: action.token_id, cibleId: action.target_token_id,
       localisation: null, degautsBruts: 0, degatsNets: 0,
       severity: null, is_lethal: false, isSuccess: false, shockResult: null,
     } })
+    emissions.push(...await reportProtectedMiss(campaignId, { action, attackKind }))
     return { suspend: false, emissions }
   }
+
+  // Drone protecteur (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.1) — moment « touché, avant dégâts ».
+  // `attackKind` EXPLICITE ('ranged' | 'melee') : cette finalisation sert AUSSI le corps à corps d'un drone
+  // (resolveDroneAssaultAction traite CaC et distance), que le RAW exclut — jamais déduit de `portee`.
+  const interposition = await resolveProtectorInterposition(io, campaignId, { action, mr, attackKind })
+  emissions.push(...interposition.emissions)
+  action = interposition.action
 
   const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
   const cibleCharacter = cibleToken?.character_id
@@ -3108,8 +3116,8 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
   const modDomAttaque = getMrModifier(mr)
   const degautsBruts  = rawDice + modDomAttaque
   const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
-  await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
-  const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
+  const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
+  const newIntegrite = droneOutcome.newIntegrite
   emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
     userId, username: tireurUsername, color: tireurColor,
     formula, rolls: dmgRolls, total: degautsBruts,
@@ -3122,6 +3130,7 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
     isSuccess: degatsNets > 0,
     cardType: 'drone_damage',
   } })
+  emissions.push(buildDroneDamageNotice({ droneName: cibleCharacter.name, degatsNets, outcome: droneOutcome }))
   emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
     tireurId: action.token_id, cibleId: action.target_token_id,
     localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
@@ -3689,6 +3698,14 @@ async function finalizeAssaultHitOutcome(io, campaignId, {
   isSuccess, emissions,
 }) {
   if (isSuccess) {
+    // Drone protecteur (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.1) — moment « touché, avant dégâts ». Si un
+    // drone s'interpose, `action.target_token_id` devient le sien : tout ce qui suit (identification de la
+    // cible, dispatch drone, fenêtre de dégâts d'un tireur PJ) est déjà celui d'une cible drone. Atteinte
+    // uniquement par un Tir (arme de contact exclue en amont, fetchAssaultWeaponAndMods) → 'ranged'.
+    const interposition = await resolveProtectorInterposition(io, campaignId, { action, mr, attackKind: 'ranged' })
+    emissions.push(...interposition.emissions)
+    action = interposition.action
+
     // Fetch stats de la cible (commun PJ et PNJ)
     const cibleToken = await db('tokens').where({ id: action.target_token_id }).first()
     let char_sheet_id_cible = null
@@ -3753,7 +3770,11 @@ async function finalizeAssaultHitOutcome(io, campaignId, {
       return await resolveAssaultHitPnjDrone(io, campaignId, { ...ctx, degautsBruts }, emissions)
     }
     return await resolveAssaultHitPnjNormal(io, campaignId, { ...ctx, degautsBruts, effectiveDamage }, emissions)
-  } else if (character.type === 'pj') {
+  }
+
+  // Tir raté (le bloc « touché » ci-dessus retourne sur toutes ses branches).
+  emissions.push(...await reportProtectedMiss(campaignId, { action, attackKind: 'ranged' }))
+  if (character.type === 'pj') {
     emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
       hit: false,
       roll: rollAttaque,
@@ -3914,7 +3935,8 @@ async function resolveAssaultHitPnjDrone(io, campaignId, ctx, emissions) {
   const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
   if (droneSheet) {
     const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-    await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
+    const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
+    emissions.push(buildDroneDamageNotice({ droneName: cibleCharacter.name, degatsNets: degatsNetsDrone, outcome: droneOutcome }))
     emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
       tireurId: action.token_id, cibleId: action.target_token_id,
       localisation: null,
@@ -4019,16 +4041,13 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
 
 // Décrémente l'intégrité du drone après un hit, met à jour damages JSONB, broadcast.
 // tokenId requis : drone_sheet n'a pas de FK token_id (PD8).
+// Retourne { severity, previousIntegrite, newIntegrite, detruit } : de quoi dire au chat ce qui s'est passé
+// (buildDroneDamageNotice) — l'émission du message reste à l'appelant, qui seul connaît l'ordre de son chat.
 export async function resolveDroneIntegrityLoss(io, campaignId, characterId, tokenId, droneSheet, degatsNets) {
   const damages = { ...droneSheet.damages }  // PD4 — copier avant mutation
 
-  let severity = null
-  if      (degatsNets >= 30) severity = 'detruit'
-  else if (degatsNets >= 25) severity = 'mortelle'
-  else if (degatsNets >= 20) severity = 'critique'
-  else if (degatsNets >= 15) severity = 'grave'
-  else if (degatsNets >= 10) severity = 'moyenne'
-  else if (degatsNets >=  5) severity = 'legere'
+  // Gravité : table RAW partagée (shared/woundConstants.js) ; seule la destruction (≥ 30) est propre au drone.
+  const severity = degatsNets >= DRONE_DESTROYED_DAMAGE ? 'detruit' : woundSeverityForDamage(degatsNets)
 
   if (severity && severity !== 'detruit' && Array.isArray(damages[severity])) {
     const idx = damages[severity].indexOf(false)
@@ -4060,4 +4079,5 @@ export async function resolveDroneIntegrityLoss(io, campaignId, characterId, tok
     damages,
     detruit,
   })
+  return { severity, previousIntegrite: droneSheet.integrite_actuelle, newIntegrite, detruit }
 }

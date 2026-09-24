@@ -403,6 +403,7 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
     seriesByTokenAndType.get(key).actions.push(action)
   }
   const carriedActionIds = []
+  const carriedTokenIds = new Set() // tokens dont la série est REPORTÉE (source de l'alerte chat, plus bas)
   for (const { tokenId, actions } of seriesByTokenAndType.values()) {
     const rosterEntry = rosterByToken.get(tokenId)
     const isDelayed = rosterEntry?.state_vitesse === 'delayed'
@@ -416,6 +417,7 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
     // « l'Action », pas une attaque bonus. Écart RAW acté : docs/JOURNAL8.md.
     const carriedOver = !isDelayed && positions[0] <= 0
     const carriedBase = CARRY_OVER_BASE + (rosterEntry?.base_ini ?? 0) * 100
+    if (carriedOver) carriedTokenIds.add(tokenId)
     actions.forEach((action, idx) => {
       if (carriedOver) carriedActionIds.push(action.id)
       rows.push({
@@ -456,18 +458,18 @@ export async function buildTimelineEntries(io, campaignId, turnNumber, pendingAc
   // série, donc soit toutes perdues ensemble, soit aucune. COMBAT_SYSTEM_NOTICE (déjà utilisé pour
   // dualWieldAmmoOutOffhand/Primary, session.json) — pas CHAT_MESSAGE, pas de texte figé.
   // `lost` = overflow d'une attaque supplémentaire (`positions[idx>0] ≤ 0`, série trop longue pour ce
-  // Tour) → « action perdue ». Report d'Initiative ≤ 0 (`resolution_snapshot` posé) → « agit au Tour
-  // suivant » : deux messages distincts, un par token.
+  // Tour) → « action perdue ». Report d'Initiative ≤ 0 (`carriedTokenIds`) → « agit au Tour suivant » :
+  // deux messages distincts, un par token. Jamais déduit de `resolution_snapshot`, qui porte AUSSI
+  // `{ autoResolve: true }` (drone `drone_auto`) : un drone annonçait « Action reportée » à chaque combat.
   const noticeTokenIds = [...new Set(rows
-    .filter(r => r.status === 'lost' || r.resolution_snapshot != null)
+    .filter(r => r.status === 'lost' || carriedTokenIds.has(r.token_id))
     .map(r => r.token_id))]
   if (noticeTokenIds.length > 0) {
-    const carriedTokens = new Set(rows.filter(r => r.resolution_snapshot != null).map(r => r.token_id))
     const noticeTokens = await db('tokens').whereIn('id', noticeTokenIds).select('id', 'label')
     const timestamp = new Date().toISOString()
     for (const { id, label } of noticeTokens) {
       io.to(campaignId).emit(WS.COMBAT_SYSTEM_NOTICE, {
-        i18nKey: carriedTokens.has(id) ? 'session.actionCarriedOver' : 'session.initiativeLost',
+        i18nKey: carriedTokenIds.has(id) ? 'session.actionCarriedOver' : 'session.initiativeLost',
         params: { label: label ?? '?' },
         timestamp,
       })

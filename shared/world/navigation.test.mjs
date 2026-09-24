@@ -5,6 +5,7 @@ import { compileSurfaceWorld } from './worldCompiler.js'
 import { createWorldSnapshot } from './worldContracts.js'
 import { buildNavigationGraph, planWorldPath } from './navigation.js'
 import { compileEffectRegions } from './worldEffects.js'
+import { cellOfPoint, createSegmentCellPredicate } from './gridCells.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -283,4 +284,127 @@ test('destination occupée sans aucune case libre voisine reste unreachable', ()
     ],
   })
   assert.equal(result.status, 'unreachable')
+})
+
+// ── Arrivée à prédicat (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.3-2) ───────────────────────────────
+const START_ROW = { x: 0.5, y: 0.125, z: 0.5 }
+const inCellsFrom = minX => node => cellOfPoint(node.point).x >= minX
+
+function rowWorld(id, maxX, patch = {}) {
+  return compileSurfaceWorld({
+    battlemapId: id,
+    surfaceData: emptySurface({ rooms: { roomA: room('roomA', 0, maxX, patch) } }),
+  })
+}
+
+test('arrivée à prédicat : le nœud libre le moins coûteux qui vérifie le prédicat est retenu', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-cheapest', 4),
+    from: START_ROW,
+    destinationPredicate: inCellsFrom(3),
+    budgetM: 10,
+  })
+  assert.equal(result.status, 'destination')
+  assert.deepEqual(result.snappedTo, { x: 3.5, y: 0.125, z: 0.5 })
+  assert.equal(result.routeCostM, 4.5)
+  assert.equal(result.requestedTo, null)
+})
+
+test('arrivée à prédicat : un départ qui vérifie déjà le prédicat coûte 0 et ne bouge pas', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-start', 4),
+    from: START_ROW,
+    destinationPredicate: inCellsFrom(0),
+    budgetM: 10,
+  })
+  assert.equal(result.status, 'destination')
+  assert.equal(result.routeCostM, 0)
+  assert.deepEqual(result.snappedTo, START_ROW)
+})
+
+test('arrivée à prédicat : hors budget → unreachable, jamais un trajet partiel', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-budget', 4),
+    from: START_ROW,
+    destinationPredicate: inCellsFrom(3),
+    budgetM: 3,
+  })
+  assert.equal(result.status, 'unreachable')
+  assert.equal(result.plan, null)
+})
+
+test('arrivée à prédicat : un budget égal au coût suffit', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-exact-budget', 4),
+    from: START_ROW,
+    destinationPredicate: inCellsFrom(3),
+    budgetM: 4.5,
+  })
+  assert.equal(result.status, 'destination')
+  assert.equal(result.plan.spentM, 4.5)
+})
+
+test('arrivée à prédicat : un candidat occupé est écarté, on contourne par la rangée voisine', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-occupied', 4, { maxZ: 1 }),
+    from: START_ROW,
+    destinationPredicate: node => cellOfPoint(node.point).x === 3,
+    budgetM: 10,
+    occupants: [{ id: 'blocker', point: { x: 3.5, y: 0.125, z: 0.5 } }],
+  })
+  assert.equal(result.status, 'destination')
+  assert.deepEqual(result.snappedTo, { x: 3.5, y: 0.125, z: 1.5 })
+})
+
+test('arrivée à prédicat : tous les candidats occupés → unreachable', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-all-occupied', 4),
+    from: START_ROW,
+    destinationPredicate: node => cellOfPoint(node.point).x === 3,
+    budgetM: 10,
+    occupants: [{ id: 'blocker', point: { x: 3.5, y: 0.125, z: 0.5 } }],
+  })
+  assert.equal(result.status, 'unreachable')
+})
+
+test('arrivée à prédicat : aucun nœud ne vérifie le prédicat → unreachable', () => {
+  const result = planWorldPath({
+    snapshot: rowWorld('map-predicate-none', 4),
+    from: START_ROW,
+    destinationPredicate: () => false,
+    budgetM: 10,
+  })
+  assert.equal(result.status, 'unreachable')
+})
+
+test('`to` et `destinationPredicate` sont exclusifs', () => {
+  assert.throws(() => planWorldPath({
+    snapshot: rowWorld('map-predicate-exclusive', 4),
+    from: START_ROW,
+    to: { x: 2.5, y: 0.125, z: 0.5 },
+    destinationPredicate: () => true,
+    budgetM: 10,
+  }), TypeError)
+})
+
+test('arrivée à prédicat : atteindre, au plus court, une case traversée par une trajectoire de tir', () => {
+  // Salle 5×3 ; tireur en (0,0) et cible en (4,0) — leurs cases sont occupées. Le tir longe z = 0.5.
+  // Le drone part de (2, 2) : la case traversée la plus proche (2, 0) est à deux pas droits (3 m),
+  // avant (1, 0) / (3, 0) qui demandent un détour en diagonale.
+  const snapshot = rowWorld('map-predicate-trajectory', 4, { maxZ: 2 })
+  const shotFrom = { x: 0.5, y: 1.0, z: 0.5 }
+  const shotTo = { x: 4.5, y: 1.0, z: 0.5 }
+  const result = planWorldPath({
+    snapshot,
+    from: { x: 2.5, y: 0.125, z: 2.5 },
+    destinationPredicate: createSegmentCellPredicate(shotFrom, shotTo, { bodyHeight: 1.2 }),
+    budgetM: 10,
+    occupants: [
+      { id: 'shooter', point: { x: 0.5, y: 0.125, z: 0.5 } },
+      { id: 'target', point: { x: 4.5, y: 0.125, z: 0.5 } },
+    ],
+  })
+  assert.equal(result.status, 'destination')
+  assert.deepEqual(result.snappedTo, { x: 2.5, y: 0.125, z: 0.5 })
+  assert.equal(result.routeCostM, 3)
 })

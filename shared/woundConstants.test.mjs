@@ -1,6 +1,19 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION } from './woundConstants.js'
+import { WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage } from './woundConstants.js'
+
+test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
+  assert.equal(woundSeverityForDamage(0), null)
+  assert.equal(woundSeverityForDamage(4), null)
+  assert.equal(woundSeverityForDamage(5), 'legere')
+  assert.equal(woundSeverityForDamage(9), 'legere')
+  assert.equal(woundSeverityForDamage(10), 'moyenne')
+  assert.equal(woundSeverityForDamage(14), 'moyenne')
+  assert.equal(woundSeverityForDamage(15), 'grave')
+  assert.equal(woundSeverityForDamage(20), 'critique')
+  assert.equal(woundSeverityForDamage(25), 'mortelle')
+  assert.equal(woundSeverityForDamage(99), 'mortelle')
+})
 
 test('WOUND_PENALTIES.mortelle - plus de sentinel numérique (LdB : "non applicable")', () => {
   assert.equal(WOUND_PENALTIES.mortelle, 0)

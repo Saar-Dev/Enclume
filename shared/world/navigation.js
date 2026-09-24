@@ -427,17 +427,32 @@ function graphWithTransientTraversalPoint(graph, requestedPoint, suffix) {
   }
 }
 
+// Deux façons de désigner l'arrivée, exclusives :
+//  - `to` (défaut, comportement historique) : un point ; si sa case est occupée, repli sur ses voisins libres.
+//  - `destinationPredicate(node) → booléen` : « le nœud libre le MOINS COÛTEUX qui vérifie ce prédicat »
+//    (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.3-2 — atteindre la trajectoire d'un tir au plus court).
+//    Dijkstra pur : le premier candidat dépilé est exactement le moins coûteux. Le nœud de départ, s'il
+//    vérifie le prédicat, est retenu à coût 0.
+// `maxCostM` borne l'expansion : sans elle, un prédicat que rien d'atteignable ne satisfait ferait
+// parcourir toute la carte. Défaut `Infinity` = comportement historique.
 export function findNavigationPath(graph, {
   from,
   to,
   occupancy = createOccupancyIndex(),
   excludeOccupantIds = [],
   maxSnapDistance = 1.25,
+  destinationPredicate = null,
+  maxCostM = Infinity,
 } = {}) {
+  if (destinationPredicate && to != null) {
+    throw new TypeError('findNavigationPath : `to` et `destinationPredicate` sont exclusifs')
+  }
   const requestedFrom = normalizeWorldPoint(from, 'from')
-  const requestedTo = normalizeWorldPoint(to, 'to')
+  const requestedTo = destinationPredicate ? null : normalizeWorldPoint(to, 'to')
   const transientStartGraph = graphWithTransientTraversalPoint(graph, requestedFrom, 'start')
-  const workingGraph = graphWithTransientTraversalPoint(transientStartGraph, requestedTo, 'destination')
+  const workingGraph = requestedTo
+    ? graphWithTransientTraversalPoint(transientStartGraph, requestedTo, 'destination')
+    : transientStartGraph
   const blocked = new Set()
   for (const node of workingGraph.nodes) {
     if (!occupancy.canOccupy(node.point, workingGraph.actorProfile, { excludeIds: excludeOccupantIds })) {
@@ -447,25 +462,32 @@ export function findNavigationPath(graph, {
   const start = nearestNode(workingGraph.nodes, requestedFrom, blocked, maxSnapDistance)
   if (!start) return null
 
-  // Nœud géométriquement le plus proche de la destination demandée, occupation ignorée : sert à
-  // détecter une destination occupée (DEPLACEMENT2, docs/BUGIDENTIFIE.md) et à borner la recherche de
-  // repli sur ses voisins directs plutôt que d'annuler tout le déplacement.
-  const requestedDestinationNode = nearestNode(workingGraph.nodes, requestedTo, new Set(), maxSnapDistance)
-  if (!requestedDestinationNode) return null
-
   const nodeById = new Map(workingGraph.nodes.map(node => [node.id, node]))
   let destinationCandidateIds
-  if (!blocked.has(requestedDestinationNode.id)) {
-    destinationCandidateIds = new Set([requestedDestinationNode.id])
-  } else {
-    // Destination occupée : le déplacement doit s'arrêter à la case libre la plus proche de
-    // l'obstacle (ses voisins directs dans le graphe), jamais être annulé entièrement.
-    destinationCandidateIds = new Set()
-    for (const edge of workingGraph.edges) {
-      if (edge.to === requestedDestinationNode.id && !blocked.has(edge.from)) destinationCandidateIds.add(edge.from)
-      if (edge.from === requestedDestinationNode.id && !blocked.has(edge.to)) destinationCandidateIds.add(edge.to)
-    }
+  if (destinationPredicate) {
+    destinationCandidateIds = new Set(workingGraph.nodes
+      .filter(node => !blocked.has(node.id) && destinationPredicate(node))
+      .map(node => node.id))
     if (destinationCandidateIds.size === 0) return null
+  } else {
+    // Nœud géométriquement le plus proche de la destination demandée, occupation ignorée : sert à
+    // détecter une destination occupée (DEPLACEMENT2, docs/BUGIDENTIFIE.md) et à borner la recherche de
+    // repli sur ses voisins directs plutôt que d'annuler tout le déplacement.
+    const requestedDestinationNode = nearestNode(workingGraph.nodes, requestedTo, new Set(), maxSnapDistance)
+    if (!requestedDestinationNode) return null
+
+    if (!blocked.has(requestedDestinationNode.id)) {
+      destinationCandidateIds = new Set([requestedDestinationNode.id])
+    } else {
+      // Destination occupée : le déplacement doit s'arrêter à la case libre la plus proche de
+      // l'obstacle (ses voisins directs dans le graphe), jamais être annulé entièrement.
+      destinationCandidateIds = new Set()
+      for (const edge of workingGraph.edges) {
+        if (edge.to === requestedDestinationNode.id && !blocked.has(edge.from)) destinationCandidateIds.add(edge.from)
+        if (edge.from === requestedDestinationNode.id && !blocked.has(edge.to)) destinationCandidateIds.add(edge.to)
+      }
+      if (destinationCandidateIds.size === 0) return null
+    }
   }
 
   if (destinationCandidateIds.has(start.id)) {
@@ -505,6 +527,7 @@ export function findNavigationPath(graph, {
     if (destinationCandidateIds.has(current.id)) { reachedId = current.id; break }
     for (const edge of outgoing.get(current.id) || []) {
       const nextCost = current.cost + edge.costM
+      if (nextCost > maxCostM + EPSILON) continue
       if (nextCost + EPSILON >= (costs.get(edge.to) ?? Infinity)) continue
       costs.set(edge.to, nextCost)
       previous.set(edge.to, edge)
@@ -548,6 +571,10 @@ export function planWorldPath({
   traversalFactors = {},
   effectRegions = snapshot?.spatial?.regions || [],
   pathId = null,
+  // Arrivée « au plus court parmi les nœuds qui vérifient ce prédicat » (voir findNavigationPath), en
+  // alternative à `to`. Le budget borne alors la recherche : hors budget → 'unreachable', jamais un
+  // trajet partiel vers un candidat qu'on n'atteint pas.
+  destinationPredicate = null,
 } = {}) {
   const navigationGraph = graph || buildNavigationGraph(snapshot, { actorProfile, traversalFactors, effectRegions })
   const route = findNavigationPath(navigationGraph, {
@@ -555,12 +582,14 @@ export function planWorldPath({
     to,
     occupancy: createOccupancyIndex(occupants),
     excludeOccupantIds,
+    destinationPredicate,
+    maxCostM: destinationPredicate && budgetM != null ? budgetM : Infinity,
   })
   if (!route) return deepFreeze({
     status: 'unreachable',
     worldRevision: snapshot.worldRevision,
     requestedFrom: normalizeWorldPoint(from),
-    requestedTo: normalizeWorldPoint(to),
+    requestedTo: to == null ? null : normalizeWorldPoint(to),
     plan: null,
   })
 
@@ -585,7 +614,7 @@ export function planWorldPath({
     status: plan.reachedDestination ? 'destination' : 'budget',
     worldRevision: snapshot.worldRevision,
     requestedFrom: normalizeWorldPoint(from),
-    requestedTo: normalizeWorldPoint(to),
+    requestedTo: to == null ? null : normalizeWorldPoint(to),
     snappedFrom: route.start.point,
     snappedTo: route.destination.point,
     routeCostM: route.costM,

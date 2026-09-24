@@ -135,9 +135,12 @@ const COMPANION_REGISTRY = {
 // wizard_locks/game_echeances/chat_messages ajoutées VAULT-REGISTRY-DRIFT1 (2026-08-16) — verrous MJ
 // du Wizard collaboratif, échéances de jeu liées à une campagne précise, historique de chat : les
 // trois décrivent un état de session/workflow, jamais le personnage lui-même.
+// drone_interception_targets ajoutée (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.6) : lien « ce drone protège
+// ce personnage » = agencement d'UNE campagne entre deux personnages, pas une donnée du drone ; un drone
+// cloné arrive sans ses protégés (ils n'existent pas dans la campagne de destination).
 const EXCLUDED_TABLES = new Set([
   'tokens', 'trade_log', 'trade_offers', 'vault_transfer_requests',
-  'wizard_locks', 'game_echeances', 'chat_messages',
+  'wizard_locks', 'game_echeances', 'chat_messages', 'drone_interception_targets',
 ])
 
 // ─── Garde-fou anti-dérive (PLAN_VAULT.md "Garde-fou anti-dérive") ──────────────────────────────

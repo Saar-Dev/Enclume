@@ -122,7 +122,7 @@ function ProgramsList({ computer, programs, catalog, canEdit, onProgramsChange, 
                   value={customCategory} onChange={e => setCustomCategory(e.target.value)}
                   style={{ background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '4px', color: '#c0c0d0', fontSize: '12px', padding: '4px 6px', outline: 'none' }}
                 >
-                  {['detection','ami_ennemi','armement_distance','armement_contact','esquive','securite','offensif','contre_attaque','rempart','pilotage','analyse','medical','communication','specialise'].map(cat => (
+                  {['detection','ami_ennemi','armement_distance','armement_contact','esquive','securite','offensif','contre_attaque','rempart','pilotage','interception','analyse','medical','communication','specialise'].map(cat => (
                     <option key={cat} value={cat}>{t(`drone.category.${cat}`, cat)}</option>
                   ))}
                 </select>

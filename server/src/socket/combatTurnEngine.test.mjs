@@ -83,9 +83,9 @@ async function createCombatFixture({ turn = 1, phase = 'RESOLUTION', subPhase = 
 }
 
 // Insère une combat_action (défaut 'assault') pour un token, renvoie la ligne.
-async function addAction(campaignId, tokenId, { type = 'assault', turnNumber = 1, sequence = 3, status = 'pending' } = {}) {
+async function addAction(campaignId, tokenId, { type = 'assault', turnNumber = 1, sequence = 3, status = 'pending', actionKey = type } = {}) {
   const [row] = await db('combat_actions')
-    .insert({ campaign_id: campaignId, token_id: tokenId, type, action_key: type, sequence, status, turn_number: turnNumber })
+    .insert({ campaign_id: campaignId, token_id: tokenId, type, action_key: actionKey, sequence, status, turn_number: turnNumber })
     .returning('*')
   return row
 }
@@ -178,6 +178,39 @@ test('buildTimelineEntries (M3) — Initiative ≤ 0 → entrée reportée au To
     const action = await db('combat_actions').where({ id: a.id }).first()
     assert.equal(action.turn_number, 5)         // bumpée → survit au wipe + trouvée par le PRECHECK T+1
     assert.equal(action.status, 'pending')
+  } finally { await fx.cleanup() }
+})
+
+// Alerte chat du report : source = report RÉEL (Initiative ≤ 0), jamais `resolution_snapshot != null` qui porte
+// aussi `{ autoResolve: true }` (drone `drone_auto`) — un drone annonçait « Action reportée » à chaque combat.
+function noticeCollectorIo() {
+  const notices = []
+  return { notices, io: { to: () => ({ emit: (event, data) => { if (event === WS.COMBAT_SYSTEM_NOTICE) notices.push(data) } }) } }
+}
+
+test('buildTimelineEntries (M3) — drone_auto (autoResolve) : aucune alerte « Action reportée »', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 3, roster: [{ baseIni: 12, ini: 12, type: 'drone' }] })
+  try {
+    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 3, actionKey: 'drone_auto' })
+    const { io: capIo, notices } = noticeCollectorIo()
+    await buildTimelineEntries(capIo, fx.campaign.id, 3, [a], fx.roster.map(r => r.rosterRow))
+
+    const [row] = await db('combat_timeline_entries').where({ campaign_id: fx.campaign.id })
+    assert.deepEqual(row.resolution_snapshot, { autoResolve: true }) // le snapshot existe bien…
+    assert.equal(row.resolve_on_turn, 3)                             // …mais rien n'est reporté
+    assert.deepEqual(notices, [])                                    // donc aucune alerte
+  } finally { await fx.cleanup() }
+})
+
+test('buildTimelineEntries (M3) — report réel : une seule alerte session.actionCarriedOver', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 4, roster: [{ baseIni: 12, ini: 0 }] })
+  try {
+    const a = await addAction(fx.campaign.id, fx.roster[0].token.id, { turnNumber: 4 })
+    const { io: capIo, notices } = noticeCollectorIo()
+    await buildTimelineEntries(capIo, fx.campaign.id, 4, [a], fx.roster.map(r => r.rosterRow))
+
+    assert.equal(notices.length, 1)
+    assert.equal(notices[0].i18nKey, 'session.actionCarriedOver')
   } finally { await fx.cleanup() }
 })
 

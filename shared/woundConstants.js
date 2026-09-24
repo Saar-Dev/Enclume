@@ -87,8 +87,8 @@ export const WOUND_INFECTION = {
 // ci-dessous). Elle n'est pas reproduite ici : l'Encyclopédie la documente en texte
 // éditorial dans l'article, hors table.
 //
-// Ajouté pour l'Encyclopédie (Phase 3) : aucune consommation moteur à ce jour — même
-// statut que DEPLACEMENT_ACTION_MALUS, conservé pour ne pas perdre la donnée RAW.
+// Ajouté pour l'Encyclopédie (Phase 3) ; consommée par le moteur via `woundSeverityForDamage` (gravité
+// d'un coup porté à un drone, resolveDroneIntegrityLoss). Les humains passent par damageService.
 export const BLESSURE_SEUILS_TABLE = [
   { key: 'legere',   seuil: 5  },
   { key: 'moyenne',  seuil: 10 },
@@ -96,6 +96,17 @@ export const BLESSURE_SEUILS_TABLE = [
   { key: 'critique', seuil: 20 },
   { key: 'mortelle', seuil: 25 },
 ]
+
+// Gravité correspondant à des Dommages nets : la plus haute ligne de BLESSURE_SEUILS_TABLE dont le seuil est
+// atteint, ou null sous le premier seuil (aucune blessure). Sans la 6ᵉ ligne « Mort subite » (seuil 30) : un
+// drone détruit à 30 et plus est une règle propre au drone, portée par resolveDroneIntegrityLoss.
+export function woundSeverityForDamage(degatsNets) {
+  let severity = null
+  for (const { key, seuil } of BLESSURE_SEUILS_TABLE) {
+    if (degatsNets >= seuil) severity = key
+  }
+  return severity
+}
 
 // Table RAW « Effets » (LdB p.235-236, article Description et effets des blessures) — pour les
 // blessures Graves et plus sévères : Allure de déplacement maximum autorisée, et malus au Test de

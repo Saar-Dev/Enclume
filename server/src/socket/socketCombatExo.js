@@ -271,7 +271,8 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       return { suspend: true, emissions }
     }
 
-    const finalized = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, chocDsl, isSuccess, emissions })
+    // Tir d'exo (resolveExoAssaultAction ne traite que la distance ; le CaC exo passe par finalizeExoMelee).
+    const finalized = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, chocDsl, isSuccess, emissions, attackKind: 'ranged' })
     return finalized
 
   } catch (err) {
@@ -323,7 +324,7 @@ async function finishExoAssaultChoice(io, campaignId, resolved, { choice, contex
     })
   }
 
-  const { suspend: finalSuspend, emissions: finalEmissions } = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions })
+  const { suspend: finalSuspend, emissions: finalEmissions } = await finalizeAssaultOutcome(io, campaignId, { action, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl, isSuccess, emissions, attackKind: 'ranged' })
   await flushDeferredEmissions(io, campaignId, userId, finalEmissions)
   // Ne pas avancer l'échelle si la finalisation a elle-même armé une attente (ex. AWAITING_DAMAGE
   // sur une cible PJ touchée, resolveAttackHitPj) — même garde que le chemin immédiat

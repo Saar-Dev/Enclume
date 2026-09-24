@@ -11,6 +11,7 @@ import { calcSkillTotal, calcDroneDegatsNets } from '../lib/charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
+import { emitExecutedTokenMovement } from '../lib/tokenMovementEmitter.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { checkLOSForPrecheck } from '../lib/losService.js'
 import { resolveSizeCategory } from '../lib/characterSizeService.js'
@@ -422,33 +423,14 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             Number(action.planned_world_revision) !== Number(outcome.result?.worldRevision)
             || Number(action.planned_runtime_revision) !== Number(outcome.evaluatedRuntimeRevision)
           )
-          if (outcome?.moved || outcome?.elevatorRuntime?.changed) {
-            io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
-              battlemapId: moveToken.battlemap_id,
-              runtimeRevision: outcome.runtimeRevision || outcome.elevatorRuntime.runtimeRevision,
-              kind: outcome.moved ? 'combat-movement' : 'elevator-clock',
-            })
-          }
-          for (const passenger of outcome?.elevatorPassengerTokens || []) {
-            io.to(campaignId).emit(WS.TOKEN_MOVED, {
-              tokenId: passenger.id,
-              pos_x: passenger.pos_x,
-              pos_y: passenger.pos_y,
-              pos_z: passenger.pos_z,
-              position_space: passenger.position_space,
-              updated_at: passenger.updated_at,
-              worldMovement: { kind: 'elevator-passenger' },
-            })
-          }
-          if (outcome?.moved) {
-            io.to(campaignId).emit(WS.TOKEN_MOVED, {
-              tokenId: outcome.token.id,
-              pos_x: outcome.token.pos_x,
-              pos_y: outcome.token.pos_y,
-              pos_z: outcome.token.pos_z,
-              position_space: outcome.token.position_space,
-              updated_at: outcome.token.updated_at,
-              worldMovement: {
+          // Diffusion partagée (lib/tokenMovementEmitter.js) : même message pour tout déplacement exécuté
+          // en combat. `worldMovement` n'est évalué que si le token a réellement bougé (result.plan existe).
+          emitExecutedTokenMovement(io, campaignId, {
+            battlemapId: moveToken.battlemap_id,
+            outcome,
+            movedKind: 'combat-movement',
+            worldMovement: outcome?.moved
+              ? {
                 kind: 'combat-resolution',
                 pathId: outcome.result.plan.pathId,
                 spentM: outcome.result.plan.spentM,
@@ -456,8 +438,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
                 worldChanged,
                 replanned: true,
                 effectEvents: outcome.effectEvents,
-              },
-            })
+              }
+              : null,
+          })
+          if (outcome?.moved) {
             // moveToken (pas l'outer `token`, pilote) — sous peine de corrompre son propre état pour
             // le reste de ce handler avec la position du drone.
             Object.assign(moveToken, outcome.token)

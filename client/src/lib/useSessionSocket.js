@@ -7,6 +7,8 @@ import { useCharacterStore } from '../stores/characterStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { useCampaignStore } from '../stores/campaignStore'
 
+let systemNoticeSeq = 0
+
 export function useSessionSocket() {
   const socket = useSocket()
   const { setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, triggerCriticalEffect } = useSessionStore()
@@ -53,9 +55,12 @@ export function useSessionSocket() {
     // Notice système combat (ex. COM29 dual-wield dégradé) — clé i18n résolue ici pour rester
     // cohérent avec la langue active du client (même mécanisme que les messages join/leave
     // ci-dessus). Événement dédié shared/events.js — plus un détournement de CHAT_MESSAGE.
+    // Le magasin déduplique par id (sessionStore.addMessage) : `clé + timestamp` ne suffit pas — deux notices
+    // de même clé produites dans la même milliseconde (ex. deux drones inéligibles pour le même motif) en
+    // perdaient une en silence. Compteur local de réception : jamais de collision.
     const onCombatSystemNotice = (payload) => {
       addMessage({
-        id: `sys-${payload.i18nKey}-${payload.timestamp}`, system: true,
+        id: `sys-${payload.i18nKey}-${payload.timestamp}-${systemNoticeSeq++}`, system: true,
         text: t(payload.i18nKey, payload.params),
         time: new Date(payload.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })

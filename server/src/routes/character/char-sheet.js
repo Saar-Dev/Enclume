@@ -67,6 +67,7 @@ import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
+import { listInterceptionLinks, addInterceptionLink, removeInterceptionLink } from '../../services/droneInterceptionLinksService.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
@@ -1911,6 +1912,38 @@ router.post('/:characterId/drone/programs', async (req, res, next) => {
     }
 
     res.status(201).json({ program: enriched })
+  } catch (err) { next(err) }
+})
+
+// ── Protection (drone d'interception) — liens drone → personnages protégés ───────────────────────────
+// docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.7. Même garde que les programmes du drone (GM ou propriétaire).
+// Règles de validation : service (droneInterceptionLinksService) → noyau pur (shared/droneInterception.js).
+
+// GET /:characterId/drone/interception-targets — { protected, candidates }
+router.get('/:characterId/drone/interception-targets', async (req, res, next) => {
+  try {
+    if (req.character.type !== 'drone') throw new AppError(400, 'Only a drone has interception targets')
+    res.json(await listInterceptionLinks(req.character))
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/drone/interception-targets — { protected_character_id }
+router.post('/:characterId/drone/interception-targets', async (req, res, next) => {
+  try {
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
+    const { protected_character_id } = req.body
+    if (!protected_character_id) throw new AppError(400, 'protected_character_id requis')
+    const target = await addInterceptionLink(req.character, protected_character_id)
+    res.status(201).json({ target })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/drone/interception-targets/:protectedId
+router.delete('/:characterId/drone/interception-targets/:protectedId', async (req, res, next) => {
+  try {
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
+    await removeInterceptionLink(req.character.id, req.params.protectedId)
+    res.status(204).end()
   } catch (err) { next(err) }
 })
 

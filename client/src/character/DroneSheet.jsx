@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import api from '../lib/api.js'
+import DroneProtectionSection from './DroneProtectionSection.jsx'
 
 const toRoman = n => (['I','II','III','IV','V','VI','VII','VIII'][n - 1] ?? '—')
 
@@ -130,7 +131,7 @@ function IntegritySection({ characterId, drone, isGm, onDroneUpdate }) {
 const PROGRAM_CATEGORIES = [
   'detection', 'ami_ennemi', 'armement_distance', 'armement_contact', 'esquive',
   'securite', 'offensif', 'contre_attaque', 'rempart',
-  'pilotage', 'analyse', 'medical', 'communication', 'specialise',
+  'pilotage', 'interception', 'analyse', 'medical', 'communication', 'specialise',
 ]
 
 // Groupes d'affichage pour le select catalogue uniquement.
@@ -142,6 +143,7 @@ const DISPLAY_GROUPS = [
   { key: 'esquive',          categories: ['esquive'] },
   { key: 'duel_ordinateurs', categories: ['securite', 'offensif', 'contre_attaque', 'rempart'] },
   { key: 'pilotage',         categories: ['pilotage'] },
+  { key: 'interception',     categories: ['interception'] },
   { key: 'analyse',          categories: ['analyse'] },
   { key: 'medical',          categories: ['medical'] },
   { key: 'communication',    categories: ['communication'] },
@@ -415,6 +417,19 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
           programs={programs}
           isGm={canEdit}
           onProgramsUpdate={onProgramsUpdate}
+        />
+      </section>
+
+      {/* Protection (drone d'interception) */}
+      <section>
+        <h4 style={{ fontSize: '10px', color: '#5b8dee', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px', fontWeight: '600' }}>
+          {t('drone.sectionProtection')}
+        </h4>
+        <DroneProtectionSection
+          characterId={characterId}
+          drone={drone}
+          programs={programs}
+          canEdit={canEdit}
         />
       </section>
 

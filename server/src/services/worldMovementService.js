@@ -213,6 +213,12 @@ export async function planBattlemapTokenMovement({
   destination,
   authorizedBudgetM,
   actorProfile = {},
+  // Arrivée « au plus court parmi les nœuds qui vérifient ce prédicat », en alternative à `destination`
+  // (planWorldPath, docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.3-2). Planification pure, n'exécute rien.
+  destinationPredicate = null,
+  // Le décor (entités) ne compte pas comme occupant : seuls les tokens bloquent une case. Réservé aux
+  // acteurs qui se glissent entre les objets (drone d'interposition, décision Saar 2026-09-24).
+  ignoreEntityOccupants = false,
 } = {}) {
   const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId: battlemap.id })
   const currentBattlemap = elevatorRuntime.battlemap
@@ -222,7 +228,8 @@ export async function planBattlemapTokenMovement({
   const runtimeContext = await loadBattlemapRuntimeContext(currentBattlemap)
   const snapshot = runtimeContext.snapshot
   const graph = getBattlemapNavigationGraph(currentBattlemap, actorProfile, runtimeContext)
-  const occupants = await loadBattlemapDynamicOccupants(currentBattlemap.id)
+  const allOccupants = await loadBattlemapDynamicOccupants(currentBattlemap.id)
+  const occupants = ignoreEntityOccupants ? allOccupants.filter(o => o.kind !== 'entity') : allOccupants
   const result = planWorldPath({
     snapshot,
     graph,
@@ -233,6 +240,7 @@ export async function planBattlemapTokenMovement({
     occupants,
     excludeOccupantIds: [currentToken.id],
     pathId: randomUUID(),
+    destinationPredicate,
   })
   const elevatorMeta = Object.freeze({
     changed: elevatorRuntime.changed,
@@ -254,6 +262,7 @@ export async function executeBattlemapTokenMovement({
   destination,
   authorizedBudgetM,
   actorProfile = {},
+  ignoreEntityOccupants = false, // voir planBattlemapTokenMovement
 } = {}) {
   return db.transaction(async trx => {
     let battlemap = await trx('battlemaps').where({ id: battlemapId }).forUpdate().first()
@@ -297,7 +306,7 @@ export async function executeBattlemapTokenMovement({
       to: destination,
       budgetM: authorizedBudgetM,
       actorProfile,
-      occupants: dynamicOccupantsFromRows(tokens, entities),
+      occupants: dynamicOccupantsFromRows(tokens, ignoreEntityOccupants ? [] : entities),
       excludeOccupantIds: [token.id],
       pathId: randomUUID(),
     })
