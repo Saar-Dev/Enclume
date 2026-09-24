@@ -5,7 +5,7 @@ import {
   TOKEN_STATUS_REGISTRY, TOKEN_STATUS_CATEGORY_COLORS, findTokenStatus,
   MANUAL_TOGGLE_STATUS_CODES, PANEL_STATUSES, DECLARATION_BLOCKING_STATUS_CODES,
   DEFENSELESS_STATUS_CODES, COMBAT_END_CLEARED_STATUS_CODES, GM_ONLY_STATUS_CODES,
-  canEditTokenStatus, DEATH_STATUS_CODES,
+  canEditTokenStatus, DEATH_STATUS_CODES, DEATH_INCOMPATIBLE_STATUS_CODES,
 } from './tokenStatusRegistry.js'
 import { ENVIRONMENTAL_HAZARD_REGISTRY } from './environmentalHazardRegistry.js'
 
@@ -151,4 +151,22 @@ test('isDeath : `dead` seul fait du token un cadavre (lu par deathStateService, 
   assert.deepEqual(DEATH_STATUS_CODES, ['dead'])
   assert.equal(findTokenStatus('dead').isDeath, true)
   for (const entry of TOKEN_STATUS_REGISTRY.filter(e => e.code !== 'dead')) assert.equal(entry.isDeath, undefined)
+})
+
+test('incompatibleWithDeath : 8 états de corps vivant interdits sur un cadavre, les 8 autres (processus/saisie) autorisés', () => {
+  assert.deepEqual(trie(DEATH_INCOMPATIBLE_STATUS_CODES), trie([
+    'restrained', 'off_balance', 'stunned', 'unconscious', 'asphyxia', 'blinded', 'hypothermia', 'evanoui',
+  ]))
+  const autorises = ['burning', 'acid', 'irradiated', 'grappled', 'electrocuted', 'infected', 'poisoned', 'decompression']
+  for (const code of autorises) assert.equal(DEATH_INCOMPATIBLE_STATUS_CODES.includes(code), false, code)
+  assert.equal(DEATH_INCOMPATIBLE_STATUS_CODES.includes('dead'), false) // `dead` n'est pas incompatible avec lui-même
+})
+
+test('canEditTokenStatus — sur un cadavre : le MJ reste libre, le joueur ne pose pas un état de corps vivant', () => {
+  const joueur = { isOwner: true, playersEditStatuses: true, targetIsDead: true }
+  assert.equal(canEditTokenStatus('stunned', { isGm: true, targetIsDead: true }), true)   // MJ libre
+  assert.equal(canEditTokenStatus('stunned', joueur), false)                              // interdit au joueur
+  assert.equal(canEditTokenStatus('restrained', joueur), false)
+  assert.equal(canEditTokenStatus('grappled', joueur), true)                              // compatible : règle habituelle
+  assert.equal(canEditTokenStatus('stunned', { ...joueur, targetIsDead: false }), true)   // vivant : inchangé
 })

@@ -352,6 +352,11 @@ Deux concepts que le RAW distingue :
   - **Lot 1e — CODÉ (2026-09-24, en attente des tests Saar).** Propriété `isDeath` du registre (`DEATH_STATUS_CODES`),
     `deathStateService.js:isCharacterDead`, `resolveChanceRecipientCharacterId` reçoit `campaignId` (2ᵉ paramètre, 3
     appelants mis à jour) et renvoie `null` pour un cadavre. 4 tests d'intégration + 1 test de registre.
+  - **Lot 1f — CODÉ (2026-09-24, en attente des tests Saar).** `incompatibleWithDeath` (8 codes) +
+    `DEATH_INCOMPATIBLE_STATUS_CODES` ; `isTokenDead` ; barrière `applyStunWithDuration` (`gmOverride` pour
+    `COMBAT_APPLY_STUN`) ; Choc coupé dans `resolveTargetHit` ; `applyDeathConsequences` (appelée par la bascule
+    `dead`) ; `canEditTokenStatus` + `targetIsDead` ; prop `statusEffectsMode` du panneau. 4 tests d'intégration + 2 tests
+    de registre.
   - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
     à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
     catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.

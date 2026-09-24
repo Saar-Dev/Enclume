@@ -701,7 +701,8 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
     }
     try {
       const combatSt = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-      await statusService.applyStunWithDuration(io, db, campaignId, tokenId, outcome, duration, combatSt?.current_turn ?? 1)
+      // gmOverride : action MANUELLE du MJ, jamais bornée par la règle « un cadavre n'est pas étourdi » (Lot 1f).
+      await statusService.applyStunWithDuration(io, db, campaignId, tokenId, outcome, duration, combatSt?.current_turn ?? 1, { gmOverride: true })
       console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} duration:${duration} campaign:${campaignId}`)
     } catch (err) {
       console.error('[WS] COMBAT_APPLY_STUN error:', err.message)

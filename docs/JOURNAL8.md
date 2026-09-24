@@ -8357,3 +8357,29 @@ Modèle : « immunités aux états » de dnd5e / PF2e (la cible reste visée, se
 `node --env-file=.env --test server/src/lib/deathStateService.test.mjs`). **Non testé** : ces tests en base ; le
 scénario en jeu (grenade sur un mort : plus d'esquive ni de Chance, il prend les dégâts ; blessure grave sur un mort :
 pas de fenêtre de réduction). **Données** : aucune migration. **Retour arrière** : `git revert` du commit applicable.
+
+---
+
+## Session (Dev) — 2026-09-24 — Lot 1f : un cadavre ne reçoit pas d'état de corps vivant
+
+**Origine** : log du test de Saar — un tir sur le token mort a lancé le test de Choc puis `applyStunWithDuration …
+stunned duration:3` sur lui. **Décisions de Saar** (RAW muet sur le cadavre) : INTERDITS = Entravé, Déséquilibré,
+Étourdi, Inconscient, Asphyxie, Aveuglé, Hypothermie, Évanoui ; AUTORISÉS = Enflammé, Corrodé, Irradié, Saisi,
+Électrocuté, Infecté, Empoisonné, Décompression (« le corps reste là et prend des blessures ») ; test de Choc ET
+durée d'étourdissement coupés ; **le MJ reste libre** ; à la mort, tous les états interdits sont retirés.
+
+**Conception** (modèle « immunités aux états » dnd5e/PF2e : la cible reste visée, seul l'effet n'est pas appliqué) :
+propriété de registre `incompatibleWithDeath` (ensemble dérivé) ; `isTokenDead`/`isCharacterDead`
+(`deathStateService.js`, niveau personnage, mode `enforced`) ; barrière dans `applyStunWithDuration` (SEUL écrivain
+automatique d'étourdi/inconscient/évanoui — vérifié par lecture de tous les `status_code` écrits) avec option
+`gmOverride` pour `COMBAT_APPLY_STUN` ; Choc coupé dans `resolveTargetHit` (seul site de `resolveShockTest`) ;
+`applyDeathConsequences` (purge des états interdits sur tous les tokens du personnage + `combat_pending` 'stun'),
+appelée par la bascule `dead` de `socketToken.js` ; `canEditTokenStatus` reçoit `targetIsDead` (serveur + aperçu du
+panneau, prop `statusEffectsMode`). Le formulaire d'hypothermie/danger du MJ n'est pas borné (MJ libre).
+
+**Testé** : `node --check` (tous fichiers) ; imports ESM sans cycle ; `node --test 'shared/**/*.test.mjs'` 674/674 ;
+ESLint client (0 erreur, avertissements préexistants de SessionPage) ; `npm run build` client OK ; 4 tests
+d'intégration ajoutés à `deathStateService.test.mjs` (8 au total) — **lancés par Saar sur sa base locale : 8/8**
+(`node --env-file=.env --test server/src/lib/deathStateService.test.mjs`). **Non testé** : le scénario en jeu (tir sur un mort : blessure sans Choc ni étourdissement ; marquer « Mort » un token étourdi : statut
+retiré ; joueur sur son token mort : états interdits grisés). **Données** : aucune migration. **Retour arrière** :
+`git revert` du commit applicable. **Limite connue** : choix d'étourdissement déjà ouvert chez un joueur à la mort.

@@ -907,6 +907,7 @@ function SessionContent({ campaignId }) {
             socket={socket}
             campaignId={campaignId}
             playersEditStatuses={campaign?.settings?.players_edit_statuses ?? true}
+            statusEffectsMode={statusEffectsMode}
             onClose={() => setStatusPanel(null)}
           />
         )

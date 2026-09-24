@@ -6,7 +6,7 @@ import AimedLocationPicker from './AimedLocationPicker.jsx'
 import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environmentalHazardPresets.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
-import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
+import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, DEATH_STATUS_CODES, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
 import { ENVIRONMENTAL_HAZARD_REGISTRY, findHazardRegistryEntry } from '../../../shared/environmentalHazardRegistry.js'
 
 const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
@@ -41,6 +41,8 @@ const CHRONIC_HAZARD_CODES = new Set(['hypothermia'])
 //   campaignId  — id de la campagne (routes REST des dangers environnementaux)
 //   playersEditStatuses — option de campagne `players_edit_statuses` : le propriétaire non-MJ peut-il
 //                 basculer les statuts de son token (défaut true)
+//   statusEffectsMode — option de campagne `status_effects_mode` ; la règle « un cadavre n'a pas d'état de
+//                 corps vivant » (aperçu, le serveur reste l'autorité) ne vaut qu'en 'enforced'
 //   onClose     — callback fermeture
 export default function TokenStatusPanel({
   x, y,
@@ -52,6 +54,7 @@ export default function TokenStatusPanel({
   socket,
   campaignId,
   playersEditStatuses = true,
+  statusEffectsMode = 'enforced',
   onClose,
 }) {
   const { t } = useTranslation()
@@ -88,7 +91,9 @@ export default function TokenStatusPanel({
   const canToggle = isGm || (isOwner && playersEditStatuses)
   // Droit sur UN statut : règle unique partagée avec le serveur (`gmOnly` = MJ seul, sinon option de
   // campagne). `canToggle` ne sert plus qu'à la légende « Lecture seule » (aucun droit du tout).
-  const canEdit = (code) => canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })
+  // Aperçu de la règle du serveur : sur un token mort, le propriétaire non-MJ ne pose pas un état de corps vivant.
+  const targetIsDead = statusEffectsMode === 'enforced' && statuses.some(code => DEATH_STATUS_CODES.includes(code))
+  const canEdit = (code) => canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses, targetIsDead })
 
   // Fermeture click-dehors / Échap
   useEffect(() => {

@@ -1,3 +1,13 @@
+## v250 — 2026-09-24 — Un mort n'est plus étourdi, inconscient, entravé…
+
+### Combat
+- [fix] Un personnage « Mort » ne reçoit plus d'état de corps vivant : Entravé, Déséquilibré, Étourdi, Inconscient,
+  Asphyxie, Aveuglé, Hypothermie, Évanoui. Les coups qu'il reçoit lui infligent toujours des blessures, mais sans test de
+  Choc ni durée d'étourdissement. Les états qui agissent sur le corps restent possibles (Enflammé, Corrodé, Irradié,
+  Saisi, Électrocuté, Infecté, Empoisonné, Décompression).
+- [add] Quand un token est marqué « Mort », ses états de corps vivant en cours sont retirés automatiquement.
+- Le MJ reste libre de poser ce qu'il veut à la main ; un joueur ne peut pas poser ces états sur son token mort.
+
 ## v249 — 2026-09-24 — Un mort n'a plus de fenêtre de Chance
 
 ### Combat

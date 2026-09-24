@@ -5,6 +5,8 @@ import { WS }                   from '../../../shared/events.js'
 import { getCampaignSettings }  from './campaignSettingsService.js'
 import { calcSeuils }           from '../../../shared/polarisUtils.js'
 import { AppError }             from './AppError.js'
+import { DEATH_INCOMPATIBLE_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
+import { isTokenDead }          from './deathStateService.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).
@@ -27,10 +29,17 @@ export async function emitTokenStatusUpdated(io, db, campaignId, tokenId) {
 // déclaré hors combat, où aucun `current_turn` ne progresse jamais (confirmé Saar : comportement
 // voulu, badge sans expiration hors combat, retrait manuel MJ) — `stunUntil` devient alors `null`
 // (jusqu'à retrait manuel) plutôt qu'une valeur de Tour qui ne serait jamais atteinte.
-export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome, stunDuration, currentTurn, { statusCode: statusCodeOverride } = {}) {
+// Lot 1f — un CADAVRE ne reçoit aucun de ces états (étourdi/inconscient/évanoui sont `incompatibleWithDeath`,
+// shared/tokenStatusRegistry.js) : refus, sans rien écrire ni effacer. `gmOverride: true` = action MANUELLE du MJ
+// (COMBAT_APPLY_STUN), toujours libre. Tout autre appelant (Choc, Fatigue, froid) est AUTOMATIQUE : borné.
+export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome, stunDuration, currentTurn, { statusCode: statusCodeOverride, gmOverride = false } = {}) {
   const stunUntil    = currentTurn != null ? currentTurn + stunDuration : null
   const statusCode   = statusCodeOverride ?? (outcome === 'inconscient' ? 'unconscious' : 'stunned')
   try {
+    if (!gmOverride && await isTokenDead(db, campaignId, tokenId)) {
+      console.log(`[DBG] applyStunWithDuration — token:${tokenId} est un cadavre : statut ${statusCode} non posé`)
+      return
+    }
     await db.transaction(async trx => {
       await trx('token_statuses')
         .where({ token_id: tokenId })
@@ -44,6 +53,35 @@ export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome
     console.error('[statusService] applyStunWithDuration error:', err.message)
   }
   console.log(`[statusService] applyStunWithDuration — token:${tokenId} outcome:${outcome} statusCode:${statusCode} duration:${stunDuration} until_turn:${stunUntil}`)
+}
+
+// ─── applyDeathConsequences (Lot 1f) ──────────────────────────────────────────
+// À appeler quand un personnage DEVIENT un cadavre (bascule MJ `dead` aujourd'hui ; blessure « Mort » au Lot 2) :
+// retire de TOUS ses tokens les états `incompatibleWithDeath` (un mort n'est ni étourdi ni inconscient…) et
+// l'étourdissement EN ATTENTE (`combat_pending` 'stun' : D6 de durée pas encore lancé). Ne retire JAMAIS un
+// état compatible (feu, acide, poison…). Mode 'enforced' seulement, comme toute règle de mort. Le MJ peut ensuite
+// reposer ce qu'il veut à la main. Retourne les ids de tokens modifiés (déjà diffusés).
+export async function applyDeathConsequences(io, db, campaignId, characterId) {
+  const settings = await getCampaignSettings(db, campaignId)
+  if (settings.status_effects_mode !== 'enforced' || !characterId) return []
+  const tokenIds = await resolveCharacterTokens(db, campaignId, characterId)
+  if (tokenIds.length === 0) return []
+
+  const removed = await db('token_statuses')
+    .whereIn('token_id', tokenIds)
+    .whereIn('status_code', DEATH_INCOMPATIBLE_STATUS_CODES)
+    .delete()
+    .returning(['token_id', 'status_code'])
+  const pendingRemoved = await db('combat_pending')
+    .where({ campaign_id: campaignId, type: 'stun' })
+    .whereIn('token_id', tokenIds)
+    .delete()
+    .returning('token_id')
+
+  const touched = [...new Set([...removed.map(r => r.token_id), ...pendingRemoved.map(r => r.token_id)])]
+  for (const tokenId of touched) await emitTokenStatusUpdated(io, db, campaignId, tokenId)
+  console.log(`[DBG] applyDeathConsequences — personnage:${characterId} : ${removed.length} statut(s) retiré(s) [${removed.map(r => r.status_code).join(', ')}], ${pendingRemoved.length} étourdissement(s) en attente supprimé(s)`)
+  return touched
 }
 
 // ─── resolveShockTest ─────────────────────────────────────────────────────────

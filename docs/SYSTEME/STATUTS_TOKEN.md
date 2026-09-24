@@ -35,11 +35,12 @@ depuis la base sans changer ses consommateurs.
 | `defenseless` | la cible ne peut pas se défendre activement (DEF5) | `socketCombatHelpers.js` (`isTargetDefenseless`) |
 | `clearedAtCombatEnd` | retiré à la fin du combat | `socketCombatState.js` |
 | `isDeath` | le statut fait du token un cadavre : cible qui prend des blessures mais sans esquive ni Chance (`isCharacterDead`) | `deathStateService.js` → `exoPilotService.js` (`resolveChanceRecipientCharacterId`) |
+| `incompatibleWithDeath` | état d'un corps qui fonctionne : ne se pose pas sur un cadavre, retiré à la mort | `statusService.js` (`applyStunWithDuration`, `applyDeathConsequences`), `canEditTokenStatus` (joueur) |
 | `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` (dangers, froid, `dead`) | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
 
 Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STATUS_CODES`, `PANEL_STATUSES`,
 `DECLARATION_BLOCKING_STATUS_CODES`, `DEFENSELESS_STATUS_CODES`, `COMBAT_END_CLEARED_STATUS_CODES`.
-`GM_ONLY_STATUS_CODES` et `DEATH_STATUS_CODES` complètent la liste. `findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`,
+`GM_ONLY_STATUS_CODES`, `DEATH_STATUS_CODES` et `DEATH_INCOMPATIBLE_STATUS_CODES` complètent la liste. `findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`,
 jamais une erreur.
 
 **Droits** — `canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })` est l'**unique** règle, appelée
@@ -75,6 +76,21 @@ l'exo OU son pilote mort. Lecture au niveau du PERSONNAGE (la Chance vit sur la 
 gravité (`woundService.js`), Catastrophe de défense au contact (`socketCombatHelpers.js`). Non couverts (le mort n'agit
 plus, lot 1c) : les Chances de l'ACTEUR (Test d'attaque, manœuvre d'exo, interaction d'entité).
 
+**Cadavre et statuts (Lot 1f)** — INTERDITS sur un mort (8, `incompatibleWithDeath`) : Entravé, Déséquilibré, Étourdi,
+Inconscient, Asphyxie, Aveuglé, Hypothermie, Évanoui (états d'un corps qui fonctionne) ; AUTORISÉS : Enflammé, Corrodé,
+Irradié, Saisi, Électrocuté, Infecté, Empoisonné, Décompression (processus qui agissent sur un corps, ou saisie).
+Quatre mécanismes, tous en mode `enforced` : (1) **barrière automatique** — `applyStunWithDuration` (seul écrivain
+automatique d'étourdi/inconscient/évanoui : Choc, Fatigue, froid) refuse sur un cadavre sans rien écrire ni effacer ;
+(2) **Choc coupé** — `resolveTargetHit` (`damageService.js`, seul site de tirage) ne lance ni test de Choc ni D6 de
+durée pour un cadavre : la blessure est appliquée, `shockResult` reste `null` ; (3) **purge à la mort** —
+`applyDeathConsequences(io, db, campaignId, characterId)` retire les états interdits de tous les tokens du personnage
+et l'étourdissement en attente (`combat_pending`), appelée par la bascule `dead` (et par le Lot 2 pour la blessure
+« Mort ») ; (4) **droits** — `canEditTokenStatus(…, { targetIsDead })` refuse un état interdit au joueur
+propriétaire d'un token mort. **Le MJ reste libre** : bascule manuelle, formulaires danger/froid et
+`COMBAT_APPLY_STUN` (option `gmOverride`) ne sont jamais refusés. Limite connue : un choix d'étourdissement déjà
+ouvert chez un joueur au moment de la mort reste affiché (sa confirmation est ignorée, la ligne `combat_pending` a
+disparu).
+
 ## 3. Invariants
 
 1. Une propriété de statut se lit dans le registre, **jamais** par un littéral `'stunned'`/`'unconscious'`
@@ -104,7 +120,7 @@ Fatigue seulement). Le test `tokenStatusRegistry.test.mjs` exige icône SVG et c
 statut affiché au panneau ou bloquant — `evanoui` n'en fait pas partie, un futur statut oui.
 Limites connues : `TokenStatusBadges` n'affiche que 3 badges au-delà de 4 statuts (un `dead` tardif peut ne
 pas se voir sur le token) ; le message de refus dit « vous êtes mort/étourdi/inconscient » même quand le MJ
-déclare pour un PNJ ; un token mort qui porte encore un danger (`burning`…) continue d'en subir les ticks.
+déclare pour un PNJ ; un token mort qui porte un danger (`burning`…) en subit encore les ticks — VOULU depuis le Lot 1f (le cadavre continue de prendre des blessures).
 
 Documents associés : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` ; `MODING.md` (statuts de mods) ;
 `INFORMATIQUE.md` (`iem_survival`) ; `COMBAT_FLUX.md` (gardes STUN2/DEF5).

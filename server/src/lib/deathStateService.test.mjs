@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { isCharacterDead } from './deathStateService.js'
+import { isCharacterDead, isTokenDead } from './deathStateService.js'
+import { applyStunWithDuration, applyDeathConsequences } from './statusService.js'
 import { resolveChanceRecipientCharacterId } from './exoPilotService.js'
 
 // Lancement (depuis la racine du projet) : node --env-file=.env --test server/src/lib/deathStateService.test.mjs
@@ -33,8 +34,9 @@ async function createFixture(types) {
     chars.push({ character, token })
   }
   const cleanup = async () => {
-    const tokenIds = chars.map(c => c.token.id)
     const characterIds = chars.map(c => c.character.id)
+    const tokenIds = await db('tokens').where({ battlemap_id: battlemap.id }).pluck('id') // y compris les tokens ajoutés par un test
+    await db('combat_pending').where({ campaign_id: campaign.id }).del()
     await db('token_statuses').whereIn('token_id', tokenIds).del()
     await db('tokens').whereIn('id', tokenIds).del()
     await db('exo_sheet').whereIn('character_id', characterIds).del()
@@ -43,7 +45,7 @@ async function createFixture(types) {
     await db('campaigns').where({ id: campaign.id }).del()
     await db('users').where({ id: gm.id }).del()
   }
-  return { campaign, chars, cleanup }
+  return { campaign, battlemap, chars, cleanup }
 }
 
 const setStatus = (tokenId, statusCode) => db('token_statuses').insert({ token_id: tokenId, status_code: statusCode })
@@ -102,5 +104,79 @@ test('resolveChanceRecipientCharacterId — exo : le pilote reçoit la Chance ; 
 
     await setStatus(exo.token.id, 'dead')                                                                     // exo morte
     assert.equal(await resolveChanceRecipientCharacterId(db, fx.campaign.id, exo.character.id, 'exo'), null)
+  } finally { await fx.cleanup() }
+})
+
+// ─── Lot 1f — un cadavre ne reçoit pas d'état de corps vivant ───────────────────────────────────────
+const io = { to: () => ({ emit: () => {} }) }
+const statusCodes = async (tokenId) =>
+  (await db('token_statuses').where({ token_id: tokenId }).pluck('status_code')).sort()
+
+test('isTokenDead — lecture au niveau du personnage ; token sans personnage jamais mort', { skip }, async () => {
+  const fx = await createFixture(['pj'])
+  try {
+    const [{ character, token }] = fx.chars
+    const [second] = await db('tokens').insert({ battlemap_id: fx.battlemap.id, character_id: character.id, label: 'T-bis' }).returning('*')
+    const [orphan] = await db('tokens').insert({ battlemap_id: fx.battlemap.id, label: 'sans-personnage' }).returning('*')
+    assert.equal(await isTokenDead(db, fx.campaign.id, second.id), false)
+    await setStatus(token.id, 'dead')
+    assert.equal(await isTokenDead(db, fx.campaign.id, second.id), true)   // le 2ᵉ token du même personnage
+    assert.equal(await isTokenDead(db, fx.campaign.id, orphan.id), false)
+  } finally { await fx.cleanup() }
+})
+
+test('applyStunWithDuration — vivant : posé ; cadavre : refusé sans rien effacer ; gmOverride : posé ; icon_only : posé', { skip }, async () => {
+  const fx = await createFixture(['pj', 'pj'])
+  try {
+    const [alive, dead] = fx.chars
+    await applyStunWithDuration(io, db, fx.campaign.id, alive.token.id, 'etourdi', 3, 1)
+    assert.deepEqual(await statusCodes(alive.token.id), ['stunned'])
+
+    await setStatus(dead.token.id, 'dead')
+    await applyStunWithDuration(io, db, fx.campaign.id, dead.token.id, 'etourdi', 3, 1)
+    await applyStunWithDuration(io, db, fx.campaign.id, dead.token.id, 'inconscient', 3, 1)
+    await applyStunWithDuration(io, db, fx.campaign.id, dead.token.id, 'x', 3, 1, { statusCode: 'evanoui' })
+    assert.deepEqual(await statusCodes(dead.token.id), ['dead'])            // rien posé, rien effacé
+
+    await applyStunWithDuration(io, db, fx.campaign.id, dead.token.id, 'etourdi', 3, 1, { gmOverride: true })
+    assert.deepEqual(await statusCodes(dead.token.id), ['dead', 'stunned']) // MJ libre
+
+    await db('token_statuses').where({ token_id: dead.token.id, status_code: 'stunned' }).del()
+    await setMode(fx.campaign.id, 'icon_only')                              // règle inactive hors 'enforced'
+    await applyStunWithDuration(io, db, fx.campaign.id, dead.token.id, 'etourdi', 3, 1)
+    assert.deepEqual(await statusCodes(dead.token.id), ['dead', 'stunned'])
+  } finally { await fx.cleanup() }
+})
+
+test('applyDeathConsequences — retire les 8 états interdits (tous les tokens du personnage) + étourdissement en attente, garde les autres', { skip }, async () => {
+  const fx = await createFixture(['pj', 'pj'])
+  try {
+    const [target, other] = fx.chars
+    const [second] = await db('tokens').insert({ battlemap_id: fx.battlemap.id, character_id: target.character.id, label: 'T-bis' }).returning('*')
+    const interdits = ['restrained', 'off_balance', 'stunned', 'unconscious', 'asphyxia', 'blinded', 'hypothermia', 'evanoui']
+    const autorises = ['burning', 'acid', 'irradiated', 'grappled', 'electrocuted', 'infected', 'poisoned', 'decompression', 'dead']
+    for (const code of [...interdits, ...autorises]) await setStatus(target.token.id, code)
+    await setStatus(second.id, 'blinded')
+    await setStatus(other.token.id, 'stunned')                              // autre personnage : intact
+    await db('combat_pending').insert({ campaign_id: fx.campaign.id, token_id: target.token.id, type: 'stun', payload: {} })
+
+    const touched = await applyDeathConsequences(io, db, fx.campaign.id, target.character.id)
+
+    assert.deepEqual(await statusCodes(target.token.id), [...autorises].sort())
+    assert.deepEqual(await statusCodes(second.id), [])
+    assert.deepEqual(await statusCodes(other.token.id), ['stunned'])
+    assert.equal((await db('combat_pending').where({ campaign_id: fx.campaign.id }).select('id')).length, 0)
+    assert.deepEqual([...touched].sort(), [target.token.id, second.id].sort())
+  } finally { await fx.cleanup() }
+})
+
+test("applyDeathConsequences — mode icon_only : rien n'est retiré", { skip }, async () => {
+  const fx = await createFixture(['pj'])
+  try {
+    const [{ character, token }] = fx.chars
+    await setStatus(token.id, 'stunned')
+    await setMode(fx.campaign.id, 'icon_only')
+    assert.deepEqual(await applyDeathConsequences(io, db, fx.campaign.id, character.id), [])
+    assert.deepEqual(await statusCodes(token.id), ['stunned'])
   } finally { await fx.cleanup() }
 })

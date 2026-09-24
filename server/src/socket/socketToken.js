@@ -1,9 +1,10 @@
 import { WS } from '../../../shared/events.js'
-import { MANUAL_TOGGLE_STATUS_CODES, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
+import { MANUAL_TOGGLE_STATUS_CODES, canEditTokenStatus, findTokenStatus } from '../../../shared/tokenStatusRegistry.js'
 import db from '../db/knex.js'
 import { checkTokenOwnership } from '../lib/socketUtils.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import * as statusService from '../lib/statusService.js'
+import { isCharacterDead } from '../lib/deathStateService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 
@@ -158,7 +159,10 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
       const playersEditStatuses = isGm
         ? true
         : (await getCampaignSettings(db, campaignId)).players_edit_statuses
-      if (!canEditTokenStatus(statusCode, { isGm, isOwner, playersEditStatuses })) return
+      // Lot 1f — sur un cadavre, un joueur ne pose pas un état de corps vivant (le MJ reste libre). Lu seulement
+      // pour un non-MJ ; `isCharacterDead` porte lui-même la condition « mode enforced ».
+      const targetIsDead = isGm ? false : await isCharacterDead(db, campaignId, token.character_id)
+      if (!canEditTokenStatus(statusCode, { isGm, isOwner, playersEditStatuses, targetIsDead })) return
 
       // burning/acid/decompression retirés (docs/PLAN_FATIGUE_DOMMAGES.md §9 Lot 3, increment G) — ce
       // toggle nu (aucune `data`) écraserait silencieusement la formule/localisation posée par
@@ -180,6 +184,11 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
           status_code: statusCode,
           applied_by: user.id,
         })
+      }
+
+      // Lot 1f — un personnage qui DEVIENT un cadavre perd ses états de corps vivant (purge, mode enforced).
+      if (!existing && findTokenStatus(statusCode)?.isDeath) {
+        await statusService.applyDeathConsequences(io, db, campaignId, token.character_id)
       }
 
       await statusService.emitTokenStatusUpdated(io, db, campaignId, tokenId)

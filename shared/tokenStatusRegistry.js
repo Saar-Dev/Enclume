@@ -26,6 +26,11 @@
 // - isDeath  : le statut fait du token un CADAVRE (`dead`). Un cadavre reste une cible et continue de prendre
 //   des blessures (technologies de résurrection), mais ne peut ni esquiver ni dépenser de Chance — lu par
 //   `deathStateService.js` (`isCharacterDead`), jamais par un littéral `'dead'`.
+// - incompatibleWithDeath : état d'un corps qui FONCTIONNE (bouger, garder l'équilibre, être conscient,
+//   respirer, voir, thermorégulation) : ne se pose pas sur un cadavre et se retire à la mort. Les processus
+//   qui AGISSENT sur un corps (feu, acide, radiation, électricité, poison, infection, décompression) ou le
+//   retiennent (saisi) restent possibles. Décision Saar 2026-09-24. Le MJ reste libre (bascule manuelle,
+//   formulaires danger/froid, étourdissement manuel) : seuls les effets AUTOMATIQUES et les joueurs sont bornés.
 // - gmOnly   : seul le MJ le pose ou le retire, quelle que soit l'option de campagne
 //   `players_edit_statuses` (dangers, froid : formulaires MJ ; `dead` : mort et résurrection ne sont pas
 //   une auto-déclaration de joueur). Règle unique : canEditTokenStatus ci-dessous, serveur ET client.
@@ -45,21 +50,21 @@ export const TOKEN_STATUS_CATEGORY_COLORS = {
 
 export const TOKEN_STATUS_REGISTRY = [
   { code: 'grappled',      category: 'entrave',   manualToggle: true,  inPanel: true },
-  { code: 'restrained',    category: 'entrave',   manualToggle: true,  inPanel: true },
-  { code: 'off_balance',   category: 'entrave',   manualToggle: true,  inPanel: true },
+  { code: 'restrained',    category: 'entrave',   manualToggle: true,  inPanel: true, incompatibleWithDeath: true },
+  { code: 'off_balance',   category: 'entrave',   manualToggle: true,  inPanel: true, incompatibleWithDeath: true },
   { code: 'burning',       category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'acid',          category: 'dot',                             inPanel: true, gmOnly: true },
-  { code: 'asphyxia',      category: 'dot',       manualToggle: true,  inPanel: true },
+  { code: 'asphyxia',      category: 'dot',       manualToggle: true,  inPanel: true, incompatibleWithDeath: true },
   { code: 'decompression', category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'electrocuted',  category: 'dot',       manualToggle: true,  inPanel: true },
   { code: 'stunned',       category: 'sens',      manualToggle: true,  inPanel: true,
-    blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true },
+    blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true, incompatibleWithDeath: true },
   { code: 'unconscious',   category: 'sens',      manualToggle: true,  inPanel: true,
-    blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true },
+    blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true, incompatibleWithDeath: true },
   { code: 'blinded',       category: 'sens',      manualToggle: true,  inPanel: true,
-    defenseless: true },
-  { code: 'evanoui',       category: 'sens' },
-  { code: 'hypothermia',   category: 'chronique', manualToggle: true,  inPanel: true, gmOnly: true },
+    defenseless: true, incompatibleWithDeath: true },
+  { code: 'evanoui',       category: 'sens',                                   incompatibleWithDeath: true },
+  { code: 'hypothermia',   category: 'chronique', manualToggle: true,  inPanel: true, gmOnly: true, incompatibleWithDeath: true },
   { code: 'infected',      category: 'chronique', manualToggle: true,  inPanel: true },
   { code: 'poisoned',      category: 'chronique', manualToggle: true,  inPanel: true },
   { code: 'irradiated',    category: 'chronique', manualToggle: true,  inPanel: true },
@@ -86,17 +91,20 @@ export const DEFENSELESS_STATUS_CODES = codesWhere('defenseless')
 export const COMBAT_END_CLEARED_STATUS_CODES = codesWhere('clearedAtCombatEnd')
 export const GM_ONLY_STATUS_CODES = codesWhere('gmOnly')
 export const DEATH_STATUS_CODES = codesWhere('isDeath')
+export const DEATH_INCOMPATIBLE_STATUS_CODES = codesWhere('incompatibleWithDeath')
 
 // Règle de droits UNIQUE pour poser/retirer un statut de token — appelée par le serveur
 // (socketToken.js, autorité) et par le panneau client (aperçu) : jamais deux implémentations.
 // - code hors registre → refus pour tous (le registre est l'autorité du vocabulaire) ;
-// - MJ → autorisé ; `gmOnly` → MJ seul ; sinon propriétaire du token si l'option de campagne
-//   `players_edit_statuses` (défaut true) l'autorise.
+// - MJ → autorisé (toujours libre, même sur un cadavre) ; `gmOnly` → MJ seul ; sur un cadavre
+//   (`targetIsDead`), un statut `incompatibleWithDeath` est refusé au joueur ; sinon propriétaire du token si
+//   l'option de campagne `players_edit_statuses` (défaut true) l'autorise.
 // Ne dit rien de la MANIÈRE de poser (bascule nue ou formulaire) : voir `manualToggle`.
-export function canEditTokenStatus(code, { isGm = false, isOwner = false, playersEditStatuses = true } = {}) {
+export function canEditTokenStatus(code, { isGm = false, isOwner = false, playersEditStatuses = true, targetIsDead = false } = {}) {
   const entry = findTokenStatus(code)
   if (!entry) return false
   if (isGm) return true
   if (entry.gmOnly) return false
+  if (targetIsDead && entry.incompatibleWithDeath) return false
   return isOwner && playersEditStatuses
 }

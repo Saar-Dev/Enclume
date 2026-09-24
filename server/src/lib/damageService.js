@@ -8,6 +8,7 @@ import { getMutationEffects }               from '../services/mutationService.js
 import { getAdvantages }                    from '../services/advantageService.js'
 import * as woundService                    from './woundService.js'
 import * as statusService                   from './statusService.js'
+import { isCharacterDead }                  from './deathStateService.js'
 import { LOC_TABLE, SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import {
   parseAmmoEffects, resolveDmgEffect, resolveChocFormula,
@@ -474,7 +475,14 @@ export async function resolveTargetHit(io, db, campaignId, {
   })
   if (woundResult) finalSeverity = woundResult.finalSeverity
 
-  if (chocTotal !== null) {
+  // Lot 1f — un CADAVRE prend la blessure (il reste là et en accumule) mais ne fait ni Test de Choc ni, donc,
+  // de D6 de durée d'étourdissement : `shockResult` reste null, comme pour une blessure sans Choc. Seul site
+  // de tirage du Choc (`resolveShockTest`) : couper ici évite les 7 appels `applyStun` en aval.
+  const targetIsDead = (chocTotal !== null || woundResult) ? await isCharacterDead(db, campaignId, characterIdCible) : false
+
+  if (targetIsDead) {
+    console.log(`[DBG] resolveTargetHit — cible morte (personnage:${characterIdCible}) : blessure appliquée, test de Choc ignoré`)
+  } else if (chocTotal !== null) {
     const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocTotal)
     shockResult = await statusService.resolveShockTest({
       finalSeverity: combinedSeverity, localisation, is_lethal: combinedIsLethal,

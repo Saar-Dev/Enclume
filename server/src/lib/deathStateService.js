@@ -28,3 +28,10 @@ export async function isCharacterDead(db, campaignId, characterId) {
     .first('ts.id')
   return !!row
 }
+
+// Même question à partir d'un TOKEN (le statut est posé sur un token, la mort se lit au niveau du personnage).
+// Un token sans personnage (accessoire, entité) n'est jamais un cadavre.
+export async function isTokenDead(db, campaignId, tokenId) {
+  const token = await db('tokens').where({ id: tokenId }).select('character_id').first()
+  return isCharacterDead(db, campaignId, token?.character_id ?? null)
+}
