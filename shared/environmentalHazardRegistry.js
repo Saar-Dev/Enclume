@@ -21,8 +21,12 @@
 //   l'exposition, RAW : "la Localisation exposée" — variable selon quelle partie du corps a touché la
 //   flamme/l'acide), ou restent aléatoires (1D20 natif) si le MJ ne l'a pas renseignée — voir
 //   environmentalHazardService.js pour la précédence registre > instance > aléatoire.
+// - lingersOnClear : le retrait peut laisser le danger persister quelques Tours (RAW Acide : « l'effet de
+//   l'acide peut alors persister pendant 1D6 Tour(s) » en sortie de zone). Seul l'Acide. Autorité unique :
+//   le serveur (clearHazard) refuse `linger` sans ce drapeau ; le panneau MJ n'ouvre un formulaire de retrait
+//   que pour ces dangers (un retrait sans choix est direct, sans fenêtre de confirmation).
 export const ENVIRONMENTAL_HAZARD_REGISTRY = [
-  { code: 'acid',          forcedLocation: null },
+  { code: 'acid',          forcedLocation: null, lingersOnClear: true },
   { code: 'decompression', forcedLocation: 'corps' },
   { code: 'burning',       forcedLocation: null },
 ]

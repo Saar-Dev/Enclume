@@ -99,7 +99,7 @@ export async function clearHazard(io, db, campaignId, tokenId, hazardCode, { lin
     await statusService.clearModStatus(io, db, campaignId, tokenId, hazardCode, { throwOnFailure: true })
     return
   }
-  if (hazardCode !== 'acid') {
+  if (!findHazardRegistryEntry(hazardCode)?.lingersOnClear) {
     throw new AppError(400, `linger réservé à "acid" (RAW), pas applicable à "${hazardCode}"`)
   }
   const expiresAtTurn = await turnsFromNow(db, campaignId, '1d6')

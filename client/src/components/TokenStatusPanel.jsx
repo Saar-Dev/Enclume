@@ -7,6 +7,7 @@ import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environm
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
 import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
+import { ENVIRONMENTAL_HAZARD_REGISTRY, findHazardRegistryEntry } from '../../../shared/environmentalHazardRegistry.js'
 
 const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
 
@@ -19,7 +20,7 @@ const CATEGORY_COLOR = TOKEN_STATUS_CATEGORY_COLORS
 // Dangers environnementaux Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9) — MJ uniquement, passent par
 // exposeToHazard/clearHazard (formule/localisations), jamais le toggle nu WS.TOKEN_STATUS_TOGGLE
 // (écraserait silencieusement la `data` posée — voir server/src/socket/socketToken.js).
-const HAZARD_CODES = new Set(['burning', 'acid', 'decompression'])
+const HAZARD_CODES = new Set(ENVIRONMENTAL_HAZARD_REGISTRY.map(entry => entry.code))
 
 // Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — scope personnage (character_id), pas token/Tour
 // comme les dangers ci-dessus : sous-formulaire dédié (tranche/paliers extrêmes/humide), jamais un
@@ -114,7 +115,13 @@ export default function TokenStatusPanel({
   const handleToggle = (statusCode) => {
     if (!canEdit(statusCode)) return // dangers, froid, mort : `gmOnly` dans le registre
     if (HAZARD_CODES.has(statusCode)) {
-      openHazardForm(statusCode, statuses.includes(statusCode) ? 'clear' : 'expose')
+      if (!statuses.includes(statusCode)) {
+        openHazardForm(statusCode, 'expose') // pose : formule/localisations à renseigner
+      } else if (findHazardRegistryEntry(statusCode)?.lingersOnClear) {
+        openHazardForm(statusCode, 'clear') // Acide : vrai choix de règle (persiste 1D6 Tours)
+      } else {
+        clearHazardNow(statusCode, false) // Feu/Décompression : retrait direct, sans fenêtre
+      }
       return
     }
     if (CHRONIC_HAZARD_CODES.has(statusCode)) {
@@ -191,12 +198,13 @@ export default function TokenStatusPanel({
     }
   }
 
-  const submitClear = async () => {
+  // Retrait d'un danger — appelé directement (Feu/Décompression) ou par le formulaire (Acide, `linger`).
+  const clearHazardNow = async (code, lingerAfter) => {
     if (sending) return
     setSending(true)
     try {
-      await api.post(`/campaigns/${campaignId}/tokens/${token.id}/hazards/${hazardForm.code}/clear`, {
-        linger: hazardForm.code === 'acid' ? linger : false,
+      await api.post(`/campaigns/${campaignId}/tokens/${token.id}/hazards/${code}/clear`, {
+        linger: findHazardRegistryEntry(code)?.lingersOnClear ? lingerAfter : false,
       })
       setHazardForm(null)
     } catch (err) {
@@ -205,6 +213,8 @@ export default function TokenStatusPanel({
       setSending(false)
     }
   }
+
+  const submitClear = () => clearHazardNow(hazardForm.code, linger)
 
   const openFallForm = () => {
     setFallForm(true)

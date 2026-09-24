@@ -1,3 +1,10 @@
+## v247 — 2026-09-24 — Retrait direct de « Enflammé » et « Décompression »
+
+### Combat
+- [fix] Retirer le statut « Enflammé » ou « Décompression » d'un token se fait désormais en un clic, sans fenêtre
+  de confirmation. « Corrodé » (choix « persiste 1D6 tours ») et « Hypothermie » (modification de la tranche de
+  froid) gardent leur fenêtre, qui porte un vrai choix.
+
 ## v246 — 2026-09-24 — Nouveau statut « Mort »
 
 ### Combat

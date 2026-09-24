@@ -8214,3 +8214,25 @@ clé i18n pour tout statut affiché ou bloquant**) ; `node --test 'shared/**/*.t
 `node --check` ; ESLint client (0 erreur, 1 avertissement préexistant) ; `npm run build` client OK.
 **Non testé** : scénario en jeu — à faire par Saar. **Données** : aucune migration. **Retour arrière** :
 `git revert` du commit applicable.
+
+---
+
+## Session (Dev) — 2026-09-24 — Retrait direct des dangers Feu/Décompression (plus de fenêtre de confirmation)
+
+**Origine** : retour de Saar au test de « Mort » — une fenêtre de confirmation apparaissait « parfois » au retrait
+d'un statut. [VÉRIFIÉ code] Elle ne concernait que les 4 statuts à formulaire dédié (`TokenStatusPanel.jsx`) :
+Enflammé, Décompression (simple bouton « Retirer » = pure confirmation), Corrodé (vrai choix de règle : « persiste
+1D6 Tour(s) après retrait ») et Hypothermie (le formulaire sert aussi à *modifier* la tranche de froid d'une
+exposition en cours).
+
+**Décision** : supprimer les confirmations **pures** seulement. Feu et Décompression se retirent en un clic.
+Acide garde son formulaire (choix RAW) ; Hypothermie garde le sien (modification de tranche) — non retirés sans
+accord de Saar. **Autorité unique** : nouveau drapeau `lingersOnClear` (Acide) dans
+`shared/environmentalHazardRegistry.js`, lu par le serveur (`clearHazard` refuse `linger` sans lui, à la place du
+littéral `'acid'`) ET par le panneau (formulaire seulement si le danger a un choix). `HAZARD_CODES` du panneau
+est désormais dérivé de ce registre (constaté (iii) du Lot 1a, résolu).
+
+**Testé** : `node --test` registre des dangers + registre des statuts (19/19), `node --check` service, ESLint
+client (0 problème), `npm run build` OK, `git diff --check`. **Non testé** : scénario en jeu (retirer Enflammé et
+Décompression en un clic ; Corrodé ouvre toujours son formulaire ; Hypothermie inchangée) — à faire par Saar.
+**Données** : aucune. **Retour arrière** : `git revert` du commit applicable.
