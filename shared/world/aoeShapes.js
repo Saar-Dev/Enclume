@@ -65,6 +65,14 @@ export function normalizeAoeShape(input) {
     const angleDeg = positiveNumber(input.angleDeg, 'angleDeg')
     if (angleDeg > 360) throw new RangeError('angleDeg ne peut pas dépasser 360')
     normalized.angleDeg = angleDeg
+    // Apex VIRTUEL reculé derrière l'origine (tronc de cône : gerbe de fusil à pompe, largeur non nulle au
+    // canon). Absent/0 = cône classique issu de l'origine. L'origine reste le tireur : distances et paliers
+    // se mesurent toujours depuis elle, seul le test latéral utilise l'apex.
+    if (input.apexBackM != null) {
+      const apexBackM = finiteNumber(input.apexBackM, 'apexBackM')
+      if (apexBackM < 0) throw new RangeError('apexBackM ne peut pas être négatif')
+      if (apexBackM > 0) normalized.apexBackM = apexBackM
+    }
   }
   if (shape === 'ray') {
     normalized.directionDeg = normalizeDirectionDeg(input.directionDeg)
@@ -89,6 +97,15 @@ export function isPointInAoeShape(point, aoeShape, metrics) {
   if (aoeShape.shape === 'cone') {
     if (distanceWorld > amplitudeWorld + EPSILON) return false
     if (distanceWorld <= EPSILON) return true // l'origine elle-même est toujours dans son propre cône
+    if (aoeShape.apexBackM > 0) {
+      // Tronc de cône : demi-largeur = (avance + recul d'apex) · tan(angle/2), jamais derrière l'origine.
+      const rad = aoeShape.directionDeg * Math.PI / 180
+      const alongWorld = dx * Math.cos(rad) + dz * Math.sin(rad)
+      if (alongWorld < -EPSILON) return false
+      const lateralWorld = -dx * Math.sin(rad) + dz * Math.cos(rad)
+      const apexBackWorld = metersToWorldUnits(aoeShape.apexBackM, metrics)
+      return Math.abs(lateralWorld) <= (alongWorld + apexBackWorld) * Math.tan(aoeShape.angleDeg * Math.PI / 360) + EPSILON
+    }
     const bearing = bearingDeg(aoeShape.origin, target)
     if (bearing === null) return true
     return angularDifferenceDeg(bearing, aoeShape.directionDeg) <= aoeShape.angleDeg / 2 + EPSILON

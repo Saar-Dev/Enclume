@@ -28,14 +28,18 @@ import { rollSignedDie } from '../diceParser.js'
 import { computeAssaultRawDamage } from '../combatAttackRoll.js'
 import { normalizeAoeShape, isPointInAoeShape } from '../../../../shared/world/aoeShapes.js'
 import { dbPositionToWorldPoint } from '../../../../shared/world/worldMetrics.js'
-import { resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND } from '../../../../shared/combatRange.js'
+import { resolveShotgunSpread, resolveShotgunCone } from '../../../../shared/combatRange.js'
 
-// ─── Ciblage — passe 2, PURE (déplacée verbatim depuis socketCombatAoe.js, segment 0d) ─────────────
+// ─── Ciblage — PURE ─────────────────────────────────────────────────────────────────────────────────
 //
-// Les candidats viennent d'une requête bulk sur le couloir le PLUS LARGE possible (sur-inclusif) ;
-// chacun est ici retesté contre la largeur RÉELLE de son propre palier RAW — deux passes géométriques
-// plutôt qu'une approximation d'un cône à largeur continue (PLAN_AOE.md §4/§6.2bis). Fonction pure :
-// aucune DB, aucune émission — testable avec des candidats fixtures.
+// Forme = tronc de cône RAW dérivé par `resolveShotgunCone` (shared/combatRange.js : apex virtuel derrière
+// le tireur, 1 m de large à 2 m, 3 m dès 14 m), plafonné à la largeur maximale du tableau : le cône est la
+// forme de la requête spatiale (`buildShape`), le couloir plafonné n'en retire que ce qui dépasse 3 m
+// au-delà de `capStartM`. L'origine de la forme reste le tireur (distances et paliers mesurés depuis lui). Même autorité que l'aperçu client
+// (`aoePreviewShape.js`) — décision Saar 2026-09-24 qui remplace les « deux passes par largeur de
+// palier » de PLAN_AOE.md v9 (JOURNAL8). Le PALIER (dé de dégâts, Chance) reste décidé par la distance
+// (`resolveShotgunSpread`), jamais par la forme. Fonction pure : aucune DB, aucune émission —
+// testable avec des candidats fixtures.
 //
 // Exclusions :
 //  - le tireur lui-même : jamais une cible normale de sa propre gerbe. Auparavant exclu SEULEMENT par
@@ -46,23 +50,34 @@ import { resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND } from '../../../../shared
 //  - bout portant (< 2 m) : RAW « le tir ne touche qu'une cible », pas de zone géométrique — une
 //    action de zone déclarée sans cible unique ne touche donc personne à cette distance en v1.
 export function filterShotgunHitTargets({ visibilityTargets, shooterTokenId, origin, directionDeg, refRange, amplitudeM, metrics }) {
+  const cone = requireShotgunCone(refRange)
+  const coneShape = normalizeAoeShape({ shape: 'cone', origin, directionDeg, amplitudeM, angleDeg: cone.angleDeg, apexBackM: cone.apexBackM })
+  const cappedShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg, amplitudeM, widthM: cone.capWidthM })
   const hitTargets = []
   for (const candidate of visibilityTargets) {
     if (candidate.tokenId === shooterTokenId) continue
     if (!candidate.hasLineOfSight) continue
     const range = resolveShotgunSpread(candidate.distanceToOriginM, refRange)
     if (range.status !== 'ok' || range.spread.widthM === null) continue
-    const narrowShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg, amplitudeM, widthM: range.spread.widthM })
-    if (!isPointInAoeShape(candidate.position, narrowShape, metrics)) continue
+    if (!isPointInAoeShape(candidate.position, coneShape, metrics)) continue
+    if (!isPointInAoeShape(candidate.position, cappedShape, metrics)) continue
     hitTargets.push({ ...candidate, band: range.band, spread: range.spread })
   }
   return hitTargets
 }
 
+// Pas de repli silencieux : une portée sans pente exploitable est un profil d'arme invalide — l'appelant
+// (`buildShape`, dans le try/catch du tronc) le remonte comme « profil de zone d'effet invalide ».
+function requireShotgunCone(refRange) {
+  const cone = resolveShotgunCone(refRange)
+  if (!cone) throw new RangeError(`fusil à pompe : cône non dérivable de ref_range "${refRange}"`)
+  return cone
+}
+
 function buildShape(ctx) {
   const origin = dbPositionToWorldPoint(ctx.shooterToken)
-  const widthM = Math.max(...Object.values(SHOTGUN_SPREAD_BY_BAND).map(band => band.widthM || 0))
-  return normalizeAoeShape({ shape: 'ray', origin, directionDeg: ctx.aoe.direction, amplitudeM: ctx.amplitudeM, widthM })
+  const { angleDeg, apexBackM } = requireShotgunCone(ctx.weapon.ref_range)
+  return normalizeAoeShape({ shape: 'cone', origin, directionDeg: ctx.aoe.direction, amplitudeM: ctx.amplitudeM, angleDeg, apexBackM })
 }
 
 function filterTargets(ctx, visibilityTargets) {

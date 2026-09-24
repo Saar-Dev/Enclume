@@ -1,3 +1,11 @@
+## v252 — 2026-09-24 — Fusil à pompe : la gerbe est un vrai cône
+
+### Combat
+- [fix] La zone du Klauss est maintenant un **cône** qui s'élargit avec la distance (1 m de large à 2 m, 3 m à partir de 14 m),
+  comme le décrit le livre. L'aperçu à l'écran montre exactement la zone où les cibles sont touchées. Les dégâts, eux, baissent
+  toujours avec la portée. La zone déborde un peu du tableau du livre en fin de palier (jusqu'à 1 m de plus) plutôt que de manquer
+  des cibles de près.
+
 ## v250 — 2026-09-24 — Un mort n'est plus étourdi, inconscient, entravé…
 
 ### Combat

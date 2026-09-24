@@ -2,12 +2,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  buildShotgunSpreadSegments, projectShotgunSpreadCorners,
+  buildShotgunConeSpan, projectShotgunConeTriangles,
   buildConeSpan, projectConeTriangles,
   buildCircleSpan, projectCircleFan,
   buildGrenadeBlastRings, projectRingQuads, projectCircleOutline,
 } from './aoePreviewShape.js'
 import { GRENADE_FRAG_BANDS } from '../../../shared/combatRange.js'
+import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
+import { normalizeAoeShape, isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js) —
 // même constante que shared/combatRange.test.mjs, pas une valeur inventée.
@@ -16,69 +18,73 @@ const KLAUSS_REF_RANGE = '2/7/14/28 (35)'
 const LANCE_FLAMMES_REF_RANGE = '3/7/15/30 (40)'
 const LANCE_FLAMMES_ANGLE = 30
 
-test('Klauss : 4 segments (bout_portant exclu), largeurs et bornes RAW exactes', () => {
-  const segments = buildShotgunSpreadSegments(KLAUSS_REF_RANGE)
-  assert.deepEqual(segments, [
-    { band: 'courte',  fromM: 2,  toM: 7,  widthM: 1 },
-    { band: 'moyenne', fromM: 7,  toM: 14, widthM: 2 },
-    { band: 'longue',  fromM: 14, toM: 28, widthM: 3 },
-    { band: 'extreme', fromM: 28, toM: 35, widthM: 3 },
-  ])
-})
-
-test('segments contigus : le toM d\'une bande est le fromM de la suivante (aucun trou ni recouvrement)', () => {
-  const segments = buildShotgunSpreadSegments(KLAUSS_REF_RANGE)
-  for (let i = 1; i < segments.length; i++) {
-    assert.equal(segments[i].fromM, segments[i - 1].toM)
-  }
-})
-
-test('portée non exploitable : tableau vide, jamais une exception', () => {
-  assert.deepEqual(buildShotgunSpreadSegments(null), [])
-  assert.deepEqual(buildShotgunSpreadSegments(''), [])
-  assert.deepEqual(buildShotgunSpreadSegments('pas un nombre'), [])
-})
-
-test('portée unique (dégénérée) : un seul segment extrême couvrant toute la portée', () => {
-  const segments = buildShotgunSpreadSegments('100')
-  assert.deepEqual(segments, [
-    { band: 'extreme', fromM: 0, toM: 100, widthM: 3 },
-  ])
-})
-
-// ─── projectShotgunSpreadCorners — même convention que shared/world/aoeShapes.js (0° = +X, trigo → +Z) ──
-
 function assertPointClose(actual, expected, label) {
   assert.ok(Math.abs(actual.x - expected.x) < 1e-9, `${label}.x : ${actual.x} ≈ ${expected.x}`)
   assert.ok(Math.abs(actual.z - expected.z) < 1e-9, `${label}.z : ${actual.z} ≈ ${expected.z}`)
 }
 
-test('projectShotgunSpreadCorners — 0° : couloir aligné sur +X, largeur sur Z', () => {
-  const [quad] = projectShotgunSpreadCorners(
-    [{ band: 'courte', fromM: 2, toM: 7, widthM: 1 }],
-    { x: 0, z: 0 }, 0,
-  )
-  assert.equal(quad.band, 'courte')
-  assertPointClose(quad.corners[0], { x: 2, z: 0.5 },  'corner0')
-  assertPointClose(quad.corners[1], { x: 2, z: -0.5 }, 'corner1')
-  assertPointClose(quad.corners[2], { x: 7, z: -0.5 }, 'corner2')
-  assertPointClose(quad.corners[3], { x: 7, z: 0.5 },  'corner3')
+// ─── Tronc de cône fusil à pompe — forme unique lue aussi par le serveur (resolveShotgunCone) ────────
+
+test('buildShotgunConeSpan — Klauss : tronc de cône dérivé du tableau (1 m à 2 m, plafond 3 m dès 14 m, portée 35 m)', () => {
+  const span = buildShotgunConeSpan(KLAUSS_REF_RANGE)
+  assert.equal(span.startM, 2)
+  assert.equal(span.capStartM, 14)
+  assert.equal(span.capWidthM, 3)
+  assert.equal(span.lengthM, 35)
+  assert.ok(Math.abs(span.apexBackM - 4) < 1e-9)
 })
 
-test('projectShotgunSpreadCorners — 90° : couloir aligné sur +Z, largeur sur X, origine décalée', () => {
-  const [quad] = projectShotgunSpreadCorners(
-    [{ band: 'courte', fromM: 2, toM: 7, widthM: 1 }],
-    { x: 10, z: 10 }, 90,
-  )
-  assertPointClose(quad.corners[0], { x: 9.5,  z: 12 }, 'corner0')
-  assertPointClose(quad.corners[1], { x: 10.5, z: 12 }, 'corner1')
-  assertPointClose(quad.corners[2], { x: 10.5, z: 17 }, 'corner2')
-  assertPointClose(quad.corners[3], { x: 9.5,  z: 17 }, 'corner3')
+test('buildShotgunConeSpan — portée non exploitable : null, jamais une exception', () => {
+  assert.equal(buildShotgunConeSpan(null), null)
+  assert.equal(buildShotgunConeSpan(''), null)
+  assert.equal(buildShotgunConeSpan('100'), null)
 })
 
-test('projectShotgunSpreadCorners — un quad par segment, même ordre', () => {
-  const quads = projectShotgunSpreadCorners(buildShotgunSpreadSegments(KLAUSS_REF_RANGE), { x: 0, z: 0 }, 0)
-  assert.deepEqual(quads.map(q => q.band), ['courte', 'moyenne', 'longue', 'extreme'])
+test('projectShotgunConeTriangles — 0° : trapèze 1 m à 2 m → 3 m à 14 m, puis couloir 3 m jusqu’à 35 m (4 triangles)', () => {
+  const tris = projectShotgunConeTriangles(buildShotgunConeSpan(KLAUSS_REF_RANGE), { x: 0, z: 0 }, 0)
+  assert.equal(tris.length, 4)
+  const has = (triangles, expected) => triangles.flatMap(t => t.corners).some(c => Math.abs(c.x - expected.x) < 1e-9 && Math.abs(c.z - expected.z) < 1e-9)
+  const trapeze = tris.slice(0, 2)
+  for (const e of [{ x: 2, z: 0.5 }, { x: 2, z: -0.5 }, { x: 14, z: 1.5 }, { x: 14, z: -1.5 }]) assert.ok(has(trapeze, e), `trapèze ${e.x},${e.z}`)
+  const couloir = tris.slice(2)
+  for (const e of [{ x: 14, z: 1.5 }, { x: 14, z: -1.5 }, { x: 35, z: 1.5 }, { x: 35, z: -1.5 }]) assert.ok(has(couloir, e), `couloir ${e.x},${e.z}`)
+})
+
+test('projectShotgunConeTriangles — 90° et origine décalée : mêmes distances, axes tournés', () => {
+  const tris = projectShotgunConeTriangles(buildShotgunConeSpan(KLAUSS_REF_RANGE), { x: 10, z: 10 }, 90)
+  const corners = tris.flatMap(t => t.corners)
+  // bord proche (2 m devant, ±0,5 m) : (10 ∓ 0,5, 12) ; bord de plafond (14 m, ±1,5 m) : (10 ∓ 1,5, 24)
+  for (const e of [{ x: 9.5, z: 12 }, { x: 10.5, z: 12 }, { x: 8.5, z: 24 }, { x: 11.5, z: 24 }]) {
+    assert.ok(corners.some(c => Math.abs(c.x - e.x) < 1e-9 && Math.abs(c.z - e.z) < 1e-9), `coin ${e.x},${e.z}`)
+  }
+})
+
+test('projectShotgunConeTriangles — span null : tableau vide, jamais une exception', () => {
+  assert.deepEqual(projectShotgunConeTriangles(null, { x: 0, z: 0 }, 0), [])
+})
+
+// Parité aperçu ↔ résolution : le défaut d'origine était un aperçu différent de ce que le serveur touchait.
+// Les bords du polygone dessiné doivent être la frontière exacte du test de touche (tronc de cône ∩ couloir
+// plafonné), tel que le compose server/src/lib/aoeMechanisms/shotgunSpread.js.
+test('parité — juste dedans / juste dehors du bord dessiné : touché / non touché par le serveur', () => {
+  const M = createWorldMetrics({ metersPerCell: 1, worldUnitsPerCell: 1 })
+  const span = buildShotgunConeSpan(KLAUSS_REF_RANGE)
+  const origin = { x: 0, y: 0, z: 0 }
+  const cone = normalizeAoeShape({ shape: 'cone', origin, directionDeg: 0, amplitudeM: span.lengthM, angleDeg: span.angleDeg, apexBackM: span.apexBackM })
+  const capped = normalizeAoeShape({ shape: 'ray', origin, directionDeg: 0, amplitudeM: span.lengthM, widthM: span.capWidthM })
+  const hit = pt => isPointInAoeShape(pt, cone, M) && isPointInAoeShape(pt, capped, M)
+  const halfAt = d => Math.min((d + span.apexBackM) * Math.tan(span.angleDeg * Math.PI / 360), span.capWidthM / 2)
+  for (const d of [2.5, 4, 7, 10, 14, 25, 34]) {
+    const edge = halfAt(d)
+    assert.ok(hit({ x: d, y: 0, z: edge - 0.01 }), `d=${d} juste dedans`)
+    assert.ok(!hit({ x: d, y: 0, z: edge + 0.01 }), `d=${d} juste dehors`)
+  }
+  // les coins dessinés (0°) sont sur la frontière : légèrement rentrés vers le tireur → touchés
+  for (const tri of projectShotgunConeTriangles(span, { x: 0, z: 0 }, 0)) {
+    for (const c of tri.corners) {
+      assert.ok(hit({ x: c.x * 0.999, y: 0, z: c.z * 0.999 }), `coin ${c.x},${c.z} rentré de 0,1 % : touché`)
+    }
+  }
 })
 
 // ─── Cône lance-flammes ───────────────────────────────────────────────────────────────────────────

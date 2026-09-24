@@ -30,6 +30,36 @@ test('cône — respecte la portée ET l’angle, jamais l’un sans l’autre',
   assert.equal(isPointInAoeShape(origin, shape, metrics), true, 'l’origine est toujours dans son propre cône')
 })
 
+test('cône tronqué (apexBackM) — largeur non nulle au canon, origine et distances inchangées, jamais derrière l’origine', () => {
+  // Klauss : 1 m à 2 m, pente 1/6 → apex 4 m derrière l'origine, angle 2·atan(1/12).
+  const angleDeg = 2 * Math.atan(1 / 12) * 180 / Math.PI
+  const shape = normalizeAoeShape({ shape: 'cone', origin, amplitudeM: 35, directionDeg: 0, angleDeg, apexBackM: 4 })
+  assert.equal(shape.apexBackM, 4)
+  assert.equal(isPointInAoeShape({ x: 2, y: 0, z: 0.49 }, shape, metrics), true, '1 m de large à 2 m : ±0,5')
+  assert.equal(isPointInAoeShape({ x: 2, y: 0, z: 0.51 }, shape, metrics), false)
+  assert.equal(isPointInAoeShape({ x: 14, y: 0, z: 1.49 }, shape, metrics), true, '3 m de large à 14 m : ±1,5')
+  assert.equal(isPointInAoeShape({ x: 14, y: 0, z: 1.51 }, shape, metrics), false)
+  assert.equal(isPointInAoeShape({ x: -1, y: 0, z: 0 }, shape, metrics), false, 'derrière l’origine : exclu, même dans le prolongement du cône')
+  assert.equal(isPointInAoeShape({ x: 36, y: 0, z: 0 }, shape, metrics), false, 'portée mesurée depuis l’origine, pas depuis l’apex')
+  assert.equal(isPointInAoeShape(origin, shape, metrics), true)
+})
+
+test('cône tronqué — direction 90° : le recul d’apex suit l’axe visé', () => {
+  const angleDeg = 2 * Math.atan(1 / 12) * 180 / Math.PI
+  const shape = normalizeAoeShape({ shape: 'cone', origin, amplitudeM: 35, directionDeg: 90, angleDeg, apexBackM: 4 })
+  assert.equal(isPointInAoeShape({ x: 0.49, y: 0, z: 2 }, shape, metrics), true)
+  assert.equal(isPointInAoeShape({ x: 0.51, y: 0, z: 2 }, shape, metrics), false)
+  assert.equal(isPointInAoeShape({ x: 0, y: 0, z: -1 }, shape, metrics), false)
+})
+
+test('cône — apexBackM absent ou 0 : cône classique inchangé ; négatif ou non fini : erreur explicite', () => {
+  const classic = normalizeAoeShape({ shape: 'cone', origin, amplitudeM: 10, directionDeg: 0, angleDeg: 90, apexBackM: 0 })
+  assert.equal('apexBackM' in classic, false)
+  assert.equal(isPointInAoeShape({ x: 5, y: 0, z: 5 }, classic, metrics), true)
+  assert.throws(() => normalizeAoeShape({ shape: 'cone', origin, amplitudeM: 10, directionDeg: 0, angleDeg: 90, apexBackM: -1 }), RangeError)
+  assert.throws(() => normalizeAoeShape({ shape: 'cone', origin, amplitudeM: 10, directionDeg: 0, angleDeg: 90, apexBackM: 'x' }), TypeError)
+})
+
 test('cône à 360° — équivalent à un cercle', () => {
   const shape = normalizeAoeShape({
     shape: 'cone', origin, amplitudeM: 5, directionDeg: 0, angleDeg: 360,

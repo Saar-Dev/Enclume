@@ -11,6 +11,12 @@
 > ci-dessous décrit l'état *du fusil à pompe* au 2026-09-03 et n'a pas suivi ce refactor — s'y référer
 > pour l'intention d'architecture, pas pour « ce qui est codé ».
 >
+> **⚠️ Remplacé le 2026-09-24 (fusil à pompe)** : la « passe 3 » ci-dessous (deux passes par largeur de
+> palier) et le « cône rejeté » de v9 §2 sont **remplacés** par un tronc de cône dérivé du tableau RAW (apex virtuel derrière le tireur) et plafonné à
+> 3 m, source unique `shared/combatRange.js#resolveShotgunCone` (aperçu client et test de touche serveur).
+> Décision et calcul : `docs/JOURNAL8.md`, session « Fusil à pompe (Klauss) : la zone est un cône ». Le reste
+> de ce document (couches 1-3, contrat, persistance) est inchangé.
+>
 > Version 11 — 2026-09-03 (Claude/Saar). **Statut : étape 9 (UI de ciblage) close, confirmée par Saar
 > en session réelle.** §12 (État d'implémentation, en pied de document) tient la liste vivante de ce
 > qui est codé/testé/en attente — ne pas laisser diverger, c'est la source de vérité de l'avancement

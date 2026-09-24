@@ -23,7 +23,7 @@ import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPr
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
-import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles, buildCircleSpan, projectCircleFan, buildGrenadeBlastRings, projectRingQuads, projectCircleOutline } from '../lib/aoePreviewShape.js'
+import { buildShotgunConeSpan, projectShotgunConeTriangles, buildConeSpan, projectConeTriangles, buildCircleSpan, projectCircleFan, buildGrenadeBlastRings, projectRingQuads, projectCircleOutline } from '../lib/aoePreviewShape.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -1659,7 +1659,7 @@ function Scene({
         if (!shooter) return null
         const y = shooter.pos_z + 0.06
         const origin = { x: shooter.pos_x, z: shooter.pos_y }
-        const shape = combatAoeTargetMode.weaponAoeProfile?.shape ?? 'ray'
+        const aoeProfile = combatAoeTargetMode.weaponAoeProfile
         // Clé incluant l'angle (précision 0,1°, même granularité que le garde-fou perf de useFrame
         // ci-dessus) : force React/Three.js à recréer bufferGeometry/bufferAttribute à chaque mise à
         // jour réelle plutôt que de réutiliser l'instance existante. Nécessaire — vérifié en lisant
@@ -1671,26 +1671,19 @@ function Scene({
         // d'un `ref` + `needsUpdate` géré à la main par face) est le choix le plus sûr ici : la
         // fréquence de mise à jour est déjà cadencée par ce même garde-fou de 0,1°, jamais 60 im/s.
         const degKey = Math.round(displayDeg * 10)
-        let faces = []
-        if (shape === 'cone') {
-          const span = buildConeSpan(combatAoeTargetMode.weaponRange, combatAoeTargetMode.weaponAoeProfile?.angleDeg)
-          faces = projectConeTriangles(span, origin, displayDeg).map((tri, i) => {
-            const [a, b, c] = tri.corners
-            return { key: `aoe-cone-${i}-${degKey}`, positions: new Float32Array([a.x, y, a.z, b.x, y, b.z, c.x, y, c.z]) }
-          })
-        } else {
-          const segments = buildShotgunSpreadSegments(combatAoeTargetMode.weaponRange)
-          faces = projectShotgunSpreadCorners(segments, origin, displayDeg).map(quad => {
-            const [a, b, c, d] = quad.corners
-            return {
-              key: `aoe-preview-${quad.band}-${degKey}`,
-              positions: new Float32Array([
-                a.x, y, a.z, b.x, y, b.z, c.x, y, c.z,
-                a.x, y, a.z, c.x, y, c.z, d.x, y, d.z,
-              ]),
-            }
-          })
+        // Forme choisie par MÉCANISME (le serveur dispatche de même) : fusil à pompe = cône plafonné
+        // dérivé du tableau RAW, lance-flammes = secteur à angle fixe du profil. Un mécanisme non
+        // reconnu n'affiche rien plutôt que la forme d'un autre.
+        let triangles = []
+        if (aoeProfile?.mechanic === 'shotgun_spread') {
+          triangles = projectShotgunConeTriangles(buildShotgunConeSpan(combatAoeTargetMode.weaponRange), origin, displayDeg)
+        } else if (aoeProfile?.shape === 'cone') {
+          triangles = projectConeTriangles(buildConeSpan(combatAoeTargetMode.weaponRange, aoeProfile.angleDeg), origin, displayDeg)
         }
+        const faces = triangles.map((tri, i) => {
+          const [a, b, c] = tri.corners
+          return { key: `aoe-cone-${i}-${degKey}`, positions: new Float32Array([a.x, y, a.z, b.x, y, b.z, c.x, y, c.z]) }
+        })
         return faces.map(face => (
           <mesh key={face.key}>
             <bufferGeometry>

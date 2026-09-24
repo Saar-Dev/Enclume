@@ -1,45 +1,32 @@
 // client/src/lib/aoePreviewShape.js
 //
 // Géométrie pure de l'APERÇU client des zones d'effet — deux formes :
-//  - couloir de dispersion "fusil à pompe" (`ray`, PLAN_AOE.md §8 étape 9) : segments de bande empilés
-//    (largeur constante par palier RAW), jamais un dégradé continu — la RAW est un palier discret
-//    (1/2/3/3 m, shared/combatRange.js#SHOTGUN_SPREAD_BY_BAND) ;
+//  - tronc de cône de dispersion "fusil à pompe" (`shotgun_spread`) : trapèze depuis la limite du bout
+//    portant puis couloir plafonné à la largeur RAW maximale — la forme exacte que le serveur teste
+//    (shared/combatRange.js#resolveShotgunCone, décision Saar 2026-09-24, JOURNAL8) ;
 //  - cône "lance-flammes" (`cone`, PLAN_ARMES_SPECIALES.md §1.4 segment 1d) : un secteur angulaire
 //    (angle fixe `aoe_profile.angleDeg`, rayon = portée extrême du catalogue) — même forme que le
 //    serveur teste (shared/world/aoeShapes.js branche 'cone', `distance <= amplitude` &&
 //    `|écart d'azimut| <= angleDeg/2`), tessellé ici en éventail de triangles pour le rendu.
 //
-// Même source de vérité que le serveur des deux côtés (RANGE_BANDS/SHOTGUN_SPREAD_BY_BAND/
-// parseWeaponRangeBands / la portée du catalogue), rien de reparsé ni de réapproximé.
+// Même source de vérité que le serveur des deux côtés (resolveShotgunCone / parseWeaponRangeBands / la
+// portée du catalogue), rien de reparsé ni de réapproximé.
 //
 // Aucune dépendance Three.js : le composant appelant (Canvas3D) traduit ces sommets (plan X/Z monde)
 // en meshes positionnés sur le tireur.
 
-import { RANGE_BANDS, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands, GRENADE_FRAG_BANDS } from '../../../shared/combatRange.js'
+import { parseWeaponRangeBands, resolveShotgunCone, GRENADE_FRAG_BANDS } from '../../../shared/combatRange.js'
+
+// ─── Cône fusil à pompe (résolveur : shared/combatRange.js#resolveShotgunCone) ─────────────────────
 
 /**
  * @param {string} referenceRange  `ref_range` brut de l'arme (ex. Klauss : "2/7/14/28 (35)")
- * @returns {ReadonlyArray<{ band: string, fromM: number, toM: number, widthM: number }>}
- *   Un segment par palier RAW à zone géométrique (bout_portant exclu — RAW : "le tir ne touche qu'une
- *   cible", cf. SHOTGUN_SPREAD_BY_BAND). Tableau vide si la portée n'est pas exploitable ou dégénérée
- *   au point de ne produire aucun segment valide (jamais une exception — un aperçu manquant n'est pas
- *   une erreur bloquante, contrairement à la résolution serveur).
+ * @returns {{ angleDeg: number, apexBackM: number, startM: number, capWidthM: number, capStartM: number, lengthM: number } | null}
+ *   Le tronc de cône dérivé du tableau RAW (`resolveShotgunCone`), `null` si la portée n'est pas exploitable
+ *   (jamais une exception — un aperçu manquant n'est pas bloquant, contrairement à la résolution serveur).
  */
-export function buildShotgunSpreadSegments(referenceRange) {
-  const thresholds = parseWeaponRangeBands(referenceRange)
-  if (!thresholds) return Object.freeze([])
-
-  const segments = []
-  for (let i = 0; i < RANGE_BANDS.length; i++) {
-    const band = RANGE_BANDS[i]
-    const spread = SHOTGUN_SPREAD_BY_BAND[band]
-    if (!spread || spread.widthM == null) continue // bout_portant : cible unique, pas de zone à dessiner
-    const fromM = i === 0 ? 0 : thresholds[i - 1]
-    const toM = thresholds[i]
-    if (toM <= fromM) continue // seuils dégénérés (portée catalogue incomplète) — pas de tranche à tracer
-    segments.push(Object.freeze({ band, fromM, toM, widthM: spread.widthM }))
-  }
-  return Object.freeze(segments)
+export function buildShotgunConeSpan(referenceRange) {
+  return resolveShotgunCone(referenceRange)
 }
 
 // ─── Cône lance-flammes (PLAN_ARMES_SPECIALES.md §1.4 segment 1d) ──────────────────────────────────
@@ -63,7 +50,7 @@ export function buildConeSpan(referenceRange, angleDeg) {
 
 // projectConeTriangles — tesselle le secteur angulaire en éventail de triangles (apex = tireur, base
 // = arc à `lengthM`), dans le plan horizontal monde (X/Z), depuis une origine et une direction en
-// degrés. Même convention d'axes que projectShotgunSpreadCorners / shared/world/aoeShapes.js
+// degrés. Même convention d'axes que projectShotgunConeTriangles / shared/world/aoeShapes.js
 // (0° = +X, sens trigonométrique vers +Z). `steps` = nombre de triangles (résolution de l'arc) ;
 // 24 pour 360° max, proportionnel sinon — l'arc d'un cône de 30° n'a pas besoin de plus de ~2-3
 // facettes mais on garde une densité constante par degré, pas de cas particulier.
@@ -197,32 +184,38 @@ export function projectCircleFan(circleSpan, center, steps = 48) {
   return Object.freeze(triangles)
 }
 
-// projectShotgunSpreadCorners — place les segments dans le plan horizontal monde (X/Z), en 4 coins par
-// segment (quadrilatère), depuis une origine et une direction en degrés. Même convention que
-// shared/world/aoeShapes.js (0° = axe +X, sens trigonométrique vers +Z, `alongX=cos, alongZ=sin`,
-// perpendiculaire `(-alongZ, alongX)`) — la même formule que le côté serveur (`isPointInAoeShape`,
-// branche 'ray'), pas une réinvention : l'aperçu dessine exactement la géométrie que le serveur teste.
-// Trigonométrie pure, aucune dépendance Three.js — Canvas3D traduit ces coins (x,z) en sommets de mesh.
-export function projectShotgunSpreadCorners(segments, origin, directionDeg) {
+// projectShotgunConeTriangles — triangles du tronc de cône plafonné dans le plan horizontal monde (X/Z),
+// depuis une origine (le tireur) et une direction en degrés : un trapèze de `startM` (limite du bout
+// portant, en deçà : cible unique, pas de zone) à `capStartM` (là où la largeur atteint le plafond), puis,
+// si la portée va plus loin, un couloir de largeur constante jusqu'à `lengthM`. La demi-largeur à la
+// distance d est `(d + apexBackM) · tan(angle/2)` (l'apex est virtuel, derrière le tireur), plafonnée à
+// `capWidthM / 2`. Même convention que shared/world/aoeShapes.js (0° = +X, trigo vers +Z, perpendiculaire
+// `(-alongZ, alongX)`) : les arêtes sont exactement celles du test de touche du serveur. Seul écart avec
+// le test : le bout est plat ici, en arc de rayon `lengthM` côté serveur (≤ 3 cm à 35 m).
+// @returns {ReadonlyArray<{ corners: ReadonlyArray<{ x: number, z: number }> }>}  vide si span null.
+export function projectShotgunConeTriangles(span, origin, directionDeg) {
+  if (!span) return Object.freeze([])
+  const { angleDeg, apexBackM, startM, capWidthM, capStartM, lengthM } = span
   const rad = directionDeg * Math.PI / 180
   const alongX = Math.cos(rad)
   const alongZ = Math.sin(rad)
-  const perpX = -alongZ
-  const perpZ = alongX
-  return segments.map(seg => {
-    const halfWidth = seg.widthM / 2
-    const nearX = origin.x + alongX * seg.fromM
-    const nearZ = origin.z + alongZ * seg.fromM
-    const farX  = origin.x + alongX * seg.toM
-    const farZ  = origin.z + alongZ * seg.toM
-    return Object.freeze({
-      band: seg.band,
-      corners: Object.freeze([
-        Object.freeze({ x: nearX + perpX * halfWidth, z: nearZ + perpZ * halfWidth }),
-        Object.freeze({ x: nearX - perpX * halfWidth, z: nearZ - perpZ * halfWidth }),
-        Object.freeze({ x: farX  - perpX * halfWidth, z: farZ  - perpZ * halfWidth }),
-        Object.freeze({ x: farX  + perpX * halfWidth, z: farZ  + perpZ * halfWidth }),
-      ]),
-    })
+  const at = (alongM, lateralM) => Object.freeze({
+    x: origin.x + alongX * alongM - alongZ * lateralM,
+    z: origin.z + alongZ * alongM + alongX * lateralM,
   })
+  const halfAt = (alongM) => Math.min((alongM + apexBackM) * Math.tan(angleDeg * Math.PI / 360), capWidthM / 2)
+  const quad = (fromM, toM) => {
+    const nearLeft = at(fromM, halfAt(fromM))
+    const nearRight = at(fromM, -halfAt(fromM))
+    const farLeft = at(toM, halfAt(toM))
+    const farRight = at(toM, -halfAt(toM))
+    return [
+      Object.freeze({ corners: Object.freeze([nearLeft, nearRight, farRight]) }),
+      Object.freeze({ corners: Object.freeze([nearLeft, farRight, farLeft]) }),
+    ]
+  }
+  if (!(lengthM > startM)) return Object.freeze([])
+  const triangles = [...quad(startM, Math.min(capStartM, lengthM))]
+  if (lengthM > capStartM) triangles.push(...quad(capStartM, lengthM))
+  return Object.freeze(triangles)
 }

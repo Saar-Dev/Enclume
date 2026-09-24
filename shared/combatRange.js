@@ -88,6 +88,53 @@ export function resolveShotgunSpread(distanceM, referenceRange) {
   return Object.freeze({ ...range, spread: SHOTGUN_SPREAD_BY_BAND[range.band] })
 }
 
+// resolveShotgunCone — forme CONIQUE de la gerbe (RAW « zone d'effet de forme conique »), dérivée de la
+// table SHOTGUN_SPREAD_BY_BAND et des seuils `ref_range` de l'arme : autorité unique de la géométrie,
+// lue par le serveur (test de touche) ET par l'aperçu client — jamais un angle recopié dans le catalogue.
+//
+// Le RAW donne des largeurs par palier (1/2/3/3 m), pas une pente : aucun cône ne peut égaler un
+// escalier. Lecture retenue [HYPOTHÈSE, décision Saar 2026-09-24, JOURNAL8] : la largeur d'un palier est
+// celle atteinte à sa limite PROCHE. Une première calibration sur la limite lointaine (cône issu du
+// canon, ±0,15 m à 2 m) a été rejetée par Saar à l'aperçu : une aiguille, inutilisable de près. Le cône
+// est donc la droite qui passe par (limite proche du premier palier, sa largeur) et (limite proche du
+// premier palier au plafond, largeur plafond) — pour le Klauss (2 m, 1 m) et (14 m, 3 m) : pente 1/6, apex
+// virtuel 4 m DERRIÈRE le tireur (tronc de cône), 1 m à 2 m, 3 m dès 14 m, plafonné à 3 m au-delà. Jamais
+// plus étroit que le tableau (sauf < 0,17 m entre 7 et 8 m), au plus 1 m plus large en fin de palier (3 m contre 2 m à 14 m).
+// Un palier vide (seuils confondus, portée catalogue incomplète) n'impose aucun point.
+//
+// Retour : { angleDeg, apexBackM, startM, capWidthM, capStartM, lengthM } — ouverture totale (degrés),
+// recul de l'apex derrière le tireur (`apexBackM` de la forme `cone`, shared/world/aoeShapes.js), limite
+// proche de la zone (en deçà : bout portant, cible unique), largeur du couloir plafonné, distance où le
+// cône atteint ce plafond, portée extrême. `null` si la portée est inexploitable ou ne fixe pas deux
+// points distincts (jamais une exception : l'appelant décide).
+export function resolveShotgunCone(referenceRange) {
+  const thresholds = parseWeaponRangeBands(referenceRange)
+  if (!thresholds) return null
+  const widths = RANGE_BANDS.map(band => SHOTGUN_SPREAD_BY_BAND[band].widthM).filter(w => w != null)
+  const capWidthM = Math.max(...widths)
+  let first = null
+  let capPoint = null
+  for (let i = 1; i < RANGE_BANDS.length; i++) {
+    const widthM = SHOTGUN_SPREAD_BY_BAND[RANGE_BANDS[i]].widthM
+    if (widthM == null || !(thresholds[i] > thresholds[i - 1])) continue // palier vide : aucun point
+    const point = { distanceM: thresholds[i - 1], widthM }
+    if (!first) first = point
+    if (widthM >= capWidthM) { capPoint = point; break }
+  }
+  if (!first || !capPoint || !(capPoint.distanceM > first.distanceM) || !(capPoint.widthM > first.widthM)) return null
+  const slope = (capPoint.widthM - first.widthM) / (capPoint.distanceM - first.distanceM)
+  const apexBackM = first.widthM / slope - first.distanceM
+  if (!(apexBackM >= 0)) return null // apex devant le tireur : largeur négative au canon, forme incohérente
+  return Object.freeze({
+    angleDeg: 2 * Math.atan(slope / 2) * 180 / Math.PI,
+    apexBackM,
+    startM: first.distanceM,
+    capWidthM,
+    capStartM: capPoint.distanceM,
+    lengthM: thresholds[thresholds.length - 1],
+  })
+}
+
 // L'identification « cette arme est-elle une arme de zone (AOE) ? » a migré vers
 // `shared/combatAoe.js` (segment 0b, PLAN_ARMES_SPECIALES.md §1.6) — c'est désormais une donnée
 // catalogue (`ref_equipment.aoe_profile`), plus un Set de noms en dur ici.

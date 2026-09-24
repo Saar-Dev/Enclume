@@ -69,6 +69,8 @@ test('resolveAoeAttackRoll — le bonus de réussite critique dépend de skillMa
 // ─── filterShotgunHitTargets — passe 2 pure du ciblage fusil à pompe (segment 0d) ─────────────────
 // Klauss réel : ref_range '2/7/14/28 (35)' → bp ≤2, courte 2-7, moyenne 7-14, longue 14-28, extrême 28-35.
 // Paliers RAW (SHOTGUN_SPREAD_BY_BAND) : bp widthM null, courte 1, moyenne 2, longue/extrême 3.
+// Forme = tronc de cône dérivé (resolveShotgunCone, décision Saar 2026-09-24) : demi-largeur (d + 4)/12 (0,5 m à
+// 2 m, 0,92 m à 7 m, 1,5 m à 14 m), plafonnée à 1,5 m au-delà. Le PALIER (band, dé de dispersion) reste décidé par la distance.
 // metrics 1 unité monde = 1 m (createWorldMetrics) → coordonnées = mètres directement.
 
 const M = createWorldMetrics({ metersPerCell: 1, worldUnitsPerCell: 1 })
@@ -106,26 +108,46 @@ test('filterShotgunHitTargets — hors de portée (> 35 m) exclu', () => {
   assert.equal(out.length, 0)
 })
 
-test('filterShotgunHitTargets — derrière le tireur (x < 0) exclu par la géométrie du rayon', () => {
+test('filterShotgunHitTargets — derrière le tireur (x < 0) exclu par la géométrie du cône', () => {
   const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
     cand({ tokenId: 'a', position: { x: -5, y: 0, z: 0 }, distanceToOriginM: 5 }),
   ] })
   assert.equal(out.length, 0)
 })
 
-test('filterShotgunHitTargets — dans le couloir large mais hors de la largeur de son propre palier : exclu', () => {
-  // Palier moyenne (7-14 m) : largeur RAW 2 m → demi-largeur 1 m. z = 1,5 m est dedans le couloir
-  // grossier (3 m) mais dehors le palier réel.
+test('filterShotgunHitTargets — hors du tronc de cône exclu', () => {
+  // x = 10 : demi-largeur (10 + 4)/12 = 1,167 m. z = 1,3 est dehors, quel que soit le palier.
   const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
-    cand({ tokenId: 'a', position: { x: 10, y: 0, z: 1.5 }, distanceToOriginM: 10 }),
+    cand({ tokenId: 'a', position: { x: 10, y: 0, z: 1.3 }, distanceToOriginM: 10 }),
   ] })
   assert.equal(out.length, 0)
 })
 
-test('filterShotgunHitTargets — en-palier inclus, band + spread corrects', () => {
+test('filterShotgunHitTargets — arêtes : 2,1 m ±0,51 / 7 m ±0,917 / 10 m ±1,167 / 14 m ±1,5, juste dedans touché, juste dehors non', () => {
+  const at = (x, z) => cand({ tokenId: `${x}:${z}`, position: { x, y: 0, z }, distanceToOriginM: x })
+  const inside = filterShotgunHitTargets({ ...BASE, visibilityTargets: [at(2.1, 0.5), at(7, 0.91), at(10, 1.16), at(14, 1.49)] })
+  assert.equal(inside.length, 4)
+  const outside = filterShotgunHitTargets({ ...BASE, visibilityTargets: [at(2.1, 0.52), at(7, 0.92), at(10, 1.17), at(14, 1.51)] })
+  assert.equal(outside.length, 0)
+})
+
+test('filterShotgunHitTargets — de près (3 m) le cône couvre ±0,58 m : une cible décalée de 0,5 m est touchée', () => {
   const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
-    cand({ tokenId: 'c', position: { x: 5, y: 0, z: 0.4 }, distanceToOriginM: 5 }),   // courte (2-7), demi-largeur 0,5
-    cand({ tokenId: 'm', position: { x: 10, y: 0, z: 0.9 }, distanceToOriginM: 10 }), // moyenne (7-14), demi-largeur 1
+    cand({ tokenId: 'near', position: { x: 3, y: 0, z: 0.5 }, distanceToOriginM: 3 }),
+  ] })
+  assert.deepEqual(out.map(t => t.tokenId), ['near'])
+})
+
+test('filterShotgunHitTargets — plafond 3 m : à 30 m le cône ferait 5,7 m mais le couloir coupe à ±1,5 m', () => {
+  const at = (z) => cand({ tokenId: `z${z}`, position: { x: 30, y: 0, z }, distanceToOriginM: 30 })
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [at(1.4), at(1.6), at(-1.4), at(-1.6)] })
+  assert.deepEqual(out.map(t => t.tokenId).sort(), ['z-1.4', 'z1.4'])
+})
+
+test('filterShotgunHitTargets — dans le cône : band + spread corrects (le palier vient de la distance)', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'c', position: { x: 5, y: 0, z: 0.7 }, distanceToOriginM: 5 }),   // courte (2-7), demi-largeur cône 0,75
+    cand({ tokenId: 'm', position: { x: 10, y: 0, z: 1.1 }, distanceToOriginM: 10 }), // moyenne (7-14), demi-largeur cône 1,167
   ] })
   assert.equal(out.length, 2)
   const c = out.find(t => t.tokenId === 'c')
@@ -136,6 +158,18 @@ test('filterShotgunHitTargets — en-palier inclus, band + spread corrects', () 
   assert.equal(m.spread.damageDice, '-1D10')
   // la hauteur (y) n'intervient jamais (géométrie horizontale X/Z) — sanity
   assert.equal(typeof c.distanceToOriginM, 'number')
+})
+
+test('filterShotgunHitTargets — direction non nulle : le cône suit l’axe visé (90° = +Z)', () => {
+  const out = filterShotgunHitTargets({ ...BASE, directionDeg: 90, visibilityTargets: [
+    cand({ tokenId: 'on', position: { x: 1.1, y: 0, z: 10 }, distanceToOriginM: 10.06 }),   // écart latéral 1,1 < 1,167
+    cand({ tokenId: 'off', position: { x: 1.3, y: 0, z: 10 }, distanceToOriginM: 10.08 }),  // écart latéral 1,3 > 1,167
+  ] })
+  assert.deepEqual(out.map(t => t.tokenId), ['on'])
+})
+
+test('filterShotgunHitTargets — ref_range sans forme exploitable : erreur explicite, jamais de repli silencieux', () => {
+  assert.throws(() => filterShotgunHitTargets({ ...BASE, refRange: '100', visibilityTargets: [] }), RangeError)
 })
 
 test('filterShotgunHitTargets — aucun candidat → tableau vide, jamais un throw', () => {

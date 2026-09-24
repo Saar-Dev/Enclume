@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   parseWeaponRangeBands, resolveWeaponRangeBand, resolveMeleeReachM,
-  resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND,
+  resolveShotgunSpread, resolveShotgunCone, SHOTGUN_SPREAD_BY_BAND,
   GRENADE_FRAG_BANDS, GRENADE_FRAG_MAX_RADIUS_M, resolveGrenadeBand,
 } from './combatRange.js'
 
@@ -66,6 +66,43 @@ test('SHOTGUN_SPREAD_BY_BAND — une entrée par palier RAW, aucun trou', () => 
   for (const band of ['bout_portant', 'courte', 'moyenne', 'longue', 'extreme']) {
     assert.ok(SHOTGUN_SPREAD_BY_BAND[band], `palier manquant : ${band}`)
   }
+})
+
+// ─── resolveShotgunCone — tronc de cône RAW dérivé du tableau + ref_range (décision Saar 2026-09-24) ──
+// Calibration sur la limite PROCHE des paliers (la première, sur la limite lointaine, a été rejetée par
+// Saar à l'aperçu : ±0,15 m à 2 m). Klauss : (2 m, 1 m) et (14 m, 3 m) → pente 1/6, apex 4 m derrière le tireur.
+
+const coneWidthAt = (cone, d) => Math.min(2 * (d + cone.apexBackM) * Math.tan(cone.angleDeg * Math.PI / 360), cone.capWidthM)
+
+test('resolveShotgunCone — Klauss : 1 m à 2 m, 3 m dès 14 m, apex 4 m derrière le tireur, angle ≈ 9,53°', () => {
+  const cone = resolveShotgunCone(KLAUSS_REF_RANGE)
+  assert.equal(cone.capWidthM, 3)
+  assert.equal(cone.lengthM, 35)
+  assert.equal(cone.startM, 2)
+  assert.equal(cone.capStartM, 14)
+  assert.ok(Math.abs(cone.apexBackM - 4) < 1e-9)
+  assert.ok(Math.abs(cone.angleDeg - 2 * Math.atan(1 / 12) * 180 / Math.PI) < 1e-9)
+  assert.ok(Math.abs(cone.angleDeg - 9.53) < 0.01)
+  assert.ok(Math.abs(coneWidthAt(cone, 2) - 1) < 1e-9)
+  assert.ok(Math.abs(coneWidthAt(cone, 14) - 3) < 1e-9)
+  assert.equal(coneWidthAt(cone, 30), 3) // plafonné
+})
+
+test('resolveShotgunCone — jamais plus étroit que le tableau RAW (tolérance 0,17 m à la frontière 7 m), au plus 1 m plus large', () => {
+  const cone = resolveShotgunCone(KLAUSS_REF_RANGE)
+  for (let d = 2.01; d <= 35; d += 0.25) {
+    const table = resolveShotgunSpread(d, KLAUSS_REF_RANGE).spread.widthM
+    const width = coneWidthAt(cone, d)
+    assert.ok(width >= table - 0.17 - 1e-9, `d=${d} : ${width} ≥ ${table} - 0,17`)
+    assert.ok(width <= table + 1 + 1e-9, `d=${d} : ${width} ≤ ${table} + 1`)
+  }
+})
+
+test('resolveShotgunCone — portée inexploitable ou dégénérée : null, jamais une exception', () => {
+  assert.equal(resolveShotgunCone(null), null)
+  assert.equal(resolveShotgunCone(''), null)
+  assert.equal(resolveShotgunCone('pas un nombre'), null)
+  assert.equal(resolveShotgunCone('100'), null) // portée unique → seuils [0,0,0,0,100] : aucun point exploitable
 })
 
 // isShotgunSpreadWeapon retiré (segment 0b) — l'identification AOE est dans shared/combatAoe.js
