@@ -23,6 +23,9 @@
 //   (socketCombatResolution.js, STUN2).
 // - defenseless : la cible ne peut pas se défendre activement — DEF5 (socketCombatHelpers.js).
 // - clearedAtCombatEnd : retiré du token à la fin du combat (socketCombatState.js).
+// - isDeath  : le statut fait du token un CADAVRE (`dead`). Un cadavre reste une cible et continue de prendre
+//   des blessures (technologies de résurrection), mais ne peut ni esquiver ni dépenser de Chance — lu par
+//   `deathStateService.js` (`isCharacterDead`), jamais par un littéral `'dead'`.
 // - gmOnly   : seul le MJ le pose ou le retire, quelle que soit l'option de campagne
 //   `players_edit_statuses` (dangers, froid : formulaires MJ ; `dead` : mort et résurrection ne sont pas
 //   une auto-déclaration de joueur). Règle unique : canEditTokenStatus ci-dessous, serveur ET client.
@@ -63,7 +66,7 @@ export const TOKEN_STATUS_REGISTRY = [
   // Mort (chantier 6ᵉ ligne du compteur de blessures). Ni expiration ni `clearedAtCombatEnd` : seul le MJ
   // le retire (bascule ou /heal). Se comporte comme `unconscious` face au combat (tour passé, sans défense).
   { code: 'dead',          category: 'mort',      manualToggle: true,  inPanel: true, gmOnly: true,
-    blocksDeclaration: true, defenseless: true },
+    blocksDeclaration: true, defenseless: true, isDeath: true },
 ]
 
 // Code inconnu → undefined (voir « Hors registre » ci-dessus).
@@ -82,6 +85,7 @@ export const DECLARATION_BLOCKING_STATUS_CODES = codesWhere('blocksDeclaration')
 export const DEFENSELESS_STATUS_CODES = codesWhere('defenseless')
 export const COMBAT_END_CLEARED_STATUS_CODES = codesWhere('clearedAtCombatEnd')
 export const GM_ONLY_STATUS_CODES = codesWhere('gmOnly')
+export const DEATH_STATUS_CODES = codesWhere('isDeath')
 
 // Règle de droits UNIQUE pour poser/retirer un statut de token — appelée par le serveur
 // (socketToken.js, autorité) et par le panneau client (aperçu) : jamais deux implémentations.

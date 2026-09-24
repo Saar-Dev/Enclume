@@ -267,7 +267,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     // l'opposition elle-même. Le choix appartient au DÉFENSEUR (dont c'est le Test) — jamais
     // l'attaquant, même si l'attaquant est celui qui a initié l'action ce Tour.
     if (defenseOutcome.catastropheRisk) {
-      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, characterIdCible, cibleType)
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, meleeCampaignId, characterIdCible, cibleType)
       if (recipientCharacterId) {
         await openChanceChoice(io, meleeCampaignId, recipientCharacterId, {
           testLabel: 'Jet pour défendre (contact)',
@@ -277,7 +277,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         })
         return
       }
-      // recipientCharacterId null (défenseur drone, jamais de char_sheet) — pas de choix possible,
+      // recipientCharacterId null (défenseur drone, jamais de char_sheet, ou cadavre) — pas de choix possible,
       // finalisation immédiate comme si de rien n'était (maybeTriggerCatastrophe reste appliqué).
     }
 

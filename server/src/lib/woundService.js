@@ -102,7 +102,7 @@ export async function applyWound(io, db, campaignId, {
     try {
       const character = await db('characters').where({ id: characterId }).first()
       const recipientCharacterId = character
-        ? await resolveChanceRecipientCharacterId(db, characterId, character.type)
+        ? await resolveChanceRecipientCharacterId(db, campaignId, characterId, character.type)
         : null
       if (recipientCharacterId) {
         const reductions = await computeAvailableSeverityReductions(

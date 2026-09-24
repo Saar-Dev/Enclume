@@ -349,6 +349,9 @@ Deux concepts que le RAW distingue :
     1e : `resolveChanceRecipientCharacterId` reçoit `campaignId` et renvoie `null` pour un mort (exo : mort OU pilote mort).
     Limite connue : un choix d'étourdissement DÉJÀ ouvert chez un joueur au moment de la mort reste affiché (la ligne
     `combat_pending` disparaît, la confirmation est ignorée). Ordre : commit 1c → 1e → 1f.
+  - **Lot 1e — CODÉ (2026-09-24, en attente des tests Saar).** Propriété `isDeath` du registre (`DEATH_STATUS_CODES`),
+    `deathStateService.js:isCharacterDead`, `resolveChanceRecipientCharacterId` reçoit `campaignId` (2ᵉ paramètre, 3
+    appelants mis à jour) et renvoie `null` pour un cadavre. 4 tests d'intégration + 1 test de registre.
   - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
     à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
     catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.

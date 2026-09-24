@@ -815,8 +815,8 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       if (!cibleToken?.character_id) continue
       const cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
       if (!cibleCharacter) continue
-      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, cibleCharacter.id, cibleCharacter.type)
-      if (!recipientCharacterId) continue // drone — reste normalement touché, aucun choix possible
+      const recipientCharacterId = await resolveChanceRecipientCharacterId(db, campaignId, cibleCharacter.id, cibleCharacter.type)
+      if (!recipientCharacterId) continue // drone ou cadavre — reste normalement touché, aucun choix possible
       avoidanceOpenings.push({
         targetTokenId: ht.tokenId, recipientCharacterId,
         cibleName: cibleCharacter.name ?? cibleToken.label ?? '?',

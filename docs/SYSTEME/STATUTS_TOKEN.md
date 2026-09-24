@@ -34,11 +34,12 @@ depuis la base sans changer ses consommateurs.
 | `blocksDeclaration` | le token ne peut plus agir : le MOTEUR de tour le passe avant d'ouvrir sa fenêtre (§ Blocage proactif) | `combatTurnEngine.js` (`getDeclarationBlockedTokens`), gardes de `socketCombatResolution.js` en filet |
 | `defenseless` | la cible ne peut pas se défendre activement (DEF5) | `socketCombatHelpers.js` (`isTargetDefenseless`) |
 | `clearedAtCombatEnd` | retiré à la fin du combat | `socketCombatState.js` |
+| `isDeath` | le statut fait du token un cadavre : cible qui prend des blessures mais sans esquive ni Chance (`isCharacterDead`) | `deathStateService.js` → `exoPilotService.js` (`resolveChanceRecipientCharacterId`) |
 | `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` (dangers, froid, `dead`) | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
 
 Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STATUS_CODES`, `PANEL_STATUSES`,
 `DECLARATION_BLOCKING_STATUS_CODES`, `DEFENSELESS_STATUS_CODES`, `COMBAT_END_CLEARED_STATUS_CODES`.
-`GM_ONLY_STATUS_CODES` complète la liste. `findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`,
+`GM_ONLY_STATUS_CODES` et `DEATH_STATUS_CODES` complètent la liste. `findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`,
 jamais une erreur.
 
 **Droits** — `canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })` est l'**unique** règle, appelée
@@ -64,6 +65,15 @@ un acteur non bloqué (les drones en `ordres_permanents` n'en sont pas) ; si TOU
 historique (fenêtre + garde réactive). Toute erreur de lecture → le token n'est pas passé (fenêtre normale). Les
 deux gardes des handlers (PRECHECK/CONFIRM) restent en filet — statut posé entre le choix du pas et le clic — et
 appellent la même fonction. Un statut posé EN COURS de Tour prend effet au prochain pas de ce token.
+
+**Cadavre et Chance (Lot 1e)** — un mort reste une cible et continue de prendre des blessures (technologies de
+résurrection : décision Saar 2026-09-24, aucun filtrage des cibles d'une zone), mais ne peut NI esquiver NI dépenser de
+Chance : `resolveChanceRecipientCharacterId(db, campaignId, characterId, type)` renvoie `null` (même contrat que le
+drone : l'appelant n'ouvre aucune fenêtre) pour un personnage dont un token porte un statut `isDeath` ; exo-armure :
+l'exo OU son pilote mort. Lecture au niveau du PERSONNAGE (la Chance vit sur la fiche, le statut sur le token), comme
+`/heal`. Actif en mode `enforced` seulement. Sites couverts : esquive de zone (`socketCombatAoe.js`), réduction de
+gravité (`woundService.js`), Catastrophe de défense au contact (`socketCombatHelpers.js`). Non couverts (le mort n'agit
+plus, lot 1c) : les Chances de l'ACTEUR (Test d'attaque, manœuvre d'exo, interaction d'entité).
 
 ## 3. Invariants
 

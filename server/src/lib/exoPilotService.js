@@ -3,9 +3,11 @@
 // combatantContextService.js importe damageService.js (fetchCibleNA), qui importe lui-même
 // woundService.js (applyWound) — un woundService.js qui aurait dû importer resolveExoContext
 // depuis combatantContextService.js aurait donc bouclé (woundService → combatantContextService →
-// damageService → woundService). Ce fichier n'a AUCUNE dépendance (feuille du graphe d'import) :
-// `db` est toujours reçu en paramètre, jamais importé — combatantContextService.js réexporte
+// damageService → woundService). Ce fichier ne dépend que d'une autre feuille (`deathStateService.js`,
+// registre partagé + réglages de campagne) : `db` est toujours reçu en paramètre, jamais importé — combatantContextService.js réexporte
 // resolveExoContext depuis ici pour que ses propres appelants n'aient rien à changer.
+import { isCharacterDead } from './deathStateService.js'
+
 export async function resolvePilot(db, exoCharacter) {
   const exoSheet = await db('exo_sheet').where({ character_id: exoCharacter.id }).first()
   if (!exoSheet?.pilot_character_id) return { pilot: null, exoSheet }  // pas de pilote assigné
@@ -29,13 +31,21 @@ export async function resolveExoContext(db, exoCharacter) {
 // - exo : aucun char_sheet propre — la Chance appartient au PILOTE.
 // - drone : aucun char_sheet, jamais de Chance possible (combatantContextService.js:283-287, même
 //   exclusion que drone_attack) — retourne null, l'appelant doit alors sauter openChanceChoice.
-export async function resolveChanceRecipientCharacterId(db, characterId, characterType) {
+// - mort (Lot 1e, deathStateService.js) : un cadavre ne dépense pas de Chance — même contrat, `null`.
+//   `campaignId` est requis (le blocage ne vaut qu'en mode 'enforced', réglage de la campagne).
+export async function resolveChanceRecipientCharacterId(db, campaignId, characterId, characterType) {
   if (characterType === 'drone') return null
+  let recipientCharacterId = characterId
   if (characterType === 'exo') {
     const exoCharacter = await db('characters').where({ id: characterId }).first()
     if (!exoCharacter) return null
     const { pilot } = await resolveExoContext(db, exoCharacter)
-    return pilot?.id ?? null
+    if (!pilot) return null
+    recipientCharacterId = pilot.id
   }
-  return characterId
+  // Lot 1e — un cadavre ne dépense pas de Chance : aucune fenêtre (même contrat que le drone : `null`).
+  // Exo : l'exo morte OU son pilote mort.
+  if (await isCharacterDead(db, campaignId, characterId)) return null
+  if (recipientCharacterId !== characterId && await isCharacterDead(db, campaignId, recipientCharacterId)) return null
+  return recipientCharacterId
 }

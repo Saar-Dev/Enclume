@@ -1,3 +1,11 @@
+## v249 — 2026-09-24 — Un mort n'a plus de fenêtre de Chance
+
+### Combat
+- [fix] Un personnage marqué « Mort » ne reçoit plus aucune fenêtre de Chance : ni pour esquiver une explosion, ni
+  pour réduire la gravité d'une blessure, ni sur une Catastrophe de défense au contact. Il reste une cible et continue
+  de prendre les blessures, mais ne peut ni esquiver ni dépenser de point de Chance. Une exo-armure morte, ou dont le
+  pilote est mort, est traitée de la même façon. Sans effet quand l'option « effets de statut » n'est pas en mode appliqué.
+
 ## v249 — 2026-09-24 — Drone d'interception : le drone bouclier s'interpose
 
 ### Combat

@@ -5,7 +5,7 @@ import {
   TOKEN_STATUS_REGISTRY, TOKEN_STATUS_CATEGORY_COLORS, findTokenStatus,
   MANUAL_TOGGLE_STATUS_CODES, PANEL_STATUSES, DECLARATION_BLOCKING_STATUS_CODES,
   DEFENSELESS_STATUS_CODES, COMBAT_END_CLEARED_STATUS_CODES, GM_ONLY_STATUS_CODES,
-  canEditTokenStatus,
+  canEditTokenStatus, DEATH_STATUS_CODES,
 } from './tokenStatusRegistry.js'
 import { ENVIRONMENTAL_HAZARD_REGISTRY } from './environmentalHazardRegistry.js'
 
@@ -145,4 +145,10 @@ test('chaque statut du panneau ou bloquant a son icône SVG et sa clé i18n stat
     assert.ok(existsSync(new URL(`client/public/assets/status/${entry.code}.svg`, racine)), `icône manquante : ${entry.code}`)
     assert.ok(typeof fr.status?.[entry.code] === 'string', `clé fr.json status.${entry.code} manquante`)
   }
+})
+
+test('isDeath : `dead` seul fait du token un cadavre (lu par deathStateService, jamais un littéral)', () => {
+  assert.deepEqual(DEATH_STATUS_CODES, ['dead'])
+  assert.equal(findTokenStatus('dead').isDeath, true)
+  for (const entry of TOKEN_STATUS_REGISTRY.filter(e => e.code !== 'dead')) assert.equal(entry.isDeath, undefined)
 })

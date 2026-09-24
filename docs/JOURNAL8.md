@@ -8334,3 +8334,26 @@ minuterie avec drone gagnant et explosion du Tour+1, effets de bord — beta tes
 fenêtre Chance PNJ « Catastrophe — … » peu claire ; message figé « L'ordre a changé entre-temps » ; badge « succès » sur la
 durée d'étourdissement ; 403 sur les blessures d'un PNJ côté joueur ; drone : −1 d'intégrité à chaque touche même sous 5 de
 dégâts nets, à confronter au RAW. Un token « mort » restait cible d'une zone : transmis à la session « Gestion MORT ».
+
+---
+
+## Session (Dev) — 2026-09-24 — Lot 1e : un mort ne dépense pas de Chance (et ne reçoit aucune fenêtre)
+
+**Origine** : test de Saar — un token « mort » a reçu « Éviter la zone d'effet — Échec 14 » d'une grenade
+(session « drones », relayé). [VÉRIFIÉ code] `queryTokensInShape` ne filtre aucun statut ; les fenêtres de Chance de
+l'esquive de zone, de la réduction de gravité et de la défense au contact ne regardaient pas la mort.
+
+**Décision de Saar** (RAW muet sur le cadavre — décision de règle, pas un raccourci) : le mort ne peut NI esquiver NI
+dépenser de Chance, MAIS il reste une cible qui prend des blessures (technologies de résurrection) → aucun filtrage
+des cibles, seulement plus de fenêtre. **Conception** : propriété de registre `isDeath` (`dead`) ;
+`deathStateService.js:isCharacterDead` (feuille ; lecture au niveau du personnage, mode `enforced` seulement) ;
+`resolveChanceRecipientCharacterId(db, campaignId, characterId, type)` (autorité EXISTANTE du destinataire de Chance,
+contrat « `null` = aucune fenêtre » déjà respecté par ses 3 appelants) renvoie `null` pour un cadavre (exo : exo OU
+pilote morts). Signature changée (`campaignId` ajouté en 2ᵉ position) : les 3 appelants mis à jour.
+Modèle : « immunités aux états » de dnd5e / PF2e (la cible reste visée, seul l'effet n'est pas appliqué).
+
+**Testé** : `node --check` ; imports ESM des modules touchés (aucun cycle) ; `node --test 'shared/**/*.test.mjs'`
+672/672 (dont `isDeath`) ; 4 tests d'intégration `deathStateService.test.mjs` (`skip` sans base — à lancer par Saar :
+`node --env-file=.env --test server/src/lib/deathStateService.test.mjs`). **Non testé** : ces tests en base ; le
+scénario en jeu (grenade sur un mort : plus d'esquive ni de Chance, il prend les dégâts ; blessure grave sur un mort :
+pas de fenêtre de réduction). **Données** : aucune migration. **Retour arrière** : `git revert` du commit applicable.
