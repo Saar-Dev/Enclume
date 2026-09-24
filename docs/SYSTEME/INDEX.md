@@ -90,6 +90,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `SYSTEME/ARCHITECTURE_SOCKET.md` | Architecture modulaire des WebSockets, coordinateur, hooks client | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MODING.md` | Système de mods d'armes : deux générations coexistantes, registre à hooks | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/STATUTS_TOKEN.md` | Statuts de token (`token_statuses`) et registre unique `shared/tokenStatusRegistry.js` | Créé 2026-09-24 |
 | `SYSTEME/CHAT.md` | Système de chat : architecture, flux, types de messages, événements WS | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/ASSETS.md` | MinIO, textures, Atelier GM, uploads, chemins assets | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MATERIAUX.md` | Pipeline de matériaux procédural : génération, cache, flux de données | 🔎 Analysé en profondeur (2026-08-26) |

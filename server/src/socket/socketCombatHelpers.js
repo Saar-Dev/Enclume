@@ -14,6 +14,7 @@ import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/in
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { runPanneTest, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
 import { resolveActiveComputer, computeOrdinateurStats } from '../../../shared/computerStats.js'
+import { DEFENSELESS_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { selectDisconnectedSystems } from '../../../shared/exoSystemsCapacity.js'
 import { exposeToIemSurvival } from '../lib/iemSurvivalService.js'
 import { randomInt } from 'crypto'
@@ -993,7 +994,7 @@ export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
   if (settings.status_effects_mode === 'enforced') {
     const statusRow = await db('token_statuses')
       .where({ token_id: targetTokenId })
-      .whereIn('status_code', ['unconscious', 'blinded', 'stunned'])
+      .whereIn('status_code', DEFENSELESS_STATUS_CODES)
       .first()
     if (statusRow) return true
   }

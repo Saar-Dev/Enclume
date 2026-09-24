@@ -105,6 +105,108 @@ Deux concepts que le RAW distingue :
     `useCombatSocket.js:175` (le message de refus ne connaît que « inconscient »/« étourdi »).
   - constaté, hors lot : la garde d'annonce (`socketCombatAnnouncement.js:259`) ne teste que `stunned`
     (pas `unconscious`) ; `dead` suit `unconscious`, pas d'extension ici.
+- **Révision du Lot 1 (2026-09-24, après recherche — en attente de validation Saar).** Ajouter `dead`
+  comme un littéral de plus dans chaque liste répéterait un défaut déjà présent : le vocabulaire des
+  statuts est **dupliqué** — liste serveur `VALID_STATUS_CODES` (`socketToken.js:160`), liste client
+  `STATUS_LIST` (`TokenStatusPanel.jsx:13`), table client `STATUS_CATEGORY` (`TokenPresentation.jsx:17`) —
+  et les ensembles de comportement sont des tableaux littéraux dispersés (gardes de déclaration
+  `socketCombatResolution.js:165/353` ; « sans défense » `socketCombatHelpers.js:996` ; nettoyage de fin
+  de combat `socketCombatState.js:302/307`). Référence Foundry VTT : un rôle sémantique passe par une
+  table de configuration (`CONFIG.specialStatusEffects.DEFEATED`), jamais par une chaîne en dur ; le
+  ticket foundryvtt #9245 documente le bug du cas inverse (comparaison à `"blind"` cassée dès qu'un
+  système renomme le code). Foundry sépare aussi le statut « dead » du drapeau `Combatant.defeated`
+  (réglage « Skip Defeated » du suivi de combat).
+  **Nouveau découpage, un commit par cause racine :**
+  - **1a — Registre unique des statuts de token** (`shared/tokenStatusRegistry.js`) : refactor **sans
+    changement de comportement**. Entrées `{ code, category, manualToggle, inPanel, gmOnly,
+    blocksDeclaration, defenseless, clearedAtCombatEnd }` ; les listes/ensembles ci-dessus en sont
+    dérivés. Filet : test « golden » qui fige chaque ensemble dérivé égal à l'ancien littéral.
+  - **1b — Statut `dead`** : une entrée de registre (`gmOnly`, `blocksDeclaration`, `defenseless`, pas
+    `clearedAtCombatEnd`) + icône + i18n + message de refus dérivé de `status.<code>` (remplace la
+    branche codée en dur « inconscient »/« étourdi », `useCombatSocket.js:175`).
+  - **Pourquoi pas une table SQL « catalogue des statuts » (question Saar, 2026-09-24).** Vérifié en base :
+    `token_statuses` ne stocke que les *instances* (token, `status_code` en texte libre sans contrainte,
+    expiration, `data`) ; il n'existe aucune table catalogue. Ajouter `dead` n'exige donc **aucune
+    migration**. Un catalogue en base a été écarté : un statut porte un *comportement* (bloque la
+    déclaration, sans défense, réservé MJ…) qui est du code — une ligne en base sans code serait un statut
+    sans effet ; l'ajout d'un statut demande de toute façon icône, texte et comportement ; les autres
+    listes qui pilotent du comportement (`environmentalHazardRegistry`, `echeanceTypeRegistry`,
+    `weaponModRegistry`) sont déjà des registres partagés, pas des tables ; et un registre se teste sans
+    base (`node --test shared/**`). **V2 possible** si un jour le MJ doit créer ses propres statuts sans
+    développeur : le registre peut être alimenté par la base sans changer ses consommateurs.
+  - **Inventaire exhaustif du vocabulaire de statuts (relu 2026-09-24)** — 3 copies de la *liste* :
+    `socketToken.js:167-170` (12 codes basculables), `TokenStatusPanel.jsx:13-29` (15 codes, ordre du
+    panneau), `TokenPresentation.jsx:17-22` (16 codes dont `evanoui`) ; + les 4 couleurs de catégorie
+    copiées dans **deux** fichiers client (`TokenStatusPanel.jsx:31`, `TokenPresentation.jsx:11`) ; + les
+    ensembles de comportement littéraux : déclaration bloquée `[stunned, unconscious]`
+    (`socketCombatResolution.js:165/353`), sans défense `[unconscious, blinded, stunned]`
+    (`socketCombatHelpers.js:996`), nettoyage fin de combat `[stunned, unconscious]`
+    (`socketCombatState.js:302/307`). Volontairement **laissés tels quels** en 1a (sémantique propre,
+    `dead` n'y entre pas) : `combatTurnEngine.js:809` (événement d'expiration d'étourdissement),
+    `statusService.js:37` (exclusion mutuelle stunned/unconscious/evanoui), garde d'annonce
+    `socketCombatAnnouncement.js:259` (`stunned` seul).
+  - **Constatés, hors périmètre 1a (à traiter ou ticketer, jamais perdus)** : (i) le serveur accepte la
+    bascule nue de `hypothermia` (`socketToken.js:170`) alors que le client ne l'envoie jamais (formulaire
+    Froid dédié) — un joueur propriétaire (option `players_edit_statuses` activée) pourrait forger cet
+    envoi ; (ii) `evanoui` n'a ni clé i18n `status.*` ni entrée de panneau (badge seul) ; (iii) `HAZARD_CODES`
+    du panneau recopie `ENVIRONMENTAL_HAZARD_REGISTRY` (`shared/`) au lieu de le lire. (i) est un vrai
+    défaut de droits : à corriger dans le commit 1b (un code `gmOnly` refusé côté serveur), pas en 1a.
+  - **Analyse à charge de 1a (2026-09-24) — conclusion : le commit tient, périmètre précisé.**
+    (1) *Codes hors registre* : d'autres services posent des statuts que les 3 listes ignorent —
+    `iem_survival` (`iemSurvivalService.js`, constante locale), `ati_offensive`/`ati_defensive`
+    (`weaponModRegistry.js` `statusCodes`, posés via `combatTurnEngine.js:294`) — sans icône
+    `/assets/status/*.svg` ni clé i18n (défaut cosmétique préexistant, noté). Décision : le registre 1a
+    couvre les **16 codes des 3 listes** ; ces codes restent déclarés par leur propriétaire, et toute
+    recherche du registre est **tolérante** (code inconnu → valeurs par défaut, comme aujourd'hui
+    `?? '#888'` dans `TokenPresentation.jsx:188`) ; test dédié. Les intégrer au registre = chantier
+    ultérieur (`weaponModRegistry` fournirait alors ses codes au registre, sans double déclaration).
+    (2) *Profil des 16 entrées* (à transcrire tel quel) : entrave = grappled, restrained, off_balance ;
+    dot = burning, acid, decompression (`manualToggle:false`), asphyxia, electrocuted ; sens = stunned,
+    unconscious (`blocksDeclaration`+`defenseless`+`clearedAtCombatEnd`), blinded (`defenseless` seul),
+    evanoui (`manualToggle:false`, `inPanel:false`) ; chronique = hypothermia (`manualToggle:true` —
+    préservé tel quel, voir constaté (i)), infected, poisoned, irradiated. Ordre du registre = ordre du
+    panneau actuel.
+    (3) `gmOnly` et le choix du formulaire du panneau (danger/froid) sont **reportés en 1b** (ils n'ont
+    d'usage qu'avec `dead` et la correction de (i)) : 1a reste à zéro changement de comportement.
+    (4) *Documentation de clôture* : aucun document SYSTEME ne décrit les statuts de token ;
+    `VOCABULARY.md:140` affirme à tort que `status_code` « ne connaît que stunned/unconscious ». Clôture =
+    nouveau `docs/SYSTEME/STATUTS_TOKEN.md` (une responsabilité, Règle 1) + ligne dans `INDEX.md` +
+    correction de cette ligne de `VOCABULARY.md`. Pas dans `COMBAT.md` (déjà modifié par l'autre session).
+    (5) *Validation prévue* : `node --check` ; `node --test shared/tokenStatusRegistry.test.mjs` ;
+    `cd client && npx eslint <fichiers>` ; `cd client && npm run build` ; `git diff --check` ; puis test
+    en jeu de Saar (panneau Statuts, étourdir un token, fin de combat).
+    Référence externe corroborante : dnd5e (FoundryVTT) construit ses statuts depuis un objet de
+    configuration unique (`CONFIG.DND5E.conditionTypes`, propriétés par condition) dont les structures
+    dérivées sont calculées — même forme que le registre proposé.
+  - **Constaté au test en jeu de 1a (2026-09-24), sans lien avec les statuts** : quand un PNJ agit, la
+    fenêtre d'action d'un joueur demande les blessures de ce PNJ (`CombatActionWindow.jsx:384-392`,
+    `playerToken.character_id`) et le serveur répond 403 « pas la permission » (fiche non possédée) ; le
+    `.catch` masque l'erreur (`setMortallyWounded(false)`) — bruit de log inoffensif, code inchangé par
+    1a. À ticketer si Saar le souhaite.
+  - **Preuves du test en jeu de 1a** : log `[STUN2] PRECHECK … assommé — auto-skip` (garde de déclaration
+    alimentée par `DECLARATION_BLOCKING_STATUS_CODES`) ; base après `FIN COMBAT` : la ligne `unconscious` a
+    disparu, les lignes `burning` sont conservées (`clearedAtCombatEnd` correct) et `combat_roster` est vide.
+  - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
+    à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
+    catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.
+  - **Points d'édition partagés avec l'autre session (interception drones, non commitée)** :
+    `socketCombatResolution.js` (hunks en 13, 424-460 ; mes gardes en 165/353 — hors zone),
+    `socketCombatHelpers.js` (hunks en 4, 119-121, 2893…3690 ; mon site en 996 + un import en tête, à
+    côté de leur ligne 4 → staging partiel soigné), `fr.json` (inchangé en 1a).
+  - **1c (différé, hors de ce plan tant que non cadré)** — sortir un token mort de la file
+    d'initiative (équivalent de « Skip Defeated »). Le champ `combat_roster.status` (`active`/`done`)
+    existe mais **aucun code ne pose `done`** (`socketCombatAnnouncement.js:1027`) et
+    `advanceAnnouncementQueue` compte SANS filtrer `status` (`combatTurnEngine.js:97-100`) : l'utiliser
+    demande d'abord de compléter ce concept. En attendant, `dead` se comporte comme `unconscious` (tour
+    passé automatiquement par la garde, comportement déjà éprouvé en jeu).
+  - Vérifié : `dead` (sans `expires_at_turn`) n'est jamais purgé par `endTurn` (`combatTurnEngine.js:804`,
+    `whereNotNull('expires_at_turn')`).
+- **Constaté 2026-09-24 — recoupement avec la session « interception des drones » (non commitée à ce
+  jour)** : elle ajoute `woundSeverityForDamage(degatsNets)` dans `shared/woundConstants.js`, lecture de
+  `BLESSURE_SEUILS_TABLE` (sans la 6ᵉ ligne), pour la gravité d'un coup sur un drone. Or
+  `damageService.js` (`_severityForDamage`) recopie ces mêmes seuils pour l'humain. **Au Lot 2, une seule
+  autorité des seuils** : `woundSeverityForDamage` (avec la 6ᵉ ligne) sert l'humain ET le drone, et
+  `_severityForDamage` disparaît. À coordonner avec le commit de l'autre session avant de toucher ce fichier.
 - **Lot 2 — La 6ᵉ ligne.** Migration `chk_wounds_severity` ; `WOUND_SEVERITIES`, `WOUND_MAX_COUNTS`,
   `WOUND_PENALTIES`, `SEVERITY_COLORS` (gris), `WOUND_HEALING`, `WOUND_INFECTION`, `TEST_BLOCKING_SEVERITIES` ;
   `nextSeverity`/`previousSeverity`/`getWorstWoundSeverity` ; `resolveWoundInsertion` (débordement →

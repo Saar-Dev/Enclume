@@ -2,24 +2,13 @@ import { Component, Suspense, useEffect, useMemo } from 'react'
 import { Billboard, Html, Text, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { tokenCropWindow } from '../lib/tokenCrop.js'
+import { TOKEN_STATUS_CATEGORY_COLORS, findTokenStatus } from '../../../shared/tokenStatusRegistry.js'
 
 // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) — présentation pure (aucun état combat), extraite de
 // Canvas3D.jsx pour être partagée avec Canvas2D. FONT_URL reste utilisé directement par Canvas3D.jsx
 // ailleurs (badges de chemin combat) — exporté, pas dupliqué.
 export const FONT_URL = '/fonts/inter.woff'
 
-const STATUS_CATEGORY_COLOR = {
-  entrave:  '#d8a838',
-  dot:      '#d84838',
-  sens:     '#9858c8',
-  chronique:'#38a8c8',
-}
-const STATUS_CATEGORY = {
-  grappled: 'entrave', restrained: 'entrave', off_balance: 'entrave',
-  burning: 'dot', acid: 'dot', asphyxia: 'dot', decompression: 'dot', electrocuted: 'dot',
-  stunned: 'sens', unconscious: 'sens', blinded: 'sens', evanoui: 'sens',
-  hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
-}
 
 // offsetY par défaut = échelle Canvas3D (personnage GLB ~2 unités de haut, label "au-dessus de la
 // tête"). Canvas2D (docs/PLAN_BATTLEMAP2D.md §8, correctif Saar) passe un offsetY réduit, proportionné
@@ -185,7 +174,8 @@ export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', of
     <Html position={[0, offsetY, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{ display: 'flex', gap: 2 }}>
         {(statuses.length > 4 ? statuses.slice(0, 3) : statuses).map(code => {
-          const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
+          // Registre unique (shared/tokenStatusRegistry.js) ; code hors registre (iem_survival, ati_*) → gris.
+          const color = TOKEN_STATUS_CATEGORY_COLORS[findTokenStatus(code)?.category] ?? '#888'
           return (
             <img
               key={code}

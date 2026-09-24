@@ -3,6 +3,7 @@ import { resolveMeleeReachM } from '../../../shared/combatRange.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { DECLARATION_BLOCKING_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { parseDice } from '../lib/diceParser.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -162,7 +163,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         const stunnedStatus = enforcedPrecheck
           ? await db('token_statuses')
               .where({ token_id: tokenId })
-              .whereIn('status_code', ['stunned', 'unconscious'])
+              .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
               .first()
           : null
         const pendingStun = (enforcedPrecheck && !stunnedStatus)
@@ -350,7 +351,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         const stunnedStatus = enforcedConfirm
           ? await db('token_statuses')
               .where({ token_id: tokenId })
-              .whereIn('status_code', ['stunned', 'unconscious'])
+              .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
               .first()
           : null
         const pendingStun = (enforcedConfirm && !stunnedStatus)

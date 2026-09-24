@@ -6,34 +6,15 @@ import AimedLocationPicker from './AimedLocationPicker.jsx'
 import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environmentalHazardPresets.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
+import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS } from '../../../shared/tokenStatusRegistry.js'
 
 const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
 
 // ─── Statuts — ordre et métadonnées ─────────────────────────────────────────
-const STATUS_LIST = [
-  { code: 'grappled',      category: 'entrave' },
-  { code: 'restrained',    category: 'entrave' },
-  { code: 'off_balance',   category: 'entrave' },
-  { code: 'burning',       category: 'dot'     },
-  { code: 'acid',          category: 'dot'     },
-  { code: 'asphyxia',      category: 'dot'     },
-  { code: 'decompression', category: 'dot'     },
-  { code: 'electrocuted',  category: 'dot'     },
-  { code: 'stunned',       category: 'sens'    },
-  { code: 'unconscious',   category: 'sens'    },
-  { code: 'blinded',       category: 'sens'    },
-  { code: 'hypothermia',   category: 'chronique' },
-  { code: 'infected',      category: 'chronique' },
-  { code: 'poisoned',      category: 'chronique' },
-  { code: 'irradiated',    category: 'chronique' },
-]
-
-const CATEGORY_COLOR = {
-  entrave:  '#d8a838',
-  dot:      '#d84838',
-  sens:     '#9858c8',
-  chronique:'#38a8c8',
-}
+// Dérivés du registre unique (shared/tokenStatusRegistry.js : `inPanel`, ordre = ordre d'affichage,
+// couleurs par catégorie) — plus de liste ni de table de couleurs locale.
+const STATUS_LIST = PANEL_STATUSES
+const CATEGORY_COLOR = TOKEN_STATUS_CATEGORY_COLORS
 
 // Dangers environnementaux Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9) — MJ uniquement, passent par
 // exposeToHazard/clearHazard (formule/localisations), jamais le toggle nu WS.TOKEN_STATUS_TOGGLE

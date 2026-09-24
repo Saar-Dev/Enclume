@@ -137,7 +137,7 @@ ref_equipment_skill_assoc	ref_equipment_skills	_assoc = compétence d'utilisatio
 Tir visé	Localisation précise (COM9) / Changer le mode de tir	Trois mécaniques distinctes de REGLESYSCOMBAT.md, jamais la même règle malgré la proximité des pages.
 « Seuil » (UI)	« CDR » (interne)	Même valeur, deux noms selon l'audience — ne jamais afficher « CDR » à un joueur.
 Vault (nom de code)	Coffre (nom produit)	Le code/DB garde vault*, tout texte utilisateur dit « Coffre ».
-« Coma »	« Inconscient » (statut réel)	Synonyme informel, pas un 3ᵉ état santé — token_statuses.status_code ne connaît que stunned/unconscious.
+« Coma »	« Inconscient » (statut réel)	Synonyme informel, pas un 3ᵉ état santé — « Inconscient » est le statut `unconscious` ; le vocabulaire complet des statuts de token est le registre `shared/tokenStatusRegistry.js` (docs/SYSTEME/STATUTS_TOKEN.md).
 PLAN (dossier docs/)	DOMAIN/SYSTEM (docs/SYSTEME/)	Un PLAN est temporaire (Règle 10) : une fois le chantier clos, archiver vers docs/Old/ — la doc durable vit dans docs/SYSTEME/*.md/.claude/rules/, pas dans le PLAN.
 Échange (PJ↔PJ)	Transfert (Coffre→campagne)	Échange (tradeService.js) = déplacement réel entre personnages vivants, double validation, jamais de copie. Transfert (vaultService.js) = copie Coffre→campagne, jamais de déplacement, validation MJ seule.
 ref_setbacks / « setback » (code)	Revers (UI/joueur)	Même mécanique, deux noms selon l'audience — comme Vault/Coffre. Le code et la base gardent l'anglais « setback », tout texte utilisateur dit « Revers ».

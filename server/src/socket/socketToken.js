@@ -1,4 +1,5 @@
 import { WS } from '../../../shared/events.js'
+import { MANUAL_TOGGLE_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import db from '../db/knex.js'
 import { checkTokenOwnership } from '../lib/socketUtils.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -163,13 +164,8 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
       // environmentalHazardService.js:exposeToHazard (`applyModStatus`, `.onConflict().merge()`).
       // Ces 3 codes passent désormais exclusivement par exposeToHazard/clearHazard (POST /campaigns/
       // :id/tokens/:tokenId/hazards/:code/expose|clear), jamais par ce toggle générique.
-      const VALID_STATUS_CODES = new Set([
-        'grappled', 'restrained', 'off_balance',
-        'asphyxia', 'electrocuted',
-        'stunned', 'unconscious', 'blinded',
-        'hypothermia', 'infected', 'poisoned', 'irradiated',
-      ])
-      if (!VALID_STATUS_CODES.has(statusCode)) return
+      // Liste dérivée du registre (`manualToggle`, shared/tokenStatusRegistry.js) — plus de copie locale.
+      if (!MANUAL_TOGGLE_STATUS_CODES.includes(statusCode)) return
 
       const existing = await db('token_statuses')
         .where({ token_id: tokenId, status_code: statusCode })

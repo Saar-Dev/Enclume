@@ -1,4 +1,5 @@
 import { WS } from '../../../shared/events.js'
+import { COMBAT_END_CLEARED_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { calcAttributeNA, calcSkillTotal } from '../lib/charStats.js'
@@ -292,19 +293,20 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
 
       await db('combat_actions').where({ campaign_id: campaignId }).delete()
 
-      // Nettoyer les statuts stunned/unconscious des tokens du roster avant suppression
+      // Nettoyer les statuts de combat (registre : `clearedAtCombatEnd`, aujourd'hui stunned/unconscious)
+      // des tokens du roster avant suppression
       const rosterTokenIds = await db('combat_roster')
         .where({ campaign_id: campaignId })
         .pluck('token_id')
       if (rosterTokenIds.length > 0) {
         const affected = await db('token_statuses')
           .whereIn('token_id', rosterTokenIds)
-          .whereIn('status_code', ['stunned', 'unconscious'])
+          .whereIn('status_code', COMBAT_END_CLEARED_STATUS_CODES)
           .select('token_id')
         if (affected.length > 0) {
           await db('token_statuses')
             .whereIn('token_id', rosterTokenIds)
-            .whereIn('status_code', ['stunned', 'unconscious'])
+            .whereIn('status_code', COMBAT_END_CLEARED_STATUS_CODES)
             .delete()
           const affectedIds = [...new Set(affected.map(r => r.token_id))]
           for (const tid of affectedIds) {

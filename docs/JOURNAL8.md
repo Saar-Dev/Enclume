@@ -8155,3 +8155,33 @@ code écrit à ce stade) :
   au-delà de la guérison en Critique) → rendu barré/gris, Lot 4 du plan.
 
 **Retour arrière** : sans objet (décisions, aucun code).
+
+---
+
+## Session (Dev) — 2026-09-24 — Registre unique des statuts de token (refactor, zéro changement de comportement)
+
+**Root cause** [VÉRIFIÉ code] : le vocabulaire des statuts (`token_statuses.status_code`, texte libre sans
+catalogue) était **recopié** dans 3 listes (`socketToken.js`, `TokenStatusPanel.jsx`,
+`TokenPresentation.jsx`) + les 4 couleurs de catégorie dans 2 fichiers client, et chaque règle de
+comportement (déclaration bloquée, sans défense, nettoyage de fin de combat) était un tableau littéral
+dispersé dans le moteur de combat. Ajouter un statut (`dead`, prochain commit) aurait exigé 6+ éditions
+parallèles sans garde-fou.
+
+**Décision** (Saar délègue l'architecture, cible : robuste/pérenne/adaptative ; recherche : FoundryVTT
+`CONFIG.specialStatusEffects` + foundryvtt#9245, dnd5e `conditionTypes`) : **registre unique en code**
+`shared/tokenStatusRegistry.js` (entrées `{ code, category, manualToggle, inPanel, blocksDeclaration,
+defenseless, clearedAtCombatEnd }`), structures dérivées. **Pas de table SQL catalogue** (un statut porte un
+comportement = du code ; patron des autres registres du projet ; testable sans base) — évolution « statuts
+créés par le MJ » notée, compatible. Périmètre : les 16 codes des 3 listes ; `iem_survival` et
+`ati_*` restent déclarés par leur propriétaire (recherche tolérante). Sémantiques propres volontairement
+non dérivées : expiration d'étourdissement, exclusion mutuelle, garde d'annonce.
+
+**Testé** : `node --test shared/tokenStatusRegistry.test.mjs` (9/9, instantané des anciens littéraux :
+bascule, panneau + ordre, catégories, couleurs, 3 ensembles de comportement, invariants, tolérance aux codes
+inconnus) ; `node --test 'shared/**/*.test.mjs'` complet (659/659) ; `node --check` des 4 fichiers serveur ;
+ESLint client (2 fichiers, 0 problème) ; `npm run build` client OK ; `git diff --check`.
+**Non testé** : scénario en jeu (panneau Statuts, étourdir un token, fin de combat) — à faire par Saar.
+**Données** : aucune migration. **Retour arrière** : `git revert` du commit applicable.
+
+**Documentation** : `docs/SYSTEME/STATUTS_TOKEN.md` créé (+ ligne `INDEX.md`) ; `VOCABULARY.md` — affirmation
+périmée (« `status_code` ne connaît que stunned/unconscious ») corrigée.
