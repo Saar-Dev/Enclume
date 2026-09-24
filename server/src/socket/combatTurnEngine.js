@@ -39,6 +39,8 @@ import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/envir
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { DECLARATION_BLOCKING_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 
 // M3 — `phase_position` d'une entrée REPORTÉE au Tour suivant (Initiative ≤ 0, RAW REGLESYSCOMBAT.md:354
 // « le personnage agit en premier »). Sentinelle très au-dessus de toute position réelle
@@ -78,6 +80,80 @@ export async function startAnnouncementTimers(io, campaignId, timerSec, gmUserId
   }
 }
 
+// ─── Blocage de déclaration — autorité unique (Lot 1c, docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md) ────
+// « Ce token peut-il agir ? » se décide ICI, au moment où le moteur CHOISIT le prochain acteur (file
+// d'annonce, échelle de résolution) — jamais après l'ouverture de la fenêtre côté client. Avant le
+// Lot 1c la question n'était posée que par deux gardes réactives des handlers (PRECHECK/CONFIRM de
+// `socketCombatResolution.js`) : la fenêtre s'ouvrait, PUIS le serveur répondait « vous êtes mort ».
+// Ces deux gardes restent en filet de sécurité (statut posé entre le choix du pas et le clic) et
+// appellent la MÊME fonction.
+//
+// Retourne `Map<tokenId, statusCode>` des tokens bloqués parmi `tokenIds`. Statuts = ceux du registre
+// (`blocksDeclaration`) + un étourdissement EN ATTENTE (`combat_pending` type 'stun' : le D6 de durée
+// n'est pas encore lancé). Uniquement en mode `status_effects_mode === 'enforced'` (PLAN 14 Sprint
+// 14-3) — 'icon_only'/'off' n'ont jamais bloqué personne, et ne le font toujours pas.
+export async function getDeclarationBlockedTokens(campaignId, tokenIds, settings) {
+  const blocked = new Map()
+  if (settings?.status_effects_mode !== 'enforced' || tokenIds.length === 0) return blocked
+
+  const statusRows = await db('token_statuses')
+    .whereIn('token_id', tokenIds)
+    .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
+    .select('token_id', 'status_code')
+  for (const row of statusRows) {
+    if (!blocked.has(row.token_id)) blocked.set(row.token_id, row.status_code)
+  }
+
+  const pendingStunTokenIds = await db('combat_pending')
+    .where({ campaign_id: campaignId, type: 'stun' })
+    .whereIn('token_id', tokenIds)
+    .pluck('token_id')
+  for (const tokenId of pendingStunTokenIds) {
+    if (!blocked.has(tokenId)) blocked.set(tokenId, 'stunned')
+  }
+  return blocked
+}
+
+// Garde-fou anti-boucle (pure) : passer automatiquement un token bloqué n'a de sens que s'il reste au
+// moins un acteur capable de jouer ce Tour. Sinon `endTurn → ANNONCE (tous passés) → RÉSOLUTION (rien)
+// → endTurn` tournerait sans fin, les Tours défilant seuls. `candidateIds` = tokens actifs susceptibles
+// d'attendre une décision humaine ; `blocked` = `Map`/`Set` des tokens bloqués.
+export function hasActionableToken(candidateIds, blocked) {
+  return candidateIds.some(tokenId => !blocked.has(tokenId))
+}
+
+// Un token doit-il être passé automatiquement (sans ouvrir de fenêtre) ? Retourne le code du statut
+// bloquant, ou `null` (pas bloqué, mode non 'enforced', OU tous les acteurs bloqués — garde-fou
+// ci-dessus : comportement historique, fenêtre + garde réactive). Les drones en `ordres_permanents`
+// (action `drone_auto` de ce Tour) agissent sans décision humaine : ils ne comptent pas comme acteurs,
+// sinon « mort + drone autonome » tournerait seul. Ouvert par défaut : toute erreur → `null` (la fenêtre
+// s'ouvre comme avant, les gardes des handlers restent le filet) plutôt qu'une file figée en silence.
+async function resolveAutoSkipStatus(campaignId, tokenId) {
+  try {
+    const settings = await getCampaignSettings(db, campaignId)
+    if (settings.status_effects_mode !== 'enforced') return null
+
+    const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+    const activeIds = await db('combat_roster').where({ campaign_id: campaignId, status: 'active' }).pluck('token_id')
+    const blocked = await getDeclarationBlockedTokens(campaignId, activeIds, settings)
+    const statusCode = blocked.get(tokenId)
+    if (!statusCode) return null
+
+    const autonomousIds = new Set(await db('combat_actions')
+      .where({ campaign_id: campaignId, turn_number: state?.current_turn ?? 1, action_key: 'drone_auto' })
+      .pluck('token_id'))
+    const humanIds = activeIds.filter(id => !autonomousIds.has(id))
+    if (!hasActionableToken(humanIds, blocked)) {
+      console.log(`[DBG] autoSkip — token:${tokenId} bloqué (${statusCode}) mais AUCUN acteur restant : pas de passage automatique (comportement historique)`)
+      return null
+    }
+    return statusCode
+  } catch (err) {
+    console.error('[WS] resolveAutoSkipStatus error:', err.message)
+    return null
+  }
+}
+
 // ─── Helper — trouver le prochain slot ANNONCE non déclaré (LdB p.212, tri base_ini ASC) ──────────
 // Lot 0 (docs/PLANS/PLAN_DRONE.md §4) — requête auparavant dupliquée à l'identique dans 5 endroits
 // (skipPlayer, endTurn, COMBAT_ACTION_DECLARE, COMBAT_ANNOUNCE_START, garde « c'est ton tour de
@@ -104,6 +180,20 @@ export async function advanceAnnouncementQueue(io, campaignId, pendingMaps) {
   }
   const nextSlot = await findNextAnnounceSlot(campaignId)
   if (!nextSlot) return
+
+  // Lot 1c — token bloqué (mort/étourdi/inconscient…) : passé AVANT toute autre chose (y compris le
+  // test de Surprise d'un PNJ mort), sans qu'aucune fenêtre de déclaration ne s'ouvre. `skipPlayer`
+  // fait le nécessaire (has_announced, action `skip`, « X a été passé ») et relance la file.
+  const blockedStatus = await resolveAutoSkipStatus(campaignId, nextSlot.token_id)
+  if (blockedStatus) {
+    console.log(`[DBG] advanceAnnouncementQueue — token:${nextSlot.token_id} bloqué (${blockedStatus}) : passé sans fenêtre de déclaration`)
+    await skipPlayer(io, campaignId, nextSlot.token_id, pendingMaps)
+    // Filet : `skipPlayer` avale ses erreurs. Si le token n'est toujours pas clos, on présente le slot
+    // normalement (les gardes des handlers prennent le relais) — jamais une file figée en silence.
+    const afterSkip = await db('combat_roster').where({ campaign_id: campaignId, token_id: nextSlot.token_id }).first()
+    if (afterSkip?.has_announced) return
+    console.warn(`[DBG] advanceAnnouncementQueue — token:${nextSlot.token_id} : le passage automatique a échoué, slot présenté normalement`)
+  }
 
   // PNJ surpris pas encore résolu (surprise_roll IS NULL) : Test de Réaction auto-résolu MAINTENANT,
   // à son tour d'ANNONCE (base_ini ASC, même ordre que tout le monde) — jamais à COMBAT_START (retour
@@ -607,6 +697,15 @@ export async function advanceTimeline(io, campaignId, pendingMaps) {
 
     const step = await pickNextTimelineStep(campaignId, turnNumber)
     if (step) {
+      // Lot 1c — token bloqué : son pas est clos par le moteur, SANS `SLOT_ACTIVE` (aucune fenêtre ne
+      // s'ouvre). Placé AVANT la branche autonome : un drone « mort » ne tire pas. Terminaison :
+      // `forfeitToken` pose `has_resolved` et clôt les entrées du token (seuls critères de
+      // `pickNextTimelineStep`) — l'ensemble restant décroît strictement à chaque passage.
+      const blockedStatus = await resolveAutoSkipStatus(campaignId, step.tokenId)
+      if (blockedStatus) {
+        await autoSkipResolutionStep(io, campaignId, step.tokenId, turnNumber, blockedStatus)
+        return advanceTimeline(io, campaignId, pendingMaps)
+      }
       // Entrée autonome → le moteur la résout lui-même et continue l'échelle, sauf suspension (voir
       // commentaire ci-dessus). Terminaison garantie côté grenade (jamais de suspend) : le résolveur
       // marque l'entrée `resolved` avant tout traitement (voir socketCombatResolution.js), donc
@@ -623,6 +722,12 @@ export async function advanceTimeline(io, campaignId, pendingMaps) {
 
     const obligatoryDelayed = await pickNextObligatoryDelayed(campaignId, turnNumber)
     if (obligatoryDelayed) {
+      // Lot 1c — le tour obligatoire d'un retardataire bloqué est passé de la même façon.
+      const blockedDelayedStatus = await resolveAutoSkipStatus(campaignId, obligatoryDelayed.token_id)
+      if (blockedDelayedStatus) {
+        await autoSkipResolutionStep(io, campaignId, obligatoryDelayed.token_id, turnNumber, blockedDelayedStatus)
+        return advanceTimeline(io, campaignId, pendingMaps)
+      }
       await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
       await broadcastTimelineState(io, campaignId, turnNumber,
         { kind: 'delayed_turn', tokenId: obligatoryDelayed.token_id, groupId: obligatoryDelayed.declaration_group_id })
@@ -633,6 +738,20 @@ export async function advanceTimeline(io, campaignId, pendingMaps) {
   } catch (err) {
     console.error('[WS] advanceTimeline error:', err.message)
   }
+}
+
+// Lot 1c — passage automatique d'un pas de RÉSOLUTION bloqué. `COMBAT_TURN_SKIPPED` (« X a été passé »)
+// n'est émis que si le token n'a pas DÉJÀ été passé à l'annonce ce Tour (action `skip`) : sinon le
+// message apparaîtrait deux fois pour le même token.
+async function autoSkipResolutionStep(io, campaignId, tokenId, turnNumber, statusCode) {
+  console.log(`[DBG] advanceTimeline — token:${tokenId} bloqué (${statusCode}) : pas passé sans fenêtre, tour ${turnNumber}`)
+  await forfeitToken(campaignId, tokenId, turnNumber)
+  const alreadySkipped = await db('combat_actions')
+    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber, type: 'skip' })
+    .first()
+  if (alreadySkipped) return
+  const token = await db('tokens').where({ id: tokenId }).first()
+  io.to(campaignId).emit(WS.COMBAT_TURN_SKIPPED, { tokenId, tokenLabel: token?.label ?? 'Inconnu' })
 }
 
 // Force-résolution d'un token hors du parcours normal (étourdissement — STUN2) : ses actions et

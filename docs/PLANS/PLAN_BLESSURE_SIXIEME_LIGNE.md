@@ -2,7 +2,8 @@
 
 > 2026-09-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et
 > fusionné dans `docs/SYSTEME/COMBAT.md` une fois clos.
-> Statut : 🟡 **cadrage terminé, aucun code écrit.** Décisions Saar du 2026-09-23 en §2. Points encore
+> Statut : 🟡 **Lots 1a/1b/1d commités ; Lot 1c CODÉ 2026-09-24 (en attente des tests Saar : base + jeu) ; Lots 2-4 non commencés.**
+> Décisions Saar du 2026-09-23 en §2. Points encore
 > ouverts en §7. Un seul problème (Règle « un plan = un bug ») : la 6ᵉ ligne du compteur RAW n'existe pas
 > dans le moteur.
 > Hiérarchie : Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`) > ce plan.
@@ -249,6 +250,105 @@ Deux concepts que le RAW distingue :
     au milieu, dernier ; tous bloqués ; stun en attente ; drone/exo ; mode `icon_only`/`off`), validation Saar
     en jeu réel. Remplace l'ancien « 1c différé » (sortie de la file d'initiative) : `combat_roster.status`
     `done` reste inutilisé.
+  - **Lot 1c — CONCEPTION DÉTAILLÉE (2026-09-24, après lecture complète de `combatTurnEngine.js` ; Saar :
+    « la fenêtre de déclaration s'affiche pour le mort » + « blocage au mauvais endroit »).**
+    *Constat code* : ANNONCE — `advanceAnnouncementQueue` (`:97`) est le point central de la file (appelé par
+    `endTurn:862`, `socketCombatState.js:445/561`, `socketCombatAnnouncement.js:1085`, `skipPlayer:251`) ; il
+    émet `COMBAT_SLOT_ADVANCED`, ce qui ouvre la fenêtre de déclaration ; précédent d'auto-passage : le PNJ qui
+    rate son test de Surprise (`:129-148`, `has_announced` + action `skip` + relance de la file) et `skipPlayer`
+    (`:220`, + `COMBAT_TURN_SKIPPED`). RÉSOLUTION — `advanceTimeline` (`:603`) choisit le pas puis diffuse
+    `SLOT_ACTIVE` (ouvre la fenêtre) ; un token qui a « passé » à l'annonce reste un pas `simple`
+    (`has_resolved=false`) et son client confirme automatiquement (log `mods:null`). Les gardes actuelles
+    (`socketCombatResolution.js` ~157-180 PRECHECK et ~346-368 CONFIRM) sont deux copies quasi identiques.
+    *Conception* : (1) **une seule autorité**, dans `combatTurnEngine.js` :
+    `getDeclarationBlockedTokens(campaignId, tokenIds, settings)` → `Map(tokenId → statusCode)` (statuts
+    `blocksDeclaration` du registre, uniquement en mode `enforced`, + stun en attente `combat_pending`) ;
+    les 2 gardes des handlers l'appellent (zéro changement de comportement de ces gardes, elles restent en filet).
+    (2) **ANNONCE** : dans `advanceAnnouncementQueue`, juste après `nextSlot` (AVANT le test de Surprise), un token
+    bloqué est passé par `skipPlayer` (déjà : `has_announced`, action `skip`, `COMBAT_TURN_SKIPPED`, relance de
+    la file) — aucune fenêtre ne s'ouvre. (3) **RÉSOLUTION** : dans `advanceTimeline`, après le choix du pas
+    (y compris le tour obligatoire des retardataires), un token bloqué est clôturé par `forfeitToken` et la
+    fonction se rappelle, sans `SLOT_ACTIVE` ; `COMBAT_TURN_SKIPPED` n'est émis que si le token n'a PAS déjà été
+    passé à l'annonce ce Tour (sinon message en double). (4) **Garde-fou anti-boucle (trouvaille)** : si TOUS les
+    tokens actifs du roster sont bloqués, `endTurn → ANNONCE (tous passés) → RÉSOLUTION (rien) → endTurn` tournerait
+    sans fin (Tours qui défilent seuls). Règle : on ne passe automatiquement que s'il reste au moins un token
+    actif non bloqué ; sinon comportement actuel (fenêtre + garde). Fonction pure testable
+    `hasActionableToken(blockedIds, activeIds)`. (5) `stunned`/`unconscious` en bénéficient (plus de fenêtre, plus
+    de message d'erreur) ; un statut posé EN COURS de Tour (Choc pendant la résolution) prend effet au prochain
+    pas de ce token, comme aujourd'hui.
+    *Terminaison* : `forfeitToken` clôt les entrées `scheduled`/`delayed_waiting` du Tour et pose
+    `has_resolved` (les seuls critères de `pickNextTimelineStep`) ; `skipPlayer` pose `has_announced` — chaque
+    passage réduit strictement l'ensemble restant.
+    *Tests* : fonction pure ; scénarios en jeu (Saar) : mort en 1ᵉʳ/milieu/dernier de l'ordre, mort + inconscient,
+    PJ et PNJ, tous bloqués (comportement inchangé), mode `icon_only`/`off` (inchangé), stun en attente, statut
+    posé pendant la résolution.
+  - **Analyse à charge de 1c (2026-09-24) — conclusion : la conception tient, 5 renforts, aucune objection
+    bloquante.** Vérifié : (a) TOUS les chemins de la file d'annonce passent par `advanceAnnouncementQueue`
+    (`socketCombatState.js:445` début d'annonce, `:561` échec de Surprise PJ, `endTurn:862`,
+    `socketCombatAnnouncement.js:1085`, `skipPlayer:251`) — une seule insertion suffit ;
+    `socketCombatAnnouncement.js:173` ne fait que VALIDER qui a le droit de déclarer ; (b) côté client, en
+    ANNONCE le token actif ne vient que de `COMBAT_SLOT_ADVANCED` (`onSlotAdvanced`) et, à la reconnexion, du
+    roster (`onStateSync`, premier non-annoncé) — un token déjà passé côté serveur n'ouvre donc aucune
+    fenêtre, et `COMBAT_PHASE_CHANGED` ne fixe pas `activeTokenId` (pas de clignotement) ; (c) l'ancien
+    `endTurn` sait déjà enchaîner un Tour entièrement pré-annoncé.
+    Renforts : (R1) **filet si `skipPlayer` échoue** (il avale ses erreurs) : relire la ligne roster ; si le token
+    n'est toujours pas `has_announced`, présenter le slot normalement — jamais une file figée en silence ;
+    (R2) en RÉSOLUTION, vérifier le blocage AVANT la branche des entrées autonomes (un drone « mort » ne tire
+    pas) ; (R3) message `COMBAT_TURN_SKIPPED` omis en résolution si une action `skip` existe déjà pour ce token ce
+    Tour ; (R4) lignes de log `[DBG]` explicites (annonce/résolution, token, statut) — serveur bavard par
+    convention ; (R5) **vrais tests d'intégration** : `combatTurnEngine.test.mjs` possède déjà un fixture de
+    base réelle isolé (`createCombatFixture` : utilisateur + campagne + tokens créés puis supprimés, `skip` sans
+    `DATABASE_URL`) — ajouter les cas 1c (annonce : bloqué passé et slot suivant émis ; mode `icon_only` :
+    inchangé ; tous bloqués : slot présenté ; résolution : pas bloqué suivant diffusé, pas de doublon de
+    message). À LANCER PAR SAAR (écrit/supprime des lignes dans sa base locale) :
+    `node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs` depuis la racine.
+    Limites connues, non aggravées : parité avec les gardes actuelles pour l'exo piloté (statuts lus sur le
+    token de l'exo, pas sur le pilote) ; un combat composé uniquement de drones en `ordres_permanents` boucle
+    déjà aujourd'hui (Tour entièrement pré-annoncé) — le garde-fou anti-boucle de 1c ne le résout pas.
+  - **Lot 1c — CODÉ (2026-09-24).** Implémenté comme conçu ci-dessus : `getDeclarationBlockedTokens` +
+    `hasActionableToken` + `resolveAutoSkipStatus` (interne) dans `combatTurnEngine.js` ; insertions dans
+    `advanceAnnouncementQueue` (avant le test de Surprise, filet si `skipPlayer` échoue), `advanceTimeline` (avant la
+    branche autonome ET pour le tour obligatoire des retardataires) ; `autoSkipResolutionStep` (message sans
+    doublon) ; les 2 gardes de `socketCombatResolution.js` appellent la même fonction. **Précision de la garde
+    anti-boucle** (trouvée au codage) : les drones à action `drone_auto` de ce Tour ne comptent pas comme acteurs
+    — sinon « mort + drone autonome » tournerait seul. 12 tests d'intégration (`combatTurnEngine.test.mjs`) +
+    1 test pur. Reste : tests base + jeu par Saar, puis commit.
+  - **Constat hors périmètre 1c (2026-09-24, rapporté par la session « drones » d'après un test de Saar)** : un token
+    `dead` reste CIBLE d'une arme de zone (grenade à fragmentation : « Baboulinet — Éviter la zone d'effet — Échec
+    14 ») et reçoit test/fenêtre de Chance. [VÉRIFIÉ par lecture, rapporté] `queryTokensInShape`
+    (`worldSpatialQueryService.js:234-264`) ne filtre ni statut ni mort ; il alimente `evaluateAoeVisibility` →
+    `resolveAoeAssaultAction`. [INCONNU] le mort a-t-il aussi encaissé des dégâts (base non lue) ; tirs simples et
+    interception non examinés. Le moteur de tour, lui, respecte bien `dead` (logs du même test = 1c fonctionne).
+    **Règle tranchée par Saar (2026-09-24)** : le mort ne peut NI esquiver NI dépenser de point de Chance (« ça c'est
+    sûr ») ; en revanche des technologies de résurrection existent → **le décompte des blessures continue jusqu'à un
+    corps totalement détruit** : un cadavre reste donc cible et encaisse les dégâts (option B). Conséquence : aucun
+    filtrage des cibles ; il faut retirer les fenêtres de Chance d'un mort (chantier séparé, « un plan = un problème »)
+    et le décompte « jusqu'au corps détruit » dépend du Lot 2 (aujourd'hui `applyWound` avale l'erreur d'une ligne
+    Mortelle pleine).
+  - **Suites de « mort » demandées par Saar (2026-09-24, non codées, un plan par problème)** — *1e* : un mort ne
+    reçoit AUCUNE fenêtre de Chance (esquive de zone, réduction de gravité, Catastrophe) : `resolveChanceRecipientCharacterId`
+    (contrat existant « null = aucune Chance possible ») + propriété de registre. *1f* : statuts incompatibles avec un mort
+    (décision Saar, « ouvert à débat ») — INTERDITS : Entravé, Déséquilibré, Étourdi/Assommé, Inconscient, Asphyxie,
+    Décompression, Aveuglé, Hypothermie ; AUTORISÉS : Enflammé, Corrodé, Irradié, Saisi, Électrocuté, Infecté,
+    Empoisonné (les 15 codes du panneau sont couverts). Preuve au log du test : un tir sur le token mort a lancé le test
+    de Choc puis `applyStunWithDuration … stunned` sur lui. Points d'écriture des statuts : `statusService.js:40`
+    (`applyStunWithDuration`), `:178` (`applyModStatus`), `socketToken.js:178` (bascule manuelle) ; test de Choc :
+    `damageService.js:479/486` (`resolveTargetHit`), en amont des 7 appels de `applyStun`. Précision de Saar : le corps
+    « reste là et prend des blessures », point (pas de notion de destruction à ce stade).
+  - **1e/1f — décisions finales de Saar (2026-09-24) + analyse à charge.** INTERDITS sur un mort (8) : Entravé,
+    Déséquilibré, Étourdi, Inconscient, Asphyxie, Aveuglé, Hypothermie, **Évanoui** ; AUTORISÉS (7) : Enflammé,
+    Corrodé, Irradié, Saisi, Électrocuté, Infecté, Empoisonné, **Décompression** (donc 8 interdits / 8 autorisés, `dead`
+    à part). Test de Choc ET durée d'étourdissement coupés pour un mort. **Le MJ reste libre** (bascule manuelle, formulaire
+    danger/froid, `COMBAT_APPLY_STUN` : jamais refusés). À la mort, tous les statuts interdits sont RETIRÉS (+ étourdissement en
+    attente de `combat_pending`). Règle active en mode `enforced` seulement. Conception : propriété de registre
+    `incompatibleWithDead` (ensemble dérivé) ; `isCharacterDead`/`isTokenDead` dans `statusService.js` (autorité de « mort »,
+    modèle `traits.ci` de dnd5e / immunités PF2e : la cible reste visée, seul l'effet n'est pas appliqué) ;
+    `applyStunWithDuration` refuse sur un mort sauf option `force` (chemin MJ) ; `resolveTargetHit` saute le test de Choc
+    (seul site : `damageService.js:479/486`) ; `applyDeathConsequences(io, db, campaignId, tokenId)` appelée par la bascule
+    `dead` (et par le Lot 2 pour la blessure Mort) ; `canEditTokenStatus` reçoit `targetIsDead` (joueur non-MJ refusé) ;
+    1e : `resolveChanceRecipientCharacterId` reçoit `campaignId` et renvoie `null` pour un mort (exo : mort OU pilote mort).
+    Limite connue : un choix d'étourdissement DÉJÀ ouvert chez un joueur au moment de la mort reste affiché (la ligne
+    `combat_pending` disparaît, la confirmation est ignorée). Ordre : commit 1c → 1e → 1f.
   - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
     à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
     catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.

@@ -17,6 +17,15 @@
 - [fix] Deux messages système identiques arrivant au même instant n'en affichaient qu'un seul.
 - [fix] Un drone en ordres permanents annonçait à tort « Initiative ≤ 0 : Action reportée » à chaque combat.
 
+## v248 — 2026-09-24 — Un token mort, étourdi ou inconscient passe son tour sans fenêtre
+
+### Combat
+- [fix] Un token mort, étourdi ou inconscient est désormais passé automatiquement, à l'annonce comme à la
+  résolution : sa fenêtre d'action ne s'ouvre plus, et le message d'erreur « action impossible » n'apparaît plus.
+  Le chat indique simplement « X a été passé ». Si TOUS les combattants sont dans ce cas, le comportement reste
+  celui d'avant (la fenêtre s'ouvre) pour éviter que les Tours défilent seuls. Sans effet quand l'option de
+  campagne « effets de statut » n'est pas en mode appliqué.
+
 ## v247 — 2026-09-24 — Retrait direct de « Enflammé » et « Décompression »
 
 ### Combat

@@ -8236,6 +8236,32 @@ est désormais dérivé de ce registre (constaté (iii) du Lot 1a, résolu).
 client (0 problème), `npm run build` OK, `git diff --check`. **Non testé** : scénario en jeu (retirer Enflammé et
 Décompression en un clic ; Corrodé ouvre toujours son formulaire ; Hypothermie inchangée) — à faire par Saar.
 **Données** : aucune. **Retour arrière** : `git revert` du commit applicable.
+
+---
+
+## Session (Dev) — 2026-09-24 — Lot 1c : blocage PROACTIF des tokens bloqués (mort / étourdi / inconscient)
+
+**Origine** : retours de Saar au test de « Mort » — « la fenêtre de déclaration s'affiche pour le mort » puis, à la
+résolution, « action impossible, vous êtes mort » : « le blocage n'est pas au bon endroit ». [VÉRIFIÉ code] Cause
+racine : « ce token peut-il agir ? » n'était posé que par deux gardes *réactives* (`socketCombatResolution.js`
+PRECHECK/CONFIRM), APRÈS l'ouverture de la fenêtre ; même défaut pour `stunned`/`unconscious`.
+
+**Décision (conception + analyse à charge dans `PLAN_BLESSURE_SIXIEME_LIGNE.md`)** : la question se pose là où le
+moteur CHOISIT le prochain acteur. Autorité unique `getDeclarationBlockedTokens` (`combatTurnEngine.js`, statuts
+`blocksDeclaration` du registre + stun en attente, mode `enforced` seulement) ; ANNONCE : `advanceAnnouncementQueue`
+passe le token par `skipPlayer` ; RÉSOLUTION : `advanceTimeline` clôt son pas par `forfeitToken` sans `SLOT_ACTIVE`
+(y compris tour obligatoire des retardataires ; « X a été passé » sans doublon). **Garde-fou anti-boucle** : pas de
+passage automatique s'il ne reste aucun acteur non bloqué (drones `ordres_permanents` exclus des acteurs) — sinon les
+Tours défileraient seuls. Erreur de lecture → fenêtre normale (jamais une file figée). Les 2 gardes des handlers
+appellent la même fonction et restent en filet. Effet de bord voulu : `stunned`/`unconscious` en bénéficient.
+
+**Testé** : `node --check` ; `node --test 'shared/**/*.test.mjs'` 671/671 ; test pur `hasActionableToken` ;
+12 tests d'intégration ajoutés à `combatTurnEngine.test.mjs` — **lancés par Saar sur sa base locale :
+40/40** (`node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs`). En jeu (log de Saar) : mort passé
+à l'annonce et à la résolution sans fenêtre ni doublon. **Non testé** en jeu : mort au milieu/dernier, PJ mort,
+mort+inconscient, tous bloqués, `icon_only`. **Données** :
+aucune migration. **Retour arrière** : `git revert` du commit applicable.
+
 ---
 
 ## Session (Dev) — 2026-09-24 — Drone d'interception, Lot 1 : le drone bouclier s'interpose sur un tir

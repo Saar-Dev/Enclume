@@ -8,6 +8,7 @@ import {
   pickNextTimelineStep, buildTimelineEntries, endTurn,
   advanceTimeline, registerAutonomousStepResolver,
   findNextAnnounceSlot, advanceAnnouncementQueue, prefillAutonomousDroneOrders,
+  getDeclarationBlockedTokens, hasActionableToken,
 } from './combatTurnEngine.js'
 
 // Lancement : node --env-file=server/.env --test server/src/socket/combatTurnEngine.test.mjs
@@ -622,4 +623,181 @@ test('advanceTimeline (3d) — entrée `autoResolve` : le moteur appelle le rés
     registerAutonomousStepResolver(null) // ne pas laisser le stub fuiter vers les autres tests
     await fx.cleanup()
   }
+})
+
+// ─── Lot 1c — blocage PROACTIF des tokens bloqués (docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md) ─────────
+// Un token mort/étourdi/inconscient est passé PAR LE MOTEUR (annonce : `skipPlayer` ; résolution :
+// `forfeitToken`) avant qu'aucune fenêtre ne s'ouvre. Mode 'enforced' seulement (défaut de campagne).
+
+test("hasActionableToken (pur) — vrai s'il reste un acteur non bloqué, faux sinon", () => {
+  assert.equal(hasActionableToken(['a', 'b'], new Map([['a', 'dead']])), true)
+  assert.equal(hasActionableToken(['a', 'b'], new Map([['a', 'dead'], ['b', 'stunned']])), false)
+  assert.equal(hasActionableToken([], new Map()), false)
+  assert.equal(hasActionableToken(['a'], new Set()), true)
+})
+
+// Pose un statut bloquant sur un token de la fixture (nettoyé par `cleanup1c`).
+async function setStatus(tokenId, statusCode) {
+  await db('token_statuses').insert({ token_id: tokenId, status_code: statusCode })
+}
+async function cleanup1c(fx) {
+  const tokenIds = fx.roster.map(r => r.token.id)
+  await db('combat_pending').where({ campaign_id: fx.campaign.id }).del()
+  await db('token_statuses').whereIn('token_id', tokenIds).del()
+  await fx.cleanup()
+}
+const recordingIo = (emitted) => ({ to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) })
+
+test('getDeclarationBlockedTokens — statut du registre + étourdissement en attente ; vide hors mode enforced', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [{ baseIni: 1 }, { baseIni: 2 }, { baseIni: 3 }] })
+  try {
+    const [t0, t1, t2] = fx.roster.map(r => r.token.id)
+    await setStatus(t0, 'dead')
+    await db('combat_pending').insert({ campaign_id: fx.campaign.id, token_id: t1, type: 'stun', payload: {} })
+    const enforced = await getDeclarationBlockedTokens(fx.campaign.id, [t0, t1, t2], { status_effects_mode: 'enforced' })
+    assert.deepEqual([...enforced.entries()].sort(), [[t0, 'dead'], [t1, 'stunned']].sort())
+    const iconOnly = await getDeclarationBlockedTokens(fx.campaign.id, [t0, t1, t2], { status_effects_mode: 'icon_only' })
+    assert.equal(iconOnly.size, 0)
+  } finally { await cleanup1c(fx) }
+})
+
+test("advanceAnnouncementQueue (1c) — token mort à son slot : passé SANS fenêtre, slot suivant présenté, « X a été passé » émis", { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', subPhase: null, roster: [
+    { baseIni: 5, announced: false }, { baseIni: 10, announced: false }, { baseIni: 15, announced: false },
+  ] })
+  const emitted = []
+  try {
+    const [dead, next] = fx.roster.map(r => r.token.id)
+    await setStatus(dead, 'dead')
+    await advanceAnnouncementQueue(recordingIo(emitted), fx.campaign.id, pendingMaps)
+
+    const slots = emitted.filter(e => e.event === WS.COMBAT_SLOT_ADVANCED)
+    assert.equal(slots.length, 1)
+    assert.equal(slots[0].payload.tokenId, next)                       // le mort n'a JAMAIS de fenêtre
+    const skipped = emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED)
+    assert.equal(skipped.length, 1)
+    assert.equal(skipped[0].payload.tokenId, dead)
+    const row = await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: dead }).first()
+    assert.equal(row.has_announced, true)
+    assert.ok(await db('combat_actions').where({ campaign_id: fx.campaign.id, token_id: dead, type: 'skip' }).first())
+  } finally { await cleanup1c(fx) }
+})
+
+test('advanceAnnouncementQueue (1c) — mode icon_only : comportement inchangé, le mort a sa fenêtre', { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', subPhase: null, roster: [
+    { baseIni: 5, announced: false }, { baseIni: 10, announced: false },
+  ] })
+  const emitted = []
+  try {
+    await db('campaigns').where({ id: fx.campaign.id }).update({ settings: JSON.stringify({ status_effects_mode: 'icon_only' }) })
+    const dead = fx.roster[0].token.id
+    await setStatus(dead, 'dead')
+    await advanceAnnouncementQueue(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_SLOT_ADVANCED).payload.tokenId, dead)
+  } finally { await cleanup1c(fx) }
+})
+
+test('advanceAnnouncementQueue (1c) — TOUS bloqués : garde-fou anti-boucle, slot présenté comme avant', { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', subPhase: null, roster: [
+    { baseIni: 5, announced: false }, { baseIni: 10, announced: false },
+  ] })
+  const emitted = []
+  try {
+    await setStatus(fx.roster[0].token.id, 'dead')
+    await setStatus(fx.roster[1].token.id, 'unconscious')
+    await advanceAnnouncementQueue(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_SLOT_ADVANCED).payload.tokenId, fx.roster[0].token.id)
+  } finally { await cleanup1c(fx) }
+})
+
+test("advanceAnnouncementQueue (1c) — mort + drone en ordres permanents seulement : pas d'acteur humain → pas de passage automatique", { skip }, async () => {
+  const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', subPhase: null, roster: [
+    { baseIni: 5, announced: false }, { baseIni: 12, announced: true, type: 'drone' },
+  ] })
+  const emitted = []
+  try {
+    await setStatus(fx.roster[0].token.id, 'dead')
+    await addAction(fx.campaign.id, fx.roster[1].token.id, { actionKey: 'drone_auto' })
+    await advanceAnnouncementQueue(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_SLOT_ADVANCED).payload.tokenId, fx.roster[0].token.id)
+  } finally { await cleanup1c(fx) }
+})
+
+test("advanceTimeline (1c) — pas d'un token mort passé SANS fenêtre : le pas suivant est diffusé, un seul « X a été passé »", { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [
+    { baseIni: 20, ini: 20 }, { baseIni: 10, ini: 10 },
+  ] })
+  const emitted = []
+  try {
+    const [dead, alive] = fx.roster.map(r => r.token.id)
+    await setStatus(dead, 'dead')
+    await advanceTimeline(recordingIo(emitted), fx.campaign.id, pendingMaps)
+
+    const timeline = emitted.filter(e => e.event === WS.COMBAT_TIMELINE_UPDATED)
+    assert.equal(timeline.length, 1)                                    // aucune fenêtre pour le mort
+    assert.equal(timeline[0].payload.currentStep.tokenId, alive)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 1)
+    assert.equal((await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: dead }).first()).has_resolved, true)
+  } finally { await cleanup1c(fx) }
+})
+
+test("advanceTimeline (1c) — déjà passé à l'annonce (action skip) : pas de doublon « X a été passé »", { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [
+    { baseIni: 20, ini: 20 }, { baseIni: 10, ini: 10 },
+  ] })
+  const emitted = []
+  try {
+    const [dead, alive] = fx.roster.map(r => r.token.id)
+    await setStatus(dead, 'dead')
+    await addAction(fx.campaign.id, dead, { type: 'skip', actionKey: 'skip', sequence: 99, status: 'skipped', turnNumber: 2 })
+    await advanceTimeline(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_TIMELINE_UPDATED).payload.currentStep.tokenId, alive)
+  } finally { await cleanup1c(fx) }
+})
+
+test("advanceTimeline (1c) — entrée d'échelle d'un token mort : clôturée (lost), action résolue, pas suivant diffusé", { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [
+    { baseIni: 20, ini: 20 }, { baseIni: 10, ini: 10 },
+  ] })
+  const emitted = []
+  try {
+    const [dead, alive] = fx.roster.map(r => r.token.id)
+    await setStatus(dead, 'dead')
+    const action = await addAction(fx.campaign.id, dead, { turnNumber: 2 })
+    await buildTimelineEntries(io, fx.campaign.id, 2, [action], fx.roster.map(r => r.rosterRow))
+    await advanceTimeline(recordingIo(emitted), fx.campaign.id, pendingMaps)
+
+    assert.equal((await db('combat_timeline_entries').where({ combat_action_id: action.id }).first()).status, 'lost')
+    assert.equal((await db('combat_actions').where({ id: action.id }).first()).status, 'resolved')
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_TIMELINE_UPDATED).payload.currentStep.tokenId, alive)
+  } finally { await cleanup1c(fx) }
+})
+
+test('advanceTimeline (1c) — mode icon_only : le pas du mort est présenté comme avant', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [{ baseIni: 20, ini: 20 }, { baseIni: 10, ini: 10 }] })
+  const emitted = []
+  try {
+    await db('campaigns').where({ id: fx.campaign.id }).update({ settings: JSON.stringify({ status_effects_mode: 'icon_only' }) })
+    const dead = fx.roster[0].token.id
+    await setStatus(dead, 'dead')
+    await advanceTimeline(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_TIMELINE_UPDATED).payload.currentStep.tokenId, dead)
+  } finally { await cleanup1c(fx) }
+})
+
+test('advanceTimeline (1c) — TOUS bloqués : garde-fou anti-boucle, le pas est présenté comme avant', { skip }, async () => {
+  const fx = await createCombatFixture({ turn: 2, roster: [{ baseIni: 20, ini: 20 }, { baseIni: 10, ini: 10 }] })
+  const emitted = []
+  try {
+    await setStatus(fx.roster[0].token.id, 'dead')
+    await setStatus(fx.roster[1].token.id, 'stunned')
+    await advanceTimeline(recordingIo(emitted), fx.campaign.id, pendingMaps)
+    assert.equal(emitted.filter(e => e.event === WS.COMBAT_TURN_SKIPPED).length, 0)
+    assert.equal(emitted.find(e => e.event === WS.COMBAT_TIMELINE_UPDATED).payload.currentStep.tokenId, fx.roster[0].token.id)
+  } finally { await cleanup1c(fx) }
 })

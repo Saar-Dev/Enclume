@@ -1,6 +1,6 @@
 # STATUTS_TOKEN — Statuts de token (`token_statuses`) et registre unique
 
-> Créé 2026-09-24 (chantier `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 1a). Décrit le mécanisme
+> Créé 2026-09-24, mis à jour 2026-09-24 (Lot 1c : blocage proactif) (chantier `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 1a). Décrit le mécanisme
 > transversal « un token porte des statuts » : où ils vivent, qui les pose, comment le code sait ce qu'un
 > statut implique. Les règles Polaris (Choc, Fatigue, Froid…) restent dans leurs documents ; les effets de
 > chaque statut sur le combat sont dans `COMBAT.md` / `COMBAT_FLUX.md`.
@@ -31,7 +31,7 @@ depuis la base sans changer ses consommateurs.
 | `category` | catégorie de couleur du badge/panneau (`TOKEN_STATUS_CATEGORY_COLORS`) | `TokenStatusPanel.jsx`, `TokenPresentation.jsx` |
 | `manualToggle` | accepté par `TOKEN_STATUS_TOGGLE` (bascule manuelle) | `socketToken.js` |
 | `inPanel` | affiché dans la grille du panneau (ordre du registre = ordre d'affichage) | `TokenStatusPanel.jsx` |
-| `blocksDeclaration` | le token ne peut plus déclarer : la garde de résolution passe son tour (STUN2) | `socketCombatResolution.js` |
+| `blocksDeclaration` | le token ne peut plus agir : le MOTEUR de tour le passe avant d'ouvrir sa fenêtre (§ Blocage proactif) | `combatTurnEngine.js` (`getDeclarationBlockedTokens`), gardes de `socketCombatResolution.js` en filet |
 | `defenseless` | la cible ne peut pas se défendre activement (DEF5) | `socketCombatHelpers.js` (`isTargetDefenseless`) |
 | `clearedAtCombatEnd` | retiré à la fin du combat | `socketCombatState.js` |
 | `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` (dangers, froid, `dead`) | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
@@ -48,9 +48,22 @@ l'autorise. Elle ne dit rien de la *manière* de poser (bascule nue = `manualTog
 
 **Statut `dead` (« Mort »)** — `gmOnly`, `blocksDeclaration`, `defenseless`, sans expiration et **jamais**
 `clearedAtCombatEnd` : seul le MJ le retire (bascule ou `/heal`). Pour l'instant posé à la main ; il sera posé
-par la blessure « Mort » du compteur (`PLAN_BLESSURE_SIXIEME_LIGNE.md` Lot 2). Un token mort garde un tour
-d'initiative passé automatiquement par la garde (comme `unconscious`) — sortir le mort de la file = lot 1c,
-non cadré (`combat_roster.status` `active`/`done` existe mais aucun code ne pose `done`).
+par la blessure « Mort » du compteur (`PLAN_BLESSURE_SIXIEME_LIGNE.md` Lot 2). Un token mort garde son tour
+d'initiative, mais le moteur le **passe automatiquement** sans ouvrir de fenêtre (Lot 1c, ci-dessous) ;
+`combat_roster.status` `active`/`done` reste inutilisé (aucun code ne pose `done`).
+
+**Blocage proactif (Lot 1c)** — « ce token peut-il agir ? » se décide là où le moteur CHOISIT le prochain
+acteur, pas après l'ouverture de la fenêtre. Autorité unique : `getDeclarationBlockedTokens(campaignId,
+tokenIds, settings)` (`combatTurnEngine.js`) → `Map(tokenId → code)` = statuts `blocksDeclaration` du registre
++ étourdissement en attente (`combat_pending` `stun`), **uniquement** en mode `status_effects_mode = 'enforced'`.
+Deux points d'application : (1) ANNONCE — `advanceAnnouncementQueue` passe le token bloqué par `skipPlayer`
+(« X a été passé ») avant tout test de Surprise ; (2) RÉSOLUTION — `advanceTimeline` clôt son pas par
+`forfeitToken` sans `SLOT_ACTIVE` (message « X a été passé » omis s'il a déjà été passé à l'annonce), y compris
+pour le tour obligatoire d'un retardataire. **Garde-fou anti-boucle** : on ne passe automatiquement que s'il reste
+un acteur non bloqué (les drones en `ordres_permanents` n'en sont pas) ; si TOUS sont bloqués, comportement
+historique (fenêtre + garde réactive). Toute erreur de lecture → le token n'est pas passé (fenêtre normale). Les
+deux gardes des handlers (PRECHECK/CONFIRM) restent en filet — statut posé entre le choix du pas et le clic — et
+appellent la même fonction. Un statut posé EN COURS de Tour prend effet au prochain pas de ce token.
 
 ## 3. Invariants
 
@@ -62,6 +75,8 @@ non cadré (`combat_roster.status` `active`/`done` existe mais aucun code ne pos
    disparaître seul (`dead`) ne porte pas d'expiration et n'est pas `clearedAtCombatEnd`.
 4b. Les droits de pose passent TOUJOURS par `canEditTokenStatus` — jamais une comparaison `isGm`/`isOwner`
    recopiée dans un handler ou un composant.
+5. « Peut-il agir ? » se lit dans `getDeclarationBlockedTokens`, jamais recopié : ni requête `token_statuses`
+   ni test de statut ajoutés dans un handler pour décider d'un blocage.
 4. Le test `shared/tokenStatusRegistry.test.mjs` fige (instantané historique) les ensembles dérivés : un
    nouveau statut modifie ces attentes **dans le diff qui l'ajoute**, jamais en silence.
 

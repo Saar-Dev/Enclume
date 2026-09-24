@@ -3,7 +3,6 @@ import { resolveMeleeReachM } from '../../../shared/combatRange.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { DECLARATION_BLOCKING_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { parseDice } from '../lib/diceParser.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -20,7 +19,7 @@ import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstant
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import { stripGmOnlyModifiers, applyDerivedAllureToSituation } from '../../../shared/combatSituationMods.js'
 import {
-  advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
+  advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken, getDeclarationBlockedTokens,
   triggerActNow, triggerDelayedPass, registerAutonomousStepResolver,
 } from './combatTurnEngine.js'
 import {
@@ -159,23 +158,15 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // 2. Guard stun — avant tout check LOS/range (STUN2)
       // Si assommé : auto-skip serveur + { ok: false, stunned: true } — débloque le pas figé
       // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
+      // Filet de sécurité depuis le Lot 1c : le moteur (`advanceTimeline`) passe déjà les tokens bloqués
+      // AVANT d'ouvrir leur fenêtre ; cette garde ne se déclenche que si le statut a été posé entre-temps.
+      // Même autorité que le moteur : `getDeclarationBlockedTokens`.
       {
-        const enforcedPrecheck = settings.status_effects_mode === 'enforced'
-        const stunnedStatus = enforcedPrecheck
-          ? await db('token_statuses')
-              .where({ token_id: tokenId })
-              .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
-              .first()
-          : null
-        const pendingStun = (enforcedPrecheck && !stunnedStatus)
-          ? await db('combat_pending')
-              .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
-              .first()
-          : null
-        if (stunnedStatus || pendingStun) {
+        const blockedStatusCode = (await getDeclarationBlockedTokens(campaignId, [tokenId], settings)).get(tokenId)
+        if (blockedStatusCode) {
           console.log(`[STUN2] PRECHECK token ${tokenId} assommé — auto-skip`)
           await forfeitToken(campaignId, tokenId, state.current_turn)
-          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: blockedStatusCode })
           await advanceTimeline(io, campaignId, pendingMaps)
           return callback({ ok: false, stunned: true })
         }
@@ -347,23 +338,13 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
 
       // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
       // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
+      // Même autorité que le moteur (`getDeclarationBlockedTokens`) ; filet depuis le Lot 1c.
       {
-        const enforcedConfirm = settings.status_effects_mode === 'enforced'
-        const stunnedStatus = enforcedConfirm
-          ? await db('token_statuses')
-              .where({ token_id: tokenId })
-              .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
-              .first()
-          : null
-        const pendingStun = (enforcedConfirm && !stunnedStatus)
-          ? await db('combat_pending')
-              .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
-              .first()
-          : null
-        if (stunnedStatus || pendingStun) {
+        const blockedStatusCode = (await getDeclarationBlockedTokens(campaignId, [tokenId], settings)).get(tokenId)
+        if (blockedStatusCode) {
           console.log(`[STUN2] CONFIRM token ${tokenId} assommé — pas auto-skipé`)
           await forfeitToken(campaignId, tokenId, state.current_turn)
-          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: blockedStatusCode })
           await advanceTimeline(io, campaignId, pendingMaps)
           return
         }
