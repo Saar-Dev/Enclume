@@ -190,7 +190,8 @@ export async function woundInfectionCheckHandler(trx, echeance) {
   const undoEntries = []
 
   const infects = !isSuccess || rule.infectsOnSuccess
-  if (infects) {
+  // Une case supplémentaire seulement quand le RAW la prévoit (WOUND_INFECTION.extraCase) : jamais pour Mortelle.
+  if (infects && rule.extraCase) {
     const insertion = await resolveWoundInsertion(trx, wound.char_sheet_id, wound.location, wound.severity)
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
   }

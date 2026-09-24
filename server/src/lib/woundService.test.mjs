@@ -207,4 +207,67 @@ test('resolveChanceChoice("reduce_1") avec Chance insuffisante : aucun effet, tr
   }
 })
 
+// ─── 6ᵉ ligne (mort_subite) — Lot 2a du chantier « 6ᵉ ligne du compteur de blessures » ──────────────────────
+
+test('applyWound (Mortelle à la tête) reste une Mortelle et ouvre un choix Chance (comportement inchangé)', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    const result = await applyWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'tete', severity: 'mortelle',
+    })
+    assert.equal(result.finalSeverity, 'mortelle')
+    assert.equal(result.promoted, false)
+    assert.equal(result.shock_test_required, true)
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 1)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound : la 2ᵉ Mortelle à la tête déborde vers mort_subite, diffusée en WOUND_ADDED, sans Test de Choc ni Chance', { skip }, async () => {
+  const fixture = await createFixture()
+  const emitted = []
+  const stubIo = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    const args = { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'tete', severity: 'mortelle' }
+    await applyWound(stubIo, db, fixture.campaign.id, args)
+    const second = await applyWound(stubIo, db, fixture.campaign.id, args)
+
+    assert.equal(second.finalSeverity, 'mort_subite')
+    assert.equal(second.promoted, true)
+    assert.equal(second.shock_test_required, false, 'Mort subite (Tête) : aucun Test de Choc')
+    assert.equal(second.worst_wound_severity, 'mort_subite')
+
+    const added = emitted.filter(e => e.event === WS.WOUND_ADDED)
+    assert.equal(added.length, 2)
+    assert.equal(added[1].payload.wound.severity, 'mort_subite')
+    assert.equal(added[1].payload.promoted, true)
+    assert.equal(added[1].payload.worst_wound_severity, 'mort_subite')
+
+    // Un seul choix Chance : celui de la 1ʳᵉ Mortelle. La 6ᵉ ligne n'en ouvre aucun avant le Lot 3.
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 1)
+
+    const wounds = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })
+    assert.deepEqual(wounds.map(w => w.severity), ['mort_subite'])
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound (mort_subite sur un bras) : Membre détruit — Test de Choc requis ; sur le même bras une 2ᵉ ne fait rien', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    const args = { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'bras_gauche', severity: 'mort_subite' }
+    const first = await applyWound(fakeIo, db, fixture.campaign.id, args)
+    assert.equal(first.finalSeverity, 'mort_subite')
+    assert.equal(first.shock_test_required, true)
+
+    const second = await applyWound(fakeIo, db, fixture.campaign.id, args)
+    assert.equal(second, null, 'ligne pleine : attendu, sans erreur')
+    assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 1)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
 test.after(async () => { await db.destroy() })

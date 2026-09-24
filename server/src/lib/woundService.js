@@ -1,6 +1,6 @@
 import {
   resolveWoundInsertion, resolveWoundImprovement, computeAvailableSeverityReductions,
-  isShockTestRequired, getWorstWoundSeverity,
+  isShockTestRequired, getWorstWoundSeverity, WoundLineFullError,
 } from './woundUtils.js'
 import { initializeWoundHealingEcheance } from './woundEvolutionService.js'
 import { emitTokenStatusUpdated } from './statusService.js'
@@ -23,7 +23,7 @@ const CHANCE_ELIGIBLE_SEVERITIES = ['grave', 'critique', 'mortelle']
 // Retourne { finalSeverity, wound, promoted, shock_test_required, worst_wound_severity } — finalSeverity
 // (post-promotion, P49) pour que le caller puisse appeler resolveShockTest, le reste pour les callers
 // qui ont besoin de la blessure complète (ex. réponse HTTP d'une route d'ajout manuel).
-// Retourne null si severity ou charSheetId absents, ou si AppError (ligne pleine — comportement normal en jeu).
+// Retourne null si severity ou charSheetId absents, ou si AppError (ligne pleine : seule la 6ᵉ ligne peut l'être — attendu).
 export async function applyWound(io, db, campaignId, {
   charSheetId,
   characterId,
@@ -44,7 +44,13 @@ export async function applyWound(io, db, campaignId, {
       return insertion
     })
   } catch (err) {
-    console.error('[woundService] applyWound — insertion échouée :', charSheetId, localisation, severity, err.message)
+    // « Ligne pleine » : seule la 6ᵉ ligne (une case) peut l'être — une localisation déjà au maximum (Mort/Membre
+    // détruit) ne reçoit rien de plus (le cadavre continue de prendre des blessures AILLEURS). Fait attendu, pas un échec.
+    if (err instanceof WoundLineFullError) {
+      console.log(`[DBG] applyWound — rien de plus à écrire (${err.message}) : fiche ${charSheetId}, ${localisation}, ${severity}`)
+    } else {
+      console.error('[woundService] applyWound — insertion échouée :', charSheetId, localisation, severity, err.message)
+    }
     return null
   }
 

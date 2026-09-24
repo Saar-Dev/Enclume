@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useDroppable, useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  WOUND_SEVERITIES, WOUND_MAX_COUNTS, SEVERITY_COLORS,
+  WOUND_SEVERITIES, WOUND_MAX_COUNTS, SEVERITY_COLORS, GM_ONLY_WOUND_SEVERITIES, isSuddenDeathLocation,
 } from '../../../shared/woundConstants.js'
 import {
   ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, SLOT_TO_REF_LOCATION, SYMMETRIC_SLOT_PAIRS,
@@ -31,6 +31,7 @@ export default function LocationPanel({
   wounds,
   characterId,
   canEdit,
+  isGm = false,
   dragItem = null,
   onWoundsReload,
 }) {
@@ -148,8 +149,12 @@ export default function LocationPanel({
   // ── Handlers blessures ─────────────────────────────────────────────────────
   const woundsHere = wounds.filter(w => w.location === location)
 
+  // Une gravité réservée au MJ (la 6ᵉ ligne : Mort / Membre détruit) ne se pose ni ne se retire par le joueur — même règle
+  // que le serveur (routes char-sheet, shared/woundConstants.js:GM_ONLY_WOUND_SEVERITIES).
+  const canEditSeverity = (severity) => canEdit && (isGm || !GM_ONLY_WOUND_SEVERITIES.includes(severity))
+
   const handleBoxClick = useCallback(async (severity, index) => {
-    if (!canEdit) return
+    if (!canEdit || (!isGm && GM_ONLY_WOUND_SEVERITIES.includes(severity))) return
     const woundsOfSev = woundsHere.filter(w => w.severity === severity)
     const wound       = woundsOfSev[index]
     try {
@@ -167,7 +172,7 @@ export default function LocationPanel({
     } catch (err) {
       console.error('Erreur blessure LocationPanel :', err)
     }
-  }, [canEdit, woundsHere, characterId, location, onWoundsReload])
+  }, [canEdit, isGm, woundsHere, characterId, location, onWoundsReload])
 
   // ── Pire blessure pour le header ───────────────────────────────────────────
   const worstSev = woundsHere.length > 0
@@ -266,6 +271,40 @@ export default function LocationPanel({
         {WOUND_SEVERITIES.map(sev => {
           const maxCount    = WOUND_MAX_COUNTS[location]?.[sev] ?? 0
           const woundsOfSev = woundsHere.filter(w => w.severity === sev)
+
+          // 6ᵉ ligne « Mort subite / Membre détruit » : UNE case, affichée comme un MOT (décision Saar 2026-09-23) —
+          // « Mort » en Tête/Corps, « Membre détruit » sur un bras/une jambe. Toujours visible : grisé si la blessure est
+          // absente, mis en évidence si elle est là ; cliquable comme une case (pose/retrait manuel, MJ seul).
+          if (sev === 'mort_subite') {
+            const w         = woundsOfSev[0]
+            const clickable = canEditSeverity(sev)
+            const word      = t(isSuddenDeathLocation(location) ? 'locationPanel.deathWord.mort' : 'locationPanel.deathWord.membreDetruit')
+            const tip = w
+              ? (w.is_stabilized ? t('locationPanel.woundStabilized') : t('locationPanel.woundActive'))
+              : (clickable ? t('locationPanel.woundEmpty') : (canEdit ? t('locationPanel.deathWordGmOnly') : ''))
+            return (
+              <div key={sev} style={s.woundRow}>
+                <span style={s.sevLabel}>{t(`locationPanel.severityShort.${sev}`)}</span>
+                <div
+                  className="wound-severity-color"
+                  onClick={() => handleBoxClick(sev, 0)}
+                  title={tip}
+                  style={{
+                    ...s.deathWord,
+                    background: w ? SEVERITY_COLORS[sev] : 'transparent',
+                    '--severity-bg': w ? SEVERITY_COLORS[sev] : 'transparent',
+                    color: w ? '#fff' : '#3a3a5a',
+                    border: `1px solid ${w ? '#5a5a7a' : '#2a2a3e'}`,
+                    cursor: clickable ? 'pointer' : 'default',
+                    outline: w?.is_stabilized ? '2px solid #4caf77' : 'none',
+                  }}
+                >
+                  {word}
+                </div>
+              </div>
+            )
+          }
+
           return (
             <div key={sev} style={s.woundRow}>
               <span style={s.sevLabel}>{t(`locationPanel.severityShort.${sev}`)}</span>
@@ -523,5 +562,16 @@ const s = {
     display: 'flex',
     gap: 2,
     flexWrap: 'wrap',
+  },
+  deathWord: {
+    fontSize: 9,
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    padding: '0 6px',
+    borderRadius: 2,
+    lineHeight: '13px',
+    height: 13,
+    whiteSpace: 'nowrap',
   },
 }

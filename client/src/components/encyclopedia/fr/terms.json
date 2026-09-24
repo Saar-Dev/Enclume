@@ -95,7 +95,8 @@
     "moyenne":  "Moyenne",
     "grave":    "Grave",
     "critique": "Critique",
-    "mortelle": "Mortelle"
+    "mortelle": "Mortelle",
+    "mort_subite": "Mort subite / Membre détruit"
   },
 
   "localisationGenerique": {

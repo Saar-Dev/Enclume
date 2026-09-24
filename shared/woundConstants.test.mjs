@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage } from './woundConstants.js'
+import {
+  WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage,
+  WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
+  isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects,
+} from './woundConstants.js'
 
 test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
   assert.equal(woundSeverityForDamage(0), null)
@@ -11,8 +15,11 @@ test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (Ld
   assert.equal(woundSeverityForDamage(14), 'moyenne')
   assert.equal(woundSeverityForDamage(15), 'grave')
   assert.equal(woundSeverityForDamage(20), 'critique')
+  assert.equal(woundSeverityForDamage(24), 'critique')
   assert.equal(woundSeverityForDamage(25), 'mortelle')
-  assert.equal(woundSeverityForDamage(99), 'mortelle')
+  assert.equal(woundSeverityForDamage(29), 'mortelle')
+  assert.equal(woundSeverityForDamage(30), 'mort_subite')
+  assert.equal(woundSeverityForDamage(99), 'mort_subite')
 })
 
 test('WOUND_PENALTIES.mortelle - plus de sentinel numérique (LdB : "non applicable")', () => {
@@ -20,7 +27,7 @@ test('WOUND_PENALTIES.mortelle - plus de sentinel numérique (LdB : "non applica
 })
 
 test('isTestBlockingWound - détecte une blessure mortelle', () => {
-  assert.equal(isTestBlockingWound([{ severity: 'critique' }, { severity: 'mortelle', wound_location: 'corps' }]), true)
+  assert.equal(isTestBlockingWound([{ severity: 'critique' }, { severity: 'mortelle', location: 'corps' }]), true)
 })
 
 test('isTestBlockingWound - grave/critique seuls ne bloquent pas', () => {
@@ -33,14 +40,14 @@ test('isTestBlockingWound - tableau vide/absent -> false', () => {
 })
 
 test('isMortalWoundImmobilized - jambe mortelle bloque même le déplacement', () => {
-  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'jambe_gauche' }]), true)
-  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'jambe_droite' }]), true)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', location: 'jambe_gauche' }]), true)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', location: 'jambe_droite' }]), true)
 })
 
 test('isMortalWoundImmobilized - bras/corps/tête mortelle laisse le déplacement lente possible', () => {
-  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'bras_droit' }]), false)
-  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'corps' }]), false)
-  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'tete' }]), false)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', location: 'bras_droit' }]), false)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', location: 'corps' }]), false)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', location: 'tete' }]), false)
 })
 
 test('WOUND_HEALING - durées RAW en minutes (REGLEBLESSURES.md:420-433, vérifiées contre le LdB p.238)', () => {
@@ -78,4 +85,112 @@ test('WOUND_INFECTION - infectsOnSuccess vrai uniquement pour Critique/Mortelle'
   assert.equal(WOUND_INFECTION.grave.infectsOnSuccess, false)
   assert.equal(WOUND_INFECTION.critique.infectsOnSuccess, true)
   assert.equal(WOUND_INFECTION.mortelle.infectsOnSuccess, true)
+})
+
+// ─── 6ᵉ ligne (mort_subite) — cohérence des tables, promotion, Choc, Test interdit ────────────────────────
+
+test('6 lignes : chaque gravité a une capacité par localisation, une couleur, un malus et un seuil (aucune table en retard)', () => {
+  assert.deepEqual(WOUND_SEVERITIES, ['legere', 'moyenne', 'grave', 'critique', 'mortelle', 'mort_subite'])
+  for (const loc of WOUND_LOCATIONS) {
+    assert.deepEqual(Object.keys(WOUND_MAX_COUNTS[loc]), WOUND_SEVERITIES, `capacités de ${loc}`)
+    assert.equal(WOUND_MAX_COUNTS[loc].mort_subite, 1, `la 6ᵉ ligne n'a qu'une case (${loc})`)
+  }
+  assert.deepEqual(Object.keys(SEVERITY_COLORS), WOUND_SEVERITIES)
+  assert.deepEqual(Object.keys(WOUND_PENALTIES), WOUND_SEVERITIES)
+  assert.deepEqual(BLESSURE_SEUILS_TABLE.map(r => r.key), WOUND_SEVERITIES)
+  assert.deepEqual(BLESSURE_SEUILS_TABLE.map(r => r.seuil), [5, 10, 15, 20, 25, 30])
+})
+
+test('capacités du compteur : identiques à la fiche papier (capture vérifiée 2026-09-24)', () => {
+  const papier = {
+    tete:         [3, 3, 2, 2, 1],
+    corps:        [4, 3, 3, 2, 2],
+    bras_droit:   [3, 3, 2, 2, 1],
+    bras_gauche:  [3, 3, 2, 2, 1],
+    jambe_droite: [3, 3, 2, 2, 1],
+    jambe_gauche: [3, 3, 2, 2, 1],
+  }
+  for (const [loc, counts] of Object.entries(papier)) {
+    assert.deepEqual(WOUND_SEVERITIES.slice(0, 5).map(s => WOUND_MAX_COUNTS[loc][s]), counts, loc)
+  }
+})
+
+test('isWoundLinePromoted - règle générale : la blessure qui remplirait la dernière case convertit', () => {
+  // Légère à 3 cases : 2 présentes → la 3ᵉ convertit, 1 présente → non.
+  assert.equal(isWoundLinePromoted('legere', 2, 3), true)
+  assert.equal(isWoundLinePromoted('legere', 1, 3), false)
+  assert.equal(isWoundLinePromoted('grave', 1, 2), true)
+  assert.equal(isWoundLinePromoted('grave', 0, 2), false)
+})
+
+test('isWoundLinePromoted - Mortelle : seul le DÉPASSEMENT convertit (une Mortelle à la tête reste une Mortelle)', () => {
+  // Tête/bras/jambes (1 case) : la 1ʳᵉ Mortelle reste, la 2ᵉ convertit.
+  assert.equal(isWoundLinePromoted('mortelle', 0, 1), false)
+  assert.equal(isWoundLinePromoted('mortelle', 1, 1), true)
+  // Corps (2 cases) : 2 Mortelles tiennent, la 3ᵉ convertit.
+  assert.equal(isWoundLinePromoted('mortelle', 1, 2), false)
+  assert.equal(isWoundLinePromoted('mortelle', 2, 2), true)
+})
+
+test('isSuddenDeathLocation - Mort en Tête/Corps, Membre détruit sur un bras ou une jambe', () => {
+  assert.equal(isSuddenDeathLocation('tete'), true)
+  assert.equal(isSuddenDeathLocation('corps'), true)
+  for (const loc of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) assert.equal(isSuddenDeathLocation(loc), false, loc)
+})
+
+// Copie FIGÉE de l'ancien `getShockMalus` de charStats.js (avant la 6ᵉ ligne) : la table BLESSURE_EFFETS_TABLE,
+// désormais autorité du malus au Choc, doit rendre exactement les mêmes valeurs sur les 5 gravités historiques.
+function legacyShockMalus(severity, location, isLethal) {
+  const MEMBERS = ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']
+  if (isLethal && MEMBERS.includes(location)) return -10
+  if (severity === 'grave') return location === 'tete' ? -5 : 0
+  if (severity === 'critique') {
+    if (location === 'tete')  return -10
+    if (location === 'corps') return -5
+    return 0
+  }
+  if (severity === 'mortelle') {
+    if (location === 'tete')  return -15
+    if (location === 'corps') return -10
+    return -5
+  }
+  return 0
+}
+
+test('getWoundEffects - malus de Choc identique à l\'ancienne fonction sur les 5 gravités × 6 localisations', () => {
+  for (const sev of WOUND_SEVERITIES.slice(0, 5)) {
+    for (const loc of WOUND_LOCATIONS) {
+      assert.equal(getWoundEffects(sev, loc)?.malusChoc ?? 0, legacyShockMalus(sev, loc, false), `${sev} / ${loc}`)
+    }
+  }
+})
+
+test('getWoundEffects - la 6ᵉ ligne : Membre détruit -10 sur un bras/une jambe (ex-is_lethal), aucun Effet en Tête/Corps', () => {
+  for (const loc of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) {
+    assert.equal(getWoundEffects('mort_subite', loc).malusChoc, -10, loc)
+    assert.equal(getWoundEffects('mort_subite', loc).malusChoc, legacyShockMalus('mortelle', loc, true), `${loc} (ancien is_lethal)`)
+  }
+  assert.equal(getWoundEffects('mort_subite', 'jambe_gauche').allure, 'impossible')
+  assert.equal(getWoundEffects('mort_subite', 'bras_droit').allure, 'lente')
+  assert.equal(getWoundEffects('mort_subite', 'tete'), null)
+  assert.equal(getWoundEffects('mort_subite', 'corps'), null)
+  assert.equal(getWoundEffects('legere', 'tete'), null)
+})
+
+test('6ᵉ ligne - interdit tout Test (RAW : Mortelle ET Membre détruit) et immobilise une jambe', () => {
+  assert.deepEqual(TEST_BLOCKING_SEVERITIES, ['mortelle', 'mort_subite'])
+  assert.equal(isTestBlockingWound([{ severity: 'mort_subite', location: 'tete' }]), true)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mort_subite', location: 'jambe_droite' }]), true)
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mort_subite', location: 'bras_gauche' }]), false)
+})
+
+test('isMortalWoundImmobilized - lit `location` (le nom réel de la colonne character_wounds), jamais `wound_location`', () => {
+  assert.equal(isMortalWoundImmobilized([{ severity: 'mortelle', wound_location: 'jambe_gauche' }]), false)
+})
+
+test('WOUND_INFECTION - extraCase : une case en plus pour Moyenne/Grave/Critique, JAMAIS pour Mortelle (survie en heures)', () => {
+  assert.equal(WOUND_INFECTION.moyenne.extraCase, true)
+  assert.equal(WOUND_INFECTION.grave.extraCase, true)
+  assert.equal(WOUND_INFECTION.critique.extraCase, true)
+  assert.equal(WOUND_INFECTION.mortelle.extraCase, false)
 })

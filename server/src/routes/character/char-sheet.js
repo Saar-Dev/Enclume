@@ -79,7 +79,7 @@ import * as modingService from '../../services/modingService.js'
 import * as integrityService from '../../services/integrityService.js'
 import { WS } from '../../../../shared/events.js'
 import {
-  WOUND_LOCATIONS, WOUND_SEVERITIES, isTestBlockingWound,
+  WOUND_LOCATIONS, WOUND_SEVERITIES, GM_ONLY_WOUND_SEVERITIES, isTestBlockingWound,
 } from '../../../../shared/woundConstants.js'
 import { isRepairable, getRepairSkillId, computeRepairNtMalus } from '../../../../shared/integrityRules.js'
 import { createEcheance } from '../../lib/echeanceService.js'
@@ -935,6 +935,7 @@ router.post('/:characterId/wounds', async (req, res, next) => {
     if (!WOUND_LOCATIONS.includes(location)) throw new AppError(400, `Localisation invalide : ${location}`)
     if (!WOUND_SEVERITIES.includes(severity)) throw new AppError(400, `Gravité invalide : ${severity}`)
 
+    if (GM_ONLY_WOUND_SEVERITIES.includes(severity) && !req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
     // applyWound centralise insertion + échéance de Guérison (Lot 2, docs/PLAN_BLESSURES_GUERISON.md
     // §5) + broadcast WOUND_ADDED — cette route ne dupliquait plus que ça avant ce commit.
     const result = await applyWound(req.app.get('io'), db, req.character.campaign_id, {
@@ -987,6 +988,7 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
       .where({ id: req.params.woundId, char_sheet_id: sheet.id }).first()
     if (!wound) throw new AppError(404, 'Wound not found')
 
+    if (GM_ONLY_WOUND_SEVERITIES.includes(wound.severity) && !req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
     await db('character_wounds').where({ id: req.params.woundId }).del()
 
     const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)

@@ -250,7 +250,6 @@ export async function applyColdDamageHits(io, campaignId, characterId, hitSpecs)
         degautsBruts: degatsRoll.total,
         degatsNets: hit.degatsNets,
         severity: hit.finalSeverity,
-        is_lethal: hit.is_lethal,
         isSuccess: true,
         isPnj: true,
         shockResult: hit.shockResult,

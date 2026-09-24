@@ -11,7 +11,7 @@
  * Références : Livre de Base Polaris (LdB)
  */
 
-import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
+import { WOUND_PENALTIES, getWoundEffects } from '../../../shared/woundConstants.js'
 import {
   polarisRound, calcAN, getGenotypeModForAttr, getMutationModForAttr, calcNA, RD_TABLE,
 } from '../../../shared/polarisUtils.js'
@@ -344,21 +344,10 @@ export function calcResistanceArmure(equippedItems) {
 }
 
 // ─── Test de Choc — LdB p.239 ────────────────────────────────────────────────
-// is_lethal = dégâts nets >= 30 (blessure mortelle par impact direct — membre détruit)
-const MEMBER_LOCATIONS = ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']
-
-export function getShockMalus(severity, location, is_lethal) {
-  if (is_lethal && MEMBER_LOCATIONS.includes(location)) return -10
-  if (severity === 'grave') return location === 'tete' ? -5 : 0
-  if (severity === 'critique') {
-    if (location === 'tete')  return -10
-    if (location === 'corps') return -5
-    return 0
-  }
-  if (severity === 'mortelle') {
-    if (location === 'tete')  return -15
-    if (location === 'corps') return -10
-    return -5
-  }
-  return 0
+// Malus au Test de Choc d'une blessure (gravité stockée + localisation moteur). Autorité unique : la colonne
+// `malusChoc` de BLESSURE_EFFETS_TABLE (shared/woundConstants.js:getWoundEffects) — la 6ᵉ gravité `mort_subite`
+// (Membre détruit, -10 sur un bras/une jambe) remplace l'ancien drapeau `is_lethal`. Aucune ligne pour le RAW
+// (Légère/Moyenne, Bras en Grave, Jambes en Grave = pas de Test ou aucun malus) : 0.
+export function getShockMalus(severity, location) {
+  return getWoundEffects(severity, location)?.malusChoc ?? 0
 }

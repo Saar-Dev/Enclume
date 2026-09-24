@@ -272,7 +272,7 @@ async function resolveAoeTargetDamage(io, campaignId, {
     const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, tokenId, droneSheet, degatsNets)
     // `droneOutcome` : de quoi dire au chat ce que le drone a encaissé (finalizeAoeResolution, buildDroneDamageNotice).
     return { tokenId, cibleType, name, band, droneOutcome, results: [
-      { localisation: null, degautsBruts, degatsNets, severity: null, is_lethal: false, shockResult: null },
+      { localisation: null, degautsBruts, degatsNets, severity: null, shockResult: null },
     ] }
   }
 
@@ -280,7 +280,7 @@ async function resolveAoeTargetDamage(io, campaignId, {
     const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleCharacter.id, degautsBruts })
     if (!exoResult) return null
     return { tokenId, cibleType, name, band, results: [
-      { localisation: null, degautsBruts, degatsNets: exoResult.degatsNets, severity: exoResult.severity, is_lethal: false, shockResult: null },
+      { localisation: null, degautsBruts, degatsNets: exoResult.degatsNets, severity: exoResult.severity, shockResult: null },
     ] }
   }
 
@@ -312,7 +312,7 @@ async function resolveAoeTargetDamage(io, campaignId, {
       armorReductionFactor,
     })
     if (!hitResult) continue
-    const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+    const { localisation, degatsNets, finalSeverity, shockResult } = hitResult
     // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
     // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). `cibleCharacter`/`name`
     // déjà résolus plus haut dans cette fonction — aucune requête supplémentaire.
@@ -326,7 +326,7 @@ async function resolveAoeTargetDamage(io, campaignId, {
         userId: shooter.userId, username: shooter.tireurUsername, color: shooter.tireurColor,
       }).catch(err => console.error('[WS] applyStun error:', err.message))
     }
-    results.push({ localisation, degautsBruts, degatsNets, severity: finalSeverity, is_lethal, shockResult })
+    results.push({ localisation, degautsBruts, degatsNets, severity: finalSeverity, shockResult })
   }
   if (results.length === 0) return null
   return { tokenId, cibleType, name, band, results }
@@ -350,7 +350,7 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: action.token_id, cibleId: ptr.tokenId,
         localisation: r.localisation, degautsBruts: r.degautsBruts, degatsNets: r.degatsNets,
-        severity: r.severity, is_lethal: r.is_lethal, isSuccess: true, isPnj: isPnjResult,
+        severity: r.severity, isSuccess: true, isPnj: isPnjResult,
         roll: rr.rollAttaque ?? null, chancesDeReussite: rr.seuil ?? null, shockResult: r.shockResult,
       } })
     }

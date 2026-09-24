@@ -27,7 +27,7 @@
     },
     {
       "type": "paragraph",
-      "text": "Le RAW prévoit une sixième gravité au seuil de 30 points de Dommages — Mort subite, ou Membre détruit si la Localisation touchée est un bras ou une jambe. Cette règle n’est pas encore modélisée dans le moteur (voir docs/ROADMAP.md)."
+      "text": "La sixième gravité, au seuil de 30 points de Dommages, est la Mort subite — ou le Membre détruit si la Localisation touchée est un bras ou une jambe. Elle est aussi la cible du débordement de la ligne des Blessures mortelles."
     },
     {
       "type": "paragraph",

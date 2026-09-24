@@ -88,10 +88,10 @@ export async function applyDeathConsequences(io, db, campaignId, characterId) {
 // Pure — aucune query DB, aucun broadcast WS.
 // Lance le D20 Test de Choc et retourne le résultat.
 // Retourne null si le test n'est pas requis pour cette blessure.
-export async function resolveShockTest({ finalSeverity, localisation, is_lethal, for_na, con_na, vol_na, mod_mutation_shock, mod_advantage_shock }) {
+export async function resolveShockTest({ finalSeverity, localisation, for_na, con_na, vol_na, mod_mutation_shock, mod_advantage_shock }) {
   if (!isShockTestRequired(finalSeverity, localisation)) return null
   const seuils     = calcSeuils(for_na, con_na, vol_na, mod_mutation_shock, mod_advantage_shock)
-  const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
+  const shockMalus = getShockMalus(finalSeverity, localisation)
   const { total: roll, rolls: d20Rolls, seed: d20Seed } = await parseDice('1d20')
   let outcome
   if      (roll <= seuils.etourdissement + shockMalus) outcome = 'ok'

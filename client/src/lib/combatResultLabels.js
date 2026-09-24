@@ -6,13 +6,13 @@
 // Fichier dedie (pas un export depuis un .jsx) : la regle react-refresh/only-export-components
 // interdit de melanger constantes et composants dans un meme fichier.
 
-export const SEVERITY = {
-  legere:   { col: '#FFD700', label: 'resultPanels.severity.legere'   },
-  moyenne:  { col: '#FFA500', label: 'resultPanels.severity.moyenne'  },
-  grave:    { col: '#FF6B6B', label: 'resultPanels.severity.grave'    },
-  critique: { col: '#FF0000', label: 'resultPanels.severity.critique' },
-  mortelle: { col: '#8B0000', label: 'resultPanels.severity.mortelle' },
-}
+import { WOUND_SEVERITIES, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+
+// DÉRIVÉE de WOUND_SEVERITIES / SEVERITY_COLORS (shared/woundConstants.js, autorité unique des 6 gravités) : une
+// gravité ajoutée là a sa couleur ici sans second tableau à tenir à jour. Clé i18n : resultPanels.severity.<gravité>.
+export const SEVERITY = Object.fromEntries(WOUND_SEVERITIES.map(severity => [
+  severity, { col: SEVERITY_COLORS[severity], label: `resultPanels.severity.${severity}` },
+]))
 
 export const LOC = {
   tete:         'resultPanels.location.tete',

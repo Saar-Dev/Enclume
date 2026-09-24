@@ -179,7 +179,6 @@ export async function resolveEnvironmentalHazardTicks(io, db, campaignId, hazard
           degautsBruts: degatsRoll.total,
           degatsNets: hit.degatsNets,
           severity: hit.finalSeverity,
-          is_lethal: hit.is_lethal,
           isSuccess: true,
           isPnj: true,
           shockResult: hit.shockResult,

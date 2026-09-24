@@ -1,14 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-
-// Couleurs de sévérité — cohérentes avec shared/woundConstants.js et le design system
-const SEV = {
-  legere:   '#FFD700',
-  moyenne:  '#FFA500',
-  grave:    '#FF6B6B',
-  critique: '#FF0000',
-  mortelle: '#8B0000',
-}
+import { SEVERITY_COLORS as SEV } from '../../../shared/woundConstants.js'
 
 const ACCENT     = '#46c6e6'
 const ACCENT_DIM = `${ACCENT}40`
@@ -163,7 +155,7 @@ export default function TokenRadialMenu({
   }
 
   const worst    = character?.worst_wound_severity ?? null
-  const severe   = worst === 'critique' || worst === 'mortelle'
+  const severe   = worst === 'critique' || worst === 'mortelle' || worst === 'mort_subite'
   const orbColor = worst ? SEV[worst] : '#1a2540'
 
   // Définition des secteurs — Sprint 1 : fiche + retirer actifs

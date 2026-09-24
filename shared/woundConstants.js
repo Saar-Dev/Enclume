@@ -4,15 +4,48 @@ export const WOUND_LOCATIONS = [
   'tete', 'corps', 'bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche',
 ]
 
-export const WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle']
+// Les 6 lignes du compteur RAW (REGLEBLESSURES.md:20-26, capture de la fiche vérifiée 2026-09-24), de la
+// plus légère à la plus grave — l'ORDRE de ce tableau est l'autorité de la promotion (`nextSeverity`), du
+// « pire » (`getWorstWoundSeverity`, client) et du tri SQL (`woundSeverityRankSql`). `mort_subite` est la
+// 6ᵉ ligne « Mort subite / Membre détruit » (seuil 30) : UNE seule gravité stockée, dont le libellé dépend de
+// la localisation — « Mort » en Tête/Corps (`isSuddenDeathLocation`), « Membre détruit » sur un bras/une jambe.
+export const WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle', 'mort_subite']
 
+// Capacité de chaque ligne (cases de la fiche). La 6ᵉ ligne a UNE case partout (Saar : une seule case pour
+// les 6 localisations, affichée comme un mot ; la fiche papier montre « Mort » en Tête/Corps et une case sur
+// chaque membre).
 export const WOUND_MAX_COUNTS = {
-  tete:          { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1 },
-  corps:         { legere: 4, moyenne: 3, grave: 3, critique: 2, mortelle: 2 },
-  bras_droit:    { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1 },
-  bras_gauche:   { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1 },
-  jambe_droite:  { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1 },
-  jambe_gauche:  { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1 },
+  tete:          { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
+  corps:         { legere: 4, moyenne: 3, grave: 3, critique: 2, mortelle: 2, mort_subite: 1 },
+  bras_droit:    { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
+  bras_gauche:   { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
+  jambe_droite:  { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
+  jambe_gauche:  { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
+}
+
+// Promotion d'une ligne pleine vers la gravité supérieure. Règle générale (confirmée par Saar, ex. 3ᵉ Légère
+// sur une ligne à 3 cases = 1 Moyenne) : la blessure qui REMPLIRAIT la dernière case convertit la ligne
+// (`currentCount >= maxCount - 1`). Exception : la ligne Mortelle ne se convertit qu'au DÉPASSEMENT
+// (`currentCount >= maxCount`) — sinon, avec 1 case (Tête, bras, jambes), toute Mortelle deviendrait aussitôt
+// Mort/Membre détruit et une Mortelle à la tête (RAW : survie avec stabilisation) n'existerait jamais. Avant la
+// 6ᵉ ligne, ce comportement était celui de la ligne terminale (remplissage jusqu'à `maxCount`, puis refus).
+export const OVERFLOW_ONLY_SEVERITIES = ['mortelle']
+
+export function isWoundLinePromoted(severity, currentCount, maxCount) {
+  const threshold = OVERFLOW_ONLY_SEVERITIES.includes(severity) ? maxCount : maxCount - 1
+  return currentCount >= threshold
+}
+
+// Gravités qu'un joueur ne pose ni ne retire à la main sur sa fiche : MJ seul (route `char-sheet` + panneau). La 6ᵉ
+// ligne tue (Tête/Corps) ou détruit un membre — comme le statut `dead` (`gmOnly`, tokenStatusRegistry.js), ce n'est
+// pas une auto-déclaration de joueur ; sans cette garde, cliquer « Mort » sur sa propre fiche contournerait le registre.
+export const GM_ONLY_WOUND_SEVERITIES = ['mort_subite']
+
+// Localisations où la 6ᵉ ligne est une MORT (Tête, Corps) ; ailleurs (bras, jambes) c'est un Membre détruit.
+export const SUDDEN_DEATH_LOCATIONS = ['tete', 'corps']
+
+export function isSuddenDeathLocation(location) {
+  return SUDDEN_DEATH_LOCATIONS.includes(location)
 }
 
 // WNDMORT (docs/BUGIDENTIFIE.md) — REGLEBLESSURES.md, Blessures mortelles : « Malus aux Tests : non
@@ -20,17 +53,21 @@ export const WOUND_MAX_COUNTS = {
 // jamais de vraie valeur numérique (le -20 précédent était une extrapolation jamais confirmée par le
 // LdB) — 0 ici uniquement en défense en profondeur (si un appelant futur oublie le garde
 // `isTestBlockingWound`, il n'ajoute aucun malus fantôme, il n'en ajoute simplement aucun).
+// `mort_subite` : même raison que `mortelle` (RAW « Malus aux Tests : non applicable » pour Mortelle ET Membre détruit).
 export const WOUND_PENALTIES = {
-  legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0,
+  legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0, mort_subite: 0,
 }
 
+// Couleur de chaque gravité — gris pour la 6ᵉ ligne (Saar : le membre détruit est barré et grisé).
 export const SEVERITY_COLORS = {
   legere: '#FFD700', moyenne: '#FFA500', grave: '#FF6B6B', critique: '#FF0000', mortelle: '#8B0000',
+  mort_subite: '#5c5c66',
 }
 
 // Sévérités qui interdisent tout Test (predicate séparé du malus numérique — même principe que
-// `shared/combatSituationMods.js` RANGED_SITUATION_MODS.impossible, TIRIMP docs/BUGIDENTIFIE.md).
-export const TEST_BLOCKING_SEVERITIES = ['mortelle']
+// `shared/combatSituationMods.js` RANGED_SITUATION_MODS.impossible, TIRIMP docs/BUGIDENTIFIE.md). RAW : Mortelle
+// ET Membre détruit (REGLEBLESSURES.md:154, 175) — « le blessé ne peut entreprendre aucune action demandant un Test ».
+export const TEST_BLOCKING_SEVERITIES = ['mortelle', 'mort_subite']
 
 export function isTestBlockingWound(wounds) {
   return (wounds ?? []).some(w => TEST_BLOCKING_SEVERITIES.includes(w.severity))
@@ -44,7 +81,7 @@ export function isTestBlockingWound(wounds) {
 export const MORTAL_WOUND_IMMOBILE_LOCATIONS = ['jambe_droite', 'jambe_gauche']
 
 export function isMortalWoundImmobilized(wounds) {
-  return (wounds ?? []).some(w => w.severity === 'mortelle' && MORTAL_WOUND_IMMOBILE_LOCATIONS.includes(w.wound_location))
+  return (wounds ?? []).some(w => TEST_BLOCKING_SEVERITIES.includes(w.severity) && MORTAL_WOUND_IMMOBILE_LOCATIONS.includes(w.location))
 }
 
 // Table RAW « Durée de guérison et soins nécessaires » (REGLEBLESSURES.md:413-433, vérifiée
@@ -69,37 +106,40 @@ export const WOUND_HEALING = {
 // periodMalus : -2 cumulatif par période de 2 jours passée sans soins corrects — RAW explicite
 // seulement pour Grave (réussite) et Critique (échec) ; ni Moyenne ni Mortelle ne le mentionnent
 // (Mortelle : la conséquence est un compte à rebours en heures, aucune "période suivante" réaliste).
+// extraCase : l'infection COCHE une case supplémentaire sur la ligne — RAW explicite pour Moyenne, Grave et Critique
+// (« le joueur doit cocher une case de blessure supplémentaire »). Pas pour Mortelle/Membre détruit : le RAW dit « le
+// blessé survit pendant un nombre d'heures égal à sa Constitution, puis meurt d'une septicémie » (REGLEBLESSURES.md:473-485),
+// jamais une case en plus. Cocher une Mortelle de plus serait faux, et avec la 6ᵉ ligne ferait mourir/détruire un membre
+// par simple infection (Mortelle pleine → débordement). Le délai de survie reste affiché au MJ, jamais appliqué
+// (décision du 2026-07-30, woundEvolutionService.js:woundInfectionCheckHandler).
 export const WOUND_INFECTION = {
-  moyenne:  { baseModifier: 5,   caseMalus: false, periodMalus: false, infectsOnSuccess: false },
-  grave:    { baseModifier: 0,   caseMalus: true,  periodMalus: true,  infectsOnSuccess: false },
-  critique: { baseModifier: -5,  caseMalus: true,  periodMalus: true,  infectsOnSuccess: true },
-  mortelle: { baseModifier: -10, caseMalus: true,  periodMalus: false, infectsOnSuccess: true },
+  moyenne:  { baseModifier: 5,   caseMalus: false, periodMalus: false, infectsOnSuccess: false, extraCase: true },
+  grave:    { baseModifier: 0,   caseMalus: true,  periodMalus: true,  infectsOnSuccess: false, extraCase: true },
+  critique: { baseModifier: -5,  caseMalus: true,  periodMalus: true,  infectsOnSuccess: true,  extraCase: true },
+  mortelle: { baseModifier: -10, caseMalus: true,  periodMalus: false, infectsOnSuccess: true,  extraCase: false },
 }
 // Table RAW « Seuils de blessures » (LdB p.234) — seuil de Dommages à partir duquel
 // une blessure d'une gravité donnée est infligée. La gravité retenue est la plus
 // haute dont le seuil est atteint ou dépassé.
 //
 // `key` reprend l'énumération WOUND_SEVERITIES (legere / moyenne / grave / critique /
-// mortelle) — les libellés français vivent dans terms.json (domaine graviteBlessure).
+// mortelle / mort_subite) — les libellés français vivent dans terms.json (domaine graviteBlessure).
 //
-// Le RAW porte une 6ᵉ ligne (seuil 30, « Mort subite / Membre détruit ») — règle
-// optionnelle non implémentée côté moteur (même renvoi docs/ROADMAP.md que WOUND_HEALING
-// ci-dessous). Elle n'est pas reproduite ici : l'Encyclopédie la documente en texte
-// éditorial dans l'article, hors table.
-//
-// Ajouté pour l'Encyclopédie (Phase 3) ; consommée par le moteur via `woundSeverityForDamage` (gravité
-// d'un coup porté à un drone, resolveDroneIntegrityLoss). Les humains passent par damageService.
+// AUTORITÉ UNIQUE des seuils, pour l'humain (damageService.js:resolveTargetHit) ET le drone (via
+// `woundSeverityForDamage`, resolveDroneIntegrityLoss). La 6ᵉ ligne (30, « Mort subite / Membre détruit ») en
+// fait partie : un coup net ≥ 30 écrit directement `mort_subite`.
 export const BLESSURE_SEUILS_TABLE = [
-  { key: 'legere',   seuil: 5  },
-  { key: 'moyenne',  seuil: 10 },
-  { key: 'grave',    seuil: 15 },
-  { key: 'critique', seuil: 20 },
-  { key: 'mortelle', seuil: 25 },
+  { key: 'legere',      seuil: 5  },
+  { key: 'moyenne',     seuil: 10 },
+  { key: 'grave',       seuil: 15 },
+  { key: 'critique',    seuil: 20 },
+  { key: 'mortelle',    seuil: 25 },
+  { key: 'mort_subite', seuil: 30 },
 ]
 
 // Gravité correspondant à des Dommages nets : la plus haute ligne de BLESSURE_SEUILS_TABLE dont le seuil est
-// atteint, ou null sous le premier seuil (aucune blessure). Sans la 6ᵉ ligne « Mort subite » (seuil 30) : un
-// drone détruit à 30 et plus est une règle propre au drone, portée par resolveDroneIntegrityLoss.
+// atteint, ou null sous le premier seuil (aucune blessure). Un drone détruit dès 30 (DRONE_DESTROYED_DAMAGE,
+// règle propre au drone) est traité AVANT cet appel par resolveDroneIntegrityLoss : il ne voit jamais `mort_subite`.
 export function woundSeverityForDamage(degatsNets) {
   let severity = null
   for (const { key, seuil } of BLESSURE_SEUILS_TABLE) {
@@ -124,8 +164,8 @@ export function woundSeverityForDamage(degatsNets) {
 //
 // Bras absent en Grave — le RAW ne liste aucun Effet Bras à ce palier (Jambes/Corps/Tête seulement).
 //
-// Ajouté pour l'Encyclopédie : aucune consommation moteur à ce jour — même statut que
-// DEPLACEMENT_ACTION_MALUS.
+// Ajouté pour l'Encyclopédie ; le champ `malusChoc` est aussi l'AUTORITÉ du malus au Test de Choc du moteur
+// (`getWoundEffects` ci-dessous, lu par charStats.js:getShockMalus) — plus de copie codée en dur.
 export const BLESSURE_EFFETS_TABLE = {
   grave: {
     jambes: { allure: 'moyenne', malusChoc: null },
@@ -148,6 +188,21 @@ export const BLESSURE_EFFETS_TABLE = {
     bras:   { allure: 'lente', malusChoc: -10 },
     jambes: { allure: 'impossible', malusChoc: -10 },
   },
+}
+
+// Localisation du moteur (6, gauche/droite) → clé générique du RAW (4) des tables ci-dessus.
+export const WOUND_LOCATION_EFFECT_KEY = {
+  tete: 'tete', corps: 'corps',
+  bras_droit: 'bras', bras_gauche: 'bras',
+  jambe_droite: 'jambes', jambe_gauche: 'jambes',
+}
+
+// Ligne de BLESSURE_EFFETS_TABLE d'une blessure (gravité stockée + localisation moteur), ou null si le RAW n'en
+// liste pas (Légère/Moyenne, Bras en Grave, Mort subite en Tête/Corps : mort immédiate, aucun Effet). La 6ᵉ
+// gravité `mort_subite` lit la colonne RAW `membreDetruit` (Bras/Jambes seulement).
+export function getWoundEffects(severity, location) {
+  const column = severity === 'mort_subite' ? 'membreDetruit' : severity
+  return BLESSURE_EFFETS_TABLE[column]?.[WOUND_LOCATION_EFFECT_KEY[location]] ?? null
 }
 
 // Table RAW « Étourdissement, inconscience et catastrophes » (LdB p.237, article Choc) — durée des

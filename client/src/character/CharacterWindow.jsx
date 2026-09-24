@@ -456,6 +456,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
             <ArmorWoundPanel
               characterId={character.id}
               canEdit={effectiveIsGm || effectiveIsOwner}
+              isGm={effectiveIsGm}
               dragItem={activeDragItem}
             />
             <WeaponPanel

@@ -54,6 +54,8 @@ import {
   WOUND_MAX_COUNTS,
   WOUND_LOCATIONS,
   WOUND_SEVERITIES,
+  TEST_BLOCKING_SEVERITIES,
+  isSuddenDeathLocation,
 } from '../../../../shared/woundConstants.js'
 import {
   SEQUELLES_TETE_GRAVES_TABLE,
@@ -547,6 +549,8 @@ function transformAimedLocationMalus(data) {
 function transformCompteurBlessures(data) {
   const sevDomain = terms.graviteBlessure || {}
   const kinds = ['key', ...WOUND_LOCATIONS.map(() => 'checkbox')]
+  // 6ᵉ ligne : la fiche imprime le mot « Mort » en Tête et Corps (pas de case) et une case sur chaque membre.
+  const kindsSixthLine = ['key', ...WOUND_LOCATIONS.map(() => 'key')]
 
   const toCheckboxes = (n) => {
     const count = Number(n) || 0
@@ -557,11 +561,14 @@ function transformCompteurBlessures(data) {
     rows: WOUND_SEVERITIES.map(sev => {
       const label = sevDomain[sev] ?? sev
       const seuil = BLESSURE_SEUILS_TABLE.find(r => r.key === sev)?.seuil
+      const isSixthLine = sev === WOUND_SEVERITIES[WOUND_SEVERITIES.length - 1]
       return {
-        kinds,
+        kinds: isSixthLine ? kindsSixthLine : kinds,
         cells: [
           seuil != null ? `${label} (${seuil})` : label,
-          ...WOUND_LOCATIONS.map(loc => toCheckboxes(data[loc]?.[sev])),
+          ...WOUND_LOCATIONS.map(loc => (isSixthLine && isSuddenDeathLocation(loc)
+            ? 'Mort'
+            : toCheckboxes(data[loc]?.[sev]))),
         ],
       }
     }),
@@ -596,14 +603,13 @@ function transformBlessureEffets(data, order) {
   }
 }
 
-// transformBlessureMalus — WOUND_PENALTIES (objet {legere,moyenne,grave,critique,mortelle} -> malus)
-// aplati en 5 lignes, ordre WOUND_SEVERITIES.
+// transformBlessureMalus — WOUND_PENALTIES (objet gravité -> malus) aplati en 6 lignes, ordre WOUND_SEVERITIES.
 //
-// `mortelle` vaut `0` dans WOUND_PENALTIES par défense en profondeur côté moteur (voir le
+// `mortelle` et `mort_subite` valent `0` dans WOUND_PENALTIES par défense en profondeur côté moteur (voir le
 // commentaire de la constante), mais le RAW est explicite : « non applicable, le blessé ne peut
 // entreprendre aucune action demandant un Test » — ce n'est pas un malus nul, c'est l'absence de
-// Test. Affiché tel quel ici plutôt que « +0 », pour rester fidèle au texte plutôt qu'à la valeur
-// technique du moteur.
+// Test (TEST_BLOCKING_SEVERITIES). Affiché tel quel ici plutôt que « +0 », pour rester fidèle au texte
+// plutôt qu'à la valeur technique du moteur.
 function transformBlessureMalus(data) {
   const domain = terms.graviteBlessure || {}
   const kinds = ['key', 'signed']
@@ -613,7 +619,7 @@ function transformBlessureMalus(data) {
       kinds,
       cells: [
         domain[sev] ?? sev,
-        sev === 'mortelle' ? 'Non applicable' : formatSigned(data[sev]),
+        TEST_BLOCKING_SEVERITIES.includes(sev) ? 'Non applicable' : formatSigned(data[sev]),
       ],
     })),
   }
@@ -624,8 +630,8 @@ function transformBlessureMalus(data) {
 // La Gravité est répétée sur chaque ligne du groupe (pas de fusion verticale — DataTableBlock ne
 // supporte que le colspan, pas le rowspan en corps de table, comme les autres tableaux du corpus).
 //
-// « Membre détruit » n'est pas une gravité de WOUND_SEVERITIES : libellé posé en dur, même traitement
-// que « Mort subite » dans l'article Blessures (hors énumération moteur).
+// « Membre détruit » est une colonne propre du RAW (`membreDetruit`, table CHOC_DUREE_TABLE) : côté moteur c'est la
+// gravité `mort_subite` sur un bras/une jambe. Libellé posé en dur, clé de table distincte.
 function transformChocDuree(data) {
   const sevDomain = terms.graviteBlessure || {}
   const locDomain = terms.localisationGenerique || {}

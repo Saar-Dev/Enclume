@@ -483,13 +483,13 @@ async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   if (cibleType === 'exo') {
     // PLAN_EXOARMURE.md §11.4 — resolveExoDamage gère déjà l'émission EXO_AVARIE_UPDATED ; ici, même
     // rôle que le bloc COMBAT_ATTACK_RESULT du chemin humain juste en dessous, format propre à l'exo
-    // (pas de localisation/is_lethal — concepts humains, EXO_AVARIE_UPDATED porte déjà destroyed/itgLoss).
+    // (pas de localisation/gravité de blessure — concepts humains, EXO_AVARIE_UPDATED porte déjà destroyed/itgLoss).
     const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
     if (exoResult) {
       io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
         tireurId: attackerTokenId, cibleId: tokenId,
         localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-        severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+        severity: exoResult.severity, isSuccess: true, isPnj: true,
         roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
       })
     }
@@ -504,7 +504,7 @@ async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
     treatAsContact: true,
   })
   if (hitResult === null) return
-  const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+  const { localisation, degatsNets, finalSeverity, shockResult } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
   // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Pas de cibleCharacter
@@ -524,7 +524,6 @@ async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
     degautsBruts,
     degatsNets,
     severity:    finalSeverity,
-    is_lethal,
     isSuccess:   true,
     isPnj:       true,
     roll:        rollAttaque,
@@ -717,7 +716,7 @@ async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
     tireurId: tokenId, cibleId: targetTokenId,
     localisation: null,
     degautsBruts, degatsNets: degatsNetsDrone,
-    severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+    severity: null, isSuccess: true, shockResult: null,
   })
 }
 
@@ -763,7 +762,7 @@ async function resolveDamageConfirmExoTarget(io, campaignId, ctx, socket) {
     tireurId: tokenId, cibleId: targetTokenId,
     localisation: null,
     degautsBruts, degatsNets: exoResult.degatsNets,
-    severity: exoResult.severity, is_lethal: false, isSuccess: true, shockResult: null,
+    severity: exoResult.severity, isSuccess: true, shockResult: null,
   })
 }
 
@@ -787,7 +786,7 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
   })
   if (hitResult === null) return
   const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-          is_lethal, finalSeverity, shockResult, woundId,
+          finalSeverity, shockResult, woundId,
           rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
@@ -899,7 +898,6 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
     degautsBruts,
     degatsNets,
     severity:    finalSeverity,
-    is_lethal,
     isSuccess:   true,
     shockResult: shockResult ?? null,
   })
@@ -2011,7 +2009,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId: attackerTokenId, cibleId: targetTokenId,
           localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
-          severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+          severity: null, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
         } })
       }
@@ -2022,7 +2020,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId: attackerTokenId, cibleId: targetTokenId,
           localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-          severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+          severity: exoResult.severity, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
         } })
       }
@@ -2037,7 +2035,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
         treatAsContact: true,
       })
       if (hitResult) {
-        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+        const { localisation, degatsNets, finalSeverity, shockResult } = hitResult
         // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
         // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Pas de
         // cibleCharacter chargé à ce point — re-fetch minimal, même discipline que les 2 sites sœurs.
@@ -2049,7 +2047,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId:    attackerTokenId, cibleId: targetTokenId,
           localisation, degautsBruts, degatsNets,
-          severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+          severity: finalSeverity, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
         } })
         if (shockResult?.outcome && shockResult.outcome !== 'ok') {
@@ -2166,7 +2164,7 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId:    attackerTokenId, cibleId: targetTokenId,
           localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-          severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+          severity: exoResult.severity, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
         } })
       }
@@ -2184,7 +2182,7 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     })
 
     if (hitResult) {
-      const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+      const { localisation, degatsNets, finalSeverity, shockResult } = hitResult
 
       // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
       // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ dans cette fonction (son nom est déjà
@@ -2197,7 +2195,7 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId:    attackerTokenId, cibleId: targetTokenId,
         localisation, degautsBruts, degatsNets,
-        severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+        severity: finalSeverity, isSuccess: true, isPnj: true,
         roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
       } })
       if (shockResult?.outcome && shockResult.outcome !== 'ok') {
@@ -2247,7 +2245,7 @@ export async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: attackerTokenId, cibleId: targetTokenId,
         localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
-        severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+        severity: null, isSuccess: true, isPnj: true,
         roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
       } })
     }
@@ -3065,7 +3063,7 @@ export async function finalizeAssaultOutcome(io, campaignId, { action, formula, 
     emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
       tireurId: action.token_id, cibleId: action.target_token_id,
       localisation: null, degautsBruts: 0, degatsNets: 0,
-      severity: null, is_lethal: false, isSuccess: false, shockResult: null,
+      severity: null, isSuccess: false, shockResult: null,
     } })
     emissions.push(...await reportProtectedMiss(campaignId, { action, attackKind }))
     return { suspend: false, emissions }
@@ -3134,7 +3132,7 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
   emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
     tireurId: action.token_id, cibleId: action.target_token_id,
     localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
-    severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+    severity: null, isSuccess: true, shockResult: null,
   } })
   return { suspend: false, emissions }
 }
@@ -3162,7 +3160,7 @@ export async function resolveAttackHitExo(io, campaignId, ctx, emissions) {
   emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
     tireurId: action.token_id, cibleId: action.target_token_id,
     localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-    severity: exoResult.severity, is_lethal: false, isSuccess: true, shockResult: null,
+    severity: exoResult.severity, isSuccess: true, shockResult: null,
   } })
   return { suspend: false, emissions }
 }
@@ -3190,7 +3188,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
   })
   if (hitResult === null) return { suspend: false, emissions }
   const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-          is_lethal, finalSeverity, shockResult } = hitResult
+          finalSeverity, shockResult } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
   // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction (dispatch
@@ -3221,7 +3219,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
   emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
     tireurId: action.token_id, cibleId: action.target_token_id,
     localisation, degautsBruts, degatsNets,
-    severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
+    severity: finalSeverity, isSuccess: true, shockResult: shockResult ?? null,
   } })
   if (shockResult?.outcome && shockResult.outcome !== 'ok') {
     statusService.applyStun(io, db, campaignId, {
@@ -3794,7 +3792,6 @@ async function finalizeAssaultHitOutcome(io, campaignId, {
       degautsBruts:     null,
       degatsNets:       null,
       severity:         null,
-      is_lethal:        false,
       shockResult:      null,
     } })
   }
@@ -3941,7 +3938,7 @@ async function resolveAssaultHitPnjDrone(io, campaignId, ctx, emissions) {
       tireurId: action.token_id, cibleId: action.target_token_id,
       localisation: null,
       degautsBruts, degatsNets: degatsNetsDrone,
-      severity: null, is_lethal: false, isSuccess: true,
+      severity: null, isSuccess: true,
       isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
     } })
   }
@@ -3973,7 +3970,7 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: action.token_id, cibleId: action.target_token_id,
         localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-        severity: exoResult.severity, is_lethal: false, isSuccess: true,
+        severity: exoResult.severity, isSuccess: true,
         isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
       } })
     }
@@ -3992,7 +3989,7 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
     treatAsContact: isJetOuTrait,
   })
   if (hitResult === null) return { suspend: false, emissions }
-  const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+  const { localisation, degatsNets, finalSeverity, shockResult } = hitResult
 
   // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
   // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction — une cible PJ est
@@ -4021,7 +4018,6 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
     degautsBruts,
     degatsNets,
     severity:    finalSeverity,
-    is_lethal,
     isSuccess: true,
     isPnj:       true,
     roll:        rollAttaque,

@@ -6,7 +6,7 @@ import { useInventoryData } from '../lib/useInventoryData.js'
 import SilhouettePanel from './SilhouettePanel.jsx'
 import LocationPanel   from './LocationPanel.jsx'
 
-export default function ArmorWoundPanel({ characterId, canEdit, dragItem = null }) {
+export default function ArmorWoundPanel({ characterId, canEdit, isGm = false, dragItem = null }) {
   const { t } = useTranslation('charSheet')
 
   const setStoreWounds = useCharacterStore(s => s.setWounds)
@@ -53,6 +53,7 @@ export default function ArmorWoundPanel({ characterId, canEdit, dragItem = null 
     wounds,
     characterId,
     canEdit,
+    isGm,
     dragItem,
     onWoundsReload: handleWoundsReload,
   }

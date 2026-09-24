@@ -256,7 +256,7 @@ function renderDice(msg, ctx) {
           </div>
           {msg.severity && (
             <span className="badge" style={{ color: msg.severityColor, background: msg.severityColor + '22', boxShadow: `inset 0 0 0 1px ${msg.severityColor}66` }}>
-              {msg.severity}
+              {ctx.t(`combat:resultPanels.severity.${msg.severity}`, { defaultValue: msg.severity })}
             </span>
           )}
         </div>

@@ -15,6 +15,7 @@ import {
   resolveAmmoMechanic, resolveMechanicDamageFormula,
 } from '../../../shared/weaponAmmoDsl.js'
 import { resolveChanceTest } from '../../../shared/polarisTestResolution.js'
+import { woundSeverityForDamage, isSuddenDeathLocation } from '../../../shared/woundConstants.js'
 
 // ─── _fetchWeaponAndAmmo (interne) ─────────────────────────────────────────────
 // Fetch commun arme + munition chargée (current_ammo) en une passe — partagé par
@@ -294,17 +295,13 @@ export async function fetchCibleNA(db, characterId, charSheetId) {
   }
 }
 
-// _severityForDamage — table de sévérité (LdB p.114, 5/10/15/20/25/30) extraite en fonction interne
-// (Lot B, docs/PLAN_ARMES_DSL.md) pour être appelée à la fois sur le dégât physique seul et sur le
-// total combiné physique+Choc, sans dupliquer les seuils.
-function _severityForDamage(net) {
-  if      (net >= 30) return { severity: 'mortelle', is_lethal: true }
-  else if (net >= 25) return { severity: 'mortelle', is_lethal: false }
-  else if (net >= 20) return { severity: 'critique',  is_lethal: false }
-  else if (net >= 15) return { severity: 'grave',     is_lethal: false }
-  else if (net >= 10) return { severity: 'moyenne',   is_lethal: false }
-  else if (net >=  5) return { severity: 'legere',    is_lethal: false }
-  return { severity: null, is_lethal: false }
+// Gravité d'un total de Choc « virtuel » (physique + Choc, LdB p.243), pour le SEUL Test de Choc : la table des
+// seuils est l'autorité unique (shared/woundConstants.js:woundSeverityForDamage, 6 lignes). Aucune blessure n'est
+// écrite pour du Choc virtuel — personne ne meurt d'un Choc : en Tête/Corps un total ≥ 30 est plafonné à Mortelle
+// (le Test garde le malus qu'il avait avant la 6ᵉ ligne), sur un membre il reste `mort_subite` (Membre détruit, -10).
+function _shockTestSeverity(combinedNet, localisation) {
+  const severity = woundSeverityForDamage(combinedNet)
+  return severity === 'mort_subite' && isSuddenDeathLocation(localisation) ? 'mortelle' : severity
 }
 
 // Résolution complète côté cible : localisation D20 → armure → dégâts nets → sévérité → blessure → shock.
@@ -461,7 +458,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   }
 
   // 4. Sévérité (physique seul — pilote toujours la blessure, étape 5)
-  const { severity, is_lethal } = _severityForDamage(degatsNets)
+  const severity = woundSeverityForDamage(degatsNets)
 
   // 5. Blessure + shock test — la blessure reste basée uniquement sur le dégât physique (jamais gonflée
   // par du Choc virtuel). Le Test de Choc, lui, utilise le total combiné physique+Choc brut s'il y a
@@ -483,16 +480,15 @@ export async function resolveTargetHit(io, db, campaignId, {
   if (targetIsDead) {
     console.log(`[DBG] resolveTargetHit — cible morte (personnage:${characterIdCible}) : blessure appliquée, test de Choc ignoré`)
   } else if (chocTotal !== null) {
-    const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocTotal)
     shockResult = await statusService.resolveShockTest({
-      finalSeverity: combinedSeverity, localisation, is_lethal: combinedIsLethal,
+      finalSeverity: _shockTestSeverity(degatsNets + chocTotal, localisation), localisation,
       for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
       mod_mutation_shock:  getMutationModForResistance(mutationEffectsCible, 'shock'),
       mod_advantage_shock: getAdvantageModForResistance(advantagesCible, 'shock'),
     })
   } else if (woundResult) {
     shockResult = await statusService.resolveShockTest({
-      finalSeverity, localisation, is_lethal,
+      finalSeverity, localisation,
       for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
       mod_mutation_shock:  getMutationModForResistance(mutationEffectsCible, 'shock'),
       mod_advantage_shock: getAdvantageModForResistance(advantagesCible, 'shock'),
@@ -505,7 +501,7 @@ export async function resolveTargetHit(io, db, campaignId, {
     etq, rd, prt,
     degatsNets,
     chocTotal,
-    severity, is_lethal,
+    severity,
     finalSeverity,
     // woundId — corrélation avec un éventuel choix Chance `wound_severity` ouvert par applyWound
     // ci-dessus (PLAN_CHANCE.md L5, retour Saar 2026-09-12 item 4) : `null` si aucune blessure créée

@@ -1,10 +1,31 @@
 import { AppError } from './AppError.js'
-import { WOUND_MAX_COUNTS, WOUND_SEVERITIES } from '../../../shared/woundConstants.js'
+import {
+  WOUND_MAX_COUNTS, WOUND_SEVERITIES, isWoundLinePromoted, isSuddenDeathLocation,
+} from '../../../shared/woundConstants.js'
+
+// Test de Choc requis ? RAW : Grave (Tête/Corps), Critique, Mortelle, et Membre détruit (bras/jambe). La Mort subite
+// (6ᵉ ligne en Tête/Corps) n'en fait aucun : « le personnage meurt sur le coup » (REGLEBLESSURES.md:164-167).
+// Ligne pleine : la localisation est déjà au maximum de cette gravité et n'a pas de gravité supérieure (la 6ᵉ ligne
+// seule, depuis que la Mortelle déborde vers elle). Erreur DÉDIÉE : les appelants la distinguent d'une vraie erreur.
+export class WoundLineFullError extends AppError {
+  constructor() {
+    super(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
+  }
+}
 
 export function isShockTestRequired(severity, location) {
+  if (severity === 'mort_subite') return !isSuddenDeathLocation(location)
   if (severity === 'critique' || severity === 'mortelle') return true
   if (severity === 'grave' && (location === 'tete' || location === 'corps')) return true
   return false
+}
+
+// Clause SQL `CASE <colonne> … END` qui classe une gravité de la plus grave (1) à la plus légère : GÉNÉRÉE depuis
+// WOUND_SEVERITIES, l'autorité de l'ordre (une gravité ajoutée à la liste est classée sans toucher au SQL).
+// `column` est un identifiant écrit dans le code appelant, jamais une entrée utilisateur.
+export function woundSeverityRankSql(column) {
+  const whens = WOUND_SEVERITIES.slice().reverse().map((severity, index) => `WHEN '${severity}' THEN ${index + 1}`).join(' ')
+  return `CASE ${column} ${whens} END`
 }
 
 export function nextSeverity(severity) {
@@ -44,14 +65,15 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
   const currentCount = existingRows.length
   const next = nextSeverity(severity)
 
-  if (next && currentCount >= maxCount - 1) {
+  // Règle de promotion : shared/woundConstants.js:isWoundLinePromoted (Mortelle : au dépassement seulement).
+  if (next && isWoundLinePromoted(severity, currentCount, maxCount)) {
     await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
     const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
     return { ...result, promoted: true, deletedWounds: [...existingRows, ...result.deletedWounds] }
   }
 
   if (currentCount >= maxCount) {
-    throw new AppError(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
+    throw new WoundLineFullError()
   }
 
   const occurredAtGameMinutes = await getResolvedGameMinutes(trx, char_sheet_id)

@@ -66,7 +66,7 @@ function DamageLine({ degatsBruts, degatsNets, localisation }) {
   )
 }
 
-function SeverityBlock({ severity, is_lethal }) {
+function SeverityBlock({ severity }) {
   const { t } = useTranslation('combat')
   const sev = SEVERITY[severity]
   if (!sev) return null
@@ -80,9 +80,6 @@ function SeverityBlock({ severity, is_lethal }) {
     }}>
       <div style={{ width: 6, height: 6, borderRadius: '50%', background: sev.col, flexShrink: 0 }} />
       <span style={{ fontSize: 11, color: sev.col, fontWeight: 600, letterSpacing: '0.02em' }}>{t(sev.label)}</span>
-      {is_lethal && (
-        <span style={{ fontSize: 9, color: C.red, marginLeft: 'auto', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t('resultPanels.severityBlock.lethal')}</span>
-      )}
     </div>
   )
 }
@@ -284,7 +281,7 @@ export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAt
 }
 
 /* ── Vue GM — bottom-left, ton neutre, tireur → cible ──────────────────── */
-export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose, onApplyStun }) {
+export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, shockResult, onClose, onApplyStun }) {
   const { t } = useTranslation('combat')
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.gold) : C.textDim
@@ -329,7 +326,7 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
         </div>
       )}
 
-      {isSuccess && <SeverityBlock severity={severity} is_lethal={is_lethal} />}
+      {isSuccess && <SeverityBlock severity={severity} />}
       {isSuccess && <ShockBlock shockResult={shockResult} onApplyStun={onApplyStun} />}
 
       {onClose && <CloseButton onClose={onClose} />}
@@ -338,7 +335,7 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
 }
 
 /* ── Vue Joueur — bottom-center, 2e personne, dramatique ───────────────── */
-export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose }) {
+export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, shockResult, onClose }) {
   const { t } = useTranslation('combat')
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.red) : C.green
@@ -361,7 +358,7 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
     }}>
       <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: isSuccess ? accent : C.text, letterSpacing: '0.01em', lineHeight: 1.2 }}>
         {isSuccess
-          ? (is_lethal ? t('resultPanels.player.lethallyHit') : t('resultPanels.player.hit'))
+          ? (severity === 'mort_subite' ? t('resultPanels.player.lethallyHit') : t('resultPanels.player.hit'))
           : t('resultPanels.player.dodged')
         }
       </div>
@@ -383,7 +380,7 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
         </div>
       )}
 
-      {isSuccess && <SeverityBlock severity={severity} is_lethal={is_lethal} />}
+      {isSuccess && <SeverityBlock severity={severity} />}
       {isSuccess && <ShockBlock shockResult={shockResult} />}
 
       {onClose && <CloseButton onClose={onClose} />}

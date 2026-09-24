@@ -82,7 +82,6 @@ export default function EnvironmentalResultQueue({ socket }) {
           degatsBruts={current.degautsBruts}
           degatsNets={current.degatsNets}
           severity={current.severity}
-          is_lethal={current.is_lethal}
           shockResult={current.shockResult}
           onClose={onClose}
         />
@@ -96,7 +95,6 @@ export default function EnvironmentalResultQueue({ socket }) {
           degatsBruts={current.degautsBruts}
           degatsNets={current.degatsNets}
           severity={current.severity}
-          is_lethal={current.is_lethal}
           shockResult={current.shockResult}
           onClose={onClose}
         />

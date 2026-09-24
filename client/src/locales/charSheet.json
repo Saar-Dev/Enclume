@@ -173,8 +173,14 @@
       "moyenne": "Moy",
       "grave": "Gra",
       "critique": "Crit",
-      "mortelle": "Mort"
+      "mortelle": "Mrtl",
+      "mort_subite": "30+"
     },
+    "deathWord": {
+      "mort": "Mort",
+      "membreDetruit": "Membre détruit"
+    },
+    "deathWordGmOnly": "Réservé au MJ",
     "shieldUnequipHint": "{{name}} — retirer déséquipe le bouclier entièrement (main comprise)",
     "shieldTag": "(bouclier)",
     "addLayerS": "+ Couche S",

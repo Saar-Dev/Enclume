@@ -533,7 +533,8 @@
       "moyenne": "Blessure moyenne",
       "grave": "Blessure grave",
       "critique": "Blessure critique",
-      "mortelle": "Blessure mortelle"
+      "mortelle": "Blessure mortelle",
+      "mort_subite": "Mort subite / Membre détruit"
     },
     "location": {
       "tete": "Tête",
@@ -550,9 +551,6 @@
     "damageLine": {
       "label": "Dégâts",
       "absorbed": "{{gross}} bruts − {{absorbed}} armure"
-    },
-    "severityBlock": {
-      "lethal": "Létal"
     },
     "shockBlock": {
       "duration_one": "Durée : {{count}} tour",

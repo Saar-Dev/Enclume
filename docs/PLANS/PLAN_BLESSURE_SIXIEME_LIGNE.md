@@ -78,7 +78,7 @@ Deux concepts que le RAW distingue :
 | Élément | Choix |
 |---|---|
 | Blessure aiguë | Une 6ᵉ valeur dans `WOUND_SEVERITIES` (nom → §7), **capacité 1 sur les 6 localisations** (§2.4). Migration de `chk_wounds_severity` (règle `migrations.md`). |
-| Débordement / ≥ 30 | Un seul chemin, la promotion existante : un coup ≥ 30 **ou** une ligne Mortelle pleine écrit la blessure 6ᵉ ligne (`nextSeverity`). Aucun cas particulier par localisation. |
+| Débordement / ≥ 30 | Un coup ≥ 30 **ou** le dépassement de la ligne Mortelle écrit la blessure 6ᵉ ligne. **Correction (analyse à charge 2026-09-24)** : la règle des autres lignes — « la blessure qui *remplirait* la dernière case convertit » (`currentCount >= maxCount - 1`, confirmée par Saar) — ne doit **pas** s'appliquer à Mortelle : avec 1 case (tête, membres), toute Mortelle deviendrait aussitôt Mort. La ligne Mortelle se remplit jusqu'à sa capacité (comportement actuel, RAW : Mortelle à la tête = survie avec stabilisation) et seul le **dépassement** (`currentCount >= maxCount`, aujourd'hui `AppError` « Ligne pleine ») écrit la 6ᵉ ligne. Confirmé par Saar : « d'où l'importance des casques ». |
 | Statut `dead` | Effet de la blessure 6ᵉ ligne sur Tête/Corps, posé dans `applyWound` (une seule autorité, tous les chemins : combat, chute, froid, route manuelle MJ). **Retiré quand cette blessure disparaît** (Chance, `/heal`, suppression MJ) — sinon statut et blessure divergent. |
 | Affichage | Case masquée, mot « Mort » / « Membre détruit » selon la localisation (§2.4). |
 | `is_lethal` | **Supprimé** : la gravité elle-même porte l'information (une autorité, plus de drapeau parallèle). L'étiquette « LÉTAL » et le malus de Choc en dérivent. |
@@ -107,7 +107,19 @@ Deux concepts que le RAW distingue :
   `damageService.js` (`_severityForDamage`) recopie ces mêmes seuils pour l'humain. **Au Lot 2, une seule
   autorité des seuils** : `woundSeverityForDamage` (avec la 6ᵉ ligne) sert l'humain ET le drone, et
   `_severityForDamage` disparaît. À coordonner avec le commit de l'autre session avant de toucher ce fichier.
-- **Lot 2 — La 6ᵉ ligne.** Migration `chk_wounds_severity` ; `WOUND_SEVERITIES`, `WOUND_MAX_COUNTS`,
+- **Découpage du Lot 2 (2026-09-24, après analyse à charge)** : **2a « la 6ᵉ gravité existe, se pose, s'affiche »** — codé, en
+  attente du test de Saar : migration 363 ; constantes (`mort_subite`, capacités, couleur grise, seuil 30, Test interdit,
+  jambe immobilisée) ; débordement de la ligne Mortelle (`isWoundLinePromoted`, voir §3) ; seuils uniques
+  (`woundSeverityForDamage`, `_severityForDamage` supprimé) ; `is_lethal` retiré partout ; Choc lu dans
+  `BLESSURE_EFFETS_TABLE` (`getWoundEffects`) ; tri SQL généré (`woundSeverityRankSql`) ; pose/retrait manuel de la 6ᵉ ligne
+  MJ seul (`GM_ONLY_WOUND_SEVERITIES`) ; infection d'une Mortelle sans case en plus (`WOUND_INFECTION.extraCase`, RAW :
+  survie en heures — remonté de 2b pour ne pas laisser un état intermédiaire faux) ; affichage (mot Mort / Membre détruit,
+  silhouette, menu radial, résultats, chat, Encyclopédie). Défaut préexistant corrigé au passage : `isMortalWoundImmobilized`
+  lisait `wound_location` (colonne réelle : `location`), la règle « jambe mortelle = déplacement impossible » ne se déclenchait
+  jamais. **2b « ses conséquences »** — à faire : `dead` posé/retiré par réconciliation idempotente dans la transaction de la
+  blessure (modèle `applyDefeatedStatus`/`determineDefeatedStatus` du système Shadowrun 5 de FoundryVTT), Membre détruit guérit
+  en Critique (table cible de guérison ≠ `previousSeverity`), pas d'échéance de guérison pour Mort.
+- **Lot 2 — La 6ᵉ ligne (plan d'origine).** Migration `chk_wounds_severity` ; `WOUND_SEVERITIES`, `WOUND_MAX_COUNTS`,
   `WOUND_PENALTIES`, `SEVERITY_COLORS` (gris), `WOUND_HEALING`, `WOUND_INFECTION`, `TEST_BLOCKING_SEVERITIES` ;
   `nextSeverity`/`previousSeverity`/`getWorstWoundSeverity` ; `resolveWoundInsertion` (débordement →
   6ᵉ ligne ou `dead`) ; `_severityForDamage` (≥ 30) ; retrait de `is_lethal` (une cinquantaine d'occurrences dans
@@ -152,6 +164,8 @@ refus) ; `/heal` ; pas de régression sur les 5 lignes existantes. Transport ré
    *promeut* vers Mort/Membre détruit, alors que la décision du 2026-07-30 est « délai de survie affiché,
    jamais appliqué » (`woundEvolutionService.js:198`). À trancher au Lot 2.
 4. **Nom de la 6ᵉ valeur** : vérifier `docs/VOCABULARY.md` avant tout nouveau concept (AGENTS.md).
-5. ~~Nombre de cases de la 6ᵉ ligne du compteur papier~~ — **tranché par Saar : une seule case** (§2.4).
-   Écart éventuel avec le papier non vérifié [INCONNU] : sans conséquence, la mort est binaire.
+5. ~~Nombre de cases du compteur papier~~ — **[VÉRIFIÉ] sur la fiche (capture de Saar, 2026-09-24)** : les capacités de
+   `WOUND_MAX_COUNTS` (Légères 3/4/3/3/3/3, Moyennes 3, Graves 2/3/2/2/2/2, Critiques 2, Mortelles 1/2/1/1/1/1) sont
+   exactes ; la 6ᵉ ligne y est « Mort » (mot, sans case) en Tête et Corps et **une case** sur chaque bras/jambe. Saar
+   maintient la décision §2.4 : une case pour les 6 localisations, affichée comme un mot.
 6. **Coût Chance** : confirmer « 3 points de coût → Critique » (§2.2).

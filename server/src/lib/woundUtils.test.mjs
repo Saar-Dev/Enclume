@@ -6,6 +6,7 @@ import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, resolveWoundInsertion, resolveWoundImprovement,
   buildWoundInsertionUndoEntries, computeAvailableSeverityReductions,
+  isShockTestRequired, woundSeverityRankSql, WoundLineFullError,
 } from './woundUtils.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
@@ -20,8 +21,31 @@ test('previousSeverity est l\'inverse exact de nextSeverity, sur toute l\'échel
   assert.equal(previousSeverity('grave'), 'moyenne')
   assert.equal(previousSeverity('critique'), 'grave')
   assert.equal(previousSeverity('mortelle'), 'critique')
+  assert.equal(previousSeverity('mort_subite'), 'mortelle')
   assert.equal(nextSeverity('legere'), 'moyenne')
-  assert.equal(nextSeverity('mortelle'), null)
+  assert.equal(nextSeverity('mortelle'), 'mort_subite')
+  assert.equal(nextSeverity('mort_subite'), null)
+})
+
+test('isShockTestRequired : RAW — Membre détruit (bras/jambe) fait un Test de Choc, la Mort subite (Tête/Corps) aucun', () => {
+  assert.equal(isShockTestRequired('mort_subite', 'tete'), false)
+  assert.equal(isShockTestRequired('mort_subite', 'corps'), false)
+  for (const loc of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) {
+    assert.equal(isShockTestRequired('mort_subite', loc), true, loc)
+  }
+  // Inchangé pour les 5 lignes existantes.
+  assert.equal(isShockTestRequired('legere', 'tete'), false)
+  assert.equal(isShockTestRequired('grave', 'corps'), true)
+  assert.equal(isShockTestRequired('grave', 'bras_droit'), false)
+  assert.equal(isShockTestRequired('critique', 'jambe_gauche'), true)
+  assert.equal(isShockTestRequired('mortelle', 'tete'), true)
+})
+
+test('woundSeverityRankSql : la plus grave d\'abord, générée depuis WOUND_SEVERITIES (6 lignes)', () => {
+  assert.equal(
+    woundSeverityRankSql('cw.severity'),
+    "CASE cw.severity WHEN 'mort_subite' THEN 1 WHEN 'mortelle' THEN 2 WHEN 'critique' THEN 3 WHEN 'grave' THEN 4 WHEN 'moyenne' THEN 5 WHEN 'legere' THEN 6 END",
+  )
 })
 
 // Crée la chaîne complète users -> campaigns -> characters -> char_sheet requise par
@@ -217,3 +241,102 @@ test('computeAvailableSeverityReductions : exception "palier plein" sur 3 degré
 })
 
 test.after(async () => { await db.destroy() })
+
+// ─── 6ᵉ ligne (mort_subite) — débordement de la ligne Mortelle ───────────────────────────────────────────────
+
+async function insertWounds(trx, charSheetId, location, severity, count) {
+  const rows = []
+  for (let i = 0; i < count; i += 1) {
+    const [row] = await trx('character_wounds')
+      .insert({ char_sheet_id: charSheetId, location, severity, occurred_at_game_minutes: i })
+      .returning('*')
+    rows.push(row)
+  }
+  return rows
+}
+
+test('Mortelle à la tête (1 case) : la 1ʳᵉ reste une Mortelle, la 2ᵉ déborde vers mort_subite', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const first = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'mortelle')
+    assert.equal(first.promoted, false)
+    assert.equal(first.wound.severity, 'mortelle')
+
+    const second = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'mortelle')
+    assert.equal(second.promoted, true)
+    assert.equal(second.wound.severity, 'mort_subite')
+    assert.equal(second.deletedWounds.length, 1)
+    assert.equal(second.deletedWounds[0].id, first.wound.id)
+
+    const remaining = await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'tete' })
+    assert.deepEqual(remaining.map(w => w.severity), ['mort_subite'])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('Mortelle au corps (2 cases) : 2 Mortelles tiennent, la 3ᵉ déborde vers mort_subite', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const one = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'mortelle')
+    const two = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'mortelle')
+    assert.equal(one.promoted, false)
+    assert.equal(two.promoted, false)
+    assert.equal((await trx('character_wounds').where({ char_sheet_id: charSheet.id, severity: 'mortelle' })).length, 2)
+
+    const three = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'mortelle')
+    assert.equal(three.promoted, true)
+    assert.equal(three.wound.severity, 'mort_subite')
+    assert.equal(three.deletedWounds.length, 2)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('un coup ≥ 30 écrit mort_subite directement ; une 2ᵉ sur la même localisation lève WoundLineFullError', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const first = await resolveWoundInsertion(trx, charSheet.id, 'bras_droit', 'mort_subite')
+    assert.equal(first.promoted, false)
+    assert.equal(first.wound.severity, 'mort_subite')
+
+    await assert.rejects(
+      resolveWoundInsertion(trx, charSheet.id, 'bras_droit', 'mort_subite'),
+      (err) => err instanceof WoundLineFullError && err instanceof AppError && err.statusCode === 400,
+    )
+    // Une autre localisation n'est pas affectée : le cadavre continue de prendre des blessures ailleurs.
+    const other = await resolveWoundInsertion(trx, charSheet.id, 'jambe_gauche', 'mort_subite')
+    assert.equal(other.wound.severity, 'mort_subite')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('promotion en cascade complète : Légère → Moyenne → Grave → Critique → Mortelle → mort_subite (tête)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    // Tête : Légère 3 cases, Moyenne 3, Grave 2, Critique 2, Mortelle 1. Chaque ligne est au point de convertir.
+    await insertWounds(trx, charSheet.id, 'tete', 'legere', 2)
+    await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 2)
+    await insertWounds(trx, charSheet.id, 'tete', 'grave', 1)
+    await insertWounds(trx, charSheet.id, 'tete', 'critique', 1)
+    await insertWounds(trx, charSheet.id, 'tete', 'mortelle', 1)
+
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'legere')
+    assert.equal(result.promoted, true)
+    assert.equal(result.wound.severity, 'mort_subite')
+    assert.equal(result.deletedWounds.length, 2 + 2 + 1 + 1 + 1)
+
+    const remaining = await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'tete' })
+    assert.deepEqual(remaining.map(w => w.severity), ['mort_subite'])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('une cascade qui atteint la ligne Mortelle vide s\'y arrête (pas de mort tant que la Mortelle n\'est pas pleine)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'bras_gauche', 'critique', 1) // ligne Critique (2 cases) au point de convertir
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'bras_gauche', 'critique')
+    assert.equal(result.promoted, true)
+    assert.equal(result.wound.severity, 'mortelle')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})

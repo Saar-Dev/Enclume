@@ -108,7 +108,6 @@ export async function resolveFall(io, db, campaignId, {
           degautsBruts: degatsBruts,
           degatsNets: hit.degatsNets,
           severity: hit.finalSeverity,
-          is_lethal: hit.is_lethal,
           isSuccess: true,
           isPnj: true,
           shockResult: hit.shockResult,

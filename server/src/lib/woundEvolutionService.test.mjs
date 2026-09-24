@@ -409,11 +409,9 @@ test('handler infection : Critique réussi -> infecte quand même (RAW, malgré 
 
 test('handler infection : Mortelle -> délai de survie affiché, jamais appliqué (aucune suppression)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
-    // Deux personnages distincts — mortelle/corps n'a que 2 cases de capacité (WOUND_MAX_COUNTS,
-    // les autres Localisations n'en ont qu'1), et le handler "infecte quand même" ajoute une case à
-    // chaque résolution : réutiliser le même personnage/la même Localisation pour les deux branches
-    // épuiserait la ligne (aucune promotion au-delà de mortelle), sans rapport avec ce que ce test
-    // vérifie (le calcul du délai de survie, indépendant par personnage).
+    // Deux personnages distincts : le délai de survie se calcule par personnage (NA de Constitution propre).
+    // L'infection d'une Mortelle n'ajoute AUCUNE case (WOUND_INFECTION.mortelle.extraCase = false, RAW : survie en
+    // heures) — vérifié plus bas : la ligne ne déborde donc jamais vers la 6ᵉ gravité par infection.
     const fixtureOk = await createFixture(trx)
     await setConstitution(trx, fixtureOk.charSheet.id, 10)
     const woundOk = await createWound(trx, fixtureOk.charSheet.id, { severity: 'mortelle' })
@@ -422,6 +420,10 @@ test('handler infection : Mortelle -> délai de survie affiché, jamais appliqu�
     const freshOk = await trx('game_echeances').where({ id: echeanceOk.id }).first()
     const resultOk = await woundInfectionCheckHandler(trx, freshOk)
     assert.deepEqual(resultOk.effects.survivalHoursInfo, { hours: 10, onSuccess: true })
+    assert.equal(resultOk.effects.infected, true)
+    assert.equal(resultOk.undoEntries.length, 0)
+    const woundsAfterOk = await trx('character_wounds').where({ char_sheet_id: fixtureOk.charSheet.id })
+    assert.deepEqual(woundsAfterOk.map(w => w.severity), ['mortelle']) // aucune case ajoutée, pas de mort_subite
 
     const fixtureFail = await createFixture(trx)
     await setConstitution(trx, fixtureFail.charSheet.id, 10)
