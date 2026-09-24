@@ -662,6 +662,8 @@
     "statusEffectsModeEnforced": "Appliqué",
     "combatModifiersModeLabel": "Modificateurs de combat",
     "combatModifiersModeHint": "Auto : la taille de la cible et l'allure de déplacement sont déterminées automatiquement (joueur en lecture seule, le MJ garde la main). Libre : joueur et MJ choisissent tout à la main, sans valeur pré-remplie. La portée reste toujours calculée depuis la distance.",
+    "playersEditStatusesLabel": "Les joueurs gèrent les statuts de leur token",
+    "playersEditStatusesHint": "Désactivez pour que seul le MJ pose et retire les statuts (les joueurs les voient en lecture seule)",
     "combatModifiersModeAuto": "Auto",
     "combatModifiersModeLibre": "Libre",
     "encumbranceEnabledLabel": "Limite de poids porté (règle maison)",
@@ -1057,6 +1059,7 @@
   "status": {
     "stunned":       "Étourdi",
     "unconscious":   "Inconscient",
+    "readOnly":      "Lecture seule",
     "blinded":       "Aveuglé",
     "grappled":      "Saisi",
     "restrained":    "Entravé",

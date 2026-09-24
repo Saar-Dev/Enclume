@@ -32,6 +32,11 @@ export const SETTINGS_SCHEMA = {
   // condition sur toutes les campagnes existantes, un défaut différent changerait silencieusement
   // leur comportement (même raisonnement que encumbrance_enabled ci-dessus).
   status_effects_mode:   { type: 'string',  default: 'enforced', enum: ['off', 'icon_only', 'enforced'] },
+  // Qui pose/retire les statuts d'un token (TOKEN_STATUS_TOGGLE). Défaut `true` : le propriétaire du
+  // token pouvait déjà basculer ses statuts avant cette option (socketToken.js), un défaut différent
+  // changerait silencieusement le comportement des campagnes existantes. `false` : MJ seul.
+  // Indépendant de status_effects_mode (affichage/application des effets, pas les droits).
+  players_edit_statuses: { type: 'boolean', default: true },
   // Modificateurs de combat (taille de la cible + allure tireur/cible). Défaut `auto` : Enclume
   // automatise (taille dérivée de la fiche cible, allure du mouvement déclaré ; joueur en lecture
   // seule, MJ garde la main). `libre` : joueur ET MJ choisissent tout à la main, fallback neutre

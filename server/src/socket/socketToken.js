@@ -1,6 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { checkTokenOwnership } from '../lib/socketUtils.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import * as statusService from '../lib/statusService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
@@ -142,7 +143,8 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
   })
 
   // ─── TOKEN:STATUS_TOGGLE ───────────────────────────────────────────────
-  // GM ou propriétaire du token : ajoute ou retire un statut (toggle)
+  // GM, ou propriétaire du token si l'option de campagne `players_edit_statuses` l'autorise (défaut) :
+  // ajoute ou retire un statut (toggle)
   // Payload : { tokenId, statusCode }
   socket.on(WS.TOKEN_STATUS_TOGGLE, async ({ tokenId, statusCode }) => {
     try {
@@ -151,6 +153,10 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
 
       const { isOwner } = await checkTokenOwnership(db, token, user.id, isGm ? 'gm' : 'player')
       if (!isOwner && !isGm) return
+      if (!isGm) {
+        const { players_edit_statuses: playersEditStatuses } = await getCampaignSettings(db, campaignId)
+        if (!playersEditStatuses) return
+      }
 
       // burning/acid/decompression retirés (docs/PLAN_FATIGUE_DOMMAGES.md §9 Lot 3, increment G) — ce
       // toggle nu (aucune `data`) écraserait silencieusement la formule/localisation posée par

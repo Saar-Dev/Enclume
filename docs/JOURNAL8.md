@@ -8102,3 +8102,56 @@ en jeu réel par Saar (2026-09-23)**.
 durable intégré à `docs/SYSTEME/MOTEUR_MONDE.md` §7 ; `docs/ROADMAP.md` — ligne retirée (chantier
 clos) ; `client/public/CHANGELOG.md` — entrée joueur/MJ ajoutée (v244) ; mémoire de session mise à
 jour (`project_combat_window_drag_handle` Round 7).
+
+---
+
+## Session (Dev) — 2026-09-24 — Option de campagne `players_edit_statuses` (statuts de token : joueurs ou MJ seul)
+
+**Origine** : préalable du chantier `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lot 1, statut `dead`).
+Saar voulait d'abord réserver tous les statuts au MJ ; relu contre le code, cela renversait la
+décision de `docs/Old/PLAN_STATUT.md` (« Propriétaire ajoute+retire son token ») et retirait aux joueurs
+un usage existant (`grappled`, `off_balance`…). **Décision Saar (2026-09-24)** : ne pas trancher pour
+tout le monde — **option de campagne laissée au MJ, défaut autorisé** (comportement historique
+inchangé, aucun impact sur les campagnes existantes).
+
+**Implémenté** : clé `players_edit_statuses` (booléen, défaut `true`) dans `SETTINGS_SCHEMA`
+(`server/src/lib/campaignSettingsService.js`) ; `TOKEN_STATUS_TOGGLE` (`socketToken.js`) ignore la
+bascule d'un non-MJ quand l'option est `false` — **serveur autoritaire**, le client (panneau en lecture
+seule, légende « Lecture seule ») ne fait que refléter ; case à cocher dans les réglages de campagne
+(`SectionGameRules.jsx`) ; propagation en direct par `CAMPAIGN_SETTINGS_UPDATED` existant. Aucune
+migration (JSONB + `mergeWithDefaults`). Indépendante de `status_effects_mode` (affichage/application
+des effets, pas les droits).
+
+**À venir dans ce chantier** (commit suivant, pas ici) : le statut `dead` sera réservé au MJ
+**quelle que soit** cette option — mort et résurrection ne sont pas une auto-déclaration de joueur.
+
+**Testé** : `node --check` (2 fichiers serveur), `fr.json` valide, `node --test
+server/src/lib/campaignSettingsService.test.mjs` (6/6), ESLint client 0 erreur, `git diff --check`.
+**Confirmé fonctionnel en jeu réel par Saar (2026-09-24), aucun écart** (option cochée/décochée,
+joueur/MJ).
+**Données** : aucune migration. **Retour arrière** : `git revert` du commit applicable.
+
+---
+
+## Session (Dev) — 2026-09-24 — Cadrage : la 6ᵉ ligne du compteur de blessures (Mort subite / Membre détruit)
+
+**Décisions de cadrage** (détail et architecture : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`, aucun
+code écrit à ce stade) :
+- **Cause racine unique** [VÉRIFIÉ code] : le moteur n'implémente que 5 des 6 lignes du compteur RAW
+  (`REGLEBLESSURES.md:20-26,135-149`). Trois symptômes : un coup ≥ 30 = simple Mortelle + drapeau
+  `is_lethal` non persisté ; aucun état « mort » ; débordement de la ligne Mortelle **muet**
+  (`nextSeverity('mortelle') === null` → `applyWound` renvoie `null`, aucune blessure écrite).
+- Le report du 2026-07-29 (Membre détruit = option future) était une décision de **périmètre** du lot
+  Guérison, pas une affirmation du RAW ; **Mort subite n'y avait jamais été tranchée**. Ce chantier
+  lève le report.
+- **La 6ᵉ ligne = une seule case, six localisations**, affichée comme un mot (« Mort » sur Tête/Corps,
+  « Membre détruit » sur les membres), toujours visible, cliquable. Une blessure « Mort » pose le
+  statut de token `dead` ; il disparaît avec elle.
+- **Écart RAW assumé — Chance** : racheter une Mort subite en Blessure critique coûtera **3 points**
+  de Chance (le RAW, `REGLE_CHANCE.md:122-123`, ne chiffre pas ; 2 semblait trop peu vu la
+  gravité). Dépasse aussi la limite générale de 2 points d'un seul coup : exception propre à cette
+  ligne. Applicable seulement quand le Lot 3 sera codé.
+- Membre détruit : blessure aiguë (6ᵉ gravité) **et** état permanent du membre séparé (paralysie
+  au-delà de la guérison en Critique) → rendu barré/gris, Lot 4 du plan.
+
+**Retour arrière** : sans objet (décisions, aucun code).

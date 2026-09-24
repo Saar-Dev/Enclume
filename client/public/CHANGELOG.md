@@ -1,3 +1,11 @@
+## v245 — 2026-09-24 — Option MJ : statuts de token gérés par les joueurs (ou non)
+
+### Campagne
+- [add] Nouvelle option dans les réglages de campagne (section Règles) : « Les joueurs gèrent les
+  statuts de leur token ». Cochée (comportement actuel, par défaut), chaque joueur peut poser et
+  retirer les statuts de son propre token. Décochée, seul le MJ le peut : les joueurs voient leurs
+  statuts en lecture seule.
+
 ## v244 — 2026-09-23 — Les caisses allongées ne bloquent plus le passage à côté
 
 ### Carte

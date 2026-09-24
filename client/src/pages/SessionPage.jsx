@@ -906,6 +906,7 @@ function SessionContent({ campaignId }) {
             userId={user?.id}
             socket={socket}
             campaignId={campaignId}
+            playersEditStatuses={campaign?.settings?.players_edit_statuses ?? true}
             onClose={() => setStatusPanel(null)}
           />
         )

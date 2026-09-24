@@ -33,6 +33,13 @@ test('mergeWithDefaults — combat_modifiers_mode : défaut auto, valeur stocké
   assert.equal(mergeWithDefaults({ combat_modifiers_mode: 'libre' }).combat_modifiers_mode, 'libre')
 })
 
+test('mergeWithDefaults — players_edit_statuses : défaut true (comportement historique), false stocké respecté', () => {
+  assert.equal(SETTINGS_SCHEMA.players_edit_statuses.type, 'boolean')
+  assert.equal(mergeWithDefaults(undefined).players_edit_statuses, true)
+  assert.equal(mergeWithDefaults({}).players_edit_statuses, true)
+  assert.equal(mergeWithDefaults({ players_edit_statuses: false }).players_edit_statuses, false)
+})
+
 test('mergeWithDefaults — falsy valide (false) sur une clé dont le défaut est true reste false (piège ?? vs ||)', () => {
   // shock_auto_stun/random_mutations ont un défaut `true` — si le code utilisait `||` au lieu de
   // `??`, ce test échouerait (false || true → true, silencieusement écrasé).

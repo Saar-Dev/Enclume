@@ -57,6 +57,8 @@ const CHRONIC_HAZARD_CODES = new Set(['hypothermia'])
 //   userId      — id de l'utilisateur courant
 //   socket      — instance socket.io client
 //   campaignId  — id de la campagne (routes REST des dangers environnementaux)
+//   playersEditStatuses — option de campagne `players_edit_statuses` : le propriétaire non-MJ peut-il
+//                 basculer les statuts de son token (défaut true)
 //   onClose     — callback fermeture
 export default function TokenStatusPanel({
   x, y,
@@ -67,6 +69,7 @@ export default function TokenStatusPanel({
   userId,
   socket,
   campaignId,
+  playersEditStatuses = true,
   onClose,
 }) {
   const { t } = useTranslation()
@@ -100,7 +103,7 @@ export default function TokenStatusPanel({
   const [coldWet, setColdWet] = useState(false)
 
   const isOwner = character?.user_id === userId
-  const canToggle = isGm || isOwner
+  const canToggle = isGm || (isOwner && playersEditStatuses)
 
   // Fermeture click-dehors / Échap
   useEffect(() => {
@@ -605,7 +608,7 @@ export default function TokenStatusPanel({
               letterSpacing: '1px',
               userSelect: 'none',
             }}>
-              {t('tokenRadial.detailStatuts')}
+              {t('status.readOnly')}
             </div>
           )}
         </>

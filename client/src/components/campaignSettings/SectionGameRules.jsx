@@ -11,6 +11,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [actionTimerSec, setActionTimerSec] = useState(initialData.action_timer_sec ?? 0)
   const [shockAutoStun, setShockAutoStun] = useState(initialData.shock_auto_stun ?? true)
   const [statusEffectsMode, setStatusEffectsMode] = useState(initialData.status_effects_mode ?? 'enforced')
+  const [playersEditStatuses, setPlayersEditStatuses] = useState(initialData.players_edit_statuses ?? true)
   const [combatModifiersMode, setCombatModifiersMode] = useState(initialData.combat_modifiers_mode ?? 'auto')
   const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
   const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
@@ -26,6 +27,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleActionTimerSec = (val) => { setActionTimerSec(val); onChange({ action_timer_sec: val }) }
   const handleShockAutoStun = (val) => { setShockAutoStun(val); onChange({ shock_auto_stun: val }) }
   const handleStatusEffectsMode = (val) => { setStatusEffectsMode(val); onChange({ status_effects_mode: val }) }
+  const handlePlayersEditStatuses = (val) => { setPlayersEditStatuses(val); onChange({ players_edit_statuses: val }) }
   const handleCombatModifiersMode = (val) => { setCombatModifiersMode(val); onChange({ combat_modifiers_mode: val }) }
   const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
@@ -107,6 +109,14 @@ export default function SectionGameRules({ initialData, onChange }) {
           ))}
         </div>
       </div>
+
+      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+        <input type="checkbox" checked={playersEditStatuses}
+          onChange={e => handlePlayersEditStatuses(e.target.checked)}
+          style={styles.checkbox} />
+        <span style={styles.toggleLabel}>{t('settings.playersEditStatusesLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.playersEditStatusesHint')}</span>
+      </label>
 
       <div style={{ marginTop: 12 }}>
         <span style={styles.toggleLabel}>{t('settings.combatModifiersModeLabel')}</span>
