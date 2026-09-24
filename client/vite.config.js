@@ -114,6 +114,13 @@ export default defineConfig(({ mode }) => {
     ],
     envDir, // .env à la racine du monorepo
     server: {
+      // Écoute IPv4 explicite. Sans `host`, Node ≥ 17 résout « localhost » vers ::1 : Vite n'écoutait que
+      // sur [::1], alors que le navigateur tente 127.0.0.1 ; sur Windows une connexion vers un port fermé
+      // met ~2,05 s à échouer avant le repli, et chaque nouvelle connexion (Vite ferme les inactives à 5 s)
+      // payait ce délai : les 16 icônes de la fenêtre de statuts arrivaient toutes d'un coup après 2 s
+      // (diagnostic 2026-09-24, requestStart à ~2 034 ms, serveur répondant en 4 ms). Loopback seulement :
+      // aucune exposition au réseau local.
+      host: '127.0.0.1',
       proxy: {
         '/api': {
           target: apiProxyTarget,
