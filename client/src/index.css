@@ -3056,6 +3056,22 @@ Convention :
   margin-bottom: 8px;
 }
 
+/* ── Wizard — attente/échec du chargement des données d'étape ───── */
+.wiz-ref-status {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+}
+.wiz-ref-status-text {
+  margin: 0;
+  color: var(--wiz-metal-3);
+  font-size: 14px;
+}
+
 /* ── Wizard — confirmation de finalisation (PC non dépensés) ────── */
 .wiz-confirm-overlay {
   position: fixed;

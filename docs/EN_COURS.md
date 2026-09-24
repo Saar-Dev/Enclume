@@ -53,6 +53,47 @@ réseau) n'a jamais été validé et ne le sera pas dans ce cadre. Plan déplac�
 
 ---
 
+## Chantier en cours — 4 bugs du Wizard (identifiés par Saar, 2026-09-24)
+
+Traités UN PAR UN (un plan = un bug, le suivant attend la validation du précédent).
+
+| # | Bug | État |
+|---|---|---|
+| 1 | Step 7 : pop-up de validation avant de finaliser s'il reste des PC | ✅ Codé, **validé par Saar**, commité (`acfbabe`) — `WizardFinalizeConfirm.jsx` remplace l'ancien `window.confirm` |
+| 2 | Steps Profession + Avantages : vue MJ « pas à jour » et écran qui saute | ⏸️ **En pause — code du lot 1 commité, JAMAIS testé en navigateur** (Saar ne pouvait pas tester, 2026-09-24) |
+| 3 | Champ **Fertilité** absent de toute la création (à ajouter en Step 1 : jet de dé ; modifiable par les choix suivants, ex. mutation, auto-fécondation) | À faire (règle de jeu : lire le RAW avant de cadrer, décision écart → `JOURNAL8.md`) |
+| 4 | Step 3 : tri et regroupement des Mutations similaires | À faire |
+
+**Bug 2 — ce qui est établi et ce qui reste** (lecture du code, rien d'exécuté) :
+- **Cause `[OBSERVÉ]` à la lecture** : le MJ observateur remonte l'étape à chaque écho du joueur
+  (`WizardCreation.jsx#gmSyncKey`, patron WIZ15/WIZ21 assumé). Chaque remontage de `Step4Experience`/
+  `Step5Advantages` rechargeait ses catalogues (`step4/ref`, `step5/ref`, `/char-ref/skills`) : étape 5 =
+  page « Chargement » à chaque clic ; étape 4 = `refData.loading` jamais lu, sous-étapes rendues sur
+  catalogue vide, puis `PRUNE_ALLOCATIONS`/`PRUNE_OPENED_SKILLS` (`CareersAllocator.jsx`) effaçaient les
+  compétences placées (aucune carrière connue) et remontaient le résultat au parent. Le commit
+  continu (`setStep4Data`/`setStep5Data`) écrivait aussi un `finalAge`/`pcNet=0` faux pendant le chargement.
+- **Lot 1 codé** (patron `inventoryDataSync.js`/`useInventoryData.js`) : cache `creationStore.refData` +
+  action `ensureRef` (une requête à la fois par clé, réponse périmée ignorée), façade
+  `lib/useWizardRef.js`, écran d'attente/erreur + « Réessayer » `WizardRefStatus.jsx`, garde
+  `refPending` sur le commit live des étapes 4 et 5. Cache vidé à `startCreation`/`loadExistingSheet`/
+  `resetCreation` (donc une option de campagne comme `polaris_latent` n'est relue qu'à l'entrée dans le
+  Wizard). Sources : react.dev (hook dédié au fetch, `key`), TanStack Query/SWR (cache + dédup), patron
+  déjà en place pour l'inventaire.
+- **Pour reprendre (test à faire par Saar)** : joueur en Carrières place des compétences puis passe en
+  Avantages et clique des cartes, MJ observe. Attendu : aucun « Chargement… » qui clignote, compétences
+  du joueur toujours visibles chez le MJ. Si validé → clore (compte-rendu `JOURNAL8.md`, retirer cette
+  ligne). Si l'écran du MJ remonte encore en haut à chaque clic → **lot 2** : conserver le défilement à
+  travers le remontage (non cadré).
+- **Hors lot 1, à ticketer** (`/admin/tickets`, non créés) : (a) un MJ observateur qui remonte l'étape
+  ré-émet `WIZARD_LIVE_UPDATE` vers la salle (inoffensif avec un seul MJ, boucle possible avec deux
+  observateurs) `[HYPOTHÈSE]` ; (b) `ProAdvantagesAndSetbacks.jsx` peut lancer un `DICE_ROLL`
+  automatiquement chez le MJ si un tirage (`money_reward`) est en attente au remontage `[HYPOTHÈSE]` ;
+  (c) `Step3Mutations` remonte aussi sur écho — à vérifier avec le bug 4, réutiliser `useWizardRef`.
+- Limite connue du lot 1 : un échec du seul catalogue d'avantages bloque aussi l'étape 4 (il ne sert
+  qu'à un libellé) — assumé pour la simplicité.
+
+---
+
 ## Dettes actives
 
 > Détail technique des bugs suivis en base → écran admin `/admin/tickets` (`bug_tickets`,

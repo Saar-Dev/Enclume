@@ -42,6 +42,19 @@ const computeHighestStep = ({ step2, step3, step4, step5, creationState }) => {
   return highestStep
 }
 
+// Données de référence du Wizard (catalogues d'origines/carrières/revers, avantages, compétences) :
+// identiques d'un rendu à l'autre, donc jamais rechargées quand une étape est remontée (le MJ
+// observateur remonte l'étape à chaque écho du joueur, WizardCreation.jsx#gmSyncKey). Même patron que
+// inventoryDataSync.js : une seule requête à la fois par clé, cache dans le store, façade React
+// `useWizardRef` (lib/useWizardRef.js) qui expose `loading`.
+const REF_SOURCES = {
+  step4: (sheetId) => `/creation/${sheetId}/step4/ref`,
+  step5: (sheetId) => `/creation/${sheetId}/step5/ref`,
+  skills: () => '/char-ref/skills',
+}
+export const wizardRefKey = (kind, sheetId) => (kind === 'skills' ? 'skills' : `${kind}:${sheetId}`)
+const refInFlight = new Map()
+
 export const useCreationStore = create((set, get) => ({
   step: 0,
   highestStep: 0,
@@ -88,6 +101,31 @@ export const useCreationStore = create((set, get) => ({
   liveStep3Data: null,
   liveStep4Data: null,
   liveStep5Data: null,
+
+  // Cache des données de référence : clé (wizardRefKey) → { status: 'loading'|'ready'|'error', data }.
+  // Vidé à chaque entrée dans le Wizard (startCreation/loadExistingSheet/resetCreation) pour repartir
+  // de catalogues frais (ex. option de campagne polaris_latent qui filtre le catalogue d'avantages).
+  refData: {},
+
+  // `force` : relance après un échec (bouton « Réessayer »). Sans lui, un échec n'est jamais rejoué
+  // automatiquement — évite une boucle de requêtes si le serveur répond en erreur.
+  ensureRef: (kind, sheetId, force = false) => {
+    const key = wizardRefKey(kind, sheetId)
+    const current = get().refData[key]
+    if (refInFlight.has(key)) return
+    if (current?.status === 'ready' || (current?.status === 'error' && !force)) return
+    set(s => ({ refData: { ...s.refData, [key]: { status: 'loading' } } }))
+    const promise = api.get(REF_SOURCES[kind](sheetId))
+      .then(res => ({ status: 'ready', data: res.data }))
+      .catch(() => ({ status: 'error' }))
+    refInFlight.set(key, promise)
+    promise.then(entry => {
+      // Cache vidé pendant la requête (autre brouillon ouvert entre-temps) : réponse périmée, ignorée.
+      if (refInFlight.get(key) !== promise) return
+      refInFlight.delete(key)
+      set(s => ({ refData: { ...s.refData, [key]: entry } }))
+    })
+  },
 
   // Vivant — pour le header (WizardHeader) : reflète la dépense en cours de l'étape 4 avant
   // même sa soumission (liveYears), en plus des étapes déjà committed.
@@ -196,7 +234,8 @@ export const useCreationStore = create((set, get) => ({
   setHighestStep: (n) => set(s => ({ highestStep: Math.max(s.highestStep, n) })),
 
   startCreation: async (campaignId) => {
-    set({ isStarting: true, startError: null })
+    refInFlight.clear()
+    set({ isStarting: true, startError: null, refData: {} })
     try {
       const res = await api.post('/creation/start', { campaignId })
       const {
@@ -242,7 +281,8 @@ export const useCreationStore = create((set, get) => ({
   // sans conséquence sur les données elles-mêmes (déjà toutes chargées), seulement sur l'écran
   // affiché en premier.
   loadExistingSheet: async (sheetId) => {
-    set({ isStarting: true, startError: null })
+    refInFlight.clear()
+    set({ isStarting: true, startError: null, refData: {} })
     try {
       const res = await api.get(`/creation/${sheetId}/state`)
       const {
@@ -283,7 +323,9 @@ export const useCreationStore = create((set, get) => ({
   })),
   setStep5Data: (data) => set({ step5Data: data }),
 
-  resetCreation: () => set({
+  resetCreation: () => {
+    refInFlight.clear()
+    set({
     step: 0,
     highestStep: 0,
     step0Data: null, step1Data: null, step2Data: null,
@@ -308,5 +350,7 @@ export const useCreationStore = create((set, get) => ({
     liveStep3Data: null,
     liveStep4Data: null,
     liveStep5Data: null,
-  }),
+    refData: {},
+    })
+  },
 }))

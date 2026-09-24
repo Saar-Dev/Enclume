@@ -1,27 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import api from '../../lib/api'
+import { useWizardRef, wizardRefsPending } from '../../lib/useWizardRef'
+import WizardRefStatus from './WizardRefStatus'
 import { advantageOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
 import { useCreationStore } from '../../stores/creationStore'
 
+// Référence stable : refData alimente des useMemo (advantagesMeta), un `[]` recréé à chaque rendu les
+// recalculerait en boucle.
+const EMPTY_LIST = []
+
 export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(5)
   const setStep5Data = useCreationStore(s => s.setStep5Data)
-  const [refData, setRefData] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Catalogue d'avantages : cache du store (useWizardRef) — déjà présent quand le MJ observateur remonte
+  // cette étape à chaque écho du joueur, plus de page « Chargement » qui clignote à chaque clic.
+  const advantagesRef = useWizardRef('step5', sheetId)
+  const refs = [advantagesRef]
+  const refPending = wizardRefsPending(refs)
+  const refData = advantagesRef.data ?? EMPTY_LIST
   const [selected, setSelected] = useState(initialData?.advantages ?? [])
   const [pendingFamily, setPendingFamily] = useState(null)
-
-  useEffect(() => {
-    if (!sheetId) return
-    api.get(`/creation/${sheetId}/step5/ref`)
-      .then(res => setRefData(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [sheetId])
 
   const advantages = refData.filter(a => a.type === 'advantage')
   const disadvantages = refData.filter(a => a.type === 'disadvantage')
@@ -75,11 +76,15 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
   // qu'à la soumission finale") — mais ce payload devient aussi la valeur committée localement :
   // sans eux, step5Data resterait incomplet (pcNet manquant casserait le budget PC du header) tant
   // que "Suivant" n'a pas été cliqué.
+  //
+  // Pas avant que le catalogue soit chargé : pcNet/advantagesMeta se calculent depuis lui, un commit à
+  // vide écraserait step5Data (et le budget PC du header) avec pcNet=0 le temps du chargement.
   useEffect(() => {
+    if (refPending) return
     const payload = { advantages: selected, pcNet, advantagesMeta }
     onLiveChange?.(payload)
     setStep5Data(payload)
-  }, [selected, pcNet, advantagesMeta, onLiveChange, setStep5Data])
+  }, [refPending, selected, pcNet, advantagesMeta, onLiveChange, setStep5Data])
 
   const handleToggle = (advantageId, type, costPc) => {
     if (isLockedForPlayer(advantageOptionKey(advantageId))) return
@@ -108,13 +113,7 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
     onNext?.({ advantages: selected, pcNet, advantagesMeta })
   }
 
-  if (loading) {
-    return (
-      <div style={s.center}>
-        <p style={s.loadingText}>{t('step5.loading')}</p>
-      </div>
-    )
-  }
+  if (refPending) return <WizardRefStatus refs={refs} />
 
   const renderAdvCard = (adv) => {
     const isOn = selected.includes(adv.advantage_id)
@@ -292,8 +291,6 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
 
 const s = {
   container: { flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px', overflowY: 'auto' },
-  center: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  loadingText: { color: '#5a5a7a', fontSize: '14px' },
   pcBanner: { textAlign: 'center', color: '#e0a85c', fontSize: '16px', fontWeight: '700', padding: '8px', borderBottom: '1px solid #1e1e2e' },
   section: { display: 'flex', flexDirection: 'column', gap: '12px' },
   sectionTitle: { color: '#9090c8', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 },

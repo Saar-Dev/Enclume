@@ -10,11 +10,17 @@ import { useCreationStore } from '../../stores/creationStore'
 import { getSetbackBlockCount } from '../../../../shared/careerSetbacks.js'
 import { originGeoOptionKey, originSocOptionKey, trainingOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { SUB_STEPS, SUB_STEP_ORDER } from '../../../../shared/wizardStep4SubSteps.js'
-import api from '../../lib/api'
+import WizardRefStatus from './WizardRefStatus'
+import { useWizardRef, wizardRefsPending } from '../../lib/useWizardRef'
 
 const enrichBg = (bg) => ({ ...bg, ...(BG_META[bg.code] ?? {}) })
 
 const HIGHER_ED_TRAINING_CODE = 'education_scolaire'
+
+// Références stables (jamais un `?? []` recréé à chaque rendu) : les useMemo qui filtrent ces
+// catalogues en dépendent, une nouvelle identité les recalculerait à chaque rendu.
+const EMPTY_LIST = []
+const EMPTY_STEP4_REF = { geoOrigins: EMPTY_LIST, socialOrigins: EMPTY_LIST, trainings: EMPTY_LIST, higherEds: EMPTY_LIST, careers: EMPTY_LIST, setbacks: EMPTY_LIST }
 
 // Bug réel (docs/EN_COURS.md, 2026-08-12) : getStep4State (creationService.js) ne renvoie jamais
 // `null` — `age` a un défaut (16), les autres champs valent `null`/`[]`/`{}` — donc `initialData` est
@@ -157,12 +163,21 @@ function Step4ExperienceInner({
   // que randomPicks/setbackRolls ci-dessus. Jamais envoyée au serveur (buildPayload ne la reprend
   // pas) : purement un confort UI local à cette sous-étape, incomplète par nature.
   const [setbackResolution, setSetbackResolution] = useState(initialData?.setbackResolution ?? null)
-  const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [], setbacks: [] })
-  const [refSkills, setRefSkills] = useState([])
-  // Catalogue des avantages (Lot 5, 2026-07-23) : réutilisé tel quel depuis Step5 (même endpoint,
-  // /creation/:sheetId/step5/ref) pour afficher un nom lisible sur la note manual_grant_choice
-  // (Choc psychologique, Fugitif...) au lieu des codes advantage_id bruts (adv_044...).
-  const [advantagesCatalog, setAdvantagesCatalog] = useState([])
+  // Catalogues de référence : cache du store (useWizardRef), donc déjà présents quand le MJ observateur
+  // remonte cette étape à chaque écho du joueur. Avant, chaque remontage repartait d'un catalogue vide
+  // — sous-étapes affichées vides, puis PRUNE_ALLOCATIONS (CareersAllocator) effaçait les compétences
+  // placées faute de carrières connues.
+  const step4Ref = useWizardRef('step4', sheetId)
+  const skillsRef = useWizardRef('skills', sheetId)
+  // Catalogue des avantages (Lot 5, 2026-07-23) : même cache que Step5 (/creation/:sheetId/step5/ref),
+  // pour afficher un nom lisible sur la note manual_grant_choice (Choc psychologique, Fugitif...) au
+  // lieu des codes advantage_id bruts (adv_044...).
+  const advantagesRef = useWizardRef('step5', sheetId)
+  const refs = [step4Ref, skillsRef, advantagesRef]
+  const refPending = wizardRefsPending(refs)
+  const refData = step4Ref.data ?? EMPTY_STEP4_REF
+  const refSkills = skillsRef.data?.skills ?? EMPTY_LIST
+  const advantagesCatalog = advantagesRef.data ?? EMPTY_LIST
 
   const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
   const handleProAdvantagesChange = useCallback((next) => setProAdvantages(next), [])
@@ -171,26 +186,6 @@ function Step4ExperienceInner({
   const handleSetbackRollsChange = useCallback((next) => setSetbackRolls(next), [])
   const handleSetbackResolutionChange = useCallback((next) => setSetbackResolution(next), [])
 
-  useEffect(() => {
-    if (!sheetId) return
-    api.get(`/creation/${sheetId}/step4/ref`)
-      .then(res => setRefData({
-        loading: false,
-        geoOrigins: res.data.geoOrigins ?? [],
-        socialOrigins: res.data.socialOrigins ?? [],
-        trainings: res.data.trainings ?? [],
-        higherEds: res.data.higherEds ?? [],
-        careers: res.data.careers ?? [],
-        setbacks: res.data.setbacks ?? [],
-      }))
-      .catch(() => setRefData({ loading: false, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [], setbacks: [] }))
-    api.get('/char-ref/skills')
-      .then(res => setRefSkills(res.data.skills ?? []))
-      .catch(() => setRefSkills([]))
-    api.get(`/creation/${sheetId}/step5/ref`)
-      .then(res => setAdvantagesCatalog(res.data ?? []))
-      .catch(() => setAdvantagesCatalog([]))
-  }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
   // Mémoïsés (WIZ38-CRASH1) : non mémoïsés, ces 4 tableaux/4 items recréaient de nouveaux objets à
@@ -411,11 +406,15 @@ function Step4ExperienceInner({
   // WIZ21 (docs/EN_COURS.md, 2026-08-11) : `subStep` ajouté UNIQUEMENT à la diffusion live, jamais au
   // commit local — buildPayload reste ignorant de la navigation UI (le serveur ne l'avance jamais en
   // arrière), même séparation que handleSubmit (onNext) ci-dessus.
+  //
+  // Pas avant que les catalogues soient chargés : finalAge dépend de selectedHigherEdItem (catalogue),
+  // un commit à vide écraserait step4Data/le header avec un âge faux le temps du chargement.
   useEffect(() => {
+    if (refPending) return
     const payload = buildPayload()
     onLiveChange?.({ ...payload, subStep })
     setStep4Data(payload)
-  }, [buildPayload, subStep, onLiveChange, setStep4Data])
+  }, [refPending, buildPayload, subStep, onLiveChange, setStep4Data])
 
   // ─── Navigation ────────────────────────────────────────────────
   const advanceSubStep = (next) => {
@@ -457,6 +456,8 @@ function Step4ExperienceInner({
   }
 
   // ─── Rendu ─────────────────────────────────────────────────────
+  if (refPending) return <WizardRefStatus refs={refs} />
+
   return (
     <div style={s.container}>
       <div style={s.subSteps}>
