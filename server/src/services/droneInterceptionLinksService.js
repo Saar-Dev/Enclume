@@ -55,6 +55,15 @@ export async function removeInterceptionLink(droneCharacterId, protectedCharacte
     .del()
 }
 
+// Tokens d'une battlemap dont le personnage est protégé par au moins un drone — lecture faite au lancer d'une grenade
+// (« vise-t-elle un protégé ? », Lot 2) : un aller-retour, vide dans le cas courant.
+export async function listProtectedTokens(battlemapId, database = db) {
+  return database('tokens')
+    .where({ battlemap_id: battlemapId })
+    .whereIn('character_id', database('drone_interception_targets').select('protected_character_id'))
+    .select('*')
+}
+
 // Drones qui protègent ce personnage — lecture faite à chaque tir touché (index sur protected_character_id).
 export async function listProtectorLinks(protectedCharacterId, database = db) {
   const rows = await database('drone_interception_targets')

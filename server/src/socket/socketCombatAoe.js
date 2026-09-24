@@ -21,6 +21,9 @@ import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { parseWeaponRangeBands } from '../../../shared/combatRange.js'
 import { getAoeMechanic, normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
+import { resolveGrenadeInterposition } from '../lib/droneInterceptionService.js'
+import { buildDroneDamageNotice } from '../lib/droneDamageNotice.js'
+import { halveExplosionDamage } from '../../../shared/droneInterception.js'
 import * as damageService from '../lib/damageService.js'
 import * as statusService from '../lib/statusService.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
@@ -266,8 +269,9 @@ async function resolveAoeTargetDamage(io, campaignId, {
     const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
     if (!droneSheet) return null
     const { degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
-    await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, tokenId, droneSheet, degatsNets)
-    return { tokenId, cibleType, name, band, results: [
+    const droneOutcome = await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, tokenId, droneSheet, degatsNets)
+    // `droneOutcome` : de quoi dire au chat ce que le drone a encaissé (finalizeAoeResolution, buildDroneDamageNotice).
+    return { tokenId, cibleType, name, band, droneOutcome, results: [
       { localisation: null, degautsBruts, degatsNets, severity: null, is_lethal: false, shockResult: null },
     ] }
   }
@@ -412,6 +416,31 @@ async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToke
   }
 
   return { coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx }
+}
+
+// Émission de notice système (clé i18n résolue côté client, rules/i18n.md).
+const systemNoticeEmission = (i18nKey, params) => ({
+  to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: { i18nKey, params, timestamp: new Date().toISOString() },
+})
+
+// Nom affichable d'un token : personnage, à défaut libellé du token.
+async function tokenDisplayName(tokenId) {
+  const token = await db('tokens').where({ id: tokenId }).first()
+  const character = token?.character_id ? await db('characters').where({ id: token.character_id }).select('name').first() : null
+  return character?.name ?? token?.label ?? '?'
+}
+
+// Écriture, sur l'action, de ce que le lancer a figé : point d'impact réel, snapshot de l'arme, et — si un drone
+// protecteur a attrapé la grenade — son token (lu à l'explosion pour lui faire absorber la moitié des dégâts).
+// UN seul constructeur pour la percussion et la minuterie (deux écritures identiques jusque-là).
+function throwModifiersUpdate({ resolvedOrigin, weaponSnapshot, interposedDroneTokenId }) {
+  let sql = "jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)"
+  const bindings = [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]
+  if (interposedDroneTokenId) {
+    sql = `jsonb_set(${sql}, '{aoe,interposedDroneTokenId}', ?::jsonb)`
+    bindings.push(JSON.stringify(interposedDroneTokenId))
+  }
+  return db.raw(sql, bindings)
 }
 
 // consumeThrownGrenade — retrait de la grenade lancée de l'inventaire (RAW : amorcée puis lancée).
@@ -560,7 +589,8 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
 
       const thrown = await resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics })
       if (thrown.blocked) { emissions.push(thrown.blocked); return { suspend: false, emissions } }
-      const { coord, resolvedOrigin, weaponSnapshot, failureMarginM, d6Roll, testCtx } = thrown
+      const { coord, weaponSnapshot, failureMarginM, d6Roll, testCtx } = thrown
+      let resolvedOrigin = thrown.resolvedOrigin
 
       const { username: coordUsername, color: coordColor } = await resolveCombatantDisplayIdentity(db, character)
       emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -576,6 +606,19 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         site: 'grenade_throw', actorTokenId: action.token_id, targetTokenId: null,
       })
 
+      // Drone protecteur (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §4) — UN point pour les deux modes de détonation,
+      // avant leur séparation : si la grenade VISE un protégé (point visé dans sa case), son drone tente de
+      // l'attraper (marge de l'attaque = celle du Test de Coordination) ; réussi, elle TOMBE À SES PIEDS. Le
+      // point d'impact est corrigé ICI, avant toute écriture : entrée d'échelle, marqueur 3D et explosion en partent.
+      const interposition = await resolveGrenadeInterposition(io, campaignId, {
+        shooterToken, aimedPoint: aoe.intendedOrigin, impactPoint: resolvedOrigin, mr: coord.mr,
+      })
+      emissions.push(...interposition.emissions)
+      if (interposition.resolvedOrigin) {
+        resolvedOrigin = interposition.resolvedOrigin
+        aoe.interposedDroneTokenId = interposition.interposedDroneTokenId
+      }
+
       // Point d'impact réel figé en mémoire — le `buildShape` d'un mécanisme cercle lit `aoe.resolvedOrigin`.
       aoe.resolvedOrigin = resolvedOrigin
       aoe.weaponSnapshot = weaponSnapshot
@@ -587,8 +630,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         // explosion ci-dessous. Écart RAW acté (JOURNAL8, 3f/10) : le RAW ne précise pas le timing de
         // la percussion — lecture retenue « au contact = ce Tour ».
         await db('combat_actions').where({ id: action.id }).update({
-          modifiers: db.raw("jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)",
-            [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]),
+          modifiers: throwModifiersUpdate({ resolvedOrigin, weaponSnapshot, interposedDroneTokenId: aoe.interposedDroneTokenId ?? null }),
           updated_at: db.fn.now(),
         })
         await consumeThrownGrenade(action.weapon_inv_id)
@@ -618,8 +660,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         const currentTurn = stateRow?.current_turn ?? 1
 
         await db('combat_actions').where({ id: action.id }).update({
-          modifiers: db.raw("jsonb_set(jsonb_set(modifiers, '{aoe,resolvedOrigin}', ?::jsonb), '{aoe,weaponSnapshot}', ?::jsonb)",
-            [JSON.stringify(resolvedOrigin), JSON.stringify(weaponSnapshot)]),
+          modifiers: throwModifiersUpdate({ resolvedOrigin, weaponSnapshot, interposedDroneTokenId: aoe.interposedDroneTokenId ?? null }),
           turn_number: currentTurn + 1, // survit au wipe endTurn (M3) + trouvé par le dispatch au Tour+1
           updated_at: db.fn.now(),
         })
@@ -860,6 +901,10 @@ async function finalizeAoeResolution(io, campaignId, {
   const shooterChocDsl = !isHumanoidShooter && weapon.equipment_id ? damageService.buildWeaponShockDsl({
     shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
   }) : null
+  // Drone protecteur qui a attrapé la grenade au lancer (persisté avec l'action, relu ici même au Tour+1) : LUI SEUL
+  // absorbe la moitié des dommages (RAW « Drone bouclier », Q-A) ; les autres cibles de la zone, protégé compris,
+  // prennent les dégâts normaux. Appliqué ICI, une fois, de façon générique — jamais dans un mécanisme du registre.
+  const interposedDroneTokenId = ctx.aoe?.interposedDroneTokenId ?? null
   const perTargetInputs = []
   for (const ht of finalTargets) {
     const effectiveDamage = isHumanoidShooter
@@ -868,8 +913,23 @@ async function finalizeAoeResolution(io, campaignId, {
     const baseRaw = effectiveDamage
       ? effectiveDamage.total
       : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
-    const { degautsBruts, locationsCount, armorReductionFactor } = await mech.computeTargetDamage(ctx, ht, { effectiveDamage, baseRaw })
-    perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl, locationsCount, armorReductionFactor })
+    const computed = await mech.computeTargetDamage(ctx, ht, { effectiveDamage, baseRaw })
+    let degautsBruts = computed.degautsBruts
+    if (interposedDroneTokenId && ht.tokenId === interposedDroneTokenId) {
+      const halved = halveExplosionDamage(degautsBruts)
+      emissions.push(systemNoticeEmission('session.droneAbsorbsHalf', {
+        drone: await tokenDisplayName(ht.tokenId), raw: degautsBruts, halved,
+      }))
+      degautsBruts = halved
+    }
+    perTargetInputs.push({
+      hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl,
+      locationsCount: computed.locationsCount, armorReductionFactor: computed.armorReductionFactor,
+    })
+  }
+  if (interposedDroneTokenId && !finalTargets.some(ht => ht.tokenId === interposedDroneTokenId)) {
+    // Détruit ou parti hors de la zone entre le lancer et l'explosion (minuterie) : rien à absorber, on le dit.
+    emissions.push(systemNoticeEmission('session.droneAbsorbsNothing', { drone: await tokenDisplayName(interposedDroneTokenId) }))
   }
 
   const shooter = { userId: character.user_id, tireurUsername, tireurColor }
@@ -881,6 +941,12 @@ async function finalizeAoeResolution(io, campaignId, {
   emissions.push(...await finalizeAoeResults({
     perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult: ctx.rollResult, action,
   }))
+
+  // Ce qu'un drone a encaissé (gravité, intégrité) — même message que pour un tir (buildDroneDamageNotice).
+  for (const ptr of perTargetResults) {
+    if (!ptr.droneOutcome) continue
+    emissions.push(buildDroneDamageNotice({ droneName: ptr.name, degatsNets: ptr.results[0].degatsNets, outcome: ptr.droneOutcome }))
+  }
 
   emissions.push(...await mech.postResolve(io, campaignId, ctx, perTargetResults))
 

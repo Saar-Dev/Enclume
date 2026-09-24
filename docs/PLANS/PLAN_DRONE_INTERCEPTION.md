@@ -474,3 +474,78 @@ JOURNAL8 + CHANGELOG à la clôture, **avant** d'écrire « CLOS »).
 - **Premier essai réussi en jeu (2026-09-24, journal serveur)** : tir touché MR 7 sur Joueur Test protégé → Drone AX rejoint la
   trajectoire (7,24 m sur 25) → Test jet 8 / Seuil 10, MR 8 > 7 → s'interpose. Non vérifié à ce stade : dégâts effectivement
   encaissés par le drone (le journal ne les trace pas) et messages de chat (vus par Saar seulement).
+
+## 7quater. Lot 2 — plan exact relu contre le code (2026-09-24)
+Relecture de `socketCombatAoe.js` : les repères du §4 sont toujours bons (lancer `:548`, point d'impact figé `:580`,
+séparation percussion/minuterie `:583`, écritures `jsonb_set` `:590`/`:621`, `finalizeAoeResolution` `:827`).
+Écarts et compléments trouvés à la relecture :
+1. **`isInterposed` doit exiger un Test RÉUSSI.** Contre un tir touché la marge d'attaque est ≥ 0, donc un Test raté (marge
+   négative) ne passait jamais ; contre une grenade dont le Test de Coordination est RATÉ, la marge d'attaque est négative et un
+   Test de drone raté « plus proche de 0 » passerait à tort. Signature → `isInterposed({ isSuccess, mr }, attackMr)`.
+2. **Le service d'interposition se scinde** : un noyau commun (éligibilité, portée, déplacement, Test, messages) et deux
+   entrées — le tir (`resolveProtectorInterposition`, inchangée pour les appelants) et la grenade
+   (`resolveGrenadeInterposition`). Le noyau reçoit une trajectoire et un protégé, plus une « action de tir » : `gatherCandidates`
+   et le Test cessent de lire `action.target_token_id`.
+3. **« Vise son protégé »** : nouveau `listProtectedTokens(battlemapId)` (liens ⨝ tokens de la carte) puis `aimedAtProtected`
+   (déjà écrit et testé au Lot 1) sur `aoe.intendedOrigin`.
+4. **Persistance** : les deux écritures `jsonb_set` identiques (percussion / minuterie) passent par un seul constructeur
+   `throwModifiersUpdate` qui ajoute `interposedDroneTokenId` quand il existe.
+5. **Point d'impact** : après interposition, `resolvedOrigin` = position du drone après son déplacement (relue en base) ; l'entrée
+   d'échelle et le marqueur 3D partent de là, sans autre changement.
+6. **Moitié des dégâts** dans `finalizeAoeResolution`, sur les dégâts BRUTS de la ligne du drone, arrondie à l'inférieur
+   (`halveExplosionDamage`, pur, testé) ; un drone absent de la zone à l'explosion (déplacé, détruit) : message, jamais d'erreur.
+7. **Chat** (demande Saar) : « le drone attrape la grenade, elle tombera à ses pieds », variantes « zone » des messages
+   d'échec (même clé + `context: 'zone'`), « le drone absorbe la moitié (X → Y) », « le drone n'est plus dans la zone »,
+   et le message de dégâts drone (`buildDroneDamageNotice`) branché sur le site AOE resté en suspens.
+8. **Hors lot, inchangé** : cône / jet (pas de recentrage), tireur exo/drone (non câblé), CRD (Lot 3).
+Tests : `isInterposed` (nouvelle signature), `halveExplosionDamage`, `aimedAtProtected` (déjà là). Le service et le tronc AOE
+n'ont pas de test automatique (base + monde) : retest en jeu par Saar (grenade à minuterie ET à percussion, drone gagnant et perdant).
+
+### Analyse à charge du Lot 2 (2026-09-24) — le plan tient, avec 4 ajustements
+Vérifié dans le code : (a) la ré-entrée du Tour+1 ne repasse pas par le bloc de lancer (garde `!aoe.resolvedOrigin`) ;
+(b) `aoe` est relu depuis `combat_actions.modifiers` à la ré-entrée, donc `interposedDroneTokenId` persisté y revient (et dans le
+contexte gelé d'un choix Chance) ; (c) le marqueur 3D et la reconnexion (`socket/index.js:202`) lisent `resolution_snapshot.resolvedOrigin`
+→ `resolvedOrigin` doit être ajusté AVANT l'insertion de l'entrée d'échelle ; (d) `filterGrenadeFragHitTargets` n'exclut personne (le
+drone à distance 0 est une cible normale) ; (e) `scattered` n'est utilisé nulle part côté client ; (f) segment nul (lancer sur sa
+propre case) : `cellsCrossedBySegment` renvoie une case ; (g) un drone n'a jamais d'ouverture de choix Chance (aucun bruit de ce côté).
+Ajustements : 1. la trajectoire d'une grenade est œil du lanceur → POINT D'IMPACT AU SOL (pas œil → œil comme le tir) ;
+2. le changement de signature de `isInterposed` touche l'appel du Lot 1 et ses tests ; 3. en explosion, le drone est cherché par
+`tokenId` dans les cibles finales : absent → message, jamais d'erreur ; 4. deux protégés dans la même case sont impossibles (les
+tokens se bloquent entre eux) : on prend le premier trouvé, sans logique multi-protégés.
+Hypothèses de règle à journaliser (JOURNAL8) : la moitié porte sur les dégâts BRUTS (RAW : « la moitié des dommages », avant
+blindage/RD) ; la « marge de l'attaque » d'une grenade est celle de son Test de Coordination (`coord.mr`, négative si le lancer est
+raté → tout Test de drone RÉUSSI la bat) ; l'interception se joue sur la trajectoire réelle (après dispersion).
+
+### Lot 2 — CODÉ (2026-09-24), non retesté en jeu, non commité
+Décisions de Saar : moitié des dommages BRUTS (arrondie à l'inférieur) ; lancer raté = facile à intercepter (marge négative) ;
+interception sur la trajectoire réelle. Fichiers : `shared/droneInterception.js` (`isInterposed({isSuccess, mr}, attackMr)`,
+`halveExplosionDamage`) + tests ; `lib/droneInterceptionService.js` (noyau `attemptInterposition`, entrées tir et
+`resolveGrenadeInterposition`) ; `services/droneInterceptionLinksService.js` (`listProtectedTokens`) ; `socket/socketCombatAoe.js`
+(hook entre le Test de Coordination et la séparation percussion/minuterie, `throwModifiersUpdate`, moitié des dégâts et messages dans
+`finalizeAoeResolution`, message de dégâts drone) ; `fr.json` (variantes `_zone`, `droneAbsorbsHalf/Nothing`).
+Vérifié : 710 tests ; rejeu lecture seule sur la carte de test (protégé trouvé si le point visé est dans sa case, pas une case plus
+loin ; le drone atteint la trajectoire d'une grenade). NON couvert par un test automatique : le tronc AOE et le service (base + monde).
+
+### Lot 2 — décision Saar 2026-09-24 (retest minuterie) : « vise son protégé » = distance, plus « case exacte »
+Constat en jeu : le point visé (−1,38 ; 0,55) était à 1,43 m des pieds de Joueur Test mais dans la case voisine → aucun drone ne
+réagissait (« viser les pieds de sa cible ne déclenche rien »). Décision : réglage `GRENADE_PROTECTION_AIM_RADIUS_M` (mètres,
+horizontal, bornes comprises) dans `shared/droneInterception.js`, **valeur de départ 1,5 m**, à ajuster aux tests ; à consigner au
+JOURNAL8 avec sa valeur finale. `aimedAtProtected` = distance (`horizontalDistanceBetweenWorldPointsM`) + même étage ; plusieurs
+protégés dans le rayon = tous visés (leurs drones réagissent, le noyau retient le meilleur niveau). Les TIRS ne changent pas (Q-I).
+Message « la grenade ne vise aucun protégé (visée à plus de X m de …) » quand des protégés existent sur la carte.
+Remplace le « modèle à la case » de Q-F pour les grenades (§4.1-1 et §7quater).
+
+### Retest grenade (Saar 2026-09-24, soir) — ce qui a marché, ce qui est corrigé, ce qui n'est pas du chantier
+Marché : lancer MR 5 → grenade « visant Joueur Test (à moins de 1,5 m) » → Drone AX déplacé de 4,24 m → Test jet 17 / Seuil 10, raté →
+« la grenade poursuit sa trajectoire », puis « grenade amorcée ». Branche « drone perd » validée en jeu. Restent à voir : drone qui
+GAGNE (grenade à ses pieds, moitié des dégâts), percussion, explosion du Tour+1 avec drone interposé.
+Corrigé : distances dites au chat arrondies à 2 décimales (`roundMeters`).
+Constats HORS chantier (à ticketer, non corrigés ici) :
+- fenêtre Chance PNJ « Catastrophe — Chance (PNJ) / Éviter la zone d'effet (Jean Val-Jean) » peu claire : le lanceur est dans son propre
+  souffle (rayon 15 m, RAW : le lanceur n'est jamais exclu) et le titre « Catastrophe » est réutilisé pour un simple choix de Chance ;
+- message serveur figé en français (règle i18n) « L'ordre a changé entre-temps… fermez-la » (`socketCombatResolution.js:304`) : Confirmer
+  cliqué sur la fenêtre de modificateurs d'un token qui n'est plus le pas courant ;
+- carte de durée d'étourdissement affichée « succès » (badge sans objet) ;
+- **`queryTokensInShape` ne filtre aucun statut** : un token tagué « mort » (Baboulinet) reste cible d'une zone et reçoit une fenêtre de
+  Chance — à traiter avec le chantier statut `dead` (`PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 1b) ;
+- 403 `GET /api/char-sheet/<PNJ>/wounds` côté client d'un joueur (déjà noté plus haut, aussi pour Baboulinet).

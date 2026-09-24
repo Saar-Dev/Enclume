@@ -1,4 +1,4 @@
-import { cellKey, cellOfPoint } from './world/gridCells.js'
+import { horizontalDistanceBetweenWorldPointsM, normalizeWorldPoint } from './world/worldMetrics.js'
 
 // Décision d'interposition d'un drone protecteur — noyau PUR (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.2).
 // Aucun accès base, aucun socket : la coquille serveur (lib/droneInterceptionService.js) rassemble les
@@ -80,23 +80,44 @@ export function pickProtector(candidates, { attackKind }) {
   return { protector: eligible[0] ?? null, rejected }
 }
 
-// « Si la marge de réussite de ce test est supérieure à la marge de réussite de l'attaque » : STRICTEMENT
-// supérieure. Une marge de succès est le jet lui-même, celle d'un échec est négative (resolveTestOutcome) :
-// un Test raté n'est donc jamais supérieur à une attaque réussie.
-export function isInterposed(droneMr, attackMr) {
-  if (!Number.isFinite(droneMr) || !Number.isFinite(attackMr)) return false
-  return droneMr > attackMr
+// « S'il réussit [son test] et si la marge de réussite de ce test est supérieure à la marge de réussite de
+// l'attaque » : Test RÉUSSI et marge STRICTEMENT supérieure. Une marge de succès est le jet lui-même, celle d'un
+// échec est négative (resolveTestOutcome). Contre un tir touché la marge d'attaque est positive, un Test raté ne
+// passe donc jamais ; contre une grenade dont le lancer est RATÉ elle est négative : sans l'exigence explicite de
+// réussite, un Test raté « moins négatif » passerait à tort. `droneOutcome` = { isSuccess, mr } (resolveTestOutcome).
+export function isInterposed(droneOutcome, attackMr) {
+  if (!droneOutcome || droneOutcome.isSuccess !== true) return false
+  if (!Number.isFinite(droneOutcome.mr) || !Number.isFinite(attackMr)) return false
+  return droneOutcome.mr > attackMr
 }
 
-// « Vise son protégé » pour un tir en zone (grenade) : une grenade n'a aucun token cible, seulement un
-// point visé ; il vise le protégé quand ce point tombe dans SA case (modèle « à la case », Q-F). Même
-// étage : l'altitude du point visé doit rester dans la hauteur du corps au-dessus des pieds du protégé.
-export function aimedAtProtected(aimedPoint, protectedFeet, { bodyHeight }) {
+// Le drone interposé absorbe la moitié des dommages d'une explosion (RAW, REGLEDRONE.md « Drone bouclier » ; Q-A :
+// lui seul). Décision Saar 2026-09-24 : la moitié des dommages BRUTS, avant blindage et RD du drone, arrondie à
+// l'inférieur (même convention que getCriticalSuccessBonus).
+export function halveExplosionDamage(rawDamage) {
+  if (!Number.isFinite(rawDamage) || rawDamage < 0) throw new RangeError('rawDamage doit être un nombre positif ou nul')
+  return Math.floor(rawDamage / 2)
+}
+
+// ── RÉGLAGE — « vise son protégé » pour une grenade ──────────────────────────────────────────────────────────
+// Distance MAXIMALE (mètres, à l'horizontale) entre le point visé par une grenade et un protégé pour que la grenade
+// compte comme « visant » ce protégé : son drone tente alors de l'attraper. Valeur de départ = une case (1,5 m),
+// À AJUSTER selon les tests en jeu (décision Saar 2026-09-24 : le modèle « dans la case exacte » était ridicule —
+// viser les pieds de sa cible ne déclenchait rien). C'est un réglage de règle maison (le RAW ne dit rien de la
+// précision de la visée), à consigner dans docs/JOURNAL8.md avec sa valeur finale. Ne concerne PAS les tirs : un tir
+// n'active le drone que si le protégé en est la cible (Q-I).
+export const GRENADE_PROTECTION_AIM_RADIUS_M = 1.5
+
+// « Vise son protégé » pour un tir en zone (grenade) : une grenade n'a aucun token cible, seulement un point visé ; il
+// vise le protégé quand ce point tombe à moins de `radiusM` mètres (horizontalement, bornes comprises) de ses pieds.
+// Même étage : l'altitude du point visé doit rester dans la hauteur du corps au-dessus des pieds du protégé.
+// `metrics` : métriques de la battlemap (conversion mètres → unités monde), défaut du moteur si absentes.
+export function aimedAtProtected(aimedPoint, protectedFeet, { bodyHeight, radiusM = GRENADE_PROTECTION_AIM_RADIUS_M, metrics } = {}) {
   const height = Number(bodyHeight)
   if (!Number.isFinite(height) || height <= 0) throw new RangeError('bodyHeight doit être un nombre positif (unités monde)')
-  const sameCell = cellKey(cellOfPoint(aimedPoint)) === cellKey(cellOfPoint(protectedFeet))
-  if (!sameCell) return false
-  const dy = aimedPoint.y - protectedFeet.y
+  if (!Number.isFinite(radiusM) || radiusM < 0) throw new RangeError('radiusM doit être un nombre positif ou nul (mètres)')
+  if (horizontalDistanceBetweenWorldPointsM(aimedPoint, protectedFeet, metrics) > radiusM + 1e-9) return false
+  const dy = normalizeWorldPoint(aimedPoint, 'aimedPoint').y - normalizeWorldPoint(protectedFeet, 'protectedFeet').y
   return dy >= -height && dy <= height
 }
 
