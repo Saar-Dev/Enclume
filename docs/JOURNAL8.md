@@ -8383,3 +8383,39 @@ d'intégration ajoutés à `deathStateService.test.mjs` (8 au total) — **lanc�
 (`node --env-file=.env --test server/src/lib/deathStateService.test.mjs`). **Non testé** : le scénario en jeu (tir sur un mort : blessure sans Choc ni étourdissement ; marquer « Mort » un token étourdi : statut
 retiré ; joueur sur son token mort : états interdits grisés). **Données** : aucune migration. **Retour arrière** :
 `git revert` du commit applicable. **Limite connue** : choix d'étourdissement déjà ouvert chez un joueur à la mort.
+
+---
+
+## Session (Dev) — 2026-09-24 — CLÔTURE du chantier « Statut Mort » (Lots 0, 1a→1f) — documentation complète, plan archivé
+
+**Constat de Saar** : le chantier avait été mené lot par lot sans plan à lui — son détail vivait dans
+`PLAN_BLESSURE_SIXIEME_LIGNE.md` (§4 « Lot 1 »), qui porte un autre sujet (la 6ᵉ ligne du compteur RAW, Lots 2-4, non commencés).
+**Décision** : chaque plan garde une responsabilité (Règle 1). Le chantier est clos et documenté selon la checklist de la Règle 10.
+
+**Livré** (7 commits, tous validés en jeu par Saar ; `df7dcce`, `845412d`, `c30ce5b`, `65dc133` déjà poussés, `b443c4c`, `35a5197`,
+`26543f6` non encore poussés) : option de campagne `players_edit_statuses` ; registre unique des statuts
+(`shared/tokenStatusRegistry.js`) ; statut `dead` réservé MJ ; retrait direct des dangers Feu/Décompression ; blocage proactif
+(`getDeclarationBlockedTokens`, moteur de tour) ; un cadavre ne reçoit ni fenêtre de Chance ni test de Choc ni état de corps vivant,
+purge à la mort (`applyDeathConsequences`), le MJ reste libre. Aucune migration.
+
+**Documentation de clôture** (rien de dupliqué : chaque information a UN endroit) :
+- **Plan** : `docs/Old/PLAN_STATUT_MORT.md` créé (historique, décisions, lots, recherches, analyses à charge, tests, limites) et **archivé**
+  d'emblée ; `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` allégé de 280 lignes (ne garde que les Lots 2-4, pointeur vers le plan archivé ;
+  point ouvert « Mort : par token ou par personnage ? » tranché).
+- **SYSTEME** : `STATUTS_TOKEN.md` réécrit (registre + tableau des 16 codes, options de campagne, qui pose/retire, blocage proactif,
+  cadavre, invariants, limites) ; `COMBAT.md` (blocage proactif + cadavre ; bloc `is_stunned` d'`state_character` déclaré périmé ;
+  chemin du moteur corrigé) ; `COMBAT_FLUX.md` (file d'annonce : token bloqué, gardes STUN2 = filets, Choc coupé, `applyStunWithDuration`
+  corrigé — exclusion mutuelle, pas de merge) ; `BLESSURES.md` (5 lignes sur 6, mort par statut) ; `SERVICES_COMBAT.md` (nouveaux
+  services) ; `COUVERTURE_RAW.md` (écart de la 6ᵉ ligne) ; `CONVENTIONS.md` §19 (pièges P59-P62) ; `INDEX.md` (statuts, plan, 3 couplages).
+- **VOCABULARY** : « Mort (statut) » précisé, « Cadavre » et « État de corps vivant » ajoutés.
+- **Règles automatiques** : `.claude/rules/combat.md` (invariant statuts/cadavre + 4 chemins ajoutés à ses `paths`, dont
+  `combatTurnEngine.js` qui n'était couvert par aucune règle).
+- **Suivi** : `ROADMAP.md` (ligne « 6ᵉ ligne du compteur de blessures », Lots 2-4 ; « Membres détruits » repointé) ; `EN_COURS.md` (ligne de
+  vigilance P59-P62) ; 7 tickets préparés dans `server/src/scripts/create_tickets_20260924_statut_mort_constats.js` (**à lancer par Saar** :
+  `node --env-file=.env server/src/scripts/create_tickets_20260924_statut_mort_constats.js`) ; `CHANGELOG.md` v245→v250 (libellés réels de
+  l'option). `ASBUILT.md` volontairement non touché : il décrit le *déployé et stable*, et ce chantier n'est pas déployé (non poussé).
+
+**Testé** : voir chaque entrée de lot ci-dessus ; `node --test 'shared/**/*.test.mjs'` 674/674 ; `combatTurnEngine.test.mjs` 40/40 et
+`deathStateService.test.mjs` 8/8 lancés par Saar sur sa base ; `git diff --check`. **Non testé** : rien de nouveau (documentation).
+**Données** : aucune. **Reste** : push par Saar (3 commits de code locaux + ce commit de documentation) ; lancer le script de tickets ;
+puis Lots 2-4 (6ᵉ ligne) — plan + analyse à charge avant tout code.

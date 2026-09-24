@@ -112,6 +112,14 @@ Source : `token_statuses WHERE token_id = X AND status_code = 'stunned'`
 | Stunné + `mapActions.melee.length > 0` | `COMBAT_DECLARE_ERROR` "Assommé — ne peut pas attaquer au CaC" |
 | Stunné + `action_key ∈ {move_rapide, move_max}` | `COMBAT_DECLARE_ERROR` "Allure maximale : Moyenne" |
 
+#### File d'annonce : token bloqué (2026-09-24)
+Un token **bloqué** (statut `blocksDeclaration` du registre — `stunned`, `unconscious`, `dead` — ou étourdissement en attente
+dans `combat_pending`, en mode `status_effects_mode = 'enforced'`) n'a **jamais** de fenêtre de déclaration :
+`advanceAnnouncementQueue` (`combatTurnEngine.js`, point central de la file, appelé par `endTurn`, `COMBAT_ANNOUNCE_START`,
+l'échec de Surprise PJ, `COMBAT_ACTION_DECLARE` et `skipPlayer`) le passe par `skipPlayer` avant tout test de Surprise et
+relance la file. Garde-fou : si TOUS les acteurs sont bloqués, rien n'est passé (sinon les Tours défileraient seuls).
+Autorité : `getDeclarationBlockedTokens` — détail et cas limites : `SYSTEME/STATUTS_TOKEN.md` §5.
+
 #### Validation arme (PC22)
 **Drone** : `drone_weapons WHERE id = droneWeaponInvId AND character_id = character.id`
 
@@ -178,7 +186,7 @@ PC13 :
 
 ### `COMBAT_SKIP_PLAYER` — `socketCombatAnnouncement.js`
 
-GM uniquement (ou timer auto-skip). Guard FSM. Race condition guard (re-vérifie `has_announced`). Insert action `type:'skip', sequence:99`. Emit `COMBAT_TURN_SKIPPED`. PC13 check.
+GM uniquement (ou timer auto-skip). Guard FSM. Race condition guard (re-vérifie `has_announced`). Insert action `type:'skip', sequence:99`. Emit `COMBAT_TURN_SKIPPED`. PC13 check. **Appelé aussi par le moteur** (`advanceAnnouncementQueue`) pour passer automatiquement un token BLOQUÉ (mort/étourdi/inconscient) sans ouvrir sa fenêtre de déclaration — voir « File d'annonce : token bloqué » ci-dessus et `SYSTEME/STATUTS_TOKEN.md` §5.
 
 ---
 
@@ -209,6 +217,7 @@ EMIT COMBAT_PHASE_CHANGED { phase:'RESOLUTION', roster(DESC initiative), actions
 | Guard FSM | `canTransition(phase, sub_phase, 'COMBAT_ACTION_CONFIRM')` |
 | Si `actionKey==='melee'` | Range check : dist > 3 + allonge → `{ ok: false }` |
 | Si `actionKey==='assault'` | `checkLOSForPrecheck()` : LOS bloquée → `{ ok: false }` |
+| Token bloqué (STUN2, mode `enforced`) | **Filet** (le moteur passe normalement le token AVANT d'ouvrir sa fenêtre) : `forfeitToken` + `COMBAT_DECLARE_ERROR { stunned:true, statusCode }` + `advanceTimeline` → `{ ok:false, stunned:true }` ; même autorité `getDeclarationBlockedTokens` |
 | Default | `{ ok: true }` |
 
 ### `COMBAT_ACTION_CONFIRM` — `socketCombatResolution.js`
@@ -219,7 +228,7 @@ EMIT COMBAT_PHASE_CHANGED { phase:'RESOLUTION', roster(DESC initiative), actions
 | Guard phase | `state.phase === 'RESOLUTION'` |
 | Guard slot actif | **Périmé** — `slots[active_slot_idx]` n'existe plus, l'entrée active vient de `combat_timeline_entries` (voir banner en tête de document) |
 | Guard ownership | `isGm` ou `character.user_id === user.id` |
-| is_stunned | **Corrigé (audit 2026-08-26)** — re-check bien présent, contrairement à ce que cette ligne affirmait. Filet de sécurité explicitement commenté « Guard is_stunned (STUN2) » (`socketCombatResolution.js:214`, pour move/reload/micro qui ne passent pas par le PRECHECK), en plus du guard déjà existant sur `COMBAT_ACTION_PRECHECK` (même fichier, ~ligne 75-96). Voir aussi `COMBAT.md` §state_character (PC42 réglé). |
+| is_stunned | **Corrigé (audit 2026-08-26)** — re-check bien présent, contrairement à ce que cette ligne affirmait. Filet de sécurité explicitement commenté « Guard is_stunned (STUN2) » (`socketCombatResolution.js:214`, pour move/reload/micro qui ne passent pas par le PRECHECK), en plus du guard déjà existant sur `COMBAT_ACTION_PRECHECK` (même fichier, ~ligne 75-96). Voir aussi `COMBAT.md` §state_character (PC42 réglé). **Depuis 2026-09-24 ces deux gardes (PRECHECK et CONFIRM) sont des FILETS** : la même autorité `getDeclarationBlockedTokens` sert le moteur, qui clôt le pas d'un token bloqué (`forfeitToken`) sans ouvrir de fenêtre (`advanceTimeline`, avant la branche autonome et pour le tour obligatoire des retardataires) — `SYSTEME/STATUTS_TOKEN.md` §5. |
 
 #### Séquence d'exécution des actions (ASC sequence)
 
@@ -550,6 +559,14 @@ D20 roll serveur
 
 ### `applyStun` — `statusService.js`
 ```
+### Cadavre : pas de Choc — `resolveTargetHit` (`damageService.js`)
+```
+Si la cible est un cadavre (isCharacterDead : un token de son personnage porte un statut `isDeath`, mode 'enforced') :
+  la blessure est appliquée normalement (le cadavre reste là et prend des blessures)
+  mais resolveShockTest N'EST PAS appelé → shockResult = null → aucun applyStun / D6 de durée en aval
+```
+`resolveTargetHit` est le seul site de tirage du test de Choc. Voir `SYSTEME/STATUTS_TOKEN.md` §6.
+
 Fetch char_type + user_id du token
 
 Si PJ :
@@ -570,12 +587,15 @@ Fetch pending 'stun'
 Guard : targetUserId === user.id || isGm
 D6 roll serveur
 stunDuration = outcome='inconscient' ? d6×10 tours : d6 tours
-applyStunWithDuration() :
-  INSERT token_statuses { status_code:'stunned'/'unconscious', expires_at_turn: currentTurn + duration }
-  onConflict merge (re-stun → étend la durée)
+applyStunWithDuration(…, { statusCode?, gmOverride? }) :
+  Si la cible est un cadavre ET pas gmOverride → RIEN (log [DBG]) — `dead` est incompatible avec stunned/unconscious/evanoui
+  TRANSACTION : DELETE token_statuses (stunned, unconscious, evanoui) puis
+  INSERT token_statuses { status_code:'stunned'/'unconscious'/'evanoui', expires_at_turn: currentTurn + duration }
+  (exclusion mutuelle : un nouvel état remplace l'ancien)
   EMIT TOKEN_STATUS_UPDATED → room
 ```
 
+  gmOverride : action MANUELLE du MJ (COMBAT_APPLY_STUN), jamais bornée par la règle du cadavre
 ---
 
 ## 11. `advanceSlot` / `endTurn` — `advanceSlot` périmé, corrigé (audit 2026-08-26)
@@ -619,7 +639,9 @@ Purge statuts expirés :
 
 setFSMSubPhase(null)
 EMIT COMBAT_PHASE_CHANGED { phase:'ANNOUNCEMENT', roster }
-EMIT COMBAT_SLOT_ADVANCED (premier slot ASC base_ini)
+prefillAutonomousDroneOrders() puis advanceAnnouncementQueue()
+  → premier slot ASC base_ini NON bloqué : COMBAT_SLOT_ADVANCED (un token bloqué est passé par skipPlayer, sans fenêtre —
+    voir « File d'annonce : token bloqué » ; bascule en RÉSOLUTION si plus personne n'a à déclarer)
 startAnnouncementTimers() (redémarre les timers pour le nouveau tour)
 ```
 

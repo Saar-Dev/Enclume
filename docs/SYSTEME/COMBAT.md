@@ -457,7 +457,7 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 **Flags définis :**
 | Flag | Per-turn | Effet | Settable | Enforced |
 |---|---|---|---|---|
-| `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer | ✅ session 66 | ❌ sprint futur |
+| ~~`is_stunned`~~ | **périmé (2026-09-24)** — l'étourdissement est le statut `stunned` de `token_statuses` (`SYSTEME/STATUTS_TOKEN.md`) ; plus aucun code ne lit ce flag | — | — | — |
 | `is_rooted` | non | déplacement impossible | ❌ | ❌ |
 
 ⚠️ **`is_rushed` supprimé** — migré vers `state_vitesse = 'rushed'` (colonne créée directement dans `32_combat_roster.js` depuis la refonte migrations, corrigé 2026-08-26 — "migration 58" pointe aujourd'hui vers `ref_career_point_categories.js`, sans rapport). Toute lecture `state_character?.is_rushed` → remplacer par `rosterEntry.state_vitesse === 'rushed'`.
@@ -468,7 +468,7 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 - Suppression flag : `db.raw("state_character - 'is_stunned'")`
 - **Jamais** `UPDATE SET state_character = '{"is_stunned":true}'` — écrase tous les autres flags.
 
-**PC42 — `is_stunned` : enforced ✅ (PC42 réglé)**
+**PC42 — `is_stunned` : enforced ✅ (PC42 réglé) — ⚠️ CORRIGÉ 2026-09-24 : bloc historique.** La source de vérité de l'étourdissement n'est **plus** ce JSONB mais `token_statuses` (`status_code = 'stunned'`/`'unconscious'`, Sprint 14-0) ; le flag `is_stunned` de `state_character` n'est plus lu ni écrit. Le blocage d'un token étourdi/inconscient/mort est désormais décidé par le MOTEUR de tour avant d'ouvrir sa fenêtre — voir « Tokens bloqués et cadavre » plus bas et `SYSTEME/STATUTS_TOKEN.md`. Le texte ci-dessous est conservé pour l'historique des gardes de déclaration :
 
 `is_stunned` est posé automatiquement dans `state_character` après un Test de Choc (outcome `etourdi` ou `inconscient`) via `applyStunWithDuration` (helper dédié, `stunned_until_turn` stocké en JSONB).
 
@@ -544,7 +544,9 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
 //    turn_number, la file « en cours » se filtre dessus ; suppression réelle seulement à COMBAT_START.
 // 3. Incrémenter current_turn, sub_phase → null, phase='ANNOUNCEMENT'
 // 4. Broadcast COMBAT_PHASE_CHANGED { phase: 'ANNOUNCEMENT', roster }
-// 5. Émettre COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: firstAnnounceSlot }
+// 5. prefillAutonomousDroneOrders puis advanceAnnouncementQueue : COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId } pour le
+//    premier slot NON BLOQUÉ (un token mort/étourdi/inconscient est passé par skipPlayer, sans fenêtre — « Tokens bloqués
+//    et cadavre »), ou bascule directe en RÉSOLUTION si plus personne n'a à déclarer
 // 6. Relancer les timers auto-skip (startAnnouncementTimers)
 ```
 
@@ -607,7 +609,7 @@ entrelacées avec les autres, pas un bloc résolu d'un coup.
 Une seule entrée par action complexe déclarée (`assault`/`melee`) — `move`/`reload`/`micro`/`skip` n'en
 génèrent jamais, résolues via `combat_roster.has_resolved` au passage du premier pas du token ce Tour.
 
-### Moteur — `pickNextTimelineStep` / `advanceTimeline` (`socketCombatHelpers.js`)
+### Moteur — `pickNextTimelineStep` / `advanceTimeline` (`combatTurnEngine.js`)
 `pickNextTimelineStep(campaignId, turnNumber)` fusionne deux sources triées par position DESC : entrées
 `scheduled` + membres du roster sans aucune entrée ce Tour (`has_resolved=false`). Retourne
 `{kind:'entry', tokenId, entry, position}` | `{kind:'simple', tokenId, position}` | `null`.
@@ -615,6 +617,18 @@ génèrent jamais, résolues via `combat_roster.has_resolved` au passage du prem
 présente le pas suivant (`sub_phase='SLOT_ACTIVE'`), ou le tour obligatoire s'il ne reste que des
 personnages en délai (`{kind:'delayed_turn', tokenId, groupId}`), ou appelle `endTurn` si l'échelle est
 intégralement résolue.
+
+### Tokens bloqués et cadavre (2026-09-24) — détail : `SYSTEME/STATUTS_TOKEN.md` §5-§6
+- **Blocage proactif** : un token dont un statut porte `blocksDeclaration` (`stunned`, `unconscious`, `dead`) ou qui a un
+  étourdissement en attente (`combat_pending` `stun`) n'a plus JAMAIS de fenêtre, en mode `status_effects_mode = 'enforced'`.
+  Autorité unique `getDeclarationBlockedTokens` (`combatTurnEngine.js`). ANNONCE : `advanceAnnouncementQueue` passe le token
+  par `skipPlayer`. RÉSOLUTION : `advanceTimeline` clôt son pas par `forfeitToken` sans `SLOT_ACTIVE` (avant la branche des
+  entrées autonomes ; aussi pour le tour obligatoire des retardataires). Garde-fou anti-boucle : rien n'est passé si TOUS les
+  acteurs sont bloqués (drones `drone_auto` exclus des acteurs). Les gardes STUN2 des handlers (PRECHECK/CONFIRM) restent en filet.
+- **Cadavre** (statut `dead`) : reste une cible qui prend des blessures ; ne dépense pas de Chance (`resolveChanceRecipientCharacterId`
+  → `null`, aucune fenêtre : esquive de zone, réduction de gravité, Catastrophe de défense) ; aucun test de Choc ni D6
+  d'étourdissement (`resolveTargetHit`) ; les états de corps vivant lui sont refusés (`applyStunWithDuration`) et retirés à sa mort
+  (`applyDeathConsequences`). Le MJ reste libre.
 
 ### Retarder son Action / Agir maintenant — RAW `docs/REGLES/REGLESYSCOMBAT.md:554-567`
 Aucun minuteur (retiré Session 159 après 3 bugs réels causés par un sous-état FSM temporisé

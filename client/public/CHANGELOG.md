@@ -14,7 +14,7 @@
 - [fix] Un personnage marqué « Mort » ne reçoit plus aucune fenêtre de Chance : ni pour esquiver une explosion, ni
   pour réduire la gravité d'une blessure, ni sur une Catastrophe de défense au contact. Il reste une cible et continue
   de prendre les blessures, mais ne peut ni esquiver ni dépenser de point de Chance. Une exo-armure morte, ou dont le
-  pilote est mort, est traitée de la même façon. Sans effet quand l'option « effets de statut » n'est pas en mode appliqué.
+  pilote est mort, est traitée de la même façon. Sans effet quand l'option « Statuts des tokens » n'est pas sur « Appliqué ».
 
 ## v249 — 2026-09-24 — Drone d'interception : le drone bouclier s'interpose
 
@@ -42,7 +42,7 @@
   résolution : sa fenêtre d'action ne s'ouvre plus, et le message d'erreur « action impossible » n'apparaît plus.
   Le chat indique simplement « X a été passé ». Si TOUS les combattants sont dans ce cas, le comportement reste
   celui d'avant (la fenêtre s'ouvre) pour éviter que les Tours défilent seuls. Sans effet quand l'option de
-  campagne « effets de statut » n'est pas en mode appliqué.
+  campagne « Statuts des tokens » n'est pas sur « Appliqué ».
 
 ## v247 — 2026-09-24 — Retrait direct de « Enflammé » et « Décompression »
 

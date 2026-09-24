@@ -81,6 +81,10 @@
 | P56 | `DICE_RESULT` ne porte jamais `dieType` — tout consommateur hors SessionPage doit le reconstruire lui-même | DICE.md |
 | P57 | Un event WS live (`CAMPAIGN_*`, `TOKEN_*`...) se branche dans le hook dédié déjà actif (`useSessionSocket.js`/`useTokenSocket.js`/...) qui met à jour un store Zustand — jamais un `socket.on` local dans un composant leaf | REACT.md |
 | P58 | Fenêtres de déclaration de combat : 3 orchestrateurs séparés (fusion rejetée, REWORK-05), morceaux communs = briques `client/src/components/CombatDeclare*.jsx` ; calcul métier dans `combatSections.js` + `shared/combatIniCost.js` (autorité coût INI client+serveur) ; jamais un composant d'état ou un `socket.on` défini dans une fenêtre | REACT.md |
+| P59 | Un rôle de statut de token (bloque, sans défense, cadavre, réservé MJ…) se lit dans `shared/tokenStatusRegistry.js` — jamais un littéral `'stunned'`/`'dead'` comparé ailleurs ; les droits de pose passent par `canEditTokenStatus` | STATUTS_TOKEN.md |
+| P60 | « Ce token peut-il agir ? » se décide par `getDeclarationBlockedTokens` (moteur de tour, AVANT d'ouvrir la fenêtre) — jamais une requête `token_statuses` recopiée dans un handler ; les gardes STUN2 ne sont qu'un filet ; garde-fou anti-boucle si tous les acteurs sont bloqués | STATUTS_TOKEN.md §5 |
+| P61 | Un cadavre (statut `isDeath`) reste une cible qui prend des blessures — ne jamais le filtrer des cibles d'une zone ; « est-il mort ? » = `isCharacterDead` (niveau personnage, mode `enforced`) ; « à qui ouvrir une fenêtre de Chance ? » = `resolveChanceRecipientCharacterId(db, campaignId, …)` (`null` = aucune) | STATUTS_TOKEN.md §6 |
+| P62 | Une écriture AUTOMATIQUE d'étourdi/inconscient/évanoui passe par `applyStunWithDuration` (barrière du cadavre) ; seul le chemin manuel du MJ passe `gmOverride` ; le test de Choc n'est tiré qu'à un endroit (`resolveTargetHit`) — c'est là qu'on le coupe pour un cadavre | STATUTS_TOKEN.md §6 |
 | PE2 | `socket.data.role` pour `fetchSockets()` | CORE.md |
 | PE4 | face null = invisible | ASSETS.md |
 | PE11 | fallback `states[0]` si `current_state_id` invalide | ENTITES.md |

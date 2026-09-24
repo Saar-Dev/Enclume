@@ -1,5 +1,7 @@
 # INDEX.md — Carte documentaire d’Enclume
 
+> Mise à jour 2026-09-24 — chantier « Statut Mort » clos : `STATUTS_TOKEN.md` réécrit (registre, options de campagne, blocage
+> proactif, cadavre), plan archivé `Old/PLAN_STATUT_MORT.md`, `PLAN_BLESSURE_SIXIEME_LIGNE.md` ajouté au §6, 3 couplages ajoutés au §8.
 > Version : 2026-09-11 — §5 (MANUEL) et §6 (PLAN) complétés par relecture directe de `docs/MANUELS/`
 > et `docs/PLANS/` (9 MANUEL et 24 PLAN, contre 1 et 15 précédemment listés — les deux sections
 > avaient divergé du contenu réel des dossiers sans qu'aucun mécanisme ne le signale). Colonne
@@ -90,7 +92,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `SYSTEME/ARCHITECTURE_SOCKET.md` | Architecture modulaire des WebSockets, coordinateur, hooks client | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MODING.md` | Système de mods d'armes : deux générations coexistantes, registre à hooks | 🔎 Analysé en profondeur (2026-08-26) |
-| `SYSTEME/STATUTS_TOKEN.md` | Statuts de token (`token_statuses`) et registre unique `shared/tokenStatusRegistry.js` | Créé 2026-09-24 |
+| `SYSTEME/STATUTS_TOKEN.md` | Statuts de token (`token_statuses`) : registre unique `shared/tokenStatusRegistry.js`, options de campagne (`status_effects_mode`, `players_edit_statuses`), blocage proactif « qui peut agir », règles du cadavre (statut `dead`) | ✅ Créé 2026-09-24, réécrit à la clôture du chantier « Statut Mort » |
 | `SYSTEME/CHAT.md` | Système de chat : architecture, flux, types de messages, événements WS | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/ASSETS.md` | MinIO, textures, Atelier GM, uploads, chemins assets | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MATERIAUX.md` | Pipeline de matériaux procédural : génération, cache, flux de données | 🔎 Analysé en profondeur (2026-08-26) |
@@ -214,6 +216,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_KIWI_BASCULE.md` | Bascule de la base `vtt` vers `enclumeBD` sur le serveur distant Kiwi (stratégie A : base neuve + report des données réelles) | En cours — diagnostic fait (`vtt` distant arrêté avant la refonte migrations) |
 | `PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md` | Bug ciblé : Choc de mutation à arme naturelle perdu sur la 4ᵉ branche défenseur PJ en défense active (les 3 autres branches sont correctes) | Cadré, cause identifiée, correctif isolé non encore livré |
 | `PLANS/PLAN_CHANCE.md` | Mécanique de dépense de points de Chance — architecture technique (le MANUEL porte la règle métier) | v2.0 réécrite 2026-09-11 (RAW fournie par Saar le jour même) — **cadrage terminé, prêt à coder** |
+| `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` | 6ᵉ ligne du compteur de blessures RAW (Mort subite / Membre détruit, seuil 30) dans le moteur : migration, retrait de `is_lethal`, seuils uniques, débordement, Chance à 3 points, état permanent du membre. Le Lot 1 (statut `dead`) est archivé : `Old/PLAN_STATUT_MORT.md` | Lot 1 clos ; Lots 2-4 non commencés |
 | `PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` | Document de séquencement (pas un chantier détaillé) — ordonne les prochains incréments du fil entités interactives ouvert par les caisses (quarantaine, preuve `move_type`, extension à d'autres packs, rendu 3D des portes) | Créé 2026-09-16, Lot A (quick wins) prêt à démarrer, Lots B/C non cadrés en détail |
 
 ---
@@ -247,6 +250,9 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | Entités (`socketEntity.js`, `entities.js`) | Moteur monde | Appelle directement `bumpBattlemapRuntimeRevision` (`worldRuntimeService.js`) pour invalider le cache runtime du snapshot | `MOTEUR_MONDE.md` §2.2 |
 | Tokens (`tokens.js`, `tokenLifecycle.js`) | Moteur monde | Idem — même helper, même mécanisme | `MOTEUR_MONDE.md` §2.2 |
 | Coffre de compte (`vaultService.js`, `vault.js`) | Character (`char-sheet.js`) | Un personnage Coffre (`campaign_id NULL`) n'a pas de GM de campagne : son propriétaire reçoit `req.isVaultOwner = true`, qui ouvre exactement les routes marquées « GM uniquement » (attributs, skills, XP, mutations, sols) sur cette fiche précise | `CHARACTER.md` §1 |
+| Moteur de tour (`combatTurnEngine.js`) | Statuts de token (`tokenStatusRegistry.js`) | `getDeclarationBlockedTokens` lit les statuts `blocksDeclaration` pour passer un token bloqué SANS fenêtre (annonce : `skipPlayer` ; résolution : `forfeitToken`) ; les gardes STUN2 de `socketCombatResolution.js` appellent la même fonction | `STATUTS_TOKEN.md` §5 |
+| Chance (`exoPilotService.js:resolveChanceRecipientCharacterId`) | Statuts de token (`deathStateService.js`) | Un cadavre (statut `isDeath`, lu au niveau du personnage) ne reçoit aucune fenêtre de Chance ; appelée par `woundService.js`, `socketCombatAoe.js`, `socketCombatHelpers.js` | `STATUTS_TOKEN.md` §6 |
+| Dégâts (`damageService.js:resolveTargetHit`) | Statuts de token (`deathStateService.js`, `statusService.js`) | Un cadavre prend la blessure mais aucun test de Choc ; `applyStunWithDuration` refuse les états de corps vivant sur un cadavre | `STATUTS_TOKEN.md` §6 |
 
 *(Table à compléter à chaque système 🔎 analysé — ne pas la laisser diverger du contenu réel des
 docs qu'elle indexe.)*

@@ -2,9 +2,9 @@
 
 > 2026-09-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et
 > fusionné dans `docs/SYSTEME/COMBAT.md` une fois clos.
-> Statut : 🟡 **Lots 1a/1b/1d commités ; Lot 1c CODÉ 2026-09-24 (en attente des tests Saar : base + jeu) ; Lots 2-4 non commencés.**
-> Décisions Saar du 2026-09-23 en §2. Points encore
-> ouverts en §7. Un seul problème (Règle « un plan = un bug ») : la 6ᵉ ligne du compteur RAW n'existe pas
+> Statut : 🟡 **Lot 1 (statut `dead`, conséquences d'un cadavre) CLOS et archivé — `docs/Old/PLAN_STATUT_MORT.md` ; il ne
+> reste ici que la 6ᵉ ligne dans le moteur : Lots 2-4, non commencés.** Décisions Saar du 2026-09-23 en §2. Points
+> encore ouverts en §7. Un seul problème (Règle « un plan = un bug ») : la 6ᵉ ligne du compteur RAW n'existe pas
 > dans le moteur.
 > Hiérarchie : Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`) > ce plan.
 
@@ -58,7 +58,7 @@ Trois symptômes, une seule absence.
    dépend de la localisation, la gravité stockée est unique. **Une blessure « Mort » (Tête/Corps) active le
    statut `dead` sur le token.** Conséquence : la 6ᵉ gravité est une vraie ligne écrite partout (la
    `WOUND_OVERFLOW` par localisation du §3 devient inutile, `nextSeverity('mortelle')` suffit), et le
-   statut `dead` est un *effet* de cette blessure, pas une seconde autorité.
+   statut `dead` est un *effet* de cette blessure, pas une seconde autorité (déjà livré : `docs/Old/PLAN_STATUT_MORT.md`).
    **Case masquée — comportement validé (2026-09-23) :** le mot est toujours visible (grisé si la blessure
    est absente, mis en évidence si active) et **cliquable** comme les autres cases (pose/retrait manuel MJ).
    **Chance : « 3 points de coût → Critique » confirmé** (§2.2).
@@ -93,285 +93,14 @@ Deux concepts que le RAW distingue :
 
 ## 4. Lots (ordre et dépendances)
 
-- **Lot 1 — Statut `dead`.** Autonome, sans migration (`token_statuses.status_code` n'a aucun CHECK, seulement
-  unique/PK/FK — vérifié). Sites exacts (relus 2026-09-23) :
-  - serveur : `socketToken.js:160` (`VALID_STATUS_CODES` + **bascule réservée au MJ** — aujourd'hui le
-    propriétaire du token peut basculer n'importe quel statut valide, `:152-153`) ;
-    `socketCombatResolution.js:165` et `:353` (gardes assommé → `forfeitToken`, ajouter `dead`) ;
-    `socketCombatState.js:302` **inchangé** (liste explicite `stunned`/`unconscious` : `dead` n'est déjà pas
-    effacé à la fin du combat — à couvrir par un test) ; `/heal` l'efface déjà (tous statuts).
-  - client : `TokenStatusPanel.jsx` (`STATUS_LIST`, couleur de catégorie, clic réservé MJ ; la grille 5
-    colonnes passe à 4 lignes), `TokenPresentation.jsx` (`STATUS_CATEGORY`), icône
-    `client/public/assets/status/dead.svg` (même gabarit hexagonal que les autres), `fr.json` `status.dead`,
-    `useCombatSocket.js:175` (le message de refus ne connaît que « inconscient »/« étourdi »).
-  - constaté, hors lot : la garde d'annonce (`socketCombatAnnouncement.js:259`) ne teste que `stunned`
-    (pas `unconscious`) ; `dead` suit `unconscious`, pas d'extension ici.
-- **Révision du Lot 1 (2026-09-24, après recherche — en attente de validation Saar).** Ajouter `dead`
-  comme un littéral de plus dans chaque liste répéterait un défaut déjà présent : le vocabulaire des
-  statuts est **dupliqué** — liste serveur `VALID_STATUS_CODES` (`socketToken.js:160`), liste client
-  `STATUS_LIST` (`TokenStatusPanel.jsx:13`), table client `STATUS_CATEGORY` (`TokenPresentation.jsx:17`) —
-  et les ensembles de comportement sont des tableaux littéraux dispersés (gardes de déclaration
-  `socketCombatResolution.js:165/353` ; « sans défense » `socketCombatHelpers.js:996` ; nettoyage de fin
-  de combat `socketCombatState.js:302/307`). Référence Foundry VTT : un rôle sémantique passe par une
-  table de configuration (`CONFIG.specialStatusEffects.DEFEATED`), jamais par une chaîne en dur ; le
-  ticket foundryvtt #9245 documente le bug du cas inverse (comparaison à `"blind"` cassée dès qu'un
-  système renomme le code). Foundry sépare aussi le statut « dead » du drapeau `Combatant.defeated`
-  (réglage « Skip Defeated » du suivi de combat).
-  **Nouveau découpage, un commit par cause racine :**
-  - **1a — Registre unique des statuts de token** (`shared/tokenStatusRegistry.js`) : refactor **sans
-    changement de comportement**. Entrées `{ code, category, manualToggle, inPanel, gmOnly,
-    blocksDeclaration, defenseless, clearedAtCombatEnd }` ; les listes/ensembles ci-dessus en sont
-    dérivés. Filet : test « golden » qui fige chaque ensemble dérivé égal à l'ancien littéral.
-  - **1b — Statut `dead`** : une entrée de registre (`gmOnly`, `blocksDeclaration`, `defenseless`, pas
-    `clearedAtCombatEnd`) + icône + i18n + message de refus dérivé de `status.<code>` (remplace la
-    branche codée en dur « inconscient »/« étourdi », `useCombatSocket.js:175`).
-  - **Pourquoi pas une table SQL « catalogue des statuts » (question Saar, 2026-09-24).** Vérifié en base :
-    `token_statuses` ne stocke que les *instances* (token, `status_code` en texte libre sans contrainte,
-    expiration, `data`) ; il n'existe aucune table catalogue. Ajouter `dead` n'exige donc **aucune
-    migration**. Un catalogue en base a été écarté : un statut porte un *comportement* (bloque la
-    déclaration, sans défense, réservé MJ…) qui est du code — une ligne en base sans code serait un statut
-    sans effet ; l'ajout d'un statut demande de toute façon icône, texte et comportement ; les autres
-    listes qui pilotent du comportement (`environmentalHazardRegistry`, `echeanceTypeRegistry`,
-    `weaponModRegistry`) sont déjà des registres partagés, pas des tables ; et un registre se teste sans
-    base (`node --test shared/**`). **V2 possible** si un jour le MJ doit créer ses propres statuts sans
-    développeur : le registre peut être alimenté par la base sans changer ses consommateurs.
-  - **Inventaire exhaustif du vocabulaire de statuts (relu 2026-09-24)** — 3 copies de la *liste* :
-    `socketToken.js:167-170` (12 codes basculables), `TokenStatusPanel.jsx:13-29` (15 codes, ordre du
-    panneau), `TokenPresentation.jsx:17-22` (16 codes dont `evanoui`) ; + les 4 couleurs de catégorie
-    copiées dans **deux** fichiers client (`TokenStatusPanel.jsx:31`, `TokenPresentation.jsx:11`) ; + les
-    ensembles de comportement littéraux : déclaration bloquée `[stunned, unconscious]`
-    (`socketCombatResolution.js:165/353`), sans défense `[unconscious, blinded, stunned]`
-    (`socketCombatHelpers.js:996`), nettoyage fin de combat `[stunned, unconscious]`
-    (`socketCombatState.js:302/307`). Volontairement **laissés tels quels** en 1a (sémantique propre,
-    `dead` n'y entre pas) : `combatTurnEngine.js:809` (événement d'expiration d'étourdissement),
-    `statusService.js:37` (exclusion mutuelle stunned/unconscious/evanoui), garde d'annonce
-    `socketCombatAnnouncement.js:259` (`stunned` seul).
-  - **Constatés, hors périmètre 1a (à traiter ou ticketer, jamais perdus)** : (i) le serveur accepte la
-    bascule nue de `hypothermia` (`socketToken.js:170`) alors que le client ne l'envoie jamais (formulaire
-    Froid dédié) — un joueur propriétaire (option `players_edit_statuses` activée) pourrait forger cet
-    envoi ; (ii) `evanoui` n'a ni clé i18n `status.*` ni entrée de panneau (badge seul) ; (iii) `HAZARD_CODES`
-    du panneau recopie `ENVIRONMENTAL_HAZARD_REGISTRY` (`shared/`) au lieu de le lire. (i) est un vrai
-    défaut de droits : à corriger dans le commit 1b (un code `gmOnly` refusé côté serveur), pas en 1a.
-  - **Analyse à charge de 1a (2026-09-24) — conclusion : le commit tient, périmètre précisé.**
-    (1) *Codes hors registre* : d'autres services posent des statuts que les 3 listes ignorent —
-    `iem_survival` (`iemSurvivalService.js`, constante locale), `ati_offensive`/`ati_defensive`
-    (`weaponModRegistry.js` `statusCodes`, posés via `combatTurnEngine.js:294`) — sans icône
-    `/assets/status/*.svg` ni clé i18n (défaut cosmétique préexistant, noté). Décision : le registre 1a
-    couvre les **16 codes des 3 listes** ; ces codes restent déclarés par leur propriétaire, et toute
-    recherche du registre est **tolérante** (code inconnu → valeurs par défaut, comme aujourd'hui
-    `?? '#888'` dans `TokenPresentation.jsx:188`) ; test dédié. Les intégrer au registre = chantier
-    ultérieur (`weaponModRegistry` fournirait alors ses codes au registre, sans double déclaration).
-    (2) *Profil des 16 entrées* (à transcrire tel quel) : entrave = grappled, restrained, off_balance ;
-    dot = burning, acid, decompression (`manualToggle:false`), asphyxia, electrocuted ; sens = stunned,
-    unconscious (`blocksDeclaration`+`defenseless`+`clearedAtCombatEnd`), blinded (`defenseless` seul),
-    evanoui (`manualToggle:false`, `inPanel:false`) ; chronique = hypothermia (`manualToggle:true` —
-    préservé tel quel, voir constaté (i)), infected, poisoned, irradiated. Ordre du registre = ordre du
-    panneau actuel.
-    (3) `gmOnly` et le choix du formulaire du panneau (danger/froid) sont **reportés en 1b** (ils n'ont
-    d'usage qu'avec `dead` et la correction de (i)) : 1a reste à zéro changement de comportement.
-    (4) *Documentation de clôture* : aucun document SYSTEME ne décrit les statuts de token ;
-    `VOCABULARY.md:140` affirme à tort que `status_code` « ne connaît que stunned/unconscious ». Clôture =
-    nouveau `docs/SYSTEME/STATUTS_TOKEN.md` (une responsabilité, Règle 1) + ligne dans `INDEX.md` +
-    correction de cette ligne de `VOCABULARY.md`. Pas dans `COMBAT.md` (déjà modifié par l'autre session).
-    (5) *Validation prévue* : `node --check` ; `node --test shared/tokenStatusRegistry.test.mjs` ;
-    `cd client && npx eslint <fichiers>` ; `cd client && npm run build` ; `git diff --check` ; puis test
-    en jeu de Saar (panneau Statuts, étourdir un token, fin de combat).
-    Référence externe corroborante : dnd5e (FoundryVTT) construit ses statuts depuis un objet de
-    configuration unique (`CONFIG.DND5E.conditionTypes`, propriétés par condition) dont les structures
-    dérivées sont calculées — même forme que le registre proposé.
-  - **Constaté au test en jeu de 1a (2026-09-24), sans lien avec les statuts** : quand un PNJ agit, la
-    fenêtre d'action d'un joueur demande les blessures de ce PNJ (`CombatActionWindow.jsx:384-392`,
-    `playerToken.character_id`) et le serveur répond 403 « pas la permission » (fiche non possédée) ; le
-    `.catch` masque l'erreur (`setMortallyWounded(false)`) — bruit de log inoffensif, code inchangé par
-    1a. À ticketer si Saar le souhaite.
-  - **Preuves du test en jeu de 1a** : log `[STUN2] PRECHECK … assommé — auto-skip` (garde de déclaration
-    alimentée par `DECLARATION_BLOCKING_STATUS_CODES`) ; base après `FIN COMBAT` : la ligne `unconscious` a
-    disparu, les lignes `burning` sont conservées (`clearedAtCombatEnd` correct) et `combat_roster` est vide.
-  - **Conception exacte de 1b (2026-09-24, présentée à Saar en langage courant ; 1a commité `845412d`).**
-    (a) *Registre* : entrée `dead` — catégorie nouvelle `mort` (gris sombre), `manualToggle`, `inPanel`
-    (dernier du panneau), `blocksDeclaration`, `defenseless`, **pas** `clearedAtCombatEnd` ; nouveau drapeau
-    `gmOnly` posé sur `burning`, `acid`, `decompression`, `hypothermia`, `dead` (dérivé `GM_ONLY_STATUS_CODES`).
-    (b) *Une seule règle de droits, partagée serveur + client* : fonction pure
-    `canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })` dans le registre — `gmOnly` ⇒ MJ seul ;
-    sinon MJ, ou propriétaire si l'option `players_edit_statuses` l'autorise ; code inconnu ⇒ refus.
-    `socketToken.js` l'appelle (ferme le constaté (i) : un joueur ne peut plus forger la bascule nue de
-    `hypothermia`, ni poser/retirer `dead`) ; `TokenStatusPanel.jsx` l'appelle pour `clickable` et
-    `handleToggle` (les sets HAZARD/CHRONIC ne servent plus qu'à choisir le formulaire).
-    (c) *Message de refus* (`useCombatSocket.js:175`) : `t('status.' + statusCode).toLowerCase()` au lieu de
-    la branche « inconscient »/« étourdi » — mêmes textes pour ces deux-là, « mort » pour `dead`.
-    (d) *Assets/i18n* : `client/public/assets/status/dead.svg` (crâne, gabarit hexagonal) ; `fr.json`
-    `status.dead` = « Mort » (fichier partagé avec la session drones : staging partiel).
-    (e) *Test* : les attentes de l'instantané sont mises à jour **volontairement** (`dead` ajouté aux ensembles
-    concernés) + tests de la règle de droits (MJ, propriétaire avec/sans option, `gmOnly`, code inconnu) +
-    `dead` non nettoyé en fin de combat.
-    (f) *Vérifié* : aucun autre site ne supprime `token_statuses` en bloc sauf `/heal` (`woundService.js:160`,
-    tous statuts = résurrection MJ voulue) ; les boucles de début de tour (dangers, `iem_survival`, mods)
-    filtrent par code précis → `dead` n'y a aucun effet ; purge d'expiration ignore `expires_at_turn` NULL.
-    (g) *Hors 1b, noté* : un token mort qui porte encore `burning` continuerait de subir les ticks de danger à
-    chaque tour (les boucles ignorent `dead`) — question de comportement à trancher avec le Lot 2 ou 1c.
-  - **Analyse à charge de 1b (2026-09-24) — conclusion : le plan tient, 3 renforts + 2 limites assumées.**
-    Renforts adoptés : (R1) test « chaque statut affiché au panneau ou bloquant a son icône
-    `client/public/assets/status/<code>.svg` ET sa clé `status.<code>` de `fr.json` » — empêche `dead` (ou un
-    futur statut) d'apparaître sans icône/texte et aurait attrapé le manque de `evanoui` ; (R2) règle de
-    droits : code inconnu du registre ⇒ refus pour tous (le serveur exige en plus `manualToggle`) ;
-    (R3) clé `status.dead` ajoutée en FIN de bloc `status` de `fr.json` : la copie de travail de ce fichier
-    porte des hunks non commités d'un autre agent (réordonnancement de clés, dont les miennes, lignes
-    ~682 et ~1078) — non sémantiques, à ne pas stager ; mon hunk reste distinct.
-    Limites assumées (notées, hors 1b) : (L1) `TokenStatusBadges` n'affiche que 3 badges au-delà de 4
-    statuts — un `dead` posé après 4 autres pourrait ne pas se voir sur le token ; (L2) le message de refus dit
-    « vous êtes mort » même quand le MJ déclare pour un PNJ (déjà le cas pour « étourdi »).
-    Effets de bord écartés par lecture : `applyStunWithDuration` ne supprime que la famille
-    stunned/unconscious/evanoui (n'efface pas `dead`) ; un Choc sur un mort ajoute `unconscious`, inoffensif ;
-    la grille passe à 4 lignes (5 colonnes fluides) sans changement de mise en page.
-  - **Retours du test en jeu de 1b (Saar, 2026-09-24)** : icône « Mort » validée ; `/heal` retire bien le
-    statut ; « fenêtre de confirmation parfois au retrait d'un statut, non nécessaire » = formulaires de
-    retrait des dangers (`hazardPanel.clearTitle`/`clearButton`, `TokenStatusPanel.jsx:280/442`) et du froid
-    (`coldExposurePanel.clearButton`, `:497`) — seuls Enflammé/Corrodé/Décompression/Hypothermie sont concernés,
-    comportement préexistant (**1d, petit lot séparé à confirmer avec Saar** : retrait direct en un clic) ;
-    **« le blocage n'est pas au bon endroit »** : la fenêtre d'action d'un token mort s'ouvre PUIS la garde
-    répond « vous êtes mort » — même comportement pour `stunned`/`unconscious` (les gardes vivent dans les
-    handlers de résolution, après l'ouverture de la fenêtre).
-  - **Cadrage de 1c — blocage PROACTIF (2026-09-24, à présenter puis analyser avant tout code).** Cause
-    racine : la vérification « ce token peut-il agir ? » est *réactive* (deux copies quasi identiques,
-    `socketCombatResolution.js` PRECHECK ~157-180 et CONFIRM ~346-368) au lieu d'être posée là où le moteur
-    CHOISIT le prochain acteur. Lecture du code : `advanceTimeline` (`combatTurnEngine.js:603`) est « le seul
-    point d'entrée fais avancer la résolution » — il choisit le pas (`pickNextTimelineStep`) puis diffuse
-    `SLOT_ACTIVE`, ce qui ouvre la fenêtre côté client ; il sait déjà résoudre des entrées autonomes puis se
-    rappeler (récursion à terminaison garantie). Pattern voisin en ANNONCE : `skipPlayer` (`:239`,
-    `has_announced`, action `skip`, `COMBAT_TURN_SKIPPED` → « X a été passé »). **Conception visée** :
-    (a) UNE fonction d'autorité « bloc de déclaration » (statut du registre `blocksDeclaration` en mode
-    `enforced` + stun en attente `combat_pending`) qui remplace les 2 copies ; (b) en RÉSOLUTION :
-    `advanceTimeline` passe les pas d'un token bloqué (`forfeitToken` + `COMBAT_TURN_SKIPPED`) et se rappelle,
-    sans ouvrir de fenêtre ; (c) en ANNONCE : `findNextAnnounceSlot`/file d'annonce saute un token bloqué via
-    `skipPlayer` (à VÉRIFIER : Saar n'a pas dit si la fenêtre de déclaration s'ouvrait aussi) ; (d) les gardes
-    des handlers restent en filet de sécurité (statut posé entre-temps). **Effet de bord voulu** :
-    `stunned`/`unconscious` bénéficient du même comportement (plus de fenêtre, plus de message d'erreur).
-    **Risque** : touche le moteur de tour (FSM) → commit isolé, tests de scénario (token bloqué en premier,
-    au milieu, dernier ; tous bloqués ; stun en attente ; drone/exo ; mode `icon_only`/`off`), validation Saar
-    en jeu réel. Remplace l'ancien « 1c différé » (sortie de la file d'initiative) : `combat_roster.status`
-    `done` reste inutilisé.
-  - **Lot 1c — CONCEPTION DÉTAILLÉE (2026-09-24, après lecture complète de `combatTurnEngine.js` ; Saar :
-    « la fenêtre de déclaration s'affiche pour le mort » + « blocage au mauvais endroit »).**
-    *Constat code* : ANNONCE — `advanceAnnouncementQueue` (`:97`) est le point central de la file (appelé par
-    `endTurn:862`, `socketCombatState.js:445/561`, `socketCombatAnnouncement.js:1085`, `skipPlayer:251`) ; il
-    émet `COMBAT_SLOT_ADVANCED`, ce qui ouvre la fenêtre de déclaration ; précédent d'auto-passage : le PNJ qui
-    rate son test de Surprise (`:129-148`, `has_announced` + action `skip` + relance de la file) et `skipPlayer`
-    (`:220`, + `COMBAT_TURN_SKIPPED`). RÉSOLUTION — `advanceTimeline` (`:603`) choisit le pas puis diffuse
-    `SLOT_ACTIVE` (ouvre la fenêtre) ; un token qui a « passé » à l'annonce reste un pas `simple`
-    (`has_resolved=false`) et son client confirme automatiquement (log `mods:null`). Les gardes actuelles
-    (`socketCombatResolution.js` ~157-180 PRECHECK et ~346-368 CONFIRM) sont deux copies quasi identiques.
-    *Conception* : (1) **une seule autorité**, dans `combatTurnEngine.js` :
-    `getDeclarationBlockedTokens(campaignId, tokenIds, settings)` → `Map(tokenId → statusCode)` (statuts
-    `blocksDeclaration` du registre, uniquement en mode `enforced`, + stun en attente `combat_pending`) ;
-    les 2 gardes des handlers l'appellent (zéro changement de comportement de ces gardes, elles restent en filet).
-    (2) **ANNONCE** : dans `advanceAnnouncementQueue`, juste après `nextSlot` (AVANT le test de Surprise), un token
-    bloqué est passé par `skipPlayer` (déjà : `has_announced`, action `skip`, `COMBAT_TURN_SKIPPED`, relance de
-    la file) — aucune fenêtre ne s'ouvre. (3) **RÉSOLUTION** : dans `advanceTimeline`, après le choix du pas
-    (y compris le tour obligatoire des retardataires), un token bloqué est clôturé par `forfeitToken` et la
-    fonction se rappelle, sans `SLOT_ACTIVE` ; `COMBAT_TURN_SKIPPED` n'est émis que si le token n'a PAS déjà été
-    passé à l'annonce ce Tour (sinon message en double). (4) **Garde-fou anti-boucle (trouvaille)** : si TOUS les
-    tokens actifs du roster sont bloqués, `endTurn → ANNONCE (tous passés) → RÉSOLUTION (rien) → endTurn` tournerait
-    sans fin (Tours qui défilent seuls). Règle : on ne passe automatiquement que s'il reste au moins un token
-    actif non bloqué ; sinon comportement actuel (fenêtre + garde). Fonction pure testable
-    `hasActionableToken(blockedIds, activeIds)`. (5) `stunned`/`unconscious` en bénéficient (plus de fenêtre, plus
-    de message d'erreur) ; un statut posé EN COURS de Tour (Choc pendant la résolution) prend effet au prochain
-    pas de ce token, comme aujourd'hui.
-    *Terminaison* : `forfeitToken` clôt les entrées `scheduled`/`delayed_waiting` du Tour et pose
-    `has_resolved` (les seuls critères de `pickNextTimelineStep`) ; `skipPlayer` pose `has_announced` — chaque
-    passage réduit strictement l'ensemble restant.
-    *Tests* : fonction pure ; scénarios en jeu (Saar) : mort en 1ᵉʳ/milieu/dernier de l'ordre, mort + inconscient,
-    PJ et PNJ, tous bloqués (comportement inchangé), mode `icon_only`/`off` (inchangé), stun en attente, statut
-    posé pendant la résolution.
-  - **Analyse à charge de 1c (2026-09-24) — conclusion : la conception tient, 5 renforts, aucune objection
-    bloquante.** Vérifié : (a) TOUS les chemins de la file d'annonce passent par `advanceAnnouncementQueue`
-    (`socketCombatState.js:445` début d'annonce, `:561` échec de Surprise PJ, `endTurn:862`,
-    `socketCombatAnnouncement.js:1085`, `skipPlayer:251`) — une seule insertion suffit ;
-    `socketCombatAnnouncement.js:173` ne fait que VALIDER qui a le droit de déclarer ; (b) côté client, en
-    ANNONCE le token actif ne vient que de `COMBAT_SLOT_ADVANCED` (`onSlotAdvanced`) et, à la reconnexion, du
-    roster (`onStateSync`, premier non-annoncé) — un token déjà passé côté serveur n'ouvre donc aucune
-    fenêtre, et `COMBAT_PHASE_CHANGED` ne fixe pas `activeTokenId` (pas de clignotement) ; (c) l'ancien
-    `endTurn` sait déjà enchaîner un Tour entièrement pré-annoncé.
-    Renforts : (R1) **filet si `skipPlayer` échoue** (il avale ses erreurs) : relire la ligne roster ; si le token
-    n'est toujours pas `has_announced`, présenter le slot normalement — jamais une file figée en silence ;
-    (R2) en RÉSOLUTION, vérifier le blocage AVANT la branche des entrées autonomes (un drone « mort » ne tire
-    pas) ; (R3) message `COMBAT_TURN_SKIPPED` omis en résolution si une action `skip` existe déjà pour ce token ce
-    Tour ; (R4) lignes de log `[DBG]` explicites (annonce/résolution, token, statut) — serveur bavard par
-    convention ; (R5) **vrais tests d'intégration** : `combatTurnEngine.test.mjs` possède déjà un fixture de
-    base réelle isolé (`createCombatFixture` : utilisateur + campagne + tokens créés puis supprimés, `skip` sans
-    `DATABASE_URL`) — ajouter les cas 1c (annonce : bloqué passé et slot suivant émis ; mode `icon_only` :
-    inchangé ; tous bloqués : slot présenté ; résolution : pas bloqué suivant diffusé, pas de doublon de
-    message). À LANCER PAR SAAR (écrit/supprime des lignes dans sa base locale) :
-    `node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs` depuis la racine.
-    Limites connues, non aggravées : parité avec les gardes actuelles pour l'exo piloté (statuts lus sur le
-    token de l'exo, pas sur le pilote) ; un combat composé uniquement de drones en `ordres_permanents` boucle
-    déjà aujourd'hui (Tour entièrement pré-annoncé) — le garde-fou anti-boucle de 1c ne le résout pas.
-  - **Lot 1c — CODÉ (2026-09-24).** Implémenté comme conçu ci-dessus : `getDeclarationBlockedTokens` +
-    `hasActionableToken` + `resolveAutoSkipStatus` (interne) dans `combatTurnEngine.js` ; insertions dans
-    `advanceAnnouncementQueue` (avant le test de Surprise, filet si `skipPlayer` échoue), `advanceTimeline` (avant la
-    branche autonome ET pour le tour obligatoire des retardataires) ; `autoSkipResolutionStep` (message sans
-    doublon) ; les 2 gardes de `socketCombatResolution.js` appellent la même fonction. **Précision de la garde
-    anti-boucle** (trouvée au codage) : les drones à action `drone_auto` de ce Tour ne comptent pas comme acteurs
-    — sinon « mort + drone autonome » tournerait seul. 12 tests d'intégration (`combatTurnEngine.test.mjs`) +
-    1 test pur. Reste : tests base + jeu par Saar, puis commit.
-  - **Constat hors périmètre 1c (2026-09-24, rapporté par la session « drones » d'après un test de Saar)** : un token
-    `dead` reste CIBLE d'une arme de zone (grenade à fragmentation : « Baboulinet — Éviter la zone d'effet — Échec
-    14 ») et reçoit test/fenêtre de Chance. [VÉRIFIÉ par lecture, rapporté] `queryTokensInShape`
-    (`worldSpatialQueryService.js:234-264`) ne filtre ni statut ni mort ; il alimente `evaluateAoeVisibility` →
-    `resolveAoeAssaultAction`. [INCONNU] le mort a-t-il aussi encaissé des dégâts (base non lue) ; tirs simples et
-    interception non examinés. Le moteur de tour, lui, respecte bien `dead` (logs du même test = 1c fonctionne).
-    **Règle tranchée par Saar (2026-09-24)** : le mort ne peut NI esquiver NI dépenser de point de Chance (« ça c'est
-    sûr ») ; en revanche des technologies de résurrection existent → **le décompte des blessures continue jusqu'à un
-    corps totalement détruit** : un cadavre reste donc cible et encaisse les dégâts (option B). Conséquence : aucun
-    filtrage des cibles ; il faut retirer les fenêtres de Chance d'un mort (chantier séparé, « un plan = un problème »)
-    et le décompte « jusqu'au corps détruit » dépend du Lot 2 (aujourd'hui `applyWound` avale l'erreur d'une ligne
-    Mortelle pleine).
-  - **Suites de « mort » demandées par Saar (2026-09-24, non codées, un plan par problème)** — *1e* : un mort ne
-    reçoit AUCUNE fenêtre de Chance (esquive de zone, réduction de gravité, Catastrophe) : `resolveChanceRecipientCharacterId`
-    (contrat existant « null = aucune Chance possible ») + propriété de registre. *1f* : statuts incompatibles avec un mort
-    (décision Saar, « ouvert à débat ») — INTERDITS : Entravé, Déséquilibré, Étourdi/Assommé, Inconscient, Asphyxie,
-    Décompression, Aveuglé, Hypothermie ; AUTORISÉS : Enflammé, Corrodé, Irradié, Saisi, Électrocuté, Infecté,
-    Empoisonné (les 15 codes du panneau sont couverts). Preuve au log du test : un tir sur le token mort a lancé le test
-    de Choc puis `applyStunWithDuration … stunned` sur lui. Points d'écriture des statuts : `statusService.js:40`
-    (`applyStunWithDuration`), `:178` (`applyModStatus`), `socketToken.js:178` (bascule manuelle) ; test de Choc :
-    `damageService.js:479/486` (`resolveTargetHit`), en amont des 7 appels de `applyStun`. Précision de Saar : le corps
-    « reste là et prend des blessures », point (pas de notion de destruction à ce stade).
-  - **1e/1f — décisions finales de Saar (2026-09-24) + analyse à charge.** INTERDITS sur un mort (8) : Entravé,
-    Déséquilibré, Étourdi, Inconscient, Asphyxie, Aveuglé, Hypothermie, **Évanoui** ; AUTORISÉS (7) : Enflammé,
-    Corrodé, Irradié, Saisi, Électrocuté, Infecté, Empoisonné, **Décompression** (donc 8 interdits / 8 autorisés, `dead`
-    à part). Test de Choc ET durée d'étourdissement coupés pour un mort. **Le MJ reste libre** (bascule manuelle, formulaire
-    danger/froid, `COMBAT_APPLY_STUN` : jamais refusés). À la mort, tous les statuts interdits sont RETIRÉS (+ étourdissement en
-    attente de `combat_pending`). Règle active en mode `enforced` seulement. Conception : propriété de registre
-    `incompatibleWithDead` (ensemble dérivé) ; `isCharacterDead`/`isTokenDead` dans `statusService.js` (autorité de « mort »,
-    modèle `traits.ci` de dnd5e / immunités PF2e : la cible reste visée, seul l'effet n'est pas appliqué) ;
-    `applyStunWithDuration` refuse sur un mort sauf option `force` (chemin MJ) ; `resolveTargetHit` saute le test de Choc
-    (seul site : `damageService.js:479/486`) ; `applyDeathConsequences(io, db, campaignId, tokenId)` appelée par la bascule
-    `dead` (et par le Lot 2 pour la blessure Mort) ; `canEditTokenStatus` reçoit `targetIsDead` (joueur non-MJ refusé) ;
-    1e : `resolveChanceRecipientCharacterId` reçoit `campaignId` et renvoie `null` pour un mort (exo : mort OU pilote mort).
-    Limite connue : un choix d'étourdissement DÉJÀ ouvert chez un joueur au moment de la mort reste affiché (la ligne
-    `combat_pending` disparaît, la confirmation est ignorée). Ordre : commit 1c → 1e → 1f.
-  - **Lot 1e — CODÉ (2026-09-24, en attente des tests Saar).** Propriété `isDeath` du registre (`DEATH_STATUS_CODES`),
-    `deathStateService.js:isCharacterDead`, `resolveChanceRecipientCharacterId` reçoit `campaignId` (2ᵉ paramètre, 3
-    appelants mis à jour) et renvoie `null` pour un cadavre. 4 tests d'intégration + 1 test de registre.
-  - **Lot 1f — CODÉ (2026-09-24, en attente des tests Saar).** `incompatibleWithDeath` (8 codes) +
-    `DEATH_INCOMPATIBLE_STATUS_CODES` ; `isTokenDead` ; barrière `applyStunWithDuration` (`gmOverride` pour
-    `COMBAT_APPLY_STUN`) ; Choc coupé dans `resolveTargetHit` ; `applyDeathConsequences` (appelée par la bascule
-    `dead`) ; `canEditTokenStatus` + `targetIsDead` ; prop `statusEffectsMode` du panneau. 4 tests d'intégration + 2 tests
-    de registre.
-  - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
-    à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
-    catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.
-  - **Points d'édition partagés avec l'autre session (interception drones, non commitée)** :
-    `socketCombatResolution.js` (hunks en 13, 424-460 ; mes gardes en 165/353 — hors zone),
-    `socketCombatHelpers.js` (hunks en 4, 119-121, 2893…3690 ; mon site en 996 + un import en tête, à
-    côté de leur ligne 4 → staging partiel soigné), `fr.json` (inchangé en 1a).
-  - **1c (différé, hors de ce plan tant que non cadré)** — sortir un token mort de la file
-    d'initiative (équivalent de « Skip Defeated »). Le champ `combat_roster.status` (`active`/`done`)
-    existe mais **aucun code ne pose `done`** (`socketCombatAnnouncement.js:1027`) et
-    `advanceAnnouncementQueue` compte SANS filtrer `status` (`combatTurnEngine.js:97-100`) : l'utiliser
-    demande d'abord de compléter ce concept. En attendant, `dead` se comporte comme `unconscious` (tour
-    passé automatiquement par la garde, comportement déjà éprouvé en jeu).
-  - Vérifié : `dead` (sans `expires_at_turn`) n'est jamais purgé par `endTurn` (`combatTurnEngine.js:804`,
-    `whereNotNull('expires_at_turn')`).
+- **Lot 1 — Statut `dead` et conséquences d'un cadavre : ✅ CLOS et ARCHIVÉ (2026-09-24)** — `docs/Old/PLAN_STATUT_MORT.md`
+  (historique, décisions, analyses à charge) ; documentation définitive `docs/SYSTEME/STATUTS_TOKEN.md`. Sous-lots livrés :
+  option de campagne (`df7dcce`), registre unique 1a (`845412d`), statut `dead` 1b (`c30ce5b`), retrait direct 1d
+  (`65dc133`), blocage proactif 1c (`b443c4c`), pas de Chance pour un mort 1e (`35a5197`), pas d'état de corps vivant sur
+  un cadavre 1f (`26543f6`). **Ce que les Lots 2-4 en réutilisent** : `deathStateService.js:isCharacterDead`,
+  `statusService.js:applyDeathConsequences(io, db, campaignId, characterId)` (à appeler quand la blessure « Mort » est
+  écrite), `shared/tokenStatusRegistry.js` (`isDeath`, `incompatibleWithDeath`). Règle de Saar : *le cadavre reste là et
+  prend des blessures* — le décompte n'a donc de sens complet qu'avec la 6ᵉ ligne (Lot 2).
 - **Constaté 2026-09-24 — recoupement avec la session « interception des drones » (non commitée à ce
   jour)** : elle ajoute `woundSeverityForDamage(degatsNets)` dans `shared/woundConstants.js`, lecture de
   `BLESSURE_SEUILS_TABLE` (sans la 6ᵉ ligne), pour la gravité d'un coup sur un drone. Or
@@ -410,8 +139,9 @@ refus) ; `/heal` ; pas de régression sur les 5 lignes existantes. Transport ré
 
 ## 7. Points ouverts
 
-1. **Mort : par token ou par personnage ?** Statuts par token, blessures par fiche
-   (`clearCharacterWoundsAndStatuses` traite déjà « tous les tokens du personnage »). À trancher au Lot 1.
+1. ~~**Mort : par token ou par personnage ?**~~ — **tranché au chantier « Statut Mort »** : `dead` est posé sur un token,
+   mais la mort se LIT au niveau du personnage (`isCharacterDead` : un token du personnage porte `dead`), comme `/heal` ;
+   `applyDeathConsequences` purge les états interdits de TOUS les tokens du personnage.
 2. **Moment de pose de `dead` vs choix de Chance.** `applyWound` corrige la gravité *après coup*
    (`woundService.js:94-132`, choix délibéré). `dead` étant dérivé de la blessure (§3), la voie naturelle
    est : poser, puis retirer si la Chance est dépensée (la blessure 6ᵉ ligne est remplacée par une Critique).

@@ -11,12 +11,17 @@ paths:
   - "shared/weaponModRegistry.js"
   - "server/src/services/weaponModService.js"
   - "server/src/services/modingService.js"
+  - "server/src/socket/combatTurnEngine.js"
+  - "server/src/lib/statusService.js"
+  - "server/src/lib/deathStateService.js"
+  - "shared/tokenStatusRegistry.js"
 ---
 
 # Combat
 
 Lire `docs/REGLES/REGLESYSCOMBAT.md`, `docs/SYSTEME/COMBAT.md` et les règles spécialisées utiles.
 Pour les mods d'armes (Lunette, ATI, Mémoire, Projecteur...), lire aussi `docs/SYSTEME/MODING.md`.
+Pour les statuts de token (étourdi, inconscient, mort…), lire `docs/SYSTEME/STATUTS_TOKEN.md`.
 
 ## Autorité
 
@@ -51,6 +56,12 @@ Pour les mods d'armes (Lunette, ATI, Mémoire, Projecteur...), lire aussi `docs/
   (`socketCombatExo`, `PLAN_EXOARMURE.md §16.4`) et drone (`resolveDroneAssaultAction`,
   `useDroneDeclare`). Déduire le CaC de `fire_mode` nul a été un bug côté exo puis côté drone
   (`DRONE-CC-MELEE-MISCLASS`).
+
+- Statuts de token et cadavre : un rôle de statut (bloque, sans défense, cadavre, réservé MJ) se lit dans
+  `shared/tokenStatusRegistry.js`, jamais par un littéral. « Ce token peut-il agir ? » = `getDeclarationBlockedTokens` :
+  le moteur de tour passe le token AVANT d'ouvrir sa fenêtre, les gardes des handlers ne sont qu'un filet. Un cadavre
+  (`isDeath`, lu par `isCharacterDead`) reste une cible qui prend des blessures mais n'a ni Chance, ni test de Choc, ni
+  état de corps vivant ; le MJ reste libre (`gmOverride`).
 
 ## Validation minimale
 

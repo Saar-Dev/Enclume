@@ -22,6 +22,10 @@ server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(
 WOUND_LOCATIONS = ['tete', 'corps', 'bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']
 
 WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle']
+// ⚠️ 5 lignes sur les 6 du RAW : la 6ᵉ « Mort subite / Membre détruit » (seuil 30) n'existe pas encore dans le moteur.
+// Un coup ≥ 30 écrit une Mortelle ; le débordement d'une ligne Mortelle pleine n'écrit aucune blessure (`applyWound` avale l'erreur, visible seulement dans les logs).
+// Chantier planifié : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots 2-4). La mort en tant que STATUT de token, elle, existe :
+// voir « Mort et cadavre » ci-dessous.
 
 WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0 }
 // mortelle=0 (pas -20) : REGLEBLESSURES.md dit "non applicable, le blessé ne peut entreprendre
@@ -218,7 +222,19 @@ soin (-2/période déjà écoulée) :
 | Mortelle | -10 | Oui | Non | Oui |
 
 Mortelle non soignée : délai de survie (Constitution ou Constitution/2 heures) calculé et affiché au
-MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ.
+MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ (elle peut être matérialisée par le statut
+`dead`, ci-dessous).
+
+## Mort et cadavre (statut de token)
+
+La mort n'est pas une gravité mais un **statut de token** `dead` (`shared/tokenStatusRegistry.js`), posé et retiré par le MJ seul
+(bascule du panneau Statuts, ou `/heal` qui efface blessures ET statuts de tous les tokens du personnage —
+`clearCharacterWoundsAndStatuses`). Tant que la 6ᵉ ligne n'existe pas, il est posé à la main ; ensuite la blessure « Mort » le
+posera (`PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 2). **Règle : le cadavre reste là et prend des blessures** (des technologies de
+résurrection existent) : `applyWound` continue de s'appliquer, mais un cadavre ne dépense pas de Chance (aucune fenêtre de
+réduction de gravité), ne fait pas de test de Choc et ne reçoit pas d'état de corps vivant. Détail et sites de code :
+`SYSTEME/STATUTS_TOKEN.md` §6. Le statut est par token, les blessures par fiche : la mort se lit au niveau du personnage
+(`deathStateService.js:isCharacterDead`).
 
 **Routes** (`campaigns.js`, toutes vérifient `game_echeances.campaign_id === :id`) :
 `POST .../game-time/request-advance|confirm-advance|cancel-advance`,

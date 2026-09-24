@@ -18,7 +18,9 @@ SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 text
 
 server/src/lib/
-├── statusService.js    — résolution du test de choc, étourdissement
+├── statusService.js    — résolution du test de choc, étourdissement, applyDeathConsequences (purge à la mort)
+├── deathStateService.js — isCharacterDead / isTokenDead : « est-ce un cadavre ? » (module feuille, niveau personnage, mode enforced)
+├── exoPilotService.js  — résolution du pilote d'exo ; resolveChanceRecipientCharacterId (à qui ouvrir une fenêtre de Chance ; null = aucune)
 ├── damageService.js    — localisation, armure, dégâts nets, sévérité, blessure, shock
 ├── woundService.js     — insertion blessure + broadcast WOUND_ADDED
 ├── woundUtils.js       — utilitaires blessures (isShockTestRequired, resolveWoundInsertion, etc.)
@@ -93,6 +95,19 @@ await applyStun(io, db, campaignId, {
 Évolution post-REWORK-04 : le paramètre pendingStunActions a été retiré. L'état est persisté dans combat_pending (table DB) et consommé plus tard par COMBAT_STUN_CONFIRM.
 emitShockDiceResult
 
+applyStunWithDuration
+
+Écrit `stunned` / `unconscious` / `evanoui` (transaction : efface la famille puis insère — exclusion mutuelle) et diffuse
+TOKEN_STATUS_UPDATED. **Barrière du cadavre** : sur un personnage mort (`isTokenDead`, mode enforced) elle ne fait RIEN (log [DBG]) — un
+mort n'est ni étourdi ni inconscient ni évanoui. Option `{ gmOverride: true }` : action MANUELLE du MJ (`COMBAT_APPLY_STUN`), jamais
+bornée. Tous les autres appelants (Choc, Fatigue, froid) sont automatiques. Voir `SYSTEME/STATUTS_TOKEN.md` §6.
+
+applyDeathConsequences
+
+`applyDeathConsequences(io, db, campaignId, characterId)` — à appeler quand un personnage DEVIENT un cadavre (bascule MJ `dead` ;
+blessure « Mort » au Lot 2 de `PLAN_BLESSURE_SIXIEME_LIGNE.md`) : retire des tokens du personnage les états `incompatibleWithDeath` et
+l'étourdissement en attente (`combat_pending`), diffuse, retourne les tokens touchés. Mode enforced seulement.
+
 Fonction synchrone — émet le résultat du D20 de Test de Choc.
 js
 
@@ -139,6 +154,8 @@ Logique détaillée :
     Dégâts nets — max(0, degautsBruts - (etq ?? 0) + rd).
 
     Choc (optionnel) — résolution DSL de la munition via resolveChocFormula. Dommages virtuels (jamais de blessure créée). Si présent, le Test de Choc utilise le total combiné physique+Choc.
+
+    Cadavre — si la cible est un cadavre (`isCharacterDead`), la blessure est appliquée mais AUCUN test de Choc n'est tiré (`shockResult` reste null, donc aucun D6 de durée ni `applyStun` en aval) : `resolveTargetHit` est le seul site de tirage du Choc.
 
     Sévérité — basée sur les dégâts physiques seuls (_severityForDamage).
 
