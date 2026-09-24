@@ -1091,7 +1091,8 @@
     "hypothermia":   "Hypothermie",
     "infected":      "Infecté",
     "poisoned":      "Empoisonné",
-    "irradiated":    "Irradié"
+    "irradiated":    "Irradié",
+    "dead":          "Mort"
   },
   "entityPanel": {
     "placeholderName": "Nom du blueprint",

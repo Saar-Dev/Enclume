@@ -172,7 +172,9 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onDeclareError = ({ message, username, stunned, statusCode }) => {
       let text = message
       if (stunned) {
-        const statut = statusCode === 'unconscious' ? 'inconscient' : 'étourdi'
+        // Libellé du statut lu dans `status.<code>` (mêmes clés que le panneau) — plus de branche par code :
+        // stunned → « étourdi », unconscious → « inconscient », dead → « mort ».
+        const statut = t(`status.${statusCode ?? 'stunned'}`).toLowerCase()
         text = t('session.stun_blocked', { statut })
       }
       addMessage({

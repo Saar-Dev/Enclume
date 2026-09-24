@@ -23,6 +23,9 @@
 //   (socketCombatResolution.js, STUN2).
 // - defenseless : la cible ne peut pas se défendre activement — DEF5 (socketCombatHelpers.js).
 // - clearedAtCombatEnd : retiré du token à la fin du combat (socketCombatState.js).
+// - gmOnly   : seul le MJ le pose ou le retire, quelle que soit l'option de campagne
+//   `players_edit_statuses` (dangers, froid : formulaires MJ ; `dead` : mort et résurrection ne sont pas
+//   une auto-déclaration de joueur). Règle unique : canEditTokenStatus ci-dessous, serveur ET client.
 //
 // Hors registre (posés par leur propriétaire, sans entrée ici — chantier ultérieur) : `iem_survival`
 // (iemSurvivalService.js) et les `statusCodes` de shared/weaponModRegistry.js (ati_offensive/
@@ -34,16 +37,17 @@ export const TOKEN_STATUS_CATEGORY_COLORS = {
   dot:       '#d84838',
   sens:      '#9858c8',
   chronique: '#38a8c8',
+  mort:      '#8b8b9a',
 }
 
 export const TOKEN_STATUS_REGISTRY = [
   { code: 'grappled',      category: 'entrave',   manualToggle: true,  inPanel: true },
   { code: 'restrained',    category: 'entrave',   manualToggle: true,  inPanel: true },
   { code: 'off_balance',   category: 'entrave',   manualToggle: true,  inPanel: true },
-  { code: 'burning',       category: 'dot',                             inPanel: true },
-  { code: 'acid',          category: 'dot',                             inPanel: true },
+  { code: 'burning',       category: 'dot',                             inPanel: true, gmOnly: true },
+  { code: 'acid',          category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'asphyxia',      category: 'dot',       manualToggle: true,  inPanel: true },
-  { code: 'decompression', category: 'dot',                             inPanel: true },
+  { code: 'decompression', category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'electrocuted',  category: 'dot',       manualToggle: true,  inPanel: true },
   { code: 'stunned',       category: 'sens',      manualToggle: true,  inPanel: true,
     blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true },
@@ -52,10 +56,14 @@ export const TOKEN_STATUS_REGISTRY = [
   { code: 'blinded',       category: 'sens',      manualToggle: true,  inPanel: true,
     defenseless: true },
   { code: 'evanoui',       category: 'sens' },
-  { code: 'hypothermia',   category: 'chronique', manualToggle: true,  inPanel: true },
+  { code: 'hypothermia',   category: 'chronique', manualToggle: true,  inPanel: true, gmOnly: true },
   { code: 'infected',      category: 'chronique', manualToggle: true,  inPanel: true },
   { code: 'poisoned',      category: 'chronique', manualToggle: true,  inPanel: true },
   { code: 'irradiated',    category: 'chronique', manualToggle: true,  inPanel: true },
+  // Mort (chantier 6ᵉ ligne du compteur de blessures). Ni expiration ni `clearedAtCombatEnd` : seul le MJ
+  // le retire (bascule ou /heal). Se comporte comme `unconscious` face au combat (tour passé, sans défense).
+  { code: 'dead',          category: 'mort',      manualToggle: true,  inPanel: true, gmOnly: true,
+    blocksDeclaration: true, defenseless: true },
 ]
 
 // Code inconnu → undefined (voir « Hors registre » ci-dessus).
@@ -73,3 +81,18 @@ export const PANEL_STATUSES = TOKEN_STATUS_REGISTRY.filter(entry => entry.inPane
 export const DECLARATION_BLOCKING_STATUS_CODES = codesWhere('blocksDeclaration')
 export const DEFENSELESS_STATUS_CODES = codesWhere('defenseless')
 export const COMBAT_END_CLEARED_STATUS_CODES = codesWhere('clearedAtCombatEnd')
+export const GM_ONLY_STATUS_CODES = codesWhere('gmOnly')
+
+// Règle de droits UNIQUE pour poser/retirer un statut de token — appelée par le serveur
+// (socketToken.js, autorité) et par le panneau client (aperçu) : jamais deux implémentations.
+// - code hors registre → refus pour tous (le registre est l'autorité du vocabulaire) ;
+// - MJ → autorisé ; `gmOnly` → MJ seul ; sinon propriétaire du token si l'option de campagne
+//   `players_edit_statuses` (défaut true) l'autorise.
+// Ne dit rien de la MANIÈRE de poser (bascule nue ou formulaire) : voir `manualToggle`.
+export function canEditTokenStatus(code, { isGm = false, isOwner = false, playersEditStatuses = true } = {}) {
+  const entry = findTokenStatus(code)
+  if (!entry) return false
+  if (isGm) return true
+  if (entry.gmOnly) return false
+  return isOwner && playersEditStatuses
+}

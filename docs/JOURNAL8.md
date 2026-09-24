@@ -8185,3 +8185,32 @@ ESLint client (2 fichiers, 0 problème) ; `npm run build` client OK ; `git diff 
 
 **Documentation** : `docs/SYSTEME/STATUTS_TOKEN.md` créé (+ ligne `INDEX.md`) ; `VOCABULARY.md` — affirmation
 périmée (« `status_code` ne connaît que stunned/unconscious ») corrigée.
+
+---
+
+## Session (Dev) — 2026-09-24 — Statut de token `dead` (« Mort ») + règle de droits unique sur les statuts
+
+**Origine** : Lot 1b de `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (décision Saar : la mort est un statut de
+token ; une blessure « Mort » le posera au Lot 2). Ce commit ne fait que le statut et ses droits.
+
+**Implémenté** : entrée `dead` dans `shared/tokenStatusRegistry.js` (`gmOnly`, `blocksDeclaration`,
+`defenseless`, catégorie `mort` gris sombre, **ni expiration ni `clearedAtCombatEnd`**) ; icône
+`client/public/assets/status/dead.svg` ; `fr.json` `status.dead` = « Mort ». Un token mort a son tour passé
+automatiquement par la garde de résolution existante (comme `unconscious`, uniquement en mode `enforced`), est
+« sans défense », et **reste mort après le combat** — seul le MJ le retire (bascule ou `/heal`).
+**Droits** : nouveau drapeau `gmOnly` (`burning`, `acid`, `decompression`, `hypothermia`, `dead`) et **une seule
+règle** `canEditTokenStatus`, appelée par le serveur (`socketToken.js`, autorité) ET le panneau client — plus de
+comparaison `isGm`/`isOwner` recopiée. **Défaut de droits refermé** : le serveur acceptait la bascule nue de
+`hypothermia` par un joueur propriétaire (le client ne l'envoyait jamais) ; désormais refusée. Le message de
+refus lit le libellé dans `status.<code>` (plus de branche « inconscient »/« étourdi » en dur).
+
+**Décisions assumées** : un mort garde un tour d'initiative passé automatiquement en attendant le lot 1c (sortie
+de la file d'initiative, non cadré — Saar : acceptable provisoirement) ; option `players_edit_statuses`
+inchangée pour les statuts ordinaires.
+
+**Testé** : `node --test shared/tokenStatusRegistry.test.mjs` (15/15 : instantané mis à jour volontairement avec
+`dead`, `gmOnly`, matrice de la règle de droits, `dead` jamais nettoyé en fin de combat, **garde-fou icône +
+clé i18n pour tout statut affiché ou bloquant**) ; `node --test 'shared/**/*.test.mjs'` complet 667/667 ;
+`node --check` ; ESLint client (0 erreur, 1 avertissement préexistant) ; `npm run build` client OK.
+**Non testé** : scénario en jeu — à faire par Saar. **Données** : aucune migration. **Retour arrière** :
+`git revert` du commit applicable.

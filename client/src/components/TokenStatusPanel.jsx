@@ -6,7 +6,7 @@ import AimedLocationPicker from './AimedLocationPicker.jsx'
 import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environmentalHazardPresets.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
-import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS } from '../../../shared/tokenStatusRegistry.js'
+import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
 
 const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
 
@@ -85,6 +85,9 @@ export default function TokenStatusPanel({
 
   const isOwner = character?.user_id === userId
   const canToggle = isGm || (isOwner && playersEditStatuses)
+  // Droit sur UN statut : règle unique partagée avec le serveur (`gmOnly` = MJ seul, sinon option de
+  // campagne). `canToggle` ne sert plus qu'à la légende « Lecture seule » (aucun droit du tout).
+  const canEdit = (code) => canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })
 
   // Fermeture click-dehors / Échap
   useEffect(() => {
@@ -109,14 +112,12 @@ export default function TokenStatusPanel({
   }
 
   const handleToggle = (statusCode) => {
-    if (!canToggle) return
+    if (!canEdit(statusCode)) return // dangers, froid, mort : `gmOnly` dans le registre
     if (HAZARD_CODES.has(statusCode)) {
-      if (!isGm) return // dangers environnementaux : MJ uniquement (docs/PLAN_FATIGUE_DOMMAGES.md §9)
       openHazardForm(statusCode, statuses.includes(statusCode) ? 'clear' : 'expose')
       return
     }
     if (CHRONIC_HAZARD_CODES.has(statusCode)) {
-      if (!isGm) return // Froid : MJ uniquement, même règle que les dangers ci-dessus
       openColdForm()
       return
     }
@@ -514,7 +515,7 @@ export default function TokenStatusPanel({
             {STATUS_LIST.map(({ code, category }) => {
               const active  = statuses.includes(code)
               const color   = CATEGORY_COLOR[category]
-              const clickable = canToggle && (!HAZARD_CODES.has(code) && !CHRONIC_HAZARD_CODES.has(code) || isGm)
+              const clickable = canEdit(code)
 
               return (
                 <div

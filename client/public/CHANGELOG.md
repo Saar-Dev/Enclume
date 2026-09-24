@@ -1,3 +1,13 @@
+## v246 — 2026-09-24 — Nouveau statut « Mort »
+
+### Combat
+- [add] Nouveau statut de token « Mort » (icône crâne, dernier de la grille des statuts). Réservé au MJ :
+  il le pose ou le retire à la main, les joueurs ne peuvent ni le poser ni le retirer. Un token mort passe
+  automatiquement son tour en combat, ne peut plus se défendre et **reste mort après la fin du combat** ;
+  `/heal` le retire.
+- [fix] Les statuts « Hypothermie », « Mort » et les dangers (feu, acide, décompression) sont désormais
+  strictement réservés au MJ, même quand l'option laisse les joueurs gérer les autres statuts de leur token.
+
 ## v245 — 2026-09-24 — Option MJ : statuts de token gérés par les joueurs (ou non)
 
 ### Campagne

@@ -34,10 +34,23 @@ depuis la base sans changer ses consommateurs.
 | `blocksDeclaration` | le token ne peut plus déclarer : la garde de résolution passe son tour (STUN2) | `socketCombatResolution.js` |
 | `defenseless` | la cible ne peut pas se défendre activement (DEF5) | `socketCombatHelpers.js` (`isTargetDefenseless`) |
 | `clearedAtCombatEnd` | retiré à la fin du combat | `socketCombatState.js` |
+| `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` (dangers, froid, `dead`) | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
 
 Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STATUS_CODES`, `PANEL_STATUSES`,
 `DECLARATION_BLOCKING_STATUS_CODES`, `DEFENSELESS_STATUS_CODES`, `COMBAT_END_CLEARED_STATUS_CODES`.
-`findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`, jamais une erreur.
+`GM_ONLY_STATUS_CODES` complète la liste. `findTokenStatus(code)` est **tolérant** : code inconnu → `undefined`,
+jamais une erreur.
+
+**Droits** — `canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })` est l'**unique** règle, appelée
+par le serveur (autorité) et le panneau (aperçu) : code hors registre → refus pour tous ; MJ → autorisé ;
+`gmOnly` → MJ seul ; sinon le propriétaire si l'option de campagne `players_edit_statuses` (défaut `true`)
+l'autorise. Elle ne dit rien de la *manière* de poser (bascule nue = `manualToggle`, ou formulaire dédié).
+
+**Statut `dead` (« Mort »)** — `gmOnly`, `blocksDeclaration`, `defenseless`, sans expiration et **jamais**
+`clearedAtCombatEnd` : seul le MJ le retire (bascule ou `/heal`). Pour l'instant posé à la main ; il sera posé
+par la blessure « Mort » du compteur (`PLAN_BLESSURE_SIXIEME_LIGNE.md` Lot 2). Un token mort garde un tour
+d'initiative passé automatiquement par la garde (comme `unconscious`) — sortir le mort de la file = lot 1c,
+non cadré (`combat_roster.status` `active`/`done` existe mais aucun code ne pose `done`).
 
 ## 3. Invariants
 
@@ -46,7 +59,9 @@ Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STA
 2. Les dangers environnementaux (`burning`, `acid`, `decompression`) ne sont **pas** `manualToggle` : la
    bascule nue écraserait la `data` posée par `exposeToHazard`. Ils passent par `exposeToHazard`/`clearHazard`.
 3. `expires_at_turn` NULL = jamais purgé par la purge universelle de `endTurn` ; un statut qui ne doit pas
-   disparaître seul (futur `dead`) ne porte pas d'expiration et n'est pas `clearedAtCombatEnd`.
+   disparaître seul (`dead`) ne porte pas d'expiration et n'est pas `clearedAtCombatEnd`.
+4b. Les droits de pose passent TOUJOURS par `canEditTokenStatus` — jamais une comparaison `isGm`/`isOwner`
+   recopiée dans un handler ou un composant.
 4. Le test `shared/tokenStatusRegistry.test.mjs` fige (instantané historique) les ensembles dérivés : un
    nouveau statut modifie ces attentes **dans le diff qui l'ajoute**, jamais en silence.
 
@@ -59,8 +74,12 @@ Ensembles à sémantique propre volontairement **non** dérivés : événement d
 (`combatTurnEngine.js`), exclusion mutuelle `stunned`/`unconscious`/`evanoui` (`statusService.js`), garde
 d'annonce `stunned` seul (`socketCombatAnnouncement.js`).
 
-Constatés (voir le plan) : le serveur accepte la bascule nue de `hypothermia` (le client ne l'envoie
-jamais — formulaire Froid dédié) ; `evanoui` n'a pas de clé i18n `status.*` ni d'entrée de panneau.
+Constaté (voir le plan) : `evanoui` n'a pas de clé i18n `status.*` ni d'entrée de panneau (posé par la
+Fatigue seulement). Le test `tokenStatusRegistry.test.mjs` exige icône SVG et clé `status.<code>` pour tout
+statut affiché au panneau ou bloquant — `evanoui` n'en fait pas partie, un futur statut oui.
+Limites connues : `TokenStatusBadges` n'affiche que 3 badges au-delà de 4 statuts (un `dead` tardif peut ne
+pas se voir sur le token) ; le message de refus dit « vous êtes mort/étourdi/inconscient » même quand le MJ
+déclare pour un PNJ ; un token mort qui porte encore un danger (`burning`…) continue d'en subir les ticks.
 
 Documents associés : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` ; `MODING.md` (statuts de mods) ;
 `INFORMATIQUE.md` (`iem_survival`) ; `COMBAT_FLUX.md` (gardes STUN2/DEF5).

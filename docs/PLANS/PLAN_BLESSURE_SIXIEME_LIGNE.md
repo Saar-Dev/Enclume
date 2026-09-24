@@ -186,6 +186,69 @@ Deux concepts que le RAW distingue :
   - **Preuves du test en jeu de 1a** : log `[STUN2] PRECHECK … assommé — auto-skip` (garde de déclaration
     alimentée par `DECLARATION_BLOCKING_STATUS_CODES`) ; base après `FIN COMBAT` : la ligne `unconscious` a
     disparu, les lignes `burning` sont conservées (`clearedAtCombatEnd` correct) et `combat_roster` est vide.
+  - **Conception exacte de 1b (2026-09-24, présentée à Saar en langage courant ; 1a commité `845412d`).**
+    (a) *Registre* : entrée `dead` — catégorie nouvelle `mort` (gris sombre), `manualToggle`, `inPanel`
+    (dernier du panneau), `blocksDeclaration`, `defenseless`, **pas** `clearedAtCombatEnd` ; nouveau drapeau
+    `gmOnly` posé sur `burning`, `acid`, `decompression`, `hypothermia`, `dead` (dérivé `GM_ONLY_STATUS_CODES`).
+    (b) *Une seule règle de droits, partagée serveur + client* : fonction pure
+    `canEditTokenStatus(code, { isGm, isOwner, playersEditStatuses })` dans le registre — `gmOnly` ⇒ MJ seul ;
+    sinon MJ, ou propriétaire si l'option `players_edit_statuses` l'autorise ; code inconnu ⇒ refus.
+    `socketToken.js` l'appelle (ferme le constaté (i) : un joueur ne peut plus forger la bascule nue de
+    `hypothermia`, ni poser/retirer `dead`) ; `TokenStatusPanel.jsx` l'appelle pour `clickable` et
+    `handleToggle` (les sets HAZARD/CHRONIC ne servent plus qu'à choisir le formulaire).
+    (c) *Message de refus* (`useCombatSocket.js:175`) : `t('status.' + statusCode).toLowerCase()` au lieu de
+    la branche « inconscient »/« étourdi » — mêmes textes pour ces deux-là, « mort » pour `dead`.
+    (d) *Assets/i18n* : `client/public/assets/status/dead.svg` (crâne, gabarit hexagonal) ; `fr.json`
+    `status.dead` = « Mort » (fichier partagé avec la session drones : staging partiel).
+    (e) *Test* : les attentes de l'instantané sont mises à jour **volontairement** (`dead` ajouté aux ensembles
+    concernés) + tests de la règle de droits (MJ, propriétaire avec/sans option, `gmOnly`, code inconnu) +
+    `dead` non nettoyé en fin de combat.
+    (f) *Vérifié* : aucun autre site ne supprime `token_statuses` en bloc sauf `/heal` (`woundService.js:160`,
+    tous statuts = résurrection MJ voulue) ; les boucles de début de tour (dangers, `iem_survival`, mods)
+    filtrent par code précis → `dead` n'y a aucun effet ; purge d'expiration ignore `expires_at_turn` NULL.
+    (g) *Hors 1b, noté* : un token mort qui porte encore `burning` continuerait de subir les ticks de danger à
+    chaque tour (les boucles ignorent `dead`) — question de comportement à trancher avec le Lot 2 ou 1c.
+  - **Analyse à charge de 1b (2026-09-24) — conclusion : le plan tient, 3 renforts + 2 limites assumées.**
+    Renforts adoptés : (R1) test « chaque statut affiché au panneau ou bloquant a son icône
+    `client/public/assets/status/<code>.svg` ET sa clé `status.<code>` de `fr.json` » — empêche `dead` (ou un
+    futur statut) d'apparaître sans icône/texte et aurait attrapé le manque de `evanoui` ; (R2) règle de
+    droits : code inconnu du registre ⇒ refus pour tous (le serveur exige en plus `manualToggle`) ;
+    (R3) clé `status.dead` ajoutée en FIN de bloc `status` de `fr.json` : la copie de travail de ce fichier
+    porte des hunks non commités d'un autre agent (réordonnancement de clés, dont les miennes, lignes
+    ~682 et ~1078) — non sémantiques, à ne pas stager ; mon hunk reste distinct.
+    Limites assumées (notées, hors 1b) : (L1) `TokenStatusBadges` n'affiche que 3 badges au-delà de 4
+    statuts — un `dead` posé après 4 autres pourrait ne pas se voir sur le token ; (L2) le message de refus dit
+    « vous êtes mort » même quand le MJ déclare pour un PNJ (déjà le cas pour « étourdi »).
+    Effets de bord écartés par lecture : `applyStunWithDuration` ne supprime que la famille
+    stunned/unconscious/evanoui (n'efface pas `dead`) ; un Choc sur un mort ajoute `unconscious`, inoffensif ;
+    la grille passe à 4 lignes (5 colonnes fluides) sans changement de mise en page.
+  - **Retours du test en jeu de 1b (Saar, 2026-09-24)** : icône « Mort » validée ; `/heal` retire bien le
+    statut ; « fenêtre de confirmation parfois au retrait d'un statut, non nécessaire » = formulaires de
+    retrait des dangers (`hazardPanel.clearTitle`/`clearButton`, `TokenStatusPanel.jsx:280/442`) et du froid
+    (`coldExposurePanel.clearButton`, `:497`) — seuls Enflammé/Corrodé/Décompression/Hypothermie sont concernés,
+    comportement préexistant (**1d, petit lot séparé à confirmer avec Saar** : retrait direct en un clic) ;
+    **« le blocage n'est pas au bon endroit »** : la fenêtre d'action d'un token mort s'ouvre PUIS la garde
+    répond « vous êtes mort » — même comportement pour `stunned`/`unconscious` (les gardes vivent dans les
+    handlers de résolution, après l'ouverture de la fenêtre).
+  - **Cadrage de 1c — blocage PROACTIF (2026-09-24, à présenter puis analyser avant tout code).** Cause
+    racine : la vérification « ce token peut-il agir ? » est *réactive* (deux copies quasi identiques,
+    `socketCombatResolution.js` PRECHECK ~157-180 et CONFIRM ~346-368) au lieu d'être posée là où le moteur
+    CHOISIT le prochain acteur. Lecture du code : `advanceTimeline` (`combatTurnEngine.js:603`) est « le seul
+    point d'entrée fais avancer la résolution » — il choisit le pas (`pickNextTimelineStep`) puis diffuse
+    `SLOT_ACTIVE`, ce qui ouvre la fenêtre côté client ; il sait déjà résoudre des entrées autonomes puis se
+    rappeler (récursion à terminaison garantie). Pattern voisin en ANNONCE : `skipPlayer` (`:239`,
+    `has_announced`, action `skip`, `COMBAT_TURN_SKIPPED` → « X a été passé »). **Conception visée** :
+    (a) UNE fonction d'autorité « bloc de déclaration » (statut du registre `blocksDeclaration` en mode
+    `enforced` + stun en attente `combat_pending`) qui remplace les 2 copies ; (b) en RÉSOLUTION :
+    `advanceTimeline` passe les pas d'un token bloqué (`forfeitToken` + `COMBAT_TURN_SKIPPED`) et se rappelle,
+    sans ouvrir de fenêtre ; (c) en ANNONCE : `findNextAnnounceSlot`/file d'annonce saute un token bloqué via
+    `skipPlayer` (à VÉRIFIER : Saar n'a pas dit si la fenêtre de déclaration s'ouvrait aussi) ; (d) les gardes
+    des handlers restent en filet de sécurité (statut posé entre-temps). **Effet de bord voulu** :
+    `stunned`/`unconscious` bénéficient du même comportement (plus de fenêtre, plus de message d'erreur).
+    **Risque** : touche le moteur de tour (FSM) → commit isolé, tests de scénario (token bloqué en premier,
+    au milieu, dernier ; tous bloqués ; stun en attente ; drone/exo ; mode `icon_only`/`off`), validation Saar
+    en jeu réel. Remplace l'ancien « 1c différé » (sortie de la file d'initiative) : `combat_roster.status`
+    `done` reste inutilisé.
   - **Filet de 1a** : test pur `shared/tokenStatusRegistry.test.mjs` — chaque ensemble dérivé est comparé
     à l'ancien littéral recopié dans le test (instantané historique) ; unicité des codes ; toute
     catégorie a sa couleur ; les codes de `ENVIRONMENTAL_HAZARD_REGISTRY` sont dans le registre.
