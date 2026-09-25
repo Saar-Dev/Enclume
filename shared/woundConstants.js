@@ -95,6 +95,21 @@ export function isMortalWoundImmobilized(wounds) {
   return (wounds ?? []).some(w => TEST_BLOCKING_SEVERITIES.includes(w.severity) && MORTAL_WOUND_IMMOBILE_LOCATIONS.includes(w.location))
 }
 
+// ─── Kits de soin ────────────────────────────────────────────────────────────────────────────────────────────────
+// Les KITS DE SOIN mobilisés par UN Test de guérison (colonne « Soins nécessaires » de la table RAW ci-dessous). Règle maison (décision de Saar,
+// 2026-09-25, docs/PLANS/PLAN_REVUE_GUERISON.md §6 Q6-Q8/Q10) : le RAW décrit trois trousses comme un équipement à niveaux (First Aid, ChiriaT,
+// Medi 1 000), jamais comme un consommable — le décompte est un écart assumé (docs/JOURNAL8.md). Un kit par Test et par ligne du compteur (le RAW soigne
+// « Localisation par Localisation »). `first` = le premier Test d'une blessure, `following` = les suivants : la Chirurgie est l'opération « avant toute
+// phase de soins médicaux », une seule fois ; le Test hebdomadaire des soins constants est un Test de Médecine (`REGLEBLESSURES.md:374-375, 391-392`).
+// Chaque liste = des ALTERNATIVES ; chaque alternative = les kits requis ENSEMBLE.
+export const CARE_KIT_TYPES = ['premiersSoins', 'medecine', 'chirurgie']
+const PREMIERS_SOINS_OU_MEDECINE = [['premiersSoins'], ['medecine']]
+const MEDECINE_SEULE = [['medecine']]
+
+// Période des « soins constants » : un Test de Médecine chaque semaine (`REGLEBLESSURES.md:391-392`). Autorité unique de cet intervalle,
+// lue par le moteur d'échéances (server/src/lib/woundHealingSchedule.js) et par le décompte des kits.
+export const SOINS_CONSTANTS_INTERVAL_MINUTES = 7 * MINUTES_PER_DAY
+
 // Table RAW « Durée de guérison et soins nécessaires » (REGLEBLESSURES.md:413-433, vérifiée
 // 2026-07-30 contre Polaris 3ème édition p.238 — voir docs/PLAN_BLESSURES_GUERISON.md §3.2).
 // `legere` volontairement absente : guérit seule, sans Test, jamais d'échéance `wound_healing_check`.
@@ -103,12 +118,14 @@ export function isMortalWoundImmobilized(wounds) {
 // Les clés sont des gravités, sauf `membreDetruit` : la 6ᵉ gravité `mort_subite` SUR UN BRAS OU UNE JAMBE (RAW : ligne
 // « Membres détruits », 3 semaines, Chirurgie + Médecine, soins constants). Ne se lit pas par `WOUND_HEALING[severity]` :
 // passer par `getWoundHealing(severity, location)`, qui choisit la bonne ligne (et n'en renvoie aucune pour une Mort).
+//
+// `kits` : voir « Kits de soin » ci-dessus (les kits mobilisés par UN Test).
 export const WOUND_HEALING = {
-  moyenne:  { durationMinutes: 3 * MINUTES_PER_DAY,  soinsConstants: false },
-  grave:    { durationMinutes: 7 * MINUTES_PER_DAY,  soinsConstants: false },
-  critique: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true },
-  mortelle: { durationMinutes: 35 * MINUTES_PER_DAY, soinsConstants: true },
-  membreDetruit: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true },
+  moyenne:  { durationMinutes: 3 * MINUTES_PER_DAY,  soinsConstants: false, kits: { first: PREMIERS_SOINS_OU_MEDECINE, following: PREMIERS_SOINS_OU_MEDECINE } },
+  grave:    { durationMinutes: 7 * MINUTES_PER_DAY,  soinsConstants: false, kits: { first: PREMIERS_SOINS_OU_MEDECINE, following: PREMIERS_SOINS_OU_MEDECINE } },
+  critique: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true,  kits: { first: MEDECINE_SEULE, following: MEDECINE_SEULE } },
+  mortelle: { durationMinutes: 35 * MINUTES_PER_DAY, soinsConstants: true,  kits: { first: [['chirurgie', 'medecine']], following: MEDECINE_SEULE } },
+  membreDetruit: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true, kits: { first: [['chirurgie', 'medecine']], following: MEDECINE_SEULE } },
 }
 
 // Ligne de WOUND_HEALING d'une blessure (gravité stockée + localisation moteur), ou null si elle n'a pas d'échéance de
@@ -117,6 +134,40 @@ export const WOUND_HEALING = {
 export function getWoundHealing(severity, location) {
   if (severity === 'mort_subite') return isSuddenDeathLocation(location) ? null : WOUND_HEALING.membreDetruit
   return WOUND_HEALING[severity] ?? null
+}
+
+// Nombre de Tests d'une guérison à soins constants (durée ÷ 1 semaine : Critique 3, Mortelle 5, Membre détruit 3) ; null pour une
+// échéance UNIQUE (Moyenne/Grave) ou une blessure qui ne guérit pas. Autorité unique, lue par le moteur d'échéances (occurrences) et le décompte des kits.
+export function getHealingTotalTests(severity, location) {
+  const healing = getWoundHealing(severity, location)
+  return healing?.soinsConstants ? Math.round(healing.durationMinutes / SOINS_CONSTANTS_INTERVAL_MINUTES) : null
+}
+
+// « Premier Test » d'une blessure ⇔ l'échéance n'a encore consommé aucune occurrence (`occurrences_remaining` = total). Une échéance unique n'a qu'un
+// rang : ses kits sont les mêmes au premier Test et aux suivants. Une nouvelle tentative après un échec (`occurrences_remaining` = 1) est le dernier Test.
+export function isFirstHealingTest(severity, location, occurrencesRemaining) {
+  const total = getHealingTotalTests(severity, location)
+  return total === null ? true : occurrencesRemaining === total
+}
+
+// Alternatives de kits d'UN Test de cette blessure (voir `WOUND_HEALING.kits`), ou null : Légère (guérit seule) et Mort en Tête/Corps n'en ont pas.
+export function getCareKits(severity, location, occurrencesRemaining) {
+  const healing = getWoundHealing(severity, location)
+  if (!healing) return null
+  return isFirstHealingTest(severity, location, occurrencesRemaining) ? healing.kits.first : healing.kits.following
+}
+
+// Kits retenus par défaut pour une liste d'alternatives : la PREMIÈRE (« premiers soins » avant « médecine » : la moins chère). Le MJ pourra en choisir une autre.
+export function defaultCareKits(alternatives) {
+  return alternatives?.[0] ?? []
+}
+
+// Décompte par type de kit d'une suite de listes de kits (une liste = les kits d'un Test) — `{ premiersSoins, medecine, chirurgie }`.
+// Une seule implémentation, lue par le serveur (vue de revue) et par le client (quand le MJ change d'alternative).
+export function sumCareKits(kitLists) {
+  const totals = Object.fromEntries(CARE_KIT_TYPES.map(type => [type, 0]))
+  for (const kits of kitLists) for (const kit of kits) if (kit in totals) totals[kit] += 1
+  return totals
 }
 
 // Gravité qui REMPLACE une blessure quand elle s'améliore d'un cran, si ce n'est pas la gravité juste en dessous dans

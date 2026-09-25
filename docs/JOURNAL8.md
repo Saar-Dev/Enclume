@@ -8707,3 +8707,29 @@ sur ce délai, `REGLEBLESSURES.md:393-407`). La case « le personnage continue-t
 **Testé** : `node --env-file=.env --test` sur `woundUtils`, `woundEvolutionService`, `woundService` — 135/135 (15 nouveaux tests, 2 anciens corrigés car ils figeaient le défaut : suppresseur unique, exception du moteur, promotion, Chance, `/heal`, `removeWound`, échecs répétés,
 annulation d'avance rejouée qui restaure une infection) ; aucun résidu en base, les données de Saar inchangées. **Validé en jeu par Saar** (2026-09-25) : revue MJ sans ligne fantôme après `/heal`, retrait en direct, échecs répétés. **Non testé** : plusieurs semaines de jeu réelles. **Données** :
 aucune migration ; les 89 fantômes existants ont été annulés par Saar (`cancel_ghost_wound_echeances_20260925.js`). **Retour arrière** : `git revert` du commit du lot (les échéances annulées gardent leur ligne).
+
+---
+
+## Session (Dev) — 2026-09-25 — Lot 1 de l'écran de revue des guérisons : vue et résolution GROUPÉES par personnage, kits de soin (règle maison)
+
+**Problème** (`PLAN_REVUE_GUERISON.md` §10-§11) : le serveur n'offrait au MJ qu'une liste plate d'échéances et une route par échéance ; rien ne permettait de répondre pour un personnage entier, de voir son état,
+ni de compter les kits. **Livré côté serveur seulement** (le client est le Lot 2a) : `woundReviewService.js:getReviewCardsForGm` (une carte par personnage : état, lignes du compteur, kits, infections, `orphans`),
+`woundReviewBatchService.js` (`resolveHealingChoices`, `resolveInfectionModes`), trois routes minces dans `campaigns.js` (`GET …/review`, `POST …/healing-choices`, `POST …/infection-modes`), les clés de chat
+`combat:woundCare.*` (`combat.json`). L'écran actuel et ses routes restent en place jusqu'au Lot 2a, qui les supprime (coexistence écrite dans le plan, pas un legacy).
+
+**Décisions de Saar (2026-09-25)** : kits de soin — Moyenne/Grave premiers soins OU médecine ; Critique médecine ; Mortelle et Membre détruit chirurgie + médecine au premier Test puis médecine seule (Q10) ;
+un kit par Test et par ligne du compteur (Q8) ; décompte AFFICHÉ (v1), consommation réelle plus tard avec une case « consommer les kits » cochée par le MJ, jamais automatique (Q6) ; catalogue : First Aid =
+premiers soins, ChiriaT = chirurgie, Medi 1 000 = médecine (Q7) ; joueurs d'abord, PNJ repliés côté écran (Q9). **ÉCART RAW assumé** (invariant 5) : le livre décrit ces trousses comme un équipement à niveaux
+(`ref_equipment`, famille « Équipement médical »), jamais comme un consommable — le décompte est une règle maison.
+
+**Décisions d'architecture (analyse à charge du plan complet, §11)** : (B1) le contexte de soins `care` est validé, jamais stocké et RACONTÉ dans le chat dès ce lot (une ligne par personnage et par issue) — sinon
+les contrôles du Lot 2 auraient été décoratifs ; `care` est facultatif (absent = rien de raconté) ; (B2) un savepoint par entrée : le moteur d'échéances avale l'échec d'un handler et passerait l'échéance en `error`
+définitif ; l'entrée est annulée, l'échéance reste en attente, le lot continue ; une erreur inattendue annule tout le lot ; (B4) route d'infection groupée ; (P1-P3) `dueCases`/`queuedCases`/`answerable`, requêtes
+groupées ; (P4) test d'anti-dérive kits ↔ `DUREE_GUERISON_SOINS_TABLE` ; (P5) `care` validé (personnage de la campagne, nom libre nettoyé et borné). `SOINS_CONSTANTS_INTERVAL_MINUTES` et `getHealingTotalTests`
+deviennent l'autorité unique de l'intervalle et du nombre de Tests hebdomadaires (le moteur d'échéances ne les recalcule plus).
+
+**Testé** : 154 tests en base (woundUtils, woundEvolutionService, woundService, woundReviewService, woundReviewBatchService) + 819 tests purs `shared/` ; 18 tests nouveaux (5 purs, 4 vue, 9 lot ; vue : regroupement, kits par rang de Test,
+`dueCases`, `answerable`, infections, orphelins, statuts, forme figée ; lot : issue commune, mixte, périmée, ÉCHEC DE HANDLER, autre campagne, validation, `care`, annulée pendant le lot, infections) ; test de mutation
+(neutraliser l'annulation d'une entrée en échec fait échouer le test) ; rendu i18next réel des lignes de chat ; aucun résidu en base. **Non testé** : le TRANSPORT HTTP des routes (le dépôt n'a aucun harnais de test de
+routes — routes minces, logique testée aux services), le rendu du chat dans le client, tout le côté écran. **Données** : aucune migration ni écriture. **Retour arrière** : `git revert` du commit du lot (ajouts + une constante
+partagée ; l'écran actuel est intact).

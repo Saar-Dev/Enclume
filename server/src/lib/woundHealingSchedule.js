@@ -2,11 +2,8 @@
 // docs/Old/PLAN_BLESSURES_GUERISON.md §5). Module feuille : woundUtils.js (seul écrivain des lignes de
 // `character_wounds`) l'appelle à CHAQUE écriture ; les handlers de woundEvolutionService.js n'ont pas à le faire —
 // et ce fichier ne dépend ni de l'un ni de l'autre (sinon import circulaire woundUtils ↔ woundEvolutionService).
-import { getWoundHealing } from '../../../shared/woundConstants.js'
-import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
+import { getWoundHealing, getHealingTotalTests, SOINS_CONSTANTS_INTERVAL_MINUTES } from '../../../shared/woundConstants.js'
 import { createEcheance } from './echeanceService.js'
-
-const WEEK_MINUTES = 7 * MINUTES_PER_DAY
 
 // Échéances d'une case de blessure : guérison ET infection (`payload.woundId`). « Vivante » = pas encore terminée, annulée ni en erreur.
 const WOUND_ECHEANCE_TYPES = ['wound_healing_check', 'wound_infection_check']
@@ -37,7 +34,7 @@ export async function cancelWoundEcheances(trx, woundIds, { exceptEcheanceId = n
 export function getHealingRetrySchedule(severity, location) {
   const healing = getWoundHealing(severity, location)
   if (!healing) return null
-  return { intervalMinutes: healing.soinsConstants ? WEEK_MINUTES : healing.durationMinutes, occurrencesRemaining: 1 }
+  return { intervalMinutes: healing.soinsConstants ? SOINS_CONSTANTS_INTERVAL_MINUTES : healing.durationMinutes, occurrencesRemaining: 1 }
 }
 
 // Appelée par woundUtils.js juste après l'écriture d'une case, uniquement pour Moyenne+ — Légère guérit seule, sans Test ni
@@ -53,11 +50,11 @@ export async function initializeWoundHealingEcheance(trx, { campaignId, characte
   if (healing.soinsConstants) {
     // Critique/Mortelle : récurrente hebdomadaire (§3.2 "Soins constants" = Test de Médecine chaque
     // semaine). La gravité ne diminue qu'à la dernière occurrence (occurrences_remaining atteint 0).
-    const occurrencesRemaining = Math.round(healing.durationMinutes / WEEK_MINUTES)
+    const occurrencesRemaining = getHealingTotalTests(wound.severity, wound.location)
     return createEcheance(trx, {
       campaignId, characterId, conditionType: 'wound_healing_check', payload,
-      nextDueMinutes: baseMinutes + WEEK_MINUTES,
-      intervalMinutes: WEEK_MINUTES,
+      nextDueMinutes: baseMinutes + SOINS_CONSTANTS_INTERVAL_MINUTES,
+      intervalMinutes: SOINS_CONSTANTS_INTERVAL_MINUTES,
       occurrencesRemaining,
     })
   }

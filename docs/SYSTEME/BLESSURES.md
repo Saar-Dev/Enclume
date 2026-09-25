@@ -1,4 +1,5 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Amendé 2026-09-25 (nuit) — Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`** : kits de soin dans `WOUND_HEALING`, vue et résolution GROUPÉES de l'écran de revue (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
 > terminent plus jamais l'échéance de guérison (§« Guérison et Infection »).
 > **Amendé 2026-09-25 (soir) — guérison en chaîne (ticket `WOUND-HEAL-CHAIN-STOPS`)** : toute case de blessure écrite (coup reçu, promotion,
@@ -30,6 +31,8 @@ server/lib/woundUtils.js  — SEUL écrivain ET SEUL suppresseur de `character_w
                             avec son échéance de guérison), tri SQL, Test de Choc requis
 server/lib/woundHealingSchedule.js — programme l'échéance de guérison d'UNE case (module feuille, appelé par woundUtils.js)
 server/lib/woundService.js — applyWound (insertion + `dead` + diffusion) / removeWound / /heal
+server/lib/woundReviewService.js — écran de revue MJ : liste plate (ancienne) + vue GROUPÉE par personnage (`getReviewCardsForGm`)
+server/lib/woundReviewBatchService.js — résolution GROUPÉE des guérisons et des infections (un savepoint par entrée, `care`, diffusions)
 ```
 
 ## Constantes blessures (woundConstants.js)
@@ -393,6 +396,31 @@ système Shadowrun 5 de FoundryVTT — décision pure, application après les d�
 `POST .../game-time/request-advance|confirm-advance|cancel-advance`,
 `GET .../game-echeances/pending-review` (GM), `GET .../game-echeances/my-pending-rolls`,
 `POST .../game-echeances/:id/healing-choice`, `POST .../game-echeances/:id/infection-mode`.
+
+**Vue et résolution GROUPÉES de l'écran de revue** (Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`, 2026-09-25 ; l'écran actuel les ignore encore, le Lot 2a
+migre puis **supprime** `pending-review`, `healing-choice`, `infection-mode` et `getPendingReviewForGm`) :
+- `GET .../game-echeances/review` (GM) → `{ cards, summary }` (`woundReviewService.js:getReviewCardsForGm`, requêtes groupées). Une carte par personnage :
+  `state` (compteur groupé, malus, `testBlocked`, codes de statuts des tokens), `lines` (une par localisation + gravité : `cases`, `dueCases`, `queuedCases`, `answerable`,
+  `dueEcheanceIds`, `targetSeverity`, `kits { alternatives, defaultKits }`, `items` avec `step { n, total }`, `isLastStep`, `isFirstTest`), `infections` (`rollsNeeded`),
+  `orphans` (échéance sans blessure — montrée, jamais masquée : elle bloquerait « Confirmer » en silence), `kitTotals`. Joueurs (`characters.type = 'pj'`) d'abord, puis PNJ.
+  Une ligne = UN Test (RAW « Localisation par Localisation », `REGLEBLESSURES.md:386-392`) donc un seul jeu de kits, celui du Test le plus exigeant de ses cases échues.
+  Une échéance `active` déjà due (prochaine ronde, pas encore ouverte par « Confirmer ») est `answerable: false`. Forme du payload figée par test.
+- `POST .../game-echeances/healing-choices` (GM) — `{ choices: [{ echeanceId, mjChoice }], care? }` → `{ results: [{ echeanceId, resolved, stale?, error? }] }` ;
+  `POST .../game-echeances/infection-modes` (GM) — `{ choices: [{ echeanceId, mode: 'auto' | 'player' }] }` (`woundReviewBatchService.js`, routes minces).
+  1 à 200 entrées, pas de doublon, toutes de la campagne et du bon type sinon la demande entière est refusée (400/404, rien d'écrit). **Un savepoint par entrée** : le moteur
+  d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif (une blessure sans échéance vivante) ; ici l'entrée est ANNULÉE (l'échéance reste en attente,
+  `error: true`). Une échéance périmée ou pas encore ouverte est `stale` sans faire échouer le lot ; une erreur inattendue (SQL) annule TOUT le lot. Après validation :
+  `GAME_ECHEANCE_RESOLVED` pour chaque échéance résolue ET pour celles annulées pendant le lot (avec leur case), `WOUND_UPDATED` une fois par personnage touché.
+- **`care` (facultatif)** : `{ provider ∈ {none, character, npc, hospital, professional}, providerCharacterId?, providerName?, equipment ∈ {complete, partial, none} }` — validé (personnage de la campagne,
+  nom libre nettoyé et borné à 60 caractères), **non stocké**, raconté dans le chat : une ligne par personnage et par issue (`combat:woundCare.notice`). Absent = rien n'est déclaré, rien n'est raconté.
+- Non testé automatiquement : le **transport HTTP** (le dépôt n'a aucun harnais de test de routes) — routes minces, logique testée au niveau des services.
+
+**Kits de soin** (règle maison, décision de Saar 2026-09-25 — le RAW décrit First Aid / ChiriaT / Medi 1 000 comme un équipement à niveaux, jamais comme un consommable) :
+`WOUND_HEALING[gravité].kits = { first, following }` dans `shared/woundConstants.js` (listes d'ALTERNATIVES, chaque alternative = kits requis ensemble) : Moyenne et Grave premiers soins **ou**
+médecine ; Critique médecine ; Mortelle et Membre détruit chirurgie **+** médecine au premier Test (l'opération, `REGLEBLESSURES.md:374-375`) puis médecine seule (Test hebdomadaire de Médecine,
+`:391-392`). Un kit par Test et par ligne ; « premier Test » ⇔ `occurrences_remaining` = total (`getHealingTotalTests`) ; une nouvelle tentative est le dernier Test. Helpers purs :
+`getCareKits`, `defaultCareKits` (première alternative), `sumCareKits`. Un test compare cette table au texte d'Encyclopédie `DUREE_GUERISON_SOINS_TABLE.soinsNecessaires` (anti-dérive).
+**v1 = décompte affiché** ; la consommation réelle de l'inventaire (case « consommer les kits » cochée par le MJ, jamais automatique) est un plan séparé.
 
 **Événements** (`shared/events.js`) : `CAMPAIGN_ADVANCE_PENDING`/`_RESOLVED`/`_CANCELLED`,
 `GAME_ECHEANCE_RESOLVED`, `WOUND_INFECTION_ROLL` (client→serveur) ; `WOUND_UPDATED` réutilisé tel

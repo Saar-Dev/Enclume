@@ -6,6 +6,7 @@ import {
   isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
   getWoundHealing, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
   WOUND_CHANCE_STEP_COST, chanceCostOfStep, maxNormalChanceDegrees,
+  CARE_KIT_TYPES, SOINS_CONSTANTS_INTERVAL_MINUTES, getHealingTotalTests, isFirstHealingTest, getCareKits, defaultCareKits, sumCareKits,
 } from './woundConstants.js'
 
 test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
@@ -219,7 +220,10 @@ test('getWoundHealing - Légère : aucune guérison à suivre ; Mort (Tête/Corp
   assert.equal(getWoundHealing('mort_subite', 'tete'), null)
   assert.equal(getWoundHealing('mort_subite', 'corps'), null)
   for (const location of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) {
-    assert.deepEqual(getWoundHealing('mort_subite', location), { durationMinutes: 21 * 1440, soinsConstants: true }, location)
+    const healing = getWoundHealing('mort_subite', location)
+    assert.equal(healing, WOUND_HEALING.membreDetruit, location)
+    assert.equal(healing.durationMinutes, 21 * 1440, location)
+    assert.equal(healing.soinsConstants, true, location)
   }
   // Les autres gravités ne dépendent pas de la localisation (Mortelle : 5 semaines partout, Tête/Corps compris).
   for (const location of WOUND_LOCATIONS) {
@@ -255,4 +259,70 @@ test('chanceCostOfStep — 1 point par cran, 3 pour ramener la 6ᵉ ligne à une
 test('maxNormalChanceDegrees — 2 degrés « normaux » (RAW), un seul pour la 6ᵉ ligne', () => {
   for (const severity of ['grave', 'critique', 'mortelle']) assert.equal(maxNormalChanceDegrees(severity), 2, severity)
   assert.equal(maxNormalChanceDegrees('mort_subite'), 1)
+})
+
+// ─── Kits de soin (PLAN_REVUE_GUERISON.md §10) ──────────────────────────────────────────────────────────────────────────────────────────
+
+test('WOUND_HEALING.kits — la table décidée par Saar (Q6-Q10) : Moyenne/Grave premiers soins OU médecine, Critique médecine, Mortelle/Membre détruit chirurgie + médecine au 1er Test puis médecine', () => {
+  const premiersOuMedecine = [['premiersSoins'], ['medecine']]
+  assert.deepEqual(WOUND_HEALING.moyenne.kits, { first: premiersOuMedecine, following: premiersOuMedecine })
+  assert.deepEqual(WOUND_HEALING.grave.kits, { first: premiersOuMedecine, following: premiersOuMedecine })
+  assert.deepEqual(WOUND_HEALING.critique.kits, { first: [['medecine']], following: [['medecine']] })
+  assert.deepEqual(WOUND_HEALING.mortelle.kits, { first: [['chirurgie', 'medecine']], following: [['medecine']] })
+  assert.deepEqual(WOUND_HEALING.membreDetruit.kits, { first: [['chirurgie', 'medecine']], following: [['medecine']] })
+  // Les types de kit utilisés existent tous dans CARE_KIT_TYPES.
+  for (const healing of Object.values(WOUND_HEALING)) {
+    for (const kit of [...healing.kits.first, ...healing.kits.following].flat()) assert.ok(CARE_KIT_TYPES.includes(kit), kit)
+  }
+})
+
+test('WOUND_HEALING.kits — anti-dérive : dit la même chose que « Soins nécessaires » de DUREE_GUERISON_SOINS_TABLE (texte d\'Encyclopédie)', () => {
+  const kitsMentionedIn = (text) => new Set([
+    ...(/chirurgie/i.test(text) ? ['chirurgie'] : []),
+    ...(/m[ée]decine/i.test(text) ? ['medecine'] : []),
+    ...(/premiers soins/i.test(text) ? ['premiersSoins'] : []),
+  ])
+  for (const [key, healing] of Object.entries(WOUND_HEALING)) {
+    const text = DUREE_GUERISON_SOINS_TABLE[key].soinsNecessaires
+    assert.deepEqual(new Set(healing.kits.first.flat()), kitsMentionedIn(text), `${key} : kits du premier Test ⇔ « ${text} »`)
+    // « … ou … » ⇔ plusieurs alternatives ; « … + … » ⇔ une seule alternative à plusieurs kits.
+    if (/ ou /i.test(text)) assert.equal(healing.kits.first.length, 2, `${key} : « ou » = 2 alternatives`)
+    else assert.equal(healing.kits.first.length, 1, `${key} : une seule alternative`)
+    if (text.includes('+')) assert.equal(healing.kits.first[0].length, 2, `${key} : « + » = 2 kits ensemble`)
+  }
+  assert.equal(DUREE_GUERISON_SOINS_TABLE.legere.soinsNecessaires, 'Aucune') // Légère : aucune entrée `kits` (absente de WOUND_HEALING)
+  assert.equal(WOUND_HEALING.legere, undefined)
+})
+
+test('getHealingTotalTests / SOINS_CONSTANTS_INTERVAL_MINUTES — autorité unique du nombre de Tests hebdomadaires (Critique 3, Mortelle 5, Membre détruit 3)', () => {
+  assert.equal(SOINS_CONSTANTS_INTERVAL_MINUTES, 7 * 1440)
+  assert.equal(getHealingTotalTests('critique', 'corps'), 3)
+  assert.equal(getHealingTotalTests('mortelle', 'tete'), 5)
+  assert.equal(getHealingTotalTests('mort_subite', 'bras_droit'), 3)
+  assert.equal(getHealingTotalTests('moyenne', 'corps'), null, 'échéance unique')
+  assert.equal(getHealingTotalTests('grave', 'corps'), null)
+  assert.equal(getHealingTotalTests('legere', 'corps'), null)
+  assert.equal(getHealingTotalTests('mort_subite', 'tete'), null, 'Mort en Tête/Corps : ne guérit pas')
+})
+
+test('isFirstHealingTest / getCareKits — le premier Test d\'une blessure lourde mobilise la Chirurgie, pas les suivants ; Légère et Mort n\'ont aucun kit', () => {
+  assert.equal(isFirstHealingTest('mortelle', 'corps', 5), true)
+  assert.equal(isFirstHealingTest('mortelle', 'corps', 4), false)
+  assert.equal(isFirstHealingTest('mortelle', 'corps', 1), false, 'une nouvelle tentative est le dernier Test')
+  assert.equal(isFirstHealingTest('moyenne', 'corps', null), true, 'échéance unique : un seul rang')
+
+  assert.deepEqual(getCareKits('mortelle', 'corps', 5), [['chirurgie', 'medecine']])
+  assert.deepEqual(getCareKits('mortelle', 'corps', 4), [['medecine']])
+  assert.deepEqual(getCareKits('mort_subite', 'bras_droit', 3), [['chirurgie', 'medecine']])
+  assert.deepEqual(getCareKits('critique', 'corps', 1), [['medecine']])
+  assert.deepEqual(getCareKits('moyenne', 'corps', null), [['premiersSoins'], ['medecine']])
+  assert.equal(getCareKits('legere', 'corps', null), null)
+  assert.equal(getCareKits('mort_subite', 'corps', 1), null)
+})
+
+test('defaultCareKits / sumCareKits — première alternative par défaut ; décompte par type de kit', () => {
+  assert.deepEqual(defaultCareKits([['premiersSoins'], ['medecine']]), ['premiersSoins'])
+  assert.deepEqual(defaultCareKits(null), [])
+  assert.deepEqual(sumCareKits([]), { premiersSoins: 0, medecine: 0, chirurgie: 0 })
+  assert.deepEqual(sumCareKits([['premiersSoins'], ['chirurgie', 'medecine'], ['medecine']]), { premiersSoins: 1, medecine: 2, chirurgie: 1 })
 })

@@ -728,6 +728,26 @@
       "effect": "Le personnage trébuche ou tombe."
     }
   },
+  "woundCare": {
+    "notice": "{{label}} : $t(combat:woundCare.outcome.{{outcome}}) — soins : $t(combat:woundCare.provider.{{provider}}) ; matériel : $t(combat:woundCare.equipment.{{equipment}})",
+    "outcome": {
+      "amelioration": "Réussite ({{cases}} case(s) de blessure)",
+      "echec": "Échec ({{cases}} case(s) de blessure)",
+      "catastrophe": "Catastrophe ({{cases}} case(s) de blessure)"
+    },
+    "provider": {
+      "none": "aucun soignant",
+      "character": "{{providerName}}",
+      "npc": "{{providerName}} (PNJ)",
+      "hospital": "à l'hôpital",
+      "professional": "médecin professionnel"
+    },
+    "equipment": {
+      "complete": "complet",
+      "partial": "partiel",
+      "none": "aucun"
+    }
+  },
   "chance": {
     "choiceCard": {
       "gainPointButton": "Gagner 1 point de Chance",

@@ -2,8 +2,8 @@
 
 > 2026-09-25 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et fusionné dans
 > `docs/SYSTEME/BLESSURES.md` §« Guérison et Infection » une fois clos.
-> Statut : 🟡 **Cadré, analyse à charge faite (§9), toutes les questions tranchées (Q1-Q10). Bug n°1 commité (`3839638`), fantômes nettoyés en base. LOT 0 CODÉ, VALIDÉ EN JEU PAR SAAR ET COMMITÉ le 2026-09-25** : `woundUtils.js` unique suppresseur + annulation des échéances, Test suivant en une seule fonction — 135/135 tests ciblés. Reste : Lot 1 (vue serveur groupée par
-> personnage, route groupée, kits dans `WOUND_HEALING`), Lot 2 (écran), Lot 3 (chat).
+> Statut : 🟡 **Cadré, analyse à charge faite (§9), toutes les questions tranchées (Q1-Q10). Bug n°1 commité (`3839638`), fantômes nettoyés en base. LOT 0 CODÉ, VALIDÉ EN JEU PAR SAAR ET COMMITÉ le 2026-09-25** : `woundUtils.js` unique suppresseur + annulation des échéances, Test suivant en une seule fonction — 135/135 tests ciblés. Analyse à charge du plan complet faite (§11) : Lot 3 supprimé, Lot 2 scindé. **LOT 1 CODÉ le 2026-09-25 (non commité, en attente du « ok » de Saar)** : 154 tests en base + 819 purs. Reste : ~~Lot 1~~ (serveur : kits dans `WOUND_HEALING`, vue groupée par
+> personnage, routes groupées guérison + infection, contexte de soins raconté dans le chat), **Lot 2a** (écran : cartes et gestes), **Lot 2b** (silhouette, kits, soignant).
 > Un seul problème (Règle « un plan = un bug ») : l'écran de revue MJ (`client/src/components/BlessuresReviewPanel.jsx`) ne permet pas de
 > décider — il affiche des lignes sans blessure, répète les mêmes questions, et n'offre pas les réponses dont le MJ a besoin.
 > Hiérarchie : Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`) > `SYSTEME/BLESSURES.md` > ce plan. Conception d'origine (archivée) :
@@ -130,8 +130,9 @@ Une **carte par personnage** :
 |---|---|---|---|
 | **0 — Fond** | **Voir §9 (analyse à charge)** : `woundUtils.js` devient aussi l'**unique suppresseur** de lignes (4 sites : promotion, amélioration, `removeWound`, `/heal`) et annule leurs échéances (guérison ET infection), avec entrées d'annulation d'avance de temps ; nettoyage des fantômes existants par un script versionné **lancé par Saar** ; **une seule fonction calcule le Test suivant** : un Échec ou une Catastrophe ne termine plus jamais l'échéance (§6, Q2/Q2b) — traite `WOUND-HEAL-ONESHOT-STUCK` | `woundUtils.js`, `woundService.js`, `woundEvolutionService.js`, `woundHealingSchedule.js`, script | tests en base ciblés (une suppression retire son échéance, annulable ; `/heal` ne laisse rien ; échecs répétés reprogramment, dernière occurrence comprise) ; base : plus aucune échéance sans blessure |
 | **1 — Vue serveur** | `getPendingReviewForGm` renvoie les cartes par personnage : état, cases par ligne, étape n/N, gravité d'arrivée ; contrat de payload stable ; **route groupée** (un personnage, une issue, les échéances visées) en une transaction ; **kits** ajoutés à `WOUND_HEALING` (`shared/`) et décompte calculé côté serveur | `woundReviewService.js`, `campaigns.js`, `shared/woundConstants.js` | tests du service et de la route groupée (atomicité, refus d'une échéance d'une autre campagne, échec isolé d'une échéance) ; forme du payload figée par test |
-| **2 — Client** | Refonte de `BlessuresReviewPanel` : carte par personnage, conditions de soins, soignant, geste par défaut (issue pour tout le personnage) + « blessure par blessure » ; retrait de `soinsContinues` ; CSS + i18n | `BlessuresReviewPanel.jsx` (+ sous-composants), locales, CSS | ESLint, build client, test en jeu de Saar |
-| **3 — (si décidé, Q4)** | Le contexte de soins choisi est fusionné au payload de l'échéance et raconté dans le chat (« Soigné par un médecin professionnel… ») | `campaigns.js`, `woundEvolutionService.js`, locales | ligne de chat par branche, sans contradiction |
+| **2a — Client : cartes et gestes** *(révisé §11)* | Refonte de `BlessuresReviewPanel` : une carte par personnage, état en texte, lignes claires, geste par défaut (issue pour toute la carte) + « blessure par blessure », bloc PNJ replié, refus de « Confirmer » **affichés** ; retrait de `soinsContinues` ; suppression de l'ancienne route, de l'ancienne fonction et de l'ancien composant ; CSS + i18n | `BlessuresReviewPanel.jsx` (+ sous-composants), locales, CSS, `woundReviewService.js`, `campaigns.js` | ESLint, build client, test en jeu de Saar |
+| **2b — Client : silhouette, kits, soignant** *(révisé §11)* | Silhouette colorée par gravité (zones échues en évidence), décompte des kits (choix « premiers soins OU médecine »), soignant (personne / personnage / PNJ / hôpital / médecin professionnel) et matériel **réellement envoyés** au serveur (`care`, Lot 1) | sous-composants, locales, CSS | ESLint, build client, test en jeu de Saar |
+| ~~3~~ | *Supprimé (§11 B1) : la ligne de chat des conditions de soins est livrée par le Lot 1 (serveur) et le Lot 2b (écran), pas après.* | — | — |
 
 **Attention à l'état de la base de Saar** : une avance de 1 semaine est en attente avec 97 lignes. Avant le nettoyage du Lot 0, il faut l'**annuler** (bouton « Annuler » de l'écran) ou la confirmer ; le script ne
 doit jamais modifier une avance en cours.
@@ -153,7 +154,7 @@ doit jamais modifier une avance en cours.
   Critique/Mortelle/Membre détruit : à la semaine suivante (rythme des « soins constants »). La case « continue d'être soigné » disparaît.
 - **Q2b — Après un soin loupé à la dernière semaine d'une Critique / Mortelle / Membre détruit : ✅ TRANCHÉ par Saar (2026-09-25) : nouveau Test la semaine suivante** (interprétation, le RAW est muet sur ce délai).
 - **Q3 — Le soignant est-il informatif ?** *Recommandation* : oui (le MJ tranche, comme décidé le 2026-07-29), avec les choix « personne / personnage / PNJ / hôpital / médecin professionnel ».
-- **Q4 — Le contexte de soins doit-il laisser une trace (chat) ?** *Recommandation* : oui, une ligne de chat par choix (règle « le chat raconte toute décision »), en Lot 3, après l'écran.
+- **Q4 — Le contexte de soins doit-il laisser une trace (chat) ?** *Recommandation* : oui, une ligne de chat par choix (règle « le chat raconte toute décision »), livrée par le Lot 1 (serveur) et le Lot 2b (écran) — pas de Lot 3 (§11 B1).
 - **Q5 — Que veux-tu voir de l'état du personnage d'un coup d'œil ?** *Proposition* : la **silhouette** (zones colorées par gravité) + pastilles du compteur, statuts actifs, malus de blessure ; en option : Constitution (utile aux Tests d'Infection) et Médecine/Chirurgie du soignant si c'est un personnage.
 - **Q6 — Kits : ✅ TRANCHÉ par Saar (2026-09-25)** : le décompte est **affiché** (v1, dans ce plan) ; et **même en version finale** la consommation réelle n'est **jamais automatique** : le MJ **coche « consommer les kits »**.
   La v2 (décrémenter `char_inventory.quantity` du soignant quand la case est cochée) est un **plan séparé** (ROADMAP) : inventaire de qui (un PNJ ou un hôpital n'a pas d'inventaire), substitution entre niveaux (un medkit couvre-t-il un kit de
@@ -163,7 +164,7 @@ doit jamais modifier une avance en cours.
 - **Q8 — Unité du décompte : ✅ TRANCHÉ : par Test** (chaque semaine d'une Critique « soins constants » consomme). Lecture retenue : le RAW soigne « Localisation par Localisation » (`:386-392`), donc **un Test = une ligne du compteur** ; les cases d'une même ligne
   échues à la même ronde comptent pour un seul kit. Voir §9, Q10 pour Chirurgie.
 - **Q9 — PNJ : ✅ TRANCHÉ (oui)** : tous affichés, PNJ repliés (§4).
-- **Q3, Q4, Q5 — retenus par défaut (Saar n'a pas objecté)** : soignant informatif ; une ligne de chat par choix (Lot 3) ; état = silhouette + pastilles + statuts + malus. Réversible à la validation visuelle du Lot 2.
+- **Q3, Q4, Q5 — retenus par défaut (Saar n'a pas objecté)** : soignant informatif ; une ligne de chat par choix (Lots 1 et 2b) ; état = silhouette + pastilles + statuts + malus. Réversible à la validation visuelle du Lot 2.
 
 ## 7. Hors périmètre
 
@@ -194,3 +195,75 @@ Relecture critique du plan contre le code réel. Chaque point : ce que le plan d
 *(Question posée :)* Chirurgie (règle de jeu) : pour Mortelle et Membre détruit, le kit de **chirurgie** est-il consommé **une seule fois** (au premier Test, l'opération) et le kit de **médecine** à **chaque** Test hebdomadaire ? *Recommandation* : oui ; une nouvelle tentative après un échec reprend les kits du Test échoué.
 
 **Verdict** : le plan tient, à condition des corrections A1, A2, A4, A6 (intégrées aux Lots 0-1) et de la réponse à Q10. Aucun code avant validation de Saar.
+
+## 10. Lot 1 — plan exact (2026-09-25, avant code)
+
+**Invariant** : le serveur construit la vue et applique les décisions ; le client n'invente aucune règle. **Un seul problème** : donner au MJ, côté serveur, une vue groupée par personnage et un geste groupé.
+
+**Coexistence temporaire, écrite ici pour ne pas devenir un legacy** : le Lot 1 AJOUTE deux routes ; l'écran actuel (`GET pending-review`, `POST healing-choice`) continue de fonctionner tel quel. Le **Lot 2** migre l'écran puis **supprime** l'ancienne route, l'ancienne fonction
+(`getPendingReviewForGm`) et l'ancien composant — jamais deux moteurs à la clôture du chantier.
+
+**Fichiers** : `shared/woundConstants.js` (+ test pur), `server/src/lib/woundReviewService.js` (+ test), `server/src/routes/campaigns.js`, `docs/SYSTEME/BLESSURES.md`, `docs/JOURNAL8.md`. Aucune migration.
+
+**1. Kits dans `WOUND_HEALING` (`shared/`)** — une seule autorité, à côté de la durée. Chaque gravité qui guérit porte `kits: { first, following }` ; chaque liste = des **alternatives**, chaque alternative = les kits requis **ensemble** (Q10) :
+
+| Gravité | Premier Test (`first`) | Tests suivants (`following`) |
+|---|---|---|
+| Moyenne, Grave | [premiersSoins] **ou** [medecine] | idem |
+| Critique | [medecine] | [medecine] |
+| Mortelle, Membre détruit | [chirurgie + medecine] | [medecine] |
+
+Helpers purs : `getCareKits(severity, location, isFirstTest)` (via `getWoundHealing`, donc jamais de kit pour une Légère ni une Mort) et `sumKits(...)`. « Premier Test » ⇔ `occurrences_remaining === total` (total = durée ÷ 1 semaine) ; une nouvelle tentative reprend les kits du Test échoué
+(elle a `occurrences_remaining = 1` : c'est le dernier Test, ses kits sont ceux de « suivants »). Par défaut, pour « premiers soins OU médecine », le décompte prend la **première alternative** (premiers soins, la moins chère) ; le MJ pourra choisir l'autre au Lot 2.
+
+**2. `GET /api/campaigns/:id/game-echeances/review`** (MJ) → `{ cards: [...] }`, une carte par personnage ayant au moins une échéance de guérison ou d'infection à traiter (mêmes statuts que l'écran actuel) :
+`{ characterId, name, isPlayer, state: { wounds: [{ location, severity, cases }], woundPenalty, statuses: [code] }, lines: [{ key, location, severity, cases, dueCases, answerable, dueEcheanceIds, step: { n, total } | null, isLastStep, targetSeverity | null, kits: { alternatives, defaultKits } }], infections: [{ echeanceId, location, severity, rollsNeeded, status }], kitTotals }`.
+- **Ligne** = une (localisation, gravité) : « Localisation par Localisation » (`REGLEBLESSURES.md:386-392`) ; `cases` = nombre de cases de cette ligne sur la fiche ; `dueEcheanceIds` = les échéances échues de ses cases ; un Test = une ligne, donc **un seul jeu de kits par ligne** (le plus exigeant de ses cases : premier Test si l'une l'est).
+- `step` : « semaine n/total » pour une échéance récurrente, `null` pour une échéance unique ; `isLastStep` + `targetSeverity` (`improvedSeverity`) disent ce que fait « Réussite » (passe à X, ou continue).
+- `state` : compteur groupé, malus de blessure (`calcWoundPenalty`), codes des statuts actifs sur les tokens du personnage dans la campagne (`resolveCharacterTokens` + `token_statuses`), sans les déchiffrer (le client les affiche par le registre `shared/tokenStatusRegistry.js`).
+- Ordre : joueurs (`characters.type = 'pj'`) d'abord, puis PNJ ; par nom. `isPlayer` sert au bloc PNJ replié du Lot 2. `kitTotals` = somme des `defaultKits`.
+- `rollsNeeded` d'une infection = `occurrences_remaining ?? 1`.
+
+**3. `POST /api/campaigns/:id/game-echeances/healing-choices`** (MJ) — corps `{ choices: [{ echeanceId, mjChoice }], care }` (1 à 200 entrées, `mjChoice ∈ {amelioration, echec, catastrophe}`, pas de doublon d'échéance, `soinsContinues` n'existe plus) :
+- **`care`** (§11 B1, P5 ; **facultatif** : absent = rien n'est déclaré ni raconté — le Lot 2a n'en envoie pas, le Lot 2b l'envoie toujours) : `{ provider ∈ {none, character, npc, hospital, professional}, providerCharacterId?, providerName?, equipment ∈ {complete, partial, none} }`, **validé** par le serveur (personnage de la campagne, nom nettoyé) et **raconté** : une ligne de chat par personnage concerné (`emitSystemNotice`, clés i18n `combat:woundCare.notice.*`, ajoutées aux locales au Lot 1). Non stocké en v1 : le chat est la trace.
+- **Un savepoint par entrée** (§11 B2) : fusion atomique du payload (`payload || ?::jsonb`, jamais lire-puis-écrire) puis `resolveEcheanceNow`. Si le moteur signale une **erreur de handler**, l'entrée est **annulée** (l'échéance reste en attente, jamais passée en `error` définitif) et rapportée. Le geste « toute la carte » = le client envoie toutes les échéances de la carte avec la même issue ; « blessure par blessure » = une ou plusieurs entrées : **un seul contrat**. Les entrées peuvent couvrir plusieurs personnages (geste « tous les PNJ »).
+- Chaque échéance est vérifiée : de cette campagne, de type guérison, **répondable** (`pending_mj_review` / `awaiting_player_roll`). Une échéance périmée (déjà résolue, annulée entre-temps) ou pas encore ouverte (`active`, prochaine ronde) ne fait **pas** échouer le lot : `stale`.
+- Réponse : `{ results: [{ echeanceId, resolved, stale?, error? }] }` — le client ne retire que les lignes réellement résolues.
+- **Après validation** : `GAME_ECHEANCE_RESOLVED` pour chaque échéance résolue ET pour chaque échéance de la campagne passée à `cancelled` pendant le lot (règle la limite notée au Lot 0) ; `WOUND_UPDATED` une fois par personnage touché ; la ligne de chat du `care`.
+- Prévu pour recevoir plus tard `consumeKits` et le choix d'alternative (Q6, v2) ; **non livrés** en v1.
+
+**4. `POST /api/campaigns/:id/game-echeances/infection-modes`** (MJ) (§11 B4) — corps `{ choices: [{ echeanceId, mode ∈ {auto, player} }] }` ; même machinerie que le point 3 (validation, savepoint par entrée, résultat par échéance, diffusions). `auto` calcule le seuil et lance le jet serveur (`computeWoundInfectionThreshold` + `resolvePolarisTest`, comme la route unitaire actuelle, qui disparaît au Lot 2a) ; `player` bascule en `awaiting_player_roll`.
+
+**Vue construite en requêtes groupées** (P3) : pas de requête par personnage (`whereIn` sur personnages, blessures, tokens, statuts). **Vue** : chaque ligne porte aussi `dueCases` (cases échues sur `cases`, P1) et `answerable` (P2).
+
+**Hors périmètre du Lot 1** : le client (Lots 2a et 2b), la consommation des kits (v2), le nombre d'échéances PNJ.
+
+**Tests** : pur (`shared/`) — table des kits, `getCareKits`, `sumKits`, aucune ligne pour Légère/Mort, **cohérence avec `DUREE_GUERISON_SOINS_TABLE`** (P4) ; service (base réelle, fixture nettoyée) — regroupement par personnage et par ligne, cases d'une même ligne = un seul jeu de kits, `dueCases` < `cases`, premier Test vs suivants, semaine n/total, PJ avant PNJ, statuts et malus, exclusion des campagnes étrangères, `answerable` faux pour une échéance `active` ; résolution groupée — issue commune à plusieurs échéances, mélange d'issues, plusieurs personnages, **erreur de handler annulée sans tuer l'échéance**, échéance périmée signalée sans faire échouer le lot, échéance d'une autre campagne refusée, `care` invalide refusé, ligne de chat émise, `WOUND_UPDATED` et `GAME_ECHEANCE_RESOLVED` émis (dont pour une annulée pendant le lot) ; infection groupée idem. Forme des payloads **figée par des tests**. **Limite** (P6) : aucun harnais de test de routes dans le dépôt — routes minces, transport HTTP non testé automatiquement, validé par Saar au Lot 2a.
+
+**Validation** : tests ciblés en base ; pas de test en jeu (aucune interface) — Saar valide au Lot 2a. Commit après ses « ok » sur le code livré.
+
+## 11. Analyse à charge du plan complet (2026-09-25, à la demande de Saar — le §9 précède ses décisions et ne couvrait pas le §10)
+
+Relecture critique des Lots 1 à 3 contre le code réel. **Bloquants** (changent le plan) : B1-B4. **Précisions** (à intégrer au code) : P1-P8.
+
+| # | Le plan disait | La réalité [preuve] | Correction retenue |
+|---|---|---|---|
+| **B1** | Lot 2 : le soignant et le matériel sont demandés à l'écran ; Lot 3 (plus tard) : le serveur les reçoit et les raconte dans le chat. | Entre les deux lots, ces contrôles seraient **décoratifs** — exactement le défaut que Saar a condamné (« les cases ne servent à rien », §2 C2). | Le contrat de la route groupée (Lot 1) porte dès le départ `care: { provider, providerCharacterId?, providerName?, equipment }` ; le serveur le **valide** et **raconte** une ligne de chat par personnage (`emitSystemNotice`, clés i18n, jamais de texte figé). Le Lot 3 disparaît ; l'écran qui envoie `care` est le Lot 2b. Le Lot 2a ne contient **aucun** contrôle de soignant. |
+| **B2** | Route groupée : « une transaction ». | Un **échec de handler** est avalé par le moteur : `resolveEcheanceHandler` passe l'échéance en `error` **définitivement** [VÉRIFIÉ, lecture `echeanceService.js`] — une blessure sans échéance vivante, en silence : l'invariant du Lot 0 rompu. La route actuelle l'ignore et diffuse quand même « résolue ». Un lot « une seule transaction » avec une exception JS fait aussi tout annuler. | **Un savepoint par entrée** ; si le moteur signale `error`, l'entrée est **annulée** (l'échéance reste en attente, le MJ peut recommencer) et **rapportée** (`error: true`) ; une échéance périmée est signalée `stale`. Le lot est atomique pour la **cohérence de la base**, pas « tout ou rien » métier. |
+| **B3** | Lot 2 : l'écran refait règle le sentiment de blocage. | Le client actuel affiche **en silence** (console seulement) les refus du serveur, dont le plus courant : « Confirmer » refusé (409) tant qu'une ligne n'a pas de réponse, ou parce que de **nouvelles échéances** sont nées de la revue (un Échec fait naître une infection déjà due : `confirmPendingAdvance` les rouvre en revue et le MJ doit **recliquer** — la « ronde ») [VÉRIFIÉ, `BlessuresReviewPanel.jsx:59-66`, `campaigns.js:351-376`]. Un MJ qui clique « Confirmer » et ne voit rien est « bloqué ». Avec un geste par personnage, une ronde coûte un clic, mais il faut que l'écran l'**explique**. | Lot 2a : le refus de « Confirmer » s'**affiche** dans le panneau (« il reste N lignes », « de nouvelles échéances sont apparues : ronde 2 ») ; `confirm` reste actif ; les PNJ repliés affichent leur **nombre restant** (un PNJ replié oublié bloque la confirmation). |
+| **B4** | Un geste groupé pour les guérisons seulement ; l'Infection « décrite, résolue une par une ». | Un Échec sur plusieurs blessures fait naître **une infection par blessure** : le MJ redevient obligé de cliquer ligne par ligne — le problème d'origine, déplacé. | Le Lot 1 ajoute **`POST …/infection-modes`** (`{ choices: [{ echeanceId, mode }] }`), même machinerie que les guérisons (validation, savepoint par entrée, résultat par échéance, diffusions). |
+
+| # | Précision à intégrer |
+|---|---|
+| **P1** | **Cases échues ≠ cases de la ligne** : une ligne de 3 cases n'a peut-être qu'**une** case échue (dates de naissance différentes). La vue porte `cases` **et** `dueCases` ; l'écran dit « 1 case échue sur 3 ». |
+| **P2** | **Lignes non répondables** : `getPendingReviewForGm` inclut des échéances `active` déjà dues (pas encore ouvertes par « Confirmer ») ; `resolveEcheanceNow` les refuse (409). La vue les marque `answerable: false` (« prochaine ronde ») ; la route les renvoie `stale`, sans erreur. |
+| **P3** | **Pas de N+1** : la vue se construit en requêtes groupées (`whereIn` sur les personnages, les blessures, les tokens), pas une requête par personnage. |
+| **P4** | **Test d'anti-dérive des kits** : `DUREE_GUERISON_SOINS_TABLE.soinsNecessaires` (texte d'Encyclopédie) et `WOUND_HEALING.kits` disent la même chose en deux formats (« représentation parallèle assumée ») ; un test de cohérence (« Médecine ou Premiers soins » ⇔ les deux alternatives, « Chirurgie + Médecine » ⇔ les deux kits au premier Test) évite qu'ils divergent en silence. |
+| **P5** | **Contrat `care` validé** : `provider ∈ {none, character, npc, hospital, professional}` ; `providerCharacterId` doit être un personnage de la campagne ; `providerName` (PNJ) : texte nettoyé, 60 caractères, sans saut de ligne ; `equipment ∈ {complete, partial, none}`. La ligne de chat passe le nom en paramètre (le client échappe). Non stocké en v1 : le chat est la trace (Q4). La v2 (Q6, consommation) s'appuiera sur `providerCharacterId` et ajoutera `consumeKits` et le choix d'alternative. |
+| **P6** | **Transport HTTP non testable ici** : le dépôt n'a aucun harnais de test de routes (ni `supertest`, ni serveur Express de test). Les routes restent **minces** (validation + appel de service) ; la logique est testée au niveau du service ; le transport réel est validé par Saar au Lot 2a. À écrire dans la clôture : « transport HTTP non testé automatiquement ». |
+| **P7** | **Sécurité** : les deux routes exigent `requireRole('gm')` ; chaque échéance est vérifiée contre la campagne ; 1 à 200 entrées ; doublons refusés. |
+| **P8** | **Lot 2 trop gros** pour un tour (composant, CSS, i18n, silhouette, kits, soignant, suppression de l'ancien) : **scindé** en 2a (cartes et gestes, sans contrôle décoratif) et 2b (silhouette, kits, soignant). |
+
+**Le §10 est corrigé en conséquence** (contrat `care`, `dueCases`, `answerable`, savepoint par entrée, route d'infection groupée, requêtes groupées, test d'anti-dérive, limite de test HTTP). Lots restants : **1** (serveur) → **2a** → **2b**.
+
+**Verdict** : le plan tient, à condition de B1-B4 ; sans B1, le Lot 2 aurait livré des cases décoratives ; sans B2, un bug de handler tuerait une guérison en silence ; sans B3, le sentiment de blocage aurait survécu à la refonte. Aucun code avant validation de Saar.

@@ -13,7 +13,8 @@ import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
-import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { getPendingReviewForGm, getReviewCardsForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { resolveHealingChoices, resolveInfectionModes } from '../lib/woundReviewBatchService.js'
 import { getRepairRequestsForGm, getRepairRollsForPlayer, getRepairSkillOptions } from '../lib/equipmentRepairReviewService.js'
 import * as inventoryService from '../services/inventoryService.js'
 import { resolveFall } from '../lib/fallDamageService.js'
@@ -393,6 +394,24 @@ router.post('/:id/game-time/cancel-advance', requireAuth, requireRole('gm'), asy
 router.get('/:id/game-echeances/pending-review', requireAuth, requireRole('gm'), async (req, res) => {
   const echeances = await getPendingReviewForGm(req.params.id)
   res.json({ echeances })
+})
+
+// GET /api/campaigns/:id/game-echeances/review — GM uniquement. Vue GROUPÉE par personnage de l'écran de revue (PLAN_REVUE_GUERISON.md §10) :
+// état, lignes du compteur, kits, infections. Remplace `pending-review` au Lot 2a (l'ancienne route disparaît avec son écran).
+router.get('/:id/game-echeances/review', requireAuth, requireRole('gm'), async (req, res) => {
+  res.json(await getReviewCardsForGm(req.params.id))
+})
+
+// POST /api/campaigns/:id/game-echeances/healing-choices — GM uniquement. body { choices: [{ echeanceId, mjChoice }], care? } : réponse GROUPÉE
+// (un personnage entier, plusieurs, ou une seule blessure). Réponse { results: [{ echeanceId, resolved, stale?, error? }] }. Toute la logique
+// (validation, savepoint par entrée, diffusions, ligne de chat) vit dans woundReviewBatchService.js.
+router.post('/:id/game-echeances/healing-choices', requireAuth, requireRole('gm'), async (req, res) => {
+  res.json(await resolveHealingChoices(req.app.get('io'), req.params.id, { choices: req.body?.choices, care: req.body?.care }))
+})
+
+// POST /api/campaigns/:id/game-echeances/infection-modes — GM uniquement. body { choices: [{ echeanceId, mode: 'auto' | 'player' }] }.
+router.post('/:id/game-echeances/infection-modes', requireAuth, requireRole('gm'), async (req, res) => {
+  res.json(await resolveInfectionModes(req.app.get('io'), req.params.id, { choices: req.body?.choices }))
 })
 
 // GET /api/campaigns/:id/game-echeances/repair-requests — GM uniquement. Boîte de réception des
