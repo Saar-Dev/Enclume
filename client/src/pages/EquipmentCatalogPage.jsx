@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
@@ -94,11 +95,11 @@ export default function EquipmentCatalogPage() {
   }, [items, family])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const matchesQuery = createSearchMatcher(search)
     return items.filter(i =>
       (!family || i.family === family) &&
       (!category || i.category === category) &&
-      (!q || i.name.toLowerCase().includes(q))
+      matchesQuery(i.name)
     )
   }, [items, search, family, category])
 

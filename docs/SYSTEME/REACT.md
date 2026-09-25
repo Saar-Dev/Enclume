@@ -4,7 +4,7 @@
 > vérifié `SessionPage.jsx`) ; prop Canvas3D `onTokenRotate` corrigée en `onTokenSetRotation`, liste
 > de props complétée ; table des handlers Échap complétée (5 réels, 3 documentés). `justSelectedRef`,
 > P40/P50/P57 reconfirmés exacts.
-> Mis à jour 2026-09-25 : masquage des fenêtres d'Annonce pendant une sélection carte (`useDeclareWindowHiding`).
+> Mis à jour 2026-09-25 : masquage des fenêtres d'Annonce (`useDeclareWindowHiding`) ; module de recherche unique (`shared/textSearch.js`).
 > Source : SYSTEME.md §11–§14
 > Lire pour : tout useCallback/useEffect/useRef, lock éditeur, ordre déclaration React
 
@@ -255,6 +255,17 @@ false`. Curseur et Échap restent basés sur `active` seul, indépendants de ce 
 
 Handlers Échap **hors** de `aimModes`, non touchés par ce patron (portée différente) : Échap
 `selectedTokenId` (désélection, patron RTS) et Échap `freeCameraOverride` (caméra).
+
+## Recherche de texte — module unique `shared/textSearch.js`
+Toute recherche saisie par un utilisateur (catalogues, inventaire, cartes, joueurs, palette d'objets,
+suggestions de compétence) passe par `createSearchMatcher(requête)` (liste filtrée : la requête est
+normalisée une seule fois) ou `matchesSearch(requête, ...champs)` (test isolé) — jamais un
+`toLowerCase().includes(q)` local. Tolérant à la casse, aux accents, aux ligatures (œ → oe, æ → ae), aux
+apostrophes typographiques et aux tirets / espaces multiples ; tous les mots de la requête doivent être
+présents, dans n'importe quel ordre. `foldForSearch(texte)` = la normalisation complète (comparaison
+exacte tolérante, ex. `/t` côté serveur) ; `foldAccents(texte)` = minuscules sans accents, ponctuation
+inchangée (classification d'un libellé technique, jamais une recherche). Pas de recherche floue (fautes de
+frappe). Test : `shared/textSearch.test.mjs`.
 
 ## P60 — `flexShrink: 0` obligatoire sur un enfant `overflow != visible` dans un flex-column scrollable
 ```javascript

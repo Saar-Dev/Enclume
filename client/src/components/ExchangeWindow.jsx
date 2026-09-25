@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 import api from '../lib/api'
 import { useDraggable } from '../lib/useDraggable.js'
 
@@ -300,13 +301,14 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
                     }}
                   />
                   {showSuggestions && (() => {
+                    const matchesName = createSearchMatcher(searchText)
                     const suggestions = characters
                       .filter(c => c.id !== effectiveCharId
                                && (c.type !== 'drone' || c.user_id === myUserId)
                                // TRADE2 : le MJ (agissant en PNJ) ne peut cibler qu'un PJ (ou son
                                // drone, déjà filtré ci-dessus) — jamais un autre PNJ.
                                && (!isGm || c.type !== 'pnj')
-                               && c.name.toLowerCase().includes(searchText.toLowerCase()))
+                               && matchesName(c.name))
                       .slice(0, 3)
                     return suggestions.length > 0 ? (
                       <div style={S.suggestions}>

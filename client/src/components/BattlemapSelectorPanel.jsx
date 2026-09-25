@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 import { useTranslation } from 'react-i18next'
 
 // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — sélecteur de cartes façon Roll20 : arbre de dossiers à
@@ -63,14 +64,14 @@ export default function BattlemapSelectorPanel({
 
   if (!isOpen) return null
 
-  const searchTerm = search.trim().toLowerCase()
+  const matchesSearchTerm = createSearchMatcher(search)
   const childFolders = folders
     .filter(f => (f.parent_folder_id || null) === currentFolderId)
-    .filter(f => !searchTerm || f.name.toLowerCase().includes(searchTerm))
+    .filter(f => matchesSearchTerm(f.name))
     .sort((a, b) => a.name.localeCompare(b.name))
   const childMaps = battlemaps
     .filter(bm => (bm.folder_id || null) === currentFolderId)
-    .filter(bm => !searchTerm || bm.name.toLowerCase().includes(searchTerm))
+    .filter(bm => matchesSearchTerm(bm.name))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (

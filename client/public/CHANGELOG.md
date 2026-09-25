@@ -1,3 +1,11 @@
+## v254 — 2026-09-25 — Recherche plus tolérante
+
+### Interface
+- [fix] Les champs de recherche (inventaire, catalogue d'équipement, cartes, joueurs, échanges, éditeur de monde, commande /t du chat)
+  ne tiennent plus compte des accents ni de la casse : « epee » trouve « Épée ». Les ligatures (« coeur » trouve « Cœur »), les apostrophes
+  typographiques et les tirets sont aussi acceptés, et les mots peuvent être tapés dans n'importe quel ordre (« pompe fusil » trouve
+  « Fusil à pompe »).
+
 ## v253 — 2026-09-25 — Les fenêtres d'action se masquent pendant le choix d'un déplacement ou d'une cible
 
 ### Combat

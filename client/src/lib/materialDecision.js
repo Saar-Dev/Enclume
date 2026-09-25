@@ -6,6 +6,7 @@ import {
   makeProceduralMaterialDescriptor,
 } from './proceduralMaterials.js'
 import { hashString } from './surfaceUtils.js'
+import { foldAccents } from '../../../shared/textSearch.js'
 
 // ----- Constantes importées de surfaceData.js -----
 const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
@@ -87,7 +88,7 @@ export function pickTextureVariant(baseTexId, availableBlocks, seed, autoVariant
 
 function isStationFloorPackage(block) {
   const packName = String(block?.pack_name || '').toLowerCase()
-  const packLabel = String(block?.pack_label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const packLabel = foldAccents(block?.pack_label)
   return packName === 'sol-station-use' || packLabel.includes('sol station')
 }
 
@@ -95,18 +96,18 @@ function usesSparseSpecialVariants(pool) {
   if (!pool?.length) return false
   if (String(pool[0]?.pack_id) === STATION_USED_PACK_ID || isStationFloorPackage(pool[0])) return true
 
-  const category = String(pool[0]?.category_label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const category = foldAccents(pool[0]?.category_label)
   const hasPrimary = pool.some(block => Number(block.sort_order) === 0)
   const hasSpecials = pool.length > 1
-  const hasTrame = pool.some(block => String(block.label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('trame'))
+  const hasTrame = pool.some(block => foldAccents(block.label).includes('trame'))
   return category === 'sol' && hasPrimary && hasSpecials && hasTrame
 }
 
 function textureVariantWeight(block) {
   const explicit = Math.max(1, Number.parseInt(block?.variant_weight, 10) || 1)
   const packName = String(block?.pack_name || '').toLowerCase()
-  const packLabel = String(block?.pack_label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  const label = String(block?.label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const packLabel = foldAccents(block?.pack_label)
+  const label = foldAccents(block?.label)
 
   if (packName === 'sol-station-use' || packLabel.includes('sol station')) {
     if (label.includes('trame') || Number(block?.sort_order) === 0) return Math.max(explicit, 33)

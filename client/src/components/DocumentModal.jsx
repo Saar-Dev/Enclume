@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import Quill from 'quill'
@@ -324,9 +325,8 @@ function PermissionSelect({ label, value, onChange, players, labelNobody, labelA
     onChange(next.length === 0 ? 'none' : next)
   }
 
-  const filtered = search.trim()
-    ? players.filter(p => p.username.toLowerCase().includes(search.toLowerCase()))
-    : players
+  const matchesUsername = createSearchMatcher(search)
+  const filtered = players.filter(p => matchesUsername(p.username))
 
   return (
     <div style={pc.field}>

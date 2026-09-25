@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createSearchMatcher, foldAccents } from '../../../shared/textSearch.js'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useEntityStore } from '../stores/entityStore'
@@ -148,13 +149,13 @@ export default function SurfaceEditorPanel({
       [surfaceMaterialFace]: { ...surfaceMaterialState, ...patch },
     },
   })
-  const normalizedBlueprintText = (blueprint) => [
+  const normalizedBlueprintText = (blueprint) => foldAccents([
     blueprint?.label,
     blueprint?.name,
     blueprint?.category,
     blueprint?.builtin_key,
     blueprint?.glb_url,
-  ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
+  ].filter(Boolean).join(' '))
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
@@ -1032,11 +1033,11 @@ surfaceMaterialMode: 'texture',
 
       {/* ── Onglet Entités — palette blueprints ── */}
       {activeEditorTab === 'entity' && (() => {
-        const query = objectSearch.trim().toLocaleLowerCase()
+        const matchesObjectQuery = createSearchMatcher(objectSearch)
         const bpList = Object.values(blueprints)
           .filter(bp => !bp.deprecated)
           .filter(bp => blueprintPlacementMode(bp) !== 'connector')
-          .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
+          .filter(bp => matchesObjectQuery(bp.label, bp.category))
         const grouped = bpList.reduce((groups, bp) => {
           const category = bp.category || t('sidebar.customObjects')
           if (!groups[category]) groups[category] = []

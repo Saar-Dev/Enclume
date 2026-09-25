@@ -16,20 +16,18 @@ import { loadCharacterTestContext } from './characterTestContext.js'
 import { maybeTriggerCatastrophe } from './catastropheService.js'
 import { getUserColor } from './socketUtils.js'
 import { WS } from '../../../shared/events.js'
+import { foldForSearch } from '../../../shared/textSearch.js'
 
-// Insensible casse/accents — matching exact uniquement (pas de flou/préfixe, décision Saar
-// 2026-09-04) : l'autocomplétion client garantit déjà qu'un usage normal tape un nom réel.
-function normalizeSkillName(value) {
-  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-}
-
+// Insensible casse/accents/ligatures/apostrophes (shared/textSearch.js#foldForSearch) — matching exact
+// uniquement (pas de flou/préfixe, décision Saar 2026-09-04) : l'autocomplétion client garantit déjà
+// qu'un usage normal tape un nom réel.
 export async function resolveSkillTestCommand(io, db, campaignId, user, { targetName, skillName, difficulty }) {
   // 1. Résoudre le personnage cible parmi ceux du joueur — jamais parmi ceux des autres (brèche sinon).
   const ownCharacters = await db('characters').where({ user_id: user.id, campaign_id: campaignId })
   let character
   if (targetName) {
-    const normalizedTarget = normalizeSkillName(targetName)
-    character = ownCharacters.find((c) => normalizeSkillName(c.name) === normalizedTarget)
+    const normalizedTarget = foldForSearch(targetName)
+    character = ownCharacters.find((c) => foldForSearch(c.name) === normalizedTarget)
     if (!character) return { error: 'chat.commands.t.characterNotFound', params: { name: targetName } }
   } else if (ownCharacters.length === 1) {
     character = ownCharacters[0]
@@ -53,8 +51,8 @@ export async function resolveSkillTestCommand(io, db, campaignId, user, { target
   // n'a même pas de colonne name ; .label est déjà l'autorité FR, la même valeur que localizeRefRows
   // renverrait au client en locale par défaut, cf. resolveRefField).
   const refSkills = await db('ref_skills')
-  const normalizedInput = normalizeSkillName(skillName)
-  const refSkill = refSkills.find((s) => normalizeSkillName(s.label) === normalizedInput)
+  const normalizedInput = foldForSearch(skillName)
+  const refSkill = refSkills.find((s) => foldForSearch(s.label) === normalizedInput)
   if (!refSkill) return { error: 'chat.commands.t.skillNotFound', params: { skillName } }
   const charSkill = await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: refSkill.id }).first()
 

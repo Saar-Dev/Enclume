@@ -4,18 +4,14 @@ import { useCharacterStore } from '../stores/characterStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useCombatStore } from '../stores/combatStore'
 import { WS } from '../../../shared/events.js'
+import { foldForSearch } from '../../../shared/textSearch.js'
 import { CombatDeclareLogChatPanel } from './CombatDeclareLog.jsx'
 import { renderMessage } from './MessageRendererRegistry.jsx'
 import { styles } from './Sidebar.styles.js'
 import api from '../lib/api.js'
 
-// Insensible casse/accents — même principe que skillTestService.js côté serveur (autorité réelle sur
-// la résolution exacte de /t), ici purement une aide de suggestion côté client, jamais dupliquée comme
-// logique de validation.
-function normalizeSkillName(value) {
-  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-}
-
+// Suggestions /t : même normalisation (shared/textSearch.js#foldForSearch) que la résolution exacte côté
+// serveur (skillTestService.js, autorité) — ici purement une aide de suggestion, jamais une validation.
 // Extrait le fragment de compétence déjà tapé après "/t " (en ignorant un éventuel préfixe
 // @<personnage>, docs/PLANS/PLAN_CHAT_COMMANDES.md §6) — null si l'input ne commence pas par /t.
 function extractSkillTestFragment(text) {
@@ -72,9 +68,9 @@ export default function SidebarChatTab({
   const skillFragment = extractSkillTestFragment(chatInput)
   const skillSuggestions = useMemo(() => {
     if (skillFragment === null) return []
-    const normalizedFragment = normalizeSkillName(skillFragment)
+    const normalizedFragment = foldForSearch(skillFragment)
     return skillCatalog
-      .filter(skill => normalizeSkillName(skill.label).startsWith(normalizedFragment))
+      .filter(skill => foldForSearch(skill.label).startsWith(normalizedFragment))
       .slice(0, 8)
   }, [skillFragment, skillCatalog])
 

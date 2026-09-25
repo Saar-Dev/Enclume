@@ -13,6 +13,7 @@ import IntegrityIcon from './IntegrityIcon.jsx'
 import IntegrityPopover from './IntegrityPopover.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 // Sous-ensemble affiché dans la boucle accordéon — Coffre est rendu séparément (§10 point 3 du plan :
@@ -273,10 +274,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const catalogRarities   = useMemo(() => [...new Set(catalog.map(i => i.rarity))].filter(Boolean).sort(), [catalog])
 
   const filteredCatalog = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
+    const matchesQuery = createSearchMatcher(searchQuery)
     const maxWeight = filterMaxWeight === '' ? null : parseFloat(filterMaxWeight)
     return catalog.filter(i => {
-      if (q && !(i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q) || i.family.toLowerCase().includes(q))) return false
+      if (!matchesQuery(i.name, i.category, i.family)) return false
       if (filterFamily && i.family !== filterFamily) return false
       if (filterCategory && i.category !== filterCategory) return false
       if (filterRarity && i.rarity !== filterRarity) return false
