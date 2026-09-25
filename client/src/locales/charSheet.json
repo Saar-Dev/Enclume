@@ -92,6 +92,16 @@
     "cancelButton": "Annuler",
     "searchPlaceholder": "Rechercher un item…",
     "noResult": "Aucun résultat",
+    "suggestions": {
+      "title": "Suggéré pour ce personnage",
+      "dismiss": "Ignorer cette suggestion",
+      "ammoEmptyInHand": "{{weapon}} est vide et vous n'avez aucune munition {{caliber}} sous la main.",
+      "ammoNone": "Aucune munition {{caliber}} pour {{weapon}}.",
+      "ammoInStash": "Vos munitions {{caliber}} pour {{weapon}} sont au Coffre : déplacez-les dans le Sac ou la Ceinture pour pouvoir recharger.",
+      "noBag": "Aucun sac : rien pour transporter votre matériel.",
+      "bagFull": "Votre sac est plein ({{load}} kg pour {{capacity}} kg de capacité).",
+      "noBelt": "Aucune ceinture pour ranger les petits objets à portée de main."
+    },
     "filterAllFamily": "Toutes familles",
     "filterAllCategory": "Toutes catégories",
     "filterAllRarity": "Toutes raretés",

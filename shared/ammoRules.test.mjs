@@ -43,3 +43,19 @@ test('COM28 - pas de capacite parseable : pas de statut', () => {
   assert.equal(weaponAmmoStatus(5, null, '9mm'), null)
   assert.equal(weaponAmmoStatus(5, 'variable', '9mm'), null)
 })
+
+import { ammoMatchesWeapon } from './ammoRules.js'
+
+test('ammoMatchesWeapon — même calibre uniquement', () => {
+  assert.equal(ammoMatchesWeapon('5.56 mm', '5.56 mm'), true)
+  assert.equal(ammoMatchesWeapon('5.56 mm', '5.56 mmS'), false)
+  assert.equal(ammoMatchesWeapon('Charge électrique', 'Charge électrique'), true)
+})
+
+test('ammoMatchesWeapon — calibre absent : jamais compatible, même deux absents', () => {
+  assert.equal(ammoMatchesWeapon(null, null), false)
+  assert.equal(ammoMatchesWeapon(undefined, undefined), false)
+  assert.equal(ammoMatchesWeapon('', ''), false)
+  assert.equal(ammoMatchesWeapon('9 mm', null), false)
+  assert.equal(ammoMatchesWeapon(null, '9 mm'), false)
+})

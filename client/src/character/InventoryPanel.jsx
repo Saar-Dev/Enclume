@@ -14,6 +14,7 @@ import IntegrityPopover from './IntegrityPopover.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
 import { createSearchMatcher } from '../../../shared/textSearch.js'
+import { buildInventorySuggestions, SUGGESTION_KIND } from '../../../shared/itemSuggestions.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 // Sous-ensemble affiché dans la boucle accordéon — Coffre est rendu séparément (§10 point 3 du plan :
@@ -81,6 +82,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const [filterRarity,   setFilterRarity]   = useState('')
   const [filterMaxWeight, setFilterMaxWeight] = useState('')
   const [catalogPage,    setCatalogPage]    = useState(1)
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(() => new Set())
   const [selectedRef,   setSelectedRef]   = useState(null)  // item ref_equipment sélectionné
   const [addQty,        setAddQty]        = useState(1)
   const [addContainer,  setAddContainer]  = useState('Coffre')
@@ -241,6 +243,15 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
     setAddContainer('Coffre')
   }, [])
 
+  // Objet choisi depuis une suggestion : des munitions vont là où elles servent (Sac, sinon Ceinture) —
+  // au Coffre elles ne sont pas rechargeables en combat et la suggestion reviendrait aussitôt.
+  const handleSelectSuggested = useCallback((refItem, kind, currentAvailableContainers) => {
+    setSelectedRef(refItem)
+    setAddQty(1)
+    const carried = currentAvailableContainers.find(c => c !== 'Coffre')
+    setAddContainer(kind === SUGGESTION_KIND.AMMO && carried ? carried : 'Coffre')
+  }, [])
+
   const handleConfirmAdd = useCallback(async () => {
     if (!selectedRef) return
     setAdding(true)
@@ -285,6 +296,15 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
       return true
     })
   }, [catalog, searchQuery, filterFamily, filterCategory, filterRarity, filterMaxWeight])
+
+  // Suggestions « ce qui manque » (shared/itemSuggestions.js) — proposées avant toute recherche ; une
+  // suggestion ignorée reste masquée jusqu'à la fermeture du panneau de la fiche.
+  const suggestions = useMemo(
+    () => buildInventorySuggestions({ inventory: items, catalog }).filter(sg => !dismissedSuggestions.has(sg.id)),
+    [items, catalog, dismissedSuggestions],
+  )
+  const showSuggestions = suggestions.length > 0 && !searchQuery.trim()
+    && !filterFamily && !filterCategory && !filterRarity && filterMaxWeight === ''
 
   const catalogPageCount = Math.max(1, Math.ceil(filteredCatalog.length / CATALOG_PAGE_SIZE))
   const pagedCatalog = useMemo(() => {
@@ -472,6 +492,36 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               ) : (
                 /* ── Recherche + filtres dans le catalogue ───────────── */
                 <>
+                  {showSuggestions && (
+                    <div style={s.suggestBox}>
+                      <div style={s.suggestTitle}>{t('inventoryPanel.suggestions.title')}</div>
+                      {suggestions.map(sg => (
+                        <div key={sg.id} style={s.suggestItem}>
+                          <div style={s.suggestReasonRow}>
+                            <span style={s.suggestReason}>{t(sg.reasonKey, sg.reasonParams)}</span>
+                            <button
+                              style={s.suggestDismiss}
+                              title={t('inventoryPanel.suggestions.dismiss')}
+                              onClick={() => setDismissedSuggestions(prev => new Set(prev).add(sg.id))}
+                            >×</button>
+                          </div>
+                          {sg.kind !== SUGGESTION_KIND.AMMO_IN_STASH && sg.candidates.map(refItem => (
+                            <div key={refItem.id} style={s.catalogRow} onClick={() => handleSelectSuggested(refItem, sg.kind, availableContainers)}>
+                              <span style={{ color: '#c0c0d0' }}>{refItem.name}</span>
+                              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                {refItem.capacity != null && (
+                                  <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.capacity} kg</span>
+                                )}
+                                {refItem.price != null && (
+                                  <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.price} S</span>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <input
                     style={s.searchInput}
                     placeholder={t('inventoryPanel.searchPlaceholder')}
@@ -812,6 +862,18 @@ const s = {
   weightInput: {
     width: 70, background: '#16162a', border: '1px solid #2a2a3e',
     borderRadius: 4, padding: '1px 4px', color: '#9090a8', fontSize: 11, outline: 'none',
+  },
+  suggestBox: {
+    marginBottom: 8, padding: '6px 8px', border: '1px solid #2a3a5e', borderRadius: 4, background: '#101626',
+  },
+  suggestTitle: {
+    color: '#5b8dee', fontSize: 11, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4,
+  },
+  suggestItem: { marginBottom: 6 },
+  suggestReasonRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
+  suggestReason: { color: '#8a8aaa', fontSize: 11, fontStyle: 'italic' },
+  suggestDismiss: {
+    background: 'transparent', border: 'none', color: '#5a5a7a', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px',
   },
   catalogList: {
     maxHeight: 200, overflowY: 'auto', borderRadius: 4,

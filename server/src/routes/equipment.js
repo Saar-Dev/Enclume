@@ -65,7 +65,9 @@ router.get('/ref/skills', requireAuth, async (req, res, next) => {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const items = await db('ref_equipment')
-      .select('id', 'family', 'category', 'name', 'description', 'tech_level', 'rarity', 'location', 'weight', 'price')
+      // `caliber` (lien arme ↔ munition) et `capacity` (sacs / ceintures, kg) : lus par les suggestions
+      // d'inventaire (shared/itemSuggestions.js) et l'affichage du calibre à l'ajout (InventoryPanel).
+      .select('id', 'family', 'category', 'name', 'description', 'tech_level', 'rarity', 'location', 'weight', 'price', 'caliber', 'capacity')
       .modify(q => { if (req.query.family) q.where('family', req.query.family) })
       .orderBy('family')
       .orderBy('category')

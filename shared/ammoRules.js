@@ -31,3 +31,13 @@ export function weaponAmmoStatus(ammoRemaining, ammoCountRaw, caliber) {
   if (remaining / capacity <= 0.25) return 'low'
   return 'ok'
 }
+
+// ammoMatchesWeapon — règle unique « cette munition va dans cette arme » : même calibre, non vide.
+// Autorité partagée par le serveur (COMBAT_ITEM_UPDATE `current_ammo`, rechargement), le combat
+// (fenêtre de déclaration), la fiche (WeaponPanel) et les suggestions d'inventaire
+// (itemSuggestions.js). `ref_equipment.caliber` est le seul lien arme ↔ munition ; la table
+// `ref_equipment_ammo_compat` n'est pas lue (vide, jamais alimentée). Deux calibres absents ne sont
+// JAMAIS compatibles : une arme sans calibre n'a pas de munition suivie (weaponAmmoStatus).
+export function ammoMatchesWeapon(weaponCaliber, ammoCaliber) {
+  return !!weaponCaliber && !!ammoCaliber && weaponCaliber === ammoCaliber
+}

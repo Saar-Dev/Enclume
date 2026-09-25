@@ -20,7 +20,7 @@ import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSl
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
-import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
+import { weaponAmmoStatus, ammoMatchesWeapon } from '../../../shared/ammoRules.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
@@ -524,7 +524,7 @@ export default function CombatActionWindow({
   // Munitions disponibles pour le rechargement — filtrées par calibre de l'arme sélectionnée
   const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
     ? allInventoryItems.filter(item =>
-        item.ref_caliber === selectedWeapon.ref_caliber &&
+        ammoMatchesWeapon(selectedWeapon.ref_caliber, item.ref_caliber) &&
         item.slots == null &&
         item.container !== 'Coffre'
       )

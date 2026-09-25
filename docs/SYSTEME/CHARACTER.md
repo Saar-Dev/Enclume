@@ -520,6 +520,18 @@ chaque zone cible (LocationPanel, WeaponPanel, InventoryPanel Sac/Ceinture/Coffr
 `data.onDrop`, routé par `CharacterWindow.handleItemDragEnd` — aucune logique dupliquée, chaque zone
 garde sa propre résolution (slot composite, conflit main/2M → confirmation sur 409).
 
+**Suggestions « ce qui manque » (panneau d'ajout, 2026-09-25)** : `shared/itemSuggestions.js#buildInventorySuggestions`
+(fonction pure, testée) lit l'inventaire chargé + le catalogue (`GET /equipment`, qui expose `caliber` et `capacity`)
+et rend au plus 6 besoins ordonnés, chacun avec une clé de traduction `inventoryPanel.suggestions.*` + paramètres et
+≤ 3 objets candidats. Affichées avant toute frappe (`InventoryPanel`), masquées dès qu'une recherche ou un filtre est
+actif ; « × » ignore une suggestion pour la session. Règles : arme en main au chargeur vide sans réserve → munitions
+(1) ; arme sans munition de son calibre nulle part → munitions (2) ; munitions seulement au Coffre → information (3) ;
+sac équipé dépassant sa capacité en kg → sacs plus grands (3) ; aucun sac (4) ; aucune ceinture (5). « Arme » = famille
+Armes avec un `caliber` (couvre les armes de contact à charges) ; le lien arme ↔ munition est `ammoMatchesWeapon`
+(`shared/ammoRules.js`) — la table `ref_equipment_ammo_compat` n'est pas lue (vide). Munitions candidates : standard
+d'abord, puis prix croissant ; ajoutées par défaut au Sac / à la Ceinture (au Coffre elles ne sont pas rechargeables).
+Proposition de confort : rien n'est ajouté sans geste du joueur, l'ajout passe par la route d'inventaire habituelle.
+
 ### Jauges de matériel (char_gauges, même patron que l'inventaire)
 
 `characterStore.js` porte `gaugesByCharId` par personnage (`{ [charId]: { [categoryKey]: value } }`).

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useDroppable, useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
+import { ammoMatchesWeapon } from '../../../shared/ammoRules.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
 import { useCharacterStore } from '../stores/characterStore.js'
@@ -222,7 +223,7 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
     return items
       .filter(i =>
         i.ref_family === 'Munitions' &&
-        i.ref_caliber === weapon.ref_caliber &&
+        ammoMatchesWeapon(weapon.ref_caliber, i.ref_caliber) &&
         i.container !== 'Coffre',
       )
       .sort((a, b) => {

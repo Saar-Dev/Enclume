@@ -15,6 +15,7 @@ import { DEFAULT_ACQUISITION_INTEGRITY } from '../../../shared/integrityRules.js
 import * as integrityService from './integrityService.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
+import { ammoMatchesWeapon } from '../../../shared/ammoRules.js'
 
 // INV2 (docs/EN_COURS.md) — débit des Sols, jusqu'ici jamais appliqué par le bouton Ajouter. Verrou
 // `forUpdate` + vérif AVANT décrément, même patron que tradeService.js#executeBuy (seul autre point
@@ -783,7 +784,7 @@ export async function updateItem(characterId, itemId, payload) {
       : null
     if (!weaponRef || weaponRef.family !== 'Armes')
       throw new AppError(400, 'current_ammo ne peut être défini que sur une arme')
-    if (weaponRef.caliber !== ammo.caliber)
+    if (!ammoMatchesWeapon(weaponRef.caliber, ammo.caliber))
       throw new AppError(400, `Munition incompatible — caliber attendu : ${weaponRef.caliber}`)
   }
 
@@ -864,7 +865,7 @@ export async function reloadWeapon(characterId, itemId, ammoItemId) {
     .first()
   if (!ammoItem) throw new AppError(404, 'Munition introuvable')
   if (ammoItem.container === 'Coffre') throw new AppError(400, 'Munition dans le Coffre — non disponible')
-  if (ammoItem.ref_caliber !== weapon.ref_caliber) {
+  if (!ammoMatchesWeapon(weapon.ref_caliber, ammoItem.ref_caliber)) {
     throw new AppError(400, `Calibre incompatible — attendu : ${weapon.ref_caliber}`)
   }
 

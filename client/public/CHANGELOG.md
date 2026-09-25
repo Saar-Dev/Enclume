@@ -1,3 +1,11 @@
+## v255 — 2026-09-25 — Suggestions à l'ajout d'objets
+
+### Inventaire
+- [add] En ouvrant « Ajouter » sur la fiche, un bloc « Suggéré pour ce personnage » propose ce qui manque, avec la raison :
+  des munitions adaptées quand une arme (à distance, ou de contact à charges comme la matraque) n'en a plus, des sacs quand
+  il n'y en a pas ou que le sien est plein, une ceinture si le personnage n'en a pas. Les munitions vont directement dans le
+  Sac (ou la Ceinture) pour pouvoir recharger en combat. Le bloc disparaît dès que l'on tape une recherche.
+
 ## v254 — 2026-09-25 — Recherche plus tolérante
 
 ### Interface
