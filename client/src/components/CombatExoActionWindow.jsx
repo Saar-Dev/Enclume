@@ -4,6 +4,7 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useDeclareWindowHiding } from '../lib/useDeclareWindowHiding.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
@@ -153,6 +154,13 @@ export default function CombatExoActionWindow({
     onCancel: () => setMoveSelection(null),
   })
 
+  // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes les
+  // fenêtres d'Annonce (useDeclareWindowHiding.js). Appelé avant les early-returns (règle des Hooks).
+  const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
+    tokenIds: [playerToken?.id],
+    combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
+  })
+
   if (!playerToken || !playerChar || !rosterEntry) return null
   // Vérification indépendante (pas seulement confiance au montage conditionnel de CombatOverlay.jsx)
   // — même discipline que CombatActionWindow, qui filtre aussi par user_id de son côté. Le MJ n'est
@@ -168,6 +176,7 @@ export default function CombatExoActionWindow({
   const handleZoneSelectClick = () => {
     if (allures === null) return
     if (moveSelection) setMoveSelection(null)
+    armExplicitMove()
     rearmMove()
   }
 
@@ -212,28 +221,8 @@ export default function CombatExoActionWindow({
     })
   }
 
-  // Masquage pendant la sélection de destination (COM-MOVEUI1/CombatGmDeclareWindow#hasPendingPlainMove)
-  // — bug trouvé en jeu réel (2026-08-26, Saar) : sans ce masquage, rien ne guide le joueur vers le
-  // panneau flottant global (légende déplacement, bouton "Valider") une fois une case cliquée sur la
-  // carte — il reste sur cette fenêtre, ne valide jamais, et la sélection se perd silencieusement au
-  // clic sur DÉCLARER (mapActions.move: null, tour passé). Cache seulement une fois qu'une destination
-  // est réellement en attente (pendingMoveSelection), jamais pendant le simple survol ambiant.
-  //
-  // RÉAPPLIQUÉ (2026-09-18, retour Saar : la fenêtre ne se masquait pas au clic sur Cible) — RETIRÉ
-  // une première fois le 2026-08-27 sur un soupçon jamais confirmé ("cause probable", jamais
-  // instrumenté). Revérifié avant de recoder : combatTargetMode se nettoie déjà tout seul (validation
-  // de cible, clic Annuler — CombatOverlay.jsx, rendu indépendamment de cette fenêtre donc toujours
-  // accessible même masquée — ET automatiquement à chaque changement de phase/avancée de la file
-  // d'annonce, useCombatSocket.js#onModeReset) ; le vrai coupable du symptôme de l'époque est bien
-  // plus probablement l'autre bug exo trouvé le même jour (déclarer une arme sans cible envoyait un
-  // payload vide, silencieusement perdu) — déjà corrigé depuis et durablement gardé par
-  // canDeclareAttack (useExoDeclare.js). Même patron que CombatActionWindow.jsx#isHidden : dérivé de
-  // l'état partagé combatTargetMode/combatAoeTargetMode, jamais un flag local (le clic direct sur un
-  // token arme combatTargetMode sans passer par un flag local — même raison documentée là-bas).
-  const isTargeting    = combatTargetMode?.tokenId === playerToken.id
-  const isAoeTargeting = combatAoeTargetMode?.tokenId === playerToken.id
-  const isSelectingOnMap = (combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection)
-    || isTargeting || isAoeTargeting
+  // Masquage : useDeclareWindowHiding (appelé plus haut) — isHidden = fenêtre masquée. Historique du
+  // masquage exo (2026-08-26 destination, 2026-09-18 clic sur Cible) : repris tel quel dans ce hook partagé.
 
   // Initiative projetée (pastille du pied). Le déplacement + les transitions d'état déclarées au
   // satellite (posture / arme / vitesse, module 3) pèsent — `initialStates` vs `decl`.
@@ -295,13 +284,13 @@ export default function CombatExoActionWindow({
         onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
         axes={isProne ? ['position'] : ['position', 'vitesse', 'weapon']}
         onPositionClick={isProne ? handleStandUp : null}
-        hidden={isSelectingOnMap}
+        hidden={isHidden}
       />
     <div className="combat-float-win" data-decl data-family="exo"
       data-narrow={!exoExpanded || undefined}
       style={{
       position: 'fixed', width: exoExpanded ? 560 : 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
-      opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
+      opacity: isHidden ? 0 : 1, pointerEvents: isHidden ? 'none' : 'auto',
     }}>
       <CombatDeclareHeader
         name={playerToken.label ?? playerChar.name}

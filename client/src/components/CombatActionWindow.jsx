@@ -25,6 +25,7 @@ import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useDeclareWindowHiding } from '../lib/useDeclareWindowHiding.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
@@ -135,7 +136,6 @@ export default function CombatActionWindow({
   const [assaultWeapons, setAssaultWeapons]       = useState([])
   const [allInventoryItems, setAllInventoryItems] = useState([])
   const [selectedAmmoId, setSelectedAmmoId]       = useState(null)
-  const [inMoveMode, setInMoveMode]               = useState(false)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
   const [moveSelection, setMoveSelection]         = useState(null)
@@ -248,6 +248,13 @@ export default function CombatActionWindow({
   // useCombatClickAttack.js — même patron/contrainte que useAutoMoveMode ci-dessus : appelé ici (avant
   // le early-return `playerTokensInRoster.length === 0` plus bas, Rules of Hooks) donc ne peut pas
   // référencer meleeWeapons/selectedWeapon/clearAttackState/clearMeleeState (calculés après ce point).
+  // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes
+  // les fenêtres d'Annonce (useDeclareWindowHiding.js). Le pilote couvre aussi le drone télépiloté.
+  const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
+    tokenIds: [playerToken?.id, telepilotDroneId],
+    combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
+  })
+
   // Dérivations dupliquées volontairement (meleeWeapons/selectedWeapon recalculés) plutôt que remonter
   // tout le bloc plus bas — patch ciblé, ne pas réordonner un fichier de 1500 lignes pour ça.
   const clickMeleeWeapons = allInventoryItems.filter(item =>
@@ -329,7 +336,6 @@ export default function CombatActionWindow({
     setMapSelected(new Set())
     assaultDecl.clear()
     setMoveSelection(null)
-    setInMoveMode(false)
     setInTargetMode(false)
     setSelectedAmmoId(null)
     meleeDecl.clear()
@@ -694,6 +700,7 @@ export default function CombatActionWindow({
   // choix remplit toute la série (comportement par défaut — pas de clic répété sur la même cible pour
   // le cas courant) ; une fois au moins une cible posée, un choix ultérieur ne touche que son slot.
   const handleChooseTarget = (index) => {
+    armExplicitMove()
     setInTargetMode(true)
     onEnterTargetMode(
       playerToken.id,
@@ -1019,13 +1026,13 @@ export default function CombatActionWindow({
   const handleRetraiteMove = () => {
     if (moveSelection) { setMoveSelection(null); return }
     if (!allures) return
-    setInMoveMode(true)
+    armExplicitMove(true)
     const retraiteAllures = { lente: allures.lente, moyenne: allures.lente, rapide: allures.lente, max: allures.lente }
     onEnterMoveMode(
       retraiteAllures, playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
-      (sel) => { setMoveSelection({ ...sel, ini_mod: 0 }); setInMoveMode(false) },
-      () => { setInMoveMode(false) }
+      (sel) => { setMoveSelection({ ...sel, ini_mod: 0 }) },
+      () => {}
     )
   }
 
@@ -1038,7 +1045,7 @@ export default function CombatActionWindow({
     setMapSelected(prev => { const n = new Set(prev); n.delete('move'); return n })
     meleeDecl.setCharge(null)
     if (!allures) return
-    setInMoveMode(true)
+    armExplicitMove(true)
     // Charge : limiter visuellement à la zone lente (déplacement court) uniquement
     const chargeAllures = { lente: allures.lente, moyenne: allures.lente, rapide: allures.lente, max: allures.lente }
     onEnterMoveMode(
@@ -1046,7 +1053,6 @@ export default function CombatActionWindow({
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (sel) => {
         const move = { ...sel, ini_mod: 0 }   // déplacement gratuit pour la Charge
-        setInMoveMode(false)
         // Chaîner automatiquement la sélection de cible CaC (Charge = 1 cible toujours)
         setInMeleeTargetMode(true)
         onEnterTargetMode(
@@ -1057,24 +1063,11 @@ export default function CombatActionWindow({
           'melee'
         )
       },
-      () => { setInMoveMode(false); dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }) }
+      () => { dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }) }
     )
   }
 
-  // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination a été
-  // posée et attend "Valider" — pas pendant le simple survol, sinon la fenêtre resterait masquée en
-  // continu pendant tout le tour (option 1, décision Saar).
-  const hasPendingOwnMove = combatMoveMode?.tokenId === playerToken?.id && !!pendingMoveSelection
-  // Masquage du ciblage dérivé de combatTargetMode (état partagé, useCombatUIState) plutôt que des
-  // flags locaux inTargetMode/inMeleeTargetMode — ces derniers ne sont positionnés que par le flux tuile
-  // Attaque/CaC classique ; le clic direct (useCombatClickAttack.js) arme combatTargetMode sans jamais
-  // toucher ces flags, donc la fenêtre restait visible pendant ce flux (retour Saar 2026-07-31). Les deux
-  // flags restent utilisés ailleurs (gate de useCombatClickAttack/useAutoMoveMode), juste plus ici.
-  const isTargeting = combatTargetMode?.tokenId === playerToken?.id
-  // Même raisonnement que isTargeting ci-dessus (état partagé, pas un flag local) — PLAN_AOE.md §8
-  // étape 9.
-  const isAoeTargeting = combatAoeTargetMode?.tokenId === playerToken?.id
-  const isHidden    = inMoveMode || isTargeting || isAoeTargeting || droneDeclare.isSelectingOnMap || hasPendingOwnMove
+  // Masquage : useDeclareWindowHiding (appelé plus haut) — autorité unique, partagée avec Exo et MJ.
   const showAssault = attackActive
   const showReload  = attackSelected && reloadSelected && !!selectedWeapon
   const showMelee   = meleeSelected  && !attackSelected
@@ -1191,7 +1184,7 @@ export default function CombatActionWindow({
               <div style={W.sectionTitle}>{t('sectionTitles.action')}</div>
               <DroneDeclareSection
                 pendingMove={(isDrone ? droneDeclare : telepilotDeclare).pendingMove}
-                onMoveToggle={(isDrone ? droneDeclare : telepilotDeclare).rearmDroneMove}
+                onMoveToggle={() => { armExplicitMove(); (isDrone ? droneDeclare : telepilotDeclare).rearmDroneMove() }}
                 hasPassed={(isDrone ? droneDeclare : telepilotDeclare).hasPassed}
                 onPassToggle={() => (isDrone ? droneDeclare : telepilotDeclare).setHasPassed(p => !p)}
                 droneWeapons={(isDrone ? droneDeclare : telepilotDeclare).droneWeapons}

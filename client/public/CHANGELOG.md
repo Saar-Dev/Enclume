@@ -1,3 +1,10 @@
+## v253 — 2026-09-25 — Les fenêtres d'action se masquent pendant le choix d'un déplacement ou d'une cible
+
+### Combat
+- [fix] En phase d'Annonce, toutes les fenêtres d'action (personnage, drone, exo-armure, et celles du MJ pour ses PNJ et
+  drones) se comportent maintenant pareil : elles se masquent dès que tu cliques sur Déplacement, Retraite, Charge ou
+  Cibler, pour laisser la carte libre, puis reviennent après la validation ou l'annulation.
+
 ## v252 — 2026-09-24 — Fusil à pompe : la gerbe est un vrai cône
 
 ### Combat

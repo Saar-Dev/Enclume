@@ -23,6 +23,7 @@ import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '..
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useDeclareWindowHiding } from '../lib/useDeclareWindowHiding.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
@@ -280,6 +281,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   useCombatClickAttack({
     enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     battlemapId,
+  // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes les
+  // fenêtres d'Annonce (useDeclareWindowHiding.js). `holdHidden` : le drapeau local isSelectingOnMap couvre
+  // l'enchaînement de cibles CaC multiples (handleStartMelee), où combatTargetMode retombe à null un
+  // instant entre deux cibles.
+  const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
+    tokenIds: [activeTokenId],
+    combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
+    holdHidden: isSelectingOnMap,
+  })
+
     tokenId: activeTokenId,
     tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
     moveDestination: pendingMove
@@ -681,6 +692,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       pendingMove, chargeSelection,
       weapon, assaultTargets, effectiveAssaultCount,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
+    armExplicitMove(true)
       aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
       aoeDetonation: assaultDecl.state.aoeDetonation,
       meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
@@ -693,15 +705,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   //    `isReloading` calculés plus haut (source unique avec `declareChecks`).
   const isMeleeSetup   = isActivePnj && meleeStarted
   const isAttackActive = attackStarted && !isReloading   // D7 : Recharger remplace le Tir
-
-  // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination PNJ a
-  // été posée et attend validation — pas pendant le simple survol (option 1, décision Saar).
-  const hasPendingPlainMove = combatMoveMode?.tokenId === activeTokenId && !!pendingMoveSelection && decl.combatMode !== 'charge'
-  // Ajouté (pas remplacé isSelectingOnMap, qui conflate move-Charge et ciblage tuile pour le MJ,
-  // contrairement au PJ qui a 2 flags séparés) — le clic direct (useCombatClickAttack.js) arme
-  // combatTargetMode sans jamais positionner isSelectingOnMap, la fenêtre restait donc visible
-  // pendant ce flux (retour Saar 2026-07-31).
-  const isTargetingViaClick = combatTargetMode?.tokenId === activeTokenId
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDU
@@ -717,10 +720,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           decl={decl}
           initial={initialStates}
           onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
-          hidden={isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick}
+          hidden={isHidden}
         />
       )}
-    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
+    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: isHidden ? 0 : 1, pointerEvents: isHidden ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <CombatDeclareHeader
@@ -754,7 +757,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     ? `[${pendingMove.targetPosX}, ${pendingMove.targetPosY}]`
                     : t('declareList.moveDefine'),
                   tooltip: t('mapActions.move.tooltip'),
-                  onToggle: () => { if (pendingMove) setPendingMove(null); rearmMove() },
+                  onToggle: () => { if (pendingMove) setPendingMove(null); armExplicitMove(); rearmMove() },
                 }}
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
@@ -810,7 +813,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {isActiveDrone && (
             <DroneDeclareSection
               pendingMove={droneDeclare.pendingMove}
-              onMoveToggle={droneDeclare.rearmDroneMove}
+              onMoveToggle={() => { armExplicitMove(); droneDeclare.rearmDroneMove() }}
               hasPassed={droneDeclare.hasPassed}
               onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
               droneWeapons={droneDeclare.droneWeapons}

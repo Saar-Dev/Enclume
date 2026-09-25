@@ -4,6 +4,7 @@
 > vérifié `SessionPage.jsx`) ; prop Canvas3D `onTokenRotate` corrigée en `onTokenSetRotation`, liste
 > de props complétée ; table des handlers Échap complétée (5 réels, 3 documentés). `justSelectedRef`,
 > P40/P50/P57 reconfirmés exacts.
+> Mis à jour 2026-09-25 : masquage des fenêtres d'Annonce pendant une sélection carte (`useDeclareWindowHiding`).
 > Source : SYSTEME.md §11–§14
 > Lire pour : tout useCallback/useEffect/useRef, lock éditeur, ordre déclaration React
 
@@ -134,6 +135,19 @@ Leurs morceaux communs sont des **briques à plat** dans `client/src/components/
 | `CombatDeclareIniWidget` | pastille « Initiative projetée » du pied (`current + delta`, rouge si ≤ 0). |
 | `CombatDeclareErrorBanner` | bannière transitoire de refus (`COMBAT_DECLARE_ERROR`) — dumb, lit `sessionStore.declareError`. |
 | `CombatDeclareLog` | log des déclarations du tour (lecture seule). |
+
+**Masquage pendant une sélection carte — autorité unique** : `client/src/lib/useDeclareWindowHiding.js`
+(cœur pur `isDeclareWindowHidden`, testé). Les trois fenêtres et leur satellite d'état l'appellent —
+aucune copie locale. Masquée (`opacity: 0` + `pointerEvents: none`) quand l'état partagé de la carte
+(`useCombatUIState`) concerne un de ses tokens (`tokenIds` : le sien, plus le drone télépiloté) :
+ciblage (`combatTargetMode`), visée de zone (`combatAoeTargetMode`), destination posée
+(`pendingMoveSelection`), ou sélection de déplacement **explicite** (`armExplicitMove` : tuile
+« Déplacement », Retraite, Charge). Jamais le simple survol ambiant (`useAutoMoveMode`), jamais le clic
+direct sur un token. Le marqueur explicite est lié à l'objet `combatMoveMode` armé : validation ou
+annulation le vident, le survol qui se réarme ensuite ne masque plus rien. `holdHidden` (MJ seulement)
+couvre l'enchaînement de cibles CaC multiples où `combatTargetMode` retombe à `null` entre deux cibles.
+Piège : toute nouvelle fenêtre de déclaration appelle ce hook (avant ses early-returns) ; ne jamais
+recalculer le masquage avec un drapeau local.
 
 **Sous-état de sélection partagé (M0.4)** — recopié à ~90 % entre PJ et MJ avant extraction, désormais
 un **reducer pur par domaine** + un hook wrapper, monté à l'identique par les deux fenêtres :
