@@ -2,7 +2,6 @@ import {
   resolveWoundInsertion, resolveWoundImprovement, computeAvailableSeverityReductions, affordableReductions, hasSeverityRoom,
   isShockTestRequired, getWorstWoundSeverity, WoundLineFullError,
 } from './woundUtils.js'
-import { initializeWoundHealingEcheance } from './woundEvolutionService.js'
 import { emitTokenStatusUpdated, reconcileWoundDeath, announceWoundDeath } from './statusService.js'
 // Import DIRECT depuis exoPilotService.js, jamais combatantContextService.js (qui importe
 // damageService.js -> woundService.js : un import inverse ici boucherait le cycle).
@@ -118,12 +117,11 @@ export async function applyWound(io, db, campaignId, {
   let reaction = { pending: null, notice: null }
   try {
     result = await db.transaction(async (trx) => {
-      const insertion = await resolveWoundInsertion(trx, charSheetId, localisation, severity)
-      // Guérison/Infection (Lot 2, docs/PLAN_BLESSURES_GUERISON.md §5) — sur la blessure finale
-      // (post-promotion) uniquement ; les échéances d'éventuelles cases supprimées par la cascade
-      // de promotion se terminent d'elles-mêmes sans effet (woundId introuvable, voir
-      // woundEvolutionService.js).
-      await initializeWoundHealingEcheance(trx, { campaignId, characterId, wound: insertion.wound })
+      // Guérison/Infection (Lot 2, docs/PLAN_BLESSURES_GUERISON.md §5) : l'échéance de guérison est programmée par
+      // resolveWoundInsertion elle-même (woundUtils.js, seul écrivain de lignes), sur la blessure finale (post-promotion)
+      // uniquement ; les échéances d'éventuelles cases supprimées par la cascade de promotion se terminent d'elles-mêmes
+      // sans effet (woundId introuvable, voir woundEvolutionService.js).
+      const insertion = await resolveWoundInsertion(trx, charSheetId, localisation, severity, { campaignId, characterId })
       // Réaction de Chance (PLAN_CHANCE.md §8) — persistée DANS la transaction de la blessure, pour que `reconcileWoundDeath`
       // (juste dessous) la voie et ne tue pas avant la décision du joueur. En SOUS-transaction (SAVEPOINT, vérifié Knex 3.3 /
       // PostgreSQL par une sonde : une panne SQL ou JS n'y défait que la sous-transaction) : cette fonctionnalité annexe ne
@@ -365,13 +363,11 @@ async function applyWoundChoice(io, campaignId, { choice, context, explicit }) {
       if (!wound) return { status: 'gone' }
       if (!(await hasSeverityRoom(trx, sheet.id, wound.location, match.targetSeverity))) return { status: 'noRoom' }
       await spendChancePoints(sheet.id, cost, { reason: 'Réduction de gravité de Blessure' }, trx)
-      let currentWoundId = woundId
-      for (let i = 0; i < match.degree; i += 1) {
-        const result = await resolveWoundImprovement(trx, currentWoundId)
-        if (!result.wound) return { status: 'reduced', woundId: null, from: wound } // guérie entièrement avant d'avoir consommé tous les degrés
-        currentWoundId = result.wound.id
-      }
-      return { status: 'reduced', woundId: currentWoundId, from: wound }
+      // Une seule écriture pour tous les degrés : la blessure obtenue naît à la gravité d'arrivée, AVEC son échéance de guérison
+      // (RAW : elle « devient » une blessure plus légère, comme si elle avait été reçue ainsi). `wound` nul : guérie
+      // entièrement avant d'avoir consommé tous les degrés.
+      const result = await resolveWoundImprovement(trx, woundId, { campaignId, characterId }, { steps: match.degree })
+      return { status: 'reduced', woundId: result.wound?.id ?? null, from: wound }
     })
   } catch (err) {
     // Jamais un throw qui remonterait jusqu'au handler socket générique (CHANCE_CHOICE_RESOLVE) : la blessure reste telle quelle.

@@ -4,44 +4,14 @@
 // jamais dupliqué ici.
 import { WOUND_INFECTION, getWoundHealing } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
-import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries } from './woundUtils.js'
+import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries } from './woundUtils.js'
 import { calcAttributeNA } from './charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
-import { createEcheance } from './echeanceService.js'
 
-const WEEK_MINUTES = 7 * MINUTES_PER_DAY
 const INFECTION_TICK_MINUTES = 2 * MINUTES_PER_DAY
 
-// Appelée juste après l'insertion d'une blessure (woundService.js applyWound), uniquement pour
-// Moyenne+ — Légère guérit seule, sans Test ni échéance (RAW, REGLEBLESSURES.md:402-403). Une Mort (Tête/Corps) n'en a
-// pas non plus (getWoundHealing = null) ; un Membre détruit a la sienne (3 semaines, soins constants).
-export async function initializeWoundHealingEcheance(trx, { campaignId, characterId, wound }) {
-  const healing = getWoundHealing(wound.severity, wound.location)
-  if (!healing) return null
-
-  const payload = { woundId: wound.id }
-  const baseMinutes = wound.occurred_at_game_minutes
-
-  if (healing.soinsConstants) {
-    // Critique/Mortelle : récurrente hebdomadaire (§3.2 "Soins constants" = Test de Médecine chaque
-    // semaine). La gravité ne diminue qu'à la dernière occurrence (occurrences_remaining atteint 0).
-    const occurrencesRemaining = Math.round(healing.durationMinutes / WEEK_MINUTES)
-    return createEcheance(trx, {
-      campaignId, characterId, conditionType: 'wound_healing_check', payload,
-      nextDueMinutes: baseMinutes + WEEK_MINUTES,
-      intervalMinutes: WEEK_MINUTES,
-      occurrencesRemaining,
-    })
-  }
-
-  // Moyenne/Grave : unique, ponctuelle, à la fin de la durée totale.
-  return createEcheance(trx, {
-    campaignId, characterId, conditionType: 'wound_healing_check', payload,
-    nextDueMinutes: baseMinutes + healing.durationMinutes,
-    intervalMinutes: null,
-    occurrencesRemaining: null,
-  })
-}
+// L'échéance de guérison d'une case est programmée à son écriture par woundUtils.js (seul écrivain de lignes de blessure) —
+// woundHealingSchedule.js : les handlers ci-dessous n'ont jamais à s'en soucier.
 
 function buildRecurringReschedule(echeance) {
   const isOneShot = echeance.occurrences_remaining === null
@@ -98,11 +68,15 @@ export async function woundHealingCheckHandler(trx, echeance) {
   if (mjChoice === 'amelioration') {
     const isLastOccurrence = isOneShot || echeance.occurrences_remaining <= 1
     if (isLastOccurrence) {
-      const result = await resolveWoundImprovement(trx, wound.id)
-      undoEntries.push({ table: 'character_wounds', rowId: wound.id, previousValues: wound })
-      if (result.wound) {
-        undoEntries.push({ table: 'character_wounds', rowId: result.wound.id, previousValues: null })
-      }
+      // La case obtenue naît AVEC son échéance de guérison (la chaîne continue jusqu'à disparition, RAW REGLEBLESSURES.md:366-367),
+      // datée du jour d'échéance de cette guérison : `game_time_resolved_minutes` n'avance qu'à la confirmation de l'avance de
+      // temps, elle serait datée avant le jour où elle est réellement devenue plus légère.
+      const result = await resolveWoundImprovement(
+        trx, wound.id,
+        { campaignId: echeance.campaign_id, characterId: echeance.character_id },
+        { occurredAtGameMinutes: echeance.next_due_minutes },
+      )
+      undoEntries.push(...buildWoundImprovementUndoEntries(wound, result))
       reschedule = null
     } else {
       reschedule = buildRecurringReschedule(echeance)
@@ -193,7 +167,11 @@ export async function woundInfectionCheckHandler(trx, echeance) {
   const infects = !isSuccess || rule.infectsOnSuccess
   // Une case supplémentaire seulement quand le RAW la prévoit (WOUND_INFECTION.extraCase) : jamais pour Mortelle.
   if (infects && rule.extraCase) {
-    const insertion = await resolveWoundInsertion(trx, wound.char_sheet_id, wound.location, wound.severity)
+    // La case d'infection guérit comme toute autre case : elle naît avec sa propre échéance de guérison.
+    const insertion = await resolveWoundInsertion(
+      trx, wound.char_sheet_id, wound.location, wound.severity,
+      { campaignId: echeance.campaign_id, characterId: echeance.character_id },
+    )
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
   }
 

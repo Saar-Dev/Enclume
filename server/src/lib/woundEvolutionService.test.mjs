@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
-import { createEcheance } from './echeanceService.js'
+import { createEcheance, resolveEcheanceNow } from './echeanceService.js'
+import { initializeWoundHealingEcheance } from './woundHealingSchedule.js'
 import {
-  initializeWoundHealingEcheance, woundHealingCheckHandler,
+  woundHealingCheckHandler,
   computeWoundInfectionThreshold, woundInfectionCheckHandler,
 } from './woundEvolutionService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (wound_healing_check + infection)
@@ -181,7 +182,7 @@ test('handler : amélioration sur échéance récurrente, DERNIÈRE occurrence -
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.equal(result.reschedule, null)
-    assert.equal(result.undoEntries.length, 2)
+    assert.equal(result.undoEntries.length, 3) // la case d'origine, la Grave obtenue, l'échéance de guérison de la Grave
     const improved = await trx('character_wounds').where({ char_sheet_id: charSheet.id }).first()
     assert.equal(improved.severity, 'grave') // previousSeverity('critique')
     throw new Error('ROLLBACK_WES_TEST')
@@ -384,10 +385,15 @@ test('handler infection : Moyenne échouée -> case supplémentaire ajoutée', {
 
     const result = await woundInfectionCheckHandler(trx, fresh)
     assert.equal(result.effects.infected, true)
-    assert.equal(result.undoEntries.length, 1)
+    assert.equal(result.undoEntries.length, 2) // la case ajoutée + son échéance de guérison
 
     const woundsAfter = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
     assert.equal(woundsAfter.length, 2) // case supplémentaire réellement ajoutée
+    // Elle guérit comme toute autre case : sa propre échéance de guérison, à côté de celle (absente ici) de la case d'origine.
+    const added = woundsAfter.find(w => w.id !== wound.id)
+    const addedEcheance = await trx('game_echeances').where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' }).first()
+    assert.deepEqual(addedEcheance.payload, { woundId: added.id })
+    assert.equal(addedEcheance.character_id, character.id)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
@@ -500,7 +506,7 @@ test('handler : amélioration, DERNIÈRE occurrence, sur un Membre détruit -> d
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.equal(result.reschedule, null)
-    assert.equal(result.undoEntries.length, 2)
+    assert.equal(result.undoEntries.length, 3) // la case d'origine, la Critique obtenue, l'échéance de guérison de la Critique
     const improved = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
     assert.deepEqual(improved.map(w => [w.location, w.severity]), [['jambe_droite', 'critique']])
     throw new Error('ROLLBACK_WES_TEST')
@@ -560,6 +566,97 @@ test('handler infection : Membre détruit -> délai de survie affiché, aucune c
     const fail = await infectWith(false)
     assert.deepEqual(fail.result.effects.survivalHoursInfo, { hours: 5, onSuccess: false })
     assert.deepEqual(fail.wounds.map(w => w.severity), ['mort_subite'])
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+// ─── WOUND-HEAL-CHAIN-STOPS — la guérison se poursuit de gravité en gravité, jusqu'à disparition ─────────────────────
+
+test('handler : la case obtenue par une guérison naît avec son échéance, datée du jour d\'échéance (pas du repère mécanique courant)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    // Repère mécanique = 1000 : n'a pas encore avancé (l'avance de temps n'est confirmée qu'après la revue du MJ).
+    const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
+    const wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
+    const due = 1000 + 3 * WEEK_MINUTES
+    const echeance = await createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice: 'amelioration' },
+      nextDueMinutes: due, intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 1,
+    })
+    const result = await woundHealingCheckHandler(trx, echeance)
+
+    const [grave] = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+    assert.equal(grave.severity, 'grave')
+    assert.equal(grave.occurred_at_game_minutes, due, 'datée du jour où la Critique a guéri, pas de 1000')
+    const next = await trx('game_echeances')
+      .where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' }).whereNot({ id: echeance.id }).first()
+    assert.deepEqual(next.payload, { woundId: grave.id })
+    assert.equal(next.next_due_minutes, due + WEEK_MINUTES)
+    assert.equal(next.character_id, character.id)
+    assert.ok(result.undoEntries.some(e => e.table === 'game_echeances' && e.rowId === next.id && e.previousValues === null))
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler : la guérison s\'enchaîne Critique -> Grave -> Moyenne -> Légère (plus d\'échéance, elle guérit seule)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
+    let wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
+    let echeance = await createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice: 'amelioration' },
+      nextDueMinutes: 1000 + 3 * WEEK_MINUTES, intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 1,
+    })
+
+    const seen = []
+    for (let step = 0; step < 3; step += 1) {
+      await woundHealingCheckHandler(trx, echeance)
+      const [current] = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+      seen.push(current.severity)
+      if (current.severity === 'legere') break
+      const row = await trx('game_echeances')
+        .where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' })
+        .whereRaw("payload->>'woundId' = ?", [current.id]).first()
+      assert.ok(row, `la ${current.severity} obtenue a son échéance de guérison`)
+      echeance = { ...row, payload: { ...row.payload, mjChoice: 'amelioration' } }
+    }
+    assert.deepEqual(seen, ['grave', 'moyenne', 'legere'])
+
+    const [legere] = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+    const none = await trx('game_echeances')
+      .where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' })
+      .whereRaw("payload->>'woundId' = ?", [legere.id])
+    assert.equal(none.length, 0, 'la Légère guérit seule : aucune échéance')
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('resolveEcheanceNow : la guérison est journalisée en entier — annuler l\'avance de temps retire aussi l\'échéance de la case obtenue', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
+    const wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
+    const echeance = await createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice: 'amelioration' },
+      nextDueMinutes: 1000 + 3 * WEEK_MINUTES, intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 1,
+      status: 'pending_mj_review',
+    })
+    assert.deepEqual(await resolveEcheanceNow(trx, echeance.id), { resolved: true })
+
+    const { pending_advance_undo_log: undoLog } = await trx('campaigns').where({ id: campaign.id }).first()
+    // Même algorithme que gameTimeService.js:replayUndoEntry (privé), rejoué en sens inverse comme cancelPendingAdvance.
+    for (const { table, rowId, previousValues } of [...undoLog].reverse()) {
+      const existing = await trx(table).where({ id: rowId }).first()
+      if (previousValues !== null && existing) await trx(table).where({ id: rowId }).update(previousValues)
+      else if (previousValues === null && existing) await trx(table).where({ id: rowId }).del()
+      else if (previousValues !== null && !existing) await trx(table).insert(previousValues)
+    }
+
+    const wounds = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+    assert.deepEqual(wounds.map(w => [w.id, w.severity]), [[wound.id, 'critique']], 'la Critique est revenue, la Grave a disparu')
+    const echeances = await trx('game_echeances').where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' })
+    assert.deepEqual(echeances.map(e => e.id), [echeance.id], 'l\'échéance de la Grave obtenue est retirée')
+    assert.equal(echeances[0].status, 'pending_mj_review')
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })

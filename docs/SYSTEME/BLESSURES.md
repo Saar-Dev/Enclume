@@ -1,4 +1,7 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Amendé 2026-09-25 (soir) — guérison en chaîne (ticket `WOUND-HEAL-CHAIN-STOPS`)** : toute case de blessure écrite (coup reçu, promotion,
+> guérison, Chance, case d'infection) naît **avec** son échéance de guérison, programmée par le seul écrivain de lignes
+> (`woundUtils.js`) ; la guérison ne s'arrête plus après un cran. Voir §« Guérison et Infection ».
 > **Mis à jour 2026-09-25 (clôture du Lot 3 du chantier « 6ᵉ ligne du compteur »)** : le compteur a ses 6 lignes
 > (`mort_subite` = « Mort » en Tête/Corps, « Membre détruit » sur un membre), le débordement de la Mortelle, la Mort qui pose le
 > statut `dead` — **après la décision du joueur** —, la guérison du Membre détruit, et la **réaction de Chance** (§« Réaction de
@@ -21,8 +24,10 @@ shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALT
                             (isWoundLinePromoted, isFatalWound, getWoundEffects, getWoundHealing, WOUND_IMPROVEMENT_TARGET…)
 shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
 server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue) / getShockMalus(severity, location)
-server/lib/woundUtils.js  — insertion en cascade, amélioration (guérison), tri SQL, Test de Choc requis
-server/lib/woundService.js — applyWound (insertion + échéance + `dead` + diffusion) / removeWound / /heal
+server/lib/woundUtils.js  — SEUL écrivain de `character_wounds` (insertion en cascade, amélioration, case d'infection : chaque case naît
+                            avec son échéance de guérison), tri SQL, Test de Choc requis
+server/lib/woundHealingSchedule.js — programme l'échéance de guérison d'UNE case (module feuille, appelé par woundUtils.js)
+server/lib/woundService.js — applyWound (insertion + `dead` + diffusion) / removeWound / /heal
 ```
 
 ## Constantes blessures (woundConstants.js)
@@ -260,9 +265,27 @@ dessous, **sauf** la 6ᵉ ligne qui devient une **Critique** (RAW : « un Membre
 `REGLE_CHANCE.md` : une Mort subite rachetée donne une Critique). `previousSeverity` reste l'inverse mécanique de la promotion, pas la
 cible d'une guérison. `resolveWoundImprovement` (guérison, et Chance) l'utilise.
 
-**Limites connues** (suivies en tickets) : la blessure obtenue après une amélioration **n'a pas de nouvelle échéance de guérison**
-(seul `applyWound` en crée — [VÉRIFIÉ par exécution] : Critique → Grave, plus aucune échéance) ; `resolveWoundImprovement` ne vérifie
-pas la capacité de la ligne cible.
+**Chaque case naît avec son échéance** (2026-09-25, `WOUND-HEAL-CHAIN-STOPS`) : `woundUtils.js` est le SEUL écrivain de lignes
+`character_wounds` — insertion d'un coup, cascade de promotion, amélioration (guérison ou Chance), case ajoutée par une infection.
+Il programme l'échéance de guérison de la case écrite (`woundHealingSchedule.js:initializeWoundHealingEcheance`) dans la même
+transaction ; un appelant qui n'a pas le contexte `{ campaignId, characterId }` échoue tout de suite, il n'écrit jamais une case sans
+échéance. Conséquences : la guérison s'enchaîne (Critique → Grave → Moyenne → Légère, la Légère guérit seule) ; la case obtenue par
+la **Chance** guérit comme si elle avait été reçue ainsi (décision de Saar, 2026-09-25) ; la case ajoutée par une **infection** a sa propre
+échéance (idem).
+- **Départ de la durée de guérison de la case obtenue** : le jour d'échéance de la guérison qui l'a produite
+  (`echeance.next_due_minutes`), **jamais** `game_time_resolved_minutes` — celui-ci n'avance qu'à la confirmation de l'avance de temps,
+  après la revue du MJ : la case naîtrait datée avant le jour où elle est réellement devenue plus légère et guérirait en sautant des
+  semaines. La Chance, elle, s'exerce « maintenant » : repère mécanique courant.
+- **`steps`** : la Chance réduit de 1 à 3 crans d'un seul coup ; `resolveWoundImprovement(trx, id, schedule, { steps })` écrit UNE case à la
+  gravité d'arrivée (jamais une case intermédiaire et son échéance aussitôt supprimées).
+- **Annulation d'une avance de temps** : `buildWoundInsertionUndoEntries` / `buildWoundImprovementUndoEntries` journalisent aussi
+  l'échéance créée avec la case (`previousValues: null`), pour que `cancelPendingAdvance` la retire.
+
+**Limites connues** (suivies en tickets) : `resolveWoundImprovement` ne vérifie pas la capacité de la ligne cible (`WOUND-HEAL-LINE-CAPACITY`) ;
+l'échéance d'une case supprimée (Chance, `/heal`, suppression MJ, promotion) n'est pas retirée avec elle — elle se termine d'elle-même
+sans effet, mais reste `active` et s'afficherait sans blessure dans l'écran de revue du MJ ; les échéances d'infection créées par un
+Échec/Catastrophe n'ont pas d'entrée d'annulation ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée (pas
+d'horloge où programmer sa guérison).
 
 **`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
 `WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par
@@ -325,7 +348,8 @@ système Shadowrun 5 de FoundryVTT — décision pure, application après les d�
   **sous-transaction** : une panne de cette fonction annexe ne fait jamais échouer la blessure), publiée après la validation.
 - **Coût** (`shared/woundConstants.js:chanceCostOfStep`) : 1 point par cran (2 crans maximum) ; **3 points** pour ramener la 6ᵉ ligne à une
   **Critique** (un seul cran proposé) ; si la Critique est pleine, l'exception RAW « palier plein » ajoute 1 point par cran (Grave pour 4).
-  `computeAvailableSeverityReductions` retourne `{ degree, cost, targetSeverity }` ; le rachat réutilise `resolveWoundImprovement`.
+  `computeAvailableSeverityReductions` retourne `{ degree, cost, targetSeverity }` ; le rachat réutilise `resolveWoundImprovement` (un seul appel,
+  `steps = degree` ; la blessure obtenue a son échéance de guérison).
 - **Rachetable** : la 6ᵉ ligne écrite **directement par un coup ≥ 30** (Mort *et* Membre détruit). **Jamais** celle qui vient d'un
   **débordement** (2ᵉ Mortelle sur la Tête, cascade) : posée tout de suite, ligne de chat dédiée (décision de Saar, écart RAW — les lignes
   fusionnées par la promotion sont déjà supprimées, il n'y aurait rien à restaurer).

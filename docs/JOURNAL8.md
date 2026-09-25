@@ -8652,3 +8652,37 @@ Saar** (« fonctionnel, répond aux attentes »), logs sans erreur (mort posée 
 
 **Documentation** : `SYSTEME/BLESSURES.md` (§« Réaction de Chance »), `STATUTS_TOKEN.md`, `COMBAT.md` (§« Réaction de blessure »), `SERVICES_COMBAT.md`,
 `CONVENTIONS.md` §19 (P66-P70), `VOCABULARY.md`, `ROADMAP.md`, `client/public/CHANGELOG.md` (v258), `PLAN_CHANCE.md` §8, `PLAN_BLESSURE_SIXIEME_LIGNE.md`.
+
+---
+
+## Session (Dev) — 2026-09-25 — Guérison des blessures en chaîne : chaque case naît avec son échéance (`WOUND-HEAL-CHAIN-STOPS`)
+
+**Cause racine** [VÉRIFIÉ par exécution et par lecture] : seul `applyWound` programmait l'échéance de guérison ; les autres écrivains de lignes
+(`resolveWoundImprovement` pour la guérison et la Chance, `resolveWoundInsertion` pour la case d'infection) ne le faisaient pas. Une blessure
+ne perdait donc qu'un cran tout seul (Critique → Grave, puis plus rien) — le RAW dit qu'elle « décroît peu à peu jusqu'à disparaître »
+(`REGLEBLESSURES.md:366-367`). L'invariant tenait à la discipline de chaque appelant.
+
+**Décision d'architecture** : `woundUtils.js` devient le SEUL écrivain de `character_wounds` (`insertWoundRow`) ; chaque case écrite est programmée
+avec son échéance de guérison dans la même transaction (`woundHealingSchedule.js`, module feuille — pas d'import circulaire). Le contexte
+`{ campaignId, characterId }` est un paramètre OBLIGATOIRE des écrivains (échec immédiat s'il manque) : c'est l'identité que `applyWound` fournissait
+déjà, jamais déduite de la fiche. Modèle : « écrire la donnée et son suivi planifié dans la même transaction » (transactional outbox,
+microservices.io ; DBOS Docs).
+
+**Décisions de Saar (2026-09-25)** : (1) la blessure obtenue par la **Chance** guérit ensuite avec sa propre échéance, à partir de ce moment (elle
+« devient » une blessure plus légère : comme si elle avait été reçue ainsi) ; (2) la **case ajoutée par une infection** a sa propre échéance de guérison
+(sinon elle ne guérirait jamais ; le MJ voit une ligne de revue de plus).
+
+**Trouvailles corrigées avec le fond** : (a) la case obtenue par une guérison est datée du **jour d'échéance** (`echeance.next_due_minutes`), pas de
+`game_time_resolved_minutes` (qui n'avance qu'à la confirmation de l'avance de temps : elle serait datée avant sa naissance réelle et guérirait en
+sautant des semaines) ; (b) la Chance à 2 crans écrit UNE case à la gravité d'arrivée (`steps`), plus de case intermédiaire et d'échéance aussitôt
+supprimées ; (c) les entrées d'annulation d'avance de temps incluent l'échéance créée (`buildWoundImprovementUndoEntries`, nouveau ; `buildWoundInsertionUndoEntries`
+étendu) — vérifié par un rejeu complet du journal.
+
+**Comportement inchangé volontairement** : une blessure Moyenne+ sur un personnage du Coffre (sans campagne) échoue toujours (`createEcheance` refuse une
+campagne nulle) — ticketé, pas modifié ici.
+
+**Testé** : `node --env-file=.env --test` sur `woundUtils.test.mjs`, `woundEvolutionService.test.mjs`, `woundService.test.mjs` — 120/120 (17 tests nouveaux : échéance à chaque
+écriture, date de départ, chaîne complète Critique → Grave → Moyenne → Légère, Chance 1 et 2 crans, annulation rejouée, case d'infection, garde du contexte) ; `node --check` ;
+`git diff --check` ; aucun résidu en base (vérifié par lecture). **Non testé** : scénario réel en jeu (avance de temps → revue MJ → guérison d'une Critique jusqu'à sa Légère ;
+réduction par la Chance suivie d'une avance de temps) — à la charge de Saar. **Données** : aucune migration ; les blessures déjà en base gardent leurs échéances (aucune blessure
+guérissable n'était sans échéance en local ; le serveur distant n'a pas été inspecté [INCONNU]). **Retour arrière** : `git revert` du commit (additif côté données).

@@ -168,6 +168,52 @@ test('resolveChanceChoice("reduce_2") dépense 2 points et réduit la Blessure d
   }
 })
 
+// WOUND-HEAL-CHAIN-STOPS — la blessure réduite par la Chance « devient » une blessure plus légère (REGLE_CHANCE.md:116-121) :
+// elle guérit ensuite comme si elle avait été reçue ainsi, avec sa propre échéance de guérison.
+const healingEcheancesOf = (campaignId) => db('game_echeances').where({ campaign_id: campaignId, condition_type: 'wound_healing_check' })
+
+test('resolveChanceChoice("reduce_1") : la Moyenne obtenue a sa propre échéance de guérison (3 jours)', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
+
+    const [moyenne] = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })
+    assert.equal(moyenne.severity, 'moyenne')
+    const mine = (await healingEcheancesOf(fixture.campaign.id)).filter(e => e.payload.woundId === moyenne.id)
+    assert.equal(mine.length, 1)
+    assert.equal(mine[0].character_id, fixture.character.id)
+    assert.equal(mine[0].next_due_minutes, moyenne.occurred_at_game_minutes + 3 * 24 * 60)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('resolveChanceChoice("reduce_2") sur une Mortelle : UNE seule échéance, celle de la Grave obtenue — jamais une Critique intermédiaire', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'mortelle',
+    })
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_2' })
+
+    const wounds = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })
+    assert.deepEqual(wounds.map(w => w.severity), ['grave'])
+    const woundIds = new Set(wounds.map(w => w.id))
+    const alive = (await healingEcheancesOf(fixture.campaign.id)).filter(e => woundIds.has(e.payload.woundId))
+    assert.equal(alive.length, 1, 'une seule échéance pour la Grave')
+    // Celle de la Mortelle d\'origine n\'est plus reliée à aucune blessure (elle se termine d\'elle-même) ; aucune Critique intermédiaire n\'a existé.
+    const all = await healingEcheancesOf(fixture.campaign.id)
+    assert.equal(all.length, 2, 'la Mortelle d\'origine + la Grave obtenue — pas de troisième pour une Critique intermédiaire')
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
 test('resolveChanceChoice(null) (timeout) laisse la Blessure inchangée, aucune dépense', { skip }, async () => {
   const fixture = await createFixture()
   try {
