@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import {
-  nextSeverity, previousSeverity, resolveWoundInsertion, resolveWoundImprovement,
+  nextSeverity, previousSeverity, improvedSeverity, resolveWoundInsertion, resolveWoundImprovement,
   buildWoundInsertionUndoEntries, computeAvailableSeverityReductions,
   isShockTestRequired, woundSeverityRankSql, WoundLineFullError,
 } from './woundUtils.js'
@@ -25,6 +25,16 @@ test('previousSeverity est l\'inverse exact de nextSeverity, sur toute l\'échel
   assert.equal(nextSeverity('legere'), 'moyenne')
   assert.equal(nextSeverity('mortelle'), 'mort_subite')
   assert.equal(nextSeverity('mort_subite'), null)
+})
+
+test('improvedSeverity : la gravité juste en dessous, sauf la 6ᵉ ligne (Membre détruit / Mort rachetée → Critique, pas Mortelle)', () => {
+  assert.equal(improvedSeverity('legere'), null)
+  assert.equal(improvedSeverity('moyenne'), 'legere')
+  assert.equal(improvedSeverity('grave'), 'moyenne')
+  assert.equal(improvedSeverity('critique'), 'grave')
+  assert.equal(improvedSeverity('mortelle'), 'critique')
+  assert.equal(improvedSeverity('mort_subite'), 'critique')
+  assert.equal(previousSeverity('mort_subite'), 'mortelle', 'previousSeverity reste l\'inverse mécanique de la promotion')
 })
 
 test('isShockTestRequired : RAW — Membre détruit (bras/jambe) fait un Test de Choc, la Mort subite (Tête/Corps) aucun', () => {
@@ -149,6 +159,23 @@ test('resolveWoundImprovement : Grave -> Moyenne, nouvel horodatage, is_stabiliz
 
     const stillThere = await trx('character_wounds').where({ id: original.id }).first()
     assert.equal(stillThere, undefined)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('resolveWoundImprovement : Membre détruit (mort_subite sur un bras) -> Critique au même endroit, jamais une Mortelle', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const charSheetId = charSheet.id
+    const [wound] = await trx('character_wounds')
+      .insert({ char_sheet_id: charSheetId, location: 'bras_gauche', severity: 'mort_subite', is_stabilized: true, occurred_at_game_minutes: 0 })
+      .returning('*')
+    const result = await resolveWoundImprovement(trx, wound.id)
+    assert.equal(result.healed, false)
+    assert.equal(result.wound.severity, 'critique')
+    assert.equal(result.wound.location, 'bras_gauche')
+    assert.equal(result.wound.is_stabilized, true, 'la stabilisation est conservée')
+    assert.deepEqual((await trx('character_wounds').where({ char_sheet_id: charSheetId })).map(w => w.severity), ['critique'])
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })

@@ -2,7 +2,7 @@
 // consommateur réel, docs/PLAN_BLESSURES_GUERISON.md §5). Payload des échéances reste minimal
 // (identifiants uniquement, convention Lot 2 2026-07-30) — l'état métier vit sur `character_wounds`,
 // jamais dupliqué ici.
-import { WOUND_HEALING, WOUND_INFECTION } from '../../../shared/woundConstants.js'
+import { WOUND_INFECTION, getWoundHealing } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries } from './woundUtils.js'
 import { calcAttributeNA } from './charStats.js'
@@ -13,9 +13,10 @@ const WEEK_MINUTES = 7 * MINUTES_PER_DAY
 const INFECTION_TICK_MINUTES = 2 * MINUTES_PER_DAY
 
 // Appelée juste après l'insertion d'une blessure (woundService.js applyWound), uniquement pour
-// Moyenne+ — Légère guérit seule, sans Test ni échéance (RAW, REGLEBLESSURES.md:402-403).
+// Moyenne+ — Légère guérit seule, sans Test ni échéance (RAW, REGLEBLESSURES.md:402-403). Une Mort (Tête/Corps) n'en a
+// pas non plus (getWoundHealing = null) ; un Membre détruit a la sienne (3 semaines, soins constants).
 export async function initializeWoundHealingEcheance(trx, { campaignId, characterId, wound }) {
-  const healing = WOUND_HEALING[wound.severity]
+  const healing = getWoundHealing(wound.severity, wound.location)
   if (!healing) return null
 
   const payload = { woundId: wound.id }
@@ -71,7 +72,7 @@ function buildInfectionSpawn(wound, echeance, { intervalMinutes, occurrencesRema
 // comme longueur, pas un reliquat qui n'existe pas.
 function computeCatastropheInfectionOccurrences(wound, echeance) {
   const isOneShot = echeance.occurrences_remaining === null
-  const windowMinutes = isOneShot ? WOUND_HEALING[wound.severity].durationMinutes : echeance.interval_minutes
+  const windowMinutes = isOneShot ? getWoundHealing(wound.severity, wound.location).durationMinutes : echeance.interval_minutes
   return Math.round(windowMinutes / INFECTION_TICK_MINUTES)
 }
 
@@ -109,7 +110,7 @@ export async function woundHealingCheckHandler(trx, echeance) {
   } else if (mjChoice === 'echec') {
     reschedule = isOneShot
       ? (echeance.payload.soinsContinues
-          ? { intervalMinutes: WOUND_HEALING[wound.severity].durationMinutes, occurrencesRemaining: 1 }
+          ? { intervalMinutes: getWoundHealing(wound.severity, wound.location).durationMinutes, occurrencesRemaining: 1 }
           : null)
       : buildRecurringReschedule(echeance)
     spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: null, occurrencesRemaining: null }))
@@ -196,10 +197,10 @@ export async function woundInfectionCheckHandler(trx, echeance) {
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
   }
 
-  // Mortelle/Membre détruit (§3.3) : délai de survie affiché au MJ, jamais appliqué automatiquement
+  // Mortelle/Membre détruit (§3.3, `survivalHours`) : délai de survie affiché au MJ, jamais appliqué automatiquement
   // (docs/PLAN_BLESSURES_GUERISON.md §8 point 1, confirmé) — la mort reste narrative.
   let survivalHoursInfo = null
-  if (wound.severity === 'mortelle') {
+  if (rule.survivalHours) {
     const conNA = await computeConstitutionNA(trx, wound.char_sheet_id)
     survivalHoursInfo = { hours: isSuccess ? conNA : Math.floor(conNA / 2), onSuccess: isSuccess }
   }

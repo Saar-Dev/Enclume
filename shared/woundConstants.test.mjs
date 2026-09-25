@@ -4,6 +4,7 @@ import {
   WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage,
   WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
   isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
+  getWoundHealing, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
 } from './woundConstants.js'
 
 test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
@@ -210,4 +211,36 @@ test('isFatalWound / hasFatalWound - seule la 6ᵉ gravité en Tête ou au Corps
   assert.equal(hasFatalWound(null), false)
   assert.equal(hasFatalWound([{ severity: 'mortelle', location: 'tete' }, { severity: 'mort_subite', location: 'bras_gauche' }]), false)
   assert.equal(hasFatalWound([{ severity: 'legere', location: 'corps' }, { severity: 'mort_subite', location: 'corps' }]), true)
+})
+
+test('getWoundHealing - Légère : aucune guérison à suivre ; Mort (Tête/Corps) : aucune échéance ; Membre détruit : 3 semaines, soins constants', () => {
+  assert.equal(getWoundHealing('legere', 'bras_droit'), null)
+  assert.equal(getWoundHealing('mort_subite', 'tete'), null)
+  assert.equal(getWoundHealing('mort_subite', 'corps'), null)
+  for (const location of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) {
+    assert.deepEqual(getWoundHealing('mort_subite', location), { durationMinutes: 21 * 1440, soinsConstants: true }, location)
+  }
+  // Les autres gravités ne dépendent pas de la localisation (Mortelle : 5 semaines partout, Tête/Corps compris).
+  for (const location of WOUND_LOCATIONS) {
+    assert.equal(getWoundHealing('mortelle', location), WOUND_HEALING.mortelle, location)
+    assert.equal(getWoundHealing('critique', location), WOUND_HEALING.critique, location)
+  }
+})
+
+test('WOUND_HEALING.membreDetruit reste cohérent avec la table RAW de l\'Encyclopédie (DUREE_GUERISON_SOINS_TABLE)', () => {
+  assert.equal(DUREE_GUERISON_SOINS_TABLE.membreDetruit.duree, '3 semaines')
+  assert.equal(WOUND_HEALING.membreDetruit.durationMinutes, 3 * 7 * 1440)
+  assert.equal(WOUND_HEALING.membreDetruit.soinsConstants, DUREE_GUERISON_SOINS_TABLE.membreDetruit.soinsConstants)
+})
+
+test('WOUND_INFECTION.mort_subite - même ligne RAW que la Mortelle (« Mortelles/Membres détruits »), survie en heures, jamais une case en plus', () => {
+  assert.equal(WOUND_INFECTION.mort_subite, WOUND_INFECTION.mortelle, 'règle partagée, jamais recopiée')
+  assert.equal(WOUND_INFECTION.mort_subite.baseModifier, -10)
+  assert.equal(WOUND_INFECTION.mort_subite.extraCase, false)
+  assert.equal(WOUND_INFECTION.mort_subite.survivalHours, true)
+  for (const severity of ['moyenne', 'grave', 'critique']) assert.equal(WOUND_INFECTION[severity].survivalHours, undefined, severity)
+})
+
+test('WOUND_IMPROVEMENT_TARGET - un Membre détruit (ou une Mort rachetée) devient une Critique (REGLEBLESSURES.md:368, REGLE_CHANCE.md:122)', () => {
+  assert.deepEqual(WOUND_IMPROVEMENT_TARGET, { mort_subite: 'critique' })
 })

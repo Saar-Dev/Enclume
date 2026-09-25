@@ -100,13 +100,31 @@ export function isMortalWoundImmobilized(wounds) {
 // `legere` volontairement absente : guérit seule, sans Test, jamais d'échéance `wound_healing_check`.
 // soinsConstants=true -> échéance récurrente hebdomadaire (Test de Médecine chaque semaine) ;
 // false -> échéance unique, ponctuelle, à la fin de la durée.
-// "Membre détruit" non modélisé (Option de campagne différée, docs/ROADMAP.md) — une Mortelle sur
-// Bras/Jambe suit la ligne `mortelle` ci-dessous, pas une ligne séparée.
+// Les clés sont des gravités, sauf `membreDetruit` : la 6ᵉ gravité `mort_subite` SUR UN BRAS OU UNE JAMBE (RAW : ligne
+// « Membres détruits », 3 semaines, Chirurgie + Médecine, soins constants). Ne se lit pas par `WOUND_HEALING[severity]` :
+// passer par `getWoundHealing(severity, location)`, qui choisit la bonne ligne (et n'en renvoie aucune pour une Mort).
 export const WOUND_HEALING = {
   moyenne:  { durationMinutes: 3 * MINUTES_PER_DAY,  soinsConstants: false },
   grave:    { durationMinutes: 7 * MINUTES_PER_DAY,  soinsConstants: false },
   critique: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true },
   mortelle: { durationMinutes: 35 * MINUTES_PER_DAY, soinsConstants: true },
+  membreDetruit: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true },
+}
+
+// Ligne de WOUND_HEALING d'une blessure (gravité stockée + localisation moteur), ou null si elle n'a pas d'échéance de
+// guérison : Légère (guérit seule) ; Mort en Tête/Corps (« le personnage meurt sur le coup » : aucune guérison, la
+// résurrection reste une décision du MJ). Autorité unique de « cette blessure guérit-elle, et en combien de temps ? ».
+export function getWoundHealing(severity, location) {
+  if (severity === 'mort_subite') return isSuddenDeathLocation(location) ? null : WOUND_HEALING.membreDetruit
+  return WOUND_HEALING[severity] ?? null
+}
+
+// Gravité qui REMPLACE une blessure quand elle s'améliore d'un cran, si ce n'est pas la gravité juste en dessous dans
+// WOUND_SEVERITIES. RAW (REGLEBLESSURES.md:368) : « un Membre détruit devient une Blessure critique » ; REGLE_CHANCE.md:122 :
+// racheter une Mort subite par la Chance donne aussi une Blessure critique. Autorité unique de la cible d'amélioration
+// (server/src/lib/woundUtils.js:improvedSeverity), lue par la guérison et, au Lot 3, par la Chance.
+export const WOUND_IMPROVEMENT_TARGET = {
+  mort_subite: 'critique',
 }
 
 // Table RAW « Infection » (REGLEBLESSURES.md:436-472, vérifiée 2026-07-30 contre Polaris 3ème
@@ -123,11 +141,21 @@ export const WOUND_HEALING = {
 // jamais une case en plus. Cocher une Mortelle de plus serait faux, et avec la 6ᵉ ligne ferait mourir/détruire un membre
 // par simple infection (Mortelle pleine → débordement). Le délai de survie reste affiché au MJ, jamais appliqué
 // (décision du 2026-07-30, woundEvolutionService.js:woundInfectionCheckHandler).
+//
+// survivalHours : la conséquence est un délai de survie en heures (NA(CON), ou la moitié sur un échec) affiché au MJ.
+// `mort_subite` = « Membres détruits » du RAW (même ligne que les Mortelles, REGLEBLESSURES.md:470-485) : la règle est
+// PARTAGÉE, jamais recopiée. Une Mort (Tête/Corps) n'a ni guérison ni infection (getWoundHealing = null : aucune
+// échéance, donc cette ligne n'y est jamais lue).
+const MORTAL_INFECTION_RULE = {
+  baseModifier: -10, caseMalus: true, periodMalus: false, infectsOnSuccess: true, extraCase: false, survivalHours: true,
+}
+
 export const WOUND_INFECTION = {
   moyenne:  { baseModifier: 5,   caseMalus: false, periodMalus: false, infectsOnSuccess: false, extraCase: true },
   grave:    { baseModifier: 0,   caseMalus: true,  periodMalus: true,  infectsOnSuccess: false, extraCase: true },
   critique: { baseModifier: -5,  caseMalus: true,  periodMalus: true,  infectsOnSuccess: true,  extraCase: true },
-  mortelle: { baseModifier: -10, caseMalus: true,  periodMalus: false, infectsOnSuccess: true,  extraCase: false },
+  mortelle: MORTAL_INFECTION_RULE,
+  mort_subite: MORTAL_INFECTION_RULE,
 }
 // Table RAW « Seuils de blessures » (LdB p.234) — seuil de Dommages à partir duquel
 // une blessure d'une gravité donnée est infligée. La gravité retenue est la plus

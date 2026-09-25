@@ -460,3 +460,106 @@ test('handler infection : payload.periodesSansSoin incrémente et rollResult est
 })
 
 test.after(async () => { await db.destroy() })
+
+// ─── Lot 2b — la 6ᵉ gravité (mort_subite) : Membre détruit (bras/jambe) guérit ; une Mort (Tête/Corps) ne guérit pas ──
+
+test('initializeWoundHealingEcheance : Membre détruit (bras) -> échéance hebdomadaire récurrente, 3 occurrences (RAW : 3 semaines, soins constants)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'mort_subite', occurredAt: 1000 })
+    const echeance = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+    assert.equal(echeance.condition_type, 'wound_healing_check')
+    assert.equal(echeance.next_due_minutes, 1000 + WEEK_MINUTES)
+    assert.equal(echeance.interval_minutes, WEEK_MINUTES)
+    assert.equal(echeance.occurrences_remaining, 3)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('initializeWoundHealingEcheance : Mort (Tête ou Corps) -> aucune échéance (la résurrection reste une décision du MJ)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    for (const location of ['tete', 'corps']) {
+      const { campaign, character, charSheet } = await createFixture(trx)
+      const wound = await createWound(trx, charSheet.id, { location, severity: 'mort_subite', occurredAt: 1000 })
+      const result = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+      assert.equal(result, null, location)
+      assert.equal((await trx('game_echeances').where({ campaign_id: campaign.id })).length, 0, location)
+    }
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler : amélioration, DERNIÈRE occurrence, sur un Membre détruit -> devient une Critique (jamais une Mortelle)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { location: 'jambe_droite', severity: 'mort_subite', occurredAt: 1000 })
+    const echeance = await createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice: 'amelioration' },
+      nextDueMinutes: 1000 + 3 * WEEK_MINUTES, intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 1,
+    })
+    const result = await woundHealingCheckHandler(trx, echeance)
+    assert.equal(result.reschedule, null)
+    assert.equal(result.undoEntries.length, 2)
+    const improved = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+    assert.deepEqual(improved.map(w => [w.location, w.severity]), [['jambe_droite', 'critique']])
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler : échec puis catastrophe sur un Membre détruit -> cycle hebdomadaire conservé, infection déclenchée (sans erreur)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { location: 'bras_droit', severity: 'mort_subite', occurredAt: 1000 })
+    const heal = (mjChoice) => createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice },
+      nextDueMinutes: 1000 + WEEK_MINUTES, intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 3,
+    })
+
+    const echec = await woundHealingCheckHandler(trx, await heal('echec'))
+    assert.deepEqual(echec.reschedule, { intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 2 })
+    assert.equal(echec.spawn.length, 1)
+    assert.equal(echec.spawn[0].conditionType, 'wound_infection_check')
+
+    const catastrophe = await woundHealingCheckHandler(trx, await heal('catastrophe'))
+    assert.equal(catastrophe.spawn[0].occurrencesRemaining, Math.round(WEEK_MINUTES / (2 * MINUTES_PER_DAY)))
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('computeWoundInfectionThreshold : Membre détruit = NA(CON) - 10, comme la Mortelle (RAW « Mortelles/Membres détruits »)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    await setConstitution(trx, charSheet.id, 14)
+    const wound = await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'mort_subite' })
+    assert.equal(await computeWoundInfectionThreshold(trx, wound, 10), 14 - 10)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler infection : Membre détruit -> délai de survie affiché, aucune case ajoutée (pas de débordement), jamais appliqué', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const infectWith = async (isSuccess) => {
+      const { campaign, character, charSheet } = await createFixture(trx)
+      await setConstitution(trx, charSheet.id, 10)
+      const wound = await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'mort_subite' })
+      const echeance = await createInfectionEcheance(trx, campaign, character, wound)
+      await trx('game_echeances').where({ id: echeance.id }).update({ payload: { ...echeance.payload, rollResult: { isSuccess } } })
+      const result = await woundInfectionCheckHandler(trx, await trx('game_echeances').where({ id: echeance.id }).first())
+      const wounds = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+      return { result, wounds }
+    }
+
+    const ok = await infectWith(true)
+    assert.deepEqual(ok.result.effects.survivalHoursInfo, { hours: 10, onSuccess: true })
+    assert.equal(ok.result.effects.infected, true)
+    assert.equal(ok.result.undoEntries.length, 0)
+    assert.deepEqual(ok.wounds.map(w => w.severity), ['mort_subite'])
+
+    const fail = await infectWith(false)
+    assert.deepEqual(fail.result.effects.survivalHoursInfo, { hours: 5, onSuccess: false })
+    assert.deepEqual(fail.wounds.map(w => w.severity), ['mort_subite'])
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})

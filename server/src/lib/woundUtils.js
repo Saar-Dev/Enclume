@@ -1,6 +1,6 @@
 import { AppError } from './AppError.js'
 import {
-  WOUND_MAX_COUNTS, WOUND_SEVERITIES, isWoundLinePromoted, isSuddenDeathLocation,
+  WOUND_MAX_COUNTS, WOUND_SEVERITIES, WOUND_IMPROVEMENT_TARGET, isWoundLinePromoted, isSuddenDeathLocation,
 } from '../../../shared/woundConstants.js'
 
 // Test de Choc requis ? RAW : Grave (Tête/Corps), Critique, Mortelle, et Membre détruit (bras/jambe). La Mort subite
@@ -36,6 +36,13 @@ export function nextSeverity(severity) {
 export function previousSeverity(severity) {
   const idx = WOUND_SEVERITIES.indexOf(severity)
   return idx > 0 ? WOUND_SEVERITIES[idx - 1] : null
+}
+
+// Gravité qu'une blessure devient quand elle s'AMÉLIORE d'un cran (guérison) : la gravité juste en dessous, sauf la 6ᵉ
+// ligne — un Membre détruit (ou une Mort rachetée) devient une Critique, pas une Mortelle (WOUND_IMPROVEMENT_TARGET).
+// `previousSeverity` reste l'inverse mécanique de la promotion (`nextSeverity`) ; ce n'est PAS la cible d'une guérison.
+export function improvedSeverity(severity) {
+  return WOUND_IMPROVEMENT_TARGET[severity] ?? previousSeverity(severity)
 }
 
 // campaigns.game_time_resolved_minutes, jamais game_time_minutes (affiché) — voir
@@ -107,7 +114,7 @@ export async function resolveWoundImprovement(trx, woundId) {
 
   await trx('character_wounds').where({ id: woundId }).del()
 
-  const prev = previousSeverity(wound.severity)
+  const prev = improvedSeverity(wound.severity)
   if (!prev) return { wound: null, healed: true }
 
   const occurredAtGameMinutes = await getResolvedGameMinutes(trx, wound.char_sheet_id)
