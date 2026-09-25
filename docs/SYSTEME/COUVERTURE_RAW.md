@@ -48,11 +48,12 @@ dommages, protections) est ✅ fait. Gaps identifiés :
 Blessures physiques, Choc, Soins/guérison, Chutes/Acide/Décompression/Feu/Froid/Noyade sont ✅ fait
 et confirmés en navigateur (`PLANS/PLAN_FATIGUE_DOMMAGES.md` Lots 0-3, `docs/Old/PLAN_BLESSURES_GUERISON.md`).
 
-⚠️ **Écart connu (2026-09-24)** : le compteur de blessures n'a que **5 lignes sur les 6** du RAW — la 6ᵉ « Mort subite /
-Membre détruit » (seuil 30, `REGLEBLESSURES.md`) est absente du moteur (un coup ≥ 30 reste une Mortelle ; le débordement d'une ligne
-Mortelle pleine n'écrit aucune blessure). Chantier cadré : `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots 2-4). En revanche la **mort
-comme statut de token** (`dead`, cadavre qui prend des blessures sans Chance ni Choc) est ✅ livrée et validée en jeu
-(`SYSTEME/STATUTS_TOKEN.md`).
+✅ **Compteur de blessures à 6 lignes (2026-09-25)** : la 6ᵉ « Mort subite / Membre détruit » (seuil 30, `REGLEBLESSURES.md`) est dans le moteur
+(`mort_subite`) — un coup ≥ 30 ou le dépassement de la ligne Mortelle l'écrit ; la Mort (Tête/Corps) pose le statut `dead` ; le Membre
+détruit interdit les Tests, immobilise une jambe, guérit en 3 semaines vers une Critique ; l'infection d'une Mortelle ou d'un Membre détruit
+n'ajoute pas de case (survie en heures). **Reste** : la Chance sur la 6ᵉ ligne (3 points → Critique, Lot 3) et la paralysie permanente du
+membre avec son rendu (Lot 4) — `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` ; la Stabilisation reste non modélisée (ticket). La **mort comme
+statut de token** (`dead`) est ✅ livrée et validée en jeu (`SYSTEME/STATUTS_TOKEN.md`).
 
 🔲 non fait, mineur : Infection, Suractivité, Séquelles, Souffle, Hyperventilation, Drogues
 (Narco-dommages/Accoutumance/Dépendance/manque/Effets secondaires), Irradiations. Non pertinent pour

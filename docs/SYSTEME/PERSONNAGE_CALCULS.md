@@ -93,7 +93,7 @@ Combat
 Fonction	Fichier	Rôle
 calcResistanceArmure(items)	charStats	Mille-feuille ETQ/PRT
 getModDom(for_na)	charStats	Modificateur de dommages CaC
-getShockMalus(severity, location, is_lethal)	charStats	Malus au Test de Choc
+getShockMalus(severity, location)	charStats	Malus au Test de Choc (lu dans BLESSURE_EFFETS_TABLE, `getWoundEffects`)
 calcWoundPenalty(wounds)	charStats	Malus blessures (pire seule)
 calcEncumbrancePenalty(weight, for, mult)	charStats	Malus encombrement
 5. Pièges

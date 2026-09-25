@@ -315,7 +315,7 @@ PK = `id UUID`. FK `char_sheet_id → char_sheet.id ON DELETE CASCADE`. Migratio
 | idx | INTEGER | NOT NULL | position dans la ligne (0-based) |
 | created_at | TIMESTAMPTZ | DEFAULT now() | |
 
-Règle de promotion : si une ligne de sévérité se remplit → `resolveWoundInsertion()` supprime la ligne entière et insère 1 case à la sévérité suivante (récursif).
+Règle de promotion : si une ligne de sévérité se remplit → `resolveWoundInsertion()` supprime la ligne entière et insère 1 case à la sévérité suivante (récursif) ; la ligne Mortelle ne se convertit qu'au dépassement. 6 gravités depuis le 2026-09-25 (`mort_subite` = « Mort » / « Membre détruit ») : `SYSTEME/BLESSURES.md`.
 
 ---
 

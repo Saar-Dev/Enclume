@@ -4,7 +4,8 @@
 > transversal « un token porte des statuts » : où ils vivent, qui les pose, ce que chacun implique, ce qu'il
 > advient d'un token mort. Les règles Polaris (Choc, Fatigue, Froid…) restent dans leurs documents ; les
 > effets d'un statut sur le déroulé d'un combat sont dans `COMBAT.md` / `COMBAT_FLUX.md`. Historique et décisions :
-> `docs/Old/PLAN_STATUT_MORT.md` (archivé).
+> `docs/Old/PLAN_STATUT_MORT.md` (archivé). **Mis à jour 2026-09-25** : la blessure « Mort » du compteur pose maintenant `dead` (Lot 2b du
+> chantier « 6ᵉ ligne », §4 et §6).
 
 ## 1. Deux choses distinctes
 
@@ -39,6 +40,7 @@ Forme d'une entrée : `{ code, category, ...drapeaux }` — un drapeau absent va
 | `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
 | `isDeath` | le statut fait du token un cadavre (§6) | `deathStateService.js` |
 | `incompatibleWithDeath` | état d'un corps qui fonctionne : interdit sur un cadavre, retiré à la mort (§6) | `statusService.js`, `canEditTokenStatus` |
+| `setByFatalWound` | le statut que POSE une blessure « Mort » (`FATAL_WOUND_STATUS_CODE` ; un seul : `dead`) | `statusService.js` (`reconcileWoundDeath`) |
 
 Les 16 codes (l'ordre est celui du panneau) :
 
@@ -64,7 +66,8 @@ Les 16 codes (l'ordre est celui du panneau) :
 
 Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STATUS_CODES`, `PANEL_STATUSES`,
 `DECLARATION_BLOCKING_STATUS_CODES`, `DEFENSELESS_STATUS_CODES`, `COMBAT_END_CLEARED_STATUS_CODES`,
-`GM_ONLY_STATUS_CODES`, `DEATH_STATUS_CODES`, `DEATH_INCOMPATIBLE_STATUS_CODES`. `findTokenStatus(code)` est
+`GM_ONLY_STATUS_CODES`, `DEATH_STATUS_CODES`, `DEATH_INCOMPATIBLE_STATUS_CODES` ; constantes `FATAL_WOUND_STATUS_CODE` (code posé par une
+blessure « Mort ») et `STATUS_SOURCE_WOUND` (valeur `'wound'` de `data.source`, §4). `findTokenStatus(code)` est
 **tolérant** : code inconnu → `undefined`, jamais une erreur. Les dangers environnementaux (`burning`, `acid`,
 `decompression`) passent par `exposeToHazard`/`clearHazard` (leur `data` — formule, localisation — ne doit pas être
 écrasée par une bascule nue) ; l'hypothermie par le formulaire Froid (la bascule nue reste acceptée du MJ seul, `gmOnly`) ; `evanoui` n'est posé que par la Fatigue.
@@ -94,6 +97,7 @@ rien de la *manière* de poser (bascule nue = `manualToggle`, ou formulaire déd
 | MJ (formulaires du panneau) | dangers (`exposeToHazard`/`clearHazard`, routes REST), froid/hypothermie (`coldExposureService.js`) | `environmentalHazardService.js`, `coldExposureService.js` |
 | Choc, Fatigue, froid (automatique) | `stunned` / `unconscious` / `evanoui` | **`applyStunWithDuration`** (`statusService.js`) — unique écrivain automatique de cette famille (exclusion mutuelle) |
 | MJ (étourdissement manuel avec durée) | idem | `COMBAT_APPLY_STUN` → `applyStunWithDuration(…, { gmOverride: true })` |
+| Blessure « Mort » (automatique) | `dead`, marqué `data.source = 'wound'`, sur tous les tokens du personnage ; retiré avec la blessure, mais **seulement** s'il porte cette marque | `reconcileWoundDeath` (dans la transaction de `applyWound`/`removeWound`, `statusService.js`) puis `announceWoundDeath` après validation |
 | Mods d'arme, `iem_survival` | statuts propres (voir §8) | `applyModStatus` |
 | Purge | statuts expirés (`expires_at_turn ≤ tour`) à `endTurn` ; statuts `clearedAtCombatEnd` à la fin du combat ; **tous** les statuts à `/heal` (résurrection voulue) | `combatTurnEngine.js`, `socketCombatState.js`, `woundService.js` |
 
@@ -123,8 +127,9 @@ pose `done`).
 ## 6. Le cadavre (statut `dead`)
 
 `dead` : `gmOnly`, `blocksDeclaration`, `defenseless`, `isDeath`, sans expiration, **jamais** `clearedAtCombatEnd` —
-seul le MJ le pose ou le retire (bascule ou `/heal`). Pour l'instant posé à la main ; la blessure « Mort » du compteur
-(`PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 2) le posera. **Règle de Saar : le cadavre reste là et prend des blessures**
+seul le MJ le pose ou le retire à la main (bascule ou `/heal`, qui soigne tout, y compris un `dead` posé à la main — décision de Saar 2026-09-25) ;
+la blessure « Mort » du compteur (6ᵉ ligne en Tête/Corps) le pose aussi automatiquement et le retire avec elle (`BLESSURES.md`, « Mort et cadavre »).
+**Règle de Saar : le cadavre reste là et prend des blessures**
 (des technologies de résurrection existent) — il reste une cible (aucun filtrage des zones d'effet) mais ne peut **ni
 esquiver ni dépenser de Chance**.
 
@@ -149,7 +154,8 @@ Conséquences (toutes en `enforced`) :
    `applyStun` en aval n'est atteint.
 5. **Purge à la mort** — `applyDeathConsequences(io, db, campaignId, characterId)` (`statusService.js`) retire les
    états interdits de TOUS les tokens du personnage et l'étourdissement en attente (`combat_pending`) ; appelée par la
-   bascule `dead` de `socketToken.js` (et par le Lot 2 pour la blessure « Mort »). Ne retire jamais un état compatible.
+   bascule `dead` de `socketToken.js` et par `announceWoundDeath` quand la blessure « Mort » vient de poser `dead` (au moins une ligne
+   réellement insérée : un `dead` déjà posé à la main ne la rejoue pas). Ne retire jamais un état compatible.
 6. **Droits** — un joueur ne pose pas un état interdit sur son token mort (`canEditTokenStatus`, `targetIsDead`).
 
 **Le MJ reste libre** : bascule manuelle, formulaires danger/froid et `COMBAT_APPLY_STUN` (`gmOverride`) ne sont jamais
@@ -169,7 +175,11 @@ refusés. Il peut donc reposer à la main ce qu'il veut après la purge.
    `token_statuses` ni test de statut ajoutés dans un handler pour décider d'un blocage).
 6. Une écriture **automatique** de la famille étourdi/inconscient/évanoui passe par `applyStunWithDuration` (barrière
    du cadavre) ; seul le chemin manuel du MJ passe `gmOverride`.
-7. Le test `shared/tokenStatusRegistry.test.mjs` fige (instantané historique) les ensembles dérivés : un nouveau statut
+7. Un statut posé **automatiquement par une cause** (`dead` par une blessure) porte une marque de provenance (`data.source`) et n'est retiré que
+   par cette cause ; sa pose est « insérer si absent » (`onConflict … ignore`), **jamais** `applyModStatus` (`merge` : il écraserait la `data` d'un
+   statut posé à la main, qui serait ensuite effacé par la cause). La réconciliation est idempotente mais ne se déclenche que pour la blessure qui
+   touche à la Mort — le MJ qui relève un personnage à la main ne le voit pas re-tué par une blessure ordinaire.
+8. Le test `shared/tokenStatusRegistry.test.mjs` fige (instantané historique) les ensembles dérivés : un nouveau statut
    modifie ces attentes **dans le diff qui l'ajoute**, jamais en silence ; il exige aussi icône SVG et clé
    `status.<code>` pour tout statut affiché au panneau ou bloquant.
 
@@ -184,8 +194,9 @@ refusés. Il peut donc reposer à la main ce qu'il veut après la purge.
   badges au-delà de 4 statuts (un `dead` tardif peut ne pas se voir) ; le message de refus dit « vous êtes mort/
   étourdi/inconscient » même quand le MJ déclare pour un PNJ ; un choix d'étourdissement déjà ouvert chez un joueur à
   la mort reste affiché (sa confirmation est ignorée) ; un combat composé uniquement de drones en `ordres_permanents`
-  boucle (préexistant) ; parité pour l'exo piloté : les statuts sont lus sur le token de l'exo, pas sur le pilote.
+  boucle (préexistant) ; parité pour l'exo piloté : les statuts sont lus sur le token de l'exo, pas sur le pilote ; **un personnage sans token n'est pas
+  « mort » mécaniquement** (la mort se lit sur les tokens) et un token créé après la mort n'a pas `dead`.
 
 Documents associés : `docs/Old/PLAN_STATUT_MORT.md` (historique) ; `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots
-2-4 : la 6ᵉ ligne du compteur) ; `MODING.md` (statuts de mods) ; `INFORMATIQUE.md` (`iem_survival`) ;
+3-4 : Chance sur la 6ᵉ ligne, état permanent du membre) ; `MODING.md` (statuts de mods) ; `INFORMATIQUE.md` (`iem_survival`) ;
 `COMBAT_FLUX.md` (gardes STUN2/DEF5, file d'annonce) ; `BLESSURES.md` (compteur de blessures).

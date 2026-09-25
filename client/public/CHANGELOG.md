@@ -1,3 +1,19 @@
+## v256 — 2026-09-25 — Le compteur de blessures a sa 6ᵉ ligne : Mort et Membre détruit
+
+### Combat
+- [add] Le compteur de blessures a maintenant ses six lignes, comme sur la fiche papier. Un coup de 30 Dommages nets ou plus, ou une
+  Blessure mortelle de trop sur une localisation pleine, inflige **Mort** (Tête, Corps) ou **Membre détruit** (bras, jambe). La case
+  s'affiche comme un mot, grisée tant qu'elle est vide ; seul le MJ peut la cocher ou la décocher à la main.
+- [add] Une blessure **Mort** met le token du personnage en statut « Mort » (le token est passé, sans défense, sans Chance ni test de Choc) ;
+  supprimer la blessure retire ce statut. Un statut « Mort » posé à la main par le MJ n'est jamais retiré par une blessure.
+- [add] Un **Membre détruit** interdit tout Test, réduit le déplacement (jambe : impossible, bras : Allure lente), impose un test de Choc à
+  −10, guérit en 3 semaines de soins constants et devient alors une Blessure critique.
+- [fix] Une Blessure mortelle à la tête ou à un membre reste une Blessure mortelle (avec stabilisation) ; seule la suivante déborde vers
+  Mort ou Membre détruit. Avant, cette blessure de trop n'était pas écrite du tout.
+- [fix] Une jambe mortellement blessée interdit bien le déplacement (la règle existait mais ne se déclenchait jamais).
+- [fix] L'infection d'une Blessure mortelle ou d'un Membre détruit n'ajoute plus une case : elle donne un délai de survie affiché au MJ.
+- Le mot « Létal » des résultats de combat est remplacé par la gravité elle-même (« mortellement touché » pour Mort ou Membre détruit).
+
 ## v255 — 2026-09-25 — Suggestions à l'ajout d'objets
 
 ### Inventaire

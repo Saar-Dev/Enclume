@@ -1,4 +1,8 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Mis à jour 2026-09-25 (clôture du Lot 2 du chantier « 6ᵉ ligne du compteur »)** : le compteur a ses 6 lignes
+> (`mort_subite` = « Mort » en Tête/Corps, « Membre détruit » sur un membre), le débordement de la Mortelle, la Mort qui pose le
+> statut `dead`, la guérison du Membre détruit. Décisions : `docs/JOURNAL8.md` (2026-09-25). Reste : Chance sur la 6ᵉ ligne (Lot 3),
+> état permanent du membre (Lot 4) — `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`.
 > Audit de compréhension approfondie 2026-08-26 (suite) : WOUND_MAX_COUNTS et WOUND_HEALING
 > confirmés exacts contre `woundConstants.js` ; formule `computeWoundInfectionThreshold` corrigée
 > (les malus de cases/périodes sont conditionnels par gravité, pas universels — table étendue) ;
@@ -11,9 +15,12 @@
 ## Architecture générale
 
 ```
-shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
+shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS + les règles pures de la 6ᵉ ligne
+                            (isWoundLinePromoted, isFatalWound, getWoundEffects, getWoundHealing, WOUND_IMPROVEMENT_TARGET…)
 shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
-server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue)
+server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue) / getShockMalus(severity, location)
+server/lib/woundUtils.js  — insertion en cascade, amélioration (guérison), tri SQL, Test de Choc requis
+server/lib/woundService.js — applyWound (insertion + échéance + `dead` + diffusion) / removeWound / /heal
 ```
 
 ## Constantes blessures (woundConstants.js)
@@ -21,13 +28,13 @@ server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(
 ```javascript
 WOUND_LOCATIONS = ['tete', 'corps', 'bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']
 
-WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle']
-// ⚠️ 5 lignes sur les 6 du RAW : la 6ᵉ « Mort subite / Membre détruit » (seuil 30) n'existe pas encore dans le moteur.
-// Un coup ≥ 30 écrit une Mortelle ; le débordement d'une ligne Mortelle pleine n'écrit aucune blessure (`applyWound` avale l'erreur, visible seulement dans les logs).
-// Chantier planifié : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots 2-4). La mort en tant que STATUT de token, elle, existe :
-// voir « Mort et cadavre » ci-dessous.
+WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle', 'mort_subite']
+// Les 6 lignes du compteur RAW. L'ORDRE est l'autorité de la promotion (nextSeverity), du « pire » (getWorstWoundSeverity, client)
+// et du tri SQL (woundSeverityRankSql, généré depuis ce tableau — plus de CASE recopié). `mort_subite` est UNE gravité stockée
+// dont le libellé dépend de la localisation : « Mort » en Tête/Corps, « Membre détruit » sur un bras/une jambe
+// (isSuddenDeathLocation). Voir « La 6ᵉ ligne » ci-dessous.
 
-WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0 }
+WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0, mort_subite: 0 }
 // mortelle=0 (pas -20) : REGLEBLESSURES.md dit "non applicable, le blessé ne peut entreprendre
 // aucune action demandant un Test" — le -20 était une extrapolation jamais confirmée par le LdB,
 // corrigé (WNDMORT, docs/BUGIDENTIFIE.md). 0 = défense en profondeur si isTestBlockingWound est
@@ -36,18 +43,51 @@ WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle:
 // correction ci-dessous : ça ne veut plus dire "malus santé non-cumulatif" au sens large.
 
 SEVERITY_COLORS = {
-  legere: '#FFD700', moyenne: '#FFA500', grave: '#FF6B6B', critique: '#FF0000', mortelle: '#8B0000'
+  legere: '#FFD700', moyenne: '#FFA500', grave: '#FF6B6B', critique: '#FF0000', mortelle: '#8B0000', mort_subite: '#5c5c66'  // gris
 }
 ```
 
 ### WOUND_MAX_COUNTS — nombre max de blessures par localisation
 
-| Localisation | Légère | Moyenne | Grave | Critique | Mortelle |
-|---|---|---|---|---|---|
-| Tête | 3 | 3 | 2 | 2 | 1 |
-| Corps | 4 | 3 | 3 | 2 | 2 |
-| Bras D/G | 3 | 3 | 2 | 2 | 1 |
-| Jambe D/G | 3 | 3 | 2 | 2 | 1 |
+Capacités vérifiées sur la fiche papier (capture de Saar, 2026-09-24).
+
+| Localisation | Légère | Moyenne | Grave | Critique | Mortelle | 6ᵉ ligne |
+|---|---|---|---|---|---|---|
+| Tête | 3 | 3 | 2 | 2 | 1 | 1 (« Mort ») |
+| Corps | 4 | 3 | 3 | 2 | 2 | 1 (« Mort ») |
+| Bras D/G | 3 | 3 | 2 | 2 | 1 | 1 (« Membre détruit ») |
+| Jambe D/G | 3 | 3 | 2 | 2 | 1 | 1 (« Membre détruit ») |
+
+### Promotion d'une ligne pleine
+
+Règle générale (`isWoundLinePromoted`, `shared/woundConstants.js`) : la blessure qui **remplirait la dernière case** convertit la
+ligne en une blessure de la gravité supérieure (3ᵉ Légère sur une ligne à 3 cases = 1 Moyenne), en cascade
+(`resolveWoundInsertion`, `woundUtils.js`). **Exception : la ligne Mortelle ne se convertit qu'au dépassement**
+(`OVERFLOW_ONLY_SEVERITIES`) — avec 1 case (Tête, bras, jambes), toute Mortelle deviendrait sinon aussitôt Mort ; or une Mortelle à
+la tête est une survie avec stabilisation (d'où l'importance des casques). La 2ᵉ Mortelle à la tête (3ᵉ au corps) déborde vers la
+6ᵉ ligne. Une 2ᵉ blessure sur la 6ᵉ ligne, déjà pleine, ne fait rien : `WoundLineFullError`, journalisée `[DBG]` par `applyWound`
+(fait attendu, pas un échec — le cadavre continue de prendre des blessures ailleurs).
+
+### Seuils de dommages — une autorité
+
+`BLESSURE_SEUILS_TABLE` (5, 10, 15, 20, 25, **30 = `mort_subite`**) + `woundSeverityForDamage(degatsNets)` : humain
+(`damageService.resolveTargetHit`) **et** drone (`resolveDroneIntegrityLoss`, qui traite avant lui la destruction propre au drone à
+30). `_severityForDamage` n'existe plus ; `is_lethal` non plus (la gravité porte l'information). Un coup net ≥ 30 écrit directement
+`mort_subite` ; le Choc virtuel combiné ≥ 30 en Tête/Corps est plafonné à `mortelle` pour le Test de Choc (`_shockTestSeverity`).
+
+### La 6ᵉ ligne — Mort subite / Membre détruit
+
+| Sujet | Règle | Où |
+|---|---|---|
+| Libellé | « Mort » en Tête/Corps, « Membre détruit » sur un membre ; case unique affichée comme un **mot**, toujours visible, cliquable (MJ seul) | `LocationPanel.jsx` |
+| Pose/retrait manuel | **MJ seul** (`GM_ONLY_WOUND_SEVERITIES`) : sinon un joueur contournerait le statut `dead` réservé au MJ | `char-sheet.js` (403 « GM uniquement »), `LocationPanel.jsx` |
+| Tests | interdits (RAW : Mortelle ET Membre détruit) ; jambe → déplacement impossible | `TEST_BLOCKING_SEVERITIES`, `isMortalWoundImmobilized` |
+| Test de Choc | Mort (Tête/Corps) : aucun (« meurt sur le coup ») ; Membre détruit : requis, malus −10 (colonne RAW `membreDetruit`) | `isShockTestRequired`, `getWoundEffects` |
+| Malus de Choc | lu dans `BLESSURE_EFFETS_TABLE` par `getWoundEffects(severity, location)` — plus de copie dans `charStats.js` | `getShockMalus` |
+| Statut `dead` | la Mort (Tête/Corps) pose `dead` sur les tokens du personnage ; le Membre détruit ne tue pas | §« Mort et cadavre » |
+| Guérison | Membre détruit : 3 semaines, Chirurgie + Médecine, soins constants, devient une **Critique** ; Mort : aucune échéance | §« Guérison et Infection » |
+| Chance | racheter une Mort subite = Critique pour 3 points de Chance (écart RAW assumé) — **pas encore câblé** (Lot 3) ; aucune fenêtre de Chance n'est ouverte sur la 6ᵉ ligne | `CHANCE_ELIGIBLE_SEVERITIES` |
+| État permanent du membre | paralysie durable, rendu barré/gris — **non implémenté** (Lot 4) | plan |
 
 ## Composants client — onglet Matériel (CharacterWindow)
 
@@ -57,7 +97,7 @@ CharacterWindow
     ├── LocationPanel × 6    — une localisation (Tête/Corps/Bras G/D/Jambe G/D)
     │   ├── armures équipées (multi-couches, mille-feuille ETQ/PRT/malus_cat)
     │   ├── select ajout couche (filtré par refCode + container='Sac')
-    │   └── grille blessures (WOUND_SEVERITIES × MAX_COUNTS — clic POST/PUT/DELETE)
+    │   └── grille blessures (WOUND_SEVERITIES × MAX_COUNTS — clic POST/PUT/DELETE ; 6ᵉ ligne = mot « Mort »/« Membre détruit », cliquable MJ seul, prop `isGm`)
     ├── ContainerPanel (D)   — Sac à dos : équipement conteneur
     ├── ContainerPanel (Ce)  — Ceinture : équipement conteneur
     └── SilhouettePanel      — SVG silhouette 50%, colorée par pire blessure par localisation
@@ -122,14 +162,17 @@ GET    /char-sheet/:id/wounds
 POST   /char-sheet/:id/wounds  { location, severity }
   → 201 { wound, promoted: bool, shock_test_required: bool }
   + WS WOUND_ADDED broadcast { characterId, wound, promoted, shock_test_required }
+  → passe par applyWound. 403 « GM uniquement » pour `mort_subite` sans droit MJ (GM_ONLY_WOUND_SEVERITIES) ;
+    400 « Ligne pleine » si la 6ᵉ ligne est déjà occupée.
 
 PUT    /char-sheet/:id/wounds/:wid/stabilize
   → { wound } (is_stabilized: true)
   + WS WOUND_UPDATED broadcast { characterId, wound }
 
 DELETE /char-sheet/:id/wounds/:wid
-  → { ok: true }
-  + WS WOUND_REMOVED broadcast { characterId, woundId }
+  → { deleted: true, woundId }   (403 pour `mort_subite` sans droit MJ, 404 si la blessure n'existe plus)
+  + WS WOUND_REMOVED broadcast { characterId, woundId, worst_wound_severity }
+  → passe par removeWound : si c'était une Mort, le `dead` qu'elle avait posé est retiré dans la même transaction.
 
 GET    /char-sheet/:id/inventory
   → { items, sols, total_weight, threshold }
@@ -195,7 +238,9 @@ client/src/components/PendingRollsPanel.jsx     — jets joueurs en attente (Inf
 
 **`wound_healing_check`** — jamais de jet serveur pour son propre résultat ; lit `payload.mjChoice`
 (`amelioration` / `echec` / `catastrophe`) déjà fourni par le MJ dans `BlessuresReviewPanel`. Table de
-durée (`WOUND_HEALING`, `shared/woundConstants.js`) :
+durée (`WOUND_HEALING`, `shared/woundConstants.js`), lue **uniquement** par `getWoundHealing(severity, location)` — autorité
+unique de « cette blessure guérit-elle, et en combien de temps ? » (jamais `WOUND_HEALING[severity]` : la clé `membreDetruit` n'est pas
+une gravité) :
 
 | Gravité | Durée | Soins constants | Forme |
 |---|---|---|---|
@@ -203,8 +248,19 @@ durée (`WOUND_HEALING`, `shared/woundConstants.js`) :
 | Grave | 1 semaine | Non | échéance unique |
 | Critique | 3 semaines | Oui | hebdomadaire, 3 occurrences |
 | Mortelle | 5 semaines | Oui | hebdomadaire, 5 occurrences |
+| Membre détruit (`mort_subite` sur un bras/une jambe) | 3 semaines | Oui | hebdomadaire, 3 occurrences |
 
-Légère guérit seule, sans échéance ni Test. `echec`/`catastrophe` engendrent une `wound_infection_check`.
+Légère guérit seule, sans échéance ni Test. **Une Mort (`mort_subite` en Tête/Corps) n'a aucune échéance** : la résurrection reste une
+décision du MJ. `echec`/`catastrophe` engendrent une `wound_infection_check`.
+
+**Cible d'une amélioration** — `improvedSeverity(severity)` (`woundUtils.js`, lit `WOUND_IMPROVEMENT_TARGET`) : la gravité juste en
+dessous, **sauf** la 6ᵉ ligne qui devient une **Critique** (RAW : « un Membre détruit devient une Blessure critique » ;
+`REGLE_CHANCE.md` : une Mort subite rachetée donne une Critique). `previousSeverity` reste l'inverse mécanique de la promotion, pas la
+cible d'une guérison. `resolveWoundImprovement` (guérison, et Chance) l'utilise.
+
+**Limites connues** (suivies en tickets) : la blessure obtenue après une amélioration **n'a pas de nouvelle échéance de guérison**
+(seul `applyWound` en crée — [VÉRIFIÉ par exécution] : Critique → Grave, plus aucune échéance) ; `resolveWoundImprovement` ne vérifie
+pas la capacité de la ligne cible.
 
 **`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
 `WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par
@@ -219,22 +275,43 @@ soin (-2/période déjà écoulée) :
 | Moyenne | +5 | Non | Non | Non |
 | Grave | +0 | Oui | Oui | Non |
 | Critique | -5 | Oui | Oui | Oui |
-| Mortelle | -10 | Oui | Non | Oui |
+| Mortelle **et Membre détruit** (`mort_subite`, même objet `MORTAL_INFECTION_RULE`) | -10 | Oui | Non | Oui |
 
-Mortelle non soignée : délai de survie (Constitution ou Constitution/2 heures) calculé et affiché au
-MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ (elle peut être matérialisée par le statut
-`dead`, ci-dessous).
+Colonne **`extraCase`** (`WOUND_INFECTION`) : l'infection coche une case de plus sur la ligne pour Moyenne/Grave/Critique (RAW explicite),
+**jamais** pour Mortelle/Membre détruit — le RAW y donne un délai de survie, pas une case ; en cocher une ferait déborder vers la 6ᵉ ligne
+(mort ou membre détruit par simple infection). Colonne **`survivalHours`** : la conséquence est un délai de survie.
+
+Mortelle ou Membre détruit non soigné : délai de survie (Constitution ou Constitution/2 **heures** — le RAW dit « minutes » p.237 et « heures »
+p.240, le code garde « heures », ticket) calculé et affiché au MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ (elle
+peut être matérialisée par le statut `dead`, ci-dessous). Une Mort (Tête/Corps) n'a ni guérison ni infection.
 
 ## Mort et cadavre (statut de token)
 
-La mort n'est pas une gravité mais un **statut de token** `dead` (`shared/tokenStatusRegistry.js`), posé et retiré par le MJ seul
-(bascule du panneau Statuts, ou `/heal` qui efface blessures ET statuts de tous les tokens du personnage —
-`clearCharacterWoundsAndStatuses`). Tant que la 6ᵉ ligne n'existe pas, il est posé à la main ; ensuite la blessure « Mort » le
-posera (`PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 2). **Règle : le cadavre reste là et prend des blessures** (des technologies de
-résurrection existent) : `applyWound` continue de s'appliquer, mais un cadavre ne dépense pas de Chance (aucune fenêtre de
-réduction de gravité), ne fait pas de test de Choc et ne reçoit pas d'état de corps vivant. Détail et sites de code :
+La mort est un **statut de token** `dead` (`shared/tokenStatusRegistry.js`), pas une gravité — mais la blessure « Mort » (6ᵉ ligne en
+Tête/Corps, `isFatalWound`) le **pose**, et le retrait de cette blessure le retire. **Règle : le cadavre reste là et prend des blessures**
+(des technologies de résurrection existent) : `applyWound` continue de s'appliquer, mais un cadavre ne dépense pas de Chance (aucune
+fenêtre de réduction de gravité), ne fait pas de test de Choc et ne reçoit pas d'état de corps vivant. Détail et sites de code :
 `SYSTEME/STATUTS_TOKEN.md` §6. Le statut est par token, les blessures par fiche : la mort se lit au niveau du personnage
 (`deathStateService.js:isCharacterDead`).
+
+**Pose et retrait par la blessure** (`statusService.js:reconcileWoundDeath`, modèle `determineDefeatedStatus`/`applyDefeatedStatus` du
+système Shadowrun 5 de FoundryVTT — décision pure, application après les dégâts) :
+
+- `applyWound` l'appelle **dans la transaction de la blessure** (la conséquence persistante est écrite avec sa cause) **uniquement si la
+  blessure posée est une Mort** ; `removeWound` de même à la suppression d'une Mort. Déclencheur étroit voulu : le MJ qui relève un
+  personnage à la main (retire `dead`, garde la blessure) ne le voit pas re-tué par une Légère ultérieure. Le calcul, lui, est
+  idempotent (l'état voulu se déduit des blessures présentes) : tant qu'une autre Mort subsiste (Tête **et** Corps), `dead` reste.
+- **Provenance** : la ligne posée par une blessure porte `data.source = 'wound'` (`STATUS_SOURCE_WOUND`). Pose = « insérer si absent »
+  (`onConflict … ignore`), **jamais** `merge` comme `applyModStatus` (qui écraserait la `data` d'un `dead` posé à la main : la blessure le
+  « reprendrait », puis l'effacerait) ; retrait = seulement les lignes marquées. Un `dead` du MJ n'est donc **jamais** écrasé ni retiré par
+  une blessure.
+- Après la validation, `announceWoundDeath` diffuse les badges puis, **seulement si une ligne a été réellement insérée** (`becameDead` :
+  PostgreSQL ne renvoie rien pour une ligne déjà présente), appelle `applyDeathConsequences` (mode `enforced`). Knex n'a pas de crochet
+  « après commit » : on agit une fois `await db.transaction(...)` rendu, comme le reste d'`applyWound`.
+- **`/heal` soigne tout** (décision de Saar, 2026-09-25 : « plus simple, plus compréhensible ») : blessures ET tous les statuts, y compris un
+  `dead` posé à la main.
+- **Limite connue** : un personnage sans token (jamais posé sur une carte) n'est pas « mort » mécaniquement, la mort se lit sur les tokens ; un
+  token créé après la mort n'a pas `dead` (ticket).
 
 **Routes** (`campaigns.js`, toutes vérifient `game_echeances.campaign_id === :id`) :
 `POST .../game-time/request-advance|confirm-advance|cancel-advance`,
@@ -252,6 +329,11 @@ quel (pas un nouvel événement) pour resynchroniser la fiche personnage après 
 | — | `character_wounds.occurred_at_game_minutes` ancré sur `campaigns.game_time_resolved_minutes`, jamais `game_time_minutes` (affiché) — sinon une blessure posée après un recul MJ de l'horloge peut déclencher son échéance dès la prochaine avance, sans qu'aucune minute ne se soit écoulée |
 | — | Fusion de `payload` avant `resolveEcheanceNow` (`healing-choice`/`infection-mode`) : toujours une expression SQL atomique (`payload \|\| ?::jsonb`), jamais un lire-puis-écrire JS |
 | — | `wound_infection_check` n'est jamais créée à la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe du `wound_healing_check` |
+| — | `WOUND_INFECTION[severity]` doit exister pour toute gravité qui a une échéance de guérison : sans l'entrée `mort_subite`, un échec de guérison d'un Membre détruit ferait planter le handler (`rule` indéfini). L'entrée d'infection et l'échéance de guérison d'une gravité arrivent dans le même commit |
+| — | Ne jamais lire `WOUND_HEALING[severity]` directement : passer par `getWoundHealing(severity, location)` (Mort en Tête/Corps → `null`, Membre détruit → ligne `membreDetruit`) |
+| — | Le statut `dead` d'une blessure ne s'écrit pas avec `applyModStatus` (écrit hors transaction et `merge` écrase la `data`) : `reconcileWoundDeath` |
+| — | `isMortalWoundImmobilized` lit `wound.location` (nom réel de la colonne). Il lisait `wound_location` : la règle « jambe mortelle = déplacement impossible » ne se déclenchait jamais avant le 2026-09-25 |
+| — | Le tri SQL des gravités se génère (`woundSeverityRankSql(colonne)`) ; ne jamais recopier un `CASE` littéral des gravités |
 
 ## Pièges inventaire
 

@@ -2,8 +2,9 @@
 
 > 2026-09-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et
 > fusionné dans `docs/SYSTEME/COMBAT.md` une fois clos.
-> Statut : 🟡 **Lot 1 (statut `dead`, conséquences d'un cadavre) CLOS et archivé — `docs/Old/PLAN_STATUT_MORT.md` ; il ne
-> reste ici que la 6ᵉ ligne dans le moteur : Lots 2-4, non commencés.** Décisions Saar du 2026-09-23 en §2. Points
+> Statut : 🟡 **Lot 1 (statut `dead`, conséquences d'un cadavre) CLOS et archivé — `docs/Old/PLAN_STATUT_MORT.md`. Lot 2 (la 6ᵉ ligne dans
+> le moteur) CLOS le 2026-09-25** (`a612c94`, `fd4e4a1`, `4d8811c` ; documentation définitive : `SYSTEME/BLESSURES.md`, décisions :
+> `JOURNAL8.md`). **Il reste les Lots 3 (Chance) et 4 (paralysie permanente du membre), non commencés** — le plan sera archivé à leur clôture. Décisions Saar du 2026-09-23 en §2. Points
 > encore ouverts en §7. Un seul problème (Règle « un plan = un bug ») : la 6ᵉ ligne du compteur RAW n'existe pas
 > dans le moteur.
 > Hiérarchie : Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`) > ce plan.
@@ -107,8 +108,8 @@ Deux concepts que le RAW distingue :
   `damageService.js` (`_severityForDamage`) recopie ces mêmes seuils pour l'humain. **Au Lot 2, une seule
   autorité des seuils** : `woundSeverityForDamage` (avec la 6ᵉ ligne) sert l'humain ET le drone, et
   `_severityForDamage` disparaît. À coordonner avec le commit de l'autre session avant de toucher ce fichier.
-- **Découpage du Lot 2 (2026-09-24, après analyse à charge)** : **2a « la 6ᵉ gravité existe, se pose, s'affiche »** — codé, en
-  attente du test de Saar : migration 363 ; constantes (`mort_subite`, capacités, couleur grise, seuil 30, Test interdit,
+- **Lot 2 — CLOS (2026-09-25).** Découpage (2026-09-24, après analyse à charge) : **2a « la 6ᵉ gravité existe, se pose, s'affiche »** — livré,
+  validé (55/55 tests en base + test visuel), `a612c94` : migration 363 ; constantes (`mort_subite`, capacités, couleur grise, seuil 30, Test interdit,
   jambe immobilisée) ; débordement de la ligne Mortelle (`isWoundLinePromoted`, voir §3) ; seuils uniques
   (`woundSeverityForDamage`, `_severityForDamage` supprimé) ; `is_lethal` retiré partout ; Choc lu dans
   `BLESSURE_EFFETS_TABLE` (`getWoundEffects`) ; tri SQL généré (`woundSeverityRankSql`) ; pose/retrait manuel de la 6ᵉ ligne
@@ -116,9 +117,11 @@ Deux concepts que le RAW distingue :
   survie en heures — remonté de 2b pour ne pas laisser un état intermédiaire faux) ; affichage (mot Mort / Membre détruit,
   silhouette, menu radial, résultats, chat, Encyclopédie). Défaut préexistant corrigé au passage : `isMortalWoundImmobilized`
   lisait `wound_location` (colonne réelle : `location`), la règle « jambe mortelle = déplacement impossible » ne se déclenchait
-  jamais. **2b « ses conséquences »** — à faire : `dead` posé/retiré par réconciliation idempotente dans la transaction de la
-  blessure (modèle `applyDefeatedStatus`/`determineDefeatedStatus` du système Shadowrun 5 de FoundryVTT), Membre détruit guérit
-  en Critique (table cible de guérison ≠ `previousSeverity`), pas d'échéance de guérison pour Mort.
+  jamais. **2b « ses conséquences »** — livré, validé (75/75 tests en base) : `dead` posé/retiré par réconciliation idempotente dans la transaction
+  de la blessure (`fd4e4a1` ; modèle `applyDefeatedStatus`/`determineDefeatedStatus` du système Shadowrun 5 de FoundryVTT ; marque de
+  provenance `data.source = 'wound'`, pose « insérer si absent », déclencheur étroit, `removeWound`), Membre détruit guérit en 3 semaines
+  vers une Critique, aucune échéance pour une Mort, infection sans case en plus (`4d8811c` ; `getWoundHealing`, `improvedSeverity`).
+  **Décision de Saar (2026-09-25) : `/heal` soigne tout, y compris un `dead` posé à la main.**
 - **Lot 2 — La 6ᵉ ligne (plan d'origine).** Migration `chk_wounds_severity` ; `WOUND_SEVERITIES`, `WOUND_MAX_COUNTS`,
   `WOUND_PENALTIES`, `SEVERITY_COLORS` (gris), `WOUND_HEALING`, `WOUND_INFECTION`, `TEST_BLOCKING_SEVERITIES` ;
   `nextSeverity`/`previousSeverity`/`getWorstWoundSeverity` ; `resolveWoundInsertion` (débordement →
@@ -126,7 +129,10 @@ Deux concepts que le RAW distingue :
   `socketCombatHelpers.js`, `socketCombatAoe.js`, `coldExposureService`, `environmentalHazardService`,
   `fallDamageService`, panneaux client) ; Choc via la gravité ; route manuelle ; libellés i18n.
 - **Lot 3 — Chance sur la 6ᵉ ligne.** Coût 3 → Critique (§2.2) ; `computeAvailableSeverityReductions`
-  ne modélise que des degrés 1-2 : prévoir une option dédiée. Décider le moment de pose de `dead` (§7).
+  ne modélise que des degrés 1-2 : prévoir une option dédiée. Décider le moment de pose de `dead` (§7) — **conflit constaté au Lot 2b** : `resolveChanceRecipientCharacterId` refuse un personnage `dead`,
+  or la Mort est posée dans la transaction même de la blessure : aucune fenêtre de Chance ne s'ouvrirait. Le choix doit s'ouvrir AVANT ou
+  INDÉPENDAMMENT de `dead`. La réconciliation idempotente (`reconcileWoundDeath`) et la cible d'amélioration (`improvedSeverity`,
+  `WOUND_IMPROVEMENT_TARGET`) sont déjà prêtes pour ce lot.
 - **Lot 4 — État permanent du membre + rendu.** Table `character_destroyed_limbs`, broadcast, barré/gris
   dans `LocationPanel` et `SilhouettePanel`. Séparable : les Lots 1-3 livrent déjà le compteur RAW complet ;
   le Lot 4 ajoute la persistance de la paralysie.
@@ -158,11 +164,10 @@ refus) ; `/heal` ; pas de régression sur les 5 lignes existantes. Transport ré
    (`woundService.js:94-132`, choix délibéré). `dead` étant dérivé de la blessure (§3), la voie naturelle
    est : poser, puis retirer si la Chance est dépensée (la blessure 6ᵉ ligne est remplacée par une Critique).
    Coût : un instant de « mort » visible avant le choix. Alternative : différer la pose jusqu'à la réponse.
-   Décision au Lot 3.
+   Décision au Lot 3 (conflit avec `resolveChanceRecipientCharacterId` : voir §4, Lot 3).
 7. ~~Case masquée~~ — **tranché** (§2.4). ~~Coût Chance~~ — **tranché** (§2.2).
-3. **Infection d'une Mortelle** (C5) : une fois la 6ᵉ ligne existante, réinsérer une Mortelle infectée
-   *promeut* vers Mort/Membre détruit, alors que la décision du 2026-07-30 est « délai de survie affiché,
-   jamais appliqué » (`woundEvolutionService.js:198`). À trancher au Lot 2.
+3. ~~**Infection d'une Mortelle** (C5)~~ — **tranché au Lot 2a** : l'infection d'une Mortelle (et d'un Membre détruit) n'ajoute pas de case
+   (`WOUND_INFECTION.extraCase: false`, RAW : survie en heures) ; le délai de survie reste affiché au MJ, jamais appliqué.
 4. **Nom de la 6ᵉ valeur** : vérifier `docs/VOCABULARY.md` avant tout nouveau concept (AGENTS.md).
 5. ~~Nombre de cases du compteur papier~~ — **[VÉRIFIÉ] sur la fiche (capture de Saar, 2026-09-24)** : les capacités de
    `WOUND_MAX_COUNTS` (Légères 3/4/3/3/3/3, Moyennes 3, Graves 2/3/2/2/2/2, Critiques 2, Mortelles 1/2/1/1/1/1) sont

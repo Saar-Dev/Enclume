@@ -18,11 +18,11 @@ SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 text
 
 server/src/lib/
-├── statusService.js    — résolution du test de choc, étourdissement, applyDeathConsequences (purge à la mort)
+├── statusService.js    — résolution du test de choc, étourdissement, applyDeathConsequences (purge à la mort), reconcileWoundDeath/announceWoundDeath (la blessure « Mort » pose `dead`)
 ├── deathStateService.js — isCharacterDead / isTokenDead : « est-ce un cadavre ? » (module feuille, niveau personnage, mode enforced)
 ├── exoPilotService.js  — résolution du pilote d'exo ; resolveChanceRecipientCharacterId (à qui ouvrir une fenêtre de Chance ; null = aucune)
 ├── damageService.js    — localisation, armure, dégâts nets, sévérité, blessure, shock
-├── woundService.js     — insertion blessure + broadcast WOUND_ADDED
+├── woundService.js     — insertion blessure (+ échéance de guérison + `dead` d'une Mort) + broadcast WOUND_ADDED ; removeWound ; /heal
 ├── woundUtils.js       — utilitaires blessures (isShockTestRequired, resolveWoundInsertion, etc.)
 ├── (mrTable.js n'existe plus — corrigé 2026-08-26, voir §5)
 ├── combatFSM.js        — machine à états du combat (transitions, guards, sub_phase)
@@ -52,7 +52,7 @@ Fonction pure — aucun accès DB ni broadcast.
 js
 
 resolveShockTest({
-  finalSeverity, localisation, is_lethal,
+  finalSeverity, localisation,
   for_na, con_na, vol_na,
   mod_mutation_shock,   // cumul mutations (getMutationModForResistance)
   mod_advantage_shock,  // cumul avantages (getAdvantageModForResistance)
@@ -66,7 +66,7 @@ Logique :
 
     Calcule les seuils via calcSeuils (dans shared/polarisUtils.js).
 
-    Calcule le malus via getShockMalus (charStats.js).
+    Calcule le malus via getShockMalus (charStats.js, lu dans BLESSURE_EFFETS_TABLE).
 
     Lance 1D20 (parseDice).
 
@@ -105,8 +105,19 @@ bornée. Tous les autres appelants (Choc, Fatigue, froid) sont automatiques. Voi
 applyDeathConsequences
 
 `applyDeathConsequences(io, db, campaignId, characterId)` — à appeler quand un personnage DEVIENT un cadavre (bascule MJ `dead` ;
-blessure « Mort » au Lot 2 de `PLAN_BLESSURE_SIXIEME_LIGNE.md`) : retire des tokens du personnage les états `incompatibleWithDeath` et
+blessure « Mort », par `announceWoundDeath`) : retire des tokens du personnage les états `incompatibleWithDeath` et
 l'étourdissement en attente (`combat_pending`), diffuse, retourne les tokens touchés. Mode enforced seulement.
+
+reconcileWoundDeath / announceWoundDeath
+
+`reconcileWoundDeath(trx, campaignId, { characterId, charSheetId })` — DANS la transaction de la blessure : si le personnage a une blessure « Mort »
+(`hasFatalWound`, 6ᵉ ligne en Tête/Corps), pose `dead` sur ses tokens de la campagne (insertion sans écrasement, marque `data.source = 'wound'`) ;
+sinon retire les `dead` portant cette marque. Idempotente ; appelée seulement pour une blessure qui touche à la Mort (`applyWound`, `removeWound`).
+Retourne `{ changedTokenIds, becameDead }` (`becameDead` = au moins une ligne réellement insérée). `announceWoundDeath(io, db, campaignId,
+characterId, change)` — après validation : diffuse les badges puis, si `becameDead`, `applyDeathConsequences` ; n'échoue jamais vers l'appelant.
+Voir `SYSTEME/BLESSURES.md`, « Mort et cadavre ».
+
+emitShockDiceResult
 
 Fonction synchrone — émet le résultat du D20 de Test de Choc.
 js
@@ -140,7 +151,7 @@ await resolveTargetHit(io, db, campaignId, {
 })
 // → null si cibleType === 'drone'
 // → { rollLoc, locRolls, locSeed, slotCode, localisation, etq, rd,
-//      degatsNets, chocTotal, severity, is_lethal, finalSeverity,
+//      degatsNets, chocTotal, severity, finalSeverity,
 //      shockResult, rollChance, chanceSuccess, ... }
 
 Logique détaillée :
@@ -157,7 +168,7 @@ Logique détaillée :
 
     Cadavre — si la cible est un cadavre (`isCharacterDead`), la blessure est appliquée mais AUCUN test de Choc n'est tiré (`shockResult` reste null, donc aucun D6 de durée ni `applyStun` en aval) : `resolveTargetHit` est le seul site de tirage du Choc.
 
-    Sévérité — basée sur les dégâts physiques seuls (_severityForDamage).
+    Sévérité — basée sur les dégâts physiques seuls (woundSeverityForDamage, shared/woundConstants.js — autorité unique des seuils, humain et drone).
 
     Blessure — appelle woundService.applyWound. Récupère finalSeverity (post-promotion P49).
 
@@ -196,13 +207,22 @@ await applyWound(io, db, campaignId, {
 })
 // → { finalSeverity } | null
 
-    Utilise resolveWoundInsertion (transaction Knex, gestion de la promotion P49).
+    Utilise resolveWoundInsertion (transaction Knex, gestion de la promotion P49 ; la ligne Mortelle ne déborde vers la 6ᵉ ligne qu'au dépassement).
+
+    Dans la même transaction : échéance de guérison (`initializeWoundHealingEcheance` ; aucune pour une Mort) et, si la blessure est une Mort en Tête/Corps, `reconcileWoundDeath` (statut `dead`).
 
     Met à jour worst_wound_severity.
 
     Émet WS.WOUND_ADDED avec { characterId, wound, promoted, shock_test_required, worst_wound_severity }.
 
-    Retourne null si severity ou charSheetId absents, ou en cas d'erreur (ligne pleine → comportement normal).
+    Retourne null si severity ou charSheetId absents, ou en cas d'erreur (ligne pleine : seule la 6ᵉ ligne peut l'être — `WoundLineFullError`, journalisée `[DBG]`, comportement normal).
+
+removeWound
+
+await removeWound(io, db, campaignId, { charSheetId, characterId, woundId })
+// → la blessure supprimée | null si elle n'existe plus
+
+    Supprime UNE blessure (route DELETE de la fiche) ; si c'était une Mort, `reconcileWoundDeath` retire le `dead` qu'elle avait posé, dans la même transaction. Émet WS.WOUND_REMOVED puis les badges. Les droits (6ᵉ ligne = MJ seul) sont vérifiés par la route.
 
 5. mrTable.js — **N'EXISTE PLUS, corrigé (audit 2026-08-26)**
 

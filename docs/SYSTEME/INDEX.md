@@ -70,7 +70,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `SYSTEME/SERVICES_COMBAT.md` | Services backend pour le combat | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/DOMMAGES.md` | Distinction dommages physiques/Choc, autorités de résolution | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/TAILLE.md` | Palier de taille d'un combattant : cascade explicite→dérivée, modificateur de combat, édition MJ | ✅ Créé (2026-09-08) |
-| `SYSTEME/BLESSURES.md` | Gestion des blessures, armures, malus, inventaire médical | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/BLESSURES.md` | Gestion des blessures (compteur à 6 lignes dont « Mort » / « Membre détruit »), armures, malus, guérison/infection, statut `dead` posé par la blessure, inventaire médical | 🔎 Analysé en profondeur (2026-08-26) ; 6ᵉ ligne documentée 2026-09-25 |
 | `SYSTEME/DICE.md` | Flux des dés, animation 3D, payload DICE_RESULT | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.3 Personnage
@@ -216,7 +216,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_KIWI_BASCULE.md` | Bascule de la base `vtt` vers `enclumeBD` sur le serveur distant Kiwi (stratégie A : base neuve + report des données réelles) | En cours — diagnostic fait (`vtt` distant arrêté avant la refonte migrations) |
 | `PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md` | Bug ciblé : Choc de mutation à arme naturelle perdu sur la 4ᵉ branche défenseur PJ en défense active (les 3 autres branches sont correctes) | Cadré, cause identifiée, correctif isolé non encore livré |
 | `PLANS/PLAN_CHANCE.md` | Mécanique de dépense de points de Chance — architecture technique (le MANUEL porte la règle métier) | v2.0 réécrite 2026-09-11 (RAW fournie par Saar le jour même) — **cadrage terminé, prêt à coder** |
-| `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` | 6ᵉ ligne du compteur de blessures RAW (Mort subite / Membre détruit, seuil 30) dans le moteur : migration, retrait de `is_lethal`, seuils uniques, débordement, Chance à 3 points, état permanent du membre. Le Lot 1 (statut `dead`) est archivé : `Old/PLAN_STATUT_MORT.md` | Lot 1 clos ; Lots 2-4 non commencés |
+| `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` | 6ᵉ ligne du compteur de blessures RAW (Mort subite / Membre détruit, seuil 30). **Lots 1 (statut `dead`) et 2 (la 6ᵉ ligne dans le moteur) clos** — documentation définitive : `SYSTEME/BLESSURES.md`, `SYSTEME/STATUTS_TOKEN.md`. Il reste : Chance à 3 points (Lot 3), état permanent du membre + rendu (Lot 4). Lot 1 archivé : `Old/PLAN_STATUT_MORT.md` | Lots 1-2 clos ; Lots 3-4 non commencés |
 | `PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` | Document de séquencement (pas un chantier détaillé) — ordonne les prochains incréments du fil entités interactives ouvert par les caisses (quarantaine, preuve `move_type`, extension à d'autres packs, rendu 3D des portes) | Créé 2026-09-16, Lot A (quick wins) prêt à démarrer, Lots B/C non cadrés en détail |
 
 ---

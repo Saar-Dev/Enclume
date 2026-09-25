@@ -8494,3 +8494,68 @@ puis Lots 2-4 (6ᵉ ligne) — plan + analyse à charge avant tout code.
 **Idée gardée pour la suite (lot 2, non décidé)** : « kit de base » (soin, survie : chaufferette, corde, lampe, communicateur, nourriture, eau, entretien). Le catalogue n'a aucune étiquette de rôle : proposition = colonne `ref_equipment.suggest_role` + migration + champ admin. Absents du catalogue : aucun « kit d'entretien » (seulement « Trousses à outils Mécanique/Électronique »).
 
 **Testé** : `node --test shared/itemSuggestions.test.mjs` 25/25 (armes vides / non vides / de contact / sans calibre, Coffre, sac absent / plein / exactement plein, limite, entrées absentes) ; `shared/ammoRules.test.mjs` ; `node --test 'shared/**/*.test.mjs'` : 769 réussis, **1 échec hors de ce lot** (`combatGrabItem.test.mjs`, chantier « Prise en main » en cours dans le worktree) ; `node --check` des deux fichiers serveur ; eslint ciblé : 0 erreur ; `npm run build` client ; JSON de locale valide ; `git diff --check`. **Non testé** : l'affichage réel du bloc (à faire par Saar : personnage avec une arme sans munition ouvre « Ajouter » ; sac plein ; ajout d'une munition suggérée → elle part au Sac) ; le rechargement en combat et l'équipement de munitions après le remplacement de la comparaison de calibre (même règle, non rejoué en base). **Données** : aucune migration. **Retour arrière** : `git revert` du commit.
+
+## Session (Dev) — 2026-09-25 — Clôture du Lot 2 : la 6ᵉ ligne du compteur de blessures est dans le moteur (Mort subite / Membre détruit)
+
+**Origine** : audit de Saar (2026-09-23) — « le RAW a 6 lignes de blessures, le moteur 5 ». Cadrage : `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`.
+Lot 2 en deux temps, chacun avec plan en langage courant, analyse à charge distincte, validation de Saar : **2a** (la gravité existe, se pose,
+s'affiche — `a612c94`, poussé) et **2b** (ses conséquences — `fd4e4a1` statut `dead`, `4d8811c` guérison du Membre détruit). Restent le
+Lot 3 (Chance) et le Lot 4 (paralysie permanente du membre).
+
+**Décisions (à retenir, invariant 5 — tout écart au RAW est écrit ici)** :
+- **Une gravité stockée** : `mort_subite` (6ᵉ valeur de `WOUND_SEVERITIES`), dont le libellé dépend de la localisation — « Mort » en Tête/Corps,
+  « Membre détruit » sur un membre. **Une case pour les 6 localisations**, affichée comme un mot (la fiche papier montre « Mort » sans case en
+  Tête/Corps ; Saar maintient l'uniformité). Capacités de `WOUND_MAX_COUNTS` vérifiées sur la capture de la fiche (Légères 3/4/3/3/3/3, Moyennes 3,
+  Graves 2/3/2/2/2/2, Critiques 2, Mortelles 1/2/1/1/1/1). Pose et retrait manuels de la 6ᵉ ligne : **MJ seul** (`GM_ONLY_WOUND_SEVERITIES`),
+  sinon un joueur contournerait le statut `dead` réservé au MJ.
+- **Débordement de la Mortelle — défaut de mon propre plan, trouvé à l'analyse à charge** : la règle générale « la blessure qui remplirait la dernière
+  case convertit la ligne » (confirmée par Saar) ne doit PAS s'appliquer à la Mortelle : avec 1 case (Tête, bras, jambes), toute Mortelle serait devenue
+  Mort. La ligne Mortelle se remplit, et seul le **dépassement** écrit la 6ᵉ ligne (`OVERFLOW_ONLY_SEVERITIES`, `isWoundLinePromoted`). Saar :
+  « d'où l'importance des casques ». Une Mortelle à la tête reste une Mortelle (survie avec stabilisation).
+- **Une autorité pour les seuils** : `BLESSURE_SEUILS_TABLE` (ligne 30 = `mort_subite`) + `woundSeverityForDamage` servent l'humain ET le drone ;
+  `_severityForDamage` supprimé. **`is_lethal` supprimé** (~50 occurrences) : la gravité porte l'information. Le malus de Choc se lit dans
+  `BLESSURE_EFFETS_TABLE` via `getWoundEffects` (plus de copie dans `charStats.js`) ; le Choc virtuel combiné ≥ 30 en Tête/Corps est plafonné à
+  `mortelle` (comportement conservé). Tri SQL des gravités généré depuis `WOUND_SEVERITIES` (`woundSeverityRankSql`) — un `CASE` recopié disparaît.
+- **Infection d'une Mortelle : pas de case en plus** (`WOUND_INFECTION.extraCase: false`) — tranche le point ouvert du plan : le RAW donne un délai de
+  survie, pas une case ; en cocher une aurait fait mourir/détruire un membre par simple infection. Le délai de survie reste affiché au MJ, jamais
+  appliqué (décision du 2026-07-30 maintenue). Le Membre détruit suit la même ligne RAW (« Mortelles/Membres détruits », objet partagé).
+- **Bug préexistant corrigé** : `isMortalWoundImmobilized` lisait `w.wound_location` (colonne réelle : `location`) — la règle « jambe mortelle =
+  déplacement impossible » ne se déclenchait jamais. Corrigé, test ajouté.
+- **La Mort pose `dead`** (2b-1) : réconciliation idempotente `reconcileWoundDeath` dans la transaction de la blessure (modèle
+  `determineDefeatedStatus`/`applyDefeatedStatus`, SR5-FoundryVTT). **Marque de provenance** `data.source = 'wound'` : une blessure ne retire que ce
+  qu'elle a posé — un `dead` posé à la main par le MJ n'est jamais écrasé ni retiré par une blessure. Pose = « insérer si absent » (`onConflict …
+  ignore`), **jamais** `applyModStatus` (`merge` : il aurait écrasé la `data` d'un `dead` MJ, effacé ensuite par la blessure — trouvé à l'analyse à
+  charge). **Déclencheur étroit** : seulement pour une blessure qui touche à la Mort (le MJ qui relève un personnage à la main ne le voit pas re-tué par
+  une Légère). `becameDead` (ligne réellement insérée) décide de rejouer `applyDeathConsequences`. Nouveau service `removeWound` (route DELETE). Pas de
+  ligne de chat « X est mort » : le panneau de résultat (chemins de combat, chute, froid, dangers) et le badge suffisent.
+- **`/heal` soigne tout, y compris un `dead` posé à la main** (Saar : « plus simple, plus compréhensible »).
+- **Membre détruit (2b-2)** : guérison 3 semaines, Chirurgie + Médecine, soins constants (RAW p.238), devient une **Critique** (p.239) —
+  `getWoundHealing(severity, location)` (autorité unique de « guérit-elle ? »), `WOUND_HEALING.membreDetruit`, `WOUND_IMPROVEMENT_TARGET` +
+  `improvedSeverity` (`previousSeverity` reste l'inverse de la promotion). **Une Mort (Tête/Corps) n'a aucune échéance** : la résurrection reste une
+  décision du MJ.
+- **Écart RAW assumé (décidé le 2026-09-23, journalisé le 2026-09-24, pas encore câblé)** : racheter une Mort subite par la Chance coûtera **3 points**
+  (le RAW ne chiffre pas) → Lot 3. **Conflit noté pour le Lot 3** : `resolveChanceRecipientCharacterId` refuse un personnage `dead` ; la Mort posée dans
+  la transaction bloque donc toute fenêtre de Chance — le choix devra s'ouvrir avant ou indépendamment de `dead`.
+- **Règle de processus** (amendement d'`AGENTS.md`, `1795f2d`, autorisation de Saar) : l'agent lance lui-même les tests ciblés avec la base locale ;
+  rapport seulement en cas d'échec ou de risque de résidu.
+
+**Migration** : `363_character_wounds_severity_mort_subite.js` (`chk_wounds_severity` à 6 valeurs ; `down()` convertit `mort_subite` en `mortelle`).
+**Recherche** : SR5-FoundryVTT (décision pure puis application), modules Foundry Always HP / Nik's DnD5e Tweaks (statut « mort » séparé de la blessure,
+le MJ le garde), Knex (pas de crochet « après commit » : agir une fois la transaction rendue), PostgreSQL `ON CONFLICT DO NOTHING`.
+
+**Documentation** : `SYSTEME/BLESSURES.md` (6 lignes, promotion, 6ᵉ ligne, guérison/infection, mort par blessure, pièges), `STATUTS_TOKEN.md`,
+`COMBAT.md`, `COMBAT_FLUX.md`, `SERVICES_COMBAT.md`, `PERSONNAGE_CALCULS.md`, `CHARACTER.md`, `COUVERTURE_RAW.md`, `INDEX.md`, `CONVENTIONS.md` §19
+(P63-P65), `VOCABULARY.md`, Encyclopédie (terme, tableau, note), `CHANGELOG.md` v256, `ROADMAP.md`. `ASBUILT.md` volontairement non touché (déployé
+et stable : pas encore poussé en production).
+
+**Constats laissés en tickets** (script `create_tickets_20260925_sixieme_ligne_constats.js`, lancé par Saar le 2026-09-25) : `WOUND-HEAL-CHAIN-STOPS`
+(**high**, [VÉRIFIÉ par exécution] une blessure améliorée n'a plus d'échéance de guérison), `WOUND-HEAL-LINE-CAPACITY`, `WOUND-DEATH-NO-TOKEN`,
+`WOUND-STABILIZATION-UNMODELED`, `WOUND-SURVIVAL-MINUTES-HOURS` (RAW contradictoire p.237/p.240), `ENCYCLO-COMPTEUR-HEADERS`,
+`LINT-TOKENRADIALMENU-DOCLOSE`. Doublon signalé : `COMBAT-WOUNDS-403-PNJ` et `PLAYER-CLIENT-403-PNJ-WOUNDS` décrivent le même 403.
+
+**Testé** : `woundConstants.test.mjs` 27/27 et `tokenStatusRegistry.test.mjs` 19/19 ; `node --test 'shared/**/*.test.mjs'` 740/740 ; en base
+(lancés par Saar puis par moi) `woundService.test.mjs` (11 tests du statut `dead`), `woundUtils.test.mjs`, `woundEvolutionService.test.mjs`,
+`deathStateService.test.mjs` : 75/75 ; build client ; `git diff --check`. **Validé par Saar** : tests en base, test visuel du Lot 2a. **Non testé** :
+un coup ≥ 30 de bout en bout en combat réel ; le badge « mort » sur un token posé par une blessure ; une guérison de Membre détruit sur plusieurs
+semaines de jeu. **Données** : migration 363 appliquée en local ; aucune autre. **Retour arrière** : `git revert` de `4d8811c`, `fd4e4a1`, `a612c94`
+(indépendants) ; `down()` de la migration 363.

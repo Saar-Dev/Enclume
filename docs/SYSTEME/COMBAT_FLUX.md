@@ -354,7 +354,7 @@ Si !needsDefenseWait → avance dans combat_timeline_entries (pickNextTimelineSt
         EMIT COMBAT_ATTACK_RESULT
 
       Sinon (PJ/PNJ cible) :
-        damageService.resolveTargetHit() → { localisation, etq, rd, degatsNets, is_lethal, finalSeverity, shockResult }
+        damageService.resolveTargetHit() → { localisation, etq, rd, degatsNets, finalSeverity, shockResult }
         Si shockResult → emitShockDiceResult + applyStun
         EMIT COMBAT_ATTACK_RESULT
 ```
@@ -550,7 +550,7 @@ return { suspend: true }
 ```
 isShockTestRequired(finalSeverity, localisation) → null si non requis
 seuils = calcSeuils(for_na, con_na, vol_na) → { etourdissement, inconscience }
-shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
+shockMalus = getShockMalus(finalSeverity, localisation)   // lu dans BLESSURE_EFFETS_TABLE (getWoundEffects)
 D20 roll serveur
   roll ≤ seuils.etourdissement + shockMalus → outcome = 'ok'
   roll ≤ seuils.inconscience   + shockMalus → outcome = 'etourdi'
@@ -659,7 +659,8 @@ Drone abîmé (integrite faible) → rdInput faible → rd POSITIF (noyau durci)
 ### `resolveDroneIntegrityLoss`
 ```
 severity : detruit(≥30, propre au drone) sinon woundSeverityForDamage(degatsNets) — table RAW partagée
-           BLESSURE_SEUILS_TABLE (shared/woundConstants.js) : mortelle(≥25) / critique(≥20) / grave(≥15) / moyenne(≥10) / legere(≥5)
+           BLESSURE_SEUILS_TABLE (shared/woundConstants.js) : mortelle(≥25) / critique(≥20) / grave(≥15) / moyenne(≥10) / legere(≥5) ; la ligne ≥30
+           (`mort_subite`) n'est jamais lue ici : la destruction à 30 est traitée avant
 damages[severity][premier false] = true  (JSONB case cochée)
 newIntegrite = detruit ? 0 : max(0, integrite - 1)     // 1 touche = 1 point, même sous 5 de dégâts nets
 Si detruit → DELETE combat_roster (retrait du roster immédiat)

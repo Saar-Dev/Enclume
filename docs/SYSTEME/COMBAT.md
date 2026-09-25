@@ -293,7 +293,7 @@ choisit s'il distingue les deux dans son message joueur.
 |---|---|---|
 | `calcWoundPenalty(wounds)` | tableau `character_wounds` | malus santé (≤ 0, pire seul) |
 | `calcEncumbrancePenalty(totalWeight, forValue)` | poids total + FOR nette | malus encombrement (≥ 0) — seuil = FOR×3 |
-| `getShockMalus(severity, location, is_lethal)` | gravité + wound_location + flag léthal | malus Test de Choc (≤ 0) |
+| `getShockMalus(severity, location)` | gravité + localisation | malus Test de Choc (≤ 0), lu dans `BLESSURE_EFFETS_TABLE` via `getWoundEffects` (la 6ᵉ ligne lit la colonne RAW `membreDetruit`) |
 
 ### XP (Skills)
 
@@ -628,7 +628,8 @@ intégralement résolue.
 - **Cadavre** (statut `dead`) : reste une cible qui prend des blessures ; ne dépense pas de Chance (`resolveChanceRecipientCharacterId`
   → `null`, aucune fenêtre : esquive de zone, réduction de gravité, Catastrophe de défense) ; aucun test de Choc ni D6
   d'étourdissement (`resolveTargetHit`) ; les états de corps vivant lui sont refusés (`applyStunWithDuration`) et retirés à sa mort
-  (`applyDeathConsequences`). Le MJ reste libre.
+  (`applyDeathConsequences`). Le MJ reste libre. **La blessure « Mort » (6ᵉ ligne en Tête/Corps) pose `dead`** dans la transaction de
+  `applyWound` (`reconcileWoundDeath`) et le retire avec elle, sans jamais toucher un `dead` posé à la main : `SYSTEME/BLESSURES.md`, « Mort et cadavre ».
 
 ### Retarder son Action / Agir maintenant — RAW `docs/REGLES/REGLESYSCOMBAT.md:554-567`
 Aucun minuteur (retiré Session 159 après 3 bugs réels causés par un sous-état FSM temporisé
@@ -1522,15 +1523,18 @@ PJ différé `COMBAT_DAMAGE_CONFIRM`).
 | 18–20 | JG | jambe_gauche |
 
 ### Seuils sévérité (dégâts nets)
-| Dégâts nets | Sévérité | is_lethal |
-|---|---|---|
-| ≥ 30 | mortelle | true |
-| 25–29 | mortelle | false |
-| 20–24 | critique | false |
-| 15–19 | grave | false |
-| 10–14 | moyenne | false |
-| 5–9 | légère | false |
-| < 5 | null (pas de blessure) | false |
+Autorité unique : `BLESSURE_SEUILS_TABLE` + `woundSeverityForDamage(degatsNets)` (`shared/woundConstants.js`) — humain ET drone. `is_lethal` n'existe plus
+(la gravité porte l'information). Détail de la 6ᵉ ligne : `SYSTEME/BLESSURES.md`.
+
+| Dégâts nets | Sévérité |
+|---|---|
+| ≥ 30 | mort_subite (« Mort » en Tête/Corps, « Membre détruit » sur un membre) |
+| 25–29 | mortelle |
+| 20–24 | critique |
+| 15–19 | grave |
+| 10–14 | moyenne |
+| 5–9 | légère |
+| < 5 | null (pas de blessure) |
 
 ### Formule dégâts nets
 ```
@@ -1548,7 +1552,6 @@ rd = calcResistanceDommages(for_na_cible, con_na_cible)
   localisation,     // slug 'tete' | 'corps' | ...
   degautsBruts, degatsNets,
   severity,         // finalSeverity (après promotion P49)
-  is_lethal,
   isSuccess,
   shockResult: null | {
     triggered: true,
