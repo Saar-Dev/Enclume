@@ -45,6 +45,7 @@
 import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
+import { resolveInventoryBroadcastRoom, emitInventoryEvent } from '../../lib/inventoryBroadcast.js'
 import { resolveRefField, localizeRefAliased } from '../../lib/refI18n.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
@@ -1106,29 +1107,9 @@ router.put('/:characterId/sols', async (req, res, next) => {
 
 // ─── POST /api/char-sheet/:characterId/quick-equip ───────────────────────────
 // GM uniquement. Équipement d'urgence pré-combat — bypass isContainerAvailable.
-// Portée de diffusion inventaire (docs/PLAN_WIZARD_MATERIEL.md §2) : tant que le personnage est un
-// brouillon actif (Wizard non terminé), diffuser à wizard:<sheetId> plutôt qu'à toute la room de
-// campagne — même principe déjà posé pour les verrous/l'état du Wizard
-// (docs/PLAN_WIZARDCOLLAB.md §2.1, "diffusion scopée par ressource, jamais toute la campagne") :
-// un membre de la campagne non impliqué dans cette session Wizard ne doit pas apprendre qu'un
-// brouillon existe. Comportement inchangé (room de campagne) pour un personnage fini, en jeu réel.
-// Un personnage du Coffre (campaign_id NULL, wizard_locked_at posé dès la création —
-// charSheetService.js) n'a personne à notifier — même invariant que PUT /sols (2026-08-16, voir son
-// commentaire ci-dessous) : retourne explicitement null plutôt que de laisser passer un campaignId
-// déjà NULL vers `.to(room).emit()`. `emitInventoryEvent` (ci-dessous) saute l'émission dans ce cas,
-// centralisé une fois pour les 7 appelants plutôt qu'un `if (room)` dupliqué à chacun (ticket
-// COFFRE-INVROOM1 — la description d'origine visait la branche `wizard:`, obsolète depuis que
-// wizard_locked_at n'est plus jamais NULL pour un personnage Coffre direct ; la vraie fuite est ici).
-async function resolveInventoryBroadcastRoom(characterId, campaignId) {
-  const sheet = await db('char_sheet').where({ character_id: characterId }).first()
-  if (sheet && !sheet.wizard_locked_at) return `wizard:${sheet.id}`
-  return campaignId || null
-}
-
-function emitInventoryEvent(io, room, event, payload) {
-  if (room) io.to(room).emit(event, payload)
-}
-
+// Portée de diffusion inventaire (`resolveInventoryBroadcastRoom` / `emitInventoryEvent`) : extraite dans
+// lib/inventoryBroadcast.js (PLAN_PRISE_EN_MAIN.md Lot A2) — la résolution d'une permutation en combat diffuse les mêmes
+// événements et choisit la salle par la même fonction.
 router.post('/:characterId/quick-equip', async (req, res, next) => {
   try {
     if (!req.isGm) throw new AppError(403, 'GM uniquement')

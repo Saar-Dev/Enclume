@@ -20,6 +20,27 @@
 export const HAND_WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
 
 /**
+ * Comment un objet se tient à la main, d'après son emplacement catalogue (`ref_equipment.location`) — autorité unique,
+ * consommée par la fiche (WeaponPanel : où équiper) ET par « Permuter » en combat (PLAN_PRISE_EN_MAIN.md : quel objet
+ * peut être pris en main, dans quelle main). Déplacée depuis WeaponPanel.jsx, comportement inchangé : la fiche et le combat
+ * ne peuvent plus diverger sur « ce qui se tient à une main / deux mains / sur trépied ».
+ *
+ * Valeurs réelles du catalogue pour un objet tenu : `M` (une main, boucliers compris), `2M`, `Tr` (trépied pur), `2M/Tr`
+ * (arme lourde tenable à deux mains OU montée sur trépied — par défaut à deux mains).
+ *
+ * @param {string|null|undefined} refLocation
+ * @returns {{ type: '1H'|'2M_Tr'|'2M'|'Tr'|'unknown', defaultSlot: string }}
+ */
+export function getSlotInfo(refLocation) {
+  const locs = (refLocation || '').split('/')
+  if (locs.includes('M'))                          return { type: '1H',    defaultSlot: 'MG' }
+  if (locs.includes('2M') && locs.includes('Tr')) return { type: '2M_Tr', defaultSlot: '2M' }
+  if (locs.includes('2M'))                         return { type: '2M',    defaultSlot: '2M' }
+  if (locs.includes('Tr'))                         return { type: 'Tr',    defaultSlot: 'Tr' }
+  return { type: 'unknown', defaultSlot: '' }
+}
+
+/**
  * @param {{ fire_mode?: string|null, ref_fire_mode?: string|null, damage_h?: string|null, ref_damage_h?: string|null, shock?: string|null, ref_shock?: string|null }} item
  */
 export function isWeaponItem(item) {

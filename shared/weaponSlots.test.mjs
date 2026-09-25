@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { isWeaponItem, resolveHandWeapons, flattenItemsBySlot, handSlotDisplayRows } from './weaponSlots.js'
+import { isWeaponItem, resolveHandWeapons, flattenItemsBySlot, handSlotDisplayRows, getSlotInfo } from './weaponSlots.js'
 
 test('isWeaponItem — un Bouclier (ni fire_mode ni damage_h) n\'est pas une arme', () => {
   assert.equal(isWeaponItem({ ref_fire_mode: null, ref_damage_h: null }), false)
@@ -108,4 +108,25 @@ test('handSlotDisplayRows — aucune arme en main : tableau vide', () => {
   const { rows, showSlotLabel } = handSlotDisplayRows({})
   assert.equal(rows.length, 0)
   assert.equal(showSlotLabel, false)
+})
+
+// ─── getSlotInfo — déplacée depuis WeaponPanel.jsx (PLAN_PRISE_EN_MAIN.md), comportement inchangé ────────────────────
+// Les 4 valeurs réelles d'emplacement de main du catalogue (lues en base le 2026-09-25) : M, 2M, Tr, 2M/Tr.
+
+test('getSlotInfo — les quatre emplacements de main du catalogue', () => {
+  assert.deepEqual(getSlotInfo('M'),     { type: '1H',    defaultSlot: 'MG' })
+  assert.deepEqual(getSlotInfo('2M'),    { type: '2M',    defaultSlot: '2M' })
+  assert.deepEqual(getSlotInfo('Tr'),    { type: 'Tr',    defaultSlot: 'Tr' })
+  assert.deepEqual(getSlotInfo('2M/Tr'), { type: '2M_Tr', defaultSlot: '2M' })
+})
+
+test('getSlotInfo — armure, conteneur, absent ou vide : unknown, jamais une exception', () => {
+  for (const location of ['T', 'C', 'BG', 'D', 'Ce', '', null, undefined]) {
+    assert.deepEqual(getSlotInfo(location), { type: 'unknown', defaultSlot: '' }, `location ${String(location)}`)
+  }
+})
+
+test('getSlotInfo — comparaison par code exact : « 2M » n\'est pas « M » (une sous-chaîne ne compte pas)', () => {
+  assert.equal(getSlotInfo('2M').type, '2M')
+  assert.equal(getSlotInfo('MG').type, 'unknown')
 })

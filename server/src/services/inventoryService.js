@@ -16,6 +16,8 @@ import * as integrityService from './integrityService.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
 import { ammoMatchesWeapon } from '../../../shared/ammoRules.js'
+import { classifyGrabCandidate, decideHandSwap, GRAB_REFUSAL } from '../../../shared/combatGrabItem.js'
+import { initialMagazineOnEquip } from '../../../shared/ammoRules.js'
 
 // INV2 (docs/EN_COURS.md) — débit des Sols, jusqu'ici jamais appliqué par le bouton Ajouter. Verrou
 // `forUpdate` + vérif AVANT décrément, même patron que tradeService.js#executeBuy (seul autre point
@@ -42,11 +44,12 @@ export const MOD_CATEGORY  = 'Accessoires pour armes'
 // Sac/Ceinture disponibles seulement si le contenant lui-même est réellement équipé (slot 'D'/'Ce'
 // dans char_inventory_slots) — pas simplement possédé quelque part, y compris au Coffre (INV1, Saar
 // 2026-08-22). Le seul geste qui ouvre ce bac est d'équiper le Sac à dos/la Ceinture (ContainerPanel).
-export async function isContainerAvailable(characterId, container) {
+// `executor` : `db` par défaut, ou la transaction en cours (`trx`) quand l'appelant doit voir ses propres écritures non validées.
+export async function isContainerAvailable(characterId, container, executor = db) {
   if (container === 'Coffre') return true
   const slotNeeded = container === 'Sac' ? 'D' : container === 'Ceinture' ? 'Ce' : null
   if (!slotNeeded) return false
-  const row = await db('char_inventory_slots')
+  const row = await executor('char_inventory_slots')
     .where({ character_id: characterId, slot_code: slotNeeded })
     .first()
   return !!row
@@ -72,13 +75,20 @@ async function _writeSlots(trx, charInventoryId, characterId, slotValue) {
   )
 }
 
+// Refus d'équipement à CODE stable (vocabulaire GRAB_REFUSAL, shared/combatGrabItem.js) : statut et message restent ceux que la
+// route renvoie (l'errorHandler ne sérialise que status / message / i18nKey) ; « Permuter » lit `err.refusal` pour dire POURQUOI
+// en chat — jamais en lisant un texte français. Seuls les refus du chemin « équiper » d'`applyItemUpdate` en portent un.
+function equipRefusal(statusCode, message, refusal) {
+  return Object.assign(new AppError(statusCode, message), { refusal })
+}
+
 // Lot B (docs/PLAN_INVENTORY_SLOTS.md) — lit char_inventory_slots au lieu de char_inventory.slot en
 // égalité stricte : un item à slot composite (ex. futur bouclier "MG/BG/C") occupe bien MG pour ce
 // contrôle, alors que l'ancienne comparaison exacte sur la colonne texte le manquait (trouvé au run
 // à vide du chantier Bouclier). Utilisé pour tout slot à occupant unique (main/contenant), et pour
 // le contrôle simple d'un slot armure côté quickEquip (qui ne gère pas le layering).
-async function _handSlotConflict(characterId, slotCodes, excludeItemId = null) {
-  let q = db('char_inventory_slots')
+async function _handSlotConflict(characterId, slotCodes, excludeItemId = null, executor = db) {
+  let q = executor('char_inventory_slots')
     .where({ character_id: characterId })
     .whereIn('slot_code', slotCodes)
   if (excludeItemId) q = q.whereNot({ char_inventory_id: excludeItemId })
@@ -87,8 +97,8 @@ async function _handSlotConflict(characterId, slotCodes, excludeItemId = null) {
 
 // Occupants actuels d'un slot armure (règle 1+S+S) — même correction que ci-dessus, remplace le
 // `LIKE '/'+slot+'/'` sur la colonne texte par une lecture directe de char_inventory_slots.
-async function _armorSlotOccupants(characterId, slotCode, excludeItemId = null) {
-  let q = db('char_inventory_slots')
+async function _armorSlotOccupants(characterId, slotCode, excludeItemId = null, executor = db) {
+  let q = executor('char_inventory_slots')
     .join('char_inventory', 'char_inventory.id', 'char_inventory_slots.char_inventory_id')
     .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
     .where('char_inventory_slots.character_id', characterId)
@@ -193,19 +203,157 @@ export async function getOwnedHandWeapon(characterId, itemId, { slotCodes, categ
   return { ...item, inHand, categoryOk }
 }
 
+// ─── Prise en main en combat (docs/Old/PLAN_PRISE_EN_MAIN.md) ─────────────────────────────────────
+//
+// Un objet du Sac / de la Ceinture doit être PRIS EN MAIN avant d'être utilisé (grenade lancée, arme tirée).
+// Ce service est l'autorité de l'ÉTAT (où est l'objet, quelles mains sont libres) ; le COÛT d'action vit dans
+// shared/combatGrabItem.js + combatIniCost.js, l'ordonnancement dans le moteur de combat. Les mains libres se
+// DÉDUISENT de char_inventory_slots (jamais un compteur stocké — même principe que `handsHeld` de Pathfinder 2e).
+// L'écriture passe par `updateItem` (mains, deux-mains, Sac requis, transaction) : aucun emplacement n'est écrit
+// ailleurs. Les refus attendus sont des CODES (GRAB_REFUSAL, vocabulaire unique de shared/combatGrabItem.js, ré-exporté ici pour
+// les appelants existants) mappés en messages de chat i18n par l'appelant.
+export { GRAB_REFUSAL }
+
+// Validation STRUCTURELLE d'une prise en main (aucune écriture) — utilisée à l'annonce (refus seulement du
+// structurellement impossible, `.claude/rules/combat.md`) et à la résolution. Ne regarde ni les mains libres ni
+// le Sac : ces motifs peuvent changer entre l'annonce et la résolution.
+// Lit `ref_equipment` en BRUT (jamais localisé) : `category`/`location` servent à des règles, pas à l'affichage.
+export async function describeGrabCandidate(characterId, itemId) {
+  if (!characterId || !itemId) return { ok: false, reason: GRAB_REFUSAL.NOT_FOUND }
+  let row
+  try {
+    row = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': itemId, 'char_inventory.character_id': characterId })
+      .first(
+        'char_inventory.id', 'char_inventory.container',
+        'ref_equipment.location as ref_location', 'ref_equipment.category as ref_category',
+      )
+  } catch (err) {
+    // Identifiant mal formé venu d'un client forgé (type uuid invalide) : indiscernable d'un objet introuvable.
+    if (err?.code === '22P02') return { ok: false, reason: GRAB_REFUSAL.NOT_FOUND }
+    throw err
+  }
+  if (!row) return { ok: false, reason: GRAB_REFUSAL.NOT_FOUND }
+
+  const slots = await db('char_inventory_slots').where({ char_inventory_id: row.id }).pluck('slot_code')
+  // Classification partagée avec la résolution (swapItemInHand) : une seule autorité du « structurellement impossible ».
+  const verdict = classifyGrabCandidate({ container: row.container, slots, refLocation: row.ref_location })
+  if (!verdict.ok) return { ok: false, reason: verdict.reason }
+  if (verdict.alreadyInHand) return { ok: true, alreadyInHand: true, itemId: row.id, container: row.container }
+  return { ok: true, alreadyInHand: false, itemId: row.id, container: row.container, refLocation: row.ref_location }
+}
+
+// Cet objet appartient-il à ce personnage ? (aucune règle de jeu : un contrôle d'appartenance, pour valider un identifiant envoyé par
+// un client — ex. la ligne à remplacer d'une permutation). Un identifiant mal formé (type uuid invalide) est un objet introuvable.
+export async function itemBelongsToCharacter(characterId, itemId) {
+  if (!characterId || !itemId) return false
+  try {
+    const row = await db('char_inventory').where({ id: itemId, character_id: characterId }).first('id')
+    return Boolean(row)
+  } catch (err) {
+    if (err?.code === '22P02') return false
+    throw err
+  }
+}
+
+// Combien d'exemplaires d'un même équipement le personnage a-t-il encore RANGÉS (sans emplacement) dans la
+// Ceinture et dans le Sac ? Sert au chat après un lancer de grenade (« il en reste N ») — jamais à décider
+// d'une règle. Un objet équipé (armure portée, objet déjà en main) n'est pas « rangé ».
+export async function countStowedByContainer(characterId, equipmentId) {
+  if (!characterId || !equipmentId) return { Ceinture: 0, Sac: 0 }
+  const rows = await db('char_inventory')
+    .where({ character_id: characterId, equipment_id: equipmentId })
+    .whereIn('container', ['Ceinture', 'Sac'])
+    .whereNotIn('id', db('char_inventory_slots').select('char_inventory_id').where({ character_id: characterId }))
+    .select('container')
+    .sum({ total: 'quantity' })
+    .groupBy('container')
+  const counts = { Ceinture: 0, Sac: 0 }
+  for (const row of rows) counts[row.container] = Number(row.total)
+  return counts
+}
+
+// Instantané de l'inventaire d'UN personnage pour décider une permutation : mêmes champs que les objets du client (`slots` en
+// tableau, `ref_*`), lus en BRUT (jamais localisés — des règles, pas de l'affichage). Lu DANS la transaction de la permutation.
+async function _loadSwapSnapshot(executor, characterId) {
+  return executor('char_inventory as ci')
+    .leftJoin('ref_equipment as re', 'ci.equipment_id', 're.id')
+    .where('ci.character_id', characterId)
+    .select(
+      'ci.id', 'ci.container', 'ci.quantity',
+      're.weight as ref_weight', 're.capacity as ref_capacity', 're.location as ref_location',
+      executor.raw('(SELECT array_agg(slot_code ORDER BY slot_code) FROM char_inventory_slots WHERE char_inventory_id = ci.id) as slots'),
+    )
+}
+
+// PERMUTER (PLAN_PRISE_EN_MAIN.md) : met en main un objet du Sac / de la Ceinture ; les objets tenus qui le gênent sortent d'abord,
+// vers le conteneur d'origine de l'objet entrant (R4). Un objet entrant à deux mains fait sortir tout ce qui est tenu (R6),
+// une main sur une ligne cliquée remplace cet objet (R7), `clickedItemId = null` = « Mains nues » (une main libre).
+//
+// Autorités : la DÉCISION (quels objets, quelle main, capacité) vient de `shared/` (`decideHandSwap`, la même fonction que l'aperçu
+// client) ; la VALIDITÉ des emplacements reste celle d'`applyItemUpdate` — tout se passe dans UNE transaction,
+// donc un refus tardif (main prise entre-temps, couches d'armure pleines pour un bouclier…) annule tout : tout ou rien (R11).
+// Aucune restauration manuelle, jamais le Coffre. Le personnage n'est pas verrouillé : deux permutations du même personnage sont
+// déjà sérialisées par le moteur de tour ; un autre écrivain (la fiche) ne peut pas créer de doublon de main (index unique
+// `uq_inventory_slots_hand_container`, erreur 23505 traduite en refus HANDS_FULL).
+//
+// Retourne { status: 'swapped' | 'already' | 'refused', ... } :
+//   swapped → { item, outgoing: [item…], slot, fromContainer, stowedIn }   (objets = getItemWithRef, relus APRÈS le commit)
+//   already → { item }                        (déjà en main : idempotent, aucune écriture)
+//   refused → { reason: GRAB_REFUSAL.*, container?, outgoingIds? }   (`container` / `outgoingIds` pour NO_ROOM et CONTAINER_UNAVAILABLE)
+// Une erreur inattendue (incident base, AppError sans code) se propage.
+export async function swapItemInHand(characterId, { incomingId, clickedItemId = null } = {}) {
+  if (!characterId || !incomingId) return { status: 'refused', reason: GRAB_REFUSAL.NOT_FOUND }
+  let outcome
+  try {
+    outcome = await db.transaction(async (trx) => {
+      // La DÉCISION (objet entrant, Sac requis, objets sortants, main, place du rangement) est `decideHandSwap` (shared/) : la même
+      // fonction alimente l'aperçu de la fenêtre de déclaration. Ici seulement l'exécution, dans la transaction.
+      const items = await _loadSwapSnapshot(trx, characterId)
+      const decision = decideHandSwap({ items, incomingId, clickedItemId })
+      if (decision.status === 'already') return { already: true }
+      if (decision.status === 'refused') {
+        return { refused: decision.reason, ...(decision.container && { container: decision.container, outgoingIds: decision.outgoingIds }) }
+      }
+
+      for (const outgoingId of decision.outgoingIds) {
+        await applyItemUpdate(trx, characterId, outgoingId, { slot: null, container: decision.stowContainer })
+      }
+      await applyItemUpdate(trx, characterId, decision.incomingId, { slot: decision.targetSlot })
+      return {
+        swapped: true, slot: decision.targetSlot, fromContainer: decision.origin, stowedIn: decision.stowContainer,
+        outgoingIds: decision.outgoingIds,
+      }
+    })
+  } catch (err) {
+    const reason = err?.refusal ?? (err?.code === '23505' ? GRAB_REFUSAL.HANDS_FULL : null)
+    if (!reason) throw err
+    return { status: 'refused', reason }
+  }
+
+  if (outcome.refused) {
+    return {
+      status: 'refused', reason: outcome.refused,
+      ...(outcome.container && { container: outcome.container, outgoingIds: outcome.outgoingIds }),
+    }
+  }
+  if (outcome.already) return { status: 'already', item: await getItemWithRef(incomingId) }
+  const [item, ...outgoing] = await Promise.all([getItemWithRef(incomingId), ...outcome.outgoingIds.map(id => getItemWithRef(id))])
+  return { status: 'swapped', item, outgoing, slot: outcome.slot, fromContainer: outcome.fromContainer, stowedIn: outcome.stowedIn }
+}
+
 // Retourne le nombre de coups à charger lors de l'équipement initial d'une arme à feu.
 // Conditions : slot ∈ WEAPON_SLOTS, caliber non null, ammo_count parseable > 0.
 // Retourne null si l'item n'est pas une arme à feu ou si ammo_count est absent/invalide.
-export async function resolveAmmoInit(equipmentId, slot) {
+export async function resolveAmmoInit(equipmentId, slot, executor = db) {
   if (!equipmentId || !WEAPON_SLOTS.has(slot)) return null
-  const ref = await db('ref_equipment')
+  const ref = await executor('ref_equipment')
     .where({ id: equipmentId })
     .select('caliber', 'ammo_count')
     .first()
-  if (!ref?.caliber || !ref?.ammo_count) return null
-  const m = String(ref.ammo_count).match(/\d+/)
-  const n = m ? parseInt(m[0], 10) : 0
-  return n > 0 ? n : null
+  // Règle partagée (shared/ammoRules.js) : le client l'appelle aussi pour l'aperçu d'une permutation.
+  return initialMagazineOnEquip(ref?.caliber, ref?.ammo_count)
 }
 
 // GET /:characterId/inventory
@@ -570,9 +718,12 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   return { type: 'single', item }
 }
 
-// PUT /:characterId/inventory/:itemId
-export async function updateItem(characterId, itemId, payload) {
-  const existing = await db('char_inventory')
+// Cœur de la mise à jour d'un objet : validations ET écritures, TOUTES via l'exécuteur transactionnel `trx` (aucune lecture
+// hors transaction — sinon un slot libéré par une écriture précédente de la même transaction resterait vu occupé).
+// `updateItem` l'enveloppe pour la route ; `swapItemInHand` (PLAN_PRISE_EN_MAIN.md) enchaîne plusieurs appels dans UNE
+// transaction. Retourne les identifiants des objets déplacés en cascade (à relire APRÈS le commit par l'appelant).
+export async function applyItemUpdate(trx, characterId, itemId, payload) {
+  const existing = await trx('char_inventory')
     .where({ id: itemId, character_id: characterId }).first()
   if (!existing) throw new AppError(404, 'Item not found')
 
@@ -616,7 +767,7 @@ export async function updateItem(characterId, itemId, payload) {
   let chargeOnValidate = 0
   if (validated_by_gm === true && existing.validated_by_gm === false) {
     const equipRefForPrice = existing.equipment_id
-      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('price').first()
+      ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('price').first()
       : null
     chargeOnValidate = (equipRefForPrice?.price ?? 0) * existing.quantity
   }
@@ -631,7 +782,7 @@ export async function updateItem(characterId, itemId, payload) {
     // shield_extra_locations catalogue) avant toute validation. Composition faite une seule fois,
     // ici, jamais côté client ni dans addItem/quickEquip (qui ne gèrent qu'un slot atomique).
     const equipRefForSlot = existing.equipment_id
-      ? await db('ref_equipment').where({ id: existing.equipment_id })
+      ? await trx('ref_equipment').where({ id: existing.equipment_id })
           .select('category', 'malus_cat', 'shield_extra_locations').first()
       : null
     const isShield = equipRefForSlot?.category === 'Bouclier'
@@ -645,7 +796,7 @@ export async function updateItem(characterId, itemId, payload) {
 
     const isContainerSlotPut = updates.slot === 'D' || updates.slot === 'Ce'
     if (isContainerSlotPut) {
-      const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
+      const conflict = await _handSlotConflict(characterId, [updates.slot], itemId, trx)
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
       // Équiper le Sac à dos/la Ceinture porte son propre poids (INV1) — même geste que l'armure/arme
       // ci-dessous, mais ici le contenant devient son propre bac (il ne va pas "dans" lui-même).
@@ -655,36 +806,36 @@ export async function updateItem(characterId, itemId, payload) {
       // Main + localisations armure composées en un seul contrôle — pas de P58 (un bouclier ne
       // couvre jamais BG et BD à la fois, cf. addItem : structurellement inapplicable) ni de
       // branche WEAPON_SLOTS/armure générique (le slot n'est déjà plus un code atomique).
-      if (!(await isContainerAvailable(characterId, 'Sac'))) {
-        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un bouclier')
+      if (!(await isContainerAvailable(characterId, 'Sac', trx))) {
+        throw equipRefusal(400, 'Sac non disponible — impossible d\'équiper un bouclier', GRAB_REFUSAL.NO_SAC)
       }
       const [hand, ...armorParts] = updates.slot.split('/')
-      const handConflict = await _handSlotConflict(characterId, [hand], itemId)
-      if (handConflict) throw new AppError(409, `Slot ${hand} déjà occupé`)
+      const handConflict = await _handSlotConflict(characterId, [hand], itemId, trx)
+      if (handConflict) throw equipRefusal(409, `Slot ${hand} déjà occupé`, GRAB_REFUSAL.HANDS_FULL)
       for (const code of armorParts) {
-        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId)
+        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId, trx)
         if (existingAtSlot.length >= 3) {
-          throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
+          throw equipRefusal(409, `Slot ${code} complet — maximum 3 couches`, GRAB_REFUSAL.ARMOR_LAYERS)
         }
         const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
         if (equipRefForSlot.malus_cat && equipRefForSlot.malus_cat !== 'S' && existingNonS.length >= 1) {
-          throw new AppError(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`)
+          throw equipRefusal(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`, GRAB_REFUSAL.ARMOR_LAYERS)
         }
       }
       updates.container = 'Sac'
     } else if (WEAPON_SLOTS.has(updates.slot)) {
-      if (!(await isContainerAvailable(characterId, 'Sac'))) {
-        throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')
+      if (!(await isContainerAvailable(characterId, 'Sac', trx))) {
+        throw equipRefusal(400, 'Sac non disponible — impossible d\'équiper une arme', GRAB_REFUSAL.NO_SAC)
       }
       const isTwoHand = updates.slot === '2M' || updates.slot === 'Tr'
       if (isTwoHand) {
-        const conflict = await _handSlotConflict(characterId, ['MG', 'MD', '2M', 'Tr'], itemId)
-        if (conflict) throw new AppError(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains')
+        const conflict = await _handSlotConflict(characterId, ['MG', 'MD', '2M', 'Tr'], itemId, trx)
+        if (conflict) throw equipRefusal(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains', GRAB_REFUSAL.HANDS_FULL)
       } else {
-        const conflictTwoHand = await _handSlotConflict(characterId, ['2M', 'Tr'], itemId)
-        if (conflictTwoHand) throw new AppError(409, 'Arme à 2 mains déjà équipée — choisissez une seule main')
-        const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
-        if (conflict) throw new AppError(409, `Slot ${updates.slot} déjà occupé`)
+        const conflictTwoHand = await _handSlotConflict(characterId, ['2M', 'Tr'], itemId, trx)
+        if (conflictTwoHand) throw equipRefusal(409, 'Arme à 2 mains déjà équipée — choisissez une seule main', GRAB_REFUSAL.HANDS_FULL)
+        const conflict = await _handSlotConflict(characterId, [updates.slot], itemId, trx)
+        if (conflict) throw equipRefusal(409, `Slot ${updates.slot} déjà occupé`, GRAB_REFUSAL.HANDS_FULL)
       }
       updates.container = 'Sac'
     } else {
@@ -695,12 +846,12 @@ export async function updateItem(characterId, itemId, payload) {
       }
       // Codes nouvellement ajoutés (absents du slot actuel de l'item) — Lot C
       // (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots, plus char_inventory.slot (retiré).
-      const existingRows  = await db('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
+      const existingRows  = await trx('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
       const existingParts = new Set(existingRows.map(r => r.slot_code))
       const addedCodes = newParts.filter(c => !existingParts.has(c))
       // malus_cat + location de l'item (malus_cat commun à tous les slots, location pour P58)
       const newItemRef = existing.equipment_id
-        ? await db('ref_equipment').where({ id: existing.equipment_id }).select('malus_cat', 'location').first()
+        ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('malus_cat', 'location').first()
         : null
       const newItemCat = newItemRef?.malus_cat ?? null
       // P58 : un item à ref_location simple (ex. 'B') ne peut couvrir qu'un seul côté d'une paire
@@ -717,18 +868,18 @@ export async function updateItem(characterId, itemId, payload) {
       }
       // 1+S+S : vérifier chaque code nouvellement ajouté
       for (const code of addedCodes) {
-        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId)
+        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId, trx)
         if (existingAtSlot.length >= 3) {
-          throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
+          throw equipRefusal(409, `Slot ${code} complet — maximum 3 couches`, GRAB_REFUSAL.ARMOR_LAYERS)
         }
         const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
         if (newItemCat && newItemCat !== 'S' && existingNonS.length >= 1) {
-          throw new AppError(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`)
+          throw equipRefusal(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`, GRAB_REFUSAL.ARMOR_LAYERS)
         }
       }
       // PI2 : Sac obligatoire pour équiper
-      if (addedCodes.length > 0 && !(await isContainerAvailable(characterId, 'Sac'))) {
-        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+      if (addedCodes.length > 0 && !(await isContainerAvailable(characterId, 'Sac', trx))) {
+        throw equipRefusal(400, 'Sac non disponible — impossible d\'équiper un item', GRAB_REFUSAL.NO_SAC)
       }
       updates.container = 'Sac'
     }
@@ -737,11 +888,11 @@ export async function updateItem(characterId, itemId, payload) {
     // définissait se ferme (INV1) : tout ce qu'il contenait doit repartir au Coffre, jamais
     // silencieusement (même invariant que INV7 — le portage reste un geste explicite). Sans
     // confirmation, refus explicite plutôt qu'une relocalisation surprise.
-    const existingSlotRows = await db('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
+    const existingSlotRows = await trx('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
     const existingSlotCodes = existingSlotRows.map(r => r.slot_code)
     const bucket = existingSlotCodes.includes('D') ? 'Sac' : existingSlotCodes.includes('Ce') ? 'Ceinture' : null
     if (bucket) {
-      const itemsInBucket = await db('char_inventory')
+      const itemsInBucket = await trx('char_inventory')
         .where({ character_id: characterId, container: bucket })
         .whereNot('id', itemId)
       if (itemsInBucket.length > 0) {
@@ -758,8 +909,8 @@ export async function updateItem(characterId, itemId, payload) {
     if (!VALID_CONTAINERS.includes(updates.container)) {
       throw new AppError(400, `container invalide : ${updates.container}`)
     }
-    if (!skipContainerAvailabilityCheck && !(await isContainerAvailable(characterId, updates.container))) {
-      throw new AppError(400, `Container "${updates.container}" non disponible`)
+    if (!skipContainerAvailabilityCheck && !(await isContainerAvailable(characterId, updates.container, trx))) {
+      throw equipRefusal(400, `Container "${updates.container}" non disponible`, GRAB_REFUSAL.CONTAINER_UNAVAILABLE)
     }
   }
 
@@ -769,7 +920,7 @@ export async function updateItem(characterId, itemId, payload) {
     }
     // P57 / L1 Usure : un item équipable ou `has_integrity` ne stacke jamais — quantity reste 1.
     const ref = existing.equipment_id
-      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('location', 'has_integrity').first()
+      ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('location', 'has_integrity').first()
       : null
     if (!canStack(ref) && updates.quantity !== 1) {
       throw new AppError(400, 'Un item équipable ou suivi en intégrité ne peut pas avoir une quantité différente de 1')
@@ -777,10 +928,10 @@ export async function updateItem(characterId, itemId, payload) {
   }
 
   if (updates.current_ammo != null) {
-    const ammo = await db('ref_equipment').where({ id: updates.current_ammo }).first()
+    const ammo = await trx('ref_equipment').where({ id: updates.current_ammo }).first()
     if (!ammo) throw new AppError(404, 'Munition introuvable')
     const weaponRef = existing.equipment_id
-      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('caliber', 'family').first()
+      ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('caliber', 'family').first()
       : null
     if (!weaponRef || weaponRef.family !== 'Armes')
       throw new AppError(400, 'current_ammo ne peut être défini que sur une arme')
@@ -790,7 +941,7 @@ export async function updateItem(characterId, itemId, payload) {
 
   // Auto-init ammo_remaining si l'arme passe en main pour la première fois
   if (WEAPON_SLOTS.has(updates.slot) && existing.ammo_remaining === null) {
-    const autoAmmo = await resolveAmmoInit(existing.equipment_id, updates.slot)
+    const autoAmmo = await resolveAmmoInit(existing.equipment_id, updates.slot, trx)
     if (autoAmmo !== null) updates.ammo_remaining = autoAmmo
   }
 
@@ -806,27 +957,31 @@ export async function updateItem(characterId, itemId, payload) {
   const hasDirectUpdate = Object.keys(updates).length > 0 || slotProvided
   if (hasDirectUpdate) updates.updated_at = db.fn.now()
 
-  await db.transaction(async (trx) => {
-    if (chargeOnValidate > 0) await _chargeSols(trx, characterId, chargeOnValidate)
-    if (hasIntegrityChange) await integrityService.adjustIntegrity(itemId, integrityChanges, trx)
-    if (hasDirectUpdate) await trx('char_inventory').where({ id: itemId }).update(updates)
-    if (slotProvided) {
-      await _writeSlots(trx, itemId, characterId, slotToWrite)
-    }
-    if (cascadeToCoffre) {
-      await trx('char_inventory')
-        .where({ character_id: characterId, container: cascadeToCoffre.bucket })
-        .whereNot('id', itemId)
-        .update({ container: 'Coffre', updated_at: db.fn.now() })
-    }
-  })
+  if (chargeOnValidate > 0) await _chargeSols(trx, characterId, chargeOnValidate)
+  if (hasIntegrityChange) await integrityService.adjustIntegrity(itemId, integrityChanges, trx)
+  if (hasDirectUpdate) await trx('char_inventory').where({ id: itemId }).update(updates)
+  if (slotProvided) {
+    await _writeSlots(trx, itemId, characterId, slotToWrite)
+  }
+  if (cascadeToCoffre) {
+    await trx('char_inventory')
+      .where({ character_id: characterId, container: cascadeToCoffre.bucket })
+      .whereNot('id', itemId)
+      .update({ container: 'Coffre', updated_at: db.fn.now() })
+  }
+  return { cascadedItemIds: cascadeToCoffre ? cascadeToCoffre.itemIds : [] }
+}
+
+// PUT /:characterId/inventory/:itemId
+// Enveloppe transactionnelle de `applyItemUpdate` : une transaction par appel, puis relecture de l'objet et des objets
+// déplacés en cascade APRÈS le commit (jamais un état non validé diffusé aux clients). Contrat inchangé pour la route.
+export async function updateItem(characterId, itemId, payload) {
+  const { cascadedItemIds } = await db.transaction(trx => applyItemUpdate(trx, characterId, itemId, payload))
   const item = await getItemWithRef(itemId)
   // Diffusion des items déplacés en cascade : la route les broadcast individuellement (même event
   // INVENTORY_UPDATED, io.to inclut l'émetteur) — aucun changement de contrat pour les autres
   // appelants de updateItem, `item` reste la clé principale.
-  const cascadedItems = cascadeToCoffre
-    ? await Promise.all(cascadeToCoffre.itemIds.map(id => getItemWithRef(id)))
-    : []
+  const cascadedItems = await Promise.all(cascadedItemIds.map(id => getItemWithRef(id)))
   return { item, cascadedItems }
 }
 

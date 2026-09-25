@@ -30,6 +30,7 @@ import {
   COMBAT_MODE_LABELS,
 } from './socketCombatHelpers.js'
 import { resolveAoeAssaultAction } from './socketCombatAoe.js'
+import { resolveGrabAction } from '../lib/combatGrabService.js'
 import { resolveExoAssaultAction, resolveExoMeleeAction } from './socketCombatExo.js'
 
 async function flushEmissions(io, socket, campaignId, emissions, preloadedSockets = null) {
@@ -449,8 +450,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           }
         } else if (action.type === 'reload') {
           await resolveReloadAction(io, socket, campaignId, character, action)
+        } else if (action.type === 'micro' && action.action_key === 'grab_item') {
+          // Prendre en main (PLAN_PRISE_EN_MAIN.md) — sequence 2, donc AVANT l'entrée complexe du même token.
+          await resolveGrabAction(io, campaignId, character, action)
         }
-        // micro / skip : resolved direct, pas d'effet V1
+        // autre micro / skip : resolved direct, pas d'effet V1
         await db('combat_actions')
           .where({ id: action.id })
           .update({ status: 'resolved', updated_at: db.fn.now() })

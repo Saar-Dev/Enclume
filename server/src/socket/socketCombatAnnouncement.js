@@ -18,6 +18,7 @@ import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { computeIniDelta } from '../../../shared/combatIniCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { validateGrabDeclaration, isGrabbedInHand, buildGrabActionRow } from '../lib/combatGrabAnnouncement.js'
 import { getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
@@ -341,6 +342,21 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       const isDrone = character.type === 'drone'
       const isExo   = character.type === 'exo'
 
+      // Permuter (docs/Old/PLAN_PRISE_EN_MAIN.md) — un objet du Sac / de la Ceinture rejoint la main. Toute la validation
+      // d'annonce (structurelle seulement, `.claude/rules/combat.md`) vit dans lib/combatGrabAnnouncement.js ; le coût dépend du
+      // conteneur RÉEL de l'objet lu en base, jamais d'un champ envoyé par le client.
+      let grabDeclaration = null
+      if (mapActions?.grab) {
+        const verdict = await validateGrabDeclaration({ grab: mapActions.grab, character, mapActions, isDrone, isExo })
+        if (!verdict.ok) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: verdict.message })
+          return
+        }
+        grabDeclaration = verdict.declaration
+      }
+      // Attaque du même Tour avec l'objet qu'une permutation met en main : voir isGrabbedInHand.
+      const isGrabbedInHandHere = (invId, allowedSlots) => isGrabbedInHand(grabDeclaration, invId, allowedSlots)
+
       // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
       let assaultWeaponRefRange = null
       // Action exclusive AOE (C4, PLAN_ARMES_SPECIALES.md §1.4bis) — profil AOE + modes de tir de
@@ -479,7 +495,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
           // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
           // stricte sur char_inventory.slot — composite-safe.
-          if (!weapon.inHand) {
+          if (!weapon.inHand && !isGrabbedInHandHere(weaponInvId, [...WEAPON_SLOTS])) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
@@ -542,7 +558,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           if (isDualWield && offhandWeaponInvId && mapActions.attack.length === 1) {
             const offhandWeapon = await getOwnedHandWeapon(character.id, offhandWeaponInvId, { slotCodes: WEAPON_SLOTS })
             const offhandFireModeOk = offhandWeapon?.ref_fire_mode ? offhandWeapon.ref_fire_mode.toUpperCase().includes(fireMode) : true
-            if (offhandWeapon?.inHand && offhandFireModeOk) {
+            if ((offhandWeapon?.inHand || (offhandWeapon && isGrabbedInHandHere(offhandWeaponInvId, ['MG', 'MD']))) && offhandFireModeOk) {
               offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, totalBulletsNeeded, { isPnj: character.type === 'pnj', pnjUnlimitedAmmo: pnjUnlimited })
             }
           }
@@ -692,6 +708,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           combatMode: state?.combat_mode ?? null,
           aim: aimTranches > 0 ? { aimTranches, lunetteNiveau } : null,
           quick,
+          grab: grabDeclaration ? { container: grabDeclaration.container } : null,
         })
       }
 
@@ -846,7 +863,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // être rejetée par ce garde.
         if (!isDrone && !isExo && firstMelee.weaponInvId) {
           const primaryWeapon = await getOwnedHandWeapon(character.id, firstMelee.weaponInvId, { slotCodes: ['MG', 'MD', '2M'], category: 'Arme de contact' })
-          if (!primaryWeapon?.inHand || !primaryWeapon.categoryOk) {
+          if (!primaryWeapon || !(primaryWeapon.inHand || isGrabbedInHandHere(firstMelee.weaponInvId, ['MG', 'MD', '2M'])) || !primaryWeapon.categoryOk) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Corps à corps impossible — l'arme sélectionnée n'est pas en main (transférée entre-temps ?)" })
             return
           }
@@ -898,7 +915,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         if (!isDrone && !isExo && firstMelee.isDualWield && firstMelee.weaponInvId && firstMelee.offhandWeaponInvId
             && firstMelee.offhandWeaponInvId !== firstMelee.weaponInvId) {
           const offhandWeapon = await getOwnedHandWeapon(character.id, firstMelee.offhandWeaponInvId, { slotCodes: ['MG', 'MD'], category: 'Arme de contact' })
-          if (offhandWeapon?.inHand && offhandWeapon.categoryOk) {
+          if (offhandWeapon && (offhandWeapon.inHand || isGrabbedInHandHere(firstMelee.offhandWeaponInvId, ['MG', 'MD'])) && offhandWeapon.categoryOk) {
             validatedOffhandWeaponInvId = firstMelee.offhandWeaponInvId
           }
         }
@@ -950,6 +967,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           status:       'pending',
         })
       }
+
+      // Permuter : type micro existant (pas de migration, chk_action_type), sequence 2 : résolu dans la boucle des actions simples,
+      // donc AVANT l'entrée complexe du même token. L'objet entrant et la ligne à remplacer voyagent dans modifiers.
+      if (grabDeclaration) actionRows.push(buildGrabActionRow(grabDeclaration, { campaignId, tokenId }))
 
       if ((quick?.observer ?? 0) > 0) {
         actionRows.push({

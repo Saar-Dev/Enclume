@@ -134,3 +134,31 @@ test('projectedInitiative — projeté = courant + delta', () => {
   assert.deepEqual(projectedInitiative(4, -4), { projected: 0, willBeLost: true })
   assert.deepEqual(projectedInitiative(3, -8), { projected: -5, willBeLost: true })
 })
+
+// ─── Prise en main (PLAN_PRISE_EN_MAIN.md) — poste `grab` ────────────────────────────────────────────
+
+test('iniDeltaBreakdown — prise en main depuis la Ceinture : Préparation −3, poste "grab" avec son conteneur', () => {
+  const lines = iniDeltaBreakdown({ grab: { container: 'Ceinture' } })
+  assert.deepEqual(lines, [{ kind: 'grab', container: 'Ceinture', value: -3 }])
+  assert.equal(computeIniDelta({ grab: { container: 'Ceinture' } }), -3)
+})
+
+test('iniDeltaBreakdown — prise en main depuis le Sac : Action simple, aucun coût d’Initiative (aucun poste)', () => {
+  assert.deepEqual(iniDeltaBreakdown({ grab: { container: 'Sac' } }), [])
+  assert.equal(computeIniDelta({ grab: { container: 'Sac' } }), 0)
+})
+
+test('iniDeltaBreakdown — conteneur inconnu ou grab absent : jamais un coût inventé', () => {
+  assert.equal(computeIniDelta({ grab: { container: 'Coffre' } }), 0)
+  assert.equal(computeIniDelta({ grab: {} }), 0)
+  assert.equal(computeIniDelta({ grab: null }), 0)
+  assert.equal(computeIniDelta({}), 0)
+})
+
+test('computeIniDelta — la prise en main se cumule avec les autres postes (Ceinture −3 + phrase −3 + dégainer −5)', () => {
+  const delta = computeIniDelta({
+    prevStates: { weapon: 'holstered' }, nextStates: { weapon: 'drawn' },
+    quick: { phrase: true }, grab: { container: 'Ceinture' },
+  })
+  assert.equal(delta, -11)
+})

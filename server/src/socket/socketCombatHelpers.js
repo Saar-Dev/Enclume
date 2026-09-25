@@ -11,6 +11,7 @@ import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } from '../lib/combatAttackRoll.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS, checkLOSForPrecheck } from '../lib/losService.js'
+import { weaponNotInHandEmission, offhandNotInHandEmission } from '../lib/combatHandWeaponNotice.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
@@ -1390,6 +1391,12 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       if (ownedWeapon?.inHand && ownedWeapon.categoryOk) {
         weapon = ownedWeapon
         damageFormula = weapon.ref_damage_h ?? null
+      } else {
+        // R14 (docs/Old/PLAN_PRISE_EN_MAIN.md, décision Saar 2026-09-25) : une arme déclarée qui n'est plus en main fait TOMBER
+        // l'attaque — jamais un repli « mains nues » silencieux (1D4), ce serait une seconde chance que la règle refuse.
+        console.warn(`[WS] resolveMeleeAction — arme introuvable ou pas en main. weapon_inv_id:${weaponInvId}`)
+        emissions.push(await weaponNotInHandEmission(character, weaponInvId))
+        return { suspend: false, emissions }
       }
     }
 
@@ -1575,6 +1582,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       const offhandWeapon = await getOwnedHandWeapon(character.id, action.offhand_weapon_inv_id, { slotCodes: ['MG', 'MD'], category: 'Arme de contact' })
       if (offhandWeapon?.inHand && offhandWeapon.categoryOk) {
         deuxArmesBonus = 3
+      } else {
+        emissions.push(offhandNotInHandEmission(character))
       }
     }
     // Mods situation CaC (§6.2)
@@ -2354,6 +2363,12 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
   // + en-main) deviendrait lui-même une source de rechargement silencieusement sans effet.
   if (weapons.length === 0) {
     await emitResult({ success: false, characterId, caliber: null, reason: 'not_in_hand' })
+    // R14 : le panneau ne parle qu'au joueur concerné ; la salle apprend, par le chat, que le rechargement est annulé.
+    // Seulement quand une arme précise était déclarée (le repli PNJ MG/MD sans arme n'a rien « déclaré »).
+    if (action?.weapon_inv_id) {
+      const notice = await weaponNotInHandEmission(character, action.weapon_inv_id)
+      io.to(campaignId).emit(notice.event, notice.data)
+    }
   }
 
   for (const weapon of weapons) {
@@ -3340,20 +3355,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       return { suspend: false, emissions }
     }
 
-    // ── LOS check ─────────────────────────────────────────────────────────────
-    if (!options.skipLos) {
-      console.log(`[DBG] resolveAssaultAction — avant checkCombatLOS`)
-      const los = await checkCombatLOS(io, db, campaignId, action, character)
-      console.log(`[DBG] resolveAssaultAction — après checkCombatLOS, result:${los.result}`)
-      if (los.result === 'blocked') return { suspend: false, emissions }
-      if (los.result === 'intercepted') {
-        return resolveAssaultAction(io, campaignId,
-          { ...action, target_token_id: los.newTargetTokenId },
-          confirmedModifiers, character, pendingMaps, { skipLos: true })
-      }
-      options.coverageModifier = los.coverageModifier ?? 0
-    }
-
+    // Arme lue AVANT la ligne de vue : sans arme en main, l'action tombe sans aucun effet de bord (pas de LOS, pas de
+    // munition) et le chat le dit (R14, docs/Old/PLAN_PRISE_EN_MAIN.md).
     const [{ weapon: primaryWeapon, installedMods: primaryMods }, rosterTireur, settings] = await Promise.all([
       fetchAssaultWeaponAndMods(action.weapon_inv_id, character.id),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
@@ -3366,8 +3369,23 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // (catégorie Choc pur, ex. Flex) peut légitimement avoir ref_damage_h vide. equipment_id est une
     // colonne propre de char_inventory, présente dès que la ligne existe, indépendamment du join.
     if (!primaryWeapon?.equipment_id) {
-      console.warn(`[WS] resolveAssaultAction — arme introuvable. weapon_inv_id:${action.weapon_inv_id}`)
+      console.warn(`[WS] resolveAssaultAction — arme introuvable ou pas en main. weapon_inv_id:${action.weapon_inv_id}`)
+      emissions.push(await weaponNotInHandEmission(character, action.weapon_inv_id))
       return { suspend: false, emissions }
+    }
+
+    // ── LOS check ─────────────────────────────────────────────────────────────
+    if (!options.skipLos) {
+      console.log(`[DBG] resolveAssaultAction — avant checkCombatLOS`)
+      const los = await checkCombatLOS(io, db, campaignId, action, character)
+      console.log(`[DBG] resolveAssaultAction — après checkCombatLOS, result:${los.result}`)
+      if (los.result === 'blocked') return { suspend: false, emissions }
+      if (los.result === 'intercepted') {
+        return resolveAssaultAction(io, campaignId,
+          { ...action, target_token_id: los.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+      options.coverageModifier = los.coverageModifier ?? 0
     }
 
     // Tir à deux armes (COM29, LdB p.226) — autorité Résolution : re-décidé ici avec l'état munitions
@@ -3390,6 +3408,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, bulletCount, { isPnj: isPnjChar, pnjUnlimitedAmmo: settings.pnj_unlimited_ammo })
       }
     }
+    // Seconde arme déclarée mais plus en main : ce n'est pas un manque de munitions — la notice de dégradation le dit autrement.
+    const offhandAbsent = Boolean(action.offhand_weapon_inv_id) && !offhandWeapon
 
     const { fires, dualWieldApplied, degraded } = resolveDualWieldFire({
       primaryAmmoOk, offhandAmmoOk,
@@ -3622,14 +3642,16 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // texte figé envoyé par le serveur. Événement dédié (pas CHAT_MESSAGE) : ce n'est pas un message
     // de chat persistant, juste un retour éphémère à ce joueur (docs/PLANS/PLAN_CHAT.md).
     if (degraded) {
-      emissions.push({
-        to: 'user', userId: character.user_id ?? null, fallback: 'socket',
-        event: WS.COMBAT_SYSTEM_NOTICE,
-        data: {
-          i18nKey: degraded === 'offhand' ? 'session.dualWieldAmmoOutOffhand' : 'session.dualWieldAmmoOutPrimary',
-          timestamp: new Date().toISOString(),
-        },
-      })
+      emissions.push(degraded === 'offhand' && offhandAbsent
+        ? offhandNotInHandEmission(character)
+        : {
+          to: 'user', userId: character.user_id ?? null, fallback: 'socket',
+          event: WS.COMBAT_SYSTEM_NOTICE,
+          data: {
+            i18nKey: degraded === 'offhand' ? 'session.dualWieldAmmoOutOffhand' : 'session.dualWieldAmmoOutPrimary',
+            timestamp: new Date().toISOString(),
+          },
+        })
     }
 
     // ── Décompte munitions ──────────────────────────────────────────────────────

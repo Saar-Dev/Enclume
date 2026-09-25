@@ -17,6 +17,7 @@
 
 import { POSITION_TRANSITION_COST } from './combatStatePositionCost.js'
 import { getAimIniCost } from './combatExclusiveActions.js'
+import { getGrabCost } from './combatGrabItem.js'
 
 // Coût d'Initiative des transitions d'état déclarées. 0 si `from === to` ou si la paire n'est pas
 // listée. `position` est délégué à combatStatePositionCost.js (autorité déjà partagée).
@@ -67,8 +68,10 @@ export function stateTransitionCost(key, from, to) {
  *        déplacement gratuit (LdB : la Charge et la Retraite incluent leur déplacement).
  * @param {?{aimTranches?:number,lunetteNiveau?:number}} [p.aim]  Tir visé déclaré, ou null.
  * @param {?{observer?:number,reperer?:number,phrase?:boolean}} [p.quick]  actions rapides cumulables.
- * @returns {Array<{kind:string, key?:string, from?:string, to?:string, count?:number, value:number}>}
- *   `kind` ∈ `'state' | 'move' | 'aim' | 'observer' | 'reperer' | 'phrase'`. Le client résout un
+ * @param {?{container?:string}} [p.grab]  prise en main déclarée (objet du Sac / de la Ceinture) — le coût dépend du
+ *        conteneur d'origine (shared/combatGrabItem.js#getGrabCost, PLAN_PRISE_EN_MAIN.md) ; `null` sinon.
+ * @returns {Array<{kind:string, key?:string, from?:string, to?:string, count?:number, container?:string, value:number}>}
+ *   `kind` ∈ `'state' | 'move' | 'aim' | 'observer' | 'reperer' | 'phrase' | 'grab'`. Le client résout un
  *   libellé i18n depuis `kind` (+ `key`/`from`/`to`/`count`) ; le serveur n'utilise que `value`.
  */
 export function iniDeltaBreakdown({
@@ -78,6 +81,7 @@ export function iniDeltaBreakdown({
   combatMode = null,
   aim = null,
   quick = null,
+  grab = null,
 } = {}) {
   // `?? {}` en plus du défaut de déstructuration : celui-ci ne couvre que `undefined`, pas un
   // `null` explicite (payload client forgé) — l'autorité ne doit jamais lever sur une entrée absente.
@@ -109,6 +113,13 @@ export function iniDeltaBreakdown({
     if (observer > 0) lines.push({ kind: 'observer', count: observer, value: observer * -5 })
     if (reperer  > 0) lines.push({ kind: 'reperer',  count: reperer,  value: reperer  * -5 })
     if (quick.phrase) lines.push({ kind: 'phrase', value: -3 })
+  }
+
+  // Prise en main (objet du Sac / de la Ceinture) : Préparation −3 depuis la Ceinture, Action simple sans coût
+  // d'Initiative depuis le Sac. Conteneur inconnu → aucun poste (jamais un coût inventé).
+  if (grab) {
+    const value = getGrabCost(grab.container)?.iniCost ?? 0
+    if (value !== 0) lines.push({ kind: 'grab', container: grab.container, value })
   }
 
   return lines

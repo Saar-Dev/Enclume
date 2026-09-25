@@ -312,3 +312,23 @@ test('getMultiShotIneligibilityReasons — rafale (RC/RL) / Tir visé / dual-wie
 // à arbitrer contre Tir Multi/Tir visé comme les autres : AssaultRangedPanel.jsx n'affiche même plus
 // ces sections quand l'arme équipée est éligible (retour Saar, corrigeant l'hypothèse "Zone = option"
 // de la version précédente de ce fichier).
+
+// ─── Prise en main (PLAN_PRISE_EN_MAIN.md) — `mapActions.grab` est « une autre action » pour les exclusifs ─
+
+test('getAimIneligibilityReasons — une prise en main déclarée rend le Tir visé inéligible', () => {
+  const entry = { state_weapon: 'drawn', state_fire_mode: 'cc' }
+  const base = { state: {}, quick: {}, entry, bulletCount: 1 }
+  assert.deepEqual(getAimIneligibilityReasons({ ...base, mapActions: {} }), [])
+  assert.deepEqual(getAimIneligibilityReasons({ ...base, mapActions: { grab: { itemId: 'x' } } }), ['prise en main'])
+})
+
+test('getAoeExclusiveIneligibilityReasons — une prise en main déclarée bloque Tir de suppression / lance-flammes', () => {
+  const entry = { state_weapon: 'drawn', state_fire_mode: 'rl' }
+  const base = { state: {}, quick: {}, entry }
+  assert.deepEqual(getAoeExclusiveIneligibilityReasons({ ...base, mapActions: {} }), [])
+  assert.deepEqual(getAoeExclusiveIneligibilityReasons({ ...base, mapActions: { grab: { itemId: 'x' } } }), ['prise en main'])
+})
+
+test('getExoStandUpIneligibilityReasons — une prise en main déclarée bloque la tentative de se relever', () => {
+  assert.deepEqual(getExoStandUpIneligibilityReasons({ mapActions: { grab: { itemId: 'x' } }, quick: {} }), ['prise en main'])
+})

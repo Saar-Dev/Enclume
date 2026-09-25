@@ -23,6 +23,7 @@ import { getAoeMechanic, normalizeGrenadeDetonation } from '../../../shared/comb
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import { resolveGrenadeInterposition } from '../lib/droneInterceptionService.js'
 import { buildDroneDamageNotice } from '../lib/droneDamageNotice.js'
+import { weaponNotInHandEmission } from '../lib/combatHandWeaponNotice.js'
 import { halveExplosionDamage } from '../../../shared/droneInterception.js'
 import * as damageService from '../lib/damageService.js'
 import * as statusService from '../lib/statusService.js'
@@ -31,6 +32,8 @@ import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 import { openChanceChoice, SITE_HANDLERS } from '../lib/chanceCatastropheChoiceService.js'
 import { spendChancePoints } from '../services/chanceService.js'
 import { advanceTimeline, combatTimers, combatPreviews } from './combatTurnEngine.js'
+import { getItemWithRef, countStowedByContainer } from '../services/inventoryService.js'
+import { broadcastInventoryEvent } from '../lib/inventoryBroadcast.js'
 import { evaluateAoeVisibility } from '../services/worldVisibilityService.js'
 import { getBattlemapWorldSnapshot } from '../services/worldService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -446,11 +449,37 @@ function throwModifiersUpdate({ resolvedOrigin, weaponSnapshot, interposedDroneT
 // consumeThrownGrenade — retrait de la grenade lancée de l'inventaire (RAW : amorcée puis lancée).
 // Commun aux deux modes de détonation (minuterie / percussion). No-op si l'action ne porte pas de
 // ligne d'inventaire (tireur non-humanoïde — jamais atteint aujourd'hui, garde de `resolveGrenadeThrow`).
-async function consumeThrownGrenade(weaponInvId) {
+//
+// Le client ne met son inventaire à jour QUE par les événements INVENTORY_* (useCharacterSocket) : sans eux,
+// la grenade lancée restait affichée en main. On diffuse donc le retrait (ou la nouvelle quantité), puis on
+// dit au chat combien d'exemplaires restent rangés (Ceinture / Sac) — cf. PLAN_PRISE_EN_MAIN.md D6, qui permet
+// d'enchaîner par « Prendre en main ». La diffusion est best-effort : le retrait, lui, est déjà écrit.
+async function consumeThrownGrenade(io, campaignId, weaponInvId, label) {
   if (!weaponInvId) return
   const inv = await db('char_inventory').where({ id: weaponInvId }).first()
-  if (inv && inv.quantity > 1) await db('char_inventory').where({ id: inv.id }).update({ quantity: inv.quantity - 1, updated_at: db.fn.now() })
-  else if (inv) await db('char_inventory').where({ id: inv.id }).del()
+  if (!inv) return
+  const stillHasStack = inv.quantity > 1
+  if (stillHasStack) await db('char_inventory').where({ id: inv.id }).update({ quantity: inv.quantity - 1, updated_at: db.fn.now() })
+  else await db('char_inventory').where({ id: inv.id }).del()
+
+  try {
+    // Salle choisie par l'autorité unique de diffusion d'inventaire (lib/inventoryBroadcast.js), comme la route et la permutation.
+    if (stillHasStack) {
+      await broadcastInventoryEvent(io, inv.character_id, campaignId, 'INVENTORY_UPDATED', { item: await getItemWithRef(inv.id) })
+    } else {
+      await broadcastInventoryEvent(io, inv.character_id, campaignId, 'INVENTORY_REMOVED', { itemId: inv.id })
+    }
+    const left = await countStowedByContainer(inv.character_id, inv.equipment_id)
+    if (left.Ceinture + left.Sac > 0) {
+      io.to(campaignId).emit(WS.COMBAT_SYSTEM_NOTICE, {
+        i18nKey: 'session.grenadesLeft',
+        params: { label, belt: left.Ceinture, bag: left.Sac },
+        timestamp: new Date().toISOString(),
+      })
+    }
+  } catch (err) {
+    console.error(`[WS] consumeThrownGrenade — diffusion inventaire échouée (retrait déjà écrit) item:${inv.id} : ${err.message}`)
+  }
 }
 
 // ─── Couche 4 AOE, phase B — orchestration (docs/PLANS/PLAN_AOE.md §8 + PLAN_ARMES_SPECIALES.md §1.4/§1.4bis) ─
@@ -534,6 +563,10 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       : await fetchAoeShooterWeapon(character, action)
     if (!weapon) {
       console.warn(`[WS] resolveAoeAssaultAction — arme introuvable. type:${character.type} weapon_inv_id:${action.weapon_inv_id} exo_weapon_inv_id:${action.exo_weapon_inv_id} drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
+      // R14 (PLAN_PRISE_EN_MAIN.md) : seul un tireur humanoïde déclare une arme d'inventaire ; exo et drone n'ont pas de permutation.
+      if (character.type !== 'exo' && character.type !== 'drone' && action.weapon_inv_id) {
+        emissions.push(await weaponNotInHandEmission(character, action.weapon_inv_id))
+      }
       return { suspend: false, emissions }
     }
     // Identification par la donnée catalogue `aoe_profile.mechanic` (segment 0b, shared/combatAoe.js) ;
@@ -633,7 +666,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
           modifiers: throwModifiersUpdate({ resolvedOrigin, weaponSnapshot, interposedDroneTokenId: aoe.interposedDroneTokenId ?? null }),
           updated_at: db.fn.now(),
         })
-        await consumeThrownGrenade(action.weapon_inv_id)
+        await consumeThrownGrenade(io, campaignId, action.weapon_inv_id, character.name ?? shooterToken.label ?? '?')
         emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
           i18nKey: 'session.grenadeThrownPercussion',
           params: { label: character.name ?? shooterToken.label ?? '?' },
@@ -672,7 +705,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
           resolution_snapshot: JSON.stringify({ autoResolve: true, resolvedOrigin, scattered: !coord.isSuccess, d6Roll, marginM: failureMarginM }),
         }).returning('id')
 
-        await consumeThrownGrenade(action.weapon_inv_id)
+        await consumeThrownGrenade(io, campaignId, action.weapon_inv_id, character.name ?? shooterToken.label ?? '?')
 
         emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
           i18nKey: 'session.grenadeArmed',
