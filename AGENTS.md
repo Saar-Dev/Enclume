@@ -1,5 +1,6 @@
 # AGENTS.md — Contrat du projet Enclume
 
+> Amendé 2026-09-25 (Saar) — tests ciblés avec la base locale lancés par l'agent (« Commandes »).
 > Révisé 2026-09-01 — refonte « noyau mince » (ex-`CLAUDE.md` §1-§13 condensé ici + routé vers
 > `.claude/rules/`). Historique et table de correspondance `§N → section` :
 > `docs/Old/PLAN_CLAUDEMD_REFONTE.md`.
@@ -21,6 +22,12 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
 - Build client : `cd client && npm run build`
 - Tests purs (aucune base) : `node --test 'shared/**/*.test.mjs'`
 - Test ciblé : `node --test <chemin/x.test.mjs>` — toujours un chemin explicite
+- Test ciblé avec la base locale : `node --env-file=.env --test <chemin/x.test.mjs> [<autre.test.mjs> …]`
+  (depuis la racine, chemins explicites) — l'agent le lance LUI-MÊME (autorisation de Saar, 2026-09-25) ;
+  ces tests créent leurs fixtures dans la base locale et les nettoient. Succès : aucun compte rendu
+  (le résultat suffit dans la clôture). Échec, test interrompu ou risque de résidu (ligne de fixture non
+  nettoyée) : rapport à Saar — test, cause, lignes concernées (vérifiées par lecture de la base) — avant
+  toute suite. Jamais `npm test` complet, jamais le serveur (voir ci-dessous).
 - Avant livraison : `git diff --check`
 - Pas de linter serveur : `node --check` est le seul contrôle statique côté serveur
 
@@ -31,7 +38,8 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
   dans un seul terminal (Job Object sous Windows via `tools/dev-window.ps1`, session
   `setsid` sous Linux). Arrêt : `tools/stop-dev.ps1` (Windows) / `stop.sh` (Linux)
 - `npm test` complet — inclut `server/src/db/migrations_archive/` (échecs attendus) et des
-  tests serveur dont une partie touche la base locale (`--env-file` requis)
+  tests serveur dont une partie touche la base locale (`--env-file` requis). Les fichiers de test
+  ciblés avec la base, eux, sont autorisés (voir « Commandes »)
 - Client `dev`/`preview`, navigateur, `npm run test:e2e` (Playwright) — Saar teste l'UI
 - `start.ps1` / `start.sh` / `tools/dev-window.ps1` — lancement complet de la stack
 
