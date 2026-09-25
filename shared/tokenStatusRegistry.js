@@ -26,6 +26,9 @@
 // - isDeath  : le statut fait du token un CADAVRE (`dead`). Un cadavre reste une cible et continue de prendre
 //   des blessures (technologies de résurrection), mais ne peut ni esquiver ni dépenser de Chance — lu par
 //   `deathStateService.js` (`isCharacterDead`), jamais par un littéral `'dead'`.
+// - setByFatalWound : le statut que POSE une blessure « Mort » (6ᵉ ligne en Tête/Corps, shared/woundConstants.js:
+//   isFatalWound) — `FATAL_WOUND_STATUS_CODE`. La ligne porte `data.source = STATUS_SOURCE_WOUND` : une blessure ne
+//   retire que ce qu'elle a posé, jamais le `dead` posé à la main par le MJ (statusService.js:reconcileWoundDeath).
 // - incompatibleWithDeath : état d'un corps qui FONCTIONNE (bouger, garder l'équilibre, être conscient,
 //   respirer, voir, thermorégulation) : ne se pose pas sur un cadavre et se retire à la mort. Les processus
 //   qui AGISSENT sur un corps (feu, acide, radiation, électricité, poison, infection, décompression) ou le
@@ -71,7 +74,7 @@ export const TOKEN_STATUS_REGISTRY = [
   // Mort (chantier 6ᵉ ligne du compteur de blessures). Ni expiration ni `clearedAtCombatEnd` : seul le MJ
   // le retire (bascule ou /heal). Se comporte comme `unconscious` face au combat (tour passé, sans défense).
   { code: 'dead',          category: 'mort',      manualToggle: true,  inPanel: true, gmOnly: true,
-    blocksDeclaration: true, defenseless: true, isDeath: true },
+    blocksDeclaration: true, defenseless: true, isDeath: true, setByFatalWound: true },
 ]
 
 // Code inconnu → undefined (voir « Hors registre » ci-dessus).
@@ -92,6 +95,9 @@ export const COMBAT_END_CLEARED_STATUS_CODES = codesWhere('clearedAtCombatEnd')
 export const GM_ONLY_STATUS_CODES = codesWhere('gmOnly')
 export const DEATH_STATUS_CODES = codesWhere('isDeath')
 export const DEATH_INCOMPATIBLE_STATUS_CODES = codesWhere('incompatibleWithDeath')
+// Statut posé par une blessure « Mort » (un seul) et marque de provenance écrite dans `token_statuses.data.source`.
+export const FATAL_WOUND_STATUS_CODE = codesWhere('setByFatalWound')[0]
+export const STATUS_SOURCE_WOUND = 'wound'
 
 // Règle de droits UNIQUE pour poser/retirer un statut de token — appelée par le serveur
 // (socketToken.js, autorité) et par le panneau client (aperçu) : jamais deux implémentations.

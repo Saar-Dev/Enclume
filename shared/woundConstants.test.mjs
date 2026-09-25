@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage,
   WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
-  isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects,
+  isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
 } from './woundConstants.js'
 
 test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
@@ -193,4 +193,21 @@ test('WOUND_INFECTION - extraCase : une case en plus pour Moyenne/Grave/Critique
   assert.equal(WOUND_INFECTION.grave.extraCase, true)
   assert.equal(WOUND_INFECTION.critique.extraCase, true)
   assert.equal(WOUND_INFECTION.mortelle.extraCase, false)
+})
+
+test('isFatalWound / hasFatalWound - seule la 6ᵉ gravité en Tête ou au Corps tue (un Membre détruit ne tue pas)', () => {
+  assert.equal(isFatalWound({ severity: 'mort_subite', location: 'tete' }), true)
+  assert.equal(isFatalWound({ severity: 'mort_subite', location: 'corps' }), true)
+  for (const location of ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']) {
+    assert.equal(isFatalWound({ severity: 'mort_subite', location }), false, location)
+  }
+  for (const severity of WOUND_SEVERITIES.filter(s => s !== 'mort_subite')) {
+    assert.equal(isFatalWound({ severity, location: 'tete' }), false, severity)
+  }
+  assert.equal(isFatalWound(null), false)
+  assert.equal(isFatalWound(undefined), false)
+  assert.equal(hasFatalWound([]), false)
+  assert.equal(hasFatalWound(null), false)
+  assert.equal(hasFatalWound([{ severity: 'mortelle', location: 'tete' }, { severity: 'mort_subite', location: 'bras_gauche' }]), false)
+  assert.equal(hasFatalWound([{ severity: 'legere', location: 'corps' }, { severity: 'mort_subite', location: 'corps' }]), true)
 })

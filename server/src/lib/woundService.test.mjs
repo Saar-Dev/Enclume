@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { applyWound } from './woundService.js'
+import { applyWound, removeWound } from './woundService.js'
 import { resolveChanceChoice, listPendingChanceChoices } from './chanceCatastropheChoiceService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (applyWound crée une échéance de guérison à l'insertion)
 
@@ -266,6 +266,265 @@ test('applyWound (mort_subite sur un bras) : Membre détruit — Test de Choc re
     assert.equal(second, null, 'ligne pleine : attendu, sans erreur')
     assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 1)
   } finally {
+    await cleanup(fixture)
+  }
+})
+
+// ─── Lot 2b — la blessure « Mort » (6ᵉ ligne en Tête/Corps) pose `dead`, la retirer le retire ──────────────────
+// Statut posé dans la transaction de la blessure, marqué `data.source = 'wound'` : une blessure ne retire que ce qu'elle
+// a posé, jamais le `dead` du MJ (registre : setByFatalWound, statusService.js:reconcileWoundDeath).
+
+async function addTokens(fixture, count = 1) {
+  const [battlemap] = await db('battlemaps')
+    .insert({ campaign_id: fixture.campaign.id, name: 'BM test mort' })
+    .returning('*')
+  const tokens = []
+  for (let i = 0; i < count; i += 1) {
+    const [token] = await db('tokens')
+      .insert({ battlemap_id: battlemap.id, character_id: fixture.character.id, label: `T${i}` })
+      .returning('*')
+    tokens.push(token)
+  }
+  return { battlemap, tokens, ids: tokens.map(t => t.id) }
+}
+
+async function cleanupTokens({ battlemap, ids }) {
+  await db('tokens').whereIn('id', ids).del()
+  await db('battlemaps').where({ id: battlemap.id }).del()
+}
+
+const statusRows = (tokenIds) => db('token_statuses').whereIn('token_id', tokenIds).orderBy('id').select('*')
+
+function recordingIo() {
+  const emitted = []
+  return { emitted, io: { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) } }
+}
+
+const woundArgs = (fixture, localisation, severity) => ({
+  charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation, severity,
+})
+
+test('applyWound (Mort en Tête) pose `dead` sur TOUS les tokens du personnage, marqué « posé par une blessure », et diffuse les badges', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture, 2)
+  const { io, emitted } = recordingIo()
+  try {
+    const result = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.equal(result.finalSeverity, 'mort_subite')
+
+    const rows = await statusRows(tk.ids)
+    assert.deepEqual(rows.map(r => r.status_code), ['dead', 'dead'])
+    assert.deepEqual(new Set(rows.map(r => r.token_id)), new Set(tk.ids))
+    for (const row of rows) assert.deepEqual(row.data, { source: 'wound' })
+
+    const badges = emitted.filter(e => e.event === WS.TOKEN_STATUS_UPDATED)
+    assert.deepEqual(new Set(badges.map(e => e.payload.tokenId)), new Set(tk.ids))
+    assert.ok(badges.every(e => e.payload.statuses.includes('dead')))
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound : la Mort au Corps pose `dead` ; un Membre détruit (bras) et une Mortelle n\'en posent pas', { skip }, async () => {
+  const corps = await createFixture()
+  const tkCorps = await addTokens(corps)
+  const membre = await createFixture()
+  const tkMembre = await addTokens(membre)
+  const mortelle = await createFixture()
+  const tkMortelle = await addTokens(mortelle)
+  try {
+    await applyWound(fakeIo, db, corps.campaign.id, woundArgs(corps, 'corps', 'mort_subite'))
+    assert.deepEqual((await statusRows(tkCorps.ids)).map(r => r.status_code), ['dead'])
+
+    await applyWound(fakeIo, db, membre.campaign.id, woundArgs(membre, 'bras_gauche', 'mort_subite'))
+    assert.deepEqual(await statusRows(tkMembre.ids), [], 'Membre détruit : le personnage ne meurt pas')
+
+    await applyWound(fakeIo, db, mortelle.campaign.id, woundArgs(mortelle, 'tete', 'mortelle'))
+    assert.deepEqual(await statusRows(tkMortelle.ids), [], 'une Mortelle à la tête reste une Mortelle')
+  } finally {
+    await cleanupTokens(tkCorps); await cleanupTokens(tkMembre); await cleanupTokens(tkMortelle)
+    await cleanup(corps); await cleanup(membre); await cleanup(mortelle)
+  }
+})
+
+test('applyWound : la 2ᵉ Mortelle à la tête (débordement) pose `dead` — la Mort par cascade est traitée comme un coup ≥ 30', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mortelle'))
+    assert.deepEqual(await statusRows(tk.ids), [])
+    const second = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mortelle'))
+    assert.equal(second.finalSeverity, 'mort_subite')
+    assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound : un `dead` posé à la main par le MJ n\'est ni écrasé ni « repris » par la blessure (sa `data` reste vide), sans rejouer de badge', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await db('token_statuses').insert({ token_id: tk.ids[0], status_code: 'dead', applied_by: fixture.user.id })
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+
+    const rows = await statusRows(tk.ids)
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].data, null, 'la marque « posé par une blessure » n\'a pas été écrite sur le `dead` du MJ')
+    assert.equal(rows[0].applied_by, fixture.user.id)
+    assert.ok(!emitted.some(e => e.event === WS.TOKEN_STATUS_UPDATED), 'rien de nouveau posé : aucun badge rediffusé')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('removeWound (Mort) retire le `dead` qu\'elle avait posé, diffuse WOUND_REMOVED et le badge', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture, 2)
+  const { io, emitted } = recordingIo()
+  try {
+    const applied = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    emitted.length = 0
+
+    const removed = await removeWound(io, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId: applied.wound.id,
+    })
+    assert.equal(removed.id, applied.wound.id)
+    assert.deepEqual(await statusRows(tk.ids), [])
+    assert.deepEqual(await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id }), [])
+
+    const removals = emitted.filter(e => e.event === WS.WOUND_REMOVED)
+    assert.equal(removals.length, 1)
+    assert.equal(removals[0].payload.worst_wound_severity, null)
+    const badges = emitted.filter(e => e.event === WS.TOKEN_STATUS_UPDATED)
+    assert.deepEqual(new Set(badges.map(e => e.payload.tokenId)), new Set(tk.ids))
+    assert.ok(badges.every(e => !e.payload.statuses.includes('dead')))
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('removeWound (Mort) ne retire PAS un `dead` posé à la main par le MJ', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await db('token_statuses').insert({ token_id: tk.ids[0], status_code: 'dead' })
+    const applied = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    await removeWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId: applied.wound.id,
+    })
+    assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'], 'le Mort du MJ survit à la blessure')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('removeWound : tant qu\'une AUTRE Mort subsiste (Tête + Corps), le `dead` reste ; il part avec la dernière', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    const tete = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const corps = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    const remove = (woundId) => removeWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId,
+    })
+
+    await remove(tete.wound.id)
+    assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'], 'le Corps est toujours mort')
+    await remove(corps.wound.id)
+    assert.deepEqual(await statusRows(tk.ids), [])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('removeWound (blessure ordinaire) ne touche pas au statut ; blessure inconnue : null', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const legere = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'bras_droit', 'legere'))
+    const ids = { charSheetId: fixture.charSheet.id, characterId: fixture.character.id }
+
+    await removeWound(fakeIo, db, fixture.campaign.id, { ...ids, woundId: legere.wound.id })
+    assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'])
+    assert.equal(await removeWound(fakeIo, db, fixture.campaign.id, { ...ids, woundId: legere.wound.id }), null)
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound : le MJ qui relève le personnage à la main (retire `dead`, garde la blessure) ne le voit pas re-tué par une blessure ordinaire', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    await db('token_statuses').where({ token_id: tk.ids[0], status_code: 'dead' }).del()
+
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'bras_droit', 'legere'))
+    assert.deepEqual(await statusRows(tk.ids), [], 'une Légère ne rejoue pas la mort')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound (Mort) sur un personnage sans token : la blessure est écrite, sans erreur (limite connue : la mort se lit sur les tokens)', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    const result = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.equal(result.finalSeverity, 'mort_subite')
+    assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 1)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound (Mort) : en mode « appliqué » les états de corps vivant partent avec la mort ; en « icônes seules » le badge est posé mais rien n\'est retiré', { skip }, async () => {
+  const enforced = await createFixture()
+  const tkEnforced = await addTokens(enforced)
+  const iconOnly = await createFixture()
+  const tkIconOnly = await addTokens(iconOnly)
+  try {
+    await db('campaigns').where({ id: iconOnly.campaign.id }).update({ settings: JSON.stringify({ status_effects_mode: 'icon_only' }) })
+    for (const tk of [tkEnforced, tkIconOnly]) {
+      await db('token_statuses').insert([
+        { token_id: tk.ids[0], status_code: 'stunned' },
+        { token_id: tk.ids[0], status_code: 'burning' },
+      ])
+    }
+
+    await applyWound(fakeIo, db, enforced.campaign.id, woundArgs(enforced, 'tete', 'mort_subite'))
+    await applyWound(fakeIo, db, iconOnly.campaign.id, woundArgs(iconOnly, 'tete', 'mort_subite'))
+
+    const codes = async (tk) => (await statusRows(tk.ids)).map(r => r.status_code).sort()
+    assert.deepEqual(await codes(tkEnforced), ['burning', 'dead'], 'étourdi retiré (corps vivant), feu conservé (processus)')
+    assert.deepEqual(await codes(tkIconOnly), ['burning', 'dead', 'stunned'], 'icon_only : aucun effet mécanique')
+  } finally {
+    await cleanupTokens(tkEnforced); await cleanupTokens(tkIconOnly)
+    await cleanup(enforced); await cleanup(iconOnly)
+  }
+})
+
+test('applyWound : deux Morts simultanées sur la même fiche ne créent aucun doublon de `dead` (unicité token/statut)', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await Promise.all([
+      applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite')),
+      applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite')),
+    ])
+    assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'])
+  } finally {
+    await cleanupTokens(tk)
     await cleanup(fixture)
   }
 })

@@ -5,7 +5,10 @@ import { WS }                   from '../../../shared/events.js'
 import { getCampaignSettings }  from './campaignSettingsService.js'
 import { calcSeuils }           from '../../../shared/polarisUtils.js'
 import { AppError }             from './AppError.js'
-import { DEATH_INCOMPATIBLE_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
+import {
+  DEATH_INCOMPATIBLE_STATUS_CODES, FATAL_WOUND_STATUS_CODE, STATUS_SOURCE_WOUND,
+} from '../../../shared/tokenStatusRegistry.js'
+import { hasFatalWound }        from '../../../shared/woundConstants.js'
 import { isTokenDead }          from './deathStateService.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
@@ -82,6 +85,62 @@ export async function applyDeathConsequences(io, db, campaignId, characterId) {
   for (const tokenId of touched) await emitTokenStatusUpdated(io, db, campaignId, tokenId)
   console.log(`[DBG] applyDeathConsequences — personnage:${characterId} : ${removed.length} statut(s) retiré(s) [${removed.map(r => r.status_code).join(', ')}], ${pendingRemoved.length} étourdissement(s) en attente supprimé(s)`)
   return touched
+}
+
+// ─── reconcileWoundDeath / announceWoundDeath (Lot 2b) ────────────────────────
+// La blessure « Mort » (6ᵉ ligne en Tête/Corps, `isFatalWound`) fait de son personnage un cadavre : statut
+// `FATAL_WOUND_STATUS_CODE` sur TOUS ses tokens de la campagne, retiré avec elle. Modèle : `determineDefeatedStatus`
+// (décision pure) puis `applyDefeatedStatus` (application après les dégâts) du système SR5 de FoundryVTT.
+//
+// `reconcileWoundDeath` s'exécute DANS la transaction de la blessure (`trx`) : la conséquence persistante est écrite
+// avec sa cause, ou pas du tout. Elle est IDEMPOTENTE — l'état voulu se déduit des blessures présentes, la rappeler ne
+// change rien — mais l'appelant ne la déclenche que pour une blessure qui touche à la Mort (applyWound, removeWound) :
+// le MJ qui relève un personnage à la main en gardant la blessure ne le voit pas re-tué par une Légère ultérieure.
+//
+// Deux règles de provenance, pour que le MJ reste maître de son statut :
+//  - POSE : « insérer si absent » (`ignore`), jamais `merge` (comme applyModStatus) — un `dead` posé à la main garde
+//    sa `data` vide et n'est donc jamais repris par la blessure ;
+//  - RETRAIT : seulement les lignes marquées `data.source = STATUS_SOURCE_WOUND`.
+// `becameDead` = au moins une ligne réellement INSÉRÉE (PostgreSQL ne renvoie rien pour une ligne déjà là) : un
+// personnage déjà marqué mort par le MJ ne rejoue pas `applyDeathConsequences`.
+// Aucun token (personnage jamais posé sur une carte) : rien à écrire, limite connue — la mort se lit sur les tokens.
+export async function reconcileWoundDeath(trx, campaignId, { characterId, charSheetId }) {
+  const none = { changedTokenIds: [], becameDead: false }
+  if (!characterId || !charSheetId) return none
+  const tokenIds = await resolveCharacterTokens(trx, campaignId, characterId)
+  if (tokenIds.length === 0) return none
+
+  const wounds = await trx('character_wounds').where({ char_sheet_id: charSheetId }).select('severity', 'location')
+  if (hasFatalWound(wounds)) {
+    const inserted = await trx('token_statuses')
+      .insert(tokenIds.map(tokenId => ({
+        token_id: tokenId, status_code: FATAL_WOUND_STATUS_CODE, data: { source: STATUS_SOURCE_WOUND },
+      })))
+      .onConflict(['token_id', 'status_code']).ignore()
+      .returning('token_id')
+    return { changedTokenIds: inserted.map(row => row.token_id), becameDead: inserted.length > 0 }
+  }
+
+  const removed = await trx('token_statuses')
+    .whereIn('token_id', tokenIds)
+    .where('status_code', FATAL_WOUND_STATUS_CODE)
+    .whereRaw(`data->>'source' = ?`, [STATUS_SOURCE_WOUND])
+    .delete()
+    .returning('token_id')
+  return { changedTokenIds: removed.map(row => row.token_id), becameDead: false }
+}
+
+// Après la validation de la transaction (Knex n'a pas de crochet « après commit » : on agit une fois
+// `await db.transaction(...)` rendu) : diffuse les badges modifiés, puis — seulement si le personnage vient de mourir —
+// retire ses états de corps vivant (`applyDeathConsequences`, mode 'enforced'). N'échoue jamais vers l'appelant : la
+// blessure est déjà écrite et diffusée, un incident ici est logué.
+export async function announceWoundDeath(io, db, campaignId, characterId, { changedTokenIds, becameDead }) {
+  try {
+    for (const tokenId of changedTokenIds) await emitTokenStatusUpdated(io, db, campaignId, tokenId)
+    if (becameDead) await applyDeathConsequences(io, db, campaignId, characterId)
+  } catch (err) {
+    console.error('[statusService] announceWoundDeath error:', err.message)
+  }
 }
 
 // ─── resolveShockTest ─────────────────────────────────────────────────────────

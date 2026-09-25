@@ -3,7 +3,7 @@ import {
   isShockTestRequired, getWorstWoundSeverity, WoundLineFullError,
 } from './woundUtils.js'
 import { initializeWoundHealingEcheance } from './woundEvolutionService.js'
-import { emitTokenStatusUpdated } from './statusService.js'
+import { emitTokenStatusUpdated, reconcileWoundDeath, announceWoundDeath } from './statusService.js'
 // Import DIRECT depuis exoPilotService.js, jamais combatantContextService.js (qui importe
 // damageService.js -> woundService.js : un import inverse ici boucherait le cycle).
 import { resolveChanceRecipientCharacterId } from './exoPilotService.js'
@@ -13,6 +13,7 @@ import { computeCharacterBaseIni } from './reactionService.js'
 import { calcWoundPenalty } from './charStats.js'
 import { buildBroadcastRoster } from './combatRosterBroadcast.js'
 import { WS } from '../../../shared/events.js'
+import { isFatalWound } from '../../../shared/woundConstants.js'
 import db from '../db/knex.js'
 
 // RAW (REGLE_CHANCE.md:112-131) : la réduction de gravité par Chance ne s'ouvre qu'à partir d'une
@@ -33,6 +34,7 @@ export async function applyWound(io, db, campaignId, {
   if (!severity || !charSheetId) return null
 
   let result
+  let deathChange = null
   try {
     result = await db.transaction(async (trx) => {
       const insertion = await resolveWoundInsertion(trx, charSheetId, localisation, severity)
@@ -41,6 +43,11 @@ export async function applyWound(io, db, campaignId, {
       // de promotion se terminent d'elles-mêmes sans effet (woundId introuvable, voir
       // woundEvolutionService.js).
       await initializeWoundHealingEcheance(trx, { campaignId, characterId, wound: insertion.wound })
+      // Lot 2b — une blessure « Mort » (Tête/Corps) pose `dead` sur les tokens du personnage, dans la MÊME transaction
+      // (conséquence persistante écrite avec sa cause). Annoncée plus bas, après la validation.
+      if (isFatalWound(insertion.wound)) {
+        deathChange = await reconcileWoundDeath(trx, campaignId, { characterId, charSheetId })
+      }
       return insertion
     })
   } catch (err) {
@@ -65,6 +72,7 @@ export async function applyWound(io, db, campaignId, {
     shock_test_required,
     worst_wound_severity,
   })
+  if (deathChange) await announceWoundDeath(io, db, campaignId, characterId, deathChange)
 
   // INI2 (RAW REGLESYSCOMBAT.md:111 — les malus de blessure « affectent le niveau de Réaction du
   // personnage et donc son Initiative de base ») : recalcule base_ini pour tout token actif de ce
@@ -141,6 +149,28 @@ export async function applyWound(io, db, campaignId, {
     finalSeverity, worst_wound_severity, shock_test_required,
     wound: result.wound, promoted: result.promoted,
   }
+}
+
+// removeWound — suppression d'UNE blessure (route DELETE de la fiche). Si c'était une Mort (Tête/Corps), le `dead` qu'elle
+// avait posé disparaît avec elle, dans la même transaction (statusService.js:reconcileWoundDeath) ; un `dead` posé à la
+// main par le MJ reste. Les droits (6ᵉ ligne = MJ seul) sont vérifiés par l'appelant. Retourne la blessure supprimée, ou
+// null si elle n'existe plus (suppression concurrente).
+export async function removeWound(io, db, campaignId, { charSheetId, characterId, woundId }) {
+  const removal = await db.transaction(async (trx) => {
+    const wound = await trx('character_wounds').where({ id: woundId, char_sheet_id: charSheetId }).first()
+    if (!wound) return null
+    await trx('character_wounds').where({ id: woundId }).del()
+    const deathChange = isFatalWound(wound)
+      ? await reconcileWoundDeath(trx, campaignId, { characterId, charSheetId })
+      : null
+    return { wound, deathChange }
+  })
+  if (!removal) return null
+
+  const worst_wound_severity = await getWorstWoundSeverity(db, charSheetId)
+  io.to(campaignId).emit(WS.WOUND_REMOVED, { characterId, woundId, worst_wound_severity })
+  if (removal.deathChange) await announceWoundDeath(io, db, campaignId, characterId, removal.deathChange)
+  return removal.wound
 }
 
 // clearCharacterWoundsAndStatuses — vide toutes les blessures et tous les statuts d'un personnage

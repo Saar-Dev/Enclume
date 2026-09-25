@@ -57,7 +57,7 @@ import {
 } from '../../../../shared/polarisUtils.js'
 import { areRequirementsSatisfied } from '../../../../shared/skillRequirements.js'
 import { getWorstWoundSeverity } from '../../lib/woundUtils.js'
-import { applyWound } from '../../lib/woundService.js'
+import { applyWound, removeWound } from '../../lib/woundService.js'
 import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
@@ -987,17 +987,14 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
     const wound = await db('character_wounds')
       .where({ id: req.params.woundId, char_sheet_id: sheet.id }).first()
     if (!wound) throw new AppError(404, 'Wound not found')
-
     if (GM_ONLY_WOUND_SEVERITIES.includes(wound.severity) && !req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
-    await db('character_wounds').where({ id: req.params.woundId }).del()
 
-    const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
-    req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_REMOVED, {
-      characterId: req.params.characterId,
-      woundId: req.params.woundId,
-      worst_wound_severity,
+    // removeWound : suppression + retrait du `dead` que cette blessure avait posé (si c'était une Mort) + diffusion.
+    const removed = await removeWound(req.app.get('io'), db, req.character.campaign_id, {
+      charSheetId: sheet.id, characterId: req.params.characterId, woundId: req.params.woundId,
     })
 
+    if (!removed) throw new AppError(404, 'Wound not found')
     res.json({ deleted: true, woundId: req.params.woundId })
   } catch (err) { next(err) }
 })

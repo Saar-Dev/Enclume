@@ -48,6 +48,17 @@ export function isSuddenDeathLocation(location) {
   return SUDDEN_DEATH_LOCATIONS.includes(location)
 }
 
+// Une blessure « Mort » : la 6ᵉ gravité en Tête ou au Corps (« le personnage meurt sur le coup », REGLEBLESSURES.md:164-167).
+// Un Membre détruit (même gravité sur un bras/une jambe) ne tue pas. Autorité unique de « cette blessure tue-t-elle ? » :
+// elle décide du statut `dead` (server/src/lib/statusService.js:reconcileWoundDeath). Pure, donc testable sans base.
+export function isFatalWound(wound) {
+  return wound?.severity === 'mort_subite' && isSuddenDeathLocation(wound.location)
+}
+
+export function hasFatalWound(wounds) {
+  return (wounds ?? []).some(isFatalWound)
+}
+
 // WNDMORT (docs/BUGIDENTIFIE.md) — REGLEBLESSURES.md, Blessures mortelles : « Malus aux Tests : non
 // applicable, le blessé ne peut entreprendre aucune action demandant un Test. » `mortelle` n'a donc
 // jamais de vraie valeur numérique (le -20 précédent était une extrapolation jamais confirmée par le

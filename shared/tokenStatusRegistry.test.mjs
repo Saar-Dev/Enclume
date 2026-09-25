@@ -6,6 +6,7 @@ import {
   MANUAL_TOGGLE_STATUS_CODES, PANEL_STATUSES, DECLARATION_BLOCKING_STATUS_CODES,
   DEFENSELESS_STATUS_CODES, COMBAT_END_CLEARED_STATUS_CODES, GM_ONLY_STATUS_CODES,
   canEditTokenStatus, DEATH_STATUS_CODES, DEATH_INCOMPATIBLE_STATUS_CODES,
+  FATAL_WOUND_STATUS_CODE, STATUS_SOURCE_WOUND,
 } from './tokenStatusRegistry.js'
 import { ENVIRONMENTAL_HAZARD_REGISTRY } from './environmentalHazardRegistry.js'
 
@@ -151,6 +152,13 @@ test('isDeath : `dead` seul fait du token un cadavre (lu par deathStateService, 
   assert.deepEqual(DEATH_STATUS_CODES, ['dead'])
   assert.equal(findTokenStatus('dead').isDeath, true)
   for (const entry of TOKEN_STATUS_REGISTRY.filter(e => e.code !== 'dead')) assert.equal(entry.isDeath, undefined)
+})
+
+test('setByFatalWound : la blessure « Mort » pose un statut de cadavre, et un seul', () => {
+  assert.equal(FATAL_WOUND_STATUS_CODE, 'dead')
+  assert.equal(STATUS_SOURCE_WOUND, 'wound')
+  assert.equal(findTokenStatus(FATAL_WOUND_STATUS_CODE).isDeath, true, 'ce que pose une blessure mortelle est bien un statut de mort')
+  assert.deepEqual(TOKEN_STATUS_REGISTRY.filter(e => e.setByFatalWound).map(e => e.code), ['dead'])
 })
 
 test('incompatibleWithDeath : 8 états de corps vivant interdits sur un cadavre, les 8 autres (processus/saisie) autorisés', () => {
