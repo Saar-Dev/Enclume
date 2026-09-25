@@ -5,6 +5,7 @@ import {
   WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
   isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
   getWoundHealing, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
+  WOUND_CHANCE_STEP_COST, chanceCostOfStep, maxNormalChanceDegrees,
 } from './woundConstants.js'
 
 test('woundSeverityForDamage - la plus haute ligne dont le seuil est atteint (LdB p.234)', () => {
@@ -243,4 +244,15 @@ test('WOUND_INFECTION.mort_subite - même ligne RAW que la Mortelle (« Mortelle
 
 test('WOUND_IMPROVEMENT_TARGET - un Membre détruit (ou une Mort rachetée) devient une Critique (REGLEBLESSURES.md:368, REGLE_CHANCE.md:122)', () => {
   assert.deepEqual(WOUND_IMPROVEMENT_TARGET, { mort_subite: 'critique' })
+})
+
+test('chanceCostOfStep — 1 point par cran, 3 pour ramener la 6ᵉ ligne à une Critique (décision Saar, écart RAW)', () => {
+  assert.deepEqual(WOUND_CHANCE_STEP_COST, { mort_subite: 3 })
+  for (const severity of ['grave', 'critique', 'mortelle']) assert.equal(chanceCostOfStep(severity), 1, severity)
+  assert.equal(chanceCostOfStep('mort_subite'), 3)
+})
+
+test('maxNormalChanceDegrees — 2 degrés « normaux » (RAW), un seul pour la 6ᵉ ligne', () => {
+  for (const severity of ['grave', 'critique', 'mortelle']) assert.equal(maxNormalChanceDegrees(severity), 2, severity)
+  assert.equal(maxNormalChanceDegrees('mort_subite'), 1)
 })

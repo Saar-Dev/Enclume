@@ -127,6 +127,25 @@ export const WOUND_IMPROVEMENT_TARGET = {
   mort_subite: 'critique',
 }
 
+// Coût en points de Chance d'UN cran de réduction, selon la gravité de départ. RAW : 1 point par degré
+// (REGLE_CHANCE.md:117-119) ; la 6ᵉ ligne n'y est pas chiffrée — DÉCISION de Saar (2026-09-23, écart RAW journalisé) : 3 points
+// pour la ramener à une Blessure critique (« 2 semblait peu vu la blessure »), soit au-delà de la limite générale de 2 points
+// d'un coup. Ce coût est celui du premier cran seulement : si la Critique est pleine, l'exception « palier plein »
+// (REGLE_CHANCE.md:125-131) ajoute 1 point par cran supplémentaire. Autorité unique, lue par `computeAvailableSeverityReductions`.
+export const WOUND_CHANCE_STEP_COST = {
+  mort_subite: 3,
+}
+
+export function chanceCostOfStep(fromSeverity) {
+  return WOUND_CHANCE_STEP_COST[fromSeverity] ?? 1
+}
+
+// Nombre de degrés proposés « normalement » (avant l'exception du palier plein) : 2 (REGLE_CHANCE.md:119) ; un seul pour la
+// 6ᵉ ligne, dont le rachat coûte déjà 3 points.
+export function maxNormalChanceDegrees(severity) {
+  return severity === 'mort_subite' ? 1 : 2
+}
+
 // Table RAW « Infection » (REGLEBLESSURES.md:436-472, vérifiée 2026-07-30 contre Polaris 3ème
 // édition p.239-240, docs/PLAN_BLESSURES_GUERISON.md §3.3). `legere` absente : jamais concernée.
 // caseMalus : -2 au Test par case déjà cochée sur la ligne (localisation/gravité), en plus de la

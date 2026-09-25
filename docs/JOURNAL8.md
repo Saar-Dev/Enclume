@@ -8602,3 +8602,53 @@ côté joueur ET côté MJ. **Non testé** : un tir / corps à corps à deux arm
 `PERMUTER-DUALWIELD-OFFHAND-E2E`) ; les pastilles du roster des autres tokens lisent encore l'instantané `combat-equipment` (ticket
 `COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE`). **Données** : migration `364_ref_equipment_grenade_weight` (idempotente, `down` en comparaison `::real`) ; aucune autre.
 **Retour arrière** : `git revert` des commits du chantier ; `down()` de la migration 364 remet le poids des 15 grenades à NULL.
+
+## Session (Dev) — 2026-09-25 — Clôture du Lot 3 : la Chance sur la 6ᵉ ligne, la mort n'est posée qu'après la décision du joueur, une seule fenêtre de réaction
+
+**Origine** : Lot 3 du chantier « 6ᵉ ligne du compteur » (`docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`). Cadré avec Saar en « Chance + fenêtres + Mort » :
+trop de fenêtres à traiter quand on subit des dégâts. Plan complet (lots 6a-1 à 6d, maquette validée) : `docs/PLANS/PLAN_CHANCE.md` §8. Livré ici :
+**6a-1** (cœur serveur + « Accepter ») et **6c** (le composant de réaction, conforme à la maquette `docs/PLANS/maquette-chance-reaction/`). Restent 6a-2
+(robustesse), 6a-3 (le PJ sans minuteur + garde de fin de Tour) et 6d (Catastrophes dans le même composant).
+
+**Décisions de Saar (à retenir, invariant 5 — tout écart au RAW est écrit ici)** :
+- **La mort n'est posée qu'à partir du moment où le choix est fait.** Le personnage vit tant que sa réaction de Chance est ouverte ; badge, conséquences
+  et ligne de chat « meurt » n'arrivent qu'à la décision (dépense, « Accepter », délai).
+- **Écart RAW — coût** : racheter une Mort ou un Membre détruit coûte **3 points** de Chance (le RAW ne chiffre pas ; décidé le 2026-09-23) et donne une
+  **Blessure critique**. Un seul cran proposé ; si la Critique est pleine, l'exception « palier plein » ajoute 1 point par cran (Grave pour 4). RAW : il
+  doit rester **3** points de Chance, donc 6 minimum pour un rachat.
+- **Écart RAW — pas de rachat par débordement** : seule la 6ᵉ ligne écrite **directement par un coup ≥ 30** se rachète (Mort et Membre détruit). Celle
+  qui vient d'un débordement (2ᵉ Mortelle sur la Tête, cascade) est posée tout de suite, sans réaction (Saar : « même règle » pour les membres).
+  Effet voulu : la promotion a déjà supprimé les lignes fusionnées, le rachat n'a jamais rien à restaurer.
+- **Membre détruit rachetable** (Saar) : même carte, même prix que la Mort ; il ne tue jamais.
+- **Une seule fenêtre** (Saar, en colère après un premier test qui montrait encore la carte du haut à droite) : la Chance d'une blessure s'affiche dans un
+  composant unique, ancré au-dessus du panneau « Résolution du tir ». **Règle de méthode retenue** : une maquette validée se suit telle quelle, on ne la
+  modifie jamais pour coller au code ; un lot serveur qui laisse l'ancienne interface visible ne se fait pas tester avant que la nouvelle soit livrée.
+- **Pose manuelle par le MJ inchangée** : elle ouvre une réaction comme aujourd'hui (le MJ peut vouloir des blessures narratives).
+- **Pas de blocage de fin de Tour par un PNJ**, jamais ; seul un PJ sur une blessure mortelle bloquera (lot 6a-3, non livré). « Accepter » d'un clic, sans
+  confirmation, même pour la Mort.
+- **Chat** : une ligne par branche (`combat:chance.notice.*`), dont une seule ligne « meurt ».
+
+**Décisions d'architecture (mes choix, analyse à charge distincte)** :
+- **Invariant dans la seule fonction qui pose `dead`** : `reconcileWoundDeath` — `dead` ⇔ une blessure mortelle SANS réaction de Chance ouverte. Ma première
+  version décidait « poser sauf si une réaction s'ouvre » dans `applyWound` : retirer ou poser une AUTRE blessure mortelle pendant l'attente aurait tué le
+  personnage. Une ligne de réaction périmée (blessure disparue) n'exclut rien.
+- **La réaction est persistée dans la transaction de la blessure**, en **sous-transaction** (SAVEPOINT Knex 3.3 / PostgreSQL, prouvé par une sonde et par un
+  test qui injecte une panne) : la fonctionnalité annexe ne doit jamais faire échouer la blessure. `openChanceChoice` (10 appelants) devient une façade de
+  `persistChanceChoice` + `publishChanceChoice`.
+- **Fermeture** : toute issue passe par `settleFatalWound` dans un `try/finally` ; la blessure et la place du palier visé sont revérifiées à la réponse ;
+  `ChanceInsufficientError` distingue « pas assez de Chance » d'une autre panne. **Accepter une Mort tue tout de suite et retire les autres réactions du
+  personnage** (`withdrawWoundReactions`, un cadavre n'a plus de Chance) — l'attente initiale de mes tests (« mort seulement à la dernière décision ») était fausse.
+- **Filtre de payabilité pour toutes les gravités** : plus de carte inutile (avant : une Grave s'ouvrait même à Chance 3). Plancher de Chance =
+  `shared/chanceRules.js:canSpendChance` (une définition, lue à l'ouverture comme à la dépense).
+- **Payload unique** `chanceChoicePendingPayload` (live + resync `SESSION_JOIN`) ; le composant de réaction lit `woundSeverity/woundLocation/subjectLabel`
+  du payload, **sans toucher aux ~15 émissions de `COMBAT_ATTACK_RESULT`**.
+- **Ancrage mesuré** : `useResultPanelRect` publie la position réelle du panneau « Résolution du tir » ; le dock s'y ancre (jamais une hauteur supposée).
+- **Recherche** : PF2e « Rétablissement héroïque » (dépense au moment où le mourant AUGMENTERAIT : réaction AVANT l'effet) ; Knex (sous-transactions =
+  SAVEPOINT, piège historique #3389 vérifié par exécution).
+
+**Testé** : 134 tests en base (6 fichiers) + 814 tests purs + 6 tests du modèle client ; sonde savepoint ; ESLint 0 erreur ; build client ; **validé en jeu par
+Saar** (« fonctionnel, répond aux attentes »), logs sans erreur (mort posée après décision, `applyDeathConsequences` ensuite).
+**Données** : aucune migration. **Retour arrière** : `git revert` du commit du lot.
+
+**Documentation** : `SYSTEME/BLESSURES.md` (§« Réaction de Chance »), `STATUTS_TOKEN.md`, `COMBAT.md` (§« Réaction de blessure »), `SERVICES_COMBAT.md`,
+`CONVENTIONS.md` §19 (P66-P70), `VOCABULARY.md`, `ROADMAP.md`, `client/public/CHANGELOG.md` (v258), `PLAN_CHANCE.md` §8, `PLAN_BLESSURE_SIXIEME_LIGNE.md`.

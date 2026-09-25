@@ -1794,6 +1794,7 @@ Flux réel :
 - `requestWorldPathPreview` (`Canvas3D.jsx:656`) appelle `POST /battlemaps/:id/world-path-preview`
   (`MOTEUR_MONDE.md` §5.3 — aperçu serveur, jamais un rayon calculé côté client) avec le budget
   `combatMoveMode.allures.max` ; construit `currentPath` à partir de `result.plan.segments` (points
+| `WoundReactionDock` | **toujours monté** (`SessionPage`, hors `CombatOverlay`) — s'affiche dès qu'une réaction de Chance de blessure existe pour l'audience (PJ propriétaire / MJ pour un PNJ) |
   déjà en espace monde canonique, mètres/pieds).
 - Rendu : un `<GroundCursorReticule>` (`SceneReticules.jsx`) par case de `currentPath`, coloré par
   `getCombatPathColor(cell.spentM, combatMoveMode.allures)` (`shared/combatMovement.js`) — bleu/vert/
@@ -1805,5 +1806,27 @@ Flux réel :
 - `useMemo([combatTargetMode?.pendingTargetId])`
 - Guard : requiert `pendingTargetId` + `tokenId` + les deux tokens trouvés dans tokenStore
 - Points : `Float32Array[6]` → `[myToken.pos_x+0.5, myToken.pos_z+1.5, myToken.pos_y+0.5, tgt.pos_x+0.5, tgt.pos_z+1.5, tgt.pos_y+0.5]`
+// WoundReactionDock
+{ socket }   // lit chanceChoiceStore.entries (site 'wound_severity') et resultPanelRect
+
 - (PE14 + PE34 : altitude = pos_z+1.5, profondeur = pos_y)
 - Rendu : `<line>` + `lineBasicMaterial color="#e07070"`
+### Réaction de blessure (Chance) — `WoundReactionDock`
+
+Le choix de Chance d'une **blessure** (`site === 'wound_severity'`, règles : `BLESSURES.md` §« Réaction de Chance ») n'a **qu'une
+seule fenêtre** : `WoundReactionDock.jsx`, jamais une carte à part (décision de Saar, 2026-09-25 ; maquette validée :
+`docs/PLANS/maquette-chance-reaction/preview.html`). Toujours du côté du **blessé** : le joueur propriétaire pour un PJ, le MJ pour un PNJ
+(filtre d'audience appliqué à l'alimentation du store par `CatastropheChoiceQueue`, seul abonné aux événements `CHANCE_CHOICE_*`).
+
+- **Ancrage** : au-dessus du panneau « Résolution du tir » (`CombatResultGM` en bas à gauche, `CombatResultPlayer` en bas au centre),
+  sur le même axe. Le panneau **publie sa position mesurée** (`useResultPanelRect` : `getBoundingClientRect` + `ResizeObserver` →
+  `chanceChoiceStore.resultPanelRect`), le dock s'y ancre ; sans panneau il se place là où il apparaîtrait. Jamais en haut à droite.
+- **Contenu** : carte (résumé de la blessure — gravité, localisation, nom —, « Chance ▾ » qui déplie les options avec leur coût, « Accepter »,
+  barre de temps) ; **pile compacte** pour le MJ quand plusieurs PNJ sont blessés (la plus grave d'abord, « + N autres blessures ») ;
+  **pagination** « Réaction 1 / 2 » pour un joueur. Une Mort montre d'emblée son option de rachat et un bouton rouge « Accepter la mort ».
+- **Données** : le payload `CHANCE_CHOICE_PENDING` (`chanceChoicePendingPayload`, autorité unique de sa forme, aussi utilisée par le resync
+  `SESSION_JOIN`) porte `options`, `chcAvailable`, `fatal`, `woundSeverity`, `woundLocation`, `subjectLabel`. Logique pure (tri, titres,
+  libellés) : `client/src/lib/woundReactionModel.js`. Un choix disparaît quand le serveur confirme (`CHANCE_CHOICE_RESOLVED`), jamais en
+  optimiste ; les boutons sont désactivés dès le clic.
+- **La carte flottante** (`CatastropheChoiceQueue`) ne montre plus les blessures : elle garde les Catastrophes et le forçage de zone (avec
+  « Ne rien dépenser »).

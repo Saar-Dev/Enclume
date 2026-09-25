@@ -35,9 +35,10 @@ const timeoutHandles = new Map()
 // câblé, ce fichier seul ne change le comportement d'aucune résolution existante.
 const SITE_HANDLERS = {}
 
-// openChanceChoice — pose la ligne en attente, émet CHANCE_CHOICE_PENDING, arme le timeout par
-// défaut (RAW : pas de forçage silencieux, "Test normal" = ni point ni relance). Ne bloque jamais
-// l'appelant — retourne dès l'insertion, la suite arrive via resolveChanceChoice.
+// persistChanceChoice — écrit la ligne en attente (`pending_chance_choices`), SANS rien émettre ni armer de minuteur.
+// `dbOrTrx` : la connexion globale, ou la transaction de la CAUSE quand la réaction doit naître atomiquement avec elle (une
+// blessure et sa réaction de Chance : `woundService.applyWound`). Une réaction persistée dans la transaction est visible de
+// tout ce qui décide dans la même transaction (ex. `reconcileWoundDeath`, qui ne tue pas tant qu'une réaction est ouverte).
 //
 // actionId/targetTokenId (PLAN_CHANCE.md L4, migration 341) — corrélation Aggregator/Scatter-Gather :
 // plusieurs lignes ouvertes avec le même actionId (une par cible éligible d'un même tir AOE) forment
@@ -45,16 +46,17 @@ const SITE_HANDLERS = {}
 // est le token à retirer de la résolution, distinct de `characterId` (le destinataire du choix, qui
 // est le PILOTE si la cible est une exo — même distinguo que les sites L3e). Les deux restent `null`
 // pour tout site à cible unique (L3e) : colonnes additives, jamais consultées hors L4.
-export async function openChanceChoice(io, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null, options = null } = {}) {
-  const [pending] = await db('pending_chance_choices')
+//
+// `options` (PLAN_CHANCE.md L5) : boutons dynamiques (nombre/libellé variable selon la capacité du palier visé, contrairement
+// aux 2 boutons fixes de L3e/L4), embarqués dans `context` (colonne déjà persistée) plutôt qu'une nouvelle colonne — c'est de la
+// métadonnée d'affichage, relue telle quelle par le resync SESSION_JOIN, jamais consultée par un handler de résolution.
+export async function persistChanceChoice(dbOrTrx, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null, options = null } = {}) {
+  const [pending] = await dbOrTrx('pending_chance_choices')
     .insert({
       campaign_id: campaignId,
       character_id: characterId,
       site,
       test_label: testLabel ?? null,
-      // `options` embarqué dans `context` (colonne déjà persistée) plutôt qu'une nouvelle colonne —
-      // c'est de la métadonnée d'affichage, relue telle quelle par le resync SESSION_JOIN
-      // (server/src/socket/index.js), jamais consultée par un handler de résolution.
       context: JSON.stringify({ ...context, site, options }),
       linked_catastrophe_id: linkedCatastropheId,
       timeout_ms: timeoutMs,
@@ -62,35 +64,42 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
       target_token_id: targetTokenId,
     })
     .returning('*')
+  return pending
+}
 
-  // linkedCatastropheId — id de la ligne pending_catastrophes ouverte par le même jet (retour Saar
-  // 2026-09-11 : une seule carte MJ unifiée, pas deux fenêtres "Catastrophe" séparées). Transmis au
-  // client pour qu'il apparie les deux flux (CATASTROPHE_PENDING / CHANCE_CHOICE_PENDING).
-  // timeoutMs/rolledAt : décompte visible côté client (retour Saar : le délai semblait arbitraire).
-  // actionId : transmis pour qu'un futur affichage groupé (liste MJ multi-cibles, L4e) puisse
-  // reconnaître les entrées d'un même tir sans requête supplémentaire.
-  // options — PLAN_CHANCE.md L5 : boutons dynamiques (nombre/libellé variable selon la capacité du
-  // palier visé, contrairement aux 2 boutons fixes de L3e/L4). `null`/absent pour tout site à choix
-  // fixe — le client garde son rendu à 2 boutons par défaut, cette clé n'est consultée que pour
-  // `site === 'wound_severity'`.
-  // woundId/chcAvailable — mêmes principe que `options` : extraits de `context` (jamais renvoyé en
-  // entier, ce n'est pas une API générique) parce qu'un consommateur précis en a besoin. woundId sert
-  // à `CombatDamageWindow.jsx` (Tir) pour corréler ce choix avec la fenêtre de dégâts déjà ouverte
-  // chez le même destinataire (PLAN_CHANCE.md L5, retour Saar 2026-09-12 item 4) ; absent/`null` pour
-  // tout autre site.
-  io.to(campaignId).emit(WS.CHANCE_CHOICE_PENDING, {
+// chanceChoicePendingPayload — LE payload de CHANCE_CHOICE_PENDING, construit depuis la ligne en base : autorité unique de sa
+// forme, partagée par l'émission en direct (publishChanceChoice) et le resync de SESSION_JOIN (socket/index.js) — les deux
+// divergeaient dès qu'un champ s'ajoutait à l'un.
+// linkedCatastropheId — id de la ligne pending_catastrophes ouverte par le même jet (retour Saar 2026-09-11 : une seule carte MJ
+// unifiée) ; timeoutMs/rolledAt : décompte visible côté client ; actionId : affichage groupé (liste MJ multi-cibles, L4e) ;
+// woundId/chcAvailable/fatal/woundSeverity/woundLocation/subjectLabel : extraits de `context` (jamais renvoyé en entier, ce n'est
+// pas une API générique) parce qu'un consommateur précis (le composant de réaction de blessure) en a besoin — chcAvailable =
+// Chance au moment de l'ouverture, fatal = la blessure est une Mort (libellé « Accepter la mort »), le reste = résumé affiché.
+export function chanceChoicePendingPayload(pending) {
+  const context = typeof pending.context === 'string' ? JSON.parse(pending.context) : (pending.context ?? {})
+  return {
     id: pending.id,
-    characterId,
+    characterId: pending.character_id,
     testLabel: pending.test_label,
-    site,
+    site: pending.site,
     rolledAt: pending.rolled_at,
     linkedCatastropheId: pending.linked_catastrophe_id,
     timeoutMs: pending.timeout_ms,
     actionId: pending.action_id,
-    options,
+    options: context.options ?? null,
     woundId: context.woundId ?? null,
     chcAvailable: context.chcAvailable ?? null,
-  })
+    fatal: context.fatal === true,
+    woundSeverity: context.severity ?? null,
+    woundLocation: context.location ?? null,
+    subjectLabel: context.label ?? null,
+  }
+}
+
+// publishChanceChoice — à appeler APRÈS la validation de la transaction qui a persisté la ligne : émet CHANCE_CHOICE_PENDING et
+// arme le timeout par défaut (RAW : pas de forçage silencieux, "Test normal" = ni point ni relance).
+export function publishChanceChoice(io, campaignId, pending) {
+  io.to(campaignId).emit(WS.CHANCE_CHOICE_PENDING, chanceChoicePendingPayload(pending))
 
   // .unref() — ce timer ne doit jamais empêcher le process de s'arrêter (arrêt serveur normal,
   // fin du process de test) : c'est un fallback best-effort, pas une obligation de résolution ;
@@ -99,10 +108,50 @@ export async function openChanceChoice(io, campaignId, characterId, { testLabel,
     timeoutHandles.delete(pending.id)
     resolveChanceChoice(io, campaignId, pending.id, { choice: null, resolvedByUserId: null })
       .catch(err => console.error('[WS] chanceCatastropheChoiceService — timeout resolve échoué:', err.message))
-  }, timeoutMs).unref()
+  }, pending.timeout_ms).unref()
   timeoutHandles.set(pending.id, timeoutHandle)
+}
 
+// openChanceChoice — pose la ligne en attente puis la publie (persistChanceChoice + publishChanceChoice, hors transaction
+// appelante). Ne bloque jamais l'appelant — retourne dès l'insertion, la suite arrive via resolveChanceChoice. Façade conservée
+// telle quelle pour les sites historiques (catastrophes, AOE, exo…) : seule la réaction de blessure a besoin des deux moitiés.
+export async function openChanceChoice(io, campaignId, characterId, params = {}) {
+  const pending = await persistChanceChoice(db, campaignId, characterId, params)
+  publishChanceChoice(io, campaignId, pending)
   return pending
+}
+
+// withdrawWoundReactions — retire SANS l'appliquer toutes les réactions de blessure encore ouvertes d'un personnage : la ligne est
+// close (choix nul, aucun handler, aucune dépense) et CHANCE_CHOICE_RESOLVED fait disparaître la carte chez ses clients. Appelée
+// quand le personnage MEURT : un cadavre n'a plus de fenêtre de Chance (Lot 1e), une autre réaction ouverte n'a plus d'objet.
+// Patron `withdrawPendingCatastrophe`. Retourne le nombre de réactions retirées.
+export async function withdrawWoundReactions(io, campaignId, characterId) {
+  const rows = await db('pending_chance_choices')
+    .where({ campaign_id: campaignId, site: 'wound_severity' })
+    .whereNull('resolved_at')
+    .whereRaw(`context->>'characterId' = ?`, [characterId])
+    .update({ resolved_at: db.fn.now(), choice: null })
+    .returning(['id', 'character_id'])
+  for (const row of rows) {
+    const handle = timeoutHandles.get(row.id)
+    if (handle) { clearTimeout(handle); timeoutHandles.delete(row.id) }
+    io.to(campaignId).emit(WS.CHANCE_CHOICE_RESOLVED, { id: row.id, characterId: row.character_id, choice: null })
+  }
+  return rows.length
+}
+
+// listOpenWoundReactionWoundIds — parmi ces blessures, lesquelles ont une réaction de Chance (`wound_severity`) OUVERTE ?
+// Lecture seule, `dbOrTrx` : sert `reconcileWoundDeath` (un personnage ne meurt pas tant que sa blessure mortelle attend
+// une décision). SANS DANGER si une ligne devient périmée : on ne regarde que les blessures passées en paramètre, une ligne
+// dont la blessure a disparu n'exclut donc rien.
+export async function listOpenWoundReactionWoundIds(dbOrTrx, woundIds) {
+  if (!woundIds?.length) return new Set()
+  const rows = await dbOrTrx('pending_chance_choices')
+    .where({ site: 'wound_severity' })
+    .whereNull('resolved_at')
+    .whereRaw(`context->>'woundId' = ANY(?::text[])`, [woundIds])
+    .select(dbOrTrx.raw(`context->>'woundId' as wound_id`))
+  return new Set(rows.map(row => row.wound_id))
 }
 
 // resolveChanceChoice — idempotent (patron resolvePendingCatastrophe) : UPDATE ... WHERE

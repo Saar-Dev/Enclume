@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Réaction du blessé (Chance)</title>
+<style>
+/* Jetons COPIÉS de client/src/index.css (autorité : index.css, pas ce fichier — voir README). */
+:root {
+  --wiz-bg-1:#061223; --wiz-bg-2:#0A1830; --wiz-bg-3:#102744;
+  --wiz-metal-1:#A8B5C7; --wiz-glass:rgba(255,255,255,.06); --wiz-glass-border:rgba(255,255,255,.12);
+  --text-primary:#fff; --text-secondary:#A8B5C7; --text-muted:#7F8A99;
+  --bg-session:#0f0f1a; --bg-session-raised:#16162a; --border-session:#1e1e2e; --border-session-2:#2a2a3e;
+  --text-session-hi:#c0c0d0; --text-session-mid:#9090a8;
+  --color-gold:#f5c542; --color-danger-soft:#e05b5b; --color-primary:#2FD7FF; --color-primary-muted:rgba(47,215,255,.18);
+  --color-success-soft:#4caf77;
+  --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --font-mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+  /* couleurs de gravité : shared/woundConstants.js#SEVERITY_COLORS */
+  --sev-legere:#FFD700; --sev-moyenne:#FFA500; --sev-grave:#FF6B6B; --sev-critique:#FF0000; --sev-mortelle:#8B0000; --sev-mort:#5c5c66;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:#04101f; color:var(--text-primary); font:14px/1.5 var(--font-ui); padding:24px; }
+h1 { font-size:18px; margin-bottom:4px; }
+.lead { color:var(--text-secondary); max-width:880px; margin-bottom:24px; font-size:13px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(400px,1fr)); gap:20px; }
+.board { background:var(--wiz-bg-2); border:1px solid var(--wiz-glass-border); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.board h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--color-primary); }
+.board .who { font-size:12px; color:var(--text-secondary); }
+.board .who b { color:var(--text-primary); }
+.stage { background:var(--bg-session); border:1px dashed var(--border-session-2); border-radius:8px; padding:16px; min-height:120px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.note { font-size:11.5px; color:var(--text-muted); }
+
+/* ── Boutons (recopie minimale de .btn / .btn-gold / .btn-ghost / .btn-danger) ── */
+.btn { font:600 11px/1 var(--font-ui); text-transform:uppercase; letter-spacing:.13em; color:var(--wiz-metal-1);
+  background:var(--wiz-glass); border:1px solid var(--wiz-glass-border); border-radius:7px; padding:8px 12px; cursor:pointer; }
+.btn-gold { background:rgba(245,197,66,.06); color:#f5c542; border-color:rgba(245,197,66,.45); }
+.btn-ghost { background:transparent; color:var(--text-secondary); border-color:rgba(255,255,255,.10); }
+.btn-danger { background:rgba(224,91,91,.06); color:#f0c4c4; border-color:rgba(224,91,91,.45); }
+.btn[disabled] { opacity:.4; cursor:default; }
+
+/* ── LE composant : « réaction de blessure » ── */
+.react { width:300px; background:var(--bg-session-raised); border:1px solid var(--border-session-2); border-top:3px solid var(--sev);
+  padding:10px 12px 8px; box-shadow:0 10px 30px rgba(0,0,0,.6); display:flex; flex-direction:column; gap:8px; }
+.react-head { display:flex; align-items:baseline; gap:8px; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--sev); flex:0 0 8px; align-self:center; }
+.react-head b { font-size:13px; color:var(--sev); }
+.react-head .loc { font-size:11px; color:var(--text-session-mid); }
+.react-head .name { margin-left:auto; font-size:11px; color:var(--text-session-hi); }
+.react-line { font-size:12px; color:var(--text-session-hi); }
+.react-actions { display:flex; gap:6px; }
+.react-actions .btn { flex:1; padding:8px 6px; }
+.react-bar { position:relative; height:14px; background:var(--bg-session); border:1px solid var(--border-session); }
+.react-bar i { position:absolute; inset:0 auto 0 0; background:rgba(245,197,66,.28); }
+.react-bar span { position:absolute; right:6px; top:0; font:11px/14px var(--font-mono); color:var(--text-session-hi); }
+.react-bar.none { background:transparent; border:none; height:auto; }
+.react-bar.none span { position:static; font:11px/1.3 var(--font-ui); color:var(--text-session-mid); }
+.opts { display:flex; flex-direction:column; gap:4px; }
+.opt { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; background:var(--bg-session); border:1px solid var(--border-session-2); color:var(--text-session-hi); font-size:12px; cursor:pointer; }
+.opt .cost { font:12px var(--font-mono); color:var(--color-gold); }
+.opt[disabled] { opacity:.4; }
+.chc { font-size:11px; color:var(--text-session-mid); text-align:right; }
+.chc b { color:var(--color-gold); font-family:var(--font-mono); }
+
+/* ── Pile compacte (plusieurs blessures) ── */
+.stack { width:300px; display:flex; flex-direction:column; gap:4px; }
+.row { display:flex; align-items:center; gap:8px; background:var(--bg-session-raised); border:1px solid var(--border-session-2); border-left:3px solid var(--sev); padding:5px 8px; font-size:12px; }
+.row .n { flex:1; color:var(--text-session-hi); }
+.row .s { font-size:11px; color:var(--sev); }
+.row .btn { padding:5px 8px; font-size:10px; }
+.row .t { font:11px var(--font-mono); color:var(--text-session-mid); width:30px; text-align:right; }
+.more { font-size:11px; color:var(--text-session-mid); text-align:right; }
+.pager { display:flex; justify-content:space-between; font-size:11px; color:var(--text-session-mid); }
+
+/* ── Bandeau MJ « Tour en attente » ── */
+.banner { width:100%; background:rgba(245,197,66,.07); border:1px solid rgba(245,197,66,.45); padding:8px 12px; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-session-hi); }
+.banner b { color:var(--color-gold); }
+.banner .btn { margin-left:auto; padding:6px 10px; }
+
+/* ── Chat ── */
+.chat { width:100%; background:var(--bg-session); border:1px solid var(--border-session); padding:8px 10px; font-size:12px; display:flex; flex-direction:column; gap:4px; }
+.chat p { color:var(--text-session-hi); }
+.chat .sys { color:var(--text-session-mid); font-style:italic; }
+
+/* ── Scène d'ancrage ── */
+.screen { position:relative; width:100%; height:330px; background:#0b1a2c; border:1px solid var(--border-session-2); overflow:hidden; }
+.screen .lbl { position:absolute; font-size:10px; color:var(--text-muted); }
+.ghost { position:absolute; border:1px dashed var(--border-session-2); color:var(--text-muted); font-size:10px; padding:4px; }
+.screen .react { position:absolute; width:210px; }
+.legend { font-size:11.5px; color:var(--text-secondary); }
+.legend li { margin-left:16px; }
+</style>
+</head>
+<body>
+
+<h1>Réaction du blessé — maquette (cadrage <code>PLAN_CHANCE.md</code> §8)</h1>
+<p class="lead">
+  Un seul petit composant, <b>toujours du côté du blessé</b> (le joueur pour un PJ, le MJ pour un PNJ), qui remplace la
+  carte flottante en haut à droite <em>pour les blessures</em>. Trois éléments : le résumé de la blessure, un bouton
+  <b>Chance</b> qui déplie les façons de dépenser (avec le coût réel), un bouton <b>Accepter</b> (un seul clic). Aucune
+  fenêtre ne s'ouvre quand il n'y a rien à décider (Légère, Moyenne, Chance insuffisante). Fichier statique : les textes
+  sont des propositions, les valeurs visuelles suivent <code>index.css</code>.
+</p>
+
+<div class="grid">
+
+  <!-- A -->
+  <section class="board">
+    <h2>A — Le joueur face à sa mort</h2>
+    <p class="who">Vu par : <b>le joueur</b> (Chance 8). Aucun minuteur : il décide lui-même.</p>
+    <div class="stage">
+      <div class="react" style="--sev:var(--sev-mort)">
+        <div class="react-head"><i class="dot"></i><b>Mort subite</b><span class="loc">Tête</span><span class="name">Kaël</span></div>
+        <div class="react-line">Ton personnage ne meurt que si tu le décides.</div>
+        <div class="opts">
+          <button class="opt" onclick="pick(this)"><span>Survivre — Blessure critique</span><span class="cost">3 pts</span></button>
+        </div>
+        <div class="react-actions">
+          <button class="btn btn-danger">Accepter la mort</button>
+        </div>
+        <div class="chc">Chance : <b>8</b> → <b>5</b> si tu dépenses</div>
+        <div class="react-bar none"><span>Le Tour attend ta décision.</span></div>
+      </div>
+    </div>
+    <p class="note">Ici le bouton « Chance » est déjà déplié : la mort n'a qu'une seule option de rachat. Le rouge n'est utilisé que pour « Accepter la mort ».</p>
+  </section>
+
+  <!-- B -->
+  <section class="board">
+    <h2>B — Chance insuffisante : rien à décider</h2>
+    <p class="who">Vu par : <b>le joueur</b> (Chance 5 : il faut en garder 3, donc 6 minimum pour dépenser 3).</p>
+    <div class="stage">
+      <div class="chat">
+        <p class="sys">Kaël subit une blessure Mort subite (Tête).</p>
+        <p>Kaël ne peut pas dépenser sa Chance (3 points à conserver) : il meurt.</p>
+      </div>
+    </div>
+    <p class="note">Aucune fenêtre : la mort est posée tout de suite, le chat la raconte. Si tu préfères que le joueur clique quand même, dis-le.</p>
+  </section>
+
+  <!-- C -->
+  <section class="board">
+    <h2>C — Un PNJ Grave, discret</h2>
+    <p class="who">Vu par : <b>le MJ</b>. 45 s ; ignoré, la blessure reste, le combat ne s'arrête jamais.</p>
+    <div class="stage">
+      <div class="react" style="--sev:var(--sev-grave)">
+        <div class="react-head"><i class="dot"></i><b>Grave</b><span class="loc">Bras droit</span><span class="name">Garde 2</span></div>
+        <div class="react-actions">
+          <button class="btn btn-gold">Chance ▾</button>
+          <button class="btn btn-ghost">Accepter</button>
+        </div>
+        <div class="react-bar"><i style="width:68%"></i><span>31 s</span></div>
+      </div>
+    </div>
+    <p class="note">Replié par défaut : un seul bouton « Chance ». Déplié (D), il montre les coûts.</p>
+  </section>
+
+  <!-- D -->
+  <section class="board">
+    <h2>D — Le même PNJ, déplié</h2>
+    <p class="who">Vu par : <b>le MJ</b> après un clic sur « Chance » (PNJ à Chance 9).</p>
+    <div class="stage">
+      <div class="react" style="--sev:var(--sev-grave)">
+        <div class="react-head"><i class="dot"></i><b>Grave</b><span class="loc">Bras droit</span><span class="name">Garde 2</span></div>
+        <div class="opts">
+          <button class="opt" onclick="pick(this)"><span>Réduire d'un degré → Moyenne</span><span class="cost">1 pt</span></button>
+          <button class="opt" onclick="pick(this)"><span>Réduire de deux degrés → Légère</span><span class="cost">2 pts</span></button>
+        </div>
+        <div class="react-actions"><button class="btn btn-ghost">Accepter</button></div>
+        <div class="chc">Chance du PNJ : <b>9</b></div>
+        <div class="react-bar"><i style="width:40%"></i><span>18 s</span></div>
+      </div>
+    </div>
+    <p class="note">Un clic sur une option = dépense et effet, atomiques (déjà le cas côté serveur). Aucune confirmation.</p>
+  </section>
+
+  <!-- E -->
+  <section class="board">
+    <h2>E — Explosion sur 5 PNJ : ne pas noyer le MJ</h2>
+    <p class="who">Vu par : <b>le MJ</b>. Une ligne par blessé ; seules les blessures qui se rachètent apparaissent.</p>
+    <div class="stage">
+      <div class="stack">
+        <div class="row" style="--sev:var(--sev-critique)"><span class="n">Garde 1</span><span class="s">Critique</span><button class="btn btn-gold">Chance</button><span class="t">40 s</span></div>
+        <div class="row" style="--sev:var(--sev-grave)"><span class="n">Garde 2</span><span class="s">Grave</span><button class="btn btn-gold">Chance</button><span class="t">40 s</span></div>
+        <div class="row" style="--sev:var(--sev-mort)"><span class="n">Garde 3</span><span class="s">Mort</span><button class="btn btn-gold">Chance</button><span class="t">40 s</span></div>
+        <div class="more">+ 2 autres blessures (Grave)</div>
+      </div>
+    </div>
+    <p class="note">Le plus grave d'abord. Rien ne bloque : on ignore, le délai passe, la blessure reste (un PNJ « Mort » meurt).</p>
+  </section>
+
+  <!-- F -->
+  <section class="board">
+    <h2>F — Deux réactions à la fois (joueur)</h2>
+    <p class="who">Vu par : <b>le joueur</b>. La plus grave est en premier, la suivante attend.</p>
+    <div class="stage">
+      <div class="react" style="--sev:var(--sev-critique)">
+        <div class="pager"><span>Réaction 1 / 2</span><span>puis : Grave — Jambe gauche</span></div>
+        <div class="react-head"><i class="dot"></i><b>Critique</b><span class="loc">Corps</span><span class="name">Kaël</span></div>
+        <div class="react-actions">
+          <button class="btn btn-gold">Chance ▾</button>
+          <button class="btn btn-ghost">Accepter</button>
+        </div>
+        <div class="react-bar"><i style="width:82%"></i><span>37 s</span></div>
+      </div>
+    </div>
+    <p class="note">Le Tour n'attend que les blessures MORTELLES d'un PJ ; une Critique ne bloque rien.</p>
+  </section>
+
+  <!-- G -->
+  <section class="board">
+    <h2>G — Le Tour attend un joueur (MJ)</h2>
+    <p class="who">Vu par : <b>le MJ</b>, seulement quand un PJ n'a pas décidé d'une blessure mortelle et que le Tour ne peut pas se terminer.</p>
+    <div class="stage">
+      <div class="banner"><span>⏳ Fin de Tour en attente : <b>Kaël</b> décide de sa mort.</span><button class="btn btn-gold">Forcer : accepter à sa place</button></div>
+    </div>
+    <p class="note">Un PNJ n'apparaît jamais ici. « Forcer » = comme « le serveur lance les dés à sa place » (bouton MJ existant).</p>
+  </section>
+
+  <!-- H -->
+  <section class="board">
+    <h2>H — Lignes de chat</h2>
+    <p class="who">Vu par : <b>tout le monde</b> (chaque décision automatique a sa ligne).</p>
+    <div class="stage">
+      <div class="chat">
+        <p>Kaël dépense 3 points de Chance : Mort subite → Blessure critique (Chance 8 → 5).</p>
+        <p>Kaël accepte sa blessure : Mort subite. Kaël meurt.</p>
+        <p>Garde 2 : le MJ dépense 1 point de Chance : Grave → Moyenne.</p>
+        <p>Kaël ne peut pas dépenser 3 points de Chance (Chance insuffisante) : sa blessure reste.</p>
+      </div>
+    </div>
+    <p class="note">La dernière ligne couvre le cas « la Chance a baissé entre l'ouverture et le clic » (aujourd'hui rien ne s'affiche).</p>
+  </section>
+
+</div>
+
+<!-- Ancrage -->
+<section class="board" style="margin-top:20px">
+  <h2>I — Où se place la réaction à l'écran ?</h2>
+  <p class="who">Ancrage <b>proposé</b> : au-dessus du compte rendu de dégâts quand il est là (même axe), sinon à sa place. Jamais en haut à droite.</p>
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div>
+      <div class="legend"><b>Joueur</b> (compte rendu en bas au centre, 220 px)</div>
+      <div class="screen">
+        <div class="ghost" style="left:12px; top:10px; width:150px; height:60px">Chat / dés</div>
+        <div class="ghost" style="left:40%; top:110px; width:20%; height:80px; border-color:#3a3a5a">Fenêtre de dégâts (tireur) — centre</div>
+        <div class="react" style="--sev:var(--sev-critique); left:50%; transform:translateX(-50%); bottom:170px">
+          <div class="react-head"><i class="dot"></i><b>Critique</b><span class="loc">Corps</span></div>
+          <div class="react-actions"><button class="btn btn-gold">Chance ▾</button><button class="btn btn-ghost">Accepter</button></div>
+          <div class="react-bar"><i style="width:80%"></i><span>36 s</span></div>
+        </div>
+        <div class="ghost" style="left:50%; transform:translateX(-50%); bottom:24px; width:220px; height:130px; border-color:var(--color-danger-soft)">Compte rendu « Vous êtes touché » (existant)</div>
+      </div>
+    </div>
+    <div>
+      <div class="legend"><b>MJ</b> (compte rendu en bas à gauche, 220 px)</div>
+      <div class="screen">
+        <div class="ghost" style="right:12px; top:10px; width:150px; height:60px">Carte Catastrophe (reste, cf. 6d)</div>
+        <div class="banner" style="position:absolute; left:12px; right:12px; top:80px; width:auto; padding:5px 8px; font-size:11px"><span>⏳ Tour en attente : <b>Kaël</b></span></div>
+        <div class="stack" style="position:absolute; left:24px; bottom:170px; width:210px">
+          <div class="row" style="--sev:var(--sev-grave)"><span class="n">Garde 2</span><span class="s">Grave</span><button class="btn btn-gold">Chance</button></div>
+        </div>
+        <div class="ghost" style="left:24px; bottom:24px; width:220px; height:130px; border-color:#3a3a5a">Compte rendu MJ (existant)</div>
+      </div>
+    </div>
+  </div>
+  <ul class="legend">
+    <li>Le composant ne dépend PAS du compte rendu : s'il n'est pas affiché (joueur qui ne voit pas le tir d'un autre joueur, chute, froid), la réaction reste au même endroit.</li>
+    <li>La fenêtre de dégâts du tireur n'est plus concernée : le « pont » actuel disparaît.</li>
+    <li>Les Catastrophes gardent leur carte jusqu'au lot 6d, où elles rejoindront ce même composant.</li>
+  </ul>
+</section>
+
+<script>
+  /* Seul comportement de la maquette : un clic sur une option la met en évidence. */
+  function pick(el){ el.style.borderColor='var(--color-gold)'; el.style.color='var(--color-gold)'; }
+</script>
+</body>
+</html>

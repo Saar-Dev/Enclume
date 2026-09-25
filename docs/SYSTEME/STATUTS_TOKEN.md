@@ -97,7 +97,7 @@ rien de la *manière* de poser (bascule nue = `manualToggle`, ou formulaire déd
 | MJ (formulaires du panneau) | dangers (`exposeToHazard`/`clearHazard`, routes REST), froid/hypothermie (`coldExposureService.js`) | `environmentalHazardService.js`, `coldExposureService.js` |
 | Choc, Fatigue, froid (automatique) | `stunned` / `unconscious` / `evanoui` | **`applyStunWithDuration`** (`statusService.js`) — unique écrivain automatique de cette famille (exclusion mutuelle) |
 | MJ (étourdissement manuel avec durée) | idem | `COMBAT_APPLY_STUN` → `applyStunWithDuration(…, { gmOverride: true })` |
-| Blessure « Mort » (automatique) | `dead`, marqué `data.source = 'wound'`, sur tous les tokens du personnage ; retiré avec la blessure, mais **seulement** s'il porte cette marque | `reconcileWoundDeath` (dans la transaction de `applyWound`/`removeWound`, `statusService.js`) puis `announceWoundDeath` après validation |
+| Blessure « Mort » (automatique) | `dead`, marqué `data.source = 'wound'`, sur tous les tokens du personnage ; retiré avec la blessure, mais **seulement** s'il porte cette marque ; **posé seulement quand la réaction de Chance de la Mort est fermée** (invariant `dead` ⇔ blessure mortelle sans réaction ouverte) | `reconcileWoundDeath` (dans la transaction de `applyWound`/`removeWound`, puis à la fermeture de la réaction : `settleFatalWound`, `statusService.js`/`woundService.js`) puis `announceWoundDeath` après validation |
 | Mods d'arme, `iem_survival` | statuts propres (voir §8) | `applyModStatus` |
 | Purge | statuts expirés (`expires_at_turn ≤ tour`) à `endTurn` ; statuts `clearedAtCombatEnd` à la fin du combat ; **tous** les statuts à `/heal` (résurrection voulue) | `combatTurnEngine.js`, `socketCombatState.js`, `woundService.js` |
 
@@ -155,7 +155,10 @@ Conséquences (toutes en `enforced`) :
 5. **Purge à la mort** — `applyDeathConsequences(io, db, campaignId, characterId)` (`statusService.js`) retire les
    états interdits de TOUS les tokens du personnage et l'étourdissement en attente (`combat_pending`) ; appelée par la
    bascule `dead` de `socketToken.js` et par `announceWoundDeath` quand la blessure « Mort » vient de poser `dead` (au moins une ligne
-   réellement insérée : un `dead` déjà posé à la main ne la rejoue pas). Ne retire jamais un état compatible.
+   réellement insérée : un `dead` déjà posé à la main ne la rejoue pas). Ne retire jamais un état compatible. `announceWoundDeath`
+   poste aussi l'unique ligne de chat « X meurt » et **retire les autres réactions de Chance de blessure** du personnage
+   (`withdrawWoundReactions` : un cadavre n'a plus de fenêtre de Chance, Lot 1e). La mort d'une blessure « Mort » n'est posée qu'**après la
+   décision du joueur** (`BLESSURES.md` §« Réaction de Chance »).
 6. **Droits** — un joueur ne pose pas un état interdit sur son token mort (`canEditTokenStatus`, `targetIsDead`).
 
 **Le MJ reste libre** : bascule manuelle, formulaires danger/froid et `COMBAT_APPLY_STUN` (`gmOverride`) ne sont jamais

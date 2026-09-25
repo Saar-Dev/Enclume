@@ -487,10 +487,7 @@
     "shockOutcomes": {
       "ok": "Résistance"
     },
-    "d20Placeholder": "D20",
-    "chanceReduce": {
-      "callButton": "Faire appel à sa Chance"
-    }
+    "d20Placeholder": "D20"
   },
   "cacModifiers": {
     "header": "{{attacker}} — Corps à corps — {{target}}",
@@ -737,12 +734,29 @@
       "rerollButton": "Relancer le Test",
       "forceButton": "Forcer (Événement favorable)",
       "attemptButton": "Tenter le Test de Chance",
-      "reduceButton": "Réduire de {{degree}} (→ {{severity}})",
-      "rescueButton": "Dépenser {{cost}} pts de Chance (→ {{severity}})",
       "acceptGeneric": "Ne rien dépenser",
       "acceptWound": "Accepter la blessure",
       "acceptDeath": "Accepter la mort",
       "autoResolveIn": "Résolution automatique dans {{seconds}}s"
+    },
+    "reaction": {
+      "titleDeath": "Mort subite",
+      "titleLimb": "Membre détruit",
+      "fatalLine": "Ton personnage ne meurt que si tu le décides.",
+      "chanceButton": "Chance",
+      "reduceOne": "Réduire d'un degré → {{severity}}",
+      "reduceMany": "Réduire de {{degree}} degrés → {{severity}}",
+      "rescueDeath": "Survivre — {{severity}}",
+      "rescueLimb": "Sauver le membre — {{severity}}",
+      "cost_one": "{{count}} pt",
+      "cost_other": "{{count}} pts",
+      "chcPlayer": "Chance : {{chc}} → {{after}} si tu dépenses",
+      "chcPnj": "Chance du PNJ : {{chc}}",
+      "seconds": "{{seconds}} s",
+      "waiting": "Le Tour attend ta décision.",
+      "pager": "Réaction {{index}} / {{total}}",
+      "pagerNext": "puis : {{severity}} — {{location}}",
+      "moreRows": "+ {{count}} autres blessures"
     },
     "notice": {
       "woundReduced": "{{label}} dépense {{cost}} de Chance pour réduire sa blessure (Chance : {{chc}}).",

@@ -1,3 +1,18 @@
+## v258 — 2026-09-25 — La Chance peut sauver d'une Mort ou d'un Membre détruit, dans une seule fenêtre
+
+### Combat
+- [add] Quand un coup de 30 Dommages nets ou plus inflige **Mort** ou **Membre détruit**, le personnage ne meurt plus tout de suite : le joueur (ou le
+  MJ pour un PNJ) peut dépenser **3 points de Chance** pour ne subir qu'une Blessure critique, ou **Accepter**. La mort n'est posée qu'à ce moment-là.
+  Il faut avoir au moins 6 points de Chance (3 doivent toujours rester). Une Mort ou un Membre détruit venu du débordement d'une ligne pleine
+  (2ᵉ Mortelle à la tête…) ne se rachète pas.
+- [add] Toute carte de Chance a maintenant un bouton pour refuser d'un clic (« Accepter la blessure », « Accepter la mort », « Ne rien dépenser »),
+  sans attendre la fin du délai.
+- [change] Le choix de Chance d'une blessure n'est plus une carte en haut à droite : il s'affiche dans **une seule fenêtre**, au-dessus du panneau
+  « Résolution du tir ». Un PNJ blessé montre un bouton « Chance » discret avec une barre de temps ; plusieurs PNJ blessés forment une pile compacte,
+  la plus grave d'abord ; un joueur qui a plusieurs réactions les voit une à une.
+- [change] Plus de carte de Chance inutile : elle ne s'ouvre que si le personnage a de quoi payer (même pour une Blessure grave).
+- [add] Le chat raconte chaque décision : Chance dépensée, blessure acceptée, délai dépassé, Chance insuffisante, débordement, et « X meurt ».
+
 ## v257 — 2026-09-25 — Permuter l'arme en combat
 
 ### Combat

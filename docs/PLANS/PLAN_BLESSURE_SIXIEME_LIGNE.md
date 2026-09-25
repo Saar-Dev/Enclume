@@ -128,11 +128,16 @@ Deux concepts que le RAW distingue :
   6ᵉ ligne ou `dead`) ; `_severityForDamage` (≥ 30) ; retrait de `is_lethal` (une cinquantaine d'occurrences dans
   `socketCombatHelpers.js`, `socketCombatAoe.js`, `coldExposureService`, `environmentalHazardService`,
   `fallDamageService`, panneaux client) ; Choc via la gravité ; route manuelle ; libellés i18n.
-- **Lot 3 — Chance sur la 6ᵉ ligne.** Coût 3 → Critique (§2.2) ; `computeAvailableSeverityReductions`
+- **Lot 3 — Chance sur la 6ᵉ ligne : ✅ CLOS et validé en jeu par Saar (2026-09-25)** — livré par les lots 6a-1 et 6c de `PLAN_CHANCE.md` §8 ; décisions et écarts RAW : `JOURNAL8.md` (Clôture du Lot 3) ; documentation définitive : `SYSTEME/BLESSURES.md` §« Réaction de Chance ». Texte d'origine du lot : Coût 3 → Critique (§2.2) ; `computeAvailableSeverityReductions`
   ne modélise que des degrés 1-2 : prévoir une option dédiée. Décider le moment de pose de `dead` (§7) — **conflit constaté au Lot 2b** : `resolveChanceRecipientCharacterId` refuse un personnage `dead`,
   or la Mort est posée dans la transaction même de la blessure : aucune fenêtre de Chance ne s'ouvrirait. Le choix doit s'ouvrir AVANT ou
   INDÉPENDAMMENT de `dead`. La réconciliation idempotente (`reconcileWoundDeath`) et la cible d'amélioration (`improvedSeverity`,
   `WOUND_IMPROVEMENT_TARGET`) sont déjà prêtes pour ce lot.
+  **Décisions de Saar (2026-09-25)** : un PJ valide sa mort lui-même (aucun minuteur pour un PJ sur une blessure mortelle,
+  un seul clic pour « Accepter ») ; un PNJ garde 45 s au MJ pour dépenser sa Chance, sinon il meurt. L'interface de cette
+  réaction est cadrée dans `PLAN_CHANCE.md` §8 (L6) : ce Lot 3 en est le lot serveur « 6a ». **Rachetable : la 6ᵉ ligne
+  écrite directement par un coup ≥ 30 (Mort et Membre détruit), 3 points → Critique ; JAMAIS celle qui vient d'un
+  débordement de ligne** (Saar, 2026-09-25).
 - **Lot 4 — État permanent du membre + rendu.** Table `character_destroyed_limbs`, broadcast, barré/gris
   dans `LocationPanel` et `SilhouettePanel`. Séparable : les Lots 1-3 livrent déjà le compteur RAW complet ;
   le Lot 4 ajoute la persistance de la paralysie.

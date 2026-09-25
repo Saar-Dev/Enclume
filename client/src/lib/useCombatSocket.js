@@ -4,7 +4,6 @@ import { useSocket } from './SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useSessionStore } from '../stores/sessionStore'
-import { useChanceChoiceStore } from '../stores/chanceChoiceStore.js'
 
 export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
@@ -43,14 +42,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onMeleeDefensePrompt  = (data) => { setMeleeDefensePrompt(data) }
     const onMeleeResult         = (data) => { setMeleeResult(data) }
     const onDamagePrompt        = (data) => { setDamagePayload(data) }
-    // woundId (PLAN_CHANCE.md L5, retour Saar 2026-09-12 item 4) — annonce au chanceChoiceStore que
-    // CombatDamageWindow prend en charge en ligne le choix `wound_severity` corrélé (s'il existe) :
-    // CatastropheChoiceQueue.jsx l'exclut alors de sa propre file, jamais deux affichages du même
-    // choix. Cleared par l'effet ci-dessous quand la fenêtre de dégâts se ferme.
-    const onDamageResult        = (data) => {
-      setDamageResults(data)
-      useChanceChoiceStore.getState().setActiveWoundWindowId(data.woundId ?? null)
-    }
+    const onDamageResult        = (data) => { setDamageResults(data) }
     const onStunPrompt          = (data) => { setStunPayload(data) }
     const onAttackPlayerResult  = (data) => { setAttackResult(data) }
     // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
@@ -263,13 +255,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const timer = setTimeout(clearDeclareError, 4000)
     return () => clearTimeout(timer)
   }, [declareError, clearDeclareError])
-
-  // Fermeture de CombatDamageWindow (damagePayload remis à null par onDamageConfirmed, SessionPage.jsx)
-  // → libère activeWoundWindowId. Un nouveau COMBAT_DAMAGE_RESULT le repose immédiatement s'il y a
-  // lieu (onDamageResult ci-dessus) : jamais de fenêtre stale entre deux jets de dégâts successifs.
-  useEffect(() => {
-    if (!damagePayload) useChanceChoiceStore.getState().clearActiveWoundWindowId()
-  }, [damagePayload])
 
   return {
     reloadResult,        setReloadResult,

@@ -30,6 +30,7 @@ import CriticalEffectOverlay from '../components/CriticalEffectOverlay'
 import DicePanel from '../components/DicePanel'
 import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
 import CatastropheChoiceQueue from '../components/CatastropheChoiceQueue'
+import WoundReactionDock from '../components/WoundReactionDock'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
 import ExoSheetWindow from '../character/ExoSheetWindow'
@@ -1303,6 +1304,11 @@ function SessionContent({ campaignId }) {
            choix Chance PNJ ; joueur : choix Chance de son propre PJ) — PLAN_CHANCE.md L3e-4,
            retour Saar 2026-09-11 puis 2026-09-12 (jamais deux fenêtres à deux endroits) ── */}
       <CatastropheChoiceQueue socket={socket} />
+
+      {/* ─── WoundReactionDock — la « réaction de blessure » (choix de Chance d'une blessure), ancrée au-dessus du panneau
+           « Résolution du tir » ; toujours monté, filtré par audience à l'alimentation du store. Remplace la branche
+           `wound_severity` de la carte ci-dessus (une seule fenêtre) — PLAN_CHANCE.md §8, maquette chance-reaction ── */}
+      <WoundReactionDock socket={socket} />
 
       {/* ─── CombatOverlay — position:fixed, z-index 1000, visible en mode combat ── */}
       {mode === 'combat' && (

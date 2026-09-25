@@ -15,14 +15,22 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { CHC_FLOOR, CHC_CEIL, canSpendChance } from '../../../shared/chanceRules.js'
 
 // RAW (REGLE_CHANCE.md) : plancher absolu de la réserve de Chance — un personnage descendu à 3
-// ne peut plus en dépenser. `spendChancePoints` REJETTE toute opération qui franchirait ce
-// plancher (choix joueur refusable) ; `cancelChanceGrant` (correction MJ, jamais initiée par le
-// joueur) CLAMPE dessus plutôt que de rejeter — même plancher, sémantique différente selon qui
-// déclenche l'écriture (décision Saar 2026-09-11).
-const CHC_FLOOR = 3
-const CHC_CEIL = 20 // contrainte applicative déjà en place (PUT /chc, char-sheet.js:497)
+// ne peut plus en dépenser (règle pure : `shared/chanceRules.js`, lue aussi avant d'ouvrir une réaction).
+// `spendChancePoints` REJETTE toute opération qui franchirait ce plancher (choix joueur refusable) ;
+// `cancelChanceGrant` (correction MJ, jamais initiée par le joueur) CLAMPE dessus plutôt que de
+// rejeter — même plancher, sémantique différente selon qui déclenche l'écriture (décision Saar 2026-09-11).
+// CHC_CEIL : contrainte applicative déjà en place (PUT /chc, char-sheet.js:497).
+
+// Erreur DÉDIÉE : l'appelant (réduction de gravité) distingue « pas assez de Chance » d'une autre panne pour choisir sa
+// ligne de chat — jamais en lisant un message.
+export class ChanceInsufficientError extends AppError {
+  constructor() {
+    super(400, `Chance insuffisante (minimum ${CHC_FLOOR} pour dépenser)`)
+  }
+}
 
 async function lockSheetRow(trx, sheetId) {
   const row = await trx('char_sheet').where({ id: sheetId }).forUpdate().first()
@@ -31,16 +39,14 @@ async function lockSheetRow(trx, sheetId) {
 }
 
 // spendChancePoints(sheetId, n, { reason }, trxOpt) → { chc, reason }
-// Garde RAW : chc - n >= 3, rejette sinon (AppError 400, aucune écriture). `n` ∈ {1, 2} selon
-// l'appelant (Événement favorable, réduction de gravité...) — pas de connaissance ici du palier
-// ou de l'effet obtenu, seulement la dépense de la réserve.
+// Garde RAW : chc - n >= 3, rejette sinon (ChanceInsufficientError, 400, aucune écriture). `n` est fixé par
+// l'appelant (Événement favorable : 1 ; réduction de gravité : 1 à 3, voir `chanceCostOfStep`) — pas de
+// connaissance ici du palier ou de l'effet obtenu, seulement la dépense de la réserve.
 export async function spendChancePoints(sheetId, n, { reason } = {}, trxOpt) {
   const run = async (trx) => {
     const row = await lockSheetRow(trx, sheetId)
     const next = row.chc - n
-    if (next < CHC_FLOOR) {
-      throw new AppError(400, `Chance insuffisante (minimum ${CHC_FLOOR} pour dépenser)`)
-    }
+    if (!canSpendChance(row.chc, n)) throw new ChanceInsufficientError()
     const [updated] = await trx('char_sheet')
       .where({ id: sheetId })
       .update({ chc: next, updated_at: trx.fn.now() })

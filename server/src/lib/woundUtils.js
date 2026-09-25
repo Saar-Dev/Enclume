@@ -1,7 +1,9 @@
 import { AppError } from './AppError.js'
 import {
   WOUND_MAX_COUNTS, WOUND_SEVERITIES, WOUND_IMPROVEMENT_TARGET, isWoundLinePromoted, isSuddenDeathLocation,
+  chanceCostOfStep, maxNormalChanceDegrees,
 } from '../../../shared/woundConstants.js'
+import { canSpendChance } from '../../../shared/chanceRules.js'
 
 // Test de Choc requis ? RAW : Grave (Tête/Corps), Critique, Mortelle, et Membre détruit (bras/jambe). La Mort subite
 // (6ᵉ ligne en Tête/Corps) n'en fait aucun : « le personnage meurt sur le coup » (REGLEBLESSURES.md:164-167).
@@ -131,8 +133,9 @@ export async function resolveWoundImprovement(trx, woundId) {
 }
 
 // hasSeverityRoom — vrai si ce palier a encore une case libre pour cette localisation (même règle
-// que resolveWoundInsertion, jamais dupliquée : `currentCount < maxCount`).
-async function hasSeverityRoom(dbOrTrx, charSheetId, location, severity) {
+// que resolveWoundInsertion, jamais dupliquée : `currentCount < maxCount`). Exportée : la réponse à un choix de Chance
+// REVÉRIFIE la place du palier visé (l'état a pu changer pendant les secondes d'attente).
+export async function hasSeverityRoom(dbOrTrx, charSheetId, location, severity) {
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
   if (maxCount == null) return false
   const [{ count }] = await dbOrTrx('character_wounds')
@@ -147,36 +150,50 @@ async function hasSeverityRoom(dbOrTrx, charSheetId, location, severity) {
 // dépenser des points de Chance pour atterrir sur un palier déjà plein (resolveWoundImprovement ne
 // vérifie pas la capacité, cf. son commentaire : c'est à l'appelant de le faire en amont).
 //
-// Deux étapes RAW distinctes :
-// 1. Les degrés normaux (1 et 2, REGLE_CHANCE.md:117-119) — retenus seulement s'ils aboutissent
-//    chacun à un palier avec de la place.
-// 2. Exception du « palier plein » (REGLE_CHANCE.md:125-131) : si ni 1 ni 2 degrés n'aboutissent
-//    nulle part de disponible, il faut continuer à descendre — un SEUL palier est alors proposé
-//    (le premier disponible), jamais la liste des paliers intermédiaires encore pleins.
+// Un « degré » est un CRAN de réduction (`improvedSeverity` : la gravité juste en dessous, sauf la 6ᵉ ligne qui redescend
+// en Critique) ; son COÛT en points de Chance est distinct (`chanceCostOfStep` : 1 par cran, 3 pour quitter la 6ᵉ ligne —
+// décision Saar 2026-09-23). Deux étapes RAW :
+// 1. Les degrés normaux (`maxNormalChanceDegrees` : 2, REGLE_CHANCE.md:117-119 ; 1 seul pour la 6ᵉ ligne) — retenus
+//    seulement s'ils aboutissent chacun à un palier avec de la place.
+// 2. Exception du « palier plein » (REGLE_CHANCE.md:125-131) : si aucun degré normal n'aboutit à un palier disponible, il
+//    faut continuer à descendre — un SEUL palier est alors proposé (le premier disponible), jamais la liste des paliers
+//    intermédiaires encore pleins ; le coût est cumulé cran par cran.
 //
-// Retourne un tableau (0 à 2 entrées) `{ degree, targetSeverity }`, jamais un `{ degree: 1..2 }`
-// hors norme sauf si l'exception s'applique (alors une seule entrée, degree > 2 possible).
+// Retourne un tableau (0 à 2 entrées) `{ degree, cost, targetSeverity }` — `degree` = nombre de crans, `cost` = points de
+// Chance —, jamais un `degree` hors norme sauf si l'exception s'applique (alors une seule entrée). N'examine PAS la
+// réserve de Chance du personnage : voir `affordableReductions`.
 export async function computeAvailableSeverityReductions(dbOrTrx, charSheetId, location, severity) {
   const normal = []
   let candidate = severity
-  for (let degree = 1; degree <= 2; degree += 1) {
-    candidate = previousSeverity(candidate)
+  let cost = 0
+  for (let degree = 1; degree <= maxNormalChanceDegrees(severity); degree += 1) {
+    cost += chanceCostOfStep(candidate)
+    candidate = improvedSeverity(candidate)
     if (!candidate) break
     if (await hasSeverityRoom(dbOrTrx, charSheetId, location, candidate)) {
-      normal.push({ degree, targetSeverity: candidate })
+      normal.push({ degree, cost, targetSeverity: candidate })
     }
   }
   if (normal.length > 0) return normal
 
   candidate = severity
+  cost = 0
   for (let degree = 1; degree <= WOUND_SEVERITIES.length; degree += 1) {
-    candidate = previousSeverity(candidate)
+    cost += chanceCostOfStep(candidate)
+    candidate = improvedSeverity(candidate)
     if (!candidate) return [] // plus rien sous Légère et toujours plein — réduction impossible
     if (await hasSeverityRoom(dbOrTrx, charSheetId, location, candidate)) {
-      return [{ degree, targetSeverity: candidate }]
+      return [{ degree, cost, targetSeverity: candidate }]
     }
   }
   return []
+}
+
+// affordableReductions — ne garde que les réductions que la réserve de Chance permet de payer (RAW : il doit en rester 3,
+// `shared/chanceRules.js`). Pure : la lecture de `chc` est à l'appelant. Sert à décider s'il y a QUELQUE CHOSE à proposer
+// avant d'ouvrir une réaction — une carte dont aucune option n'est payable ne s'ouvre jamais.
+export function affordableReductions(reductions, chc) {
+  return reductions.filter(reduction => canSpendChance(chc, reduction.cost))
 }
 
 export async function getWorstWoundSeverity(db, charSheetId) {

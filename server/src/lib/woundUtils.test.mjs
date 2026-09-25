@@ -5,7 +5,7 @@ import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, improvedSeverity, resolveWoundInsertion, resolveWoundImprovement,
-  buildWoundInsertionUndoEntries, computeAvailableSeverityReductions,
+  buildWoundInsertionUndoEntries, computeAvailableSeverityReductions, affordableReductions,
   isShockTestRequired, woundSeverityRankSql, WoundLineFullError,
 } from './woundUtils.js'
 
@@ -215,8 +215,8 @@ test('computeAvailableSeverityReductions : cas normal, degrés 1 et 2 tous deux 
     const { charSheet } = await createFixture(trx)
     const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'grave')
     assert.deepEqual(options, [
-      { degree: 1, targetSeverity: 'moyenne' },
-      { degree: 2, targetSeverity: 'legere' },
+      { degree: 1, cost: 1, targetSeverity: 'moyenne' },
+      { degree: 2, cost: 2, targetSeverity: 'legere' },
     ])
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
@@ -229,7 +229,7 @@ test('computeAvailableSeverityReductions : degré 1 plein, degré 2 seul retenu'
       await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'moyenne', occurred_at_game_minutes: i })
     }
     const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'grave')
-    assert.deepEqual(options, [{ degree: 2, targetSeverity: 'legere' }])
+    assert.deepEqual(options, [{ degree: 2, cost: 2, targetSeverity: 'legere' }])
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })
@@ -262,9 +262,56 @@ test('computeAvailableSeverityReductions : exception "palier plein" sur 3 degré
     }
     // moyenne/corps vide -> disponible, 3 degrés en dessous de mortelle
     const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'mortelle')
-    assert.deepEqual(options, [{ degree: 3, targetSeverity: 'moyenne' }])
+    assert.deepEqual(options, [{ degree: 3, cost: 3, targetSeverity: 'moyenne' }])
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
+})
+
+// 6ᵉ ligne : UN cran (→ Critique) pour 3 points ; si la Critique est pleine, l'exception « palier plein » ajoute 1 point par cran.
+test('computeAvailableSeverityReductions : la 6ᵉ ligne (Mort, coup ≥ 30) se rachète en Critique pour 3 points, une seule option', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'tete', 'mort_subite')
+    assert.deepEqual(options, [{ degree: 1, cost: 3, targetSeverity: 'critique' }])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('computeAvailableSeverityReductions : 6ᵉ ligne, Critique pleine → palier plein : Grave pour 4 points (3 + 1)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    for (let i = 0; i < 2; i++) { // critique/tete maxCount=2 -> plein
+      await trx('character_wounds').insert({ char_sheet_id: charSheet.id, location: 'tete', severity: 'critique', occurred_at_game_minutes: i })
+    }
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'tete', 'mort_subite')
+    assert.deepEqual(options, [{ degree: 2, cost: 4, targetSeverity: 'grave' }])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('computeAvailableSeverityReductions : Mortelle inchangée (Critique 1 pt, Grave 2 pts)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const options = await computeAvailableSeverityReductions(trx, charSheet.id, 'corps', 'mortelle')
+    assert.deepEqual(options, [
+      { degree: 1, cost: 1, targetSeverity: 'critique' },
+      { degree: 2, cost: 2, targetSeverity: 'grave' },
+    ])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('affordableReductions : ne garde que ce que la Chance permet de payer (il doit en rester 3) — pur', () => {
+  const options = [
+    { degree: 1, cost: 1, targetSeverity: 'moyenne' },
+    { degree: 2, cost: 2, targetSeverity: 'legere' },
+  ]
+  assert.deepEqual(affordableReductions(options, 11), options)
+  assert.deepEqual(affordableReductions(options, 4), [options[0]], '4 − 2 = 2 : le 2ᵉ degré est refusé')
+  assert.deepEqual(affordableReductions(options, 3), [], 'déjà au plancher')
+  assert.deepEqual(affordableReductions([{ degree: 1, cost: 3, targetSeverity: 'critique' }], 6).length, 1)
+  assert.deepEqual(affordableReductions([{ degree: 1, cost: 3, targetSeverity: 'critique' }], 5), [])
+  assert.deepEqual(affordableReductions(options, null), [], 'Chance inconnue : rien de payable')
 })
 
 test.after(async () => { await db.destroy() })

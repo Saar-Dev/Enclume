@@ -2,9 +2,10 @@
    CombatResultGM   : vue GM, bottom-left, ton neutre
    CombatResultPlayer : vue Joueur, bottom-center, 2e personne dramatique
 */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LOC, SEVERITY } from '../lib/combatResultLabels.js'
+import { useResultPanelRect } from '../lib/useResultPanelRect.js'
 
 const C = {
   bg:         'var(--bg-session-raised)',
@@ -285,9 +286,12 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
   const { t } = useTranslation('combat')
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.gold) : C.textDim
+  // Publie sa position : la réaction de blessure (WoundReactionDock) s'ancre au-dessus, sur le même axe.
+  const panelRef = useRef(null)
+  useResultPanelRect(panelRef)
 
   return (
-    <div style={{
+    <div ref={panelRef} style={{
       position: 'absolute', bottom: 24, left: 24,
       width: 220,
       background: C.bg,
@@ -339,9 +343,12 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
   const { t } = useTranslation('combat')
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.red) : C.green
+  // Publie sa position : la réaction de blessure (WoundReactionDock) s'ancre au-dessus, sur le même axe.
+  const panelRef = useRef(null)
+  useResultPanelRect(panelRef)
 
   return (
-    <div style={{
+    <div ref={panelRef} style={{
       position: 'absolute', bottom: 24, left: '50%',
       transform: 'translateX(-50%)',
       width: 220,

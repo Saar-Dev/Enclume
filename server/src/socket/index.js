@@ -14,7 +14,7 @@ import { registerChatHandlers } from '../chat/socketChat.js'
 import { registerCatastropheHandlers } from './socketCatastrophe.js'
 import { listPendingCatastrophes } from '../lib/catastropheService.js'
 import { registerChanceHandlers } from './socketChance.js'
-import { listPendingChanceChoices } from '../lib/chanceCatastropheChoiceService.js'
+import { listPendingChanceChoices, chanceChoicePendingPayload } from '../lib/chanceCatastropheChoiceService.js'
 import { startPresence, endPresence } from '../lib/campaignActivityService.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
@@ -284,22 +284,8 @@ const initSocket = (io) => {
             // côté client (CatastropheChoiceQueue.jsx, composant unique), pas ici.
             const pendingChanceChoices = await listPendingChanceChoices(campaignId)
             for (const pc of pendingChanceChoices) {
-              // options — PLAN_CHANCE.md L5, boutons dynamiques (wound_severity) — embarqué dans
-              // `context` à l'ouverture (chanceCatastropheChoiceService.js), relu ici tel quel.
-              const pcContext = typeof pc.context === 'string' ? JSON.parse(pc.context) : pc.context
-              socket.emit(WS.CHANCE_CHOICE_PENDING, {
-                id: pc.id,
-                characterId: pc.character_id,
-                testLabel: pc.test_label,
-                site: pc.site,
-                rolledAt: pc.rolled_at,
-                linkedCatastropheId: pc.linked_catastrophe_id,
-                timeoutMs: pc.timeout_ms,
-                actionId: pc.action_id,
-                options: pcContext?.options ?? null,
-                woundId: pcContext?.woundId ?? null,
-                chcAvailable: pcContext?.chcAvailable ?? null,
-              })
+              // Même payload que la diffusion live (chanceChoicePendingPayload : options, woundId, chcAvailable, fatal…).
+              socket.emit(WS.CHANCE_CHOICE_PENDING, chanceChoicePendingPayload(pc))
             }
           }
         } catch (err) {

@@ -19,11 +19,13 @@ SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 text
 
 server/src/lib/
-├── statusService.js    — résolution du test de choc, étourdissement, applyDeathConsequences (purge à la mort), reconcileWoundDeath/announceWoundDeath (la blessure « Mort » pose `dead`)
+├── statusService.js    — résolution du test de choc, étourdissement, applyDeathConsequences (purge à la mort), reconcileWoundDeath/announceWoundDeath (la blessure « Mort » pose `dead` — sauf réaction de Chance ouverte ; annonce = ligne « meurt » + retrait des autres réactions)
 ├── deathStateService.js — isCharacterDead / isTokenDead : « est-ce un cadavre ? » (module feuille, niveau personnage, mode enforced)
 ├── exoPilotService.js  — résolution du pilote d'exo ; resolveChanceRecipientCharacterId (à qui ouvrir une fenêtre de Chance ; null = aucune)
 ├── damageService.js    — localisation, armure, dégâts nets, sévérité, blessure, shock
-├── woundService.js     — insertion blessure (+ échéance de guérison + `dead` d'une Mort) + broadcast WOUND_ADDED ; removeWound ; /heal
+├── woundService.js     — insertion blessure (+ échéance de guérison + réaction de Chance en sous-transaction + `dead` d'une Mort) + broadcast WOUND_ADDED ; openWoundReaction ; finishWoundSeverityChoice (rachat/refus/délai, settleFatalWound) ; removeWound ; /heal
+├── chanceCatastropheChoiceService.js — choix Chance en attente : persistChanceChoice (dans la transaction de la cause) / publishChanceChoice / openChanceChoice (façade) / resolveChanceChoice ; chanceChoicePendingPayload (payload unique live + resync) ; withdrawWoundReactions ; listOpenWoundReactionWoundIds
+├── systemNotice.js     — emitSystemNotice : une ligne système i18n dans le chat (COMBAT_SYSTEM_NOTICE, clés `combat:…`)
 ├── woundUtils.js       — utilitaires blessures (isShockTestRequired, resolveWoundInsertion, etc.)
 ├── (mrTable.js n'existe plus — corrigé 2026-08-26, voir §5)
 ├── combatFSM.js        — machine à états du combat (transitions, guards, sub_phase)

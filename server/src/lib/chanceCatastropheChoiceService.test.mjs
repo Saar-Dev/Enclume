@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import db from '../db/knex.js'
 import {
   openChanceChoice, resolveChanceChoice, listPendingChanceChoices,
+  persistChanceChoice, publishChanceChoice, chanceChoicePendingPayload, listOpenWoundReactionWoundIds,
 } from './chanceCatastropheChoiceService.js'
 import { createPendingCatastrophe } from './catastropheService.js'
 
@@ -49,6 +50,74 @@ test('openChanceChoice crée une ligne en attente avec le site et le libellé fo
     const listed = await listPendingChanceChoices(fixture.campaign.id)
     assert.equal(listed.length, 1)
     assert.equal(listed[0].id, pending.id)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+// ─── persistChanceChoice / publishChanceChoice / chanceChoicePendingPayload — Lot 3 (PLAN_CHANCE.md §8) ─────────
+
+test('persistChanceChoice écrit la ligne dans la transaction appelante (annulée avec elle) — elle n\'émet rien, n\'a même pas d\'`io`', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    await assert.rejects(db.transaction(async (trx) => {
+      const pending = await persistChanceChoice(trx, fixture.campaign.id, fixture.character.id, { testLabel: 'x', site: 'wound_severity' })
+      assert.ok(pending.id)
+      assert.equal((await trx('pending_chance_choices').where({ campaign_id: fixture.campaign.id })).length, 1, 'visible dans la transaction')
+      throw new Error('ROLLBACK_CHOICE_TEST')
+    }), /ROLLBACK_CHOICE_TEST/)
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0, 'annulée avec la transaction')
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('publishChanceChoice émet CHANCE_CHOICE_PENDING avec le payload commun (options, woundId, chcAvailable, fatal)', { skip }, async () => {
+  const fixture = await createRealFixture()
+  const emitted = []
+  const io = { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) }
+  try {
+    const options = [{ choice: 'reduce_1', degree: 1, cost: 3, targetSeverity: 'critique' }]
+    const pending = await persistChanceChoice(db, fixture.campaign.id, fixture.character.id, {
+      testLabel: 'Éviter la mort', site: 'wound_severity',
+      context: { woundId: 'w-1', chcAvailable: 8, fatal: true, severity: 'mort_subite', location: 'tete', label: 'Kaël' }, options,
+    })
+    publishChanceChoice(io, fixture.campaign.id, pending)
+    assert.equal(emitted.length, 1)
+    assert.deepEqual(emitted[0].payload, {
+      id: pending.id, characterId: fixture.character.id, testLabel: 'Éviter la mort', site: 'wound_severity',
+      rolledAt: pending.rolled_at, linkedCatastropheId: null, timeoutMs: 45000, actionId: null,
+      options, woundId: 'w-1', chcAvailable: 8, fatal: true,
+      woundSeverity: 'mort_subite', woundLocation: 'tete', subjectLabel: 'Kaël',
+    })
+    // Le payload du resync SESSION_JOIN est LE MÊME (une seule autorité de sa forme).
+    assert.deepEqual(chanceChoicePendingPayload((await listPendingChanceChoices(fixture.campaign.id))[0]), emitted[0].payload)
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: null }) // annule le minuteur armé
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('chanceChoicePendingPayload : contexte absent → valeurs neutres ; fatal jamais vrai par défaut — pur', () => {
+  const payload = chanceChoicePendingPayload({ id: 'p', character_id: 'c', test_label: null, site: 'assault', rolled_at: 't', linked_catastrophe_id: null, timeout_ms: 45000, action_id: null, context: '{}' })
+  assert.deepEqual([payload.options, payload.woundId, payload.chcAvailable, payload.fatal], [null, null, null, false])
+  assert.deepEqual([payload.woundSeverity, payload.woundLocation, payload.subjectLabel], [null, null, null])
+})
+
+// ─── listOpenWoundReactionWoundIds — quelles blessures attendent une décision ? ──────────────────────────────────
+
+test('listOpenWoundReactionWoundIds : seules les réactions de blessure OUVERTES des blessures demandées comptent', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    await persistChanceChoice(db, fixture.campaign.id, fixture.character.id, { site: 'wound_severity', context: { woundId: 'w-open' } })
+    const closed = await persistChanceChoice(db, fixture.campaign.id, fixture.character.id, { site: 'wound_severity', context: { woundId: 'w-closed' } })
+    await persistChanceChoice(db, fixture.campaign.id, fixture.character.id, { site: 'assault', context: { woundId: 'w-other-site' } })
+    await db('pending_chance_choices').where({ id: closed.id }).update({ resolved_at: db.fn.now() })
+
+    const ids = await listOpenWoundReactionWoundIds(db, ['w-open', 'w-closed', 'w-other-site', 'w-absent'])
+    assert.deepEqual([...ids], ['w-open'])
+    assert.deepEqual([...(await listOpenWoundReactionWoundIds(db, []))], [])
+    assert.deepEqual([...(await listOpenWoundReactionWoundIds(db, ['w-absent']))], [])
   } finally {
     await cleanup(fixture)
   }

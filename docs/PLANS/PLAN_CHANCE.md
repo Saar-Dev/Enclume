@@ -5,7 +5,7 @@
 > séparée du score) s'est révélée fausse à la lecture du RAW — voir `MANUEL_CHANCE.md` §1.
 > Statut (2026-09-15) : **L1→L5 codés et VALIDÉS JEU RÉEL** (les 7 sites Catastrophe combat + L4
 > forçage AOE + L5 réduction de gravité, détail §5-7) — voir `JOURNAL8.md` pour la clôture
-> complète. Reste **L6** (§8, UI `<ChanceSpendButton>`), non commencé.
+> complète. **L6** (§8, réaction du blessé) : lots **6a-1 et 6c livrés et validés en jeu (2026-09-25)** ; restent 6a-2, 6a-3 et 6d, puis **L7** (Chance narrative).
 >
 > Responsabilité unique : architecture technique (fichiers, services, séquencement). Ce document
 > ne contient aucune règle métier — celles-ci sont dans `docs/MANUELS/MANUEL_CHANCE.md`, sourcé
@@ -397,18 +397,129 @@ lecture mais ne se manifeste pas en pratique.
 
 ---
 
-## 8. L6 — UI `<ChanceSpendButton>` + fenêtre narrative
+## 8. L6 — Réaction du blessé (fenêtre unique) puis Chance narrative
 
-Composant React réutilisable, visible si `chc − coût ≥ 3`. Jamais un composant par site
-d'intégration (transversal, cf. doctrine déjà posée en v1 §3.4).
+> **Cadrage du 2026-09-25 — validé dans son principe par Saar, AUCUNE ligne codée, analyse à charge et maquette
+> restantes.** Origine : en préparant le Lot 3 du chantier 6ᵉ ligne (`PLAN_BLESSURE_SIXIEME_LIGNE.md` §4, rachat d'une
+> Mort subite), Saar a demandé de cadrer d'un bloc « Chance + fenêtres + Mort » : trop de fenêtres à traiter quand on
+> subit des dégâts (surtout quand une Catastrophe s'y ajoute). Ce §8 remplace l'ancien L6 (`<ChanceSpendButton>`
+> générique, jamais commencé) ; sa partie narrative devient le **L7** (fin de section).
 
-Deux branchements :
-- **Mécanique** (résolution réelle, effet immédiat) : fenêtre de forçage AOE (L4), fenêtre de
-  confirmation de dégât PJ (L5).
-- **Narrative** (`MANUEL_CHANCE.md` §3.4, zéro résolution automatisée) : bouton générique
-  « Utiliser sa Chance » avec un champ texte libre optionnel, décrémente 1 point et poste une
-  note à l'attention du MJ. Canal exact à identifier au moment du lot — réutiliser un mécanisme
-  de message/notification MJ existant plutôt qu'en créer un nouveau (à vérifier, pas supposé ici).
+### 8.1 Faits relevés dans le code (2026-09-25)
+- Un seul composant affiche tous les choix Chance : `CatastropheChoiceQueue.jsx`, carte flottante en haut à droite
+  (`.catastrophe-review-overlay`, `index.css`). Pour `wound_severity` elle n'a que les boutons de réduction : **aucun
+  bouton de refus** — décliner = attendre le timeout de 45 s. Le protocole accepte déjà `choice: null`
+  (`resolveChanceChoice`, `socketChance.js`).
+- `CombatDamageWindow.jsx` : Tir seulement, montrée à celui qui **lance** les dégâts (le tireur), pas au blessé. Le
+  « pont » actuel (`activeWoundWindowId`, bouton qui révèle la carte) n'a de sens que si tireur = propriétaire du choix.
+- Compte rendu commun : chaque source de blessure (Tir, drone, exo, explosion, chute, froid, acide/feu) émet
+  `COMBAT_ATTACK_RESULT` à la room, **sans `woundId`** ; il est rendu par `CombatResultGM` / `CombatResultPlayer`
+  (`CombatOverlay.jsx` en combat, `EnvironmentalResultQueue.jsx` hors combat). Le Corps à corps émet aussi
+  `COMBAT_MELEE_RESULT` (rendu à vérifier).
+- `pending_chance_choices.timeout_ms` est `NOT NULL default 45000` (migration 340) ; `useChanceCountdown` tolère déjà un
+  timeout absent. `chc` n'est affiché nulle part côté client hors fiche ; `chcAvailable` est transmis à l'ouverture.
+- `resolveChanceChoice` : le SERVEUR laisse le MJ répondre à n'importe quel choix (`socketChance.js`, `isGm`), mais
+  l'INTERFACE ne lui montre que les choix des PNJ (`CatastropheChoiceQueue`, `forMe`) : **aucun filet visible** si un
+  joueur est absent (correction de l'analyse à charge du 2026-09-25 — la première rédaction disait le contraire).
+- Toutes les suppressions de blessure : `removeWound` et `clearCharacterWoundsAndStatuses` (`woundService.js`),
+  `resolveWoundImprovement` (guérison, Chance) et la cascade de promotion de `resolveWoundInsertion` (`woundUtils.js`).
+
+### 8.2 Décisions de Saar (2026-09-25)
+1. **Un PJ valide sa mort lui-même** : une blessure « Mort » n'est posée que par sa réponse (dépenser ou « Accepter ») —
+   **aucun minuteur** pour un PJ sur une blessure mortelle. Un seul clic pour « Accepter » (pas de confirmation).
+2. **Un PNJ reste discret** : le MJ reçoit le compte rendu de dégâts ; pour garder le PNJ en vie il a 45 s pour cliquer
+   sur le bouton Chance. Passé ce délai la blessure reste telle quelle (un PNJ « Mort » meurt). **Aucune carte
+   flottante** pour un PNJ.
+3. **« Accepter la blessure » sur TOUTES les cartes Chance** (Catastrophe : équivaut à « Test normal »).
+4. But global : **moins de fenêtres** par coup reçu (Catastrophe + Chance + Choc + compte rendu = « arbre de Noël »).
+5. **Pose manuelle par le MJ : inchangée** — une blessure posée à la main ouvre une réaction comme aujourd'hui (le MJ
+   peut vouloir infliger des blessures narratives).
+6. **Pas de fin de Tour avec un « mort-vivant »** : le Tour ne se termine pas tant qu'un PJ n'a pas décidé d'une
+   blessure mortelle (§8.6). **Un PNJ ne bloque jamais** (pas de blocage côté MJ).
+7. **Chat** : une ligne pour « Accepter » et une pour la Chance dépensée (comme toute décision automatique).
+8. **Pas de rachat d'une Mort venue d'un DÉBORDEMENT** (analyse à charge de 6a-1, réponse de Saar) : seule la 6ᵉ ligne
+   écrite directement par un coup ≥ 30 (`promoted === false`) ouvre une réaction ; celle qui vient de la promotion d'une
+   ligne pleine (2ᵉ Mortelle sur la Tête, cascade) est posée sans réaction. Appliqué aussi au Membre détruit
+   (même 6ᵉ ligne — confirmé par Saar : « même règle »). Écart RAW à inscrire au `JOURNAL8` à la clôture (RAW : « il est toujours
+   possible de dépenser des points de Chance en cas de Mort subite »). Effet de bord voulu : le rachat n'a jamais de
+   lignes fusionnées à restaurer.
+9. **Membre détruit rachetable** (3 points → Critique), même carte et même prix que la Mort.
+
+### 8.3 Architecture recommandée
+- **Serveur inchangé dans son rôle** : `pending_chance_choices` + résolution idempotente restent la machine d'état
+  (« une réaction est ouverte sur cette blessure, elle expire à T »). `applyWound` reste l'unique point d'ouverture.
+- **Une surface unique côté blessé** (joueur pour un PJ, MJ pour un PNJ ; filtre d'audience déjà écrit dans
+  `CatastropheChoiceQueue`) : un composant « réaction de blessure » qui remplace la branche `wound_severity` de la carte
+  flottante et le pont `activeWoundWindowId`. Il résume la blessure, porte « Chance » (qui déplie les façons de
+  dépenser, coût réel affiché) et « Accepter ». Ancré près du compte rendu de dégâts, jamais à part.
+- **Aucune modification des ~15 émissions `COMBAT_ATTACK_RESULT`** : la corrélation se fait par le choix lui-même (il
+  porte `woundId`, `characterId`, et recevra un résumé de la blessure), pas par le compte rendu.
+- Pas de bouton « grisé » permanent : sans réaction ouverte (blessure Légère/Moyenne, Chance < coût), rien ne
+  s'affiche — plus discret, et cohérent avec « le MJ ne doit pas être noyé ». *Écart assumé avec l'idée initiale de
+  Saar (bouton toujours présent, grisé si Légère) — à confirmer sur maquette.*
+
+### 8.4 Lots (révisés par l'analyse à charge du 2026-09-25 — §8.5)
+- **6a-1 — cœur serveur + « Accepter »** (= Lot 3 du chantier 6ᵉ ligne) — **CODÉ et VALIDÉ EN JEU par Saar le 2026-09-25** (« fonctionnel, répond aux attentes »), tests 134/134 en base + 814
+  purs ; documentation de clôture faite (`JOURNAL8.md`, `SYSTEME/BLESSURES.md`). Précisions issues du
+  code : avec deux Morts en attente, en ACCEPTER une tue tout de suite et retire la carte de l'autre (un cadavre n'a plus de
+  Chance) ; en racheter une ne tue pas tant que l'autre décide. Provisoire : le PJ garde 45 s (lot 6a-3) : la ligne `pending_chance_choices` est écrite
+  DANS la transaction de la blessure (`openChanceChoice` scindé en persistance + publication) ; **l'invariant vit dans
+  `reconcileWoundDeath`** : *`dead` ⇔ une blessure mortelle sans réaction ouverte* ; coût 3 (plancher Chance 3 ⇒ `chc ≥ 6`,
+  prédicat exporté par `chanceService`, jamais recopié) ; « Accepter » (`choice: null`) sur les cartes existantes.
+- **6a-2 — robustesse, sans changement de comportement visible** : fermeture des réactions quand la blessure est
+  supprimée à la main (`removeWound`, `/heal`) ; au démarrage du serveur : relance des minuteurs et réconciliation des
+  orphelins (blessure mortelle sans `dead` ni réaction). Le PJ garde encore 45 s (provisoire).
+- **6a-3 — « le PJ valide sa mort » + garde de fin de Tour** (§8.6) : `timeout_ms` nullable, PJ sans minuteur sur une
+  blessure mortelle, garde dans `advanceTimeline`, reprise par registre, état d'attente diffusé, bandeau MJ « Forcer »
+  minimal. Ces éléments partent ENSEMBLE : sans le bandeau, un joueur absent bloquerait le Tour sans issue visible.
+- **6b — maquette dans le dépôt** (`maquette-chance-reaction/preview.html`, 9 planches, rédigée le 2026-09-25 et
+  **VALIDÉE par Saar le jour même** (barre de compte à rebours comprise) ; états : PJ face à une Mort ; PNJ Grave avec compte à rebours ; Chance insuffisante ;
+  explosion sur 5 PNJ ; deux réactions en même temps) validée par Saar AVANT tout code d'interface.
+- **6c — CODÉ et VALIDÉ EN JEU par Saar le 2026-09-25 (`WoundReactionDock.jsx`, `woundReactionModel.js`, `useResultPanelRect.js`)** — maquette suivie telle que validée ; pont `activeWoundWindowId` et branche `wound_severity` de la carte retirés.
+  Prévu : composant de réaction, GÉNÉRIQUE dès le départ (titre, résumé, boutons, compte à rebours, « Accepter »,
+  file repliée « +N ») : `wound_severity` en est la première famille, pour que 6d porte les Catastrophes sur ce même
+  composant au lieu de laisser deux surfaces permanentes. Retrait de la branche `wound_severity` de la carte flottante
+  et du pont `activeWoundWindowId`.
+- **6d — Catastrophe + régénération de Chance** sur ce composant (cadrage propre, après 6c).
+
+### 8.5 Résultat de l'analyse à charge (2026-09-25)
+Défauts de la première version de ce plan, tous corrigés ci-dessus :
+1. **Faux « filet MJ »** (§8.1) : un joueur absent bloquerait sa réaction sans que le MJ puisse la voir.
+2. **Invariant au mauvais endroit** : « poser `dead` sauf si une réaction s'ouvre » décidé dans `applyWound` ne tenait pas
+   si une AUTRE blessure mortelle était retirée/posée pendant la réaction (`reconcileWoundDeath` aurait tué le
+   personnage). Corrigé : la règle vit dans `reconcileWoundDeath` (seule autorité) et la réaction est persistée dans la
+   transaction de la blessure. Une ligne périmée (blessure disparue) ne peut ainsi jamais bloquer ni provoquer une mort.
+3. **Trou après crash** : `resolveChanceChoice` marque la réponse AVANT d'appliquer l'effet — un arrêt entre les deux
+   laisserait une blessure mortelle sans `dead` ni réaction. Corrigé par la réconciliation au démarrage.
+4. **Suppressions de blessure** (4 sites, §8.1) : sans minuteur, une réaction PJ périmée resterait à l'écran ; fermeture
+   aux deux sites MJ, validation à la réponse pour les autres.
+5. **Deux composants permanents** (carte + réaction) : évité en rendant le composant générique dès 6c.
+6. **Volume de travail** : le « 6a » initial mêlait quatre problèmes ; scindé en 6a-1 / 6a-2.
+7. **Garde de fin de Tour** (décision 6) : trouvée en lisant le moteur (`combatTurnEngine.js`), voir §8.6.
+`[INCONNU]` restant : ancrage visuel exact de la surface selon la source (Corps à corps, explosion, PNJ→PJ où le PJ lance
+lui-même ses dégâts) — tranché sur maquette, la surface étant indépendante du compte rendu.
+
+### 8.6 Garde de fin de Tour (décision 6 de Saar)
+- **Où** : `advanceTimeline` (`combatTurnEngine.js`), juste avant `endTurn` — point unique par lequel le Tour se termine.
+  Aucun sous-état FSM nouveau : `combatFSM.js` documente que l'ancien `AWAITING_REACTION_WINDOW` a produit 3 bugs en une
+  journée et a été retiré pour sa complexité. L'état « tout est résolu, le Tour attend » est identifiable sans marqueur
+  (phase RESOLUTION, aucun pas ni tour obligatoire restant, réaction mortelle ouverte) et n'existe autrement qu'un instant.
+- **Ce qui bloque** : uniquement la réaction d'un PJ sur une blessure MORTELLE (celle qui peut faire un
+  « mort-vivant »). **Jamais un PNJ** (décision de Saar, confirmée : « les PNJ ne peuvent pas être bloquants ») ni une
+  réaction sur une Grave/Critique : sinon un PNJ ignoré par le MJ figerait 45 s chaque Tour, contraire à « discret ».
+  Le prédicat joint la blessure encore existante (une ligne périmée ne bloque jamais) et le type du destinataire.
+- **Reprise** : quand la réaction est résolue ou fermée, un appel unique relance la fin de Tour si (et seulement si) cet
+  état d'attente est constaté. `woundService` ne peut pas importer le moteur (cycle) : fonction injectée par la couche de
+  composition (patron `registerAutonomousStepResolver`, `pendingMaps` liés là).
+- **Limite assumée** : les autres pas du Tour continuent ; le blessé qui n'a pas décidé peut agir à son propre pas.
+- **Sortie MJ** : l'état d'attente est diffusé comme un pas spécial du chronogramme ; bandeau MJ « Forcer » (précédent :
+  `COMBAT_SKIP_PLAYER`, « le serveur décide à sa place »), qui répond par `CHANCE_CHOICE_RESOLVE` avec `choice: null` —
+  le serveur l'autorise déjà. Recours provisoire avant le bandeau : retirer la blessure (la réaction se ferme, le Tour reprend).
+
+### 8.6 L7 — Chance narrative (ancien L6, inchangé, non cadré)
+Bouton générique « Utiliser sa Chance » (`MANUEL_CHANCE.md` §3.4, zéro résolution automatisée) avec champ texte libre
+optionnel, décrémente 1 point et poste une note à l'attention du MJ. Canal exact à identifier au moment du lot —
+réutiliser un mécanisme de message/notification MJ existant plutôt qu'en créer un nouveau (à vérifier, pas supposé ici).
 
 Reset/verrou : une dépense n'disparaît de l'UI qu'une fois confirmée côté serveur — pas
 d'optimisme (principe déjà posé en v1, conservé).

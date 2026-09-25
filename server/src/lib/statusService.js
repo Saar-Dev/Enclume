@@ -8,8 +8,10 @@ import { AppError }             from './AppError.js'
 import {
   DEATH_INCOMPATIBLE_STATUS_CODES, FATAL_WOUND_STATUS_CODE, STATUS_SOURCE_WOUND,
 } from '../../../shared/tokenStatusRegistry.js'
-import { hasFatalWound }        from '../../../shared/woundConstants.js'
+import { isFatalWound }         from '../../../shared/woundConstants.js'
 import { isTokenDead }          from './deathStateService.js'
+import { listOpenWoundReactionWoundIds, withdrawWoundReactions } from './chanceCatastropheChoiceService.js'
+import { emitSystemNotice }    from './systemNotice.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).
@@ -104,14 +106,21 @@ export async function applyDeathConsequences(io, db, campaignId, characterId) {
 // `becameDead` = au moins une ligne réellement INSÉRÉE (PostgreSQL ne renvoie rien pour une ligne déjà là) : un
 // personnage déjà marqué mort par le MJ ne rejoue pas `applyDeathConsequences`.
 // Aucun token (personnage jamais posé sur une carte) : rien à écrire, limite connue — la mort se lit sur les tokens.
+//
+// INVARIANT (Lot 3, PLAN_CHANCE.md §8) : `dead` ⇔ une blessure mortelle SANS réaction de Chance ouverte. Tant que le joueur
+// (ou le MJ pour un PNJ) n'a pas décidé de racheter ou d'accepter, le personnage n'est pas mort (décision Saar : « la mort n'est
+// posée qu'à partir du moment où le choix est fait »). La règle vit ICI, dans la seule fonction qui pose `dead` : aucun appelant
+// (pose d'une autre blessure, retrait d'une autre blessure…) ne peut donc tuer par erreur un personnage qui décide encore.
 export async function reconcileWoundDeath(trx, campaignId, { characterId, charSheetId }) {
   const none = { changedTokenIds: [], becameDead: false }
   if (!characterId || !charSheetId) return none
   const tokenIds = await resolveCharacterTokens(trx, campaignId, characterId)
   if (tokenIds.length === 0) return none
 
-  const wounds = await trx('character_wounds').where({ char_sheet_id: charSheetId }).select('severity', 'location')
-  if (hasFatalWound(wounds)) {
+  const wounds = await trx('character_wounds').where({ char_sheet_id: charSheetId }).select('id', 'severity', 'location')
+  const fatalWounds = wounds.filter(isFatalWound)
+  const awaitingDecision = await listOpenWoundReactionWoundIds(trx, fatalWounds.map(wound => wound.id))
+  if (fatalWounds.some(wound => !awaitingDecision.has(wound.id))) {
     const inserted = await trx('token_statuses')
       .insert(tokenIds.map(tokenId => ({
         token_id: tokenId, status_code: FATAL_WOUND_STATUS_CODE, data: { source: STATUS_SOURCE_WOUND },
@@ -134,10 +143,19 @@ export async function reconcileWoundDeath(trx, campaignId, { characterId, charSh
 // `await db.transaction(...)` rendu) : diffuse les badges modifiés, puis — seulement si le personnage vient de mourir —
 // retire ses états de corps vivant (`applyDeathConsequences`, mode 'enforced'). N'échoue jamais vers l'appelant : la
 // blessure est déjà écrite et diffusée, un incident ici est logué.
+// Ligne de chat « X meurt » : UNE seule, ici — la mort peut arriver tout de suite ou après la décision du joueur (Chance,
+// PLAN_CHANCE.md §8), toutes les branches passent par cette annonce. Jamais pour un `dead` posé à la main (aucune ligne insérée).
 export async function announceWoundDeath(io, db, campaignId, characterId, { changedTokenIds, becameDead }) {
   try {
     for (const tokenId of changedTokenIds) await emitTokenStatusUpdated(io, db, campaignId, tokenId)
-    if (becameDead) await applyDeathConsequences(io, db, campaignId, characterId)
+    if (becameDead) {
+      const character = await db('characters').where({ id: characterId }).select('name').first()
+      emitSystemNotice(io, campaignId, 'combat:chance.notice.dies', { label: character?.name ?? '?' })
+      // Un cadavre n'a plus de fenêtre de Chance (Lot 1e) : une autre réaction de blessure encore ouverte est retirée (ex. deux
+      // Morts en attente, l'une acceptée → il meurt, l'autre carte n'a plus d'objet).
+      await withdrawWoundReactions(io, campaignId, characterId)
+      await applyDeathConsequences(io, db, campaignId, characterId)
+    }
   } catch (err) {
     console.error('[statusService] announceWoundDeath error:', err.message)
   }

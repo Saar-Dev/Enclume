@@ -1,8 +1,10 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
-> **Mis à jour 2026-09-25 (clôture du Lot 2 du chantier « 6ᵉ ligne du compteur »)** : le compteur a ses 6 lignes
+> **Mis à jour 2026-09-25 (clôture du Lot 3 du chantier « 6ᵉ ligne du compteur »)** : le compteur a ses 6 lignes
 > (`mort_subite` = « Mort » en Tête/Corps, « Membre détruit » sur un membre), le débordement de la Mortelle, la Mort qui pose le
-> statut `dead`, la guérison du Membre détruit. Décisions : `docs/JOURNAL8.md` (2026-09-25). Reste : Chance sur la 6ᵉ ligne (Lot 3),
-> état permanent du membre (Lot 4) — `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md`.
+> statut `dead` — **après la décision du joueur** —, la guérison du Membre détruit, et la **réaction de Chance** (§« Réaction de
+> Chance ») qui permet de racheter une Mort ou un Membre détruit. Décisions : `docs/JOURNAL8.md` (2026-09-25). Reste : état permanent
+> du membre (Lot 4) — `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` ; suites de la réaction (minuteur PJ, garde de fin de Tour,
+> Catastrophes) — `docs/PLANS/PLAN_CHANCE.md` §8.
 > Audit de compréhension approfondie 2026-08-26 (suite) : WOUND_MAX_COUNTS et WOUND_HEALING
 > confirmés exacts contre `woundConstants.js` ; formule `computeWoundInfectionThreshold` corrigée
 > (les malus de cases/périodes sont conditionnels par gravité, pas universels — table étendue) ;
@@ -86,7 +88,7 @@ la tête est une survie avec stabilisation (d'où l'importance des casques). La 
 | Malus de Choc | lu dans `BLESSURE_EFFETS_TABLE` par `getWoundEffects(severity, location)` — plus de copie dans `charStats.js` | `getShockMalus` |
 | Statut `dead` | la Mort (Tête/Corps) pose `dead` sur les tokens du personnage ; le Membre détruit ne tue pas | §« Mort et cadavre » |
 | Guérison | Membre détruit : 3 semaines, Chirurgie + Médecine, soins constants, devient une **Critique** ; Mort : aucune échéance | §« Guérison et Infection » |
-| Chance | racheter une Mort subite = Critique pour 3 points de Chance (écart RAW assumé) — **pas encore câblé** (Lot 3) ; aucune fenêtre de Chance n'est ouverte sur la 6ᵉ ligne | `CHANCE_ELIGIBLE_SEVERITIES` |
+| Chance | racheter une Mort ou un Membre détruit **écrit directement par un coup ≥ 30** = Critique pour **3 points** (écart RAW assumé) ; jamais celui d'un débordement | §« Réaction de Chance », `openWoundReaction` |
 | État permanent du membre | paralysie durable, rendu barré/gris — **non implémenté** (Lot 4) | plan |
 
 ## Composants client — onglet Matériel (CharacterWindow)
@@ -298,7 +300,8 @@ fenêtre de réduction de gravité), ne fait pas de test de Choc et ne reçoit p
 système Shadowrun 5 de FoundryVTT — décision pure, application après les dégâts) :
 
 - `applyWound` l'appelle **dans la transaction de la blessure** (la conséquence persistante est écrite avec sa cause) **uniquement si la
-  blessure posée est une Mort** ; `removeWound` de même à la suppression d'une Mort. Déclencheur étroit voulu : le MJ qui relève un
+  blessure posée est une Mort** ; `removeWound` de même à la suppression d'une Mort. **Elle ne tue pas tant qu'une réaction de Chance est
+  ouverte sur la Mort** (invariant : `dead` ⇔ une blessure mortelle SANS réaction ouverte, §« Réaction de Chance »). Déclencheur étroit voulu : le MJ qui relève un
   personnage à la main (retire `dead`, garde la blessure) ne le voit pas re-tué par une Légère ultérieure. Le calcul, lui, est
   idempotent (l'état voulu se déduit des blessures présentes) : tant qu'une autre Mort subsiste (Tête **et** Corps), `dead` reste.
 - **Provenance** : la ligne posée par une blessure porte `data.source = 'wound'` (`STATUS_SOURCE_WOUND`). Pose = « insérer si absent »
@@ -312,6 +315,33 @@ système Shadowrun 5 de FoundryVTT — décision pure, application après les d�
   `dead` posé à la main.
 - **Limite connue** : un personnage sans token (jamais posé sur une carte) n'est pas « mort » mécaniquement, la mort se lit sur les tokens ; un
   token créé après la mort n'a pas `dead` (ticket).
+
+**Réaction de Chance** (Lot 3, `woundService.js:openWoundReaction`, `finishWoundSeverityChoice` ; UI : `SYSTEME/COMBAT.md` §« Réaction de blessure », `WoundReactionDock.jsx`) — la « correction a posteriori » RAW (REGLE_CHANCE.md:112-131) :
+
+- **Quand** : `applyWound` ouvre une réaction pour une blessure Grave, Critique, Mortelle ou 6ᵉ ligne (jamais Légère/Moyenne), si le
+  destinataire existe (PJ ou PNJ, pilote pour une exo, jamais un drone ni un cadavre) ET si au moins une réduction est **payable**
+  (RAW : il doit rester **3** points de Chance — `shared/chanceRules.js:canSpendChance`, donc 6 minimum pour un rachat à 3). Aucune carte
+  inutile, pour aucune gravité. La ligne `pending_chance_choices` est écrite **dans la transaction de la blessure** (en
+  **sous-transaction** : une panne de cette fonction annexe ne fait jamais échouer la blessure), publiée après la validation.
+- **Coût** (`shared/woundConstants.js:chanceCostOfStep`) : 1 point par cran (2 crans maximum) ; **3 points** pour ramener la 6ᵉ ligne à une
+  **Critique** (un seul cran proposé) ; si la Critique est pleine, l'exception RAW « palier plein » ajoute 1 point par cran (Grave pour 4).
+  `computeAvailableSeverityReductions` retourne `{ degree, cost, targetSeverity }` ; le rachat réutilise `resolveWoundImprovement`.
+- **Rachetable** : la 6ᵉ ligne écrite **directement par un coup ≥ 30** (Mort *et* Membre détruit). **Jamais** celle qui vient d'un
+  **débordement** (2ᵉ Mortelle sur la Tête, cascade) : posée tout de suite, ligne de chat dédiée (décision de Saar, écart RAW — les lignes
+  fusionnées par la promotion sont déjà supprimées, il n'y aurait rien à restaurer).
+- **Invariant de mort** (`reconcileWoundDeath`, seule fonction qui pose `dead`) : `dead` ⇔ une blessure mortelle sans réaction ouverte.
+  Décision de Saar : « la mort n'est posée qu'à partir du moment où le choix est fait ». Une ligne de réaction périmée (blessure
+  disparue) n'exclut rien : la requête ne regarde que les blessures existantes.
+- **Fermeture** (`finishWoundSeverityChoice`, dans un `try/finally`) : dépense réussie, « Accepter » (`choice: null` posé par un utilisateur),
+  délai écoulé (`choice: null`, personne), Chance devenue insuffisante, place disparue, blessure retirée, panne — **toute** issue sur une
+  Mort appelle `settleFatalWound` (`reconcileWoundDeath` + `announceWoundDeath`). Dépense + réduction sont atomiques ; la blessure et la
+  place du palier visé sont **revérifiées** à la réponse. Accepter **une** Mort tue tout de suite et **retire** la carte des autres
+  réactions de blessure du personnage (`withdrawWoundReactions` : un cadavre n'a plus de Chance) ; en racheter une ne tue pas tant qu'une autre décide.
+- **Chat** (`COMBAT_SYSTEM_NOTICE`, clés `combat:chance.notice.*`) : une ligne par branche — Chance dépensée (réduite / mort évitée / membre
+  sauvé), « accepte sa blessure », « n'a pas répondu » (Mort seulement), « ne peut plus dépenser », « plus de place », « pas assez de
+  Chance pour éviter la mort », « débordement : ne se rachète pas », et **une seule** ligne « meurt » (`announceWoundDeath`).
+- **Limites (suites, `PLAN_CHANCE.md` §8)** : le PJ garde encore le minuteur de 45 s (lot 6a-3 : « le Tour attend sa décision ») ; un arrêt
+  du serveur pendant l'attente perd le minuteur (lot 6a-2 : relance au démarrage) ; pas encore de garde de fin de Tour.
 
 **Routes** (`campaigns.js`, toutes vérifient `game_echeances.campaign_id === :id`) :
 `POST .../game-time/request-advance|confirm-advance|cancel-advance`,

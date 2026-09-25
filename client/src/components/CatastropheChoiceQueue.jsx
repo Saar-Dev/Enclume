@@ -41,7 +41,6 @@ export default function CatastropheChoiceQueue({ socket }) {
   const [catastropheEntries, setCatastropheEntries] = useState([])
   const [overrideEntry, setOverrideEntry] = useState('')
   const chanceEntriesRaw = useChanceChoiceStore(s => s.entries)
-  const activeWoundWindowId = useChanceChoiceStore(s => s.activeWoundWindowId)
   const addPendingChance = useChanceChoiceStore(s => s.addPending)
   const removeResolvedChance = useChanceChoiceStore(s => s.removeResolved)
 
@@ -78,15 +77,10 @@ export default function CatastropheChoiceQueue({ socket }) {
     }
   }, [socket, characters, isGm, userId, addPendingChance, removeResolvedChance])
 
-  // wound_severity pris en charge en ligne par CombatDamageWindow.jsx (Tir, PLAN_CHANCE.md L5 retour
-  // Saar 2026-09-12 item 4) : exclu d'ici pour ne jamais montrer deux fois le même choix (invariant
-  // déjà établi L3e-4, "une seule fenêtre, une seule position"). CombatOverlay annonce sa prise en
-  // charge via `activeWoundWindowId` (chanceChoiceStore) dès que `COMBAT_DAMAGE_RESULT.woundId`
-  // correspond à un choix en attente ; CaC/AOE n'ont pas de fenêtre victime à réutiliser (asymétrie
-  // vérifiée dans le code, Étape 2 à venir) et restent donc affichés ici normalement.
-  const chanceEntries = chanceEntriesRaw.filter(ch => !(
-    ch.site === 'wound_severity' && ch.woundId != null && ch.woundId === activeWoundWindowId
-  ))
+  // La réaction de Chance d'une BLESSURE (`wound_severity`) n'est plus une carte ici : elle s'affiche dans WoundReactionDock.jsx,
+  // ancrée au-dessus du panneau « Résolution du tir » (une seule fenêtre, jamais en haut à droite — PLAN_CHANCE.md §8, maquette
+  // chance-reaction). Cette carte garde les autres familles (Catastrophe, forçage de zone…) jusqu'au lot 6d.
+  const chanceEntries = chanceEntriesRaw.filter(ch => ch.site !== 'wound_severity')
 
   // Fusion dérivée à chaque rendu — pas d'état séparé à synchroniser : une fois l'une des deux
   // moitiés résolue, elle disparaît de sa propre liste source et la carte continue de montrer
@@ -178,20 +172,6 @@ export default function CatastropheChoiceQueue({ socket }) {
                     {t('chance.choiceCard.forceButton')}
                   </button>
                 </>
-              ) : chance.site === 'wound_severity' ? (
-                // Réduction de gravité de Blessure (PLAN_CHANCE.md L5) — boutons DYNAMIQUES : le
-                // nombre et le libellé dépendent de la capacité réelle du palier visé (RAW « palier
-                // plein », woundUtils.js#computeAvailableSeverityReductions), calculés et transmis
-                // par le serveur (`chance.options`) — jamais figés ici, contrairement aux deux autres
-                // mécaniques dont le vocabulaire est fixe.
-                (chance.options ?? []).map((opt) => (
-                  <button key={opt.choice} className="btn btn-gold" onClick={() => resolveChance(opt.choice)}>
-                    {t('chance.choiceCard.reduceButton', {
-                      degree: opt.degree,
-                      severity: t(`resultPanels.severity.${opt.targetSeverity}`),
-                    })}
-                  </button>
-                ))
               ) : (
                 <>
                   <button className="btn-ghost" onClick={() => resolveChance('reroll')}>
@@ -202,6 +182,12 @@ export default function CatastropheChoiceQueue({ socket }) {
                   </button>
                 </>
               )}
+              {/* « Accepter » — refus EXPLICITE sur toute carte Chance (`choice: null`, déjà accepté par le serveur) : sans lui,
+                  décliner obligeait à attendre le délai. Équivalent du délai écoulé (Test normal, reste touché…). Les blessures ont
+                  leur propre composant (WoundReactionDock). */}
+              <button className="btn btn-ghost" onClick={() => resolveChance(null)}>
+                {t('chance.choiceCard.acceptGeneric')}
+              </button>
             </div>
             {remainingSeconds != null && (
               <div className="chance-choice-countdown">{t('chance.choiceCard.autoResolveIn', { seconds: remainingSeconds })}</div>

@@ -4659,6 +4659,70 @@ Convention :
   text-align: right;
 }
 
+/* ── WoundReactionDock.jsx — « réaction de blessure » (PLAN_CHANCE.md §8). Maquette validée par Saar :
+   docs/PLANS/maquette-chance-reaction/preview.html (planches A-F, ancrage I). Ancré au-dessus du panneau « Résolution du tir »
+   (position mesurée, inline : left/bottom) ; la couleur de gravité arrive par la custom property --sev. ── */
+.wound-reaction-dock {
+  position: fixed;
+  width: 300px;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+}
+.wound-reaction {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session-2);
+  border-top: 3px solid var(--sev, var(--border-session-2));
+  box-shadow: 0 10px 30px rgba(0,0,0,.6);
+}
+.wound-reaction-head { display: flex; align-items: baseline; gap: 8px; }
+.wound-reaction-dot { width: 8px; height: 8px; flex: 0 0 8px; align-self: center; border-radius: 50%; background: var(--sev); }
+.wound-reaction-head b { font-size: 13px; color: var(--sev); }
+.wound-reaction-loc { font-size: 11px; color: var(--text-session-mid); }
+.wound-reaction-name { margin-left: auto; font-size: 11px; color: var(--text-session-hi); }
+.wound-reaction-line { font-size: 12px; color: var(--text-session-hi); }
+.wound-reaction-opts { display: flex; flex-direction: column; gap: 4px; }
+.wound-reaction-opt {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 7px 9px;
+  background: var(--bg-session);
+  border: 1px solid var(--border-session-2);
+  color: var(--text-session-hi);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wound-reaction-opt:hover:not(:disabled) { border-color: var(--color-gold); color: var(--color-gold); }
+.wound-reaction-opt:disabled { opacity: .4; cursor: default; }
+.wound-reaction-cost { font: 12px var(--font-mono); color: var(--color-gold); }
+.wound-reaction-actions { display: flex; gap: 6px; }
+.wound-reaction-actions .btn { flex: 1; padding: 8px 6px; }
+.wound-reaction-chc { font-size: 11px; text-align: right; color: var(--text-session-mid); }
+.wound-reaction-bar { position: relative; height: 14px; background: var(--bg-session); border: 1px solid var(--border-session); }
+.wound-reaction-bar i { position: absolute; inset: 0 auto 0 0; background: rgba(245,197,66,.28); transition: width 1s linear; }
+.wound-reaction-bar span { position: absolute; right: 6px; top: 0; font: 11px/14px var(--font-mono); color: var(--text-session-hi); }
+.wound-reaction-wait { font-size: 11px; color: var(--text-session-mid); }
+.wound-reaction-pager { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-session-mid); }
+.wound-reaction-stack { display: flex; flex-direction: column; gap: 4px; }
+.wound-reaction-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px;
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session-2);
+  border-left: 3px solid var(--sev);
+  font-size: 12px;
+}
+.wound-reaction-row-name { flex: 1; color: var(--text-session-hi); }
+.wound-reaction-row-sev { font-size: 11px; color: var(--sev); }
+.wound-reaction-row .btn { padding: 5px 8px; font-size: 10px; }
+.wound-reaction-row-time { width: 30px; text-align: right; font: 11px var(--font-mono); color: var(--text-session-mid); }
+.wound-reaction-more { font-size: 11px; text-align: right; color: var(--text-session-mid); }
+
 /* ── Curseur custom canvas 3D (SceneCursorOverlay.jsx) ─────────────────────── */
 .scene-cursor-overlay {
   position: fixed;

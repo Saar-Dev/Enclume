@@ -17,7 +17,11 @@ const skip = !process.env.DATABASE_URL
 
 const fakeIo = { to: () => ({ emit: () => {} }) }
 
-async function createFixture() {
+// `chc` : Chance de départ de la fiche (défaut de la base : 11). NO_CHANCE = 3, le plancher : rien à dépenser, donc AUCUNE
+// réaction ne s'ouvre et une blessure « Mort » est posée tout de suite (tests du statut `dead`, Lot 2b).
+const NO_CHANCE = { chc: 3 }
+
+async function createFixture({ chc } = {}) {
   const [user] = await db('users')
     .insert({ email: `wound-svc-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wound-svc-test' })
     .returning('*')
@@ -27,7 +31,7 @@ async function createFixture() {
   const [character] = await db('characters')
     .insert({ campaign_id: campaign.id, user_id: user.id, name: 'Perso test', type: 'pj' })
     .returning('*')
-  const [charSheet] = await db('char_sheet').insert({ character_id: character.id }).returning('*')
+  const [charSheet] = await db('char_sheet').insert({ character_id: character.id, ...(chc != null && { chc }) }).returning('*')
   return { user, campaign, character, charSheet }
 }
 
@@ -52,8 +56,8 @@ test('applyWound (Blessure grave) ouvre un choix Chance avec 2 réductions (degr
     assert.equal(pending[0].character_id, fixture.character.id) // pj -> destinataire = lui-même
     const context = typeof pending[0].context === 'string' ? JSON.parse(pending[0].context) : pending[0].context
     assert.deepEqual(context.reductions, [
-      { degree: 1, targetSeverity: 'moyenne' },
-      { degree: 2, targetSeverity: 'legere' },
+      { degree: 1, cost: 1, targetSeverity: 'moyenne' },
+      { degree: 2, cost: 2, targetSeverity: 'legere' },
     ])
   } finally {
     await cleanup(fixture)
@@ -185,23 +189,51 @@ test('resolveChanceChoice(null) (timeout) laisse la Blessure inchangée, aucune 
   }
 })
 
-test('resolveChanceChoice("reduce_1") avec Chance insuffisante : aucun effet, transaction atomique', { skip }, async () => {
-  const fixture = await createFixture()
+test('applyWound (Grave) avec Chance au plancher (3) : aucune carte inutile ne s\'ouvre — RAW : il doit rester 3 points', { skip }, async () => {
+  const fixture = await createFixture(NO_CHANCE)
   try {
-    await db('char_sheet').where({ id: fixture.charSheet.id }).update({ chc: 3 }) // plancher RAW
+    await applyWound(fakeIo, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0)
+    assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 1, 'la blessure est bien écrite')
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound (Grave) : seules les options PAYABLES sont proposées (Chance 4 → le 2ᵉ degré, 2 points, est refusé)', { skip }, async () => {
+  const fixture = await createFixture({ chc: 4 })
+  try {
     await applyWound(fakeIo, db, fixture.campaign.id, {
       charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
     })
     const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    const context = typeof pending.context === 'string' ? JSON.parse(pending.context) : pending.context
+    assert.deepEqual(context.reductions, [{ degree: 1, cost: 1, targetSeverity: 'moyenne' }])
+  } finally {
+    await cleanup(fixture)
+  }
+})
 
-    await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
+test('resolveChanceChoice("reduce_1") avec Chance devenue insuffisante entre l\'ouverture et la réponse : aucun effet, une ligne de chat', { skip }, async () => {
+  const fixture = await createFixture()
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await db('char_sheet').where({ id: fixture.charSheet.id }).update({ chc: 3 }) // dépense concurrente : plancher RAW
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
 
     const sheet = await db('char_sheet').where({ id: fixture.charSheet.id }).first()
     assert.equal(sheet.chc, 3, 'inchangé — jamais sous le plancher')
-
     const wounds = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id }).select('*')
     assert.equal(wounds.length, 1)
     assert.equal(wounds[0].severity, 'grave', 'inchangée — dépense refusée, réduction jamais appliquée')
+    assert.deepEqual(noticeKeys(emitted), ['cannotSpend'])
   } finally {
     await cleanup(fixture)
   }
@@ -244,7 +276,7 @@ test('applyWound : la 2ᵉ Mortelle à la tête déborde vers mort_subite, diffu
     assert.equal(added[1].payload.promoted, true)
     assert.equal(added[1].payload.worst_wound_severity, 'mort_subite')
 
-    // Un seul choix Chance : celui de la 1ʳᵉ Mortelle. La 6ᵉ ligne n'en ouvre aucun avant le Lot 3.
+    // Un seul choix Chance : celui de la 1ʳᵉ Mortelle. La 6ᵉ ligne venue d'un débordement n'en ouvre jamais (décision Saar 2026-09-25).
     assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 1)
 
     const wounds = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })
@@ -300,12 +332,17 @@ function recordingIo() {
   return { emitted, io: { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) } }
 }
 
+// Clés des lignes de chat postées (COMBAT_SYSTEM_NOTICE) sous `combat:chance.notice.`, dans l'ordre d'émission.
+function noticeKeys(emitted) {
+  return emitted.filter(e => e.event === WS.COMBAT_SYSTEM_NOTICE).map(e => e.payload.i18nKey.replace('combat:chance.notice.', ''))
+}
+
 const woundArgs = (fixture, localisation, severity) => ({
   charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation, severity,
 })
 
 test('applyWound (Mort en Tête) pose `dead` sur TOUS les tokens du personnage, marqué « posé par une blessure », et diffuse les badges', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture, 2)
   const { io, emitted } = recordingIo()
   try {
@@ -327,11 +364,11 @@ test('applyWound (Mort en Tête) pose `dead` sur TOUS les tokens du personnage, 
 })
 
 test('applyWound : la Mort au Corps pose `dead` ; un Membre détruit (bras) et une Mortelle n\'en posent pas', { skip }, async () => {
-  const corps = await createFixture()
+  const corps = await createFixture(NO_CHANCE)
   const tkCorps = await addTokens(corps)
-  const membre = await createFixture()
+  const membre = await createFixture(NO_CHANCE)
   const tkMembre = await addTokens(membre)
-  const mortelle = await createFixture()
+  const mortelle = await createFixture(NO_CHANCE)
   const tkMortelle = await addTokens(mortelle)
   try {
     await applyWound(fakeIo, db, corps.campaign.id, woundArgs(corps, 'corps', 'mort_subite'))
@@ -349,7 +386,7 @@ test('applyWound : la Mort au Corps pose `dead` ; un Membre détruit (bras) et u
 })
 
 test('applyWound : la 2ᵉ Mortelle à la tête (débordement) pose `dead` — la Mort par cascade est traitée comme un coup ≥ 30', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mortelle'))
@@ -364,7 +401,7 @@ test('applyWound : la 2ᵉ Mortelle à la tête (débordement) pose `dead` — l
 })
 
 test('applyWound : un `dead` posé à la main par le MJ n\'est ni écrasé ni « repris » par la blessure (sa `data` reste vide), sans rejouer de badge', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   const { io, emitted } = recordingIo()
   try {
@@ -383,7 +420,7 @@ test('applyWound : un `dead` posé à la main par le MJ n\'est ni écrasé ni «
 })
 
 test('removeWound (Mort) retire le `dead` qu\'elle avait posé, diffuse WOUND_REMOVED et le badge', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture, 2)
   const { io, emitted } = recordingIo()
   try {
@@ -410,7 +447,7 @@ test('removeWound (Mort) retire le `dead` qu\'elle avait posé, diffuse WOUND_RE
 })
 
 test('removeWound (Mort) ne retire PAS un `dead` posé à la main par le MJ', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     await db('token_statuses').insert({ token_id: tk.ids[0], status_code: 'dead' })
@@ -426,7 +463,7 @@ test('removeWound (Mort) ne retire PAS un `dead` posé à la main par le MJ', { 
 })
 
 test('removeWound : tant qu\'une AUTRE Mort subsiste (Tête + Corps), le `dead` reste ; il part avec la dernière', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     const tete = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
@@ -446,7 +483,7 @@ test('removeWound : tant qu\'une AUTRE Mort subsiste (Tête + Corps), le `dead` 
 })
 
 test('removeWound (blessure ordinaire) ne touche pas au statut ; blessure inconnue : null', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
@@ -463,7 +500,7 @@ test('removeWound (blessure ordinaire) ne touche pas au statut ; blessure inconn
 })
 
 test('applyWound : le MJ qui relève le personnage à la main (retire `dead`, garde la blessure) ne le voit pas re-tué par une blessure ordinaire', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
@@ -478,7 +515,7 @@ test('applyWound : le MJ qui relève le personnage à la main (retire `dead`, ga
 })
 
 test('applyWound (Mort) sur un personnage sans token : la blessure est écrite, sans erreur (limite connue : la mort se lit sur les tokens)', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   try {
     const result = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
     assert.equal(result.finalSeverity, 'mort_subite')
@@ -489,9 +526,9 @@ test('applyWound (Mort) sur un personnage sans token : la blessure est écrite, 
 })
 
 test('applyWound (Mort) : en mode « appliqué » les états de corps vivant partent avec la mort ; en « icônes seules » le badge est posé mais rien n\'est retiré', { skip }, async () => {
-  const enforced = await createFixture()
+  const enforced = await createFixture(NO_CHANCE)
   const tkEnforced = await addTokens(enforced)
-  const iconOnly = await createFixture()
+  const iconOnly = await createFixture(NO_CHANCE)
   const tkIconOnly = await addTokens(iconOnly)
   try {
     await db('campaigns').where({ id: iconOnly.campaign.id }).update({ settings: JSON.stringify({ status_effects_mode: 'icon_only' }) })
@@ -515,7 +552,7 @@ test('applyWound (Mort) : en mode « appliqué » les états de corps vivant par
 })
 
 test('applyWound : deux Morts simultanées sur la même fiche ne créent aucun doublon de `dead` (unicité token/statut)', { skip }, async () => {
-  const fixture = await createFixture()
+  const fixture = await createFixture(NO_CHANCE)
   const tk = await addTokens(fixture)
   try {
     await Promise.all([
@@ -525,6 +562,475 @@ test('applyWound : deux Morts simultanées sur la même fiche ne créent aucun d
     assert.deepEqual((await statusRows(tk.ids)).map(r => r.status_code), ['dead'])
   } finally {
     await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+// ─── Lot 3 — la Chance sur la 6ᵉ ligne : la mort n'est posée QU'APRÈS le choix (PLAN_CHANCE.md §8, décision Saar) ──────────
+// Une Mort (Tête/Corps) écrite DIRECTEMENT par un coup ≥ 30 ouvre une réaction (3 points → Critique) tant que la Chance le
+// permet (chc ≥ 6) ; tant qu'elle est ouverte le personnage vit. Fermée (dépense, « Accepter », délai) : la mort est tranchée.
+
+const chanceOf = async (fixture) => (await db('char_sheet').where({ id: fixture.charSheet.id }).first()).chc
+const deadCodes = async (tk) => (await statusRows(tk.ids)).map(r => r.status_code)
+const woundSeverities = async (fixture) => (await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id }).orderBy('created_at')).map(w => w.severity)
+
+test('Mort directe (≥ 30) à la tête avec Chance 11 : le personnage VIT, une réaction s\'ouvre (3 points → Critique), rien n\'est annoncé mort', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    const result = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.equal(result.finalSeverity, 'mort_subite')
+    assert.equal(result.promoted, false)
+
+    assert.deepEqual(await statusRows(tk.ids), [], 'pas de `dead` tant que le joueur n\'a pas décidé')
+    assert.ok(!emitted.some(e => e.event === WS.TOKEN_STATUS_UPDATED), 'aucun badge')
+    assert.deepEqual(noticeKeys(emitted), [], 'aucune ligne « meurt »')
+
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    assert.equal(pending.site, 'wound_severity')
+    assert.equal(pending.character_id, fixture.character.id)
+    const payload = emitted.find(e => e.event === WS.CHANCE_CHOICE_PENDING).payload
+    assert.equal(payload.fatal, true)
+    assert.deepEqual(payload.options, [{ choice: 'reduce_1', degree: 1, cost: 3, targetSeverity: 'critique' }])
+    assert.equal(payload.chcAvailable, 11)
+    assert.ok(emitted.findIndex(e => e.event === WS.WOUND_ADDED) < emitted.findIndex(e => e.event === WS.CHANCE_CHOICE_PENDING), 'la blessure d\'abord, puis la réaction')
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: null }) // libère le minuteur
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : dépenser 3 points → une Critique, le personnage n\'est JAMAIS mort, ligne de chat « la mort est évitée »', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+
+    assert.equal(await chanceOf(fixture), 8, '11 − 3')
+    assert.deepEqual(await woundSeverities(fixture), ['critique'])
+    assert.deepEqual(await statusRows(tk.ids), [], 'jamais mort')
+    assert.deepEqual(noticeKeys(emitted), ['deathAvoided'])
+    const updated = emitted.find(e => e.event === WS.WOUND_UPDATED)
+    assert.equal(updated.payload.wound.severity, 'critique')
+    assert.equal(updated.payload.worst_wound_severity, 'critique')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : « Accepter » (refus explicite) → la mort est posée à ce moment, badges et conséquences, deux lignes de chat', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture, 2)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    assert.deepEqual(await statusRows(tk.ids), [])
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: null, resolvedByUserId: fixture.user.id })
+
+    const rows = await statusRows(tk.ids)
+    assert.deepEqual(rows.map(r => r.status_code), ['dead', 'dead'])
+    for (const row of rows) assert.deepEqual(row.data, { source: 'wound' })
+    assert.equal(await chanceOf(fixture), 11, 'rien dépensé')
+    assert.deepEqual(await woundSeverities(fixture), ['mort_subite'])
+    assert.deepEqual(noticeKeys(emitted), ['woundAccepted', 'dies'])
+    const badges = emitted.filter(e => e.event === WS.TOKEN_STATUS_UPDATED)
+    assert.deepEqual(new Set(badges.map(e => e.payload.tokenId)), new Set(tk.ids))
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : délai écoulé (choix nul, aucun utilisateur) → la mort est posée, ligne « n\'a pas répondu » puis « meurt »', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: null, resolvedByUserId: null })
+
+    assert.deepEqual(await deadCodes(tk), ['dead'])
+    assert.deepEqual(noticeKeys(emitted), ['noAnswer', 'dies'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe avec Chance 5 (il faut 6) : aucune réaction, la mort est posée tout de suite, lignes « pas assez de Chance » puis « meurt »', { skip }, async () => {
+  const fixture = await createFixture({ chc: 5 })
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0)
+    assert.deepEqual(await deadCodes(tk), ['dead'])
+    assert.deepEqual(noticeKeys(emitted), ['deathNoChance', 'dies'])
+    assert.ok(!emitted.some(e => e.event === WS.CHANCE_CHOICE_PENDING))
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe avec Chance 6 (le minimum) : la réaction s\'ouvre ; dépenser laisse 3', { skip }, async () => {
+  const fixture = await createFixture({ chc: 6 })
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
+    assert.equal(await chanceOf(fixture), 3)
+    assert.deepEqual(await woundSeverities(fixture), ['critique'])
+    assert.deepEqual(await statusRows(tk.ids), [])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort par DÉBORDEMENT (2ᵉ Mortelle) : jamais rachetable, même avec beaucoup de Chance — morte tout de suite, ligne dédiée', { skip }, async () => {
+  const fixture = await createFixture() // Chance 11
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mortelle'))
+    const [firstReaction] = await listPendingChanceChoices(fixture.campaign.id) // celle de la Mortelle, pas de la Mort
+    await resolveChanceChoice(io, fixture.campaign.id, firstReaction.id, { choice: null })
+    emitted.length = 0
+
+    const second = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mortelle'))
+    assert.equal(second.finalSeverity, 'mort_subite')
+    assert.equal(second.promoted, true)
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0, 'aucune réaction pour la 6ᵉ ligne venue d\'un débordement')
+    assert.deepEqual(await deadCodes(tk), ['dead'])
+    assert.deepEqual(noticeKeys(emitted), ['overflowNoRescue', 'dies'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Membre détruit direct (bras) : rachetable comme la Mort (3 points → Critique), mais le personnage ne meurt jamais', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'bras_droit', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    const payload = emitted.find(e => e.event === WS.CHANCE_CHOICE_PENDING).payload
+    assert.equal(payload.fatal, false, 'un Membre détruit ne tue pas')
+    assert.deepEqual(payload.options, [{ choice: 'reduce_1', degree: 1, cost: 3, targetSeverity: 'critique' }])
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await woundSeverities(fixture), ['critique'])
+    assert.equal(await chanceOf(fixture), 8)
+    assert.deepEqual(noticeKeys(emitted), ['limbSaved'])
+    assert.deepEqual(await statusRows(tk.ids), [])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Membre détruit direct : refusé → le membre reste détruit, aucune mort, aucune ligne « meurt » ; ligne « accepte sa blessure »', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'jambe_gauche', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: null, resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await woundSeverities(fixture), ['mort_subite'])
+    assert.deepEqual(await statusRows(tk.ids), [])
+    assert.deepEqual(noticeKeys(emitted), ['woundAccepted'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Membre détruit par DÉBORDEMENT (2ᵉ Mortelle sur le bras) : pas de réaction, même règle que la Mort', { skip }, async () => {
+  const fixture = await createFixture()
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'bras_gauche', 'mortelle'))
+    const [firstReaction] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(io, fixture.campaign.id, firstReaction.id, { choice: null })
+    emitted.length = 0
+
+    const second = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'bras_gauche', 'mortelle'))
+    assert.equal(second.finalSeverity, 'mort_subite')
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0)
+    assert.deepEqual(noticeKeys(emitted), ['overflowNoRescue'])
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('Critique pleine : la Mort se rachète en Grave pour 4 points (3 + 1, exception « palier plein »)', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      await db('character_wounds').insert({ char_sheet_id: fixture.charSheet.id, location: 'tete', severity: 'critique', occurred_at_game_minutes: i })
+    }
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    const context = typeof pending.context === 'string' ? JSON.parse(pending.context) : pending.context
+    assert.deepEqual(context.reductions, [{ degree: 2, cost: 4, targetSeverity: 'grave' }])
+
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, pending.id, { choice: 'reduce_2' })
+    assert.equal(await chanceOf(fixture), 7, '11 − 4')
+    assert.deepEqual((await woundSeverities(fixture)).sort(), ['critique', 'critique', 'grave'])
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : Chance tombée à 4 entre l\'ouverture et la réponse → dépense refusée, la mort est posée, ligne « ne peut plus dépenser »', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await db('char_sheet').where({ id: fixture.charSheet.id }).update({ chc: 4 })
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+
+    assert.equal(await chanceOf(fixture), 4, 'rien de débité')
+    assert.deepEqual(await woundSeverities(fixture), ['mort_subite'])
+    assert.deepEqual(await deadCodes(tk), ['dead'], 'la décision est tranchée : la réaction est fermée')
+    assert.deepEqual(noticeKeys(emitted), ['cannotSpend', 'dies'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : la Critique visée se remplit pendant l\'attente (2ᵉ blessure) → dépense refusée sans rien débiter, la mort est posée, ligne « plus de place »', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    for (let i = 0; i < 2; i += 1) {
+      await db('character_wounds').insert({ char_sheet_id: fixture.charSheet.id, location: 'tete', severity: 'critique', occurred_at_game_minutes: i })
+    }
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+
+    assert.equal(await chanceOf(fixture), 11, 'rien de débité')
+    assert.ok((await woundSeverities(fixture)).includes('mort_subite'))
+    assert.deepEqual(await deadCodes(tk), ['dead'])
+    assert.deepEqual(noticeKeys(emitted), ['noRoom', 'dies'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Mort directe : le MJ retire la blessure pendant l\'attente → réponse sans effet ni erreur, aucune dépense, personnage vivant', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    const applied = await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    await removeWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId: applied.wound.id })
+    emitted.length = 0
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+
+    assert.equal(await chanceOf(fixture), 11)
+    assert.deepEqual(await woundSeverities(fixture), [])
+    assert.deepEqual(await statusRows(tk.ids), [])
+    assert.deepEqual(noticeKeys(emitted), [])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Deux Morts en attente : en accepter UNE tue tout de suite, et retire la carte de l\'autre (un cadavre n\'a plus de Chance)', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    const [a, b] = await listPendingChanceChoices(fixture.campaign.id)
+    emitted.length = 0
+
+    await resolveChanceChoice(io, fixture.campaign.id, a.id, { choice: null, resolvedByUserId: fixture.user.id })
+
+    assert.deepEqual(await deadCodes(tk), ['dead'], 'A acceptée : la mort est posée, quoi que décide B')
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0, 'la réaction B est retirée')
+    const withdrawn = await db('pending_chance_choices').where({ id: b.id }).first()
+    assert.equal(withdrawn.choice, null)
+    assert.ok(withdrawn.resolved_at, 'close sans avoir été appliquée')
+    assert.equal(await chanceOf(fixture), 11, 'rien dépensé')
+    assert.ok(emitted.some(e => e.event === WS.CHANCE_CHOICE_RESOLVED && e.payload.id === b.id), 'la carte B disparaît chez les clients')
+    assert.deepEqual(noticeKeys(emitted), ['woundAccepted', 'dies'], 'aucune ligne parasite pour B')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Deux Morts en attente : racheter la 1ʳᵉ ne tue pas tant que la 2ᵉ décide ; l\'accepter tue', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    const [a, b] = await listPendingChanceChoices(fixture.campaign.id)
+
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, a.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await statusRows(tk.ids), [], 'A rachetée, B décide encore : pas mort')
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, b.id, { choice: null, resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await deadCodes(tk), ['dead'], 'B acceptée : mort')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Deux Morts en attente : racheter les deux → vivant, 6 points dépensés', { skip }, async () => {
+  const fixture = await createFixture({ chc: 12 })
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+    const [a, b] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, a.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, b.id, { choice: 'reduce_1', resolvedByUserId: fixture.user.id })
+    assert.equal(await chanceOf(fixture), 6, '12 − 3 − 3')
+    assert.deepEqual(await statusRows(tk.ids), [], 'les deux rachetées : jamais mort')
+    assert.deepEqual((await woundSeverities(fixture)).sort(), ['critique', 'critique'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('INVARIANT : retirer une AUTRE Mort (sans réaction) pendant une décision ne tue pas le personnage qui décide encore', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    // A (Tête) attend une décision (Chance 11) : le personnage vit.
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pendingA] = await listPendingChanceChoices(fixture.campaign.id)
+    // B (Corps) : ancienne blessure mortelle écrite hors réaction (donnée du MJ), le personnage a été relevé à la main.
+    const [b] = await db('character_wounds')
+      .insert({ char_sheet_id: fixture.charSheet.id, location: 'corps', severity: 'mort_subite', occurred_at_game_minutes: 0 })
+      .returning('*')
+    assert.deepEqual(await statusRows(tk.ids), [])
+
+    // Le MJ retire B : sans l’invariant, reconcileWoundDeath verrait A (mortelle) et tuerait avant sa décision.
+    await removeWound(fakeIo, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId: b.id })
+    assert.deepEqual(await statusRows(tk.ids), [], 'seule A reste, elle décide encore : vivant')
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 1, 'sa réaction est toujours ouverte')
+
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, pendingA.id, { choice: null, resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await deadCodes(tk), ['dead'], 'A acceptée : la mort est posée')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Une Mort SANS réaction (Chance tombée à 3) tue tout de suite et retire la réaction ouverte d’une autre Mort', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [pendingA] = await listPendingChanceChoices(fixture.campaign.id)
+    await db('char_sheet').where({ id: fixture.charSheet.id }).update({ chc: 3 }) // dépense concurrente
+    emitted.length = 0
+
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'mort_subite'))
+
+    assert.deepEqual(await deadCodes(tk), ['dead'])
+    assert.equal((await listPendingChanceChoices(fixture.campaign.id)).length, 0, 'la réaction de A est retirée : un cadavre n’a plus de Chance')
+    assert.ok(emitted.some(e => e.event === WS.CHANCE_CHOICE_RESOLVED && e.payload.id === pendingA.id))
+    assert.deepEqual(noticeKeys(emitted), ['deathNoChance', 'dies'])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('« Accepter » explicite sur une blessure ordinaire (Grave) : rien ne change, ligne « accepte sa blessure », aucun statut ; le délai écoulé ne dit rien', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  const { io, emitted } = recordingIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'corps', 'grave'))
+    await applyWound(io, db, fixture.campaign.id, woundArgs(fixture, 'bras_droit', 'grave'))
+    const [explicit, timeout] = await listPendingChanceChoices(fixture.campaign.id)
+
+    await resolveChanceChoice(io, fixture.campaign.id, explicit.id, { choice: null, resolvedByUserId: fixture.user.id })
+    assert.deepEqual(noticeKeys(emitted), ['woundAccepted'])
+    await resolveChanceChoice(io, fixture.campaign.id, timeout.id, { choice: null, resolvedByUserId: null })
+    assert.deepEqual(noticeKeys(emitted), ['woundAccepted'], 'le délai écoulé sur une blessure ordinaire ne raconte rien')
+    assert.deepEqual(await woundSeverities(fixture), ['grave', 'grave'])
+    assert.deepEqual(await statusRows(tk.ids), [])
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Le MJ qui a relevé le personnage à la main n\'est pas re-tué par la fermeture d\'une réaction ordinaire (Grave)', { skip }, async () => {
+  const fixture = await createFixture()
+  const tk = await addTokens(fixture)
+  try {
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    const [fatalReaction] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, fatalReaction.id, { choice: null, resolvedByUserId: fixture.user.id })
+    await db('token_statuses').where({ token_id: tk.ids[0], status_code: 'dead' }).del() // relevé à la main, blessure gardée
+
+    await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'bras_droit', 'grave'))
+    const [graveReaction] = await listPendingChanceChoices(fixture.campaign.id)
+    await resolveChanceChoice(fakeIo, fixture.campaign.id, graveReaction.id, { choice: null, resolvedByUserId: fixture.user.id })
+    assert.deepEqual(await statusRows(tk.ids), [], 'la fermeture d\'une réaction ordinaire ne rejoue pas la mort')
+  } finally {
+    await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+test('Une panne de la réaction de Chance ne fait JAMAIS échouer la blessure (sous-transaction) : blessure écrite, aucune réaction', { skip }, async () => {
+  const fixture = await createFixture()
+  // Injection : une Mort directe n'a AUCUNE échéance de guérison (donc rien n'échoue avant), mais sa réaction viole la clé
+  // étrangère pending_chance_choices.campaign_id (campagne inconnue) — l'échec est confiné à la sous-transaction.
+  const unknownCampaignId = '00000000-0000-4000-8000-000000000000'
+  const errors = []
+  const originalError = console.error
+  console.error = (...args) => errors.push(args.join(' '))
+  try {
+    const result = await applyWound(fakeIo, db, unknownCampaignId, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.ok(result, 'applyWound retourne normalement')
+    assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 1, 'la blessure est écrite')
+    assert.equal((await db('pending_chance_choices').where({ character_id: fixture.character.id })).length, 0)
+    assert.ok(errors.some(e => e.includes('réaction de Chance non ouverte')), 'la panne est loguée : ' + errors.join(' | '))
+  } finally {
+    console.error = originalError
     await cleanup(fixture)
   }
 })
