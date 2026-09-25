@@ -28,6 +28,9 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
   (le résultat suffit dans la clôture). Échec, test interrompu ou risque de résidu (ligne de fixture non
   nettoyée) : rapport à Saar — test, cause, lignes concernées (vérifiées par lecture de la base) — avant
   toute suite. Jamais `npm test` complet, jamais le serveur (voir ci-dessous).
+- Scripts de création de tickets (`server/src/scripts/create_tickets_*.js`) : idempotents (clé `linked_bug_code`) et
+  limités à `bug_tickets` — l'agent les lance LUI-MÊME (autorisation de Saar, 2026-09-25). Tout autre script qui écrit
+  en base reste à lancer par Saar.
 - Avant livraison : `git diff --check`
 - Pas de linter serveur : `node --check` est le seul contrôle statique côté serveur
 
