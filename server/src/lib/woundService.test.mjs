@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { applyWound, removeWound } from './woundService.js'
+import { applyWound, removeWound, clearCharacterWoundsAndStatuses } from './woundService.js'
 import { resolveChanceChoice, listPendingChanceChoices } from './chanceCatastropheChoiceService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (applyWound crée une échéance de guérison à l'insertion)
 
@@ -1082,3 +1082,102 @@ test('Une panne de la réaction de Chance ne fait JAMAIS échouer la blessure (s
 })
 
 test.after(async () => { await db.destroy() })
+
+// ─── Lot 0 (PLAN_REVUE_GUERISON) — une échéance vit et meurt avec sa case : plus d'échéance fantôme, et l'écran de revue ouvert se met à jour ──
+
+const captureIo = () => {
+  const emitted = []
+  return { emitted, io: { to: () => ({ emit: (event, payload) => emitted.push({ event, payload }) }) } }
+}
+const echeanceEvents = (emitted) => emitted.filter(e => e.event === WS.GAME_ECHEANCE_RESOLVED).map(e => e.payload.echeanceId)
+
+test('removeWound : l\'échéance de guérison de la blessure retirée est annulée, et sa ligne quitte l\'écran de revue du MJ', { skip }, async () => {
+  const fixture = await createFixture()
+  const { io, emitted } = captureIo()
+  try {
+    const result = await applyWound(io, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne',
+    })
+    const [echeance] = await healingEcheancesOf(fixture.campaign.id)
+    assert.equal(echeance.status, 'active')
+
+    await removeWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, woundId: result.wound.id })
+
+    assert.equal((await db('game_echeances').where({ id: echeance.id }).first()).status, 'cancelled')
+    assert.deepEqual(echeanceEvents(emitted), [echeance.id])
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('/heal (clearCharacterWoundsAndStatuses) : toutes les échéances de guérison du personnage sont annulées, aucune fantôme, une diffusion par ligne', { skip }, async () => {
+  const fixture = await createFixture(NO_CHANCE)
+  const { io, emitted } = captureIo()
+  try {
+    for (const [localisation, severity] of [['corps', 'moyenne'], ['tete', 'moyenne'], ['bras_droit', 'grave']]) {
+      await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation, severity })
+    }
+    const before = await healingEcheancesOf(fixture.campaign.id)
+    assert.equal(before.length, 3)
+    emitted.length = 0
+
+    assert.equal(await clearCharacterWoundsAndStatuses(io, db, fixture.campaign.id, fixture.character.id), true)
+
+    const after = await healingEcheancesOf(fixture.campaign.id)
+    assert.deepEqual(after.map(e => e.status), ['cancelled', 'cancelled', 'cancelled'])
+    assert.equal((await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })).length, 0)
+    assert.deepEqual(new Set(echeanceEvents(emitted)), new Set(before.map(e => e.id)))
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('applyWound : une promotion en cascade annule les échéances des cases fusionnées et diffuse leur retrait ; la case finale a la sienne', { skip }, async () => {
+  const fixture = await createFixture(NO_CHANCE)
+  const { io, emitted } = captureIo()
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne' })
+    }
+    const merged = await healingEcheancesOf(fixture.campaign.id)
+    assert.equal(merged.length, 2)
+    emitted.length = 0
+
+    const third = await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne' })
+    assert.equal(third.promoted, true)
+    assert.equal(third.wound.severity, 'grave')
+
+    const all = await healingEcheancesOf(fixture.campaign.id)
+    const alive = all.filter(e => e.status === 'active')
+    assert.equal(alive.length, 1)
+    assert.equal(alive[0].payload.woundId, third.wound.id)
+    assert.deepEqual(new Set(all.filter(e => e.status === 'cancelled').map(e => e.id)), new Set(merged.map(e => e.id)))
+    assert.deepEqual(new Set(echeanceEvents(emitted)), new Set(merged.map(e => e.id)))
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('resolveChanceChoice("reduce_1") : l\'échéance de la Grave d\'origine est annulée (et sa ligne quitte l\'écran de revue), celle de la Moyenne obtenue reste vivante', { skip }, async () => {
+  const fixture = await createFixture()
+  const { io, emitted } = captureIo()
+  try {
+    await applyWound(io, db, fixture.campaign.id, {
+      charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'grave',
+    })
+    const [original] = await healingEcheancesOf(fixture.campaign.id)
+    const [pending] = await listPendingChanceChoices(fixture.campaign.id)
+    emitted.length = 0
+
+    await resolveChanceChoice(io, fixture.campaign.id, pending.id, { choice: 'reduce_1' })
+
+    assert.equal((await db('game_echeances').where({ id: original.id }).first()).status, 'cancelled')
+    const [moyenne] = await db('character_wounds').where({ char_sheet_id: fixture.charSheet.id })
+    assert.equal(moyenne.severity, 'moyenne')
+    const alive = (await healingEcheancesOf(fixture.campaign.id)).filter(e => e.status === 'active')
+    assert.deepEqual(alive.map(e => e.payload.woundId), [moyenne.id])
+    assert.ok(echeanceEvents(emitted).includes(original.id))
+  } finally {
+    await cleanup(fixture)
+  }
+})

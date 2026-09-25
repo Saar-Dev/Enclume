@@ -2,7 +2,8 @@
 
 > 2026-09-25 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et fusionné dans
 > `docs/SYSTEME/BLESSURES.md` §« Guérison et Infection » une fois clos.
-> Statut : 🟡 **Cadré, analyse à charge faite (§9), rien codé.** Questions §6 tranchées par Saar sauf **Q10** (Chirurgie, §9). Prochaine étape : réponse à Q10 + « ok » de Saar, puis séquence A6 (nettoyage des fantômes, test du bug n°1, commit), puis Lot 0.
+> Statut : 🟡 **Cadré, analyse à charge faite (§9), toutes les questions tranchées (Q1-Q10). Bug n°1 commité (`3839638`), fantômes nettoyés en base. LOT 0 CODÉ, VALIDÉ EN JEU PAR SAAR ET COMMITÉ le 2026-09-25** : `woundUtils.js` unique suppresseur + annulation des échéances, Test suivant en une seule fonction — 135/135 tests ciblés. Reste : Lot 1 (vue serveur groupée par
+> personnage, route groupée, kits dans `WOUND_HEALING`), Lot 2 (écran), Lot 3 (chat).
 > Un seul problème (Règle « un plan = un bug ») : l'écran de revue MJ (`client/src/components/BlessuresReviewPanel.jsx`) ne permet pas de
 > décider — il affiche des lignes sans blessure, répète les mêmes questions, et n'offre pas les réponses dont le MJ a besoin.
 > Hiérarchie : Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`) > `SYSTEME/BLESSURES.md` > ce plan. Conception d'origine (archivée) :

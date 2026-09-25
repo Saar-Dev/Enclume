@@ -1,5 +1,5 @@
 import {
-  resolveWoundInsertion, resolveWoundImprovement, computeAvailableSeverityReductions, affordableReductions, hasSeverityRoom,
+  resolveWoundInsertion, resolveWoundImprovement, deleteWoundRows, computeAvailableSeverityReductions, affordableReductions, hasSeverityRoom,
   isShockTestRequired, getWorstWoundSeverity, WoundLineFullError,
 } from './woundUtils.js'
 import { emitTokenStatusUpdated, reconcileWoundDeath, announceWoundDeath } from './statusService.js'
@@ -21,6 +21,12 @@ import db from '../db/knex.js'
 const CHANCE_ELIGIBLE_SEVERITIES = ['grave', 'critique', 'mortelle', 'mort_subite']
 
 const NOTICE = 'combat:chance.notice.'
+
+// Les échéances annulées avec leur case (deleteWoundRows) quittent l'écran de revue du MJ s'il est ouvert : même événement que la
+// résolution d'une échéance (le panneau retire la ligne par identifiant). À appeler APRÈS la validation de la transaction.
+function emitEcheancesCancelled(io, campaignId, cancelledEcheances = []) {
+  for (const echeance of cancelledEcheances) io.to(campaignId).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
+}
 
 async function characterLabel(characterId) {
   const character = await db('characters').where({ id: characterId }).select('name').first()
@@ -161,6 +167,7 @@ export async function applyWound(io, db, campaignId, {
     shock_test_required,
     worst_wound_severity,
   })
+  emitEcheancesCancelled(io, campaignId, result.cancelledEcheances) // cases fusionnées par une promotion
   if (reaction.notice) emitSystemNotice(io, campaignId, reaction.notice.i18nKey, reaction.notice.params)
   if (reaction.pending) {
     try {
@@ -225,16 +232,17 @@ export async function removeWound(io, db, campaignId, { charSheetId, characterId
   const removal = await db.transaction(async (trx) => {
     const wound = await trx('character_wounds').where({ id: woundId, char_sheet_id: charSheetId }).first()
     if (!wound) return null
-    await trx('character_wounds').where({ id: woundId }).del()
+    const { cancelledEcheances } = await deleteWoundRows(trx, { id: woundId })
     const deathChange = isFatalWound(wound)
       ? await reconcileWoundDeath(trx, campaignId, { characterId, charSheetId })
       : null
-    return { wound, deathChange }
+    return { wound, deathChange, cancelledEcheances }
   })
   if (!removal) return null
 
   const worst_wound_severity = await getWorstWoundSeverity(db, charSheetId)
   io.to(campaignId).emit(WS.WOUND_REMOVED, { characterId, woundId, worst_wound_severity })
+  emitEcheancesCancelled(io, campaignId, removal.cancelledEcheances)
   if (removal.deathChange) await announceWoundDeath(io, db, campaignId, characterId, removal.deathChange)
   return removal.wound
 }
@@ -253,24 +261,21 @@ export async function clearCharacterWoundsAndStatuses(io, db, campaignId, charac
   const tokenRows = await db('tokens').where({ character_id: characterId }).select('id')
   const tokenIds = tokenRows.map((t) => t.id)
 
-  const removedWounds = await db.transaction(async (trx) => {
-    const wounds = await trx('character_wounds').where({ char_sheet_id: sheet.id }).select('id')
-    if (wounds.length > 0) {
-      await trx('character_wounds').where({ char_sheet_id: sheet.id }).delete()
-    }
+  const { wounds: removedWounds, cancelledEcheances } = await db.transaction(async (trx) => {
+    // Suppresseur unique : les échéances de guérison/infection de ces cases sont annulées avec elles (plus d'échéance fantôme après /heal).
+    const removal = await deleteWoundRows(trx, { char_sheet_id: sheet.id })
     if (tokenIds.length > 0) {
       await trx('token_statuses').whereIn('token_id', tokenIds).delete()
     }
-    return wounds
+    return removal
   })
 
-  // worst_wound_severity constant après suppression complète (null) — calculé une fois, pas par
-  // blessure. Aucune échéance orpheline en erreur : woundHealingCheckHandler/woundInfectionCheckHandler
-  // gèrent déjà une blessure disparue en no-op (woundEvolutionService.js:81-87,179-183, vérifié).
+  // worst_wound_severity constant après suppression complète (null) — calculé une fois, pas par blessure.
   const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
   for (const wound of removedWounds) {
     io.to(campaignId).emit(WS.WOUND_REMOVED, { characterId, woundId: wound.id, worst_wound_severity })
   }
+  emitEcheancesCancelled(io, campaignId, cancelledEcheances)
   for (const tokenId of tokenIds) {
     await emitTokenStatusUpdated(io, db, campaignId, tokenId)
   }
@@ -367,7 +372,7 @@ async function applyWoundChoice(io, campaignId, { choice, context, explicit }) {
       // (RAW : elle « devient » une blessure plus légère, comme si elle avait été reçue ainsi). `wound` nul : guérie
       // entièrement avant d'avoir consommé tous les degrés.
       const result = await resolveWoundImprovement(trx, woundId, { campaignId, characterId }, { steps: match.degree })
-      return { status: 'reduced', woundId: result.wound?.id ?? null, from: wound }
+      return { status: 'reduced', woundId: result.wound?.id ?? null, from: wound, cancelledEcheances: result.cancelledEcheances }
     })
   } catch (err) {
     // Jamais un throw qui remonterait jusqu'au handler socket générique (CHANCE_CHOICE_RESOLVE) : la blessure reste telle quelle.
@@ -389,6 +394,7 @@ async function applyWoundChoice(io, campaignId, { choice, context, explicit }) {
   const finalWound = outcome.woundId ? await db('character_wounds').where({ id: outcome.woundId }).first() : null
   const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
   io.to(campaignId).emit(WS.WOUND_UPDATED, { characterId, wound: finalWound, worst_wound_severity })
+  emitEcheancesCancelled(io, campaignId, outcome.cancelledEcheances) // l'échéance de la blessure d'origine : annulée avec elle
 
   const chcNow = (await db('char_sheet').where({ id: sheet.id }).select('chc').first())?.chc
   const from = outcome.from

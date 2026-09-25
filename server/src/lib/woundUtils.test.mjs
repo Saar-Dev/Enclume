@@ -6,8 +6,10 @@ import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, improvedSeverity, resolveWoundInsertion, resolveWoundImprovement,
   buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries, computeAvailableSeverityReductions, affordableReductions,
-  isShockTestRequired, woundSeverityRankSql, WoundLineFullError,
+  isShockTestRequired, woundSeverityRankSql, WoundLineFullError, deleteWoundRows,
 } from './woundUtils.js'
+import { getHealingRetrySchedule } from './woundHealingSchedule.js'
+import { createEcheance } from './echeanceService.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (écrire une blessure programme son échéance de guérison)
 
@@ -583,4 +585,107 @@ test('une cascade qui atteint la ligne Mortelle vide s\'y arrête (pas de mort t
     assert.equal(result.wound.severity, 'mortelle')
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
+})
+
+// ─── Lot 0 (PLAN_REVUE_GUERISON) — une échéance vit et meurt avec sa case : woundUtils est aussi l'UNIQUE suppresseur ───────────────
+
+const infectionEcheanceOf = (trx, campaign, character, woundId) => createEcheance(trx, {
+  campaignId: campaign.id, characterId: character.id, conditionType: 'wound_infection_check',
+  payload: { woundId, periodesSansSoin: 0 }, nextDueMinutes: 2000, intervalMinutes: null, occurrencesRemaining: null,
+})
+const statusOfEcheance = async (trx, echeance) => (await trx('game_echeances').where({ id: echeance.id }).first()).status
+
+test('deleteWoundRows : supprime les cases visées et annule leurs échéances (guérison ET infection), laisse les autres, retourne les lignes d\'origine', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    const head = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne', schedule)
+    const body = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    const infection = await infectionEcheanceOf(trx, campaign, character, head.wound.id)
+
+    const { wounds, cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id: charSheet.id, location: 'tete' })
+    assert.deepEqual(wounds.map(w => w.id), [head.wound.id])
+    assert.deepEqual(new Set(cancelledEcheances.map(e => e.id)), new Set([head.echeance.id, infection.id]))
+    assert.ok(cancelledEcheances.every(e => e.status === 'active'), 'lignes telles qu\'elles étaient AVANT l\'annulation')
+    assert.equal(await statusOfEcheance(trx, head.echeance), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, infection), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, body.echeance), 'active', 'l\'échéance d\'une autre case n\'est pas touchée')
+    assert.deepEqual((await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.id), [body.wound.id])
+
+    // Idempotent : plus rien de vivant à annuler, aucune case à supprimer.
+    const again = await deleteWoundRows(trx, { char_sheet_id: charSheet.id, location: 'tete' })
+    assert.deepEqual(again, { wounds: [], cancelledEcheances: [] })
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('deleteWoundRows : l\'échéance que le moteur résout (exceptEcheanceId) n\'est jamais annulée ici', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    const head = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne', schedule)
+    const { cancelledEcheances } = await deleteWoundRows(trx, { id: head.wound.id }, { exceptEcheanceId: head.echeance.id })
+    assert.deepEqual(cancelledEcheances, [])
+    assert.equal(await statusOfEcheance(trx, head.echeance), 'active')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('une échéance déjà terminée (completed) n\'est pas touchée par la suppression de sa case', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    const head = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne', schedule)
+    await trx('game_echeances').where({ id: head.echeance.id }).update({ status: 'completed' })
+    const { cancelledEcheances } = await deleteWoundRows(trx, { id: head.wound.id })
+    assert.deepEqual(cancelledEcheances, [])
+    assert.equal(await statusOfEcheance(trx, head.echeance), 'completed')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('resolveWoundInsertion (promotion) : les échéances des cases fusionnées sont annulées et journalisées, celle de la case finale reste vivante', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    const one = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    const two = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule) // la ligne déborde -> Grave
+    assert.equal(result.promoted, true)
+    assert.equal(result.wound.severity, 'grave')
+    assert.deepEqual(new Set(result.cancelledEcheances.map(e => e.id)), new Set([one.echeance.id, two.echeance.id]))
+    assert.equal(await statusOfEcheance(trx, result.echeance), 'active', 'la Grave obtenue a son échéance, vivante')
+
+    const restores = buildWoundInsertionUndoEntries(result).filter(e => e.table === 'game_echeances' && e.previousValues !== null)
+    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([one.echeance.id, two.echeance.id]))
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('resolveWoundImprovement : l\'échéance de la case d\'origine est annulée (retournée et journalisée) ; sauf celle que le moteur résout', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    // Cas « Chance » : personne ne résout l'échéance de la case réduite — elle est annulée avec elle.
+    const grave = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'grave', schedule)
+    const infection = await infectionEcheanceOf(trx, campaign, character, grave.wound.id)
+    const reduced = await resolveWoundImprovement(trx, grave.wound.id, schedule)
+    assert.deepEqual(new Set(reduced.cancelledEcheances.map(e => e.id)), new Set([grave.echeance.id, infection.id]))
+    assert.equal(await statusOfEcheance(trx, grave.echeance), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, reduced.echeance), 'active', 'la Moyenne obtenue a la sienne')
+    const restores = buildWoundImprovementUndoEntries(grave.wound, reduced).filter(e => e.table === 'game_echeances' && e.previousValues !== null)
+    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([grave.echeance.id, infection.id]))
+
+    // Cas « guérison » : l'échéance résolue par le moteur (exceptEcheanceId) reste à lui.
+    const critique = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'critique', schedule)
+    const healed = await resolveWoundImprovement(trx, critique.wound.id, schedule, { exceptEcheanceId: critique.echeance.id })
+    assert.deepEqual(healed.cancelledEcheances, [])
+    assert.equal(await statusOfEcheance(trx, critique.echeance), 'active')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('getHealingRetrySchedule : Moyenne/Grave = la durée de la gravité, soins constants = 1 semaine, Légère et Mort n\'en ont pas', () => {
+  assert.deepEqual(getHealingRetrySchedule('moyenne', 'corps'), { intervalMinutes: 3 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
+  assert.deepEqual(getHealingRetrySchedule('grave', 'corps'), { intervalMinutes: 7 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
+  for (const [severity, location] of [['critique', 'corps'], ['mortelle', 'tete'], ['mort_subite', 'bras_droit']]) {
+    assert.deepEqual(getHealingRetrySchedule(severity, location), { intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 1 }, `${severity}/${location}`)
+  }
+  assert.equal(getHealingRetrySchedule('legere', 'corps'), null)
+  assert.equal(getHealingRetrySchedule('mort_subite', 'tete'), null)
 })

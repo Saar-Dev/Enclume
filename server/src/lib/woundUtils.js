@@ -4,7 +4,7 @@ import {
   chanceCostOfStep, maxNormalChanceDegrees,
 } from '../../../shared/woundConstants.js'
 import { canSpendChance } from '../../../shared/chanceRules.js'
-import { initializeWoundHealingEcheance } from './woundHealingSchedule.js'
+import { initializeWoundHealingEcheance, cancelWoundEcheances } from './woundHealingSchedule.js'
 
 // Test de Choc requis ? RAW : Grave (Tête/Corps), Critique, Mortelle, et Membre détruit (bras/jambe). La Mort subite
 // (6ᵉ ligne en Tête/Corps) n'en fait aucun : « le personnage meurt sur le coup » (REGLEBLESSURES.md:164-167).
@@ -82,17 +82,39 @@ async function insertWoundRow(trx, { char_sheet_id, location, severity, is_stabi
   return { wound, echeance }
 }
 
+// SEUL suppresseur de lignes `character_wounds`, comme insertWoundRow en est le seul écrivain : une échéance vit et meurt avec sa case
+// (WOUND-ECHEANCE-GHOSTS — 87 lignes de revue « sans blessure » sur 97 dans la base locale, dues à des cases supprimées dont
+// l'échéance restait vivante). Supprime les cases correspondant à `where` puis annule leurs échéances vivantes (guérison ET infection).
+// `exceptEcheanceId` : l'échéance que le moteur résout en ce moment (voir cancelWoundEcheances). Retourne les cases supprimées et les
+// échéances annulées (avant annulation) : de quoi construire les entrées d'annulation d'une avance de temps.
+export async function deleteWoundRows(trx, where, { exceptEcheanceId = null } = {}) {
+  const wounds = await trx('character_wounds').where(where).select('*')
+  if (wounds.length === 0) return { wounds: [], cancelledEcheances: [] }
+  const ids = wounds.map(w => w.id)
+  await trx('character_wounds').whereIn('id', ids).del()
+  const cancelledEcheances = await cancelWoundEcheances(trx, ids, { exceptEcheanceId })
+  return { wounds, cancelledEcheances }
+}
+
 // undoEntry générique de la ligne d'échéance créée avec une case (voir buildWoundInsertionUndoEntries).
 function echeanceUndoEntries(echeance) {
   return echeance ? [{ table: 'game_echeances', rowId: echeance.id, previousValues: null }] : []
+}
+
+// undoEntries des échéances ANNULÉES avec leur case : rejouées à l'envers, elles restaurent l'échéance telle qu'elle était (previousValues =
+// la ligne d'origine) — sinon annuler l'avance de temps rendrait la case sans son échéance.
+function cancelledEcheanceUndoEntries(cancelledEcheances = []) {
+  return cancelledEcheances.map(e => ({ table: 'game_echeances', rowId: e.id, previousValues: e }))
 }
 
 // Récursif — résout la promotion en cascade dans une transaction knex. `deletedWounds` accumule les
 // lignes supprimées par la cascade (vide si aucune promotion) — nécessaire aux appelants qui doivent
 // construire des undoEntries génériques { table, rowId, previousValues } (Lot 2, ex.
 // wound_infection_check) sur une insertion qui peut être un mélange delete+insert, pas juste un insert.
-// Retourne aussi `echeance` : l'échéance de guérison de la case finale (null si elle guérit seule ou ne guérit pas).
-export async function resolveWoundInsertion(trx, char_sheet_id, location, severity, schedule) {
+// Retourne aussi `echeance` : l'échéance de guérison de la case finale (null si elle guérit seule ou ne guérit pas), et
+// `cancelledEcheances` : celles des cases fusionnées par la cascade, annulées avec elles (deleteWoundRows).
+// `exceptEcheanceId` : l'échéance que le moteur résout en ce moment, jamais annulée ici (ex. l'infection dont la case est promue).
+export async function resolveWoundInsertion(trx, char_sheet_id, location, severity, schedule, { exceptEcheanceId = null } = {}) {
   requireSchedule(schedule)
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
   if (!maxCount) throw new AppError(400, `Gravité "${severity}" invalide pour "${location}"`)
@@ -106,9 +128,14 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
 
   // Règle de promotion : shared/woundConstants.js:isWoundLinePromoted (Mortelle : au dépassement seulement).
   if (next && isWoundLinePromoted(severity, currentCount, maxCount)) {
-    await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
-    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next, schedule)
-    return { ...result, promoted: true, deletedWounds: [...existingRows, ...result.deletedWounds] }
+    const { cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id, location, severity }, { exceptEcheanceId })
+    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next, schedule, { exceptEcheanceId })
+    return {
+      ...result,
+      promoted: true,
+      deletedWounds: [...existingRows, ...result.deletedWounds],
+      cancelledEcheances: [...cancelledEcheances, ...result.cancelledEcheances],
+    }
   }
 
   if (currentCount >= maxCount) {
@@ -116,28 +143,32 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
   }
 
   const { wound, echeance } = await insertWoundRow(trx, { char_sheet_id, location, severity }, schedule)
-  return { wound, echeance, promoted: false, deletedWounds: [] }
+  return { wound, echeance, promoted: false, deletedWounds: [], cancelledEcheances: [] }
 }
 
 // undoEntries génériques { table, rowId, previousValues } pour un résultat de resolveWoundInsertion —
 // une entrée par ligne supprimée par la cascade (previousValues = son contenu) + une pour la ligne
-// insérée (previousValues: null) + une pour l'échéance de guérison créée avec elle (previousValues: null).
+// insérée (previousValues: null) + une pour l'échéance de guérison créée avec elle (previousValues: null) + une par échéance annulée avec
+// une case fusionnée (previousValues = la ligne d'origine).
 // Convention Lot 2, docs/PLAN_FATIGUE_DOMMAGES.md §8.
 export function buildWoundInsertionUndoEntries(insertionResult) {
   return [
     ...insertionResult.deletedWounds.map(w => ({ table: 'character_wounds', rowId: w.id, previousValues: w })),
     { table: 'character_wounds', rowId: insertionResult.wound.id, previousValues: null },
     ...echeanceUndoEntries(insertionResult.echeance),
+    ...cancelledEcheanceUndoEntries(insertionResult.cancelledEcheances),
   ]
 }
 
 // Même convention pour un résultat de resolveWoundImprovement : la case d'origine supprimée (previousValues = son contenu),
-// la case obtenue (previousValues: null) si elle existe, et son échéance de guérison (previousValues: null) si elle en a une.
+// la case obtenue (previousValues: null) si elle existe, son échéance de guérison (previousValues: null) si elle en a une, et les échéances
+// annulées avec la case d'origine (ex. son infection en cours ; previousValues = la ligne d'origine).
 export function buildWoundImprovementUndoEntries(originalWound, improvementResult) {
   return [
     { table: 'character_wounds', rowId: originalWound.id, previousValues: originalWound },
     ...(improvementResult.wound ? [{ table: 'character_wounds', rowId: improvementResult.wound.id, previousValues: null }] : []),
     ...echeanceUndoEntries(improvementResult.echeance),
+    ...cancelledEcheanceUndoEntries(improvementResult.cancelledEcheances),
   ]
 }
 
@@ -152,18 +183,20 @@ export function buildWoundImprovementUndoEntries(originalWound, improvementResul
 // case qui vient de guérir (`echeance.next_due_minutes`) : le repère mécanique de la campagne, lui, n'avance qu'à la
 // confirmation de l'avance de temps — la case naîtrait datée AVANT le jour où elle est réellement devenue plus légère.
 // Défaut : le repère mécanique courant (la Chance, qui s'exerce « maintenant »).
-export async function resolveWoundImprovement(trx, woundId, schedule, { steps = 1, occurredAtGameMinutes } = {}) {
+// La case d'origine est supprimée par deleteWoundRows : ses échéances vivantes sont annulées avec elle (retournées dans
+// `cancelledEcheances`), SAUF `exceptEcheanceId` — l'échéance de guérison que le moteur résout, qui fixe elle-même son statut final.
+export async function resolveWoundImprovement(trx, woundId, schedule, { steps = 1, occurredAtGameMinutes, exceptEcheanceId = null } = {}) {
   requireSchedule(schedule)
   if (!Number.isInteger(steps) || steps < 1) throw new Error(`resolveWoundImprovement : steps doit être un entier ≥ 1 (reçu ${steps})`)
 
   const wound = await trx('character_wounds').where({ id: woundId }).first()
   if (!wound) throw new AppError(404, `Blessure "${woundId}" introuvable`)
 
-  await trx('character_wounds').where({ id: woundId }).del()
+  const { cancelledEcheances } = await deleteWoundRows(trx, { id: woundId }, { exceptEcheanceId })
 
   let targetSeverity = wound.severity
   for (let step = 0; step < steps && targetSeverity; step += 1) targetSeverity = improvedSeverity(targetSeverity)
-  if (!targetSeverity) return { wound: null, echeance: null, healed: true }
+  if (!targetSeverity) return { wound: null, echeance: null, cancelledEcheances, healed: true }
 
   const { wound: newWound, echeance } = await insertWoundRow(trx, {
     char_sheet_id: wound.char_sheet_id,
@@ -172,7 +205,7 @@ export async function resolveWoundImprovement(trx, woundId, schedule, { steps = 
     is_stabilized: wound.is_stabilized,
     occurredAtGameMinutes,
   }, schedule)
-  return { wound: newWound, echeance, healed: false }
+  return { wound: newWound, echeance, cancelledEcheances, healed: false }
 }
 
 // hasSeverityRoom — vrai si ce palier a encore une case libre pour cette localisation (même règle

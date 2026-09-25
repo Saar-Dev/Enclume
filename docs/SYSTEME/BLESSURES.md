@@ -1,4 +1,6 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
+> terminent plus jamais l'échéance de guérison (§« Guérison et Infection »).
 > **Amendé 2026-09-25 (soir) — guérison en chaîne (ticket `WOUND-HEAL-CHAIN-STOPS`)** : toute case de blessure écrite (coup reçu, promotion,
 > guérison, Chance, case d'infection) naît **avec** son échéance de guérison, programmée par le seul écrivain de lignes
 > (`woundUtils.js`) ; la guérison ne s'arrête plus après un cran. Voir §« Guérison et Infection ».
@@ -24,7 +26,7 @@ shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALT
                             (isWoundLinePromoted, isFatalWound, getWoundEffects, getWoundHealing, WOUND_IMPROVEMENT_TARGET…)
 shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
 server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue) / getShockMalus(severity, location)
-server/lib/woundUtils.js  — SEUL écrivain de `character_wounds` (insertion en cascade, amélioration, case d'infection : chaque case naît
+server/lib/woundUtils.js  — SEUL écrivain ET SEUL suppresseur de `character_wounds` (une échéance vit et meurt avec sa case ; insertion en cascade, amélioration, case d'infection : chaque case naît
                             avec son échéance de guérison), tri SQL, Test de Choc requis
 server/lib/woundHealingSchedule.js — programme l'échéance de guérison d'UNE case (module feuille, appelé par woundUtils.js)
 server/lib/woundService.js — applyWound (insertion + `dead` + diffusion) / removeWound / /heal
@@ -258,7 +260,7 @@ une gravité) :
 | Membre détruit (`mort_subite` sur un bras/une jambe) | 3 semaines | Oui | hebdomadaire, 3 occurrences |
 
 Légère guérit seule, sans échéance ni Test. **Une Mort (`mort_subite` en Tête/Corps) n'a aucune échéance** : la résurrection reste une
-décision du MJ. `echec`/`catastrophe` engendrent une `wound_infection_check`.
+décision du MJ. `echec`/`catastrophe` engendrent une `wound_infection_check` **et ne terminent jamais l'échéance de guérison** (voir « Le Test suivant » ci-dessous).
 
 **Cible d'une amélioration** — `improvedSeverity(severity)` (`woundUtils.js`, lit `WOUND_IMPROVEMENT_TARGET`) : la gravité juste en
 dessous, **sauf** la 6ᵉ ligne qui devient une **Critique** (RAW : « un Membre détruit devient une Blessure critique » ;
@@ -281,11 +283,31 @@ la **Chance** guérit comme si elle avait été reçue ainsi (décision de Saar,
 - **Annulation d'une avance de temps** : `buildWoundInsertionUndoEntries` / `buildWoundImprovementUndoEntries` journalisent aussi
   l'échéance créée avec la case (`previousValues: null`), pour que `cancelPendingAdvance` la retire.
 
-**Limites connues** (suivies en tickets) : `resolveWoundImprovement` ne vérifie pas la capacité de la ligne cible (`WOUND-HEAL-LINE-CAPACITY`) ;
-l'échéance d'une case supprimée (Chance, `/heal`, suppression MJ, promotion) n'est pas retirée avec elle — elle se termine d'elle-même
-sans effet, mais reste `active` et s'afficherait sans blessure dans l'écran de revue du MJ ; les échéances d'infection créées par un
-Échec/Catastrophe n'ont pas d'entrée d'annulation ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée (pas
-d'horloge où programmer sa guérison).
+**Une échéance meurt avec sa case** (Lot 0 de `PLAN_REVUE_GUERISON`, 2026-09-25, `WOUND-ECHEANCE-GHOSTS`) : `woundUtils.js` est aussi l'**UNIQUE
+suppresseur** de lignes (`deleteWoundRows` — promotion, amélioration, `removeWound`, `/heal` n'écrivent plus jamais un `.del()`). Il annule les
+échéances **vivantes** (`active`, `pending_mj_review`, `awaiting_player_roll`) de guérison ET d'infection des cases supprimées (statut `cancelled`,
+aucune ligne effacée — `woundHealingSchedule.js:cancelWoundEcheances`). Avant ce lot, 87 des 97 lignes de l'écran de revue de la base locale
+étaient des échéances « sans blessure » qui bloquaient la confirmation de l'avance de temps.
+- **`exceptEcheanceId`** : l'échéance que le moteur est en train de résoudre n'est jamais annulée par ce suppresseur — c'est le moteur qui fixe son
+  statut final (sinon il la « ressusciterait » en `active`). Un handler d'infection dont la case est fusionnée par la promotion se termine.
+- **Annulation d'une avance de temps** : les échéances annulées avec une case (guérison : ex. son infection en cours ; promotion : les cases fusionnées)
+  entrent dans les `undoEntries` avec leur ligne d'origine (`previousValues`) : annuler l'avance les **restaure**.
+- **Diffusion** : `woundService.js` émet `GAME_ECHEANCE_RESOLVED` pour chaque échéance annulée (suppression MJ, `/heal`, promotion, Chance) : le panneau de
+  revue ouvert retire la ligne. Les annulations faites dans un handler du moteur (sans `io`) ne sont pas diffusées (Lot 1 : route groupée).
+
+**Le Test suivant** (Lot 0, `WOUND-HEAL-ONESHOT-STUCK`, décisions de Saar 2026-09-25) : **un seul calcul**, `woundEvolutionService.js:buildFailedHealingReschedule`.
+Un Échec ou une Catastrophe ne terminent JAMAIS l'échéance : pas la dernière occurrence → le cycle continue ; dernière occurrence (ou échéance unique) →
+une nouvelle tentative (`woundHealingSchedule.js:getHealingRetrySchedule`) — Moyenne/Grave (guérison naturelle) : la durée de la gravité (3 jours / 1 semaine) ;
+Critique/Mortelle/Membre détruit (soins constants) : **1 semaine**. RAW (`REGLEBLESSURES.md:393-407`, `:435-485`) : un soin loupé n'est pas une guérison — Test de
+Constitution contre l'infection ; le RAW ne dit pas la durée d'une nouvelle tentative (semaine suivante = décision de Saar). L'ancienne case « le personnage
+continue-t-il d'être soigné ? » (`soinsContinues`) n'a plus aucun effet côté serveur (l'écran la retire au Lot 2). Vérifié par exécution avant le correctif : un 2ᵉ Échec,
+un Échec sur la dernière semaine d'une Critique et une Catastrophe sur une Moyenne laissaient la blessure sans plus aucune échéance.
+
+**Limites connues** (suivies en tickets) : `resolveWoundImprovement` ne vérifie pas la capacité de la ligne cible (`WOUND-HEAL-LINE-CAPACITY`) ; une Légère
+n'est jamais retirée (`WOUND-LEGERE-NEVER-HEALS`) ; les échéances d'infection créées par un Échec/Catastrophe n'ont pas d'entrée d'annulation d'avance
+(`ECHEANCE-SPAWN-UNDO`) ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée, pas d'horloge où programmer sa guérison
+(`WOUND-VAULT-NO-CAMPAIGN`) ; toute blessure de PNJ programme une échéance (`WOUND-PNJ-ECHEANCES-FLOOD`) ; une échéance annulée par un handler reste affichée dans un
+écran de revue déjà ouvert jusqu'au rechargement (un clic dessus reçoit un refus 409, sans effet).
 
 **`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
 `WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par

@@ -5,6 +5,7 @@
 import { WOUND_INFECTION, getWoundHealing } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries } from './woundUtils.js'
+import { getHealingRetrySchedule } from './woundHealingSchedule.js'
 import { calcAttributeNA } from './charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
 
@@ -13,10 +14,24 @@ const INFECTION_TICK_MINUTES = 2 * MINUTES_PER_DAY
 // L'échéance de guérison d'une case est programmée à son écriture par woundUtils.js (seul écrivain de lignes de blessure) —
 // woundHealingSchedule.js : les handlers ci-dessous n'ont jamais à s'en soucier.
 
+// Dernière occurrence d'une échéance : l'échéance UNIQUE (Moyenne/Grave : `occurrences_remaining` nul) ou le dernier Test d'une échéance récurrente.
+function isLastOccurrence(echeance) {
+  return echeance.occurrences_remaining === null || echeance.occurrences_remaining <= 1
+}
+
+// Suite d'un cycle récurrent : null à la dernière occurrence (l'échéance d'INFECTION, elle, se termine bien là — un Test « un et un seul »).
 function buildRecurringReschedule(echeance) {
-  const isOneShot = echeance.occurrences_remaining === null
-  if (isOneShot || echeance.occurrences_remaining <= 1) return null
+  if (isLastOccurrence(echeance)) return null
   return { intervalMinutes: echeance.interval_minutes, occurrencesRemaining: echeance.occurrences_remaining - 1 }
+}
+
+// SEUL calcul du Test suivant d'une GUÉRISON qui n'a pas abouti (Échec ou Catastrophe) — une échéance de guérison ne se termine jamais tant
+// que la blessure n'a pas guéri (WOUND-HEAL-ONESHOT-STUCK : ni un Échec sur la dernière semaine d'une Critique, ni un 2ᵉ Échec sur une
+// Moyenne, ni une Catastrophe ne doivent laisser une blessure sans plus aucun Test — vérifié par exécution avant ce correctif) :
+// pas la dernière occurrence → le cycle hebdomadaire continue ; dernière occurrence → une nouvelle tentative (getHealingRetrySchedule).
+function buildFailedHealingReschedule(wound, echeance) {
+  if (!isLastOccurrence(echeance)) return buildRecurringReschedule(echeance)
+  return getHealingRetrySchedule(wound.severity, wound.location)
 }
 
 // Échec/Catastrophe déclenchent tous les deux un wound_infection_check, dès maintenant (même instant
@@ -40,9 +55,10 @@ function buildInfectionSpawn(wound, echeance, { intervalMinutes, occurrencesRema
 // de "temps restant" au moment où le Test se déclenche (il se déclenche exactement à la fin de
 // l'unique période) — la fenêtre réutilise donc la durée caractéristique de la gravité elle-même
 // comme longueur, pas un reliquat qui n'existe pas.
+// La période que ce Test referme est `interval_minutes` (échéance récurrente, y compris une nouvelle tentative) ; une échéance unique n'en a pas
+// (`interval_minutes` nul) : la durée de la gravité fait alors office de période.
 function computeCatastropheInfectionOccurrences(wound, echeance) {
-  const isOneShot = echeance.occurrences_remaining === null
-  const windowMinutes = isOneShot ? getWoundHealing(wound.severity, wound.location).durationMinutes : echeance.interval_minutes
+  const windowMinutes = echeance.interval_minutes ?? getWoundHealing(wound.severity, wound.location).durationMinutes
   return Math.round(windowMinutes / INFECTION_TICK_MINUTES)
 }
 
@@ -60,21 +76,21 @@ export async function woundHealingCheckHandler(trx, echeance) {
   const { mjChoice } = echeance.payload
   if (!mjChoice) return { resolved: false } // attend la réponse du MJ
 
-  const isOneShot = echeance.occurrences_remaining === null
   const undoEntries = []
   const spawn = []
   let reschedule
 
   if (mjChoice === 'amelioration') {
-    const isLastOccurrence = isOneShot || echeance.occurrences_remaining <= 1
-    if (isLastOccurrence) {
+    if (isLastOccurrence(echeance)) {
       // La case obtenue naît AVEC son échéance de guérison (la chaîne continue jusqu'à disparition, RAW REGLEBLESSURES.md:366-367),
       // datée du jour d'échéance de cette guérison : `game_time_resolved_minutes` n'avance qu'à la confirmation de l'avance de
       // temps, elle serait datée avant le jour où elle est réellement devenue plus légère.
       const result = await resolveWoundImprovement(
         trx, wound.id,
         { campaignId: echeance.campaign_id, characterId: echeance.character_id },
-        { occurredAtGameMinutes: echeance.next_due_minutes },
+        // exceptEcheanceId : cette échéance-ci fixe elle-même son statut final (le moteur) ; les AUTRES échéances de la case guérie
+        // (ex. son infection en cours) sont annulées avec elle et journalisées pour l'annulation d'avance.
+        { occurredAtGameMinutes: echeance.next_due_minutes, exceptEcheanceId: echeance.id },
       )
       undoEntries.push(...buildWoundImprovementUndoEntries(wound, result))
       reschedule = null
@@ -82,14 +98,10 @@ export async function woundHealingCheckHandler(trx, echeance) {
       reschedule = buildRecurringReschedule(echeance)
     }
   } else if (mjChoice === 'echec') {
-    reschedule = isOneShot
-      ? (echeance.payload.soinsContinues
-          ? { intervalMinutes: getWoundHealing(wound.severity, wound.location).durationMinutes, occurrencesRemaining: 1 }
-          : null)
-      : buildRecurringReschedule(echeance)
+    reschedule = buildFailedHealingReschedule(wound, echeance)
     spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: null, occurrencesRemaining: null }))
   } else if (mjChoice === 'catastrophe') {
-    reschedule = buildRecurringReschedule(echeance)
+    reschedule = buildFailedHealingReschedule(wound, echeance)
     const occurrencesRemaining = computeCatastropheInfectionOccurrences(wound, echeance)
     spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: INFECTION_TICK_MINUTES, occurrencesRemaining }))
   } else {
@@ -166,13 +178,17 @@ export async function woundInfectionCheckHandler(trx, echeance) {
 
   const infects = !isSuccess || rule.infectsOnSuccess
   // Une case supplémentaire seulement quand le RAW la prévoit (WOUND_INFECTION.extraCase) : jamais pour Mortelle.
+  let woundPromotedAway = false
   if (infects && rule.extraCase) {
-    // La case d'infection guérit comme toute autre case : elle naît avec sa propre échéance de guérison.
+    // La case d'infection guérit comme toute autre case : elle naît avec sa propre échéance de guérison. Si la ligne déborde, la
+    // cascade fusionne des cases (dont, peut-être, celle infectée) et annule leurs échéances — sauf CELLE-CI, que le moteur résout.
     const insertion = await resolveWoundInsertion(
       trx, wound.char_sheet_id, wound.location, wound.severity,
       { campaignId: echeance.campaign_id, characterId: echeance.character_id },
+      { exceptEcheanceId: echeance.id },
     )
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
+    woundPromotedAway = insertion.deletedWounds.some(w => w.id === wound.id)
   }
 
   // Mortelle/Membre détruit (§3.3, `survivalHours`) : délai de survie affiché au MJ, jamais appliqué automatiquement
@@ -191,7 +207,8 @@ export async function woundInfectionCheckHandler(trx, echeance) {
     payload: { ...echeance.payload, periodesSansSoin, rollResult: null },
   })
 
-  const reschedule = buildRecurringReschedule(echeance)
+  // Sa case n'existe plus (fusionnée par la promotion) : l'infection n'a plus d'objet, elle se termine au lieu de se reprogrammer sans blessure.
+  const reschedule = woundPromotedAway ? null : buildRecurringReschedule(echeance)
 
   return {
     resolved: true,

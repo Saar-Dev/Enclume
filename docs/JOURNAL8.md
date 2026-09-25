@@ -8686,3 +8686,24 @@ campagne nulle) — ticketé, pas modifié ici.
 `git diff --check` ; aucun résidu en base (vérifié par lecture). **Non testé** : scénario réel en jeu (avance de temps → revue MJ → guérison d'une Critique jusqu'à sa Légère ;
 réduction par la Chance suivie d'une avance de temps) — à la charge de Saar. **Données** : aucune migration ; les blessures déjà en base gardent leurs échéances (aucune blessure
 guérissable n'était sans échéance en local ; le serveur distant n'a pas été inspecté [INCONNU]). **Retour arrière** : `git revert` du commit (additif côté données).
+
+---
+
+## Session (Dev) — 2026-09-25 — Lot 0 de l'écran de revue des guérisons : une échéance meurt avec sa case, le Test suivant ne s'éteint jamais (`WOUND-ECHEANCE-GHOSTS`, `WOUND-HEAL-ONESHOT-STUCK`)
+
+**Cause racine** [VÉRIFIÉ en base et par exécution] : (1) quatre sites supprimaient des lignes de `character_wounds` sans toucher à leurs échéances
+(cascade de promotion, amélioration, `removeWound`, `/heal`) — 89 échéances « fantômes » dans la base locale, 87 des 97 lignes de l'écran de revue, qui
+bloquaient la confirmation d'une avance de temps ; (2) le calcul du Test suivant terminait l'échéance après un Échec ou une Catastrophe (échéance unique, 2ᵉ échec, dernière
+semaine d'une Critique) — `isOneShot` était lu sur `occurrences_remaining`, nul seulement avant la première reprogrammation (sonde en transaction annulée : `null` dans 4 cas sur 4).
+
+**Décisions d'architecture** : `woundUtils.js` est l'UNIQUE suppresseur (`deleteWoundRows`) comme il est l'unique écrivain : il annule les échéances vivantes de guérison ET d'infection
+(`woundHealingSchedule.js:cancelWoundEcheances`, statut `cancelled` déjà prévu par la contrainte, aucune ligne effacée) ; `exceptEcheanceId` protège l'échéance que le moteur résout ; les
+échéances annulées entrent dans les `undoEntries` (annuler l'avance les restaure) ; `woundService.js` diffuse `GAME_ECHEANCE_RESOLVED` pour chacune (l'écran ouvert retire la ligne). Un
+seul calcul du Test suivant (`buildFailedHealingReschedule`) : Échec/Catastrophe ne terminent jamais l'échéance.
+
+**Décisions de Saar (2026-09-25)** : nouvelle tentative après un soin loupé — Moyenne/Grave : la durée de la gravité ; Critique/Mortelle/Membre détruit : la semaine suivante (Q2b ; le RAW est muet
+sur ce délai, `REGLEBLESSURES.md:393-407`). La case « le personnage continue-t-il d'être soigné ? » est sans effet côté serveur (retirée de l'écran au Lot 2).
+
+**Testé** : `node --env-file=.env --test` sur `woundUtils`, `woundEvolutionService`, `woundService` — 135/135 (15 nouveaux tests, 2 anciens corrigés car ils figeaient le défaut : suppresseur unique, exception du moteur, promotion, Chance, `/heal`, `removeWound`, échecs répétés,
+annulation d'avance rejouée qui restaure une infection) ; aucun résidu en base, les données de Saar inchangées. **Validé en jeu par Saar** (2026-09-25) : revue MJ sans ligne fantôme après `/heal`, retrait en direct, échecs répétés. **Non testé** : plusieurs semaines de jeu réelles. **Données** :
+aucune migration ; les 89 fantômes existants ont été annulés par Saar (`cancel_ghost_wound_echeances_20260925.js`). **Retour arrière** : `git revert` du commit du lot (les échéances annulées gardent leur ligne).
