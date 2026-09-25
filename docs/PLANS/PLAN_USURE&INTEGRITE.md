@@ -716,7 +716,9 @@ nécessitant un Test réussi avec la Compétence d'arme correspondante. »* Aucu
 présente **au MJ** les branches ; seules deux touchent le système matériel :
 - *s'enraye* → `malfunction_severity = 'simple'` (débloque par le bricolage §10.1-a, 3 Tours, Compétence d'usage) ;
 - *se casse* (mauvaise qualité) → destruction ou grosse perte d'ITG, au jugement du MJ.
-« Tombe au sol » / « perd son bouclier » sont spatiaux/narratifs — hors système ITG.
+« Tombe au sol » / « perd son bouclier » sont spatiaux/narratifs — hors système ITG. **La branche « tombe au sol » dépend de
+`PLANS/PLAN_OBJETS_AU_SOL.md`** (dépôt réel de l'arme au pied du token, décision Saar 2026-09-25) : tant qu'il n'existe pas, elle reste
+un descripteur MJ non mécanisé.
 
 **#8 « Panne d'un système ».** Le RAW ne donne qu'une ligne. Handler → `integrityService.runPanneTest`
 sur un équipement du personnage choisi par le MJ (ciblage « électronique » automatique : attend

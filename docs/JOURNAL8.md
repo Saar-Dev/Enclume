@@ -8559,3 +8559,46 @@ et stable : pas encore poussé en production).
 un coup ≥ 30 de bout en bout en combat réel ; le badge « mort » sur un token posé par une blessure ; une guérison de Membre détruit sur plusieurs
 semaines de jeu. **Données** : migration 363 appliquée en local ; aucune autre. **Retour arrière** : `git revert` de `4d8811c`, `fd4e4a1`, `a612c94`
 (indépendants) ; `down()` de la migration 363.
+
+---
+
+## Session (Dev) — 2026-09-25 — Permuter l'arme en combat (prise en main d'un objet du Sac / de la Ceinture)
+
+**Besoin** (Saar, 2026-09-24) : après un lancer de grenade il reste des grenades au Sac / à la Ceinture, mais le personnage a la main vide
+et rien ne permet d'en prendre une autre ; « il doit forcément aller chercher une nouvelle arme (ou grenade) et donc payer le coût en
+Initiative ». Plan `docs/Old/PLAN_PRISE_EN_MAIN.md` (v3.1 validée), maquette `docs/Old/maquette-permuter/`. Documentation définitive :
+`SYSTEME/COMBAT.md` « Permuter l'arme en combat », `COMBAT_FLUX.md`, `SERVICES_COMBAT.md`, `CHARACTER.md`, `VOCABULARY.md`.
+
+**Décisions de Saar (règles de jeu et d'interface).**
+- **Coût par conteneur** : Ceinture = Préparation, Initiative −3, l'objet sert dans le même Tour ; Sac = Action simple (aucun coût d'Initiative,
+  exclusive avec tir / corps à corps / rechargement). Décision de conception, pas une lecture littérale du RAW (qui donne « Saisir un objet
+  −3 » et « Sortir un objet d'un sac : Action simple »). L'état Rangée / Au clair n'est pas modifié par la permutation.
+- **Capacité des conteneurs** : règle « ne jamais empirer » (poids rangé après l'échange ≤ max(capacité, poids d'avant)) ; l'arme sortante va dans
+  le conteneur d'origine de l'entrante ; si elle n'y rentre pas la permutation est **refusée** (« message d'erreur et on corrigera en v2 »).
+  Jamais le Coffre — l'approximation « à terre = Coffre » a été rejetée (téléportation + allègement du poids porté).
+- **Poids d'une grenade = 300 g** (migration 364, 15 grenades) : le poids porté des personnages qui en emportent monte (8 grenades = +2,4 kg).
+- **Bouclier = objet à une main comme un autre** : aucune règle spéciale (l'exclusion du bouclier venait d'une duplication des règles de slots).
+- **La fiche reste libre** : équiper depuis la fiche en combat n'est pas verrouillé ; « Permuter » est le chemin payant, pas le seul.
+- **Munitions** : le chargeur plein gratuit à la toute première mise en main (Session 81) est **gardé** ; « première mise en main = arme vide » écartée
+  (changement global : fiche, équipement d'urgence du MJ, PNJ).
+- **Une permutation refusée fait perdre son action** au personnage (« c'est sa faute, ce n'est pas au système de lui donner une seconde chance ») :
+  l'attaque dépendante est annulée et le chat le dit ; l'Initiative payée n'est pas remboursée ; un corps à corps n'est jamais dégradé en « mains nues ».
+- **Interface** : « une action = une extension de fenêtre dédiée » — ⇄ à côté de ↻ ouvre l'extension « Permuter » (colonne 2) ; un refus prévisible est
+  signalé **en rouge mais reste cliquable** (le joueur assume, le serveur tranche). L'ancienne section « Prendre en main » est supprimée.
+- **« À terre » réel** (l'objet lâché devient une entité 3D ramassable) = chantier séparé `PLANS/PLAN_OBJETS_AU_SOL.md` ; les Catastrophes « arme lâchée »
+  restent un autre chantier (L9 de `PLAN_USURE&INTEGRITE.md`).
+
+**Architecture.** Décision unique partagée serveur / client (`decideHandSwap`), exécution transactionnelle (`swapItemInHand`, `updateItem` = enveloppe de
+`applyItemUpdate(trx)`), annonce testable seule (`combatGrabAnnouncement`), une seule règle « arme déclarée plus en main → l'action tombe, le chat le
+dit » (`combatHandWeaponNotice`), aperçu client sans règle dupliquée (`declaredSwap`). Les armes en main des PNJ sont dérivées de leur inventaire (plus de
+main « fantôme » après un lancer). Trouvailles corrigées au passage : une arme rangée du même calibre était proposée comme « munition » au rechargement ;
+le corps à corps annulé retombait en silence sur « mains nues » ; le message « main à sec » était faux pour une arme absente.
+
+**Testé** : tests purs `shared/` 809/809, client 337/337 (dont `declaredSwap`, `grabList`, `pnjHandEquipment`, payloads) ; en base (lancés par l'agent, autorisation de Saar) `inventorySwap`
+15, `inventoryEquip` 23 (caractérisation de `updateItem` avant sa scission), `inventoryService` 26, `combatGrabService` 10, `combatGrabAnnouncement` 13,
+`socketCombatAnnouncementGrab` 9 (vrai gestionnaire, dont « permuter la grenade puis la lancer au même Tour »), `socketCombatHandWeaponAbsence` 9 (vraies
+résolutions Tir / zone / CaC / rechargement) ; `npm run build` ; lint des fichiers touchés ; `git diff --check`. **Validé par Saar en jeu** (2026-09-25) :
+côté joueur ET côté MJ. **Non testé** : un tir / corps à corps à deux armes dont seule la seconde manque, de bout en bout (carte complète requise — ticket
+`PERMUTER-DUALWIELD-OFFHAND-E2E`) ; les pastilles du roster des autres tokens lisent encore l'instantané `combat-equipment` (ticket
+`COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE`). **Données** : migration `364_ref_equipment_grenade_weight` (idempotente, `down` en comparaison `::real`) ; aucune autre.
+**Retour arrière** : `git revert` des commits du chantier ; `down()` de la migration 364 remet le poids des 15 grenades à NULL.

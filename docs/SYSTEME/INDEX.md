@@ -1,5 +1,7 @@
 # INDEX.md — Carte documentaire d’Enclume
 
+> Mise à jour 2026-09-25 — chantier « Permuter l'arme en combat » clos : documentation définitive dans `COMBAT.md`, `COMBAT_FLUX.md`,
+> `SERVICES_COMBAT.md`, `CHARACTER.md` ; plan archivé `Old/PLAN_PRISE_EN_MAIN.md` (+ `Old/maquette-permuter/`), `PLAN_OBJETS_AU_SOL.md` (v2) ajouté au §6.
 > Mise à jour 2026-09-24 — chantier « Statut Mort » clos : `STATUTS_TOKEN.md` réécrit (registre, options de campagne, blocage
 > proactif, cadavre), plan archivé `Old/PLAN_STATUT_MORT.md`, `PLAN_BLESSURE_SIXIEME_LIGNE.md` ajouté au §6, 3 couplages ajoutés au §8.
 > Version : 2026-09-11 — §5 (MANUEL) et §6 (PLAN) complétés par relecture directe de `docs/MANUELS/`
@@ -217,6 +219,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md` | Bug ciblé : Choc de mutation à arme naturelle perdu sur la 4ᵉ branche défenseur PJ en défense active (les 3 autres branches sont correctes) | Cadré, cause identifiée, correctif isolé non encore livré |
 | `PLANS/PLAN_CHANCE.md` | Mécanique de dépense de points de Chance — architecture technique (le MANUEL porte la règle métier) | v2.0 réécrite 2026-09-11 (RAW fournie par Saar le jour même) — **cadrage terminé, prêt à coder** |
 | `PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` | 6ᵉ ligne du compteur de blessures RAW (Mort subite / Membre détruit, seuil 30). **Lots 1 (statut `dead`) et 2 (la 6ᵉ ligne dans le moteur) clos** — documentation définitive : `SYSTEME/BLESSURES.md`, `SYSTEME/STATUTS_TOKEN.md`. Il reste : Chance à 3 points (Lot 3), état permanent du membre + rendu (Lot 4). Lot 1 archivé : `Old/PLAN_STATUT_MORT.md` | Lots 1-2 clos ; Lots 3-4 non commencés |
+| `PLANS/PLAN_OBJETS_AU_SOL.md` | « À terre » réel (v2 de « Permuter l'arme en combat ») : l'objet lâché devient une entité 3D ramassable, persistante, sans butin | Stub 2026-09-25, cadrage non commencé ; asset 3D à fournir par Saar. Le chantier « Permuter » est clos : `Old/PLAN_PRISE_EN_MAIN.md` |
 | `PLANS/PLAN_ENTITES_INTERACTIVES_ROADMAP.md` | Document de séquencement (pas un chantier détaillé) — ordonne les prochains incréments du fil entités interactives ouvert par les caisses (quarantaine, preuve `move_type`, extension à d'autres packs, rendu 3D des portes) | Créé 2026-09-16, Lot A (quick wins) prêt à démarrer, Lots B/C non cadrés en détail |
 
 ---

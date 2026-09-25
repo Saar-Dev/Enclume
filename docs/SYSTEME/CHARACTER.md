@@ -532,6 +532,8 @@ Armes avec un `caliber` (couvre les armes de contact à charges) ; le lien arme 
 d'abord, puis prix croissant ; ajoutées par défaut au Sac / à la Ceinture (au Coffre elles ne sont pas rechargeables).
 Proposition de confort : rien n'est ajouté sans geste du joueur, l'ajout passe par la route d'inventaire habituelle.
 
+**Capacité des conteneurs et permutation en combat (2026-09-25)** : `ref_equipment.capacity` (kg) n'est contrôlée QUE par « Permuter » (`shared/inventoryMath.js` : `containerState`, `fitsInContainer`, règle « ne jamais empirer ») — la fiche reste libre, un Sac peut toujours être trop plein. `inventoryService.updateItem` est l'enveloppe transactionnelle d'`applyItemUpdate(trx, …)`, qui porte la validité des emplacements (mains, 2M, Sac requis, composite du bouclier, couches d'armure) ; les refus d'équipement portent un code (`equipRefusal`, `err.refusal`) sans changer le statut ni le message de la route. Poids d'une grenade : 0,3 kg (migration 364) — le poids porté monte pour un personnage qui en emporte. `lib/inventoryBroadcast.js` est l'unique autorité de la salle de diffusion des événements INVENTORY_* (route et combat). Détail de la règle et de l'interface : `SYSTEME/COMBAT.md` « Permuter l'arme en combat ».
+
 ### Jauges de matériel (char_gauges, même patron que l'inventaire)
 
 `characterStore.js` porte `gaugesByCharId` par personnage (`{ [charId]: { [categoryKey]: value } }`).

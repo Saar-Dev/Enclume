@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Maquette — Permuter (fenêtre de déclaration)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+<style>
+/* Maquette statique — docs/Old/PLAN_PRISE_EN_MAIN.md, Lot B2b. Ouvrir le fichier dans un navigateur : aucune dépendance.
+   Couleurs et structure reprises de docs/Old/maquette-declare/Main.dc.html (fenêtre du joueur : accent vert). */
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#5a6b7f;--tx-mid:#7a8798;
+ --warn:#e0a060;--ok:#4caf77;--lost:#e05b5b;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ --accent:#50c878;--accent-bg:rgba(80,200,120,.13);--accent-bd:rgba(80,200,120,.44);
+}
+body{margin:0;background:#05060a;padding:28px 24px 60px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+h1{font:600 20px var(--ui);color:var(--tx-strong);margin:0 0 6px}
+.lead{max-width:760px;font:400 13px/1.55 var(--ui);color:var(--tx-mid);margin:0 0 18px}
+.lead b{color:var(--tx-strong);font-weight:600}
+.rules{max-width:760px;margin:0 0 30px;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:#0a0c14;font:400 12px/1.6 var(--ui);color:var(--tx)}
+.rules li{margin:2px 0}
+.scene{margin:0 0 42px}
+.scene h2{font:600 14px var(--ui);color:var(--accent);margin:0 0 4px}
+.scene p.cap{max-width:760px;font:400 12px/1.5 var(--ui);color:var(--tx-mid);margin:0 0 12px}
+.scene p.cap b{color:var(--tx-strong);font-weight:600}
+.win{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;width:640px;max-width:100%}
+.hdr{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--header)}
+.hx{width:22px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1 var(--mono);color:#05060a;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:var(--accent)}
+.hdr-t{font:600 12px/1 var(--ui);color:var(--tx-strong)}
+.hdr-m{margin-left:auto;font:400 10px/1 var(--mono);color:var(--tx-dim)}
+.body{display:flex;align-items:stretch}
+.col1{width:320px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.col2{flex:1;min-width:0;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+.move{display:flex;align-items:center;gap:9px;margin:8px 8px 4px;padding:8px 9px;border:1px dashed var(--border);border-radius:6px;background:rgba(255,255,255,.03)}
+.move .ml{font:500 11px var(--ui);flex:1;color:var(--tx)}
+.move .mr{font:400 10px var(--mono);color:var(--tx-dim)}
+.alist{padding:4px 8px 10px}
+.aeb{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);padding:6px 4px 2px;display:flex;gap:6px}
+.aeb .h{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-dim);font-size:10px}
+.grp{padding:8px 4px 4px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.11em;color:var(--field)}
+.act{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.022);margin-bottom:3px}
+.act .nm{font:500 12px var(--ui);color:var(--tx);flex:1;min-width:0}
+.act .nm small{display:block;font:400 10px var(--ui);color:var(--tx-dim);margin-top:1px}
+.act .rt{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.act.sel{border-color:var(--accent);background:var(--accent-bg)}
+.act.sel .nm{color:var(--tx-strong)}
+.act .tag{font:600 8px var(--ui);text-transform:uppercase;letter-spacing:.06em;color:var(--accent);border:1px solid var(--accent-bd);border-radius:3px;padding:2px 5px;flex:none}
+.btns{display:flex;gap:4px;flex:none}
+.ib{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;font:600 12px var(--ui);color:var(--tx-mid);background:var(--header)}
+.ib.on{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+.ros{margin-top:auto;border-top:1px solid var(--sep);padding:7px 12px 8px}
+.rosh{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);margin-bottom:5px}
+.rr{display:flex;align-items:center;gap:7px;padding:3px 2px;font:400 11px var(--ui);color:var(--tx-mid)}
+.rr.a{color:var(--tx-strong)}
+.rr .n{flex:1}
+.rr .i{font:400 10px var(--mono);color:var(--field)}
+.c2h{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--sep);font:600 11px/1 var(--ui);color:var(--accent)}
+.c2h .sw{font-size:13px}
+.c2hint{padding:8px 12px 2px;font:400 10px/1.45 var(--ui);color:var(--tx-dim)}
+.c2b{padding:4px 12px 12px;display:flex;flex-direction:column;gap:3px}
+.xk{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field);padding:10px 0 4px}
+.cand{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:5px;background:rgba(255,255,255,.02)}
+.cand .rad{width:12px;height:12px;flex:none;border-radius:50%;border:1.5px solid var(--tx-dim);margin-top:2px;position:relative}
+.cand.on{border-color:var(--accent);background:var(--accent-bg)}
+.cand.on .rad{border-color:var(--accent)}
+.cand.on .rad::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--accent)}
+.cand .cn{font:500 11px var(--ui);color:var(--tx);flex:1;min-width:0}
+.cand.on .cn{color:var(--tx-strong)}
+.cand .cs{display:block;font:400 9px/1.35 var(--ui);color:var(--tx-dim);margin-top:2px}
+.cand .cw{display:block;font:500 9px/1.35 var(--ui);color:var(--lost);margin-top:3px}
+.cand .co{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.cand.warn{border-color:rgba(224,91,91,.45)}
+.after{margin-top:8px;padding:8px 10px;border:1px dashed var(--accent-bd);border-radius:5px;font:400 10px/1.5 var(--ui);color:var(--tx)}
+.after b{color:var(--tx-strong)}
+.ft{display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid var(--border);background:var(--header)}
+.pill{font:700 12px/1 var(--mono);color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-bd);border-radius:5px;padding:6px 8px;flex:none}
+.st{flex:1;text-align:center;font:500 11px var(--ui);color:var(--ok)}
+.bpass{font:500 11px var(--ui);color:var(--tx-mid);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex:none}
+.btn{font:600 12px var(--ui);color:#05060a;background:var(--accent);border:0;border-radius:6px;padding:9px 18px;flex:none}
+.btn.off{background:#26331f;color:#5b6b52}
+.legend{max-width:760px;margin-top:10px;font:400 11px/1.55 var(--ui);color:var(--tx-dim)}
+</style>
+</head>
+<body>
+
+<h1>Permuter — maquette de la fenêtre de déclaration du joueur</h1>
+<p class="lead">
+  <b>Une action = une extension de fenêtre dédiée.</b> Sur la ligne d'une arme, deux boutons ouvrent chacun leur extension à droite :
+  <b>↻ Recharger</b> (la liste des munitions, elle existe déjà) et <b>⇄ Permuter</b> (la liste des armes disponibles pour la permutation).
+  Il n'y a plus de section « Prendre en main » dans la colonne de gauche.
+</p>
+<ul class="rules">
+  <li>La <b>ligne où l'on clique ⇄</b> est l'objet qui sera rangé : c'est le titre de l'extension (« Permuter — Scorpion »). « Mains nues » = une main libre reçoit l'objet.</li>
+  <li>Le <b>bouclier</b> a le même bouton ⇄ que les armes ; comme il n'attaque pas, il n'a pas d'autre extension.</li>
+  <li>Le <b>coût</b> est écrit sur chaque candidat : Ceinture = Préparation, Initiative −3 ; Sac = Action simple (exclusive avec une attaque ou un rechargement).</li>
+  <li>Un <b>seul choix par Tour</b> : cliquer un autre candidat remplace le précédent ; recliquer le candidat choisi l'annule.</li>
+  <li>Un candidat qui sera <b>refusé</b> est signalé <b>en rouge mais reste cliquable</b> : le joueur assume, le serveur tranche, le chat le dit.</li>
+  <li>La colonne de gauche montre l'état <b>après permutation</b> : l'objet choisi apparaît en main, l'objet remplacé disparaît.</li>
+</ul>
+
+<!-- ─────────────────────────── Scène 1 ─────────────────────────── -->
+<section class="scene">
+  <h2>1. Après un lancer de grenade : les mains sont vides</h2>
+  <p class="cap">Le cas d'origine du chantier. Jean Val-Jean n'a plus rien en main. Il clique <b>⇄ sur « Mains nues »</b> : l'extension liste ce qu'il peut prendre au Sac et à la Ceinture.</p>
+  <div class="win">
+    <div class="hdr"><span class="hx">JV</span><span class="hdr-t">Jean Val-Jean</span><span class="hdr-m">1 / 2 déclarés</span></div>
+    <div class="body">
+      <div class="col1">
+        <div class="move"><span class="ml">Déplacement</span><span class="mr">définir la zone</span></div>
+        <div class="alist">
+          <div class="aeb">Action <span class="h">un seul choix</span></div>
+          <div class="grp">Contact</div>
+          <div class="act"><span class="nm">Mains nues<small>permanent</small></span><span class="btns"><span class="ib on" title="Permuter">⇄</span></span></div>
+        </div>
+        <div class="ros"><div class="rosh">Roster — 2 PNJs/Drones</div>
+          <div class="rr"><span class="n">Baboulinet</span><span class="i">INI 7</span></div>
+          <div class="rr a"><span class="n">▶ Jean Val-Jean</span><span class="i">INI 11</span></div></div>
+      </div>
+      <div class="col2">
+        <div class="c2h"><span class="sw">⇄</span> Permuter — Mains nues</div>
+        <div class="c2hint">Une main libre reçoit l'objet choisi. Un seul choix par Tour.</div>
+        <div class="c2b">
+          <div class="xk">Ceinture · Préparation</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×2 · peut être lancée ce Tour</span></span><span class="co">−3</span></div>
+          <div class="xk">Sac · Action simple</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Breather <span class="cs">exclusive avec une attaque ou un rechargement</span></span><span class="co">0</span></div>
+          <div class="cand"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×5 · exclusive avec une attaque</span></span><span class="co">0</span></div>
+          <div class="cand"><span class="rad"></span><span class="cn">Matraque Mao <span class="cs">exclusive avec une attaque</span></span><span class="co">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ft"><span class="pill">INI 11 → 11</span><span class="st">Choisis un objet</span><button class="bpass">Passer le tour</button><button class="btn off">Déclarer</button></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── Scène 2 ─────────────────────────── -->
+<section class="scene">
+  <h2>2. La grenade de la Ceinture est choisie</h2>
+  <p class="cap">La colonne de gauche montre l'état <b>après permutation</b> : la grenade est en main, elle apparaît dans Distance et on peut la lancer <b>dans le même Tour</b> (Ceinture = Préparation). L'Initiative annonce −3. « Mains nues » reste là : l'autre main est libre.</p>
+  <div class="win">
+    <div class="hdr"><span class="hx">JV</span><span class="hdr-t">Jean Val-Jean</span><span class="hdr-m">1 / 2 déclarés</span></div>
+    <div class="body">
+      <div class="col1">
+        <div class="move"><span class="ml">Déplacement</span><span class="mr">définir la zone</span></div>
+        <div class="alist">
+          <div class="aeb">Action <span class="h">un seul choix</span></div>
+          <div class="grp">Distance</div>
+          <div class="act"><span class="nm">Grenade à fragmentation<small>MD · zone</small></span><span class="tag">Permutée</span><span class="btns"><span class="ib">⇄</span></span></div>
+          <div class="grp">Contact</div>
+          <div class="act"><span class="nm">Mains nues<small>permanent</small></span><span class="btns"><span class="ib on" title="Permuter">⇄</span></span></div>
+        </div>
+        <div class="ros"><div class="rosh">Roster — 2 PNJs/Drones</div>
+          <div class="rr"><span class="n">Baboulinet</span><span class="i">INI 7</span></div>
+          <div class="rr a"><span class="n">▶ Jean Val-Jean</span><span class="i">INI 11</span></div></div>
+      </div>
+      <div class="col2">
+        <div class="c2h"><span class="sw">⇄</span> Permuter — Mains nues</div>
+        <div class="c2hint">Une main libre reçoit l'objet choisi. Un seul choix par Tour.</div>
+        <div class="c2b">
+          <div class="xk">Ceinture · Préparation</div>
+          <div class="cand on"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×2 · peut être lancée ce Tour</span></span><span class="co">−3</span></div>
+          <div class="xk">Sac · Action simple</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Breather <span class="cs">exclusive avec une attaque ou un rechargement</span></span><span class="co">0</span></div>
+          <div class="cand"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×5 · exclusive avec une attaque</span></span><span class="co">0</span></div>
+          <div class="cand"><span class="rad"></span><span class="cn">Matraque Mao <span class="cs">exclusive avec une attaque</span></span><span class="co">0</span></div>
+          <div class="after">Après la permutation : <b>Grenade à fragmentation en main droite</b>. Une grenade reste à la Ceinture.</div>
+        </div>
+      </div>
+    </div>
+    <div class="ft"><span class="pill">INI 11 → 8</span><span class="st">Prêt</span><button class="bpass">Passer le tour</button><button class="btn">Déclarer</button></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── Scène 3 ─────────────────────────── -->
+<section class="scene">
+  <h2>3. Remplacer le bouclier : même bouton, sans autre extension</h2>
+  <p class="cap">Le personnage tient un Scorpion (main droite) et un bouclier (main gauche). Le bouclier a sa ligne, à la suite des armes, avec <b>⇄ seulement</b> (il n'attaque pas, donc pas de ↻ ni d'options de tir). Il sortira au profit de la grenade.</p>
+  <div class="win">
+    <div class="hdr"><span class="hx">JV</span><span class="hdr-t">Jean Val-Jean</span><span class="hdr-m">1 / 2 déclarés</span></div>
+    <div class="body">
+      <div class="col1">
+        <div class="move"><span class="ml">Déplacement</span><span class="mr">définir la zone</span></div>
+        <div class="alist">
+          <div class="aeb">Action <span class="h">un seul choix</span></div>
+          <div class="grp">Distance</div>
+          <div class="act"><span class="nm">Scorpion<small>MD · CC</small></span><span class="rt">14 / 14</span><span class="btns"><span class="ib">↻</span><span class="ib">⇄</span></span></div>
+          <div class="grp">Contact</div>
+          <div class="act"><span class="nm">Mains nues<small>permanent</small></span></div>
+          <div class="act" style="margin-top:8px"><span class="nm">Bouclier - Moyen<small>MG</small></span><span class="btns"><span class="ib on" title="Permuter">⇄</span></span></div>
+        </div>
+        <div class="ros"><div class="rosh">Roster — 2 PNJs/Drones</div>
+          <div class="rr a"><span class="n">▶ Jean Val-Jean</span><span class="i">INI 11</span></div></div>
+      </div>
+      <div class="col2">
+        <div class="c2h"><span class="sw">⇄</span> Permuter — Bouclier - Moyen (MG)</div>
+        <div class="c2hint">Le bouclier sera rangé dans le conteneur d'où vient l'objet choisi.</div>
+        <div class="c2b">
+          <div class="xk">Ceinture · Préparation</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×2 · peut être lancée ce Tour</span></span><span class="co">−3</span></div>
+          <div class="xk">Sac · Action simple</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Matraque Mao <span class="cs">exclusive avec une attaque</span></span><span class="co">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ft"><span class="pill">INI 11 → 11</span><span class="st">Choisis un objet</span><button class="bpass">Passer le tour</button><button class="btn off">Déclarer</button></div>
+  </div>
+  <p class="legend">Le bouclier est une ligne comme les autres, à la suite des armes, sans groupe ni titre à part. La même ligne apparaît pour tout objet tenu qui n'a aucune action (une grenade sans profil de zone, par exemple).</p>
+</section>
+
+<!-- ─────────────────────────── Scène 4 ─────────────────────────── -->
+<section class="scene">
+  <h2>4. Une permutation qui sera refusée : avertissement rouge, mais cliquable</h2>
+  <p class="cap">Le personnage tient une Gatling (deux mains). Il veut prendre une grenade <b>de la Ceinture</b> : la Gatling devrait y être rangée et elle est trop lourde. La ligne est <b>rouge mais reste cliquable</b> : si le joueur la choisit, le serveur refusera à la résolution, l'action est perdue et le chat le dit. Depuis le Sac (grande capacité), la même Gatling rentre.</p>
+  <div class="win">
+    <div class="hdr"><span class="hx">JV</span><span class="hdr-t">Jean Val-Jean</span><span class="hdr-m">1 / 2 déclarés</span></div>
+    <div class="body">
+      <div class="col1">
+        <div class="move"><span class="ml">Déplacement</span><span class="mr">définir la zone</span></div>
+        <div class="alist">
+          <div class="aeb">Action <span class="h">un seul choix</span></div>
+          <div class="grp">Distance</div>
+          <div class="act"><span class="nm">Gatling<small>2M · RL</small></span><span class="rt">200 / 200</span><span class="btns"><span class="ib">↻</span><span class="ib on" title="Permuter">⇄</span></span></div>
+          <div class="grp">Contact</div>
+          <div class="act"><span class="nm">Mains nues<small>permanent</small></span></div>
+        </div>
+        <div class="ros"><div class="rosh">Roster — 2 PNJs/Drones</div>
+          <div class="rr a"><span class="n">▶ Jean Val-Jean</span><span class="i">INI 11</span></div></div>
+      </div>
+      <div class="col2">
+        <div class="c2h"><span class="sw">⇄</span> Permuter — Gatling (2M)</div>
+        <div class="c2hint">La Gatling sera rangée dans le conteneur d'où vient l'objet choisi.</div>
+        <div class="c2b">
+          <div class="xk">Ceinture · Préparation</div>
+          <div class="cand warn"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×2</span><span class="cw">⚠ La Gatling ne rentre pas dans la Ceinture : la permutation sera refusée et l'action perdue.</span></span><span class="co">−3</span></div>
+          <div class="xk">Sac · Action simple</div>
+          <div class="cand"><span class="rad"></span><span class="cn">Breather <span class="cs">exclusive avec une attaque ou un rechargement</span></span><span class="co">0</span></div>
+          <div class="cand"><span class="rad"></span><span class="cn">Grenade à fragmentation <span class="cs">×5 · exclusive avec une attaque</span></span><span class="co">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ft"><span class="pill">INI 11 → 11</span><span class="st">Choisis un objet</span><button class="bpass">Passer le tour</button><button class="btn off">Déclarer</button></div>
+  </div>
+</section>
+
+</body>
+</html>

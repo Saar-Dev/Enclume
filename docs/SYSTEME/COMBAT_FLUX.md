@@ -165,6 +165,7 @@ aperçu — pastille « Initiative projetée » du pied des 3 fenêtres de décl
 |---|---|
 | move (lente / rapide / max) | 1 |
 | interact / observer / reperer / phrase | 2 |
+| micro `grab_item` (Permuter l'arme) | 2 |
 | assault / melee / reload | 3 |
 | skip (timeout / surprise ratée) | 99 |
 
@@ -242,11 +243,18 @@ type='move_short' / 'move_long' :
 
 type='assault' :
   → resolveAssaultAction() → flushEmissions()
+  → arme déclarée plus en main (permutation refusée, arme rangée…) : l'action tombe et une ligne de chat le dit
+    (`session.actionCancelledWeapon…`, lib/combatHandWeaponNotice.js) — même règle pour la zone / grenade
+    (resolveAoeAssaultAction), le corps à corps (resolveMeleeAction) et le rechargement (COMBAT.md « Permuter l'arme en combat »)
 
 type='reload' :
   → resolveReloadAction()
 
-type='micro' / 'skip' :
+type='micro' + action_key='grab_item' (Permuter) :
+  → resolveGrabAction() (lib/combatGrabService.js) : swapItemInHand en UNE transaction, INVENTORY_UPDATED de chaque
+    objet déplacé, une ligne de chat par issue. sequence 2 : résolue AVANT l'entrée complexe (assault / melee) du même token
+
+type='micro' (autre) / 'skip' :
   → Marqué 'resolved' immédiatement, pas d'effet gameplay V1
 ```
 

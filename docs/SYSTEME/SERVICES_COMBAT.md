@@ -1,6 +1,7 @@
 SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 
     Dernière mise à jour : 2026-09-24 — services du drone d'interception ajoutés à l'arborescence (§1).
+    Mis à jour 2026-09-25 — services de « Permuter l'arme en combat » ajoutés à l'arborescence (§1) : `combatGrabService`, `combatGrabAnnouncement`, `combatHandWeaponNotice`, `inventoryBroadcast` (COMBAT.md « Permuter l'arme en combat »).
     Précédemment : 2026-07-21 — ajout renvoi vers @MODING (mods d'armes).
     Audit de compréhension approfondie 2026-08-26 (suite) : §7 corrigé (advanceSlot périmé →
     advanceTimeline/pickNextTimelineStep) ; signature resolveTargetHit (forcedSlotCode,
@@ -33,6 +34,10 @@ server/src/lib/
 ├── tokenMovementEmitter.js — buildTokenMovedPayload / emitExecutedTokenMovement : TOKEN_MOVED d'un déplacement exécuté
 ├── criticalFailReroll.js — resolveCriticalFailReroll (extrait de socketCombatHelpers.js) : relance d'un échec critique
 ├── droneTelepilotState.js — isDroneTelepilotedThisTurn : ce drone est-il télépiloté ce Tour ?
+├── combatGrabService.js — resolveGrabAction : résolution de « Permuter » (swapItemInHand, rediffusion INVENTORY_UPDATED, une ligne de chat par issue)
+├── combatGrabAnnouncement.js — validateGrabDeclaration / isGrabbedInHand / buildGrabActionRow : annonce de « Permuter » (extrait du gestionnaire d'annonce, testable seul)
+├── combatHandWeaponNotice.js — weaponNotInHandEmission / offhandNotInHandEmission : l'arme déclarée n'est plus en main → l'action tombe, le chat le dit
+├── inventoryBroadcast.js — resolveInventoryBroadcastRoom / emitInventoryEvent / broadcastInventoryEvent : salle de diffusion des événements INVENTORY_* (route et combat)
 └── socketUtils.js      — getUserColor, checkTokenOwnership
 
 Tous ces services respectent les conventions suivantes :

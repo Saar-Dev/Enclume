@@ -1,3 +1,20 @@
+## v257 — 2026-09-25 — Permuter l'arme en combat
+
+### Combat
+- [add] Après un lancer de grenade, le personnage peut aller chercher la suivante : un bouton **⇄ Permuter** apparaît sur chaque ligne d'arme, sur « Mains nues » et
+  sur un bouclier tenu en main. Il ouvre, à droite, la liste des objets du Sac et de la Ceinture avec leur coût : depuis la Ceinture, −3 d'Initiative et l'objet
+  sert dans le même Tour ; depuis le Sac, c'est une Action simple (pas d'Initiative perdue, mais aucune attaque ce Tour-là).
+- [add] La colonne de gauche montre l'état après la permutation choisie : l'objet pris apparaît en main (étiquette « permutée »), l'objet remplacé disparaît.
+  Si la permutation range l'arme de l'attaque déjà choisie, cette attaque est désélectionnée.
+- [add] L'arme rangée doit rentrer dans le conteneur d'où vient l'objet pris ; sinon la permutation est refusée, rien ne bouge et le chat dit quelle arme ne rentre
+  pas et où. La fenêtre le signale à l'avance en rouge, mais laisse le choix au joueur.
+- [add] Une grenade pèse maintenant 0,3 kg (encombrement).
+- [fix] Une action dont l'arme n'est plus en main au moment de la résolution est annulée **et le chat le dit** (avant : elle tombait sans un mot ; un corps à corps
+  devenait un coup à mains nues). Le personnage perd son action.
+- [fix] Au rechargement, une arme rangée du même calibre n'est plus proposée comme munition.
+- [fix] La fenêtre du MJ lit désormais les armes en main d'un PNJ dans son inventaire à jour (avant : une liste chargée une fois par carte, périmée après un lancer de grenade).
+- L'ancienne section « Prendre en main » des fenêtres de déclaration est remplacée par ce bouton.
+
 ## v256 — 2026-09-25 — Le compteur de blessures a sa 6ᵉ ligne : Mort et Membre détruit
 
 ### Combat

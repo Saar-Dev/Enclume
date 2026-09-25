@@ -246,6 +246,43 @@ scope). Retourne `null` si l'objet n'existe pas ou n'appartient pas au personnag
 comme un objet inaccessible) ; sinon l'item complet enrichi de `inHand`/`categoryOk` — l'appelant
 choisit s'il distingue les deux dans son message joueur.
 
+### Permuter l'arme en combat — mettre en main un objet du Sac / de la Ceinture (clos 2026-09-25, plan archivé `docs/Old/PLAN_PRISE_EN_MAIN.md`)
+
+**Besoin.** Une grenade lancée est consommée : il en reste au Sac ou à la Ceinture, mais le personnage a la main vide et rien ne permettait d'en prendre une autre. **Permuter** est l'action de combat qui met en main un objet tenable du Sac ou de la Ceinture, en rangeant d'abord ce qui gêne, en UNE opération. Après un lancer, le personnage doit donc aller chercher la suivante et payer l'Initiative.
+
+**Règles** (RAW `REGLESYSCOMBAT.md` : « Saisir un objet : Initiative −3 à portée de main » et « Sortir un objet d'un sac : Action simple » ; le coût par conteneur est une décision de conception de Saar, `JOURNAL8.md`) :
+
+- **Portée.** Tout objet tenable : emplacement catalogue `M` (boucliers compris), `2M`, `2M/Tr` (traité comme `2M`) ; pas `Tr` pur. Il vient du Sac ou de la Ceinture, jamais du Coffre. Ou « Mains nues » : une main libre reçoit l'objet.
+- **Coût.** Ceinture = Préparation, Initiative −3, cumulable avec toute autre action, l'objet sert dans le même Tour. Sac = Action simple : aucun coût d'Initiative, mais exclusive avec tir / corps à corps / rechargement / interaction. Une seule permutation par Tour. L'état Rangée / Au clair n'est pas modifié.
+- **Rangement.** L'objet sortant va dans le conteneur d'origine de l'entrant, s'il y rentre. Règle de capacité « ne jamais empirer » : poids rangé après l'échange ≤ max(capacité, poids d'avant) (`shared/inventoryMath.js`). Sinon la permutation est **refusée**, rien ne bouge, le chat nomme l'objet et le conteneur. Jamais le Coffre. L'objet « à terre » est la v2 (`PLANS/PLAN_OBJETS_AU_SOL.md`). Une grenade pèse 0,3 kg (migration 364).
+- **Mains.** Entrant à deux mains : tout ce qui est tenu sort (armes, arme montée, bouclier). Entrant à une main : l'objet de la ligne cliquée sort ; « Mains nues » exige une main libre (MD d'abord).
+- **Divers.** Sac à dos équipé obligatoire (règle PI2). Le chargeur d'une arme n'est jamais modifié, sauf le chargeur plein gratuit à la toute première mise en main (`initialMagazineOnEquip`). **La fiche reste libre** : équiper depuis la fiche en combat n'est pas verrouillé ; « Permuter » est le chemin payant, pas le seul.
+
+**Autorités (une couche = une responsabilité).**
+
+| Couche | Où | Rôle |
+|---|---|---|
+| Décision | `shared/combatGrabItem.js#decideHandSwap` | classification, Sac requis, objets sortants, main, place du rangement — la MÊME fonction côté serveur (résolution) et côté client (aperçu). Codes de refus : `GRAB_REFUSAL` (10) |
+| Validité des emplacements | `inventoryService.applyItemUpdate(trx, …)` | mains, deux-mains, composite du bouclier, couches d'armure. `updateItem` en est l'enveloppe transactionnelle (contrat de la route inchangé) ; refus à code par `equipRefusal` (`err.refusal`) ; erreur PostgreSQL 23505 (index unique de main) → refus `hands_full` |
+| Exécution | `inventoryService.swapItemInHand` | UNE transaction : sortants rangés puis entrant équipé, tout ou rien ; retourne `swapped` / `already` / `refused` |
+| Annonce | `lib/combatGrabAnnouncement.js` | `mapActions.grab = { itemId, replaceItemId? }` → ligne `micro` / `grab_item`, `sequence 2`, `modifiers { ini_mod, itemId, container, replaceItemId }` ; conteneur et coût lus en base, jamais du client ; refus structurel seulement (annonce permissive) ; l'objet entrant compte « en main » pour l'attaque du même Tour (4 sites : Tir et CaC, principal et secondaire) |
+| Résolution | `lib/combatGrabService.js#resolveGrabAction` | dans la boucle des actions simples, AVANT l'entrée complexe du même token ; rediffuse `INVENTORY_UPDATED` (`lib/inventoryBroadcast.js`) ; une ligne de chat par issue (`session.grab*`, `session.swapDone`) |
+| Client | `lib/declaredSwap.js`, `lib/grabList.js`, `lib/pnjHandEquipment.js`, `CombatSwapPanel.jsx` | aperçu : inventaire « après permutation » (`applyDeclaredSwap`), avertissement de refus (`swapWarning`), candidats à empreinte d'état, armes en main du PNJ dérivées de son inventaire |
+
+**Interface — une action = une extension de fenêtre.** Sur la ligne d'une arme, d'« Mains nues » ou d'un objet tenu sans action (bouclier), le bouton ⇄ ouvre l'extension « Permuter » en colonne 2 (comme ↻ ouvre les munitions) : les candidats du Sac et de la Ceinture avec leur coût. La colonne 1 montre l'état après permutation ; choisir une permutation qui range l'arme d'une attaque déclarée désélectionne cette attaque. Un refus prévisible (ne rentre pas, aucune main libre, pas de Sac) s'affiche en rouge mais la ligne reste cliquable : le joueur assume, le serveur tranche. Fenêtres joueur et MJ (`CombatActionWindow`, `CombatGmDeclareWindow`) ; l'exo n'a pas de permutation.
+
+**Une arme déclarée qui n'est plus en main fait TOMBER l'action, et le chat le dit** (`lib/combatHandWeaponNotice.js`, clés `session.actionCancelledWeapon…`). Causes : permutation refusée, arme rangée par la même permutation, arme rangée depuis la fiche entre l'annonce et la résolution. Quatre sites : Tir (`resolveAssaultAction` — l'arme est lue AVANT la ligne de vue), zone / grenade (`resolveAoeAssaultAction`), corps à corps (`resolveMeleeAction` — jamais de repli silencieux « mains nues »), rechargement (le panneau du joueur reste, la salle a en plus la ligne de chat). Décision de Saar : le personnage **perd son action**, pas de seconde chance, l'Initiative payée à l'annonce n'est pas remboursée. Seconde arme absente d'un tir / CaC à deux armes : l'attaque continue avec l'arme principale, notice dédiée `session.dualWieldOffhandNotInHand` (et non « à sec »).
+
+**Pièges.**
+
+- Un objet non équipé a `slots = null` côté serveur (`array_agg` vide), jamais `[]` : le filtre des munitions et `buildGrabList` en dépendent.
+- Armes ET munitions portent un `caliber` : « munition » = `isCompatibleAmmoItem` (`shared/ammoRules.js`, famille `Munitions`), jamais le calibre seul.
+- `/combat-equipment` est un instantané chargé une fois par carte. La fenêtre MJ dérive les armes en main du PNJ actif de son inventaire (rechargé à chaque Tour) ; les pastilles du roster des AUTRES tokens lisent encore l'instantané (ticket `COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE`).
+- `ARMOR_LAYERS` (couches d'armure d'un bouclier entrant) n'est pas prévisible côté client : la règle 1+S+S n'est pas dupliquée, le serveur refuse à la résolution.
+- Un test de résolution avec une arme absente ne doit pas dépendre d'une carte : l'arme est vérifiée avant la ligne de vue.
+
+**Non couvert.** Tir / CaC à deux armes dont seule la seconde arme manque : la notice est testée seule, jamais de bout en bout (carte complète requise, ticket `PERMUTER-DUALWIELD-OFFHAND-E2E`).
+
 ---
 
 ## Fonctions charStats.js — référence complète
@@ -998,6 +1035,7 @@ et `AWAITING_DAMAGE`, plus seulement la défense CaC).
 **Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (contrainte dans `127_combat_actions_constraints.js`, corrigé 2026-08-26 — "migration 63" pointe aujourd'hui vers `ref_careers.js`, sans rapport). CaC et Tir sont mutuellement exclusifs à la déclaration depuis Session 159 (`docs/REGLES/REGLESYSCOMBAT.md`, « Types d'Actions » — une seule Action de combat par Tour).
 **Une action complexe (`assault`/`melee`) déclarée génère aussi une ligne `combat_timeline_entries`** — voir « Échelle de phases » ci-dessous ; `move`/`reload`/`micro`/`skip` n'en génèrent jamais.
 **PC32 :** sequence attribuée serveur — jamais calculée côté client.
+**Permuter (2026-09-25) :** `type='micro'`, `action_key='grab_item'`, `sequence=2`, `modifiers { ini_mod, itemId, container, replaceItemId }` — résolue par `resolveGrabAction` dans la boucle des actions simples, avant l'entrée complexe du même token (voir « Permuter l'arme en combat »).
 **PC22 :** arme assault doit être en slot `'MG'` ou `'MD'` — rejeté sinon.
 **PC23 :** `'RC'` / `'RL'` nécessitent `is_learned=true` pour `TIR_AUTOMATIQUE`.
 **PC33 :** coordonnées `moveAction` doivent être des entiers valides (coords DB PE14).
