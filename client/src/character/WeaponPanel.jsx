@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useDroppable, useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
-import { ammoMatchesWeapon } from '../../../shared/ammoRules.js'
+import { isCompatibleAmmoItem } from '../../../shared/ammoRules.js'
+import { getSlotInfo } from '../../../shared/weaponSlots.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
 import { useCharacterStore } from '../stores/characterStore.js'
@@ -34,15 +35,6 @@ function parseAmmoCount(ammoCount) {
   if (!ammoCount) return 0
   const match = ammoCount.match(/\d+/)
   return match ? parseInt(match[0], 10) : 0
-}
-
-function getSlotInfo(refLocation) {
-  const locs = (refLocation || '').split('/')
-  if (locs.includes('M'))                          return { type: '1H',    defaultSlot: 'MG' }
-  if (locs.includes('2M') && locs.includes('Tr')) return { type: '2M_Tr', defaultSlot: '2M' }
-  if (locs.includes('2M'))                         return { type: '2M',    defaultSlot: '2M' }
-  if (locs.includes('Tr'))                         return { type: 'Tr',    defaultSlot: 'Tr' }
-  return { type: 'unknown', defaultSlot: '' }
 }
 
 // Décision Saar 2026-08-05 : plus de zone "2 Mains" séparée — équiper une arme 2 mains dans Main
@@ -221,11 +213,7 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
   const availableAmmoFor = useCallback((weapon) => {
     if (!weapon.ref_caliber) return []
     return items
-      .filter(i =>
-        i.ref_family === 'Munitions' &&
-        ammoMatchesWeapon(weapon.ref_caliber, i.ref_caliber) &&
-        i.container !== 'Coffre',
-      )
+      .filter(i => isCompatibleAmmoItem(i, weapon.ref_caliber))
       .sort((a, b) => {
         const aName = (a.custom_name || a.ref_name || '').toLowerCase()
         const bName = (b.custom_name || b.ref_name || '').toLowerCase()

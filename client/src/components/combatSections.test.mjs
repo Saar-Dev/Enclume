@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { nextKey } from './combatSections.js'
+import { nextKey, calcIniDelta, calcIniBreakdown } from './combatSections.js'
 
 // position : [standing, crouching, kneeling, prone] ; fire_mode : [cc, rc, rl]
 
@@ -29,4 +29,22 @@ test('nextKey — currentKey hors de l\'ensemble filtre → premiere option vali
 
 test('nextKey — ensemble filtre vide → currentKey inchange (jamais une valeur invalide)', () => {
   assert.equal(nextKey('fire_mode', 'cc', []), 'cc')
+})
+
+// ─── Prise en main (PLAN_PRISE_EN_MAIN.md) — l'aperçu d'Initiative reçoit le conteneur d'origine ─────────
+
+const idle = { position: 'standing', weapon: 'drawn', fire_mode: 'cc', cover: 'exposed', vitesse: 'normal', combatMode: 'normal' }
+const noQuick = { observer: 0, reperer: 0, phrase: false }
+
+test('calcIniDelta — prise depuis la Ceinture : −3 ; depuis le Sac : 0 ; sans prise : 0', () => {
+  assert.equal(calcIniDelta(idle, idle, { grab: { container: 'Ceinture' } }, noQuick), -3)
+  assert.equal(calcIniDelta(idle, idle, { grab: { container: 'Sac' } }, noQuick), 0)
+  assert.equal(calcIniDelta(idle, idle, {}, noQuick), 0)
+  assert.equal(calcIniDelta(idle, idle, { grab: null }, noQuick), 0)
+})
+
+test('calcIniBreakdown — le détail nomme la prise en main avec son conteneur (libellé résolu par t())', () => {
+  const t = (key, params) => `${key}|${params?.container ?? ''}`
+  const lines = calcIniBreakdown(idle, idle, { grab: { container: 'Ceinture' } }, noQuick, t)
+  assert.deepEqual(lines, [{ label: 'iniBreakdown.grab|Ceinture', value: -3 }])
 })

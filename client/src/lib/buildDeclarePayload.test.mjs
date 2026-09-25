@@ -800,3 +800,57 @@ test('buildMeleeEntries — troncature à effectiveMeleeCount', () => {
   assert.deepEqual(r.map(e => e.targetTokenId), ['a', 'b'])
   assert.equal(r[0].naturalWeaponCharMutationId, 'mut')
 })
+
+// ─── Prise en main (PLAN_PRISE_EN_MAIN.md) — humain / PJ ─────────────────────────────────────────────
+
+test('prise en main — objet choisi : mapActions.grab = { itemId } (seul l’identifiant part, jamais le conteneur ni le coût)', () => {
+  const p = buildHumanDeclarePayload(baseSel({ grabItemId: 'item-9' }))
+  assert.deepEqual(p.mapActions.grab, { itemId: 'item-9' })
+  assert.equal(p.mapActions.attack, null)
+})
+
+test('prise en main — aucun objet choisi : la clé grab est ABSENTE (payload identique à avant, golden master préservé)', () => {
+  assert.equal('grab' in buildHumanDeclarePayload(baseSel()).mapActions, false)
+  assert.equal('grab' in buildHumanDeclarePayload(baseSel({ grabItemId: null })).mapActions, false)
+})
+
+test('prise en main — se cumule avec un déplacement dans le même payload', () => {
+  const p = buildHumanDeclarePayload(baseSel({
+    grabItemId: 'item-9',
+    moveSelection: { targetPosX: 1, targetPosY: 2, targetPosZ: 0, ini_mod: -3, action_key: 'move_short' },
+  }))
+  assert.deepEqual(p.mapActions.grab, { itemId: 'item-9' })
+  assert.equal(p.mapActions.move.targetPosX, 1)
+})
+
+test('permutation — la ligne remplacée part avec l’objet : grab = { itemId, replaceItemId } ; « Mains nues » (replaceItemId absent ou null) : replaceItemId ABSENT', () => {
+  assert.deepEqual(buildHumanDeclarePayload(baseSel({ grabItemId: 'item-9', grabReplaceItemId: 'arme-3' })).mapActions.grab,
+    { itemId: 'item-9', replaceItemId: 'arme-3' })
+  assert.deepEqual(buildHumanDeclarePayload(baseSel({ grabItemId: 'item-9', grabReplaceItemId: null })).mapActions.grab, { itemId: 'item-9' })
+  assert.deepEqual(buildHumanDeclarePayload(baseSel({ grabItemId: 'item-9' })).mapActions.grab, { itemId: 'item-9' })
+})
+
+test('permutation — une ligne remplacée sans objet choisi n’écrit rien : la clé grab reste ABSENTE', () => {
+  assert.equal('grab' in buildHumanDeclarePayload(baseSel({ grabItemId: null, grabReplaceItemId: 'arme-3' })).mapActions, false)
+})
+
+test('permutation — se cumule avec une attaque avec l’objet mis en main (la ligne d’assaut est inchangée, grab en plus)', () => {
+  const withoutSwap = buildHumanDeclarePayload(baseSel())
+  const withSwap = buildHumanDeclarePayload(baseSel({ grabItemId: 'item-9', grabReplaceItemId: 'arme-3' }))
+  assert.deepEqual({ ...withSwap.mapActions, grab: undefined }, { ...withoutSwap.mapActions, grab: undefined })
+})
+
+// ─── Prise en main (PLAN_PRISE_EN_MAIN.md) — MJ / PNJ ────────────────────────────────────────────────
+
+test('prise en main MJ — objet choisi : mapActions.grab = { itemId } ; absent sinon (payload PNJ inchangé)', () => {
+  assert.deepEqual(buildGmDeclarePayload(baseGmSel({ grabItemId: 'item-7' })).mapActions.grab, { itemId: 'item-7' })
+  assert.equal('grab' in buildGmDeclarePayload(baseGmSel()).mapActions, false)
+  assert.equal('grab' in buildGmDeclarePayload(baseGmSel({ grabItemId: null })).mapActions, false)
+})
+
+test('permutation MJ — la ligne remplacée part avec l’objet ; « Mains nues » (absente ou null) : replaceItemId ABSENT ; sans objet, clé grab ABSENTE', () => {
+  assert.deepEqual(buildGmDeclarePayload(baseGmSel({ grabItemId: 'item-7', grabReplaceItemId: 'arme-2' })).mapActions.grab,
+    { itemId: 'item-7', replaceItemId: 'arme-2' })
+  assert.deepEqual(buildGmDeclarePayload(baseGmSel({ grabItemId: 'item-7', grabReplaceItemId: null })).mapActions.grab, { itemId: 'item-7' })
+  assert.equal('grab' in buildGmDeclarePayload(baseGmSel({ grabItemId: null, grabReplaceItemId: 'arme-2' })).mapActions, false)
+})

@@ -20,7 +20,7 @@ import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSl
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon, getAoeProfile, weaponHasRangedAttackPath } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
-import { weaponAmmoStatus, ammoMatchesWeapon } from '../../../shared/ammoRules.js'
+import { weaponAmmoStatus, isCompatibleAmmoItem } from '../../../shared/ammoRules.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
@@ -31,6 +31,7 @@ import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareActionList from './CombatDeclareActionList.jsx'
+import CombatSwapPanel from './CombatSwapPanel.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
@@ -41,8 +42,11 @@ import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
 import { assaultCheckInputs } from '../lib/assaultDeclaration.js'
 import { meleeCheckInputs } from '../lib/meleeDeclaration.js'
-import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
+import { assaultCheck, meleeCheck, reloadCheck, grabCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
+import { buildGrabList, findSelectedGrabRow } from '../lib/grabList.js'
+import { applyDeclaredSwap, swapWarning, heldItemsWithoutActionRow } from '../lib/declaredSwap.js'
+import { getGrabConflictReasons } from '../../../shared/combatGrabItem.js'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -133,8 +137,24 @@ export default function CombatActionWindow({
 
   // --- etat assaut (panneau droit) ------------------------------------------
   const [allures, setAllures]                     = useState(null)
-  const [assaultWeapons, setAssaultWeapons]       = useState([])
-  const [allInventoryItems, setAllInventoryItems] = useState([])
+  // Inventaire chargé (`GET /char-sheet/:id/inventory`) : la SEULE copie d'état. Tout le reste en est DÉRIVÉ — plus d'états
+  // recopiés qui pouvaient diverger — et une identité stable (useMemo) évite de relancer les effets qui en dépendent.
+  // La permutation choisie (états ci-dessous) la projette en l'inventaire tel qu'il sera à la résolution.
+  const [baseInventory, setBaseInventory]         = useState([])
+  // Permuter (PLAN_PRISE_EN_MAIN.md) : `swap` = la permutation choisie pour ce Tour { itemId, replaceItemId } (`replaceItemId` null =
+  // « Mains nues ») ; `swapPanel` = l'extension ⇄ ouverte { replaceItemId }. Deux états distincts : on peut refermer l'extension et
+  // garder le choix. L'inventaire effectif (`applyDeclaredSwap`, aperçu) est ce que TOUTES les listes ci-dessous lisent ; le serveur
+  // ne reprend jamais cette version, il relit l'inventaire réel à la résolution.
+  const [swap, setSwap]                           = useState(null)
+  const [swapPanel, setSwapPanel]                 = useState(null)
+  const allInventoryItems = useMemo(() => applyDeclaredSwap(baseInventory, swap).items, [baseInventory, swap])
+  // shared/weaponSlots.js — inclut le deux-mains (2M), pas seulement MG/MD (Session 158, Loulou/Breather non détecté). Armes de
+  // « Tir » = a un chemin de résolution à distance (`weaponHasRangedAttackPath` : arme à feu OU mécanisme de zone câblé —
+  // PLAN_GRENADES.md §10.1). Le panneau CaC a son propre filtre pour les armes de contact.
+  const assaultWeapons = useMemo(
+    () => flattenItemsBySlot(allInventoryItems).filter(weaponHasRangedAttackPath),
+    [allInventoryItems],
+  )
   const [selectedAmmoId, setSelectedAmmoId]       = useState(null)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
@@ -244,10 +264,6 @@ export default function CombatActionWindow({
     onCancel: () => {},
   })
 
-  // --- clic direct sur un token adverse (sans tuile Attaque/CaC préalable) --
-  // useCombatClickAttack.js — même patron/contrainte que useAutoMoveMode ci-dessus : appelé ici (avant
-  // le early-return `playerTokensInRoster.length === 0` plus bas, Rules of Hooks) donc ne peut pas
-  // référencer meleeWeapons/selectedWeapon/clearAttackState/clearMeleeState (calculés après ce point).
   // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes
   // les fenêtres d'Annonce (useDeclareWindowHiding.js). Le pilote couvre aussi le drone télépiloté.
   const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
@@ -255,6 +271,10 @@ export default function CombatActionWindow({
     combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
   })
 
+  // --- clic direct sur un token adverse (sans tuile Attaque/CaC préalable) --
+  // useCombatClickAttack.js — même patron/contrainte que useAutoMoveMode ci-dessus : appelé ici (avant
+  // le early-return `playerTokensInRoster.length === 0` plus bas, Rules of Hooks) donc ne peut pas
+  // référencer meleeWeapons/selectedWeapon/clearAttackState/clearMeleeState (calculés après ce point).
   // Dérivations dupliquées volontairement (meleeWeapons/selectedWeapon recalculés) plutôt que remonter
   // tout le bloc plus bas — patch ciblé, ne pas réordonner un fichier de 1500 lignes pour ça.
   const clickMeleeWeapons = allInventoryItems.filter(item =>
@@ -290,12 +310,14 @@ export default function CombatActionWindow({
     // inaccessibles ici pour la même raison Rules of Hooks) — même liste de setters, ne pas diverger
     // si l'une des deux évolue.
     onMeleeTarget: (tid) => {
+      setSwapPanel(null)
       dispatch({ type: 'SELECT_ATTACK' })
       setMapSelected(prev => { const n = new Set(prev); n.delete('attack'); n.add('melee'); return n })
       assaultDecl.clear(); setInTargetMode(false)
       meleeDecl.setSoleTarget(tid)
     },
     onAssaultTarget: (tid) => {
+      setSwapPanel(null)
       dispatch({ type: 'SELECT_ATTACK' })
       setMapSelected(prev => { const n = new Set(prev); n.delete('melee'); n.add('attack'); return n })
       meleeDecl.clear(); setInMeleeTargetMode(false)
@@ -334,6 +356,8 @@ export default function CombatActionWindow({
     initialStates.current = snap
     dispatch({ type: 'RESET', payload: snap })
     setMapSelected(new Set())
+    setSwap(null)
+    setSwapPanel(null)
     assaultDecl.clear()
     setMoveSelection(null)
     setInTargetMode(false)
@@ -408,13 +432,7 @@ export default function CombatActionWindow({
     let cancelled = false
     api.get(`/char-sheet/${charId}/inventory`).then(res => {
       if (cancelled) return
-      const items = res.data.items || []
-      // shared/weaponSlots.js — inclut le deux-mains (2M), pas seulement MG/MD (Session 158, Loulou/
-      // Breather non détecté). Armes de « Tir » = a un chemin de résolution à distance
-      // (`weaponHasRangedAttackPath` : arme à feu OU mécanisme de zone câblé — PLAN_GRENADES.md §10.1).
-      // Le panneau CaC a son propre filtre pour les armes de contact.
-      setAssaultWeapons(flattenItemsBySlot(items).filter(weaponHasRangedAttackPath))
-      setAllInventoryItems(items)
+      setBaseInventory(res.data.items || [])
     }).catch(() => {})
     return () => { cancelled = true }
   }, [isDrone, playerToken?.id, phase])
@@ -521,13 +539,11 @@ export default function CombatActionWindow({
     currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
 
-  // Munitions disponibles pour le rechargement — filtrées par calibre de l'arme sélectionnée
-  const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
-    ? allInventoryItems.filter(item =>
-        ammoMatchesWeapon(selectedWeapon.ref_caliber, item.ref_caliber) &&
-        item.slots == null &&
-        item.container !== 'Coffre'
-      )
+  // Munitions disponibles pour le rechargement — règle unique `isCompatibleAmmoItem` (shared/ammoRules.js), la même que la fiche :
+  // famille « Munitions » + calibre de l'arme sélectionnée + hors Coffre. Le calibre seul proposait une ARME rangée du même calibre
+  // comme « munition » (armes et munitions portent toutes deux un calibre).
+  const reloadAmmoItems = selectedWeapon?.ref_caliber
+    ? allInventoryItems.filter(item => isCompatibleAmmoItem(item, selectedWeapon.ref_caliber))
     : []
 
   // Grisage « arme vide » / « chargeur plein » : porté par buildWeaponList (weaponAmmoStatus) pour la
@@ -603,6 +619,7 @@ export default function CombatActionWindow({
   }
 
   const handleMapToggle = (k) => {
+    if (k !== 'move') setSwapPanel(null)   // une action = une extension : Tir / CaC / Recharger reprennent la colonne 2
     setMapSelected(prev => {
       const next = new Set(prev)
 
@@ -660,6 +677,7 @@ export default function CombatActionWindow({
   // annule l'action. CaC ⊕ Tir reste exclusif (handleMapToggle s'en charge).
   const handleWeaponPick = (row) => {
     if (row.disabled) return
+    setSwapPanel(null)
     if (row.group === 'distance') {
       if (attackSelected && selectedWeaponRowId === row.id) { handleMapToggle('attack'); return }
       assaultDecl.selectWeapon(row.id)   // change d'arme = reset config col. 2 (P8 / PO-M4-e)
@@ -680,10 +698,33 @@ export default function CombatActionWindow({
   // `row.disabled` (chargeur vide) bloque la sélection normale de cette ligne — miroir de la branche
   // Distance ci-dessus, mais force Recharger ON au lieu de OFF.
   const handleQuickReload = (row) => {
+    setSwapPanel(null)
     assaultDecl.selectWeapon(row.id)
     if (!attackSelected) handleMapToggle('attack')
     else dispatch({ type: 'SELECT_ATTACK' })
     if (!reloadSelected) handleMapToggle('reload')
+  }
+
+  // Permuter — ⇄ d'une ligne : ouvre l'extension « armes disponibles pour la permutation » ; re-cliquer le même ⇄ la referme.
+  // La ligne cliquée est l'objet qui sortira (« Mains nues » = aucun : une main libre reçoit l'objet).
+  const handleSwapOpen = (row) => {
+    const replaceItemId = row.kind === 'bare' ? null : row.id
+    setSwapPanel(prev => (prev != null && prev.replaceItemId === replaceItemId ? null : { replaceItemId }))
+  }
+
+  // Permuter — choisir un candidat le sélectionne (un seul choix par Tour, R9 : il REMPLACE le précédent), re-cliquer le candidat
+  // choisi l'annule. L'inventaire effectif change : toute action dont l'arme n'est plus en main est désélectionnée — sinon
+  // `selectedWeapon` retomberait en silence sur l'arme principale et l'attaque partirait avec une AUTRE arme.
+  const handleSwapPick = (candidate) => {
+    if (!swapPanel) return
+    const alreadyChosen = swap != null && swap.itemId === candidate.itemId && swap.replaceItemId === swapPanel.replaceItemId
+    const nextSwap = alreadyChosen ? null : { itemId: candidate.itemId, replaceItemId: swapPanel.replaceItemId }
+    setSwap(nextSwap)
+    const handIds = new Set(flattenItemsBySlot(applyDeclaredSwap(baseInventory, nextSwap).items).map(item => item.id))
+    if (reloadSelected && assaultWeaponId && !handIds.has(assaultWeaponId)) handleMapToggle('reload')
+    if (attackSelected && assaultWeaponId && !handIds.has(assaultWeaponId)) handleMapToggle('attack')
+    if (meleeSelected && effectiveMeleeWeaponId && !handIds.has(effectiveMeleeWeaponId)) handleMapToggle('melee')
+    setSwapPanel(swapPanel)   // `handleMapToggle` referme l'extension : elle reste ouverte ici, le joueur voit son choix
   }
 
   // --- deplacement zone select ---------------------------------------------
@@ -692,6 +733,7 @@ export default function CombatActionWindow({
   // (COM-MOVEUI1) : seul moyen de sortir de ce désarmement avant la fin de l'activation en cours.
   const handleZoneSelectClick = () => {
     if (moveSelection) setMoveSelection(null)
+    armExplicitMove()
     rearmMove()
   }
 
@@ -700,7 +742,6 @@ export default function CombatActionWindow({
   // choix remplit toute la série (comportement par défaut — pas de clic répété sur la même cible pour
   // le cas courant) ; une fois au moins une cible posée, un choix ultérieur ne touche que son slot.
   const handleChooseTarget = (index) => {
-    armExplicitMove()
     setInTargetMode(true)
     onEnterTargetMode(
       playerToken.id,
@@ -742,6 +783,19 @@ export default function CombatActionWindow({
   // Charge : le déplacement gratuit (ini_mod 0) et la cible vivent dans `chargeSelection` (M0.4-g) ;
   // sinon `moveSelection` (déplacement normal / Retraite). Miroir de `buildGmDeclarePayload`.
   const iniMoveSel = chargeSelection?.move ?? moveSelection
+  // Prise en main : lignes prenables (mêmes règles que le serveur, shared/combatGrabItem.js) et ligne choisie — null si
+  // l'objet a disparu de l'inventaire rechargé (jamais un identifiant périmé envoyé au serveur).
+  const grabRows = buildGrabList(baseInventory)
+  const grabRow = findSelectedGrabRow(grabRows, swap?.itemId ?? null)
+  // Extension « Permuter » : candidats + avertissement (mêmes règles que le serveur, information seulement — la ligne reste cliquable).
+  const swapReplacedItem = swapPanel?.replaceItemId ? baseInventory.find(item => item.id === swapPanel.replaceItemId) : null
+  const swapRows = swapPanel
+    ? grabRows.map(row => ({ ...row, warning: swapWarning(baseInventory, { itemId: row.itemId, replaceItemId: swapPanel.replaceItemId }) }))
+    : []
+  const swapChosenHere = swapPanel != null && grabRow != null && swap.replaceItemId === swapPanel.replaceItemId
+  // Objets en main sans ligne d'action (bouclier, grenade sans profil de zone) : une ligne chacun, avec ⇄ seulement.
+  const heldRows = heldItemsWithoutActionRow(allInventoryItems, [...weaponGroups.distance, ...weaponGroups.contact].map(row => row.id))
+  const swapRowKey = (row) => (row.kind === 'bare' ? null : row.id)
   const mapActionsObj = {
     move:   iniMoveSel ? { ini_mod: (chargeSelection?.move || decl.combatMode === 'retraite') ? 0 : iniMoveSel.ini_mod } : null,
     // Tir Multi (docs/PLAN_TIRMULTI.md D1) : array systématique, comme melee ci-dessous. aimTranches
@@ -753,6 +807,8 @@ export default function CombatActionWindow({
       ? Array(meleeCount).fill({ targetTokenId: null, weaponInvId: null })
       : null,
     reload: reloadSelected ? {} : null,
+    // Coût d'Initiative selon le conteneur ; « prise en main » compte aussi comme une autre action pour Tir visé / zone.
+    grab: grabRow ? { container: grabRow.container } : null,
   }
   const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick, t)
@@ -804,12 +860,18 @@ export default function CombatActionWindow({
     hasWeapon:       selectedWeapon !== null,
     hasAmmo:         selectedAmmoId !== null,
   })
+  // Prise en main : Sac = Action simple, incompatible avec tir / CaC / rechargement (raison affichée, jamais de reset).
+  const grab = grabCheck({
+    started:   grabRow != null,
+    conflicts: grabRow ? getGrabConflictReasons({ container: grabRow.container, mapActions: mapActionsObj }) : [],
+  })
   // B5 (§5.2) : un humain peut déclarer un tour vide (comme drone/exo). Module 5 (§5.10, D12) ré-ajoute
   // un gate `hasCompleteAction` : Déclarer actif ⟺ il y a quelque chose à déclarer ET c'est valide.
   const hasCompleteAction = hasSomethingToDeclare({
     attackStarted:  attackSelected,
     meleeStarted:   meleeSelected || !!chargeSelection,
     reloadStarted:  reloadSelected,
+    grabStarted:    grabRow != null,
     hasMove:        moveSelection != null || chargeSelection?.move != null,
     hasStateChange: hasDeliberateStateChange(decl, initialStates.current),
     hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
@@ -818,8 +880,8 @@ export default function CombatActionWindow({
     ? droneDeclare.canDeclare
     : telepilotDroneId
       ? telepilotDeclare.canDeclare
-      : (assault.valid && melee.valid && reload.valid)
-  const blockReason = (isDrone || telepilotDroneId) ? null : buildBlockReason({ assault, melee, reload })
+      : (assault.valid && melee.valid && reload.valid && grab.valid)
+  const blockReason = (isDrone || telepilotDroneId) ? null : buildBlockReason({ assault, melee, reload, grab })
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
@@ -865,6 +927,8 @@ export default function CombatActionWindow({
       meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount, chargeSelection,
       effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
       reloadSelected, selectedWeapon, selectedAmmoId,
+      grabItemId: grabRow?.itemId ?? null,
+      grabReplaceItemId: grabRow ? (swap.replaceItemId ?? null) : null,
     }))
   }
 
@@ -1068,9 +1132,13 @@ export default function CombatActionWindow({
   }
 
   // Masquage : useDeclareWindowHiding (appelé plus haut) — autorité unique, partagée avec Exo et MJ.
-  const showAssault = attackActive
-  const showReload  = attackSelected && reloadSelected && !!selectedWeapon
-  const showMelee   = meleeSelected  && !attackSelected
+  // Une action = une extension : l'extension « Permuter » (⇄) prend la colonne 2 tant qu'elle est ouverte ; l'attaque et la
+  // sélection restent, elles reviennent quand elle se referme.
+  const showSwap    = swapPanel != null && !isDrone && !telepilotDroneId
+  const showAssault = attackActive && !showSwap
+  const showReload  = attackSelected && reloadSelected && !!selectedWeapon && !showSwap
+  const showMelee   = meleeSelected  && !attackSelected && !showSwap
+  const hasCol2     = showAssault || showReload || showMelee || showSwap
 
   // CC slider index
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
@@ -1086,7 +1154,7 @@ export default function CombatActionWindow({
       {!isDrone && (
         <CombatDeclareStatePanel
           pos={pos}
-          windowWidth={(showAssault || showReload || showMelee) ? 720 : 360}
+          windowWidth={hasCol2 ? 720 : 360}
           family="pj"
           decl={decl}
           initial={initialStates.current}
@@ -1096,10 +1164,10 @@ export default function CombatActionWindow({
         />
       )}
     <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'}
-      data-narrow={!(showAssault || showReload || showMelee) || undefined}
+      data-narrow={!hasCol2 || undefined}
       style={{
       position: 'fixed',
-      width: (showAssault || showReload || showMelee) ? 720 : 360,
+      width: hasCol2 ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',
       left: pos.left,
@@ -1172,6 +1240,13 @@ export default function CombatActionWindow({
               selectedRowId={selectedWeaponRowId}
               onPick={handleWeaponPick}
               reload={{ active: reloadSelected, onToggle: () => handleMapToggle('reload'), onQuickReload: handleQuickReload }}
+              swap={{
+                isActive: (row) => swapPanel != null && swapPanel.replaceItemId === swapRowKey(row),
+                isChosen: (row) => grabRow != null && swap.replaceItemId === swapRowKey(row),
+                incomingId: grabRow ? swap.itemId : null,
+                onOpen: handleSwapOpen,
+              }}
+              heldRows={heldRows}
             />
           )}
 
@@ -1258,8 +1333,19 @@ export default function CombatActionWindow({
 
         </div>
 
-        {(showAssault || showReload || showMelee) && (
+        {hasCol2 && (
         <div className="decl-col2">
+        {/* ---- Panneau droit — Permuter (⇄) : armes disponibles au Sac / à la Ceinture ---- */}
+        {showSwap && (
+          <CombatSwapPanel
+            rows={swapRows}
+            selectedItemId={swapChosenHere ? grabRow.itemId : null}
+            replacedName={swapReplacedItem ? (swapReplacedItem.custom_name || swapReplacedItem.ref_name) : null}
+            afterName={swapChosenHere ? grabRow.name : null}
+            onPick={handleSwapPick}
+          />
+        )}
+
         {/* Recharger : ↻ sur la ligne d'arme (col. 1, option B — Saar 2026-08-29). Ici, quand il est
             actif, la col. 2 passe sur le sélecteur de munition. */}
 

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare,
+  assaultCheck, meleeCheck, reloadCheck, grabCheck, buildBlockReason, hasSomethingToDeclare,
 } from './declareChecks.js'
 
 // --- assaultCheck ---------------------------------------------------------------------------------
@@ -126,4 +126,34 @@ test('hasSomethingToDeclare — chaque source seule → true, aucune → false',
   for (const flag of ['attackStarted', 'meleeStarted', 'reloadStarted', 'hasMove', 'hasStateChange', 'hasQuick']) {
     assert.equal(hasSomethingToDeclare({ [flag]: true }), true, flag)
   }
+})
+
+// --- grabCheck (PLAN_PRISE_EN_MAIN.md) -------------------------------------------------------------
+
+test('grabCheck — non commencé ou sans conflit (Ceinture, ou Sac seul) → valide', () => {
+  assert.deepEqual(grabCheck({ started: false, conflicts: ['tir'] }), { valid: true, reason: null })
+  assert.deepEqual(grabCheck({ started: true, conflicts: [] }), { valid: true, reason: null })
+  assert.deepEqual(grabCheck({ started: true }), { valid: true, reason: null })
+  assert.deepEqual(grabCheck(), { valid: true, reason: null })
+})
+
+test('grabCheck — Sac + autre Action : invalide, raison AFFICHÉE avec les actions en cause', () => {
+  const result = grabCheck({ started: true, conflicts: ['tir', 'rechargement'] })
+  assert.equal(result.valid, false)
+  assert.match(result.reason, /Sac occupe l'action du Tour/)
+  assert.match(result.reason, /tir, rechargement/)
+})
+
+test('buildBlockReason — la prise en main passe en dernier (Tir → CaC → Rechargement → Prise en main)', () => {
+  const grab = { reason: 'raison grab' }
+  assert.equal(buildBlockReason({ grab }), 'raison grab')
+  assert.equal(buildBlockReason({ reload: { reason: 'raison reload' }, grab }), 'raison reload')
+  assert.equal(buildBlockReason({ assault: { reason: 'raison tir' }, grab }), 'raison tir')
+  assert.equal(buildBlockReason({ grab: { reason: null } }), null)
+})
+
+test('hasSomethingToDeclare — un objet à prendre suffit à activer « Déclarer »', () => {
+  assert.equal(hasSomethingToDeclare({ grabStarted: true }), true)
+  assert.equal(hasSomethingToDeclare({ grabStarted: false }), false)
+  assert.equal(hasSomethingToDeclare({}), false)
 })

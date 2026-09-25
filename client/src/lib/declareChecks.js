@@ -110,19 +110,38 @@ export function reloadCheck({ started, coveredByAttack, hasWeapon, hasAmmo } = {
 }
 
 /**
- * Raison unique du grisage de « Déclarer » : premier `.reason` non nul, précédence Tir → CaC →
- * Rechargement. `null` si tout est valide.
+ * Validité de la **Prise en main** (objet du Sac / de la Ceinture, docs/Old/PLAN_PRISE_EN_MAIN.md). Prendre depuis le Sac
+ * est une Action simple : elle occupe l'action du Tour et refuse tir / corps à corps / rechargement — la raison est
+ * AFFICHÉE (jamais de remise à zéro silencieuse d'un autre choix). Depuis la Ceinture (Préparation), aucun conflit.
+ * `conflicts` = `shared/combatGrabItem.js#getGrabConflictReasons` (même autorité que le serveur).
  *
- * @param {{ assault?: {reason?: string|null}, melee?: {reason?: string|null}, reload?: {reason?: string|null} }} checks
+ * @param {object}   p
+ * @param {boolean}  p.started    un objet est choisi
+ * @param {string[]} p.conflicts  raisons d'incompatibilité avec le reste de la déclaration — [] si compatible
+ * @returns {{ valid: boolean, reason: string | null }}
+ */
+export function grabCheck({ started, conflicts = [] } = {}) {
+  if (!started) return OK
+  if ((conflicts?.length ?? 0) > 0) {
+    return fail(`Prendre un objet dans le Sac occupe l'action du Tour — impossible avec : ${conflicts.join(', ')}`)
+  }
+  return OK
+}
+
+/**
+ * Raison unique du grisage de « Déclarer » : premier `.reason` non nul, précédence Tir → CaC →
+ * Rechargement → Prise en main. `null` si tout est valide.
+ *
+ * @param {{ assault?: {reason?: string|null}, melee?: {reason?: string|null}, reload?: {reason?: string|null}, grab?: {reason?: string|null} }} checks
  * @returns {string | null}
  */
-export function buildBlockReason({ assault, melee, reload } = {}) {
-  return assault?.reason ?? melee?.reason ?? reload?.reason ?? null
+export function buildBlockReason({ assault, melee, reload, grab } = {}) {
+  return assault?.reason ?? melee?.reason ?? reload?.reason ?? grab?.reason ?? null
 }
 
 /**
  * Y a-t-il **quelque chose à déclarer** ? (gate d'activation de « Déclarer », lève le mis-clic de B5).
- * OU des 6 sources — **liste canonique**, identique PJ / MJ, à ne pas dupliquer dans les fenêtres.
+ * OU des 7 sources — **liste canonique**, identique PJ / MJ, à ne pas dupliquer dans les fenêtres.
  * Chaque drapeau est calculé par la fenêtre depuis son modèle (voir `declareChecks` pour la
  * normalisation ; `hasStateChange` = `hasDeliberateStateChange(decl, initial)`).
  *
@@ -130,13 +149,14 @@ export function buildBlockReason({ assault, melee, reload } = {}) {
  * @param {boolean} p.attackStarted
  * @param {boolean} p.meleeStarted
  * @param {boolean} p.reloadStarted
+ * @param {boolean} [p.grabStarted]  un objet est choisi pour la Prise en main
  * @param {boolean} p.hasMove
  * @param {boolean} p.hasStateChange
  * @param {boolean} p.hasQuick
  * @returns {boolean}
  */
 export function hasSomethingToDeclare({
-  attackStarted, meleeStarted, reloadStarted, hasMove, hasStateChange, hasQuick,
+  attackStarted, meleeStarted, reloadStarted, grabStarted = false, hasMove, hasStateChange, hasQuick,
 } = {}) {
-  return !!(attackStarted || meleeStarted || reloadStarted || hasMove || hasStateChange || hasQuick)
+  return !!(attackStarted || meleeStarted || reloadStarted || grabStarted || hasMove || hasStateChange || hasQuick)
 }

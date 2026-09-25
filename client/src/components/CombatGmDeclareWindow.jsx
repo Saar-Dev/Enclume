@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useReducer } from 'react'
+import { useState, useEffect, useMemo, useRef, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -37,8 +37,14 @@ import { assaultCheckInputs } from '../lib/assaultDeclaration.js'
 import { meleeCheckInputs } from '../lib/meleeDeclaration.js'
 import { buildWeaponList } from '../lib/weaponList.js'
 import CombatDeclareActionList from './CombatDeclareActionList.jsx'
-import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
+import { assaultCheck, meleeCheck, grabCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
+import { buildGrabList, findSelectedGrabRow } from '../lib/grabList.js'
+import { getGrabConflictReasons } from '../../../shared/combatGrabItem.js'
+import { flattenItemsBySlot } from '../../../shared/weaponSlots.js'
+import { applyDeclaredSwap, swapWarning, heldItemsWithoutActionRow } from '../lib/declaredSwap.js'
+import { pnjHandEquipment } from '../lib/pnjHandEquipment.js'
+import CombatSwapPanel from './CombatSwapPanel.jsx'
 
 // ---------------------------------------------------------------------------
 // Composant principal
@@ -63,6 +69,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── États de déclaration pour le PNJ actif ───────────────────────────────
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const [mapAction,       setMapAction]       = useState(null)     // 'reload' | null
+  // Permuter (PLAN_PRISE_EN_MAIN.md) : inventaire complet du PNJ actif (Sac / Ceinture inclus — /combat-equipment ne renvoie que les
+  // armes en main, et un instantané par carte), `swap` = la permutation choisie pour ce Tour { itemId, replaceItemId } (`replaceItemId`
+  // null = « Mains nues »), `swapPanel` = l'extension ⇄ ouverte { replaceItemId }. Deux états distincts : on peut refermer l'extension
+  // et garder le choix.
+  const [pnjInventory,    setPnjInventory]    = useState({ characterId: null, items: null })
+  const [swap,            setSwap]            = useState(null)
+  const [swapPanel,       setSwapPanel]       = useState(null)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
 
@@ -169,6 +182,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
     dispatch({ type: 'RESET', payload: initialStates })
     setMapAction(null)
+    setSwap(null)
+    setSwapPanel(null)
     setMeleePendingMode(false)
     setPendingMove(null)
     assaultDecl.clear()
@@ -194,6 +209,37 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .then(r => setEquipment(r.data.equipment ?? {}))
       .catch(() => {})
   }, [battlemapId])
+
+  // ── Fetch inventaire du PNJ actif — liste « Prendre en main » (humanoïde PNJ seulement) ───────────────
+  // Recharge à chaque nouveau Tour (has_announced true→false) : un objet pris au Tour précédent est alors en main.
+  const grabCharacterId = (() => {
+    const tok = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
+    const char = tok?.character_id ? characters.find(c => c.id === tok.character_id) : null
+    return char?.type === 'pnj' ? char.id : null
+  })()
+  useEffect(() => {
+    if (!grabCharacterId) return
+    let cancelled = false
+    api.get(`/char-sheet/${grabCharacterId}/inventory`)
+      .then(res => { if (!cancelled) setPnjInventory({ characterId: grabCharacterId, items: res.data.items || [] }) })
+      .catch(() => { if (!cancelled) setPnjInventory({ characterId: grabCharacterId, items: null }) })
+    return () => { cancelled = true }
+  }, [grabCharacterId, activePnjEntry?.has_announced])
+
+  // Inventaire EFFECTIF du PNJ actif : la permutation choisie l'a projeté (aperçu, jamais l'autorité — le serveur relit l'inventaire
+  // réel à la résolution). Les armes en main du PNJ en sont DÉRIVÉES (`pnjHandEquipment`, mêmes règles que la route
+  // /combat-equipment) : toujours fraîches (rechargées à chaque Tour) alors que /combat-equipment est un instantané par carte. Tant
+  // que l'inventaire n'est pas chargé (ou en erreur), la fenêtre garde l'instantané du serveur.
+  const effectivePnjItems = useMemo(
+    () => (grabCharacterId && pnjInventory.characterId === grabCharacterId && Array.isArray(pnjInventory.items))
+      ? applyDeclaredSwap(pnjInventory.items, swap).items
+      : null,
+    [grabCharacterId, pnjInventory, swap],
+  )
+  const activeHandEquipment = useMemo(
+    () => (effectivePnjItems ? pnjHandEquipment(effectivePnjItems) : (equipment[activeTokenId] ?? null)),
+    [effectivePnjItems, equipment, activeTokenId],
+  )
 
   // ── Fetch armes drone quand le slot actif est un drone ───────────────────
   const activeDroneCharId = (() => {
@@ -258,6 +304,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     onCancel: () => setPendingMove(null),
   })
 
+  // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes les
+  // fenêtres d'Annonce (useDeclareWindowHiding.js). `holdHidden` : le drapeau local isSelectingOnMap couvre
+  // l'enchaînement de cibles CaC multiples (handleStartMelee), où combatTargetMode retombe à null un
+  // instant entre deux cibles.
+  const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
+    tokenIds: [activeTokenId],
+    combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
+    holdHidden: isSelectingOnMap,
+  })
+
   // ── Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) ──────────────────────
   // Même hook que CombatActionWindow (PJ)/useDroneDeclare, cf. useCombatClickAttack.js. `isActivePnj`
   // (calculé plus haut, ligne 190, avant les hooks ambiants — Rules of Hooks) est déjà disponible ici :
@@ -267,8 +323,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // nécessaire ici contrairement à CombatActionWindow (allInventoryItems y était aussi déjà dispo,
   // dérivation dupliquée là-bas uniquement par cohérence de patron entre les 2 fichiers).
   const clickAllWeapons = isActivePnj
-    ? [equipment[activeTokenId]?.weaponMg, equipment[activeTokenId]?.weaponMd,
-       equipment[activeTokenId]?.weapon2M, equipment[activeTokenId]?.weaponTr].filter(Boolean)
+    ? [activeHandEquipment?.weaponMg, activeHandEquipment?.weaponMd,
+       activeHandEquipment?.weapon2M, activeHandEquipment?.weaponTr].filter(Boolean)
     : []
   const clickMeleeWeapon  = clickAllWeapons.find(w => w.ref_category === 'Arme de contact') ?? null
   const clickRangedWeapon = clickAllWeapons.find(w => w.ref_fire_mode) ?? null
@@ -281,16 +337,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   useCombatClickAttack({
     enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     battlemapId,
-  // Masquage pendant une sélection de destination / de cible — autorité unique partagée par toutes les
-  // fenêtres d'Annonce (useDeclareWindowHiding.js). `holdHidden` : le drapeau local isSelectingOnMap couvre
-  // l'enchaînement de cibles CaC multiples (handleStartMelee), où combatTargetMode retombe à null un
-  // instant entre deux cibles.
-  const { hidden: isHidden, armExplicitMove } = useDeclareWindowHiding({
-    tokenIds: [activeTokenId],
-    combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode,
-    holdHidden: isSelectingOnMap,
-  })
-
     tokenId: activeTokenId,
     tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
     moveDestination: pendingMove
@@ -299,18 +345,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     resolveMode: resolveGmClickAttackMode,
     showTargetRecap,
     registerAmbientAttackHandler,
-    onMeleeTarget:   (tid) => meleeDecl.setSoleTarget(tid),
-    onAssaultTarget: (tid) => assaultDecl.setSoleTarget(tid),
+    onMeleeTarget:   (tid) => { setSwapPanel(null); meleeDecl.setSoleTarget(tid) },
+    onAssaultTarget: (tid) => { setSwapPanel(null); assaultDecl.setSoleTarget(tid) },
   })
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
-    const w = equipment[activeTokenId]?.weapon
+    const w = activeHandEquipment?.weapon
     if (!w?.ref_fire_mode) return
     const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
     if (!modes.includes(initialStates.fire_mode))
       dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
-  }, [activeTokenId, equipment])
+  }, [activeTokenId, activeHandEquipment])
 
   const getLabel = (tokenId) => tokens.find(tk => tk.id === tokenId)?.label ?? tokenId
   const isRanged = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
@@ -336,7 +382,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
   const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) && !isDroneGmManaged(blockerEntry) : false
 
-  const gmEq          = isActivePnj ? (equipment[activeTokenId] ?? null) : null
+  const gmEq          = isActivePnj ? activeHandEquipment : null
   const weaponMg      = gmEq?.weaponMg ?? null
   const weaponMd      = gmEq?.weaponMd ?? null
   const weapon2M      = gmEq?.weapon2M ?? null
@@ -374,6 +420,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const hasTwoMeleeWeapons = !!(weaponMg && weaponMd
     && weaponMg.ref_category === 'Arme de contact' && weaponMd.ref_category === 'Arme de contact')
 
+  // Prise en main : lignes prenables du PNJ actif et ligne choisie (null si l'objet a disparu de l'inventaire rechargé).
+  // L'inventaire est indexé par personnage : jamais la liste du PNJ précédent pendant le rechargement du suivant.
+  const baseItems = (isActivePnj && pnjInventory.characterId === grabCharacterId) ? (pnjInventory.items ?? []) : []
+  const grabRows = buildGrabList(baseItems)
+  const grabRow = findSelectedGrabRow(grabRows, swap?.itemId ?? null)
+  const grabIni = grabRow ? { container: grabRow.container } : null
+
   // ── INI delta ────────────────────────────────────────────────────────────
   const iniDelta = isActivePnj ? calcIniDelta(
     initialStates,
@@ -382,12 +435,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       move:  pendingMove ?? null,
       attack: null,
       melee: meleeTargets.length > 0 ? meleeTargets : null,
+      grab:  grabIni,
     },
     decl.quick,
   ) : 0
   const iniBreakdown = isActivePnj ? calcIniBreakdown(
     initialStates, decl,
-    { move: pendingMove ?? null, attack: null, melee: meleeTargets.length > 0 ? meleeTargets : null },
+    { move: pendingMove ?? null, attack: null, melee: meleeTargets.length > 0 ? meleeTargets : null, grab: grabIni },
     decl.quick,
     t,
   ) : []
@@ -428,6 +482,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     blanketDisable: isStunnedActivePnj ? 'stunned' : null,
   })
 
+  // Extension « Permuter » : candidats + avertissement (mêmes règles que le serveur, information seulement — la ligne reste cliquable).
+  const swapReplacedItem = swapPanel?.replaceItemId ? baseItems.find(item => item.id === swapPanel.replaceItemId) : null
+  const swapRows = swapPanel
+    ? grabRows.map(row => ({ ...row, warning: swapWarning(baseItems, { itemId: row.itemId, replaceItemId: swapPanel.replaceItemId }) }))
+    : []
+  const swapChosenHere = swapPanel != null && grabRow != null && swap.replaceItemId === swapPanel.replaceItemId
+  // Objets en main sans ligne d'action (bouclier, grenade sans profil de zone) : une ligne chacun, avec ⇄ seulement.
+  const heldRows = heldItemsWithoutActionRow(effectivePnjItems ?? [], [...weaponGroups.distance, ...weaponGroups.contact].map(row => row.id))
+  const swapRowKey = (row) => (row.kind === 'bare' ? null : row.id)
+
   // Tir GM — mode de tir et variant (miroir logique CombatActionWindow)
   const availableFireModes = weapon?.ref_fire_mode
     ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
@@ -460,6 +524,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       attack:   assaultTargets.length > 0 ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau: weapon?.lunette_niveau ?? 0 }) : null,
       melee:    meleeTargets.length > 0 ? meleeTargets : null,
       reload:   mapAction === 'reload'   ? {} : null,
+      grab:     grabIni,
     },
     state: decl, quick: decl.quick, entry: activePnjEntry,
     isDualWield, bulletCount: effectiveBulletCount ?? null,
@@ -505,6 +570,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     defensif:           meleeDefensif,
     effectiveMeleeCount,
   }))
+  // Prise en main : Sac = Action simple, incompatible avec tir / CaC / rechargement (raison affichée, jamais de reset).
+  const grab = grabCheck({
+    started:   grabRow != null,
+    conflicts: grabRow ? getGrabConflictReasons({
+      container: grabRow.container,
+      mapActions: {
+        attack: (attackStarted && !isReloading) ? [{}] : null,
+        melee:  meleeStarted ? [{}] : null,
+        reload: isReloading ? {} : null,
+      },
+    }) : [],
+  })
   // B5 (§5.2) : un PNJ peut déclarer un tour vide. Module 5 (§5.10, D12) : Déclarer actif ⟺ il y a
   // quelque chose à déclarer ET c'est valide. Le MJ ne configure pas le rechargement (pas de reloadCheck).
   const hasCompleteAction = isActiveDrone
@@ -513,12 +590,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         attackStarted,
         meleeStarted,
         reloadStarted:  mapAction === 'reload',
+        grabStarted:    grabRow != null,
         hasMove:        pendingMove != null,
         hasStateChange: hasDeliberateStateChange(decl, initialStates),
         hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
       })
-  const canDeclare = (isActivePnj && assault.valid && melee.valid) || (isActiveDrone && droneDeclare.canDeclare)
-  const blockReason = isActiveDrone ? null : buildBlockReason({ assault, melee })
+  const canDeclare = (isActivePnj && assault.valid && melee.valid && grab.valid) || (isActiveDrone && droneDeclare.canDeclare)
+  const blockReason = isActiveDrone ? null : buildBlockReason({ assault, melee, grab })
 
   // ── Sélection dans la liste d'armes (module 4, D5) ───────────────────────
   const gmMeleeRowId = !meleeStarted
@@ -542,6 +620,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Le MJ ouvre la colonne 2 (panneau détail) sans sauter au ciblage — la cible se choisit dans la col. 2.
   const handleGmWeaponPick = (row) => {
     if (row.disabled) return
+    setSwapPanel(null)   // une action = une extension : l'attaque reprend la colonne 2
     if (row.group === 'distance') {
       if (attackStarted && gmSelectedRowId === row.id) { assaultDecl.clear(); setMapAction(p => p === 'reload' ? null : p); return }
       if (meleeStarted) clearMeleeSetup()
@@ -563,10 +642,37 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // puisque `row.disabled` (chargeur vide) bloque la sélection normale de cette ligne — miroir de la
   // branche Distance ci-dessus, mais force Recharger ON au lieu de OFF.
   const handleGmQuickReload = (row) => {
+    setSwapPanel(null)
     if (meleeStarted) clearMeleeSetup()
     assaultDecl.selectWeapon(row.id)
     setMapAction('reload')
     if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
+  }
+
+  // Permuter — ⇄ d'une ligne : ouvre l'extension « armes disponibles pour la permutation » ; re-cliquer le même ⇄ la referme.
+  // La ligne cliquée est l'objet qui sortira (« Mains nues » = aucun : une main libre reçoit l'objet).
+  const handleGmSwapOpen = (row) => {
+    const replaceItemId = row.kind === 'bare' ? null : row.id
+    setSwapPanel(prev => (prev != null && prev.replaceItemId === replaceItemId ? null : { replaceItemId }))
+  }
+
+  // Permuter — choisir un candidat le sélectionne (un seul choix par Tour : il REMPLACE le précédent), re-cliquer le candidat choisi
+  // l'annule. L'inventaire effectif change : toute action dont l'arme n'est plus en main est désélectionnée — sinon l'attaque
+  // partirait avec une AUTRE arme (l'arme principale se recalcule) ou avec une arme qui n'est plus là.
+  const handleGmSwapPick = (candidate) => {
+    if (!swapPanel) return
+    const alreadyChosen = swap != null && swap.itemId === candidate.itemId && swap.replaceItemId === swapPanel.replaceItemId
+    const nextSwap = alreadyChosen ? null : { itemId: candidate.itemId, replaceItemId: swapPanel.replaceItemId }
+    setSwap(nextSwap)
+    const handIds = new Set(flattenItemsBySlot(applyDeclaredSwap(baseItems, nextSwap).items).map(item => item.id))
+    if (attackStarted && weapon?.inv_id && !handIds.has(weapon.inv_id)) {
+      assaultDecl.clear()
+      setMapAction(prev => (prev === 'reload' ? null : prev))
+    }
+    if (meleeStarted && weaponInvIdForMelee && !handIds.has(weaponInvIdForMelee)) {
+      setMeleePendingMode(false)
+      meleeDecl.clear()
+    }
   }
 
   // ── Déplacement direct ───────────────────────────────────────────────────
@@ -648,6 +754,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
     meleeDecl.setCharge(null)
     setIsSelectingOnMap(true)
+    armExplicitMove(true)
     const chargeAllures = {
       lente: DEFAULT_PNJ_ALLURES.lente, moyenne: DEFAULT_PNJ_ALLURES.lente,
       rapide: DEFAULT_PNJ_ALLURES.lente, max:    DEFAULT_PNJ_ALLURES.lente,
@@ -692,12 +799,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       pendingMove, chargeSelection,
       weapon, assaultTargets, effectiveAssaultCount,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
-    armExplicitMove(true)
       aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection, aoeIntendedOrigin: assaultDecl.state.aoeIntendedOrigin,
       aoeDetonation: assaultDecl.state.aoeDetonation,
       meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
       effectiveDualWieldMelee, meleeOffhandWeapon,
       mapAction,
+      grabItemId: grabRow?.itemId ?? null,
+      grabReplaceItemId: grabRow ? (swap.replaceItemId ?? null) : null,
     }))
   }
 
@@ -705,6 +813,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   //    `isReloading` calculés plus haut (source unique avec `declareChecks`).
   const isMeleeSetup   = isActivePnj && meleeStarted
   const isAttackActive = attackStarted && !isReloading   // D7 : Recharger remplace le Tir
+  // Une action = une extension : l'extension « Permuter » (⇄) prend la colonne 2 tant qu'elle est ouverte ; le Tir / CaC choisi reste,
+  // il revient quand elle se referme.
+  const showSwap = swapPanel != null && isActivePnj
+  const hasCol2  = showSwap || isMeleeSetup || isAttackActive
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDU
@@ -714,7 +826,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       {isActivePnj && (
         <CombatDeclareStatePanel
           pos={pos}
-          windowWidth={(isMeleeSetup || isAttackActive) ? 720 : 440}
+          windowWidth={hasCol2 ? 720 : 440}
           family="gm-pnj"
           positionMode="absolute"
           decl={decl}
@@ -723,7 +835,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           hidden={isHidden}
         />
       )}
-    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: isHidden ? 0 : 1, pointerEvents: isHidden ? 'none' : 'auto' }}>
+    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: hasCol2 ? 720 : 440, left: pos.left, top: pos.top, opacity: isHidden ? 0 : 1, pointerEvents: isHidden ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <CombatDeclareHeader
@@ -762,7 +874,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
                 onPick={handleGmWeaponPick}
-                reload={{ active: isReloading, onToggle: () => setMapAction(prev => prev === 'reload' ? null : 'reload'), onQuickReload: handleGmQuickReload }}
+                reload={{ active: isReloading, onToggle: () => { setSwapPanel(null); setMapAction(prev => prev === 'reload' ? null : 'reload') }, onQuickReload: handleGmQuickReload }}
+                swap={{
+                  isActive: (row) => swapPanel != null && swapPanel.replaceItemId === swapRowKey(row),
+                  isChosen: (row) => grabRow != null && swap.replaceItemId === swapRowKey(row),
+                  incomingId: grabRow ? swap.itemId : null,
+                  onOpen: handleGmSwapOpen,
+                }}
+                heldRows={heldRows}
               />
 
               {/* ACTIONS RAPIDES */}
@@ -951,13 +1070,24 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           </div>
         </div>
 
-        {(isMeleeSetup || isAttackActive) && (
+        {hasCol2 && (
         <div className="decl-col2">
+        {/* PANNEAU DROIT — Permuter (⇄) : armes disponibles au Sac / à la Ceinture du PNJ */}
+        {showSwap && (
+          <CombatSwapPanel
+            rows={swapRows}
+            selectedItemId={swapChosenHere ? grabRow.itemId : null}
+            replacedName={swapReplacedItem ? (swapReplacedItem.custom_name || swapReplacedItem.ref_name) : null}
+            afterName={swapChosenHere ? grabRow.name : null}
+            onPick={handleGmSwapPick}
+          />
+        )}
+
         {/* Recharger : ↻ sur la ligne d'arme (col. 1, option B). Le MJ n'a pas de sélecteur de
             munition — le mode Recharger est un booléen, la col. 2 ne s'ouvre pas pour lui. */}
 
         {/* PANNEAU DROIT — Mode CaC */}
-        {isMeleeSetup && isActivePnj && (
+        {isMeleeSetup && isActivePnj && !showSwap && (
           <div style={{ ...S.meleePanelGm, flex: 1, minHeight: 0 }}>
             <MeleeCombatPanel
               availableWeapons={meleeWeaponAvailable ? [{ id: meleeWeaponAvailable.inv_id, label: meleeWeaponAvailable.name ?? 'Arme', slot: meleeWeaponAvailable.slot ?? '', damage: '', allonge: 0 }] : []}
@@ -1008,7 +1138,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         )}
 
         {/* PANNEAU DROIT — Tir */}
-        {isAttackActive && isActivePnj && (
+        {isAttackActive && isActivePnj && !showSwap && (
           <div style={{ ...S.assaultPanelGm, flex: 1, minHeight: 0 }}>
             <AssaultRangedPanel
               weaponDisplay={weapon ? `${weapon.name ?? 'Arme'} (${weapon.slot ?? '?'})` : null}

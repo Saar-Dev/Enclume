@@ -309,7 +309,28 @@
     "disabledAmmoEmpty": "Chargeur vide",
     "rosterHeader": "Roster",
     "colTwoEmpty": "Choisis une arme à gauche.",
-    "colTwoEmptySub": "Elle devient ton attaque."
+    "colTwoEmptySub": "Elle devient ton attaque.",
+    "swapButton": "Permuter",
+    "swappedTag": "permutée"
+  },
+  "swapPanel": {
+    "title": "Permuter — {{name}}",
+    "titleBareHands": "Permuter — Mains nues",
+    "hintBareHands": "Une main libre reçoit l’objet choisi. Un seul choix par Tour.",
+    "hintReplace": "{{name}} sera rangé dans le conteneur d’où vient l’objet choisi. Un seul choix par Tour.",
+    "groupBelt": "Ceinture · Préparation",
+    "groupBag": "Sac · Action simple",
+    "beltNote": "peut servir dans le même Tour",
+    "bagNote": "exclusive avec une attaque ou un rechargement",
+    "empty": "Rien à prendre dans le Sac ni à la Ceinture.",
+    "after": "Après la permutation : {{item}} en main.",
+    "warning": {
+      "no_room": "⚠ {{item}} ne rentre pas dans {{container}} : la permutation sera refusée et l’action perdue.",
+      "no_sac": "⚠ Aucun Sac à dos équipé : la permutation sera refusée et l’action perdue.",
+      "hands_full": "⚠ Aucune main libre : la permutation sera refusée. Utilise ⇄ sur l’objet à remplacer.",
+      "container_unavailable": "⚠ {{container}} n’est pas équipé : l’objet remplacé ne pourra pas y être rangé, la permutation sera refusée.",
+      "generic": "⚠ Cette permutation sera refusée : l’action sera perdue."
+    }
   },
   "quickActions": {
     "observer": {
@@ -333,7 +354,8 @@
     "aimedShot": "Tir visé ×{{count}}",
     "observe": "Observer ×{{count}}",
     "spot": "Repérer ×{{count}}",
-    "shortPhrase": "Phrase courte"
+    "shortPhrase": "Phrase courte",
+    "grab": "Prendre en main ({{container}})"
   },
   "iniWidget": {
     "pill": "INI = {{current}} -> {{projected}}",
@@ -716,7 +738,23 @@
       "forceButton": "Forcer (Événement favorable)",
       "attemptButton": "Tenter le Test de Chance",
       "reduceButton": "Réduire de {{degree}} (→ {{severity}})",
+      "rescueButton": "Dépenser {{cost}} pts de Chance (→ {{severity}})",
+      "acceptGeneric": "Ne rien dépenser",
+      "acceptWound": "Accepter la blessure",
+      "acceptDeath": "Accepter la mort",
       "autoResolveIn": "Résolution automatique dans {{seconds}}s"
+    },
+    "notice": {
+      "woundReduced": "{{label}} dépense {{cost}} de Chance pour réduire sa blessure (Chance : {{chc}}).",
+      "deathAvoided": "{{label}} dépense {{cost}} de Chance : la mort est évitée, il ne subit qu'une Blessure critique (Chance : {{chc}}).",
+      "limbSaved": "{{label}} dépense {{cost}} de Chance : le membre est sauvé, il ne subit qu'une Blessure critique (Chance : {{chc}}).",
+      "woundAccepted": "{{label}} accepte sa blessure.",
+      "noAnswer": "{{label}} n'a pas répondu à temps : sa blessure reste.",
+      "cannotSpend": "{{label}} ne peut plus dépenser {{cost}} de Chance (3 points doivent rester) : sa blessure reste.",
+      "noRoom": "{{label}} : plus de place dans le compteur, la Chance ne peut plus réduire cette blessure.",
+      "deathNoChance": "{{label}} n'a pas assez de Chance pour éviter la mort (3 points doivent rester).",
+      "overflowNoRescue": "{{label}} : la ligne du compteur a débordé, cette blessure ne se rachète pas avec la Chance.",
+      "dies": "{{label}} meurt."
     },
     "gmQueue": {
       "title": "Catastrophe — Chance (PNJ)"

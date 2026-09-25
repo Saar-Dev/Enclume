@@ -85,6 +85,8 @@ function toIniParams(prevStates, nextStates, mapActions, quick) {
     combatMode: nextStates?.combatMode ?? null,
     aim: aimTranches > 0 ? { aimTranches, lunetteNiveau: singleAttack?.lunetteNiveau ?? 0 } : null,
     quick,
+    // Prise en main (PLAN_PRISE_EN_MAIN.md) : le coût dépend du conteneur d'origine (shared/combatGrabItem.js).
+    grab: mapActions?.grab ? { container: mapActions.grab.container } : null,
   }
 }
 
@@ -112,6 +114,7 @@ function iniBreakdownLabel(line, t) {
     case 'observer': return t('iniBreakdown.observe', { count: line.count })
     case 'reperer':  return t('iniBreakdown.spot', { count: line.count })
     case 'phrase':   return t('iniBreakdown.shortPhrase')
+    case 'grab':     return t('iniBreakdown.grab', { container: line.container })
     default:         return ''
   }
 }

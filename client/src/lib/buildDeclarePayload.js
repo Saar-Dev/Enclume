@@ -97,6 +97,12 @@ export function buildHumanDeclarePayload(sel) {
       reload: sel.reloadSelected
         ? { weapon_inv_id: sel.selectedWeapon?.id ?? null, ammo_item_id: sel.selectedAmmoId }
         : false,
+      // Prise en main (PLAN_PRISE_EN_MAIN.md) : clé ajoutée SEULEMENT si un objet est choisi (les payloads sans prise
+      // restent strictement inchangés). Le serveur relit le conteneur en base pour le coût — jamais du client.
+      // `replaceItemId` = la ligne d'objet tenu sur laquelle « Permuter » a été cliqué ; absent = « Mains nues » (une main libre).
+      ...(sel.grabItemId
+        ? { grab: { itemId: sel.grabItemId, ...(sel.grabReplaceItemId ? { replaceItemId: sel.grabReplaceItemId } : {}) } }
+        : {}),
     },
     quick: {
       observer: sel.decl.quick.observer,
@@ -175,6 +181,11 @@ export function buildGmDeclarePayload(sel) {
         : null,
       melee:  meleeCaC.length > 0 ? meleeCaC : null,
       reload: sel.mapAction === 'reload' ? { weapon_inv_id: sel.weapon?.inv_id ?? null } : false,
+      // Prise en main (PLAN_PRISE_EN_MAIN.md) : clé ajoutée SEULEMENT si un objet est choisi (payload inchangé sinon).
+      // `replaceItemId` = la ligne d'objet tenu sur laquelle « Permuter » a été cliqué ; absent = « Mains nues » (une main libre).
+      ...(sel.grabItemId
+        ? { grab: { itemId: sel.grabItemId, ...(sel.grabReplaceItemId ? { replaceItemId: sel.grabReplaceItemId } : {}) } }
+        : {}),
     },
     quick: { ...sel.decl.quick },
   }

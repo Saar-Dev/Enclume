@@ -2027,6 +2027,70 @@ Convention :
   border-color: var(--decl-acc);
   background: var(--decl-acc-bg);
 }
+/* ⇄ Permuter (PLAN_PRISE_EN_MAIN.md) — même bouton que ↻ : `data-active` = son extension est ouverte, `data-chosen` = une
+   permutation est déjà choisie pour cette ligne (l'extension peut être fermée). */
+[data-decl] .decl-wpn__swap { font-size: 20px; }
+[data-decl] .decl-wpn__swap[data-chosen] { color: var(--decl-acc); border-color: var(--decl-acc-line); }
+/* Ligne d'un objet tenu sans action (bouclier…) : le corps ne fait rien, seul ⇄ agit. */
+[data-decl] .decl-wpn[data-held] { cursor: default; margin-top: 6px; }
+[data-decl] .decl-wpn__tag {
+  flex: none;
+  font: 600 8px var(--font-ui);
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--decl-acc);
+  border: 1px solid var(--decl-acc-line);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+
+/* Extension « Permuter » (colonne 2) */
+[data-decl] .decl-swap { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+[data-decl] .decl-swap__head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--decl-sep);
+  font: 600 11px/1 var(--font-ui);
+  color: var(--decl-acc);
+}
+[data-decl] .decl-swap__hint { padding: 8px 12px 2px; font: 400 10px/1.45 var(--font-ui); color: var(--decl-text-dim); }
+[data-decl] .decl-swap__body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
+[data-decl] .decl-swap__group {
+  padding: 10px 0 4px;
+  font: 600 8px/1 var(--font-ui);
+  text-transform: uppercase; letter-spacing: .09em;
+  color: var(--decl-label);
+}
+[data-decl] .decl-swap__cand {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--decl-line);
+  border-radius: 5px;
+  background: var(--decl-row);
+  cursor: pointer;
+}
+[data-decl] .decl-swap__cand:hover { border-color: var(--decl-acc-line); }
+[data-decl] .decl-swap__cand[data-sel="true"] { border-color: var(--decl-acc); background: var(--decl-acc-bg); }
+[data-decl] .decl-swap__cand[data-warn] { border-color: color-mix(in srgb, var(--decl-danger) 45%, transparent); }
+[data-decl] .decl-swap__radio {
+  flex: none; width: 12px; height: 12px; margin-top: 2px;
+  border-radius: 50%; border: 1.5px solid var(--decl-text-dim);
+  position: relative;
+}
+[data-decl] .decl-swap__cand[data-sel="true"] .decl-swap__radio { border-color: var(--decl-acc); }
+[data-decl] .decl-swap__cand[data-sel="true"] .decl-swap__radio::after {
+  content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--decl-acc);
+}
+[data-decl] .decl-swap__name { flex: 1; min-width: 0; font: 500 11px var(--font-ui); color: var(--decl-text); }
+[data-decl] .decl-swap__cand[data-sel="true"] .decl-swap__name { color: var(--decl-text-hi); }
+[data-decl] .decl-swap__sub { display: block; margin-top: 2px; font: 400 9px/1.35 var(--font-ui); color: var(--decl-text-dim); }
+[data-decl] .decl-swap__warn { display: block; margin-top: 3px; font: 500 9px/1.35 var(--font-ui); color: var(--decl-danger); }
+[data-decl] .decl-swap__cost { flex: none; font: 400 10px var(--font-mono); color: var(--decl-text-dim); }
+[data-decl] .decl-swap__after {
+  margin-top: 8px; padding: 8px 10px;
+  border: 1px dashed var(--decl-acc-line); border-radius: 5px;
+  font: 400 10px/1.5 var(--font-ui); color: var(--decl-text);
+}
+[data-decl] .decl-swap__empty { padding: 12px; font: 400 11px/1.45 var(--font-ui); color: var(--decl-text-dim); }
 
 /* Roster (bas de colonne 1) */
 [data-decl] .decl-roster { margin-top: auto; border-top: 1px solid var(--decl-sep); padding: 7px 12px 8px; }

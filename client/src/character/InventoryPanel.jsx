@@ -34,7 +34,7 @@ const SLOT_LABEL_I18N_KEYS = {
 const CATALOG_PAGE_SIZE = 20
 
 // Slots réellement proposables pour un item donné, dérivés de `ref_location` (même parsing que
-// getSlotInfo dans WeaponPanel.jsx) — le menu déroulant ne doit jamais offrir un code hors sujet
+// `getSlotInfo`, shared/weaponSlots.js) — le menu déroulant ne doit jamais offrir un code hors sujet
 // (armure sur une arme, arme sur une localisation corporelle). Bug corrigé Saar 2026-08-05 : le
 // Breather (arme 2 mains) s'équipait sur "Tête" faute de filtre.
 function slotOptionsForItem(item) {
