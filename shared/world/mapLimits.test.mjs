@@ -6,9 +6,10 @@ import { MAP_LIMITS } from './mapLimits.js'
 // Les noms sont le contrat des consommateurs (garde structurelle, enveloppe, export, import) : en retirer un
 // doit faire échouer ce test, pas casser silencieusement un plafond.
 const EXPECTED_KEYS = [
-  'maxAbsCoordinate', 'maxCeilings', 'maxConnectors', 'maxErrors', 'maxExtentCells', 'maxFileBytes',
-  'maxFloors', 'maxJsonDepth', 'maxJsonNodes', 'maxKeyLength', 'maxNameLength', 'maxRingPoints',
-  'maxRooms', 'maxStairs', 'maxStringLength', 'maxTotalCells', 'maxVerticalSlices', 'maxWalls',
+  'maxAbsCoordinate', 'maxArcsPerRoom', 'maxBoundaryEdgesPerRoom', 'maxCeilings', 'maxClipRoomsPerRoom',
+  'maxConnectors', 'maxErrors', 'maxExtentCells', 'maxFileBytes', 'maxFloors', 'maxJsonDepth', 'maxJsonNodes',
+  'maxKeyLength', 'maxNameLength', 'maxProfilesPerRoom', 'maxRingPoints', 'maxRooms', 'maxStairs',
+  'maxStringLength', 'maxTotalCells', 'maxVerticalSlices', 'maxWalls',
 ]
 
 test('MAP_LIMITS expose exactement les plafonds attendus', () => {
@@ -35,4 +36,6 @@ test('les plafonds sont cohérents entre eux', () => {
   assert.ok(MAP_LIMITS.maxNameLength <= MAP_LIMITS.maxStringLength)
   assert.ok(MAP_LIMITS.maxKeyLength <= MAP_LIMITS.maxStringLength)
   assert.ok(MAP_LIMITS.maxErrors >= 1)
+  // Le contour d'une salle ne peut pas avoir plus d'arêtes que quatre par case (pire cas : cases isolées).
+  assert.ok(MAP_LIMITS.maxBoundaryEdgesPerRoom <= 4 * MAP_LIMITS.maxTotalCells)
 })

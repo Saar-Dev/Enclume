@@ -188,7 +188,7 @@ Prévu, dans le cœur pur (L1a) :
 - Types **stricts** (`typeof number`) pour l'import ; erreurs renvoyées ≤ 20.
 - Plafonds structurels : salles, cases, murs, connecteurs, points par anneau, tranches, coordonnées, **regroupés dans un module
   unique de constantes (`MAP_LIMITS`), documenté et modifiable** (décision Saar : « modifiable à terme, faire des tests de
-  performance, débuter petit »). **Départ v1 (décision Saar, 2026-09-26, après mesure) : étendue maximale 30×30 cases et surface totale ≤ 900 cases** (toutes salles et tous
+  performance, débuter petit »). **Départ v1 (décision Saar, 2026-09-26, après mesure) : surface totale ≤ 900 cases (« 30×30 »), exprimée par la surface et non par axe (corrigé en L1a-2)** (toutes salles et tous
   niveaux), à affiner par le banc d'essai de L1a.
   `[MESURÉ, reproduit par Claude le 2026-09-26]` `compileSurfaceWorld`, synchrone, pour **une** salle carrée : 10×10 = 66 ms,
   20×20 = 270 ms, 30×30 = 1,1 s, 40×40 = 3,1 s, **50×50 = 6,6 s** (croissance plus rapide que la surface). Même à 50×50, un import
@@ -304,22 +304,67 @@ départ plus bas (30×30 = 1,6 s) et relèvement quand la compilation sera amél
   `tools/bench-compile.mjs` (script manuel, hors `npm test`, mesure temps de compilation et taille du document pour des salles N×N
   décrites par leurs cases, comme l'éditeur les produit).
 - **Ne modifie aucun fichier existant** et n'est importé par aucun code existant : aucun effet en production.
-- **Valeurs de départ (proposition, modifiables, à confirmer par le banc d'essai)** : étendue 30×30 cases ; surface totale 900 cases (**décision Saar, 2026-09-26**) ;
+- **Valeurs de départ (proposition, modifiables, à confirmer par le banc d'essai)** : surface totale 900 cases (**décision Saar « 30×30 », 2026-09-26**) ; garde-fou par axe 100 cases (corrigé en L1a-2, voir ce sous-lot) ;
   salles ≤ 100 ; murs ≤ 2 000 ; connecteurs ≤ 200 ; escaliers ≤ 200 ; sols et plafonds ≤ 900 ; points par anneau ≤ 2 000 ; tranches
   verticales ≤ 20 ; |coordonnée| ≤ 200 cases ; fichier ≤ 2 Mo ; profondeur JSON ≤ 32 ; nœuds ≤ 200 000 ; chaîne ≤ 4 096 ; nom ≤ 100 ;
   clé ≤ 128 ; erreurs renvoyées ≤ 20.
 - **Tests** : `node --test shared/world/mapLimits.test.mjs` (objet gelé, entiers positifs, cohérence entre valeurs) ; `node --check` ;
   lancement manuel du banc d'essai ; `git diff --check`. **Hors périmètre** : aucune validation, aucun branchement.
 
-### L1a-2 — Garde structurelle avant validation (certitude : forte sur la conception ; les seuils viennent de L1a-1)
-- **Crée** `shared/world/importGuard.js` et son test : `scanJsonStructure(value, limits)` (parcours **itératif** : profondeur, nombre de
-  nœuds, longueur des chaînes et des clés, clés interdites `__proto__`/`constructor`/`prototype`, caractères de contrôle dont NUL) et
-  `checkSurfaceLimits(surface, limits)` (comptes par collection ; par salle : bornes de type nombre, étendue, longueur de `cells`, total
-  de cases ; points d'anneau, tranches, |coordonnée|).
-- **Erreurs** : objets `{ code, params }` à codes stables (jamais de texte FR, pour la traduction plus tard), plafonnés à `maxErrors`.
-- **Invariants** : fonctions pures, aucun import de la géométrie, `validateSurfaceData` **non modifié**.
-- **Tests** : fixtures hostiles générées en mémoire (JSON de 100 000 niveaux construit sans récursion, `__proto__`, NUL, salle aux bornes
-  ±1e6 sans cases, 5 001 salles, chaîne de 10 Mo…) et carte saine construite à la main ; module de fixtures sans suffixe `.test.mjs`.
+### L1a-2 — Garde structurelle avant validation (certitude : forte, conception révisée par des mesures le 2026-09-26) — **FAIT le 2026-09-26, en attente de validation**
+
+**Résultat (2026-09-26)** : `importGuard.js`, `importGuard.test.mjs`, `mapTestFixtures.mjs` créés ; `mapLimits.js`, `mapLimits.test.mjs`, `tools/bench-compile.mjs` modifiés ;
+`validateSurfaceData` et le compilateur non modifiés. Tests : 36/36 (garde + limites) ; **865/865** sur `node --test 'shared/**/*.test.mjs'` (aucune régression).
+**Corrections trouvées en codant** :
+1. **La carte réelle a été essayée contre la garde** (lecture seule, base locale) : sa salle principale fait **31 cases de large** (403 cases, 88 arêtes de contour, légère) ;
+   la limite « 30 cases par axe » l'aurait refusée. **La décision de Saar « 30×30 » s'exprime donc par la SURFACE** (`maxTotalCells` = 900) ; `maxExtentCells` devient un garde-fou
+   par axe à **100** (bornes absurdes). Un couloir 60×10 et la salle 31×13 réelle sont acceptés ; 31×31 (961 cases) est refusé.
+2. Le drapeau `truncated` n'était pas levé quand l'analyse s'arrêtait au plafond d'erreurs : corrigé (`markTruncated`) ; une salle qui dépasse le plafond de cases n'est plus
+   signalée deux fois (par salle et par total).
+**Pires cas laissés passer par les plafonds actuels (`[MESURÉ]`)** : damier 12×12 (288 arêtes, sous le plafond de 300) : compilation ~0,94 s ; validation du même damier avec 16 arrondis :
+93 ms ; salle pleine 30×30 : ~1,6 s. **Trou connu, non traité (à décider)** : les plafonds d'arêtes sont **par salle** ; comme le total de cases (900) autorise ~12 salles en damier 12×12,
+le pire cas cumulé est d'environ **11 s** de compilation (12 × 0,94 s). Piste : un budget de complexité de la carte entière (somme des carrés des arêtes de contour, ≈ 250 000 ; la carte réelle
+fait ~8 400), à instruire comme sous-lot séparé avant de le coder.
+
+**Mesures qui fixent la conception (`[MESURÉ]`, machine de dev, sans base)** :
+- **La complexité du contour compte plus que le nombre de cases.** Compilation d'une salle en damier (cases isolées, pire cas) : 10×10 (200 arêtes de
+  contour) 0,39 s ; 12×12 (288 arêtes) 0,87 s ; 14×14 (392) 2,1 s ; **16×16 (512 arêtes) 5,1 s** ; un damier 30×30 (450 cases, donc **dans** le plafond de
+  900 cases) dépasse **2 minutes** sans terminer. À l'inverse une salle pleine 30×30 (120 arêtes) : 1,0 à 1,7 s ; une salle en L de 675 cases (120 arêtes) : 1,7 s.
+  → un plafond de cases seul **ne protège pas** ; il faut plafonner les arêtes de contour par salle.
+- **Le validateur lui-même est exploitable.** `validateSurfaceData` recalcule tout le contour de la salle pour **chaque** arrondi déclaré
+  (`selectedRoomBoundaryChain`) : sur un damier 30×30, 1 arrondi = 138 ms, 16 = 2,2 s, **64 = 10,8 s** — avant toute compilation. Il faut plafonner le nombre
+  d'arrondis par salle.
+- La hauteur d'une salle (`heightLevels`) **ne change pas** le coût de compilation d'une salle sans tranches explicites (517 ms pour 1, 2, 3 ou 5 niveaux) : pas de
+  pondération par niveaux. `[INCONNU]` le coût d'une salle à tranches explicites (salles fusionnées) : à mesurer pendant le réglage.
+
+**Crée** `shared/world/importGuard.js`, `shared/world/importGuard.test.mjs`, `shared/world/mapTestFixtures.mjs` (module de fixtures **sans** suffixe `.test.mjs`, donc
+non exécuté seul : constructeurs de cartes saines et hostiles, générés en mémoire, aucun binaire).
+**Modifie** (fichiers de L1a-1) `shared/world/mapLimits.js` (+ `maxBoundaryEdgesPerRoom`, `maxArcsPerRoom`, `maxProfilesPerRoom`, `maxClipRoomsPerRoom`) et son test (liste des noms) ;
+`tools/bench-compile.mjs` (+ options `--shape=checkerboard` et `--arcs=N` pour mesurer les cas piégés). `validateSurfaceData` et le compilateur : **non modifiés**.
+
+**Fonctions** (pures, sans état) :
+1. `scanJsonStructure(value, limits = MAP_LIMITS)` — parcours **itératif** (pile explicite, aucune récursion) : profondeur, nombre de nœuds (borne aussi les cycles), longueur des chaînes
+   et des clés, clés `__proto__`/`constructor`/`prototype`, caractères de contrôle (NUL et C0 sauf tabulation, saut de ligne, retour chariot), nombres non finis (`JSON.parse('1e999')`
+   donne `Infinity`), types non JSON.
+2. `checkSurfaceLimits(surface, limits = MAP_LIMITS)` — d'abord de l'arithmétique pure : comptes par collection ; par salle : bornes de type nombre fini, étendue (≤ 30 par axe), |coordonnée|,
+   longueur de `cells`, longueurs de `boundaryArcs`, des profils, de `geometryClipRoomIds`, `verticalProfile.slices` et points d'anneau ; total de cases de la carte. **Ensuite seulement**, et
+   uniquement pour les salles qui ont passé ces contrôles, le nombre d'arêtes de contour est obtenu par `roomBoundaryEdges` (autorité unique de « qu'est-ce qu'une arête de contour »,
+   coût proportionnel aux cases, donc déjà borné) et comparé à `maxBoundaryEdgesPerRoom` ; `openWallEdgeKeys` est borné par ce même plafond. Une salle sans `cells` n'est jamais
+   énumérée avant que ses bornes soient validées.
+3. Erreurs : objets `{ code, params }` à codes stables (jamais de texte français : traduits plus tard), au plus `maxErrors`, avec un drapeau `truncated`.
+**Ordre d'utilisation** (documenté dans le module) : `scanJsonStructure` → `checkSurfaceLimits` → *(types stricts, L1a-3)* → `validateSurfaceData` → …
+
+**Valeurs de départ proposées pour les nouveaux plafonds** (à confirmer par le banc d'essai) : arêtes de contour par salle ≤ 300 (pire cas mesuré ≈ 1 s) ; arrondis par salle ≤ 16 ;
+profils (élévation + apparence) par salle ≤ 64 ; salles de découpe (`geometryClipRoomIds`) par salle ≤ 8.
+
+**Tests** (`node --test shared/world/importGuard.test.mjs`) : carte saine et salle 30×30 acceptées, 31×31 refusée ; JSON de profondeur 32 accepté, 33 refusé, **100 000 niveaux construits sans récursion**
+refusé sans dépassement de pile ; nœuds, chaînes, clés, `__proto__`/`constructor`/`prototype` (via `JSON.parse`), NUL, `1e999`, type non JSON ; 101 salles ; bornes ±1e6 sans cases ;
+bornes de type chaîne ou NaN ; |coordonnée| 201 ; cases au-dessus du plafond et total sur plusieurs salles ; damier au-dessus de 300 arêtes refusé ; arrondis, profils, découpes au-dessus
+du plafond ; erreurs tronquées à `maxErrors` ; collection qui n'est pas un objet ignorée sans exception ; test d'architecture : le module n'importe que `mapLimits` et `roomGeometry`.
+Aucune assertion de durée (fragile) ; les temps sont vérifiés au banc d'essai.
+
+**Ce que L1a-2 ne fait pas** : types stricts (L1a-3), enveloppe et réglages (L1a-4), aucun branchement serveur ou client.
+**Clôture** : Testé (tests purs, `node --check`, banc d'essai sur les cas piégés) / Non testé (rien de branché) / Données (aucune) / Retour arrière (retirer les trois fichiers créés et rétablir les deux modifiés).
 
 ### L1a-3 — Types stricts pour un fichier importé (**certitude : NON, exploration d'abord**)
 - Problème `[VÉRIFIÉ]` : le validateur accepte `null`, `""`, `true` comme nombre (`Number(x)` fini) et certaines données historiques en
@@ -348,3 +393,5 @@ départ plus bas (30×30 = 1,6 s) et relèvement quand la compilation sera amél
 - **2026-09-26** — décisions de fin de cadrage : JSON validé ; plafonds modifiables, départ 50×50, mesure de compilation reproduite (6,6 s) ; refus des cartes à voxels et purge du voxel décidée (plan à part).
 - **2026-09-26** — plan exact de L1a présenté (§12), découpé en quatre sous-lots ; L1a-3 (types stricts) jugé non certain, exploration d'abord.
 - **2026-09-26** — L1a-1 codé ; mesure : 50×50 = ~14 s ; **départ v1 abaissé à 30×30 sur décision de Saar** (constantes `MAP_LIMITS` : étendue 30, surface 900).
+- **2026-09-26** — L1a-1 commité (deux commits, non poussés) ; plan exact de L1a-2 révisé par des mesures (le contour compte plus que le nombre de cases ; le validateur est exploitable par les arrondis).
+- **2026-09-26** — L1a-2 codé (garde structurelle) : 36/36 tests, 865/865 sur shared/ ; carte réelle acceptée après correction de la limite par axe ; trou connu : budget de complexité cumulé de la carte (pire cas ~11 s), à instruire.

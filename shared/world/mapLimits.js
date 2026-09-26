@@ -5,7 +5,10 @@
 // Valeurs de DÉPART, volontairement basses et modifiables ICI seulement (décision Saar, 2026-09-26 :
 // « modifiable à terme, débuter petit, faire des tests de performance » ; départ v1 fixé à 30×30 après mesure).
 // Elles se règlent avec le banc d'essai `tools/bench-compile.mjs`, jamais à l'estime : `compileSurfaceWorld` est
-// synchrone et son coût croît plus vite que la surface (mesuré : salle 30×30 ≈ 1,6 s, 40×40 ≈ 5,8 s, 50×50 ≈ 14 s).
+// synchrone et son coût croît plus vite que la surface (mesuré : salle pleine 30×30 ≈ 1 à 1,7 s, 50×50 ≈ 14 s) et
+// surtout avec la complexité du contour (mesuré : salle en damier 16×16 ≈ 5 s, 30×30 > 2 min), d'où les plafonds
+// par salle. Le validateur recalcule aussi le contour de la salle pour chaque arrondi déclaré (64 arrondis sur un
+// damier 30×30 ≈ 11 s), d'où `maxArcsPerRoom`.
 // Étendues et coordonnées en cases de grille.
 
 export const MAP_LIMITS = Object.freeze({
@@ -18,8 +21,11 @@ export const MAP_LIMITS = Object.freeze({
   maxNameLength: 100,
   maxErrors: 20,
 
-  // Document de surface
-  maxExtentCells: 30,
+  // Document de surface : carte entière.
+  // « 30×30 » (décision Saar) s'exprime par la SURFACE : `maxTotalCells` (900 cases). `maxExtentCells` n'est qu'un garde-fou
+  // par axe contre les bornes absurdes : un long couloir de 60×5 cases est léger, et la carte réelle actuelle a une salle de
+  // 31×13 cases (403 cases, 88 arêtes de contour) qu'une limite de 30 par axe refuserait à tort.
+  maxExtentCells: 100,
   maxTotalCells: 900,
   maxAbsCoordinate: 200,
   maxRooms: 100,
@@ -28,6 +34,13 @@ export const MAP_LIMITS = Object.freeze({
   maxStairs: 200,
   maxFloors: 900,
   maxCeilings: 900,
+
+  // Document de surface : par salle
+  maxBoundaryEdgesPerRoom: 300,
+  maxArcsPerRoom: 16,
+  maxProfilesPerRoom: 64,
+  maxClipRoomsPerRoom: 8,
+  // Par tranche verticale : points de contour (tous anneaux confondus) et chemins de murs (`maxWalls`)
   maxRingPoints: 2000,
   maxVerticalSlices: 20,
 })
