@@ -44,6 +44,7 @@ export const IMPORT_GUARD_CODES = Object.freeze([
   'slice_too_many_walls',
   'too_many_open_walls',
   'room_boundary_too_complex',
+  'boundary_complexity_exceeded',
   'room_geometry_unreadable',
 ])
 
@@ -273,6 +274,7 @@ function checkRoom(id, room, limits, collector, runningCells) {
 
   // Le nombre d'arêtes de contour vient de la géométrie (autorité unique de « arête de contour »), mais seulement pour
   // une salle dont la taille est déjà bornée, et tant que le total de cases de la carte reste dans le plafond.
+  let complexity = 0
   if (geometrySafe && runningCells + cellCount <= limits.maxTotalCells) {
     try {
       const edgeCount = roomBoundaryEdges(room).length
@@ -280,13 +282,16 @@ function checkRoom(id, room, limits, collector, runningCells) {
         collector.add('room_boundary_too_complex', {
           path, limit: limits.maxBoundaryEdgesPerRoom, actual: edgeCount,
         })
+      } else {
+        // Le budget de la carte ne compte que les salles qui n'ont pas déjà été refusées (pas de double signalement).
+        complexity = edgeCount * edgeCount
       }
     } catch {
       collector.add('room_geometry_unreadable', { path })
     }
   }
 
-  return cellCount
+  return { cellCount, complexity }
 }
 
 export function checkSurfaceLimits(surface, limits = MAP_LIMITS) {
@@ -311,16 +316,22 @@ export function checkSurfaceLimits(surface, limits = MAP_LIMITS) {
   // Les salles ne sont parcourues que si leur nombre est dans le plafond.
   if (isPlainObject(surface.rooms) && !tooMany.has('rooms')) {
     let totalCells = 0
+    let totalComplexity = 0
     for (const [id, room] of Object.entries(surface.rooms)) {
       if (collector.isFull) {
         collector.markTruncated()
         break
       }
       if (!isPlainObject(room)) continue
-      totalCells += checkRoom(id, room, limits, collector, totalCells)
+      const checked = checkRoom(id, room, limits, collector, totalCells)
+      totalCells += checked.cellCount
+      totalComplexity += checked.complexity
     }
     if (totalCells > limits.maxTotalCells) {
       collector.add('too_many_total_cells', { limit: limits.maxTotalCells, actual: totalCells })
+    }
+    if (totalComplexity > limits.maxBoundaryComplexity) {
+      collector.add('boundary_complexity_exceeded', { limit: limits.maxBoundaryComplexity, actual: totalComplexity })
     }
   }
 

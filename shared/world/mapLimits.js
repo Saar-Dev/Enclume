@@ -35,6 +35,12 @@ export const MAP_LIMITS = Object.freeze({
   maxFloors: 900,
   maxCeilings: 900,
 
+  // Budget de complexité de la carte entière : somme, sur toutes les salles, du CARRÉ du nombre d'arêtes de contour
+  // (le coût de compilation croît environ comme ce carré et s'additionne d'une salle à l'autre : mesuré, 1 damier 12×12 ≈ 0,9 s
+  // pour 83 000, 3 damiers ≈ 3,4 s pour 249 000). Sans lui, les plafonds par salle laisseraient passer une douzaine de salles
+  // complexes (≈ 11 s de compilation). La carte réelle actuelle en consomme ≈ 8 400.
+  maxBoundaryComplexity: 150000,
+
   // Document de surface : par salle
   maxBoundaryEdgesPerRoom: 300,
   maxArcsPerRoom: 16,

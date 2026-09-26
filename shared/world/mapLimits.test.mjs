@@ -6,7 +6,7 @@ import { MAP_LIMITS } from './mapLimits.js'
 // Les noms sont le contrat des consommateurs (garde structurelle, enveloppe, export, import) : en retirer un
 // doit faire échouer ce test, pas casser silencieusement un plafond.
 const EXPECTED_KEYS = [
-  'maxAbsCoordinate', 'maxArcsPerRoom', 'maxBoundaryEdgesPerRoom', 'maxCeilings', 'maxClipRoomsPerRoom',
+  'maxAbsCoordinate', 'maxArcsPerRoom', 'maxBoundaryComplexity', 'maxBoundaryEdgesPerRoom', 'maxCeilings', 'maxClipRoomsPerRoom',
   'maxConnectors', 'maxErrors', 'maxExtentCells', 'maxFileBytes', 'maxFloors', 'maxJsonDepth', 'maxJsonNodes',
   'maxKeyLength', 'maxNameLength', 'maxProfilesPerRoom', 'maxRingPoints', 'maxRooms', 'maxStairs',
   'maxStringLength', 'maxTotalCells', 'maxVerticalSlices', 'maxWalls',
@@ -38,4 +38,6 @@ test('les plafonds sont cohérents entre eux', () => {
   assert.ok(MAP_LIMITS.maxErrors >= 1)
   // Le contour d'une salle ne peut pas avoir plus d'arêtes que quatre par case (pire cas : cases isolées).
   assert.ok(MAP_LIMITS.maxBoundaryEdgesPerRoom <= 4 * MAP_LIMITS.maxTotalCells)
+  // Une seule salle au plafond d'arêtes doit tenir dans le budget de la carte, sinon le plafond par salle serait inatteignable.
+  assert.ok(MAP_LIMITS.maxBoundaryEdgesPerRoom ** 2 <= MAP_LIMITS.maxBoundaryComplexity)
 })

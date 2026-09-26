@@ -322,9 +322,7 @@ départ plus bas (30×30 = 1,6 s) et relèvement quand la compilation sera amél
 2. Le drapeau `truncated` n'était pas levé quand l'analyse s'arrêtait au plafond d'erreurs : corrigé (`markTruncated`) ; une salle qui dépasse le plafond de cases n'est plus
    signalée deux fois (par salle et par total).
 **Pires cas laissés passer par les plafonds actuels (`[MESURÉ]`)** : damier 12×12 (288 arêtes, sous le plafond de 300) : compilation ~0,94 s ; validation du même damier avec 16 arrondis :
-93 ms ; salle pleine 30×30 : ~1,6 s. **Trou connu, non traité (à décider)** : les plafonds d'arêtes sont **par salle** ; comme le total de cases (900) autorise ~12 salles en damier 12×12,
-le pire cas cumulé est d'environ **11 s** de compilation (12 × 0,94 s). Piste : un budget de complexité de la carte entière (somme des carrés des arêtes de contour, ≈ 250 000 ; la carte réelle
-fait ~8 400), à instruire comme sous-lot séparé avant de le coder.
+93 ms ; salle pleine 30×30 : ~1,6 s. **Trou connu, FERMÉ ensuite (L1a-2b, même jour)** : les plafonds d'arêtes étaient par salle, donc ~12 salles en damier pouvaient cumuler ~11 s de compilation. Ajout d'un **budget de complexité de la carte entière** : somme, sur les salles, du carré du nombre d'arêtes de contour ≤ `maxBoundaryComplexity` = **150 000** (`[MESURÉ]` : 1 damier 12×12 = 83 000 ≈ 0,9 s ; 2 = 166 000 ≈ 1,7 s ; 3 = 249 000 ≈ 3,4 s ; 4 = 332 000 ≈ 4,7 s ; salle pleine 30×30 + 2 damiers ≈ 4,6 s ; carte réelle ≈ 8 400). Pire cas cumulé sous les plafonds actuels : **~4 à 5 s**. Code `boundary_complexity_exceeded` ; une salle déjà refusée pour son contour n'est pas recomptée. Tests : 38/38, 867/867 sur `shared/`.
 
 **Mesures qui fixent la conception (`[MESURÉ]`, machine de dev, sans base)** :
 - **La complexité du contour compte plus que le nombre de cases.** Compilation d'une salle en damier (cases isolées, pire cas) : 10×10 (200 arêtes de
@@ -395,3 +393,4 @@ Aucune assertion de durée (fragile) ; les temps sont vérifiés au banc d'essai
 - **2026-09-26** — L1a-1 codé ; mesure : 50×50 = ~14 s ; **départ v1 abaissé à 30×30 sur décision de Saar** (constantes `MAP_LIMITS` : étendue 30, surface 900).
 - **2026-09-26** — L1a-1 commité (deux commits, non poussés) ; plan exact de L1a-2 révisé par des mesures (le contour compte plus que le nombre de cases ; le validateur est exploitable par les arrondis).
 - **2026-09-26** — L1a-2 codé (garde structurelle) : 36/36 tests, 865/865 sur shared/ ; carte réelle acceptée après correction de la limite par axe ; trou connu : budget de complexité cumulé de la carte (pire cas ~11 s), à instruire.
+- **2026-09-26** — L1a-2 commité (`586fbbd`) puis L1a-2b (budget de complexité, 150 000) codé : 38/38 ; méthode : lots invisibles auto-validés (Saar : « t'es tout seul », pas de niveau technique).

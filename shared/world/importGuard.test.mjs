@@ -228,6 +228,30 @@ test('limites : le contour trop complexe est refusé (damier), même dans le pla
   assert.deepEqual(codes(checkSurfaceLimits(emptySurface({ rooms: { r: checkerboardRoom(30) } }))), ['room_boundary_too_complex'])
 })
 
+test('limites : le budget de complexité de la carte entière s\'additionne d\'une salle à l\'autre', () => {
+  const shift = (room, dx) => ({
+    ...room,
+    minX: room.minX + dx,
+    maxX: room.maxX + dx,
+    cells: room.cells.map(key => { const [x, z] = key.split(':').map(Number); return `${x + dx}:${z}` }),
+  })
+  // Un damier 12×12 = 288 arêtes → 82 944 : dans le budget de 150 000.
+  const one = emptySurface({ rooms: { a: checkerboardRoom(12) } })
+  assert.equal(checkSurfaceLimits(one).ok, true)
+  // Deux damiers = 165 888 : chaque salle est sous son plafond (300), mais la carte dépasse le budget.
+  const two = emptySurface({ rooms: { a: checkerboardRoom(12), b: shift(checkerboardRoom(12), 20) } })
+  const result = checkSurfaceLimits(two)
+  assert.deepEqual(codes(result), ['boundary_complexity_exceeded'])
+  assert.equal(result.errors[0].params.actual, 165888)
+  // La carte saine des fixtures consomme une fraction infime du budget.
+  assert.equal(checkSurfaceLimits(healthySurface()).ok, true)
+})
+
+test('limites : une salle déjà refusée pour son contour ne compte pas deux fois dans le budget', () => {
+  const result = checkSurfaceLimits(emptySurface({ rooms: { r: checkerboardRoom(20) } }))
+  assert.deepEqual(codes(result), ['room_boundary_too_complex'])
+})
+
 test('limites : arrondis, profils, découpes et murs ouverts par salle', () => {
   const withArcs = baseRoom({ boundaryArcs: wideArray(MAP_LIMITS.maxArcsPerRoom + 1, {}) })
   assert.deepEqual(codes(checkSurfaceLimits(emptySurface({ rooms: { r: withArcs } }))), ['too_many_arcs'])
