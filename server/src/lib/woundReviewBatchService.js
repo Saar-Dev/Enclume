@@ -13,7 +13,7 @@ import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import { WS } from '../../../shared/events.js'
 import { resolveEcheanceNow } from './echeanceService.js'
-import { computeWoundInfectionThreshold } from './woundEvolutionService.js'
+import { computeLocationInfectionThreshold } from './woundEvolutionService.js'
 import { resolvePolarisTest } from './polarisTestService.js'
 import { broadcastWoundUpdate } from './woundReviewService.js'
 import { emitSystemNotice } from './systemNotice.js'
@@ -126,11 +126,11 @@ async function applyHealingEntry(savepoint, campaignId, { echeanceId, value: mjC
   return { resolved: Boolean(outcome.resolved), characterId: row.character_id, woundId: row.payload?.woundId ?? null, choice: mjChoice }
 }
 
-// Une infection : `player` bascule seulement le statut (le jet arrive par socket) ; `auto` calcule le seuil, lance le jet serveur et résout.
+// Une infection (celle d'une LOCALISATION, Lot B1) : `player` bascule seulement le statut (le jet arrive par socket) ; `auto` calcule le seuil sur la pire blessure
+// susceptible de s'infecter de la localisation, lance le jet serveur et résout.
 async function applyInfectionEntry(savepoint, campaignId, { echeanceId, value: mode }, trace = null) {
   const row = await lockAnswerable(savepoint, campaignId, echeanceId)
   if (!row) return { resolved: false, stale: true }
-  const woundId = row.payload?.woundId ?? null
 
   if (mode === 'player') {
     if (row.status === 'pending_mj_review') {
@@ -139,14 +139,14 @@ async function applyInfectionEntry(savepoint, campaignId, { echeanceId, value: m
     return { resolved: false, status: 'awaiting_player_roll' }
   }
 
-  const wound = woundId ? await savepoint('character_wounds').where({ id: woundId }).first() : null
-  if (wound) { // sans blessure, le handler termine l'échéance sans jet
-    const threshold = await computeWoundInfectionThreshold(savepoint, wound, row.payload?.periodesSansSoin ?? 0)
-    await mergeIntoPayload(savepoint, row.id, { rollResult: await resolvePolarisTest(threshold) })
+  const sheet = await savepoint('char_sheet').where({ character_id: row.character_id }).first('id')
+  const infection = sheet ? await computeLocationInfectionThreshold(savepoint, sheet.id, row.payload?.location, row.payload?.periodesSansSoin ?? 0) : null
+  if (infection) { // sans blessure susceptible de s'infecter, le handler termine l'échéance sans jet
+    await mergeIntoPayload(savepoint, row.id, { rollResult: await resolvePolarisTest(infection.threshold) })
   }
   const outcome = await resolveEcheanceNow(savepoint, row.id, { trace })
   if (outcome.error) throw new EntryRolledBack()
-  return { resolved: Boolean(outcome.resolved), status: outcome.resolved ? 'resolved' : undefined, characterId: row.character_id, woundId }
+  return { resolved: Boolean(outcome.resolved), status: outcome.resolved ? 'resolved' : undefined, characterId: row.character_id, woundId: null }
 }
 
 // ─── Diffusions (APRÈS la validation) ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ async function emitBatchEffects(io, campaignId, results, cancelledDuringBatch) {
 
   // Une mise à jour de fiche par personnage touché (le client relit la liste des blessures à chaque diffusion).
   const woundIdByCharacter = new Map()
-  for (const { characterId, woundId } of resolved) if (characterId && !woundIdByCharacter.has(characterId)) woundIdByCharacter.set(characterId, woundId)
+  for (const { characterId, woundId } of resolved) if (characterId && (woundIdByCharacter.get(characterId) ?? null) === null) woundIdByCharacter.set(characterId, woundId)
   for (const [characterId, woundId] of woundIdByCharacter) {
     const sheet = await db('char_sheet').where({ character_id: characterId }).first('id')
     if (sheet) {

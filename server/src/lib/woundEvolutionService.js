@@ -2,10 +2,10 @@
 // consommateur réel, docs/PLAN_BLESSURES_GUERISON.md §5). Payload des échéances reste minimal
 // (identifiants uniquement, convention Lot 2 2026-07-30) — l'état métier vit sur `character_wounds`,
 // jamais dupliqué ici.
-import { WOUND_INFECTION, WOUND_MAX_COUNTS, getWoundHealing, getHealingTotalTests } from '../../../shared/woundConstants.js'
+import { WOUND_INFECTION, WOUND_MAX_COUNTS, getWoundHealing, getHealingTotalTests, findInfectionTarget } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries } from './woundUtils.js'
-import { getHealingRetrySchedule } from './woundHealingSchedule.js'
+import { getHealingRetrySchedule, ensureLocationInfection } from './woundHealingSchedule.js'
 import { calcAttributeNA } from './charStats.js'
 import { shortId } from './reviewTrace.js'
 import { getMutationEffects } from '../services/mutationService.js'
@@ -35,18 +35,23 @@ function buildFailedHealingReschedule(wound, echeance) {
   return getHealingRetrySchedule(wound.severity, wound.location)
 }
 
-// Échec/Catastrophe déclenchent tous les deux un wound_infection_check, dès maintenant (même instant
-// que la résolution du wound_healing_check) — pas de délai, RAW ne prévoit pas d'attente entre les
-// deux. `intervalMinutes`/`occurrencesRemaining` null = ponctuel (Échec, "un et un seul Test") ;
-// non-null = récurrent tous les 2 jours (Catastrophe).
-function buildInfectionSpawn(wound, echeance, { intervalMinutes, occurrencesRemaining }) {
-  return {
-    conditionType: 'wound_infection_check',
-    payload: { woundId: wound.id, periodesSansSoin: 0 },
-    nextDueMinutes: echeance.next_due_minutes,
-    intervalMinutes,
-    occurrencesRemaining,
-  }
+// Échec/Catastrophe déclenchent tous les deux le Test de Constitution de la LOCALISATION de la blessure (REGLEBLESSURES.md:396-401 : « un (et un seul)
+// Test de Constitution » ; :439-442 : « pour chaque Localisation »), dès maintenant (même instant que la résolution du wound_healing_check) — pas de
+// délai, RAW ne prévoit pas d'attente entre les deux. `intervalMinutes`/`occurrencesRemaining` null = ponctuel (Échec) ; non-null = récurrent tous les
+// 2 jours (Catastrophe). Trois cases de la même localisation qui échouent d'un coup ne créent qu'UN Test : `ensureLocationInfection` fusionne (Lot B1).
+async function ensureInfection(trx, wound, echeance, { intervalMinutes, occurrencesRemaining }) {
+  return ensureLocationInfection(trx, {
+    campaignId: echeance.campaign_id, characterId: echeance.character_id, location: wound.location,
+    nextDueMinutes: echeance.next_due_minutes, intervalMinutes, occurrencesRemaining,
+  })
+}
+
+// Trace : ce que l'assurance de l'infection a fait pour la localisation (créée, fusionnée, ou déjà là).
+const describeEnsuredInfection = (wound, { created, echeance, undoEntries }) => {
+  if (created) return `un Test d'infection est créé pour ${wound.location} (échéance ${shortId(echeance.id)}, déjà dû)`
+  return undoEntries.length > 0
+    ? `${wound.location} avait déjà un Test d'infection (échéance ${shortId(echeance.id)}) : il devient récurrent / s'allonge, aucun Test de plus`
+    : `${wound.location} a déjà un Test d'infection (échéance ${shortId(echeance.id)}) : aucun Test de plus`
 }
 
 // Fenêtre d'Infection déclenchée par une Catastrophe, bornée à "la période de guérison en cours"
@@ -124,13 +129,15 @@ export async function woundHealingCheckHandler(trx, echeance, context = {}) {
     }
   } else if (mjChoice === 'echec') {
     reschedule = buildFailedHealingReschedule(wound, echeance)
-    spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: null, occurrencesRemaining: null }))
-    trace?.("→ la blessure ne s'améliore pas ; un Test d'infection est créé (déjà dû)")
+    const infection = await ensureInfection(trx, wound, echeance, { intervalMinutes: null, occurrencesRemaining: null })
+    undoEntries.push(...infection.undoEntries)
+    trace?.(`→ la blessure ne s'améliore pas ; ${describeEnsuredInfection(wound, infection)}`)
   } else if (mjChoice === 'catastrophe') {
     reschedule = buildFailedHealingReschedule(wound, echeance)
     const occurrencesRemaining = computeCatastropheInfectionOccurrences(wound, echeance)
-    spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: INFECTION_TICK_MINUTES, occurrencesRemaining }))
-    trace?.(`→ la blessure ne s'améliore pas ; Catastrophe : ${occurrencesRemaining} Test(s) de Constitution contre l'infection`)
+    const infection = await ensureInfection(trx, wound, echeance, { intervalMinutes: INFECTION_TICK_MINUTES, occurrencesRemaining })
+    undoEntries.push(...infection.undoEntries)
+    trace?.(`→ la blessure ne s'améliore pas ; Catastrophe : ${occurrencesRemaining} Test(s) de Constitution contre l'infection ; ${describeEnsuredInfection(wound, infection)}`)
   } else {
     throw new Error(`mjChoice "${mjChoice}" invalide pour wound_healing_check`)
   }
@@ -158,79 +165,79 @@ async function computeConstitutionNA(trx, charSheetId) {
   return calcAttributeNA(attrs, 'CON', genotypeRow, mutationEffects)
 }
 
-// Seuil du Test de Constitution contre l'Infection (§3.3, REGLEBLESSURES.md:436-472) — combine
-// jusqu'à trois composantes RAW distinctes, pas toutes présentes pour toutes les gravités
-// (shared/woundConstants.js WOUND_INFECTION, relecture attentive documentée là-bas) :
-// NA(Constitution) + modificateur de base + malus de cases (-2/case au-delà de la première sur la
-// même ligne localisation/gravité) + malus de périodes sans soin (-2/période déjà écoulée).
-export async function computeWoundInfectionThreshold(trx, wound, periodesSansSoin) {
-  const rule = WOUND_INFECTION[wound.severity]
-  const conNA = await computeConstitutionNA(trx, wound.char_sheet_id)
-
-  let threshold = conNA + rule.baseModifier
-
-  if (rule.caseMalus) {
-    const { count } = await trx('character_wounds')
-      .where({ char_sheet_id: wound.char_sheet_id, location: wound.location, severity: wound.severity })
-      .count('* as count')
-      .first()
-    threshold -= 2 * Math.max(0, parseInt(count) - 1)
-  }
-
-  if (rule.periodMalus) {
-    threshold -= 2 * periodesSansSoin
-  }
-
-  return threshold
+// La CIBLE du Test d'infection d'une localisation : sa pire blessure susceptible de s'infecter et le nombre de cases de sa ligne (`findInfectionTarget`), ou null.
+async function loadInfectionTarget(trx, charSheetId, location) {
+  const wounds = await trx('character_wounds').where({ char_sheet_id: charSheetId, location }).select('severity', 'location')
+  return findInfectionTarget(wounds)
 }
 
-// Handler `wound_infection_check` (interactive: true) — contrairement à wound_healing_check, garde
-// un vrai jet (§3.3, décision Saar) : le caller (route, pas encore codée) doit avoir déjà résolu le
+// Seuil du Test de Constitution contre l'Infection d'UNE LOCALISATION (REGLEBLESSURES.md:439-472 ; décision de Saar 2026-09-26, Q5/Q6 : la PIRE blessure fixe
+// le Test, et seules les cases de SA ligne comptent) — combine jusqu'à trois composantes RAW distinctes, pas toutes présentes pour toutes les gravités
+// (shared/woundConstants.js WOUND_INFECTION) : NA(Constitution) + modificateur de base + malus de cases (-2/case au-delà de la première sur la ligne de la
+// pire blessure) + malus de périodes sans soin (-2/période déjà écoulée). Retourne `{ threshold, severity, cases }`, ou null si la localisation n'a plus aucune
+// blessure susceptible de s'infecter.
+export async function computeLocationInfectionThreshold(trx, charSheetId, location, periodesSansSoin) {
+  const target = await loadInfectionTarget(trx, charSheetId, location)
+  if (!target) return null
+  const rule = WOUND_INFECTION[target.severity]
+  const conNA = await computeConstitutionNA(trx, charSheetId)
+
+  let threshold = conNA + rule.baseModifier
+  if (rule.caseMalus) threshold -= 2 * Math.max(0, target.cases - 1)
+  if (rule.periodMalus) threshold -= 2 * periodesSansSoin
+  return { threshold, severity: target.severity, cases: target.cases }
+}
+
+// Handler `wound_infection_check` (interactive: true) — une échéance par PERSONNAGE et LOCALISATION (`payload.location`, Lot B1), contrairement à
+// wound_healing_check garde un vrai jet (§3.3, décision Saar) : le caller (route, pas encore codée) doit avoir déjà résolu le
 // jet — auto (resolvePolarisTest direct) ou joueur (DICE_ROLL/MACRO_ROLL) — et fusionné le résultat
 // dans payload.rollResult avant d'appeler resolveEcheanceNow. Ce handler ne lance jamais de dé
 // lui-même, il interprète un résultat déjà connu (même contrat que wound_healing_check.payload.mjChoice,
-// une réponse externe déjà fournie).
+// une réponse externe déjà fournie). La cible est lue AU MOMENT du jet : la pire blessure susceptible de s'infecter de la localisation.
 export async function woundInfectionCheckHandler(trx, echeance, context = {}) {
   const trace = context.trace ?? null
-  const wound = await trx('character_wounds').where({ id: echeance.payload.woundId }).first()
-  if (!wound) {
+  const { location } = echeance.payload
+  const sheet = await trx('char_sheet').where({ character_id: echeance.character_id }).first('id')
+  const target = sheet ? await loadInfectionTarget(trx, sheet.id, location) : null
+  if (!target) {
+    trace?.(`infection ${location} : plus aucune blessure susceptible de s'infecter — l'échéance se termine sans jet`)
     return { resolved: true, reschedule: null, spawn: [], undoEntries: [] }
   }
 
   const { rollResult } = echeance.payload
   if (!rollResult) return { resolved: false } // attend un jet (auto ou joueur)
 
-  const rule = WOUND_INFECTION[wound.severity]
+  const rule = WOUND_INFECTION[target.severity]
   const { isSuccess } = rollResult
   const undoEntries = []
 
   const infects = !isSuccess || rule.infectsOnSuccess
   if (trace) {
     const critical = rollResult.isCriticalFail ? ' (échec critique)' : (rollResult.isCriticalSuccess ? ' (réussite critique)' : '')
-    trace(`infection ${wound.location}/${wound.severity} (case ${shortId(wound.id)}, période sans soin n°${(echeance.payload.periodesSansSoin ?? 0) + 1}) — jet ${rollResult.roll} contre seuil ${rollResult.threshold} : ${isSuccess ? 'réussite' : 'échec'}${critical}`)
+    trace(`infection ${location} — pire blessure susceptible : ${target.severity} (${target.cases} case(s) sur sa ligne), période sans soin n°${(echeance.payload.periodesSansSoin ?? 0) + 1} — jet ${rollResult.roll} contre seuil ${rollResult.threshold} : ${isSuccess ? 'réussite' : 'échec'}${critical}`)
   }
   // Une case supplémentaire seulement quand le RAW la prévoit (WOUND_INFECTION.extraCase) : jamais pour Mortelle.
-  let woundPromotedAway = false
   if (infects && rule.extraCase) {
-    // La case d'infection guérit comme toute autre case : elle naît avec sa propre échéance de guérison. Si la ligne déborde, la
-    // cascade fusionne des cases (dont, peut-être, celle infectée) et annule leurs échéances — sauf CELLE-CI, que le moteur résout.
+    // La case d'infection est cochée sur la ligne de la pire blessure et guérit comme toute autre case : elle naît avec sa propre échéance de guérison. Si la
+    // ligne déborde (règle des cases), la cascade fusionne des cases et annule leurs échéances de guérison ; l'infection de la localisation, elle, continue
+    // tant qu'une blessure susceptible de s'infecter subsiste (la case du dessus en est une) — celle que le moteur résout n'est de toute façon jamais annulée.
     const insertion = await resolveWoundInsertion(
-      trx, wound.char_sheet_id, wound.location, wound.severity,
+      trx, sheet.id, location, target.severity,
       { campaignId: echeance.campaign_id, characterId: echeance.character_id },
       { exceptEcheanceId: echeance.id },
     )
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
-    woundPromotedAway = insertion.deletedWounds.some(w => w.id === wound.id)
-    trace?.(`→ infection : une case supplémentaire naît (${insertion.wound?.location}/${insertion.wound?.severity}, case ${shortId(insertion.wound?.id)}, échéance ${shortId(insertion.echeance?.id)})${insertion.promoted ? ' ; la ligne débordait : promotion en cascade' : ''}${woundPromotedAway ? ' ; la case infectée a été fusionnée' : ''}`)
+    trace?.(`→ infection : une case supplémentaire naît (${insertion.wound?.location}/${insertion.wound?.severity}, case ${shortId(insertion.wound?.id)}, échéance ${shortId(insertion.echeance?.id)})${insertion.promoted ? ' ; la ligne était pleine : promotion en cascade' : ''}`)
   } else {
     trace?.(infects ? "→ infection sans case supplémentaire (la règle n'en prévoit pas pour cette gravité)" : "→ pas d'infection")
   }
 
   // Mortelle/Membre détruit (§3.3, `survivalHours`) : délai de survie affiché au MJ, jamais appliqué automatiquement
-  // (docs/PLAN_BLESSURES_GUERISON.md §8 point 1, confirmé) — la mort reste narrative.
+  // (docs/PLAN_BLESSURES_GUERISON.md §8 point 1, confirmé) — la mort reste narrative, à la charge du MJ (elle
+  // peut être matérialisée par le statut `dead`, ci-dessous). Une Mort (Tête/Corps) n'a ni guérison ni infection.
   let survivalHoursInfo = null
   if (rule.survivalHours) {
-    const conNA = await computeConstitutionNA(trx, wound.char_sheet_id)
+    const conNA = await computeConstitutionNA(trx, sheet.id)
     survivalHoursInfo = { hours: isSuccess ? conNA : Math.floor(conNA / 2), onSuccess: isSuccess }
   }
 
@@ -242,8 +249,9 @@ export async function woundInfectionCheckHandler(trx, echeance, context = {}) {
     payload: { ...echeance.payload, periodesSansSoin, rollResult: null },
   })
 
-  // Sa case n'existe plus (fusionnée par la promotion) : l'infection n'a plus d'objet, elle se termine au lieu de se reprogrammer sans blessure.
-  const reschedule = woundPromotedAway ? null : buildRecurringReschedule(echeance)
+  // Plus aucune blessure susceptible de s'infecter (une cascade jusqu'à une Mort en Tête/Corps) : l'infection se termine au lieu de se reprogrammer sans cible.
+  const stillInfectable = await loadInfectionTarget(trx, sheet.id, location)
+  const reschedule = stillInfectable ? buildRecurringReschedule(echeance) : null
 
   return {
     resolved: true,

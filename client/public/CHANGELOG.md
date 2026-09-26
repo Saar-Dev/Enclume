@@ -1,3 +1,13 @@
+## v261 — 2026-09-26 — Un seul Test d'infection par localisation
+
+### Blessures
+- [fix] L'infection se joue « pour chaque Localisation », comme dans le livre : un Échec (ou une Catastrophe) au Test de soins ne lance plus un jet de Constitution **par case de blessure** mais **un seul** par localisation.
+  Trois Moyennes à la Jambe gauche en Échec donnent un jet et au plus une case en plus, plus trois.
+- [fix] Quand une localisation porte plusieurs gravités, le Test d'infection suit la **pire** blessure susceptible de s'infecter (son modificateur), et seules les cases de sa ligne comptent pour le malus de −2 par case en plus
+  de la première. La case en plus est cochée sur cette ligne.
+- [change] L'infection d'une localisation continue tant qu'elle porte une blessure susceptible de s'infecter (une Critique qui guérit en Grave ne l'arrête plus) ; elle s'arrête avec la dernière. Annuler une avance de temps
+  la restaure comme les autres échéances de blessure. Le panneau « jets en attente » du joueur indique la localisation et sa pire blessure.
+
 ## v260 — 2026-09-26 — Les blessures suivent la règle des cases du livre
 
 ### Blessures

@@ -72,7 +72,7 @@ export default function PendingRollsPanel({ campaignId }) {
     if (e.conditionType === 'equipment_repair') {
       return `${e.characterName} — ${t('session.repairRollLabel', { item: e.item?.name ?? '' })}`
     }
-    return `${e.characterName} — ${e.wound ? `${tChar(LOCATION_I18N_KEYS[e.wound.location])} (${tChar(`locationPanel.severityShort.${e.wound.severity}`)})` : ''}`
+    return `${e.characterName} — ${e.location ? `${tChar(LOCATION_I18N_KEYS[e.location])}${e.severity ? ` (${tChar(`locationPanel.severityShort.${e.severity}`)})` : ''}` : ''}`
   }
 
   return (

@@ -1,7 +1,7 @@
 # PLAN_GUERISON_RAW — Guérison, infection et cases des blessures : se conformer au texte du livre
 
 > 2026-09-26 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et fusionné dans `docs/SYSTEME/BLESSURES.md` une fois clos.
-> Statut : 🟡 **Cadré le 2026-09-26 ; Lot A : analyse à charge faite (§6), CODÉ (259 tests en base verts), en attente de validation en jeu par Saar.** Lot B non commencé (Q7/Q8/Q10 à confirmer). Il reprend et remplace le ticket `WOUND-HEAL-LINE-CAPACITY` (bug n°2 de la résolution de bugs) et le ticket
+> Statut : 🟡 **Cadré le 2026-09-26. Lot A CLOS et poussé (`79f5557`, validé en jeu). Lot B1 (un seul Test d'infection par localisation) : analyse à charge faite (§8), CODÉ (297 tests en base verts, migrations 365-366 appliquées en local), en attente de validation en jeu par Saar. Lot B2 (réponse de l'écran par localisation) non commencé.** Il reprend et remplace le ticket `WOUND-HEAL-LINE-CAPACITY` (bug n°2 de la résolution de bugs) et le ticket
 > `WOUND-FULL-LINE-TWO-CONVENTIONS`. Suite de `PLAN_REVUE_GUERISON.md` (écran de revue, Lots 0-2a livrés).
 > Base de travail : **`docs/MANUELS/MANUEL_BLESSURES.md`** (V1, 2026-09-26 : le chapitre du livre traduit et vérifié, à valider par Saar) — le §2 ci-dessous n'en est que l'extrait utile ; en cas de divergence, le manuel prévaut.
 > Hiérarchie : **Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`)** > `SYSTEME/BLESSURES.md` > ce plan.
@@ -112,3 +112,61 @@ peut réutiliser la fonction partagée du Lot A.
 **Tests qui encodent l'ancienne lecture** (à réécrire et journaliser, jamais supprimer en silence) : `shared/woundConstants.test.mjs` (3 tests `isWoundLinePromoted`) ; `woundUtils.test.mjs` (cascade Moyenne 2 cases, une promotion ne programme que la case finale,
 cascade complète à la tête, cascade qui s'arrête sur la Mortelle vide, échéances des cases fusionnées) ; `woundService.test.mjs` (promotion en cascade annule les échéances) ; `woundEvolutionService.test.mjs` (infection : la ligne déborde). Docs : `BLESSURES.md`,
 `CONVENTIONS.md` P65, `VOCABULARY.md` (Débordement), `EN_COURS.md` (P63-P65), `PLAN_BLESSURE_SIXIEME_LIGNE.md` (note datée), entrée `JOURNAL8` « guérison sur ligne d'arrivée pleine » à réécrire.
+
+---
+
+## 7. Lot B — plan (2026-09-26, avant analyse à charge ; Lot A poussé `79f5557`)
+
+Marquage : [VÉRIFIÉ] = lu dans le code ; [HYPOTHÈSE] = lecture non tranchée par le livre.
+
+### 7.1 Ce que le code fait aujourd'hui [VÉRIFIÉ]
+- **Guérison** : UNE échéance par case (`woundHealingSchedule.js`, `payload.woundId`) — conforme à R5 (chaque blessure a sa période). L'écran regroupe déjà par **ligne** (localisation × gravité) et par personnage ; le MJ peut répondre ligne par ligne (geste d'exception).
+- **Infection** : un Échec (ou une Catastrophe) de la guérison d'une case crée UNE échéance d'infection **par case** (`buildInfectionSpawn`, `payload.woundId`) ; chacune lance son propre jet, calcule son seuil sur la gravité de SA case (`computeWoundInfectionThreshold`) et, sur un Échec, coche une case de plus.
+  Écart avec R9 (« pour chaque **Localisation** … un Test de Constitution ») : 3 Moyennes à la Jambe gauche + un Échec = **3 jets** et jusqu'à 3 cases de plus, là où le livre en veut **un**. Et à plusieurs gravités dans une localisation, chaque case lance son jet au lieu d'un seul, sur la pire blessure (Q5, tranchée par Saar).
+- Une échéance d'infection vit et meurt avec **sa case** (`cancelWoundEcheances`, Lot 0) ; le jet du joueur (`socketDice.js`, `WOUND_INFECTION_ROLL`) et le jet automatique (`woundReviewBatchService.js`) lisent `payload.woundId`.
+
+### 7.2 Deux lots, dans cet ordre (un problème par lot)
+| Lot | Problème | Livre |
+|---|---|---|
+| **B1 — Un seul jet d'infection par localisation** | l'infection appartient à une **localisation** (personnage + localisation), plus à une case ; un Échec ou une Catastrophe n'en crée jamais plus d'une par localisation ; le seuil se calcule sur la **pire** blessure susceptible de s'infecter de la localisation | R6, R7, R9, Q5 |
+| **B2 — Une seule réponse de Test de soins par localisation** | l'écran répond par **localisation** (toutes ses blessures échues, quelle que soit la gravité) au lieu de par ligne ; le serveur refuse deux issues différentes pour la même localisation dans un même lot | R4 |
+
+B1 d'abord : c'est lui qui corrige le jeu (nombre de jets). B2 est un regroupement d'écran + une garde serveur ; sans B1, il ne changerait rien aux jets.
+
+### 7.3 B1 — modèle visé
+- **Identité** : une échéance d'infection = (personnage, localisation) ; `payload: { location, periodesSansSoin }` (plus de `woundId`). Au plus **une** échéance vivante par (personnage, localisation).
+- **Création** : la guérison en Échec/Catastrophe appelle UNE fonction « assurer l'infection de la localisation » (idempotente, indépendante de l'ordre des cases traitées) : rien de vivant → elle crée ; une échéance vivante existe → elle **fusionne** (une infection récurrente l'emporte sur une ponctuelle ; la fenêtre la plus longue ; l'échéance la plus proche). Les modifications entrent dans les entrées d'annulation d'avance (ce qui ferme aussi `ECHEANCE-SPAWN-UNDO` pour ce cas).
+- **Résolution** : le handler lit les blessures **au moment du jet** : la pire blessure susceptible de s'infecter (`WOUND_INFECTION`) fixe le modificateur, le malus de cases (Q6), le malus de période, l'effet (case en plus sur SA ligne — règle des cases du Lot A —, ou délai de survie). Aucune blessure susceptible : l'échéance se termine sans jet.
+- **Mort de l'échéance** : `deleteWoundRows` (seul suppresseur) annule aussi l'infection d'une localisation qui n'a plus AUCUNE blessure susceptible de s'infecter (retournée dans `cancelledEcheances`, donc restaurée par l'annulation d'avance).
+- **Seuil** : une seule fonction `computeLocationInfectionThreshold` (jet automatique du MJ ET jet du joueur, aujourd'hui deux appelants de `computeWoundInfectionThreshold`).
+- **Données** : une migration convertit les infections **vivantes** existantes (blessure → localisation, doublons d'une même localisation fusionnés, sans blessure → annulées) ; les infections terminées gardent leur ancien payload (historique, jamais relu).
+- **Fichiers probables** : `woundEvolutionService.js` (handlers, seuil), `woundHealingSchedule.js` (création, annulation), `woundUtils.js` (`deleteWoundRows`), `woundReviewService.js` (vue : une infection par localisation), `woundReviewBatchService.js`, `socket/socketDice.js`, `PendingRollsPanel.jsx` (libellé), une migration, tests, `docs/SYSTEME/BLESSURES.md`.
+
+### 7.4 Lectures retenues (à confirmer par Saar)
+| Sujet | Lecture retenue | Statut |
+|---|---|---|
+| **Q6** — cases « en plus de la première » pour le malus de −2 de l'infection | Les cases de la **ligne de la pire blessure** susceptible de s'infecter (pas toutes les cases de la localisation) | **TRANCHÉE par Saar** (2026-09-26 : « on ne compte que les cases de la pire blessure ») |
+| Q7 — après un Échec/une Catastrophe | La guérison de la case reprend une période plus tard (Moyenne/Grave : la durée de la gravité ; soins constants : 1 semaine) — comportement actuel | [HYPOTHÈSE] = code actuel |
+| Q8 — cadence du Test de soins Moyenne/Grave | Un seul Test, à la fin de la période — comportement actuel | [HYPOTHÈSE] = code actuel |
+| Q10 — début du cycle d'infection | Le jour de l'Échec (échéance de guérison), puis tous les 2 jours sur la période — comportement actuel | [HYPOTHÈSE] = code actuel |
+| Période d'une Catastrophe quand plusieurs blessures échues n'ont pas la même période | La plus longue (la fusion prend la plus longue fenêtre) | [HYPOTHÈSE] |
+| Un Échec quand une infection de la localisation est déjà vivante | Aucun jet de plus : une localisation = un jet par période de deux jours | [HYPOTHÈSE] (conséquence de « pour chaque Localisation ») |
+
+---
+
+## 8. Lot B1 — analyse à charge (2026-09-26)
+
+**Lecture des lecteurs de `payload.woundId` d'une infection** [VÉRIFIÉ] : `woundEvolutionService.js` (handler + seuil), `woundHealingSchedule.js` (création, annulation avec la case), `woundReviewService.js` (vue de l'écran, jets en attente du joueur),
+`woundReviewBatchService.js` (jet automatique), `socketDice.js` (jet du joueur), `PendingRollsPanel.jsx` (libellé) ; les tests de ces fichiers ; un script historique (`cancel_ghost_wound_echeances_20260925.js`, à usage unique, non touché).
+Base locale : 3 infections vivantes (même personnage) — à convertir.
+
+**Défauts trouvés dans mon plan (corrigés avant de coder)**
+1. **Annulation prématurée** : faire annuler l'infection par `deleteWoundRows` quand une localisation n'a « plus de blessure susceptible » la tuerait à tort pendant une **promotion** (la ligne est effacée AVANT que la case du dessus soit cochée : un coup qui convertit 3 Moyennes en Grave perdrait l'infection alors que la Grave est infectable).
+   → l'annulation se règle **à la fin de l'opération publique** (`resolveWoundInsertion` après promotion, `resolveWoundImprovement`, suppression directe), jamais au milieu d'une cascade ; `deleteWoundRows` reçoit une option `settleInfections` (vrai par défaut, faux dans la cascade et l'amélioration, qui règlent une fois à la fin).
+2. **Concurrence** : deux lots simultanés pourraient créer deux infections pour la même localisation → une contrainte d'**unicité en base** (index unique partiel : une infection vivante par personnage et localisation), migration séparée (règle `migrations.md` : structure / contraintes). Le doublon perdant échoue dans son savepoint et l'entrée est annulée (le MJ recommence, la fusion s'applique).
+3. **Fin de vie** : l'ancienne règle « l'infection meurt avec sa case » n'existe plus ; elle vit sa fenêtre (Catastrophe) ou son jet (Échec) tant que la localisation a une blessure susceptible ; sinon elle est annulée avec la dernière (journalisée : annuler l'avance la restaure).
+   Différence de comportement vs avant [VÉRIFIÉ par lecture] : une Critique qui guérit en Grave ne tue plus « son » infection (la localisation porte toujours une blessure susceptible) — décision consignée, à voir en jeu.
+
+**Ordre d'écriture** (nodemon applique les migrations dès l'écriture d'un fichier sous `server/`) : le code d'abord, les migrations en DERNIER (conversion des infections vivantes, puis contrainte d'unicité).
+
+**Fusion** (`ensureLocationInfection`, idempotente) : rien de vivant → création ; vivante → récurrente l'emporte sur ponctuelle, occurrences les plus nombreuses, échéance la plus proche ; aucun changement → aucune entrée d'annulation.

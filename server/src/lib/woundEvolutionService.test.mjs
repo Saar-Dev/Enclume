@@ -4,10 +4,10 @@ import assert from 'node:assert/strict'
 import db from '../db/knex.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { createEcheance, resolveEcheanceNow } from './echeanceService.js'
-import { initializeWoundHealingEcheance } from './woundHealingSchedule.js'
+import { initializeWoundHealingEcheance, ensureLocationInfection } from './woundHealingSchedule.js'
 import {
   woundHealingCheckHandler,
-  computeWoundInfectionThreshold, woundInfectionCheckHandler,
+  computeLocationInfectionThreshold, woundInfectionCheckHandler,
 } from './woundEvolutionService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (wound_healing_check + infection)
 
@@ -47,6 +47,10 @@ async function createWound(trx, charSheetId, { location = 'corps', severity, occ
     .returning('*')
   return wound
 }
+
+// Lot B1 : l'infection appartient à une LOCALISATION d'un personnage (`payload.location`), jamais à une case.
+const infectionsOf = (trx, characterId) => trx('game_echeances').where({ character_id: characterId, condition_type: 'wound_infection_check' }).orderBy('created_at')
+const hasUndoEntry = (undoEntries, rowId, predicate = () => true) => undoEntries.some(e => e.table === 'game_echeances' && e.rowId === rowId && predicate(e))
 
 // ─── initializeWoundHealingEcheance ─────────────────────────────────────────────────────────────
 
@@ -189,7 +193,7 @@ test('handler : amélioration sur échéance récurrente, DERNIÈRE occurrence -
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : échec sur échéance unique (Moyenne) -> reprogramme une tentative, spawn infection (`soinsContinues` n\'a plus aucun effet)', { skip }, async () => {
+test("handler : échec sur échéance unique (Moyenne) -> reprogramme une tentative, crée le Test d'infection de la LOCALISATION (`soinsContinues` n'a plus aucun effet)", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'moyenne', occurredAt: 1000 })
@@ -200,16 +204,18 @@ test('handler : échec sur échéance unique (Moyenne) -> reprogramme une tentat
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.deepEqual(result.reschedule, { intervalMinutes: 3 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
-    assert.equal(result.spawn.length, 1)
-    assert.equal(result.spawn[0].conditionType, 'wound_infection_check')
-    assert.equal(result.spawn[0].nextDueMinutes, echeance.next_due_minutes)
-    assert.equal(result.spawn[0].intervalMinutes, null)
-    assert.deepEqual(result.spawn[0].payload, { woundId: wound.id, periodesSansSoin: 0 })
+    assert.deepEqual(result.spawn, [], "l'infection n'est plus une échéance « engendrée » : le handler l'assure lui-même")
+    const infections = await infectionsOf(trx, character.id)
+    assert.equal(infections.length, 1)
+    assert.deepEqual(infections[0].payload, { location: 'corps', periodesSansSoin: 0 })
+    assert.equal(infections[0].next_due_minutes, echeance.next_due_minutes)
+    assert.equal(infections[0].interval_minutes, null)
+    assert.ok(hasUndoEntry(result.undoEntries, infections[0].id, e => e.previousValues === null), "l'annulation d'avance retire l'infection créée")
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : échec sur échéance unique (Grave), sans aucune case cochée -> une nouvelle tentative de 1 semaine est TOUJOURS reprogrammée, spawn infection', { skip }, async () => {
+test("handler : échec sur échéance unique (Grave), sans aucune case cochée -> une nouvelle tentative de 1 semaine est TOUJOURS reprogrammée, une infection pour la localisation", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'grave', occurredAt: 1000 })
@@ -220,12 +226,12 @@ test('handler : échec sur échéance unique (Grave), sans aucune case cochée -
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.deepEqual(result.reschedule, { intervalMinutes: 7 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
-    assert.equal(result.spawn.length, 1)
+    assert.equal((await infectionsOf(trx, character.id)).length, 1)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : échec sur échéance récurrente -> continue son cycle normalement, spawn infection', { skip }, async () => {
+test("handler : échec sur échéance récurrente -> continue son cycle normalement, une infection pour la localisation", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'mortelle', occurredAt: 1000 })
@@ -236,12 +242,12 @@ test('handler : échec sur échéance récurrente -> continue son cycle normalem
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.deepEqual(result.reschedule, { intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 4 })
-    assert.equal(result.spawn.length, 1)
+    assert.equal((await infectionsOf(trx, character.id)).length, 1)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : catastrophe sur échéance unique (Moyenne, 3j) -> infection récurrente ~2 occurrences', { skip }, async () => {
+test("handler : catastrophe sur échéance unique (Moyenne, 3j) -> infection récurrente ~2 occurrences", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'moyenne', occurredAt: 1000 })
@@ -253,14 +259,14 @@ test('handler : catastrophe sur échéance unique (Moyenne, 3j) -> infection ré
     const result = await woundHealingCheckHandler(trx, echeance)
     // Une Catastrophe ne termine pas la guérison : la Moyenne guérit naturellement, une nouvelle période de 3 jours est reprogrammée.
     assert.deepEqual(result.reschedule, { intervalMinutes: 3 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
-    assert.equal(result.spawn.length, 1)
-    assert.equal(result.spawn[0].intervalMinutes, 2 * MINUTES_PER_DAY)
-    assert.equal(result.spawn[0].occurrencesRemaining, Math.round((3 * MINUTES_PER_DAY) / (2 * MINUTES_PER_DAY)))
+    const [infection] = await infectionsOf(trx, character.id)
+    assert.equal(infection.interval_minutes, 2 * MINUTES_PER_DAY)
+    assert.equal(infection.occurrences_remaining, Math.round((3 * MINUTES_PER_DAY) / (2 * MINUTES_PER_DAY)))
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : catastrophe sur échéance récurrente (Critique) -> fenêtre = la semaine en cours', { skip }, async () => {
+test("handler : catastrophe sur échéance récurrente (Critique) -> fenêtre = la semaine en cours", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
@@ -271,67 +277,90 @@ test('handler : catastrophe sur échéance récurrente (Critique) -> fenêtre = 
     })
     const result = await woundHealingCheckHandler(trx, echeance)
     assert.deepEqual(result.reschedule, { intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 2 })
-    assert.equal(result.spawn[0].occurrencesRemaining, Math.round(WEEK_MINUTES / (2 * MINUTES_PER_DAY)))
+    const [infection] = await infectionsOf(trx, character.id)
+    assert.equal(infection.occurrences_remaining, Math.round(WEEK_MINUTES / (2 * MINUTES_PER_DAY)))
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-// ─── computeWoundInfectionThreshold ─────────────────────────────────────────────────────────────
+// ─── computeLocationInfectionThreshold — la PIRE blessure de la localisation, les cases de SA ligne (Q5/Q6, décision de Saar 2026-09-26) ───────────
 
-test('computeWoundInfectionThreshold : Moyenne = NA(CON) + 5, jamais de malus de cases', { skip }, async () => {
+test('computeLocationInfectionThreshold : Moyenne = NA(CON) + 5, jamais de malus de cases', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet } = await createFixture(trx)
     await setConstitution(trx, charSheet.id, 12)
-    const wound = await createWound(trx, charSheet.id, { severity: 'moyenne' })
-    // 2 cases supplémentaires sur la même ligne -> ne doit rien changer pour Moyenne
-    await createWound(trx, charSheet.id, { severity: 'moyenne' })
-    await createWound(trx, charSheet.id, { severity: 'moyenne' })
-    const threshold = await computeWoundInfectionThreshold(trx, wound, 5)
-    assert.equal(threshold, 12 + 5)
+    for (let i = 0; i < 3; i += 1) await createWound(trx, charSheet.id, { severity: 'moyenne' }) // 2 cases en plus de la première : rien pour une Moyenne
+    const infection = await computeLocationInfectionThreshold(trx, charSheet.id, 'corps', 5)
+    assert.deepEqual(infection, { threshold: 12 + 5, severity: 'moyenne', cases: 3 })
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('computeWoundInfectionThreshold : Grave = NA(CON) + 0 - malus de cases - malus de périodes', { skip }, async () => {
+test('computeLocationInfectionThreshold : Grave = NA(CON) + 0 - malus de cases - malus de périodes', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet } = await createFixture(trx)
     await setConstitution(trx, charSheet.id, 12)
-    const wound = await createWound(trx, charSheet.id, { severity: 'grave' })
+    await createWound(trx, charSheet.id, { severity: 'grave' })
     await createWound(trx, charSheet.id, { severity: 'grave' }) // 2e case -> -2
-    const threshold = await computeWoundInfectionThreshold(trx, wound, 3) // 3 périodes -> -6
-    assert.equal(threshold, 12 + 0 - 2 - 6)
+    const infection = await computeLocationInfectionThreshold(trx, charSheet.id, 'corps', 3) // 3 périodes -> -6
+    assert.equal(infection.threshold, 12 + 0 - 2 - 6)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('computeWoundInfectionThreshold : Critique = NA(CON) - 5 - malus de cases - malus de périodes', { skip }, async () => {
+test('computeLocationInfectionThreshold : Critique = NA(CON) - 5 - malus de cases - malus de périodes', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet } = await createFixture(trx)
     await setConstitution(trx, charSheet.id, 14)
-    const wound = await createWound(trx, charSheet.id, { severity: 'critique' })
-    const threshold = await computeWoundInfectionThreshold(trx, wound, 2)
-    assert.equal(threshold, 14 - 5 - 0 - 4) // 1 seule case -> pas de malus de case, 2 périodes -> -4
+    await createWound(trx, charSheet.id, { severity: 'critique' })
+    const infection = await computeLocationInfectionThreshold(trx, charSheet.id, 'corps', 2)
+    assert.equal(infection.threshold, 14 - 5 - 0 - 4) // 1 seule case -> pas de malus de case, 2 périodes -> -4
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('computeWoundInfectionThreshold : Mortelle = NA(CON) - 10 - malus de cases, jamais de malus de périodes', { skip }, async () => {
+test('computeLocationInfectionThreshold : Mortelle = NA(CON) - 10 - malus de cases, jamais de malus de périodes', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet } = await createFixture(trx)
     await setConstitution(trx, charSheet.id, 14)
-    const wound = await createWound(trx, charSheet.id, { severity: 'mortelle' })
-    const threshold = await computeWoundInfectionThreshold(trx, wound, 10) // periodesSansSoin ignoré
-    assert.equal(threshold, 14 - 10)
+    await createWound(trx, charSheet.id, { severity: 'mortelle' })
+    const infection = await computeLocationInfectionThreshold(trx, charSheet.id, 'corps', 10) // periodesSansSoin ignoré
+    assert.equal(infection.threshold, 14 - 10)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('computeLocationInfectionThreshold : la PIRE blessure fixe le Test, seules les cases de sa ligne comptent (Jambe : 1 Critique + 2 Moyennes = Critique -5, aucun malus de cases)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    await setConstitution(trx, charSheet.id, 14)
+    await createWound(trx, charSheet.id, { location: 'jambe_gauche', severity: 'moyenne' })
+    await createWound(trx, charSheet.id, { location: 'jambe_gauche', severity: 'critique' })
+    await createWound(trx, charSheet.id, { location: 'jambe_gauche', severity: 'moyenne' })
+    await createWound(trx, charSheet.id, { location: 'bras_droit', severity: 'mortelle' }) // une AUTRE localisation : jamais mêlée
+    const infection = await computeLocationInfectionThreshold(trx, charSheet.id, 'jambe_gauche', 0)
+    assert.deepEqual(infection, { threshold: 14 - 5, severity: 'critique', cases: 1 })
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('computeLocationInfectionThreshold : aucune blessure susceptible de s\'infecter (Légères seules, ou localisation vide) -> null', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    await createWound(trx, charSheet.id, { location: 'tete', severity: 'legere' })
+    assert.equal(await computeLocationInfectionThreshold(trx, charSheet.id, 'tete', 0), null)
+    assert.equal(await computeLocationInfectionThreshold(trx, charSheet.id, 'corps', 0), null)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
 // ─── woundInfectionCheckHandler ──────────────────────────────────────────────────────────────────
 
+// `wound` : une blessure de la localisation concernée (seule sa localisation est lue — l'infection appartient à la localisation).
 async function createInfectionEcheance(trx, campaign, character, wound, payloadExtra = {}, scheduleExtra = {}) {
   return createEcheance(trx, {
     campaignId: campaign.id, characterId: character.id, conditionType: 'wound_infection_check',
-    payload: { woundId: wound.id, periodesSansSoin: 0, ...payloadExtra },
+    payload: { location: wound.location, periodesSansSoin: 0, ...payloadExtra },
     nextDueMinutes: 1000, intervalMinutes: null, occurrencesRemaining: null,
     ...scheduleExtra,
   })
@@ -348,9 +377,11 @@ test('handler infection : sans rollResult -> resolved false (attend le jet)', { 
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler infection : blessure introuvable -> no-op résolu', { skip }, async () => {
+test("handler infection : plus aucune blessure susceptible de s'infecter dans la localisation -> no-op résolu, sans jet", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
-    const echeance = { id: '00000000-0000-0000-0000-000000000000', payload: { woundId: '00000000-0000-0000-0000-000000000001', rollResult: { isSuccess: true } } }
+    const { campaign, character, charSheet } = await createFixture(trx)
+    await createWound(trx, charSheet.id, { severity: 'legere' }) // une Légère n'est pas susceptible de s'infecter
+    const echeance = await createInfectionEcheance(trx, campaign, character, { location: 'corps' }, { rollResult: { isSuccess: false } })
     const result = await woundInfectionCheckHandler(trx, echeance)
     assert.deepEqual(result, { resolved: true, reschedule: null, spawn: [], undoEntries: [] })
     throw new Error('ROLLBACK_WES_TEST')
@@ -466,7 +497,6 @@ test('handler infection : payload.periodesSansSoin incrémente et rollResult est
   }), /ROLLBACK_WES_TEST/)
 })
 
-test.after(async () => { await db.destroy() })
 
 // ─── Lot 2b — la 6ᵉ gravité (mort_subite) : Membre détruit (bras/jambe) guérit ; une Mort (Tête/Corps) ne guérit pas ──
 
@@ -514,7 +544,7 @@ test('handler : amélioration, DERNIÈRE occurrence, sur un Membre détruit -> d
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : échec puis catastrophe sur un Membre détruit -> cycle hebdomadaire conservé, infection déclenchée (sans erreur)', { skip }, async () => {
+test("handler : échec puis catastrophe sur un Membre détruit -> cycle hebdomadaire conservé, UNE infection pour le bras, devenue récurrente (sans erreur)", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { location: 'bras_droit', severity: 'mort_subite', occurredAt: 1000 })
@@ -526,21 +556,26 @@ test('handler : échec puis catastrophe sur un Membre détruit -> cycle hebdomad
 
     const echec = await woundHealingCheckHandler(trx, await heal('echec'))
     assert.deepEqual(echec.reschedule, { intervalMinutes: WEEK_MINUTES, occurrencesRemaining: 2 })
-    assert.equal(echec.spawn.length, 1)
-    assert.equal(echec.spawn[0].conditionType, 'wound_infection_check')
+    const [oneShot] = await infectionsOf(trx, character.id)
+    assert.equal(oneShot.interval_minutes, null)
 
     const catastrophe = await woundHealingCheckHandler(trx, await heal('catastrophe'))
-    assert.equal(catastrophe.spawn[0].occurrencesRemaining, Math.round(WEEK_MINUTES / (2 * MINUTES_PER_DAY)))
+    const infections = await infectionsOf(trx, character.id)
+    assert.equal(infections.length, 1, 'jamais un 2e Test pour le même bras')
+    assert.equal(infections[0].id, oneShot.id)
+    assert.equal(infections[0].interval_minutes, 2 * MINUTES_PER_DAY)
+    assert.equal(infections[0].occurrences_remaining, Math.round(WEEK_MINUTES / (2 * MINUTES_PER_DAY)))
+    assert.ok(hasUndoEntry(catastrophe.undoEntries, oneShot.id, e => e.previousValues?.interval_minutes === null), "la fusion garde la ligne d'origine pour l'annulation d'avance")
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('computeWoundInfectionThreshold : Membre détruit = NA(CON) - 10, comme la Mortelle (RAW « Mortelles/Membres détruits »)', { skip }, async () => {
+test("computeLocationInfectionThreshold : Membre détruit = NA(CON) - 10, comme la Mortelle (RAW « Mortelles/Membres détruits »)", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet } = await createFixture(trx)
     await setConstitution(trx, charSheet.id, 14)
-    const wound = await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'mort_subite' })
-    assert.equal(await computeWoundInfectionThreshold(trx, wound, 10), 14 - 10)
+    await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'mort_subite' })
+    assert.equal((await computeLocationInfectionThreshold(trx, charSheet.id, 'bras_gauche', 10)).threshold, 14 - 10)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
@@ -735,7 +770,7 @@ test('resolveEcheanceNow : deux Échecs de suite reprogramment chaque fois (jama
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler infection : la ligne déborde et la case infectée est fusionnée -> l\'infection SE TERMINE, les échéances des cases fusionnées sont annulées et journalisées', { skip }, async () => {
+test("handler infection : la ligne pleine déborde -> les échéances de guérison des cases fusionnées sont annulées et journalisées ; l'infection de la LOCALISATION continue (la Grave obtenue s'infecte)", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     // corps/moyenne : capacité 3, la ligne est pleine à 3 cases — la case d'infection est la 4ᵉ, elle déborde.
@@ -753,14 +788,14 @@ test('handler infection : la ligne déborde et la case infectée est fusionnée 
     await trx('game_echeances').where({ id: infection.id }).update({ payload: { ...infection.payload, rollResult: { isSuccess: false } } })
 
     const result = await woundInfectionCheckHandler(trx, await trx('game_echeances').where({ id: infection.id }).first())
-    assert.equal(result.reschedule, null, 'sa case n\'existe plus : plus de reprogrammation sans blessure')
+    assert.deepEqual(result.reschedule, { intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 2 }, 'la Grave obtenue est susceptible de s\'infecter : le cycle continue')
     assert.deepEqual((await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.severity), ['grave'])
 
     const statusOf = async (e) => (await trx('game_echeances').where({ id: e.id }).first()).status
     assert.equal(await statusOf(heal1), 'cancelled')
     assert.equal(await statusOf(heal2), 'cancelled')
     assert.equal(await statusOf(heal3), 'cancelled')
-    assert.equal(await statusOf(infection), 'active', 'l\'échéance que le moteur résout n\'est pas touchée : il fixe lui-même son statut')
+    assert.equal(await statusOf(infection), 'active', 'l\'échéance que le moteur résout n\'est jamais annulée par la cascade : il fixe lui-même son statut')
     for (const healing of [heal1, heal2, heal3]) {
       const entry = result.undoEntries.find(e => e.table === 'game_echeances' && e.rowId === healing.id)
       assert.equal(entry?.previousValues?.status, 'active', 'entrée d\'annulation = la ligne d\'origine')
@@ -769,7 +804,18 @@ test('handler infection : la ligne déborde et la case infectée est fusionnée 
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('resolveEcheanceNow : une guérison annule l\'infection en cours de la case guérie ; annuler l\'avance de temps la RESTAURE', { skip }, async () => {
+// Rejoue les entrées d'annulation comme cancelPendingAdvance (même algorithme que gameTimeService.js:replayUndoEntry, privé), en sens inverse.
+async function undoAdvance(trx, campaignId) {
+  const { pending_advance_undo_log: undoLog } = await trx('campaigns').where({ id: campaignId }).first()
+  for (const { table, rowId, previousValues } of [...undoLog].reverse()) {
+    const existing = await trx(table).where({ id: rowId }).first()
+    if (previousValues !== null && existing) await trx(table).where({ id: rowId }).update(previousValues)
+    else if (previousValues === null && existing) await trx(table).where({ id: rowId }).del()
+    else if (previousValues !== null && !existing) await trx(table).insert(previousValues)
+  }
+}
+
+test("resolveEcheanceNow : une guérison qui laisse une blessure susceptible de s'infecter (Critique -> Grave) ne touche PAS l'infection de la localisation", { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
     const wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
@@ -781,19 +827,30 @@ test('resolveEcheanceNow : une guérison annule l\'infection en cours de la case
     const infection = await createInfectionEcheance(trx, campaign, character, wound, {}, { intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 3 })
 
     assert.deepEqual(await resolveEcheanceNow(trx, healing.id), { resolved: true })
-    assert.equal((await trx('game_echeances').where({ id: infection.id }).first()).status, 'cancelled', 'la Critique a guéri : son infection n\'a plus d\'objet')
+    assert.equal((await trx('game_echeances').where({ id: infection.id }).first()).status, 'active', 'la Grave obtenue est encore susceptible de s\'infecter')
+    assert.equal((await trx('game_echeances').where({ id: healing.id }).first()).status, 'completed')
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test("resolveEcheanceNow : la DERNIÈRE blessure susceptible de s'infecter guérit (Moyenne -> Légère) -> l'infection de la localisation est annulée ; annuler l'avance de temps la RESTAURE", { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
+    const wound = await createWound(trx, charSheet.id, { severity: 'moyenne', occurredAt: 1000 })
+    const healing = await createEcheance(trx, {
+      campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+      payload: { woundId: wound.id, mjChoice: 'amelioration' }, nextDueMinutes: 1000 + 3 * MINUTES_PER_DAY,
+      intervalMinutes: null, occurrencesRemaining: null, status: 'pending_mj_review',
+    })
+    const infection = await createInfectionEcheance(trx, campaign, character, wound, {}, { intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 3 })
+
+    assert.deepEqual(await resolveEcheanceNow(trx, healing.id), { resolved: true })
+    assert.equal((await trx('game_echeances').where({ id: infection.id }).first()).status, 'cancelled', 'plus aucune blessure susceptible de s\'infecter : plus d\'objet')
     assert.equal((await trx('game_echeances').where({ id: healing.id }).first()).status, 'completed')
 
-    const { pending_advance_undo_log: undoLog } = await trx('campaigns').where({ id: campaign.id }).first()
-    // Même algorithme que gameTimeService.js:replayUndoEntry (privé), rejoué en sens inverse comme cancelPendingAdvance.
-    for (const { table, rowId, previousValues } of [...undoLog].reverse()) {
-      const existing = await trx(table).where({ id: rowId }).first()
-      if (previousValues !== null && existing) await trx(table).where({ id: rowId }).update(previousValues)
-      else if (previousValues === null && existing) await trx(table).where({ id: rowId }).del()
-      else if (previousValues !== null && !existing) await trx(table).insert(previousValues)
-    }
+    await undoAdvance(trx, campaign.id)
     assert.equal((await trx('game_echeances').where({ id: infection.id }).first()).status, 'active', 'l\'infection est restaurée telle qu\'elle était')
-    assert.deepEqual((await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.severity), ['critique'])
+    assert.deepEqual((await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.severity), ['moyenne'])
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
@@ -830,3 +887,117 @@ test('handler : une guérison sur une ligne d\'arrivée PLEINE efface la ligne, 
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })
+
+// ─── Lot B1 — UN SEUL Test d'infection par localisation ───────────────────────────────────────────────────────────────────────────────────
+
+test('trois cases de la même localisation échouent d\'un coup -> UN seul Test d\'infection (le livre : « pour chaque Localisation »)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    for (let i = 0; i < 3; i += 1) {
+      const wound = await createWound(trx, charSheet.id, { location: 'jambe_gauche', severity: 'moyenne', occurredAt: 1000 })
+      const echeance = await createEcheance(trx, {
+        campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+        payload: { woundId: wound.id, mjChoice: 'echec' }, nextDueMinutes: 1000 + 3 * MINUTES_PER_DAY, intervalMinutes: null, occurrencesRemaining: null,
+      })
+      await woundHealingCheckHandler(trx, echeance)
+    }
+    const infections = await infectionsOf(trx, character.id)
+    assert.equal(infections.length, 1)
+    assert.equal(infections[0].payload.location, 'jambe_gauche')
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('deux localisations en Échec -> un Test PAR localisation ; une Catastrophe sur trois cases -> un seul cycle, sans allonger deux fois', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const fail = async (location, mjChoice) => {
+      const wound = await createWound(trx, charSheet.id, { location, severity: 'moyenne', occurredAt: 1000 })
+      const echeance = await createEcheance(trx, {
+        campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+        payload: { woundId: wound.id, mjChoice }, nextDueMinutes: 1000 + 3 * MINUTES_PER_DAY, intervalMinutes: null, occurrencesRemaining: null,
+      })
+      return woundHealingCheckHandler(trx, echeance)
+    }
+    await fail('bras_droit', 'echec')
+    await fail('jambe_gauche', 'catastrophe')
+    const second = await fail('jambe_gauche', 'catastrophe') // même fenêtre : aucun changement
+    assert.deepEqual(second.undoEntries, [], 'rien à annuler : la fusion n\'a rien changé')
+    const infections = await infectionsOf(trx, character.id)
+    assert.deepEqual(infections.map(i => i.payload.location).sort(), ['bras_droit', 'jambe_gauche'])
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('ensureLocationInfection : un Échec de plus ne change rien (un Test existe déjà) ; une Catastrophe l\'emporte et prend la fenêtre la plus longue ; une infection terminée n\'empêche pas d\'en créer une', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character } = await createFixture(trx)
+    const ensure = (extra = {}) => ensureLocationInfection(trx, {
+      campaignId: campaign.id, characterId: character.id, location: 'tete', nextDueMinutes: 5000, ...extra,
+    })
+    const first = await ensure()
+    assert.equal(first.created, true)
+    assert.deepEqual(first.undoEntries, [{ table: 'game_echeances', rowId: first.echeance.id, previousValues: null }])
+
+    const again = await ensure()
+    assert.equal(again.created, false)
+    assert.equal(again.echeance.id, first.echeance.id)
+    assert.deepEqual(again.undoEntries, [])
+
+    const upgraded = await ensure({ nextDueMinutes: 4000, intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 2 })
+    assert.equal(upgraded.echeance.id, first.echeance.id)
+    assert.equal(upgraded.echeance.interval_minutes, 2 * MINUTES_PER_DAY)
+    assert.equal(upgraded.echeance.occurrences_remaining, 2)
+    assert.equal(upgraded.echeance.next_due_minutes, 4000, 'l\'échéance la plus proche')
+    assert.equal(upgraded.undoEntries[0].previousValues.interval_minutes, null)
+
+    const longer = await ensure({ intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 5 })
+    assert.equal(longer.echeance.occurrences_remaining, 5)
+    const shorter = await ensure({ intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 1 })
+    assert.equal(shorter.echeance.occurrences_remaining, 5, 'jamais raccourcie')
+    assert.deepEqual(shorter.undoEntries, [])
+    assert.equal((await infectionsOf(trx, character.id)).length, 1)
+
+    await trx('game_echeances').where({ id: first.echeance.id }).update({ status: 'completed' })
+    const fresh = await ensure()
+    assert.equal(fresh.created, true, 'une infection terminée n\'est plus vivante')
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler infection : la PIRE blessure de la localisation est infectée (Grave + Moyennes : la case en plus est cochée sur la ligne Grave, jamais sur Moyenne)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'moyenne' })
+    await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'moyenne' })
+    const grave = await createWound(trx, charSheet.id, { location: 'bras_gauche', severity: 'grave' })
+    const echeance = await createInfectionEcheance(trx, campaign, character, grave, {}, { intervalMinutes: 2 * MINUTES_PER_DAY, occurrencesRemaining: 2 })
+    await trx('game_echeances').where({ id: echeance.id }).update({ payload: { ...echeance.payload, rollResult: { isSuccess: false } } })
+
+    const result = await woundInfectionCheckHandler(trx, await trx('game_echeances').where({ id: echeance.id }).first())
+    assert.equal(result.effects.infected, true)
+    const wounds = await trx('character_wounds').where({ char_sheet_id: charSheet.id })
+    assert.equal(wounds.filter(w => w.severity === 'grave').length, 2, 'une case en plus sur la ligne Grave')
+    assert.equal(wounds.filter(w => w.severity === 'moyenne').length, 2, 'la ligne Moyenne n\'a pas bougé')
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('handler infection : une échéance d\'une AUTRE localisation n\'est jamais touchée (une infection par personnage et localisation)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const bras = await createWound(trx, charSheet.id, { location: 'bras_droit', severity: 'moyenne' })
+    const jambe = await createWound(trx, charSheet.id, { location: 'jambe_droite', severity: 'moyenne' })
+    const infectionBras = await createInfectionEcheance(trx, campaign, character, bras)
+    const infectionJambe = await createInfectionEcheance(trx, campaign, character, jambe)
+    await trx('game_echeances').where({ id: infectionBras.id }).update({ payload: { ...infectionBras.payload, rollResult: { isSuccess: false } } })
+
+    await woundInfectionCheckHandler(trx, await trx('game_echeances').where({ id: infectionBras.id }).first())
+    assert.equal((await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'bras_droit' })).length, 2, 'une case en plus au bras')
+    assert.equal((await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'jambe_droite' })).length, 1, 'rien à la jambe')
+    assert.equal((await trx('game_echeances').where({ id: infectionJambe.id }).first()).payload.periodesSansSoin, 0)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test.after(async () => { await db.destroy() })

@@ -224,6 +224,25 @@ export const WOUND_INFECTION = {
   mortelle: MORTAL_INFECTION_RULE,
   mort_subite: MORTAL_INFECTION_RULE,
 }
+
+// Blessure « susceptible de s'infecter » (REGLEBLESSURES.md:439-441) : celle qui a une guérison à suivre (`getWoundHealing`) — Moyenne et
+// plus, Membre détruit compris ; ni la Légère (guérit seule) ni une Mort en Tête/Corps.
+export function isInfectableWound(wound) {
+  return getWoundHealing(wound.severity, wound.location) !== null && WOUND_INFECTION[wound.severity] !== undefined
+}
+
+// CIBLE du Test d'infection d'une localisation (REGLEBLESSURES.md:439-442 : « pour chaque Localisation … un Test de Constitution » ; décision de Saar,
+// 2026-09-26, Q5/Q6) : la PIRE blessure susceptible de s'infecter fixe le modificateur du Test, la ligne où une case s'ajoute, et les cases
+// « en plus de la première » ne sont comptées que sur SA ligne. `wounds` : les blessures d'UNE localisation (`{ severity, location }`).
+// Retourne `{ severity, cases }` (cases = cases cochées sur la ligne de cette gravité) ou null si rien n'est susceptible de s'infecter.
+export function findInfectionTarget(wounds) {
+  const infectable = wounds.filter(isInfectableWound)
+  if (infectable.length === 0) return null
+  const severity = infectable.reduce((worst, wound) => (
+    WOUND_SEVERITIES.indexOf(wound.severity) > WOUND_SEVERITIES.indexOf(worst) ? wound.severity : worst
+  ), infectable[0].severity)
+  return { severity, cases: infectable.filter(wound => wound.severity === severity).length }
+}
 // Table RAW « Seuils de blessures » (LdB p.234) — seuil de Dommages à partir duquel
 // une blessure d'une gravité donnée est infligée. La gravité retenue est la plus
 // haute dont le seuil est atteint ou dépassé.

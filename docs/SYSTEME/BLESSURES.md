@@ -3,6 +3,8 @@
 > **Amendé 2026-09-25 (nuit) — Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`** : kits de soin dans `WOUND_HEALING`, vue et résolution GROUPÉES de l'écran de revue (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
 > terminent plus jamais l'échéance de guérison (§« Guérison et Infection »).
+> **Amendé 2026-09-26 (Lot B1 de `PLANS/PLAN_GUERISON_RAW.md`) — UN seul Test d'infection par personnage et par LOCALISATION** (le livre : « pour chaque Localisation ») : l'échéance `wound_infection_check` porte
+> `payload.location` (plus `woundId`), une seule vivante par (personnage, localisation) — index unique en base — et le seuil est celui de la PIRE blessure susceptible de s'infecter (§« `wound_infection_check` »).
 > **Amendé 2026-09-26 — la règle des cases du LIVRE (Lot A de `PLANS/PLAN_GUERISON_RAW.md` ; tickets `WOUND-HEAL-LINE-CAPACITY`, `WOUND-FULL-LINE-TWO-CONVENTIONS`)** : une ligne est pleine
 > quand TOUTES ses cases sont cochées, c'est la blessure SUIVANTE qui la convertit (coup reçu, guérison, infection) ; une seule définition, `isWoundLineFull` (§« Règle des cases »).
 > **Amendé 2026-09-25 (soir) — guérison en chaîne (ticket `WOUND-HEAL-CHAIN-STOPS`)** : toute case de blessure écrite (coup reçu, promotion,
@@ -280,7 +282,7 @@ une gravité) :
 | Membre détruit (`mort_subite` sur un bras/une jambe) | 3 semaines | Oui | hebdomadaire, 3 occurrences |
 
 Légère guérit seule, sans échéance ni Test. **Une Mort (`mort_subite` en Tête/Corps) n'a aucune échéance** : la résurrection reste une
-décision du MJ. `echec`/`catastrophe` engendrent une `wound_infection_check` **et ne terminent jamais l'échéance de guérison** (voir « Le Test suivant » ci-dessous).
+décision du MJ. `echec`/`catastrophe` **assurent le Test d'infection de la LOCALISATION** (`ensureLocationInfection` : créé, ou fusionné avec celui qui existe — jamais un deuxième) **et ne terminent jamais l'échéance de guérison** (voir « Le Test suivant » ci-dessous).
 
 **Cible d'une amélioration** — `improvedSeverity(severity)` (`woundUtils.js`, lit `WOUND_IMPROVEMENT_TARGET`) : la gravité juste en
 dessous, **sauf** la 6ᵉ ligne qui devient une **Critique** (RAW : « un Membre détruit devient une Blessure critique » ;
@@ -305,12 +307,13 @@ la **Chance** guérit comme si elle avait été reçue ainsi (décision de Saar,
 
 **Une échéance meurt avec sa case** (Lot 0 de `PLAN_REVUE_GUERISON`, 2026-09-25, `WOUND-ECHEANCE-GHOSTS`) : `woundUtils.js` est aussi l'**UNIQUE
 suppresseur** de lignes (`deleteWoundRows` — promotion, amélioration, `removeWound`, `/heal` n'écrivent plus jamais un `.del()`). Il annule les
-échéances **vivantes** (`active`, `pending_mj_review`, `awaiting_player_roll`) de guérison ET d'infection des cases supprimées (statut `cancelled`,
-aucune ligne effacée — `woundHealingSchedule.js:cancelWoundEcheances`). Avant ce lot, 87 des 97 lignes de l'écran de revue de la base locale
+échéances **vivantes** (`active`, `pending_mj_review`, `awaiting_player_roll`) de **guérison** des cases supprimées (statut `cancelled`,
+aucune ligne effacée — `woundHealingSchedule.js:cancelWoundEcheances`) ; l'échéance d'**infection**, elle, appartient à la LOCALISATION et meurt avec sa dernière blessure susceptible de s'infecter
+(`settleLocationInfections`, réglée UNE fois à la FIN de l'opération publique — `deleteWoundRows` à l'appel direct, `resolveWoundInsertion` après une promotion, `resolveWoundImprovement` —, jamais au milieu d'une cascade : la ligne effacée est remplacée par la case du dessus). Avant ce lot, 87 des 97 lignes de l'écran de revue de la base locale
 étaient des échéances « sans blessure » qui bloquaient la confirmation de l'avance de temps.
 - **`exceptEcheanceId`** : l'échéance que le moteur est en train de résoudre n'est jamais annulée par ce suppresseur — c'est le moteur qui fixe son
-  statut final (sinon il la « ressusciterait » en `active`). Un handler d'infection dont la case est fusionnée par la promotion se termine.
-- **Annulation d'une avance de temps** : les échéances annulées avec une case (guérison : ex. son infection en cours ; promotion : les cases fusionnées)
+  statut final (sinon il la « ressusciterait » en `active`).
+- **Annulation d'une avance de temps** : les échéances annulées avec une case (promotion : les cases fusionnées ; guérison complète : l'infection de la localisation devenue sans blessure susceptible)
   entrent dans les `undoEntries` avec leur ligne d'origine (`previousValues`) : annuler l'avance les **restaure**.
 - **Diffusion** : `woundService.js` émet `GAME_ECHEANCE_RESOLVED` pour chaque échéance annulée (suppression MJ, `/heal`, promotion, Chance) : le panneau de
   revue ouvert retire la ligne. Les annulations faites dans un handler du moteur (sans `io`) ne sont pas diffusées (Lot 1 : route groupée).
@@ -324,18 +327,20 @@ continue-t-il d'être soigné ? » (`soinsContinues`) n'a plus aucun effet côt�
 un Échec sur la dernière semaine d'une Critique et une Catastrophe sur une Moyenne laissaient la blessure sans plus aucune échéance.
 
 **Limites connues** (suivies en tickets) : une Légère
-n'est jamais retirée (`WOUND-LEGERE-NEVER-HEALS`) ; les échéances d'infection créées par un Échec/Catastrophe n'ont pas d'entrée d'annulation d'avance
-(`ECHEANCE-SPAWN-UNDO`) ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée, pas d'horloge où programmer sa guérison
+n'est jamais retirée (`WOUND-LEGERE-NEVER-HEALS`) ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée, pas d'horloge où programmer sa guérison
 (`WOUND-VAULT-NO-CAMPAIGN`) ; toute blessure de PNJ programme une échéance (`WOUND-PNJ-ECHEANCES-FLOOD`) ; une échéance annulée par un handler reste affichée dans un
 écran de revue déjà ouvert jusqu'au rechargement (un clic dessus reçoit un refus 409, sans effet).
 
-**`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
-`WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par
-`computeWoundInfectionThreshold` = NA(Constitution) + `WOUND_INFECTION[severity].baseModifier`, puis
-**seulement si activé pour cette gravité** (corrigé 2026-08-26 — la formule n'est pas uniforme, `if
-(rule.caseMalus)`/`if (rule.periodMalus)` dans `woundEvolutionService.js:158-168`) : malus de cases
-(-2/case au-delà de la première sur la même ligne localisation/gravité) et/ou malus de périodes sans
-soin (-2/période déjà écoulée) :
+**`wound_infection_check`** — UNE échéance par **personnage et localisation** (`payload: { location, periodesSansSoin }`, Lot B1 ; RAW `REGLEBLESSURES.md:396-401` « un (et un seul) Test de Constitution » et `:439-442` « pour chaque Localisation »).
+Au plus une vivante par (personnage, localisation) : `ensureLocationInfection` (`woundHealingSchedule.js`) fusionne — un Échec de plus ne change rien, une Catastrophe rend une ponctuelle récurrente et allonge une récurrente — et l'index unique
+`uq_game_echeances_infection_per_location` (migration 366) le garantit en base. Garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement `WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`),
+rythme fixe 2 jours. **La cible est lue au moment du jet** : la PIRE blessure susceptible de s'infecter de la localisation (`findInfectionTarget`, `shared/woundConstants.js` — Moyenne et plus, Membre détruit compris ; pas la Légère ni une Mort)
+fixe le modificateur, la ligne où la case en plus est cochée et les cases « en plus de la première » (**seules les cases de SA ligne comptent**, décision de Saar 2026-09-26, Q5/Q6 du manuel). Seuil calculé par
+`computeLocationInfectionThreshold` = NA(Constitution) + `WOUND_INFECTION[severity].baseModifier`, puis
+**seulement si activé pour cette gravité** (la formule n'est pas uniforme, `rule.caseMalus`/`rule.periodMalus`) : malus de cases
+(-2/case au-delà de la première sur la ligne de la pire blessure) et/ou malus de périodes sans
+soin (-2/période déjà écoulée). Sans blessure susceptible au moment du jet, l'échéance se termine sans jet. Exemple : Jambe gauche, 1 Critique + 2 Moyennes → Test à NA(CON) −5, aucun malus de cases.
+Une infection née avant le Lot B1 (une par case) a été convertie par la migration 365 (regroupée par localisation, doublons fusionnés). Modificateurs par gravité :
 
 | Gravité | Modificateur | Malus de cases | Malus de périodes | S'infecte même en réussite |
 |---|---|---|---|---|
@@ -460,7 +465,7 @@ quel (pas un nouvel événement) pour resynchroniser la fiche personnage après 
 |---|---|
 | — | `character_wounds.occurred_at_game_minutes` ancré sur `campaigns.game_time_resolved_minutes`, jamais `game_time_minutes` (affiché) — sinon une blessure posée après un recul MJ de l'horloge peut déclencher son échéance dès la prochaine avance, sans qu'aucune minute ne se soit écoulée |
 | — | Fusion de `payload` avant `resolveEcheanceNow` (`woundReviewBatchService`) : toujours une expression SQL atomique (`payload \|\| ?::jsonb`), jamais un lire-puis-écrire JS |
-| — | `wound_infection_check` n'est jamais créée à la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe du `wound_healing_check` |
+| — | `wound_infection_check` n'est jamais créée à la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe du `wound_healing_check`, par `ensureLocationInfection` (jamais un `createEcheance` direct : un deuxième Test pour la même localisation violerait le livre ET l'index unique) |
 | — | `WOUND_INFECTION[severity]` doit exister pour toute gravité qui a une échéance de guérison : sans l'entrée `mort_subite`, un échec de guérison d'un Membre détruit ferait planter le handler (`rule` indéfini). L'entrée d'infection et l'échéance de guérison d'une gravité arrivent dans le même commit |
 | — | Ne jamais lire `WOUND_HEALING[severity]` directement : passer par `getWoundHealing(severity, location)` (Mort en Tête/Corps → `null`, Membre détruit → ligne `membreDetruit`) |
 | — | Le statut `dead` d'une blessure ne s'écrit pas avec `applyModStatus` (écrit hors transaction et `merge` écrase la `data`) : `reconcileWoundDeath` |

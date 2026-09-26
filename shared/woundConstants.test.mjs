@@ -4,7 +4,7 @@ import {
   WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage,
   WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
   isWoundLineFull, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
-  getWoundHealing, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
+  getWoundHealing, isInfectableWound, findInfectionTarget, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
   WOUND_CHANCE_STEP_COST, chanceCostOfStep, maxNormalChanceDegrees,
   CARE_KIT_TYPES, SOINS_CONSTANTS_INTERVAL_MINUTES, getHealingTotalTests, isFirstHealingTest, getCareKits, defaultCareKits, sumCareKits,
 } from './woundConstants.js'
@@ -342,4 +342,34 @@ test('defaultCareKits / sumCareKits — première alternative par défaut ; déc
   assert.deepEqual(defaultCareKits(null), [])
   assert.deepEqual(sumCareKits([]), { premiersSoins: 0, medecine: 0, chirurgie: 0 })
   assert.deepEqual(sumCareKits([['premiersSoins'], ['chirurgie', 'medecine'], ['medecine']]), { premiersSoins: 1, medecine: 2, chirurgie: 1 })
+})
+
+// ─── Cible du Test d'infection d'une localisation (PLAN_GUERISON_RAW Lot B1 ; décision de Saar 2026-09-26 : la pire blessure, ses cases seulement) ───
+
+test('isInfectableWound - Moyenne et plus, Membre détruit compris ; ni la Légère ni une Mort en Tête/Corps', () => {
+  assert.equal(isInfectableWound({ severity: 'legere', location: 'tete' }), false)
+  for (const severity of ['moyenne', 'grave', 'critique', 'mortelle']) assert.equal(isInfectableWound({ severity, location: 'corps' }), true, severity)
+  assert.equal(isInfectableWound({ severity: 'mort_subite', location: 'bras_droit' }), true, 'Membre détruit')
+  assert.equal(isInfectableWound({ severity: 'mort_subite', location: 'tete' }), false, 'Mort')
+  assert.equal(isInfectableWound({ severity: 'mort_subite', location: 'corps' }), false, 'Mort')
+})
+
+test("findInfectionTarget - la pire blessure susceptible de s'infecter ; ses cases seulement (Jambe : 1 Critique + 2 Moyennes = Critique, 1 case)", () => {
+  const jambe = [
+    { severity: 'moyenne', location: 'jambe_gauche' }, { severity: 'critique', location: 'jambe_gauche' }, { severity: 'moyenne', location: 'jambe_gauche' },
+  ]
+  assert.deepEqual(findInfectionTarget(jambe), { severity: 'critique', cases: 1 })
+  assert.deepEqual(findInfectionTarget(jambe.filter(w => w.severity === 'moyenne')), { severity: 'moyenne', cases: 2 })
+})
+
+test("findInfectionTarget - une Légère n'est jamais une cible ; une localisation sans blessure susceptible : null ; une Mort (Tête) ne masque pas le reste", () => {
+  assert.equal(findInfectionTarget([]), null)
+  assert.equal(findInfectionTarget([{ severity: 'legere', location: 'tete' }, { severity: 'legere', location: 'tete' }]), null)
+  assert.equal(findInfectionTarget([{ severity: 'mort_subite', location: 'tete' }]), null)
+  assert.deepEqual(findInfectionTarget([{ severity: 'mort_subite', location: 'tete' }, { severity: 'grave', location: 'tete' }]), { severity: 'grave', cases: 1 })
+  assert.deepEqual(findInfectionTarget([{ severity: 'legere', location: 'bras_droit' }, { severity: 'moyenne', location: 'bras_droit' }]), { severity: 'moyenne', cases: 1 })
+})
+
+test("findInfectionTarget - le Membre détruit est la pire cible d'un bras (règle des Mortelles / Membres détruits)", () => {
+  assert.deepEqual(findInfectionTarget([{ severity: 'mortelle', location: 'bras_droit' }, { severity: 'mort_subite', location: 'bras_droit' }]), { severity: 'mort_subite', cases: 1 })
 })

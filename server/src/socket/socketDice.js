@@ -13,7 +13,7 @@ import {
 } from '../../../shared/polarisUtils.js'
 import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { isReviewTraceEnabled, reviewTrace, reviewTraceLines, shortId } from '../lib/reviewTrace.js'
-import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
+import { computeLocationInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { getItemWithRef } from '../services/inventoryService.js'
 import { interpretRepairOutcome } from '../../../shared/integrityRules.js'
@@ -300,9 +300,11 @@ export function registerDiceHandlers(io, socket, context) {
         return
       }
 
-      const wound = await db('character_wounds').where({ id: echeance.payload.woundId }).first()
-      if (!wound) {
-        reviewTrace(`jet d'infection du joueur IGNORÉ : la blessure de l'échéance ${shortId(echeance.id)} n'existe plus (l'échéance reste en attente)`)
+      // L'infection est celle d'une LOCALISATION (Lot B1) : sans blessure susceptible de s'infecter, il n'y a plus de jet à lancer.
+      const sheet = await db('char_sheet').where({ character_id: echeance.character_id }).first('id')
+      const infection = sheet ? await computeLocationInfectionThreshold(db, sheet.id, echeance.payload.location, echeance.payload.periodesSansSoin ?? 0) : null
+      if (!infection) {
+        reviewTrace(`jet d'infection du joueur IGNORÉ : la localisation de l'échéance ${shortId(echeance.id)} n'a plus de blessure susceptible de s'infecter (l'échéance reste en attente)`)
         return
       }
 
@@ -310,7 +312,8 @@ export function registerDiceHandlers(io, socket, context) {
       const traceLines = []
       const trace = isReviewTraceEnabled() ? (line) => traceLines.push(line) : null
       const { rollResult, threshold, resolution } = await db.transaction(async (trx) => {
-        const seuil = await computeWoundInfectionThreshold(trx, wound, echeance.payload.periodesSansSoin ?? 0)
+        const seuil = (await computeLocationInfectionThreshold(trx, sheet.id, echeance.payload.location, echeance.payload.periodesSansSoin ?? 0))?.threshold
+        if (seuil === undefined) throw new Error('infection sans cible au moment du jet')
         const roll = await resolvePolarisTest(seuil)
         await trx('game_echeances').where({ id: echeance.id })
           .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify({ rollResult: roll })]) })
@@ -323,7 +326,7 @@ export function registerDiceHandlers(io, socket, context) {
       io.to(campaignId).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
       if (resolution.resolved) {
         await broadcastWoundUpdate(io, campaignId, {
-          characterId: echeance.character_id, charSheetIdForWorst: wound.char_sheet_id, woundId: echeance.payload.woundId,
+          characterId: echeance.character_id, charSheetIdForWorst: sheet.id, woundId: null,
         })
       }
 

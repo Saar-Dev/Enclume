@@ -274,19 +274,19 @@ test('care : validé, jamais stocké, raconté dans le chat (une ligne par perso
   }
 })
 
-test('résolution groupée : une échéance annulée PENDANT le lot (l\'infection de la blessure guérie) est diffusée, ses lignes disparaissent de l\'écran ouvert', { skip }, async () => {
+test('résolution groupée : une échéance annulée PENDANT le lot (l\'infection de la localisation dont la dernière blessure susceptible guérit) est diffusée, ses lignes disparaissent de l\'écran ouvert', { skip }, async () => {
   const f = await createFixture()
   const { io, emitted } = captureIo()
   try {
     const wound = await woundInReview(f.alice, 'corps', 'moyenne')
     const [infection] = await db('game_echeances').insert({
       campaign_id: f.campaign.id, character_id: f.alice.character.id, condition_type: 'wound_infection_check', interactive: true,
-      payload: { woundId: wound.wound.id, periodesSansSoin: 0 }, next_due_minutes: 100, status: 'pending_mj_review',
+      payload: { location: 'corps', periodesSansSoin: 0 }, next_due_minutes: 100, status: 'pending_mj_review',
     }).returning('*')
 
     await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([wound.echeance.id], 'amelioration') })
 
-    assert.equal((await echeanceRow(infection.id)).status, 'cancelled', 'la Moyenne a guéri : son infection n\'a plus d\'objet')
+    assert.equal((await echeanceRow(infection.id)).status, 'cancelled', 'la Moyenne a guéri (une Légère ne s\'infecte pas) : l\'infection du corps n\'a plus d\'objet')
     assert.ok(resolvedEvents(emitted).includes(infection.id), 'sa ligne est retirée de l\'écran de revue ouvert')
     assert.ok(resolvedEvents(emitted).includes(wound.echeance.id))
   } finally {
@@ -299,7 +299,7 @@ test('résolution groupée : une échéance annulée PENDANT le lot (l\'infectio
 async function infectionOf(who, wound, status = 'pending_mj_review') {
   const [row] = await db('game_echeances').insert({
     campaign_id: who.schedule.campaignId, character_id: who.character.id, condition_type: 'wound_infection_check', interactive: true,
-    payload: { woundId: wound.id, periodesSansSoin: 0 }, next_due_minutes: 100, status,
+    payload: { location: wound.location, periodesSansSoin: 0 }, next_due_minutes: 100, status,
   }).returning('*')
   return row
 }
@@ -411,3 +411,29 @@ test('traces : une entrée périmée et un refus de validation sont écrits (san
 })
 
 test.after(async () => { await db.destroy() })
+
+// ─── Lot B1 — un seul Test d'infection par localisation ─────────────────────────────────────────────────────────────────────────────────────
+
+test('deux cases d\'une même localisation en Échec dans un même lot -> UN seul Test d\'infection, résolu par UN jet : une seule case en plus', { skip }, async () => {
+  const f = await createFixture()
+  const { io } = captureIo()
+  try {
+    const cases = []
+    for (let i = 0; i < 2; i += 1) cases.push(await woundInReview(f.alice, 'jambe_gauche', 'moyenne'))
+    await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf(cases.map(c => c.echeance.id), 'echec') })
+
+    const infections = await db('game_echeances').where({ campaign_id: f.campaign.id, condition_type: 'wound_infection_check' })
+    assert.equal(infections.length, 1, 'le livre : un Test de Constitution par Localisation')
+    assert.equal(infections[0].payload.location, 'jambe_gauche')
+
+    // Le Test est déjà dû (créé à l'instant de l'Échec) : on l'ouvre comme le fait « Confirmer », puis le MJ lance le jet automatique.
+    await db('game_echeances').where({ id: infections[0].id }).update({ status: 'pending_mj_review' })
+    const before = (await db('character_wounds').where({ char_sheet_id: f.alice.sheet.id, location: 'jambe_gauche', severity: 'moyenne' })).length
+    const { results } = await resolveInfectionModes(io, f.campaign.id, { choices: [{ echeanceId: infections[0].id, mode: 'auto' }] })
+    assert.equal(results[0].resolved, true)
+    const after = (await db('character_wounds').where({ char_sheet_id: f.alice.sheet.id, location: 'jambe_gauche', severity: 'moyenne' })).length
+    assert.ok(after - before <= 1 && after >= before, 'au plus UNE case en plus (jamais une par case échouée)')
+  } finally {
+    await cleanup(f)
+  }
+})

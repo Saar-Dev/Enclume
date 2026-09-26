@@ -590,18 +590,19 @@ test('une cascade qui atteint la ligne Mortelle vide s\'y arrête (pas de mort t
 
 // ─── Lot 0 (PLAN_REVUE_GUERISON) — une échéance vit et meurt avec sa case : woundUtils est aussi l'UNIQUE suppresseur ───────────────
 
-const infectionEcheanceOf = (trx, campaign, character, woundId) => createEcheance(trx, {
+// Lot B1 : l'infection appartient à une LOCALISATION d'un personnage, pas à une case.
+const infectionEcheanceOf = (trx, campaign, character, location) => createEcheance(trx, {
   campaignId: campaign.id, characterId: character.id, conditionType: 'wound_infection_check',
-  payload: { woundId, periodesSansSoin: 0 }, nextDueMinutes: 2000, intervalMinutes: null, occurrencesRemaining: null,
+  payload: { location, periodesSansSoin: 0 }, nextDueMinutes: 2000, intervalMinutes: null, occurrencesRemaining: null,
 })
 const statusOfEcheance = async (trx, echeance) => (await trx('game_echeances').where({ id: echeance.id }).first()).status
 
-test('deleteWoundRows : supprime les cases visées et annule leurs échéances (guérison ET infection), laisse les autres, retourne les lignes d\'origine', { skip }, async () => {
+test('deleteWoundRows : supprime les cases visées, annule leur guérison et l\'infection d\'une localisation devenue sans blessure susceptible, laisse les autres, retourne les lignes d\'origine', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet, schedule } = await createFixture(trx)
     const head = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne', schedule)
     const body = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
-    const infection = await infectionEcheanceOf(trx, campaign, character, head.wound.id)
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'tete')
 
     const { wounds, cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id: charSheet.id, location: 'tete' })
     assert.deepEqual(wounds.map(w => w.id), [head.wound.id])
@@ -666,13 +667,15 @@ test('resolveWoundImprovement : l\'échéance de la case d\'origine est annulée
     const { campaign, character, charSheet, schedule } = await createFixture(trx)
     // Cas « Chance » : personne ne résout l'échéance de la case réduite — elle est annulée avec elle.
     const grave = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'grave', schedule)
-    const infection = await infectionEcheanceOf(trx, campaign, character, grave.wound.id)
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'corps')
     const reduced = await resolveWoundImprovement(trx, grave.wound.id, schedule)
-    assert.deepEqual(new Set(reduced.cancelledEcheances.map(e => e.id)), new Set([grave.echeance.id, infection.id]))
+    // L'infection appartient à la LOCALISATION : la Moyenne obtenue est encore susceptible de s'infecter, elle continue.
+    assert.deepEqual(new Set(reduced.cancelledEcheances.map(e => e.id)), new Set([grave.echeance.id]))
     assert.equal(await statusOfEcheance(trx, grave.echeance), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, infection), 'active', 'la Moyenne obtenue est encore susceptible de s\'infecter')
     assert.equal(await statusOfEcheance(trx, reduced.echeance), 'active', 'la Moyenne obtenue a la sienne')
     const restores = buildWoundImprovementUndoEntries(grave.wound, reduced).filter(e => e.table === 'game_echeances' && e.previousValues !== null)
-    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([grave.echeance.id, infection.id]))
+    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([grave.echeance.id]))
 
     // Cas « guérison » : l'échéance résolue par le moteur (exceptEcheanceId) reste à lui.
     const critique = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'critique', schedule)
@@ -884,6 +887,83 @@ test("guérison : la cascade part de la Moyenne pleine et s'arrête à la Grave 
     assert.equal(result.wound.severity, 'grave')
     assert.equal(await countAt(trx, charSheet.id, 'tete', 'grave'), 1)
     assert.equal(await countAt(trx, charSheet.id, 'tete', 'legere'), 3, 'la ligne Légère n\'est pas touchée : la cascade est partie de la Moyenne')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+// ─── Lot B1 — l'infection d'une localisation vit tant que la localisation porte une blessure susceptible de s'infecter (PLAN_GUERISON_RAW §8) ────
+
+test('infection de localisation : une promotion (3 Moyennes pleines + une 4ᵉ -> Grave) ne l\'annule PAS en route — la Grave est susceptible de s\'infecter', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'corps', 'moyenne', 3) // ligne pleine
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'corps')
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    assert.equal(result.promoted, true)
+    assert.equal(result.wound.severity, 'grave')
+    assert.equal(await statusOfEcheance(trx, infection), 'active')
+    assert.ok(!result.cancelledEcheances.some(e => e.id === infection.id))
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('infection de localisation : une cascade qui n\'aboutit qu\'à une Mort (Tête) la termine — plus aucune blessure susceptible ; l\'annulation est journalisée', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'tete', 'mortelle', 1) // ligne Mortelle pleine (1 case)
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'tete')
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'mortelle', schedule) // déborde vers la Mort
+    assert.equal(result.wound.severity, 'mort_subite')
+    assert.equal(await statusOfEcheance(trx, infection), 'cancelled', 'une Mort en Tête n\'a ni guérison ni infection')
+    assert.ok(result.cancelledEcheances.some(e => e.id === infection.id && e.status === 'active'), 'ligne d\'origine retournée pour l\'annulation d\'avance')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('infection de localisation : supprimer une blessure alors qu\'une autre susceptible de s\'infecter reste -> l\'infection reste ; supprimer la dernière -> annulée ; les autres localisations ne sont pas touchées', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    const moyenne = await resolveWoundInsertion(trx, charSheet.id, 'bras_droit', 'moyenne', schedule)
+    const grave = await resolveWoundInsertion(trx, charSheet.id, 'bras_droit', 'grave', schedule)
+    await resolveWoundInsertion(trx, charSheet.id, 'jambe_gauche', 'moyenne', schedule)
+    const bras = await infectionEcheanceOf(trx, campaign, character, 'bras_droit')
+    const jambe = await infectionEcheanceOf(trx, campaign, character, 'jambe_gauche')
+
+    await deleteWoundRows(trx, { id: grave.wound.id })
+    assert.equal(await statusOfEcheance(trx, bras), 'active', 'la Moyenne du bras reste susceptible de s\'infecter')
+    await deleteWoundRows(trx, { id: moyenne.wound.id })
+    assert.equal(await statusOfEcheance(trx, bras), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, jambe), 'active', 'l\'infection d\'une autre localisation n\'est jamais touchée')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('infection de localisation : une Légère qui reste n\'est pas « susceptible de s\'infecter » ; l\'infection que le moteur résout (exceptEcheanceId) n\'est jamais annulée ici', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'corps', 'legere', 1)
+    const moyenne = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'corps')
+
+    const { cancelledEcheances } = await deleteWoundRows(trx, { id: moyenne.wound.id }, { exceptEcheanceId: infection.id })
+    assert.ok(!cancelledEcheances.some(e => e.id === infection.id))
+    assert.equal(await statusOfEcheance(trx, infection), 'active')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison complète (Moyenne -> Légère) : l\'infection de la localisation est annulée et journalisée (annuler l\'avance la restaure)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    const moyenne = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
+    const infection = await infectionEcheanceOf(trx, campaign, character, 'corps')
+    const healed = await resolveWoundImprovement(trx, moyenne.wound.id, schedule)
+    assert.equal(healed.wound.severity, 'legere')
+    assert.equal(await statusOfEcheance(trx, infection), 'cancelled', 'une Légère ne s\'infecte pas')
+    const restores = buildWoundImprovementUndoEntries(moyenne.wound, healed).filter(e => e.table === 'game_echeances' && e.previousValues !== null)
+    assert.ok(restores.some(e => e.rowId === infection.id))
+    await replayUndoEntries(trx, buildWoundImprovementUndoEntries(moyenne.wound, healed))
+    assert.equal(await statusOfEcheance(trx, infection), 'active')
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })

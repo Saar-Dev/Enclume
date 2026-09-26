@@ -4,7 +4,7 @@ import {
   chanceCostOfStep, maxNormalChanceDegrees,
 } from '../../../shared/woundConstants.js'
 import { canSpendChance } from '../../../shared/chanceRules.js'
-import { initializeWoundHealingEcheance, cancelWoundEcheances } from './woundHealingSchedule.js'
+import { initializeWoundHealingEcheance, cancelWoundEcheances, settleLocationInfections } from './woundHealingSchedule.js'
 
 // Test de Choc requis ? RAW : Grave (Tête/Corps), Critique, Mortelle, et Membre détruit (bras/jambe). La Mort subite
 // (6ᵉ ligne en Tête/Corps) n'en fait aucun : « le personnage meurt sur le coup » (REGLEBLESSURES.md:164-167).
@@ -85,14 +85,23 @@ async function insertWoundRow(trx, { char_sheet_id, location, severity, is_stabi
 // SEUL suppresseur de lignes `character_wounds`, comme insertWoundRow en est le seul écrivain : une échéance vit et meurt avec sa case
 // (WOUND-ECHEANCE-GHOSTS — 87 lignes de revue « sans blessure » sur 97 dans la base locale, dues à des cases supprimées dont
 // l'échéance restait vivante). Supprime les cases correspondant à `where` puis annule leurs échéances vivantes (guérison ET infection).
+// Une échéance de GUÉRISON meurt avec sa case ; l'INFECTION (une par personnage et localisation) meurt avec la DERNIÈRE blessure susceptible de s'infecter
+// de sa localisation (`settleLocationInfections`) — réglée ICI quand la suppression est définitive (`settleInfections`, par défaut), mais PAS au milieu d'une
+// opération qui réécrit tout de suite (cascade de promotion, amélioration) : celle-ci règle une fois, à sa fin.
 // `exceptEcheanceId` : l'échéance que le moteur résout en ce moment (voir cancelWoundEcheances). Retourne les cases supprimées et les
 // échéances annulées (avant annulation) : de quoi construire les entrées d'annulation d'une avance de temps.
-export async function deleteWoundRows(trx, where, { exceptEcheanceId = null } = {}) {
+export async function deleteWoundRows(trx, where, { exceptEcheanceId = null, settleInfections = true } = {}) {
   const wounds = await trx('character_wounds').where(where).select('*')
   if (wounds.length === 0) return { wounds: [], cancelledEcheances: [] }
   const ids = wounds.map(w => w.id)
   await trx('character_wounds').whereIn('id', ids).del()
   const cancelledEcheances = await cancelWoundEcheances(trx, ids, { exceptEcheanceId })
+  if (settleInfections) {
+    for (const sheetId of new Set(wounds.map(w => w.char_sheet_id))) {
+      const locations = wounds.filter(w => w.char_sheet_id === sheetId).map(w => w.location)
+      cancelledEcheances.push(...await settleLocationInfections(trx, sheetId, locations, { exceptEcheanceId }))
+    }
+  }
   return { wounds, cancelledEcheances }
 }
 
@@ -121,6 +130,15 @@ function cancelledEcheanceUndoEntries(cancelledEcheances = []) {
 // d'être supprimée, sa ligne a de la place, et à ce niveau la case rendue est réutilisée même si une fiche corrompue l'y croyait pleine (une guérison
 // n'aggrave jamais une blessure).
 export async function resolveWoundInsertion(trx, char_sheet_id, location, severity, schedule, options = {}) {
+  const result = await placeWound(trx, char_sheet_id, location, severity, schedule, options)
+  if (!result.promoted) return result // aucune case supprimée : l'infection de la localisation n'a rien perdu
+  // Des lignes ont été effacées : la localisation garde-t-elle une blessure susceptible de s'infecter ? Réglé UNE fois, ici, la cascade terminée.
+  const settled = await settleLocationInfections(trx, char_sheet_id, [location], { exceptEcheanceId: options.exceptEcheanceId ?? null })
+  return { ...result, cancelledEcheances: [...result.cancelledEcheances, ...settled] }
+}
+
+// La cascade elle-même (récursive) : ne règle jamais les infections — la ligne effacée est remplacée par la case du dessus dans la même opération.
+async function placeWound(trx, char_sheet_id, location, severity, schedule, options) {
   const { exceptEcheanceId = null, isStabilized = false, occurredAtGameMinutes, ceilingSeverity = null } = options
   requireSchedule(schedule)
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
@@ -134,8 +152,8 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
   const isFull = severity !== ceilingSeverity && isWoundLineFull(existingRows.length, maxCount)
 
   if (isFull && next) {
-    const { cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id, location, severity }, { exceptEcheanceId })
-    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next, schedule, options)
+    const { cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id, location, severity }, { exceptEcheanceId, settleInfections: false })
+    const result = await placeWound(trx, char_sheet_id, location, next, schedule, options)
     return {
       ...result,
       promoted: true,
@@ -203,17 +221,22 @@ export async function resolveWoundImprovement(trx, woundId, schedule, { steps = 
   const wound = await trx('character_wounds').where({ id: woundId }).first()
   if (!wound) throw new AppError(404, `Blessure "${woundId}" introuvable`)
 
-  const { cancelledEcheances } = await deleteWoundRows(trx, { id: woundId }, { exceptEcheanceId })
+  // Ni « règle » ici : la case obtenue est écrite tout de suite après — l'infection de la localisation est réglée UNE fois, à la fin.
+  const { cancelledEcheances } = await deleteWoundRows(trx, { id: woundId }, { exceptEcheanceId, settleInfections: false })
 
   let targetSeverity = wound.severity
   for (let step = 0; step < steps && targetSeverity; step += 1) targetSeverity = improvedSeverity(targetSeverity)
-  if (!targetSeverity) return { wound: null, echeance: null, cancelledEcheances, deletedWounds: [], promoted: false, healed: true }
+  if (!targetSeverity) {
+    const settled = await settleLocationInfections(trx, wound.char_sheet_id, [wound.location], { exceptEcheanceId })
+    return { wound: null, echeance: null, cancelledEcheances: [...cancelledEcheances, ...settled], deletedWounds: [], promoted: false, healed: true }
+  }
 
   const insertion = await resolveWoundInsertion(trx, wound.char_sheet_id, wound.location, targetSeverity, schedule, {
     exceptEcheanceId, isStabilized: wound.is_stabilized, occurredAtGameMinutes, ceilingSeverity: wound.severity,
   })
+  const settled = await settleLocationInfections(trx, wound.char_sheet_id, [wound.location], { exceptEcheanceId })
   return {
-    wound: insertion.wound, echeance: insertion.echeance, cancelledEcheances: [...cancelledEcheances, ...insertion.cancelledEcheances],
+    wound: insertion.wound, echeance: insertion.echeance, cancelledEcheances: [...cancelledEcheances, ...insertion.cancelledEcheances, ...settled],
     deletedWounds: insertion.deletedWounds, promoted: insertion.promoted, healed: false,
   }
 }

@@ -8820,3 +8820,24 @@ en défaut (libellés à moi mis entre guillemets, ponctuation, un « plus réal
 **Constats** : (1) le livre dit « toutes les cases cochées ET une nouvelle blessure » (`REGLEBLESSURES.md:47-53`) — le code convertit à la 3ᵉ (lecture antérieure de Saar) ; (2) l'ordre « le plus grave d'abord » n'existe que pour la
 STABILISATION (`:341-343`), rien de tel pour la guérison ; (3) `RegleDocumentaire.md` Règle 9 dit que les MANUELS ne définissent jamais une règle métier, alors que le gabarit et tous les manuels existants traduisent le livre — écart à arbitrer.
 **Testé** : les deux vérifications ci-dessus. **Non testé** : la relecture de Saar (cycle de vie du gabarit : rédaction → validation → passage au PLAN). **Données** : aucune. **Retour arrière** : supprimer le fichier.
+
+---
+
+## Session (Dev) — 2026-09-26 — Un seul Test d'infection par localisation (Lot B1 de PLAN_GUERISON_RAW)
+
+**Problème** : le livre joue l'infection « pour chaque Localisation » (`REGLEBLESSURES.md:439-442`) et un Échec impose « un (et un seul) Test de Constitution » (`:396-398`). Le code créait UNE échéance d'infection par case : trois Moyennes à la Jambe gauche
+en Échec lançaient trois jets et jusqu'à trois cases de plus ; à plusieurs gravités, chaque case jouait son propre seuil au lieu de la pire blessure.
+
+**Décisions de Saar (2026-09-26)** : « ok deux lots » (B1 = un Test d'infection par localisation, B2 = une réponse de soins par localisation) ; **Q6 : « on ne compte que les cases de la pire blessure »** (Jambe avec 1 Critique et 2 Moyennes : Critique −5, aucun malus
+de cases) ; Q5 (2026-09-26) : la pire blessure fixe le Test. Q7/Q8/Q10 gardent le comportement actuel (hypothèses de travail).
+
+**Livré** : l'échéance `wound_infection_check` porte `payload.location` (plus `woundId`) ; au plus UNE vivante par (personnage, localisation) — `ensureLocationInfection` (fusion idempotente : un Échec de plus ne change rien, une Catastrophe rend une ponctuelle
+récurrente et allonge une récurrente, entrées d'annulation d'avance) et index unique partiel `uq_game_echeances_infection_per_location` (migration 366). Le handler lit la cible AU MOMENT du jet : `findInfectionTarget` (`shared/woundConstants.js`) = la pire blessure
+susceptible de s'infecter, ses cases seules pour le malus ; la case en plus est cochée sur SA ligne (règle des cases du Lot A). Une seule fonction de seuil (`computeLocationInfectionThreshold`) pour le jet automatique du MJ et celui du joueur. L'infection meurt avec la dernière
+blessure susceptible de sa localisation (`settleLocationInfections`, réglée à la fin de l'opération publique — jamais au milieu d'une cascade de promotion : défaut de mon premier plan trouvé à l'analyse à charge). Migration 365 : conversion des infections vivantes (regroupées par
+localisation, doublons fusionnés, sans cible annulées). Écran de revue et panneau des jets du joueur : une infection est décrite par sa localisation et sa pire blessure. Ferme aussi `ECHEANCE-SPAWN-UNDO` pour l'infection (création et fusion journalisées).
+**Changement de comportement** : une guérison qui laisse une blessure susceptible de s'infecter (Critique → Grave) ne tue plus « son » infection (elle est celle de la localisation) ; elle vit sa fenêtre.
+
+**Testé** : 297 tests en base (woundConstants, woundUtils, woundService, woundEvolutionService, woundReviewService, woundReviewBatchService, combatantContextService, echeanceService, migrations 365-366, woundReviewGestures) + 833 tests purs de `shared` ; 5 tests de migration
+(plan pur, conversion + idempotence + down, index) ; tests nouveaux : trois cases en Échec = un Test, pire blessure, fusion, règlement des infections (promotion, Mort, dernière blessure). **Non testé** : en jeu (à faire par Saar), le jet du joueur par socket (le seuil est le même
+code que le jet automatique, testé). **Données** : migrations 365 (3 infections vivantes de la base locale, déjà à leur localisation, aucune fusion) et 366 appliquées par le serveur de Saar en cours d'exécution. **Retour arrière** : `git revert` du commit + `down()` de 366 puis de 365.

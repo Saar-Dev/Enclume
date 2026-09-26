@@ -11,25 +11,29 @@ import { calcWoundPenalty } from './charStats.js'
 import { reviewTrace, shortId } from './reviewTrace.js'
 import {
   WOUND_SEVERITIES, WOUND_LOCATIONS, isTestBlockingWound, getHealingTotalTests, isFirstHealingTest,
-  getCareKits, defaultCareKits, sumCareKits,
+  getCareKits, defaultCareKits, sumCareKits, findInfectionTarget,
 } from '../../../shared/woundConstants.js'
 
 const WOUND_CONDITION_TYPES = ['wound_healing_check', 'wound_infection_check']
 
+// Une échéance d'INFECTION est celle d'une localisation (Lot B1) : on la décrit par sa localisation et la pire blessure susceptible de s'infecter qui s'y trouve
+// (`severity`, null si la localisation n'en a plus).
 async function enrichWoundEcheances(rows) {
   if (!rows.length) return []
 
-  const woundIds = [...new Set(rows.map(r => r.payload?.woundId).filter(Boolean))]
-  const wounds = woundIds.length ? await db('character_wounds').whereIn('id', woundIds) : []
-  const woundsById = Object.fromEntries(wounds.map(w => [w.id, w]))
-
   const characterIds = [...new Set(rows.map(r => r.character_id))]
-  const characters = characterIds.length ? await db('characters').whereIn('id', characterIds) : []
+  const [characters, sheets] = await Promise.all([
+    db('characters').whereIn('id', characterIds),
+    db('char_sheet').whereIn('character_id', characterIds).select('id', 'character_id'),
+  ])
   const charactersById = Object.fromEntries(characters.map(c => [c.id, c]))
+  const sheetByCharacter = Object.fromEntries(sheets.map(s => [s.character_id, s.id]))
+  const wounds = sheets.length ? await db('character_wounds').whereIn('char_sheet_id', sheets.map(s => s.id)).select('char_sheet_id', 'location', 'severity') : []
 
   return rows.map(r => {
-    const wound = woundsById[r.payload?.woundId] ?? null
-    const character = charactersById[r.character_id] ?? null
+    const location = r.payload?.location ?? null
+    const sheetId = sheetByCharacter[r.character_id]
+    const target = location ? findInfectionTarget(wounds.filter(w => w.char_sheet_id === sheetId && w.location === location)) : null
     return {
       id: r.id,
       conditionType: r.condition_type,
@@ -39,10 +43,9 @@ async function enrichWoundEcheances(rows) {
       intervalMinutes: r.interval_minutes,
       occurrencesRemaining: r.occurrences_remaining,
       characterId: r.character_id,
-      characterName: character?.name ?? null,
-      wound: wound ? {
-        id: wound.id, location: wound.location, severity: wound.severity, isStabilized: wound.is_stabilized,
-      } : null,
+      characterName: charactersById[r.character_id]?.name ?? null,
+      location,
+      severity: target?.severity ?? null,
     }
   })
 }
@@ -202,16 +205,19 @@ async function buildReviewView(campaignId) {
     const infections = []
     const orphans = []
     for (const row of characterRows) {
-      const wound = woundById[row.payload?.woundId]
-      if (!wound) { // ne devrait plus exister depuis le Lot 0 : montré, jamais masqué (il bloquerait « Confirmer » en silence)
+      // Une guérison appartient à une CASE ; une infection à une LOCALISATION, décrite par sa pire blessure susceptible de s'infecter.
+      const isHealing = row.condition_type === 'wound_healing_check'
+      const wound = isHealing ? woundById[row.payload?.woundId] : null
+      const infectionTarget = isHealing ? null : findInfectionTarget(characterWounds.filter(w => w.location === row.payload?.location))
+      if (isHealing ? !wound : !infectionTarget) { // ne devrait plus exister depuis le Lot 0 : montré, jamais masqué (il bloquerait « Confirmer » en silence)
         orphans.push({ echeanceId: row.id, conditionType: row.condition_type, status: row.status, answerable: isAnswerable(row) })
-      } else if (row.condition_type === 'wound_healing_check') {
+      } else if (isHealing) {
         const key = `${wound.location}:${wound.severity}`
         if (!itemsByLine.has(key)) itemsByLine.set(key, { location: wound.location, severity: wound.severity, items: [] })
         itemsByLine.get(key).items.push(buildHealingItem(row, wound))
       } else {
         infections.push({
-          echeanceId: row.id, location: wound.location, severity: wound.severity,
+          echeanceId: row.id, location: row.payload.location, severity: infectionTarget.severity,
           rollsNeeded: row.occurrences_remaining ?? 1, status: row.status, answerable: isAnswerable(row),
         })
       }

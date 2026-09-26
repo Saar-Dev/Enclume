@@ -60,16 +60,19 @@ test('getPendingRollsForPlayer : un joueur ne voit que les jets de son propre pe
 
     await db('game_echeances').insert({
       campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'awaiting_player_roll',
+      interactive: true, payload: { location: wound.location }, next_due_minutes: 100, status: 'awaiting_player_roll',
     })
     await db('game_echeances').insert({
       campaign_id: campaign.id, character_id: autreCharacter.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'awaiting_player_roll',
+      interactive: true, payload: { location: wound.location }, next_due_minutes: 100, status: 'awaiting_player_roll',
     })
 
     const rows = await getPendingRollsForPlayer(campaign.id, player.id, { isGm: false })
     assert.equal(rows.length, 1)
     assert.equal(rows[0].characterId, character.id)
+    // Une infection est décrite par sa LOCALISATION et la pire blessure susceptible de s'infecter qui s'y trouve (jamais une case).
+    assert.equal(rows[0].location, wound.location)
+    assert.equal(rows[0].severity, wound.severity)
   } finally {
     // ordre important : la campagne (et son cascade campaign_members/characters) doit partir avant
     // l'utilisateur "autre", sinon la FK campaign_members_user_id_foreign bloque la suppression.
@@ -84,7 +87,7 @@ test('getPendingRollsForPlayer : un MJ voit tous les jets en attente de la campa
     const { campaign, character, wound, gm } = fixture
     await db('game_echeances').insert({
       campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'awaiting_player_roll',
+      interactive: true, payload: { location: wound.location }, next_due_minutes: 100, status: 'awaiting_player_roll',
     })
     const rows = await getPendingRollsForPlayer(campaign.id, gm.id, { isGm: true })
     assert.equal(rows.length, 1)
@@ -108,7 +111,6 @@ test('getPendingRollsForPlayer : ne retourne jamais un wound_healing_check (jama
   }
 })
 
-test.after(async () => { await db.destroy() })
 
 // ─── Vue groupée par personnage (PLAN_REVUE_GUERISON.md §10) ────────────────────────────────────────────────────────────────────────────
 
@@ -233,7 +235,7 @@ test('getReviewCardsForGm : infections décrites (jets nécessaires) ; échéanc
     const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
     const [infection] = await db('game_echeances').insert({
       campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
-      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: 100,
+      payload: { location: 'bras_droit', periodesSansSoin: 0 }, next_due_minutes: 100,
       interval_minutes: 2880, occurrences_remaining: 3, status: 'pending_mj_review',
     }).returning('*')
     const [orphan] = await db('game_echeances').insert({
@@ -295,16 +297,20 @@ test("getReviewCardsForGm : l'avance en attente est exposée même quand plus au
 test('getReviewCardsForGm : `awaitingPlayerCount` compte les jets de joueurs attendus (sous-ensemble des réponses possibles), `queuedCount` les échéances pas encore ouvertes', { skip }, async () => {
   const f = await createCardsFixture()
   try {
-    const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
-    const insertInfection = (status, nextDue) => db('game_echeances').insert({
+    await woundInReview(f.pj, 'bras_droit', 'moyenne')
+    // Une infection par LOCALISATION (index unique) : trois autres localisations portent une Moyenne (écrite à la main, sans échéance de guérison).
+    for (const location of ['bras_gauche', 'jambe_droite', 'jambe_gauche']) {
+      await db('character_wounds').insert({ char_sheet_id: f.pj.sheet.id, location, severity: 'moyenne', occurred_at_game_minutes: 0 })
+    }
+    const insertInfection = (location, status, nextDue) => db('game_echeances').insert({
       campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
-      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: nextDue, status,
+      payload: { location, periodesSansSoin: 0 }, next_due_minutes: nextDue, status,
     }).returning('*')
-    const [awaiting] = await insertInfection('awaiting_player_roll', 100)
-    await insertInfection('pending_mj_review', 100)
+    const [awaiting] = await insertInfection('bras_droit', 'awaiting_player_roll', 100)
+    await insertInfection('bras_gauche', 'pending_mj_review', 100)
     await db('campaigns').where({ id: f.campaign.id }).update({ game_time_resolved_minutes: 5000 })
-    await insertInfection('active', 4000) // déjà due, pas encore ouverte : prochaine ronde
-    await insertInfection('active', 9000) // future : jamais montrée
+    await insertInfection('jambe_droite', 'active', 4000) // déjà due, pas encore ouverte : prochaine ronde
+    await insertInfection('jambe_gauche', 'active', 9000) // future : jamais montrée
 
     const { cards, summary } = await getReviewCardsForGm(f.campaign.id)
     // guérison (1) + infection en attente du MJ (1) + infection en attente d'un joueur (1)
@@ -320,12 +326,13 @@ test('getReviewCardsForGm : `awaitingPlayerCount` compte les jets de joueurs att
 test("getReviewCardsForGm : la « ronde suivante » est jugée sur la FIN de l'avance en attente (comme « Confirmer »), pas sur le repère résolu actuel — les infections d'un Échec y figurent", { skip }, async () => {
   const f = await createCardsFixture()
   try {
-    const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
+    await woundInReview(f.pj, 'bras_droit', 'moyenne')
+    await db('character_wounds').insert({ char_sheet_id: f.pj.sheet.id, location: 'jambe_gauche', severity: 'moyenne', occurred_at_game_minutes: 0 })
     // Le repère résolu (1000) n'avance qu'à la confirmation ; l'avance en attente (10080) en fait 11080 : une infection due à 5000 y sera ouverte par « Confirmer ».
     await db('campaigns').where({ id: f.campaign.id }).update({ game_time_minutes: 1000, game_time_resolved_minutes: 1000 })
     await db('game_echeances').insert({
       campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
-      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: 5000, status: 'active',
+      payload: { location: 'bras_droit', periodesSansSoin: 0 }, next_due_minutes: 5000, status: 'active',
     })
 
     let view = await getReviewCardsForGm(f.campaign.id)
@@ -340,10 +347,36 @@ test("getReviewCardsForGm : la « ronde suivante » est jugée sur la FIN de l'a
     // Horizon strictement borné : une échéance due APRÈS la fin de l'avance n'est pas annoncée.
     await db('game_echeances').insert({
       campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
-      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: 11081, status: 'active',
+      payload: { location: 'jambe_gauche', periodesSansSoin: 0 }, next_due_minutes: 11081, status: 'active',
     })
     assert.equal((await getReviewCardsForGm(f.campaign.id)).summary.queuedCount, 1)
   } finally {
     await cleanupCards(f)
   }
 })
+
+test('getReviewCardsForGm : une infection est décrite par la PIRE blessure susceptible de sa localisation ; sans blessure susceptible, elle est montrée comme anomalie (jamais masquée)', { skip }, async () => {
+  const f = await createCardsFixture()
+  try {
+    await db('character_wounds').insert([
+      { char_sheet_id: f.pj.sheet.id, location: 'jambe_gauche', severity: 'moyenne', occurred_at_game_minutes: 0 },
+      { char_sheet_id: f.pj.sheet.id, location: 'jambe_gauche', severity: 'critique', occurred_at_game_minutes: 0 },
+      { char_sheet_id: f.pj.sheet.id, location: 'bras_droit', severity: 'legere', occurred_at_game_minutes: 0 }, // une Légère n'est pas susceptible
+    ])
+    const insertInfection = (location) => db('game_echeances').insert({
+      campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
+      payload: { location, periodesSansSoin: 0 }, next_due_minutes: 100, status: 'pending_mj_review',
+    }).returning('*')
+    const [jambe] = await insertInfection('jambe_gauche')
+    const [bras] = await insertInfection('bras_droit')
+
+    const { cards } = await getReviewCardsForGm(f.campaign.id)
+    const [card] = cards
+    assert.deepEqual(card.infections.map(i => [i.echeanceId, i.location, i.severity]), [[jambe.id, 'jambe_gauche', 'critique']])
+    assert.deepEqual(card.orphans.map(o => [o.echeanceId, o.conditionType]), [[bras.id, 'wound_infection_check']])
+  } finally {
+    await cleanupCards(f)
+  }
+})
+
+test.after(async () => { await db.destroy() })
