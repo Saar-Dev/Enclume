@@ -39,7 +39,7 @@ test('toutes les collections de surface_data ont un plafond, et aucune n\'est in
 test('le module n\'importe que mapLimits et roomGeometry (aucune autre dépendance)', () => {
   const source = readFileSync(new URL('./importGuard.js', import.meta.url), 'utf8')
   const imported = [...source.matchAll(/^import .* from '([^']+)'/gm)].map(match => match[1]).sort()
-  assert.deepEqual(imported, ['./mapLimits.js', './roomGeometry.js'])
+  assert.deepEqual(imported, ['./guardErrors.js', './mapLimits.js', './roomGeometry.js'])
 })
 
 test('chaque code d\'erreur émis existe dans IMPORT_GUARD_CODES', () => {

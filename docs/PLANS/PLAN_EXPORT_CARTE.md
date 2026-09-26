@@ -364,12 +364,20 @@ Aucune assertion de durée (fragile) ; les temps sont vérifiés au banc d'essai
 **Ce que L1a-2 ne fait pas** : types stricts (L1a-3), enveloppe et réglages (L1a-4), aucun branchement serveur ou client.
 **Clôture** : Testé (tests purs, `node --check`, banc d'essai sur les cas piégés) / Non testé (rien de branché) / Données (aucune) / Retour arrière (retirer les trois fichiers créés et rétablir les deux modifiés).
 
-### L1a-3 — Types stricts pour un fichier importé (**certitude : NON, exploration d'abord**)
-- Problème `[VÉRIFIÉ]` : le validateur accepte `null`, `""`, `true` comme nombre (`Number(x)` fini) et certaines données historiques en
-  dépendent peut-être (coordonnées de sols lues dans des clés textuelles). Le durcir dans le validateur de production risque de rejeter
-  une carte légitime.
-- Pistes : (a) option `strict` passée au validateur ; (b) liste partagée des champs numériques ; (c) contrôle limité aux collections
-  modernes. **Choix après** dénombrement des sites d'appel et essai contre la carte réelle : ce sous-lot se re-présentera avant tout code.
+### L1a-3 — Types stricts pour un fichier importé — **FAIT le 2026-09-26** (conception tranchée après exploration)
+**Résultat** : `shared/world/surfaceFieldTypes.js` (table de types + `checkStrictTypes`) et `shared/world/guardErrors.js` (collecteur d'erreurs commun, extrait de `importGuard.js`) créés ; `importGuard.js` refactoré sans changement de comportement ; validateur de production **non modifié**. Tests : 15 nouveaux (dont la garde contre la dérive), **882/882** sur `shared/`. **La carte réelle passe** scan, limites, types stricts et validateur de production. Défaut trouvé par les tests et corrigé : un champ obligatoire de mauvais type était signalé deux fois. Choix : `null` est toléré pour tout champ facultatif (le validateur de production le tolère), et refusé pour les champs obligatoires (bornes, coordonnées de porte…) où il passait pour 0.
+**Constats** (`[VÉRIFIÉ]`) : le validateur a **10 appels** à `validateFiniteFields` et une dizaine de contrôles inline qui acceptent tout ce que `Number()` rend fini (`null`, `""`, `true`, `"0x10"`) ;
+les champs non validés (épaisseurs, `heightLevels`, `y`, `level`…) ne sont pas typés du tout. Un fichier hostile peut donc faire stocker des chaînes là où le moteur et le rendu attendent
+des nombres (corruption persistante, plantage à l'ouverture pour tous les clients). **La carte réelle est propre** (lecture seule, base locale) : tous ses champs ont le type attendu ; aucun sol, mur,
+plafond ni escalier historique n'y figure (`[INCONNU]` ce que contiennent d'autres cartes anciennes).
+**Décision** : le validateur de production n'est **pas modifié** (risque de rejeter une carte historique). Un module séparé `shared/world/surfaceFieldTypes.js` porte une **table déclarative**
+« champ → type attendu » par collection, et `checkStrictTypes(surface)` ne signale que les champs **présents** avec un mauvais type (un champ absent reste toléré, les clés inconnues ne sont pas
+concernées). Types : `number` (fini), `string`, `boolean`, `object`, `array`, `reference` (nombre, chaîne ou `null` : `floorTex`…). Couverture v1 : champs de `rooms` et `connectors` observés sur la carte
+réelle et tous ceux que le validateur contrôle, avec leurs sous-structures (arrondis, profils, matériaux, chemins de murs) ; coordonnées **si présentes** des collections historiques.
+Erreur : `{ code: 'wrong_type', params: { path, expected } }`. Ordre : scan → limites → **types stricts** → `validateSurfaceData`.
+**Garde contre la dérive** : un test lit les listes de champs numériques du validateur (dans le code source) et exige que chacune figure dans la table. La table est une **duplication assumée et
+temporaire** de la connaissance du validateur : à terme le validateur devrait la consommer (schéma unique, pratique des pros : Foundry `DataModel`, zod) — dette notée, hors S0.
+Sortie de la liste blanche des clés (U3) : non traitée ici ; les clés inconnues restent bornées par la garde de structure.
 
 ### L1a-4 — Enveloppe, réglages, règles de modèle, refus, aperçu (certitude : bonne ; dépend de L1a-2)
 - **Crée** `shared/world/mapSettings.js` (`BATTLEMAP_SETTINGS_FIELDS` et leurs validateurs — **source unique**, ensuite consommée aussi
@@ -394,3 +402,4 @@ Aucune assertion de durée (fragile) ; les temps sont vérifiés au banc d'essai
 - **2026-09-26** — L1a-1 commité (deux commits, non poussés) ; plan exact de L1a-2 révisé par des mesures (le contour compte plus que le nombre de cases ; le validateur est exploitable par les arrondis).
 - **2026-09-26** — L1a-2 codé (garde structurelle) : 36/36 tests, 865/865 sur shared/ ; carte réelle acceptée après correction de la limite par axe ; trou connu : budget de complexité cumulé de la carte (pire cas ~11 s), à instruire.
 - **2026-09-26** — L1a-2 commité (`586fbbd`) puis L1a-2b (budget de complexité, 150 000) codé : 38/38 ; méthode : lots invisibles auto-validés (Saar : « t'es tout seul », pas de niveau technique).
+- **2026-09-26** — L1a-3 codé (types stricts, table déclarative, garde contre la dérive) : 882/882 ; carte réelle acceptée.

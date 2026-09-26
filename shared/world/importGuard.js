@@ -16,6 +16,7 @@
 // taille est déjà bornée.
 
 import { MAP_LIMITS } from './mapLimits.js'
+import { createCollector, isPlainObject } from './guardErrors.js'
 import { roomBoundaryEdges } from './roomGeometry.js'
 
 export const IMPORT_GUARD_CODES = Object.freeze([
@@ -62,33 +63,6 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 // NUL et caractères de contrôle C0 (sauf tabulation, saut de ligne, retour chariot) et DEL. PostgreSQL rejette NUL
 // dans un jsonb alors que JSON.parse l'accepte.
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/
-
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const proto = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
-}
-
-function createCollector(maxErrors) {
-  const errors = []
-  let truncated = false
-  return {
-    add(code, params = {}) {
-      if (errors.length >= maxErrors) {
-        truncated = true
-        return
-      }
-      errors.push(Object.freeze({ code, params: Object.freeze({ ...params }) }))
-    },
-    get isFull() { return errors.length >= maxErrors },
-    // À appeler quand on arrête l'analyse parce que le plafond d'erreurs est atteint alors qu'il restait du travail :
-    // le résultat ne liste alors pas forcément toutes les erreurs.
-    markTruncated() { truncated = true },
-    result() {
-      return Object.freeze({ ok: errors.length === 0, errors: Object.freeze([...errors]), truncated })
-    },
-  }
-}
 
 function pathOf(entry) {
   const parts = []
