@@ -8779,3 +8779,44 @@ faits du handler : blessure avant → après, **ligne cible « n cases / maximum
 **Testé** : 193 tests en base (woundReview, woundReviewBatch, woundUtils, woundEvolution, woundService, echeanceService — dont l'erreur de handler écrite même traces coupées et le collecteur —, gameTimeService, reviewTrace) ;
 les lots tracés et non tracés donnent les mêmes résultats ; aucune ligne quand c'est coupé. **Non testé** : la lecture des traces dans le terminal réel du serveur (nodemon), le jet d'infection d'un joueur par socket (une ligne de trace
 ajoutée, aucun harnais socket). **Données** : aucune migration ni écriture. **Retour arrière** : `git revert` du commit des traces (aucune donnée touchée).
+
+---
+
+## Session (Dev) — 2026-09-26 — La règle des cases du livre : une ligne est pleine quand TOUTES ses cases sont cochées (Lot A de PLAN_GUERISON_RAW ; WOUND-HEAL-LINE-CAPACITY, WOUND-FULL-LINE-TWO-CONVENTIONS)
+
+**Problème** : `resolveWoundImprovement` écrivait la case obtenue sans regarder si la ligne d'arrivée était pleine. Trace réelle du serveur (Saar, 2026-09-26) : « ligne tete/legere : 5 case(s) pour un maximum de 3 ».
+En cherchant la cause, deux définitions de « ligne pleine » sont apparues : à l'aggravation (`isWoundLinePromoted`, seuil `max - 1` : la blessure qui REMPLIT la dernière case convertit, sauf la Mortelle) et à la Chance (`hasSeverityRoom`,
+`count < max`). Une première correction (« option B », code jamais commité) avait fait coexister les deux ; Saar s'est déclaré perdu.
+
+**Décision de Saar (2026-09-26)** : « Si tu arrives à comprendre et faire fonctionner un système de guérison à partir du RAW, go. Ce que je te livre, ce sont MES interprétations. » → le livre fait autorité. `REGLEBLESSURES.md:47-53` : « lorsque
+toutes les cases d'une ligne sont cochées et que le personnage subit une nouvelle blessure de cette gravité » : la ligne se remplit ENTIÈREMENT, la blessure SUIVANTE convertit. `MANUEL_BLESSURES.md` validé (« Manuel OK »), plan `PLAN_GUERISON_RAW.md`.
+Et, pendant la guérison : « la règle des cases est toujours valable » (Saar, manuel Q12).
+
+**Livré** : `isWoundLineFull(count, max)` (`shared/woundConstants.js`) remplace `isWoundLinePromoted` et `OVERFLOW_ONLY_SEVERITIES` (l'exception Mortelle disparaît : la même règle donne le même comportement) ; `resolveWoundInsertion` la lit
+et accepte `isStabilized`, `occurredAtGameMinutes` et un **plafond** (`ceilingSeverity`) ; `resolveWoundImprovement` ne contient plus de cascade à lui : il supprime la case d'origine puis POSE la case obtenue par `resolveWoundInsertion`, plafonnée à la
+gravité d'origine (une guérison n'aggrave jamais, même sur une fiche corrompue) ; `hasSeverityRoom` = « ligne pas pleine » (même fonction). Une seule autorité. Écart de comportement assumé : Tête, 3 Légères tiennent, la 4ᵉ convertit ; 2 Graves et
+2 Critiques tiennent, la 3ᵉ convertit ; Corps 4 / 3 / 3 / 2 / 2 ; un personnage encaisse une blessure de plus par ligne avant de convertir. Analyse à charge : `PLAN_GUERISON_RAW.md` §6 (propriété « une guérison ne dépasse jamais sa gravité d'origine »
+prouvée puis testée ; 15 lignes en base locale, aucune au-dessus de sa capacité).
+**Constats hors lot** : (1) la saisie manuelle de la fiche ne peut plus provoquer une conversion (une ligne pleine n'a plus de case vide à cliquer) ; (2) le compteur d'Avaries des exo-armures recopie l'ancienne lecture — ticket
+`EXO-AVARIE-LINE-CONVENTION`.
+
+**Testé** : 259 tests en base (woundConstants, woundUtils, woundService, woundEvolutionService, woundReviewService, woundReviewBatchService, combatantContextService, echeanceService) ; tests réécrits et journalisés (les 2 tests `isWoundLinePromoted`, cascade
+Moyenne 2→3 cases, une promotion ne programme que la case finale, cascade complète à la Tête, cascade qui s'arrête sur la Mortelle vide, échéances des cases fusionnées, applyWound en cascade, infection qui déborde) ; 4 tests nouveaux (3 Légères tiennent /
+la 4ᵉ convertit, 2 Critiques / la 3ᵉ convertit, « une seule définition de pleine » sur chaque ligne de la Tête = la Chance voit de la place exactement quand la pose ne convertit pas, cascade plafonnée) ; test de mutation : remettre l'ancien seuil
+(`max - 1`) fait échouer plus de trente tests. **Non testé** : en jeu (à faire par Saar). **Données** : aucune migration ; les fiches existantes ne sont pas modifiées. **Retour arrière** : `git revert` du commit du lot.
+
+---
+
+## Session (Dev) — 2026-09-26 — MANUEL_BLESSURES.md : le chapitre Blessures du livre, traduit et vérifié (V1, à valider par Saar)
+
+**Pourquoi** : Saar a proposé de partir d'une base propre et vérifiée avant de reprendre la guérison (« commencer par rédiger MANUEL_GUERISON ou MANUEL_BLESSURE »), après que ses propres lectures de la règle se soient
+révélées différentes du texte (la 3ᵉ ou la 4ᵉ Légère qui convertit ; « une seule guérison par localisation »). Décision de Saar (2026-09-26) : le livre fait autorité, ses lectures antérieures n'en sont que des lectures.
+
+**Livré** : `docs/MANUELS/MANUEL_BLESSURES.md` (gabarit `GABARIT_MANUEL.md`, 8 sections) — seuils, compteur et débordement des lignes, effets par gravité, malus non cumulatifs, stabilisation (minutes), durée de guérison et soins,
+traitement par Localisation, réussite / échec / Catastrophe, guérison naturelle, infection, suractivité, Choc (optionnel) ; 11 questions ouvertes dont 2 bloquantes (**Q2** nombre de cases hors Tête, **Q5** plusieurs gravités par
+Localisation) ; hors périmètre déclaré. Outil réutilisable : `tools/verify-manual-quotes.mjs` (chaque citation d'un manuel doit exister dans le fichier RAW).
+**Vérification** : 85 citations sur 85 retrouvées dans le livre (`REGLEBLESSURES`, `REGLESYSCOMBAT`, `REGLE_CHANCE`, `RegleDocumentaire`) ; 54 valeurs chiffrées des tableaux contrôlées (0 écart). Le premier passage avait 28 citations
+en défaut (libellés à moi mis entre guillemets, ponctuation, un « plus réaliste, mais plus incapacitante » paraphrasé au lieu du texte « plus réaliste (mais aussi plus incapacitant) »), toutes corrigées.
+**Constats** : (1) le livre dit « toutes les cases cochées ET une nouvelle blessure » (`REGLEBLESSURES.md:47-53`) — le code convertit à la 3ᵉ (lecture antérieure de Saar) ; (2) l'ordre « le plus grave d'abord » n'existe que pour la
+STABILISATION (`:341-343`), rien de tel pour la guérison ; (3) `RegleDocumentaire.md` Règle 9 dit que les MANUELS ne définissent jamais une règle métier, alors que le gabarit et tous les manuels existants traduisent le livre — écart à arbitrer.
+**Testé** : les deux vérifications ci-dessus. **Non testé** : la relecture de Saar (cycle de vie du gabarit : rédaction → validation → passage au PLAN). **Données** : aucune. **Retour arrière** : supprimer le fichier.

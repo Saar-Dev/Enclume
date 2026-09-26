@@ -1,5 +1,8 @@
 # PLAN_BLESSURE_SIXIEME_LIGNE — Compteur de blessures : la 6ᵉ ligne « Mort subite / Membre détruit »
 
+> **Note 2026-09-26 (Lot A de `PLAN_GUERISON_RAW.md`)** : la règle « la blessure qui remplirait la dernière case convertit, sauf la Mortelle » citée plus bas (§3, correction du 2026-09-24) est **remplacée par la règle des cases du livre**
+> (`isWoundLineFull`, `SYSTEME/BLESSURES.md` §« Règle des cases ») : la ligne se remplit entièrement, la blessure suivante convertit — la Mortelle n'est plus une exception, le débordement vers la 6ᵉ ligne est inchangé.
+
 > 2026-09-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et
 > fusionné dans `docs/SYSTEME/COMBAT.md` une fois clos.
 > Statut : 🟡 **Lot 1 (statut `dead`, conséquences d'un cadavre) CLOS et archivé — `docs/Old/PLAN_STATUT_MORT.md`. Lot 2 (la 6ᵉ ligne dans

@@ -3,6 +3,8 @@
 > **Amendé 2026-09-25 (nuit) — Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`** : kits de soin dans `WOUND_HEALING`, vue et résolution GROUPÉES de l'écran de revue (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
 > terminent plus jamais l'échéance de guérison (§« Guérison et Infection »).
+> **Amendé 2026-09-26 — la règle des cases du LIVRE (Lot A de `PLANS/PLAN_GUERISON_RAW.md` ; tickets `WOUND-HEAL-LINE-CAPACITY`, `WOUND-FULL-LINE-TWO-CONVENTIONS`)** : une ligne est pleine
+> quand TOUTES ses cases sont cochées, c'est la blessure SUIVANTE qui la convertit (coup reçu, guérison, infection) ; une seule définition, `isWoundLineFull` (§« Règle des cases »).
 > **Amendé 2026-09-25 (soir) — guérison en chaîne (ticket `WOUND-HEAL-CHAIN-STOPS`)** : toute case de blessure écrite (coup reçu, promotion,
 > guérison, Chance, case d'infection) naît **avec** son échéance de guérison, programmée par le seul écrivain de lignes
 > (`woundUtils.js`) ; la guérison ne s'arrête plus après un cran. Voir §« Guérison et Infection ».
@@ -25,7 +27,7 @@
 
 ```
 shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS + les règles pures de la 6ᵉ ligne
-                            (isWoundLinePromoted, isFatalWound, getWoundEffects, getWoundHealing, WOUND_IMPROVEMENT_TARGET…)
+                            (isWoundLineFull, isFatalWound, getWoundEffects, getWoundHealing, WOUND_IMPROVEMENT_TARGET…)
 shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
 server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue) / getShockMalus(severity, location)
 server/lib/woundUtils.js  — SEUL écrivain ET SEUL suppresseur de `character_wounds` (une échéance vit et meurt avec sa case ; insertion en cascade, amélioration, case d'infection : chaque case naît
@@ -71,15 +73,28 @@ Capacités vérifiées sur la fiche papier (capture de Saar, 2026-09-24).
 | Bras D/G | 3 | 3 | 2 | 2 | 1 | 1 (« Membre détruit ») |
 | Jambe D/G | 3 | 3 | 2 | 2 | 1 | 1 (« Membre détruit ») |
 
-### Promotion d'une ligne pleine
+### Règle des cases — ligne pleine et promotion
 
-Règle générale (`isWoundLinePromoted`, `shared/woundConstants.js`) : la blessure qui **remplirait la dernière case** convertit la
-ligne en une blessure de la gravité supérieure (3ᵉ Légère sur une ligne à 3 cases = 1 Moyenne), en cascade
-(`resolveWoundInsertion`, `woundUtils.js`). **Exception : la ligne Mortelle ne se convertit qu'au dépassement**
-(`OVERFLOW_ONLY_SEVERITIES`) — avec 1 case (Tête, bras, jambes), toute Mortelle deviendrait sinon aussitôt Mort ; or une Mortelle à
-la tête est une survie avec stabilisation (d'où l'importance des casques). La 2ᵉ Mortelle à la tête (3ᵉ au corps) déborde vers la
-6ᵉ ligne. Une 2ᵉ blessure sur la 6ᵉ ligne, déjà pleine, ne fait rien : `WoundLineFullError`, journalisée `[DBG]` par `applyWound`
-(fait attendu, pas un échec — le cadavre continue de prendre des blessures ailleurs).
+Règle du livre (`REGLEBLESSURES.md:47-53`, `MANUELS/MANUEL_BLESSURES.md` 4.3) : une ligne (localisation × gravité) est **pleine** quand **toutes** ses cases sont cochées ; la blessure **suivante** de cette gravité efface la
+ligne et coche une case au degré supérieur, de ligne pleine en ligne pleine (`resolveWoundInsertion`, `woundUtils.js`). **Une seule définition** : `isWoundLineFull(count, max)` (`shared/woundConstants.js`), lue par la pose d'une
+blessure (coup reçu, guérison, case d'infection) et par la Chance (`hasSeverityRoom` = « ligne pas pleine »). Aucune exception : la ligne Mortelle suit la même règle.
+
+| Ligne (Tête) | Cases | Ce qui se passe |
+|---|---|---|
+| Légère | 3 | 3 Légères tiennent (ligne pleine) ; la 4ᵉ efface les 3 et coche une Moyenne |
+| Grave, Critique | 2 | 2 tiennent ; la 3ᵉ convertit |
+| Mortelle | 1 | la 1ʳᵉ se coche ; la 2ᵉ déborde vers la 6ᵉ ligne (Mort en Tête/Corps, Membre détruit sur un membre) — Corps : 2 Mortelles tiennent, la 3ᵉ déborde |
+
+Une 2ᵉ blessure sur la 6ᵉ ligne, pleine et sans degré supérieur, ne fait rien : `WoundLineFullError`, journalisée `[DBG]` par `applyWound` (fait attendu, pas un échec — le cadavre continue de prendre des blessures ailleurs).
+*Historique* : jusqu'au 2026-09-26 le code convertissait la blessure qui REMPLIRAIT la dernière case (seuil `max - 1`, exception Mortelle) — lecture antérieure de Saar, retirée : le livre fait autorité (décision du 2026-09-26, `JOURNAL8.md`).
+
+**Guérison** : `resolveWoundImprovement` supprime la case d'origine puis POSE la case obtenue par `resolveWoundInsertion` (« durant la guérison, la règle des cases est toujours valable », Saar 2026-09-26 ; le livre est muet, manuel Q12) :
+une ligne d'arrivée pleine est effacée et la case est cochée au-dessus. **Plafond** : jamais au-dessus de la gravité d'origine (`ceilingSeverity` : sa place vient d'être libérée ; sûr même sur une fiche corrompue) — un Membre détruit qui
+guérit vers une Critique pleine puis une Mortelle pleine reste un Membre détruit. Les lignes effacées (`deletedWounds`) et leurs échéances annulées sont journalisées (`buildWoundImprovementUndoEntries`) : « Annuler l'avance » restaure tout.
+La Chance ne propose une réduction que vers un palier avec de la place (`computeAvailableSeverityReductions`) et le revérifie à la réponse : elle ne déclenche jamais cette cascade.
+
+**Saisie manuelle** : une ligne pleine n'a plus de case vide à cliquer (`LocationPanel.jsx`) : la conversion vient de la prochaine blessure reçue (combat, infection) ; à la main, le MJ coche la case du dessus et efface la ligne.
+**Exo-armure** : le compteur d'Avaries a sa propre copie de l'ancienne lecture (`exoAvarieService.js`) — ticket `EXO-AVARIE-LINE-CONVENTION`, hors de ce lot.
 
 ### Seuils de dommages — une autorité
 
@@ -308,7 +323,7 @@ Constitution contre l'infection ; le RAW ne dit pas la durée d'une nouvelle ten
 continue-t-il d'être soigné ? » (`soinsContinues`) n'a plus aucun effet côté serveur (l'écran la retire au Lot 2). Vérifié par exécution avant le correctif : un 2ᵉ Échec,
 un Échec sur la dernière semaine d'une Critique et une Catastrophe sur une Moyenne laissaient la blessure sans plus aucune échéance.
 
-**Limites connues** (suivies en tickets) : `resolveWoundImprovement` ne vérifie pas la capacité de la ligne cible (`WOUND-HEAL-LINE-CAPACITY`) ; une Légère
+**Limites connues** (suivies en tickets) : une Légère
 n'est jamais retirée (`WOUND-LEGERE-NEVER-HEALS`) ; les échéances d'infection créées par un Échec/Catastrophe n'ont pas d'entrée d'annulation d'avance
 (`ECHEANCE-SPAWN-UNDO`) ; une blessure Moyenne+ sur un personnage du Coffre (sans campagne) est refusée, pas d'horloge où programmer sa guérison
 (`WOUND-VAULT-NO-CAMPAIGN`) ; toute blessure de PNJ programme une échéance (`WOUND-PNJ-ECHEANCES-FLOOD`) ; une échéance annulée par un handler reste affichée dans un

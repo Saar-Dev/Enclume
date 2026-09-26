@@ -6,8 +6,9 @@ import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, improvedSeverity, resolveWoundInsertion, resolveWoundImprovement,
   buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries, computeAvailableSeverityReductions, affordableReductions,
-  isShockTestRequired, woundSeverityRankSql, WoundLineFullError, deleteWoundRows,
+  isShockTestRequired, woundSeverityRankSql, WoundLineFullError, deleteWoundRows, hasSeverityRoom,
 } from './woundUtils.js'
+import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import { getHealingRetrySchedule } from './woundHealingSchedule.js'
 import { createEcheance } from './echeanceService.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
@@ -109,9 +110,9 @@ test('resolveWoundInsertion : sans promotion, deletedWounds vide, undoEntries = 
 test('resolveWoundInsertion : promotion en cascade, deletedWounds capture les lignes supprimées', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet, schedule } = await createFixture(trx)
-    // corps/moyenne maxCount=3 -> 2 cases existantes déclenchent déjà la cascade (currentCount >= maxCount-1)
+    // corps/moyenne maxCount=3 : la ligne est PLEINE à 3 cases (règle des cases du livre) — la 4ᵉ Moyenne déclenche la cascade
     const existing = []
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const [row] = await trx('character_wounds')
         .insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'moyenne', occurred_at_game_minutes: 100 + i })
         .returning('*')
@@ -121,11 +122,11 @@ test('resolveWoundInsertion : promotion en cascade, deletedWounds capture les li
     const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
     assert.equal(result.promoted, true)
     assert.equal(result.wound.severity, 'grave')
-    assert.equal(result.deletedWounds.length, 2)
+    assert.equal(result.deletedWounds.length, 3)
     assert.deepEqual(new Set(result.deletedWounds.map(w => w.id)), new Set(existing.map(w => w.id)))
 
     const undoEntries = buildWoundInsertionUndoEntries(result)
-    assert.equal(undoEntries.length, 4) // 2 delete-undo (insert) + 1 insert-undo (delete) + l'échéance de la Grave obtenue (delete)
+    assert.equal(undoEntries.length, 5) // 3 delete-undo (insert) + 1 insert-undo (delete) + l'échéance de la Grave obtenue (delete)
     for (const w of existing) {
       assert.ok(undoEntries.some(e => e.rowId === w.id && e.previousValues?.id === w.id))
     }
@@ -244,7 +245,7 @@ test('resolveWoundInsertion : Légère et Mort (Tête/Corps) n\'ont aucune éch�
 test('resolveWoundInsertion : une promotion en cascade ne programme que la case finale (les cases fusionnées n\'en reçoivent pas de nouvelle)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, charSheet, schedule } = await createFixture(trx)
-    await insertWounds(trx, charSheet.id, 'corps', 'moyenne', 2) // ligne au point de convertir
+    await insertWounds(trx, charSheet.id, 'corps', 'moyenne', 3) // ligne pleine : la prochaine Moyenne convertit
     const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
     assert.equal(result.wound.severity, 'grave')
     const echeances = await healingEcheancesOf(trx, campaign.id)
@@ -558,17 +559,17 @@ test('un coup ≥ 30 écrit mort_subite directement ; une 2ᵉ sur la même loca
 test('promotion en cascade complète : Légère → Moyenne → Grave → Critique → Mortelle → mort_subite (tête)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet, schedule } = await createFixture(trx)
-    // Tête : Légère 3 cases, Moyenne 3, Grave 2, Critique 2, Mortelle 1. Chaque ligne est au point de convertir.
-    await insertWounds(trx, charSheet.id, 'tete', 'legere', 2)
-    await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 2)
-    await insertWounds(trx, charSheet.id, 'tete', 'grave', 1)
-    await insertWounds(trx, charSheet.id, 'tete', 'critique', 1)
+    // Tête : Légère 3 cases, Moyenne 3, Grave 2, Critique 2, Mortelle 1. Chaque ligne est PLEINE.
+    await insertWounds(trx, charSheet.id, 'tete', 'legere', 3)
+    await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 3)
+    await insertWounds(trx, charSheet.id, 'tete', 'grave', 2)
+    await insertWounds(trx, charSheet.id, 'tete', 'critique', 2)
     await insertWounds(trx, charSheet.id, 'tete', 'mortelle', 1)
 
     const result = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'legere', schedule)
     assert.equal(result.promoted, true)
     assert.equal(result.wound.severity, 'mort_subite')
-    assert.equal(result.deletedWounds.length, 2 + 2 + 1 + 1 + 1)
+    assert.equal(result.deletedWounds.length, 3 + 3 + 2 + 2 + 1)
 
     const remaining = await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'tete' })
     assert.deepEqual(remaining.map(w => w.severity), ['mort_subite'])
@@ -579,7 +580,7 @@ test('promotion en cascade complète : Légère → Moyenne → Grave → Critiq
 test('une cascade qui atteint la ligne Mortelle vide s\'y arrête (pas de mort tant que la Mortelle n\'est pas pleine)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { charSheet, schedule } = await createFixture(trx)
-    await insertWounds(trx, charSheet.id, 'bras_gauche', 'critique', 1) // ligne Critique (2 cases) au point de convertir
+    await insertWounds(trx, charSheet.id, 'bras_gauche', 'critique', 2) // ligne Critique (2 cases) pleine
     const result = await resolveWoundInsertion(trx, charSheet.id, 'bras_gauche', 'critique', schedule)
     assert.equal(result.promoted, true)
     assert.equal(result.wound.severity, 'mortelle')
@@ -646,14 +647,16 @@ test('resolveWoundInsertion (promotion) : les échéances des cases fusionnées 
     const { charSheet, schedule } = await createFixture(trx)
     const one = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
     const two = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule)
-    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule) // la ligne déborde -> Grave
+    const three = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule) // la 3ᵉ tient : ligne pleine
+    assert.equal(three.promoted, false)
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne', schedule) // la ligne pleine déborde -> Grave
     assert.equal(result.promoted, true)
     assert.equal(result.wound.severity, 'grave')
-    assert.deepEqual(new Set(result.cancelledEcheances.map(e => e.id)), new Set([one.echeance.id, two.echeance.id]))
+    assert.deepEqual(new Set(result.cancelledEcheances.map(e => e.id)), new Set([one.echeance.id, two.echeance.id, three.echeance.id]))
     assert.equal(await statusOfEcheance(trx, result.echeance), 'active', 'la Grave obtenue a son échéance, vivante')
 
     const restores = buildWoundInsertionUndoEntries(result).filter(e => e.table === 'game_echeances' && e.previousValues !== null)
-    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([one.echeance.id, two.echeance.id]))
+    assert.deepEqual(new Set(restores.map(e => e.rowId)), new Set([one.echeance.id, two.echeance.id, three.echeance.id]))
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })
@@ -688,4 +691,199 @@ test('getHealingRetrySchedule : Moyenne/Grave = la durée de la gravité, soins 
   }
   assert.equal(getHealingRetrySchedule('legere', 'corps'), null)
   assert.equal(getHealingRetrySchedule('mort_subite', 'tete'), null)
+})
+
+// ─── Guérison sur une ligne d'arrivée PLEINE (WOUND-HEAL-LINE-CAPACITY ; règle des cases du livre, PLAN_GUERISON_RAW Lot A, 2026-09-26) ─────────
+
+// Même algorithme que gameTimeService.js:replayUndoEntry (privé), rejoué en sens inverse comme cancelPendingAdvance.
+async function replayUndoEntries(trx, entries) {
+  for (const { table, rowId, previousValues } of [...entries].reverse()) {
+    const existing = await trx(table).where({ id: rowId }).first()
+    if (previousValues !== null && existing) await trx(table).where({ id: rowId }).update(previousValues)
+    else if (previousValues === null && existing) await trx(table).where({ id: rowId }).del()
+    else if (previousValues !== null && !existing) await trx(table).insert(previousValues)
+  }
+}
+const healingEcheanceOf = (trx, campaign, character, woundId) => createEcheance(trx, {
+  campaignId: campaign.id, characterId: character.id, conditionType: 'wound_healing_check',
+  payload: { woundId }, nextDueMinutes: 5000, intervalMinutes: null, occurrencesRemaining: null,
+})
+const countAt = async (trx, charSheetId, location, severity) =>
+  Number((await trx('character_wounds').where({ char_sheet_id: charSheetId, location, severity }).count('* as n').first()).n)
+
+test('guérison : une case libre reste sur la ligne d\'arrivée — 2 Légères sur 3, la case guérie prend la 3ᵉ (ligne pleine, mais aucune ligne effacée)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'tete', 'legere', 2)
+    const moyenne = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne', schedule)
+
+    const result = await resolveWoundImprovement(trx, moyenne.wound.id, schedule)
+    assert.equal(result.wound.severity, 'legere')
+    assert.equal(result.promoted, false)
+    assert.deepEqual(result.deletedWounds, [])
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'legere'), 3, 'toutes les cases cochées : la ligne est pleine, jamais plus')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison : ligne d\'arrivée PLEINE (3 Moyennes sur 3) — la ligne est effacée, la case est cochée au-dessus (gravité d\'origine), échéances annulées', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    const line = await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 3)
+    const lineEcheances = []
+    for (const row of line) lineEcheances.push(await healingEcheanceOf(trx, campaign, character, row.id))
+    const grave = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'grave', schedule)
+
+    const result = await resolveWoundImprovement(trx, grave.wound.id, schedule)
+    assert.equal(result.wound.severity, 'grave', 'la Grave « guérie » reste une Grave : sa ligne d\'arrivée était pleine')
+    assert.equal(result.promoted, true)
+    assert.deepEqual(new Set(result.deletedWounds.map(w => w.id)), new Set(line.map(w => w.id)))
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'moyenne'), 0, 'la ligne pleine est effacée')
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'grave'), 1)
+
+    const cancelled = new Set(result.cancelledEcheances.map(e => e.id))
+    assert.deepEqual(cancelled, new Set([grave.echeance.id, ...lineEcheances.map(e => e.id)]), 'la case d\'origine ET les cases effacées perdent leur échéance')
+    for (const echeance of lineEcheances) assert.equal(await statusOfEcheance(trx, echeance), 'cancelled')
+    assert.equal(await statusOfEcheance(trx, result.echeance), 'active', 'la case cochée naît avec son échéance de guérison')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison : deux lignes pleines à la suite (Chance, 2 crans) — de ligne pleine en ligne pleine jusqu\'à la première case libre, jamais au-dessus de la gravité d\'origine', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'tete', 'grave', 2)     // ligne d'arrivée (2 crans sous Mortelle) : pleine
+    await insertWounds(trx, charSheet.id, 'tete', 'critique', 2)  // ligne suivante : pleine aussi
+    const mortelle = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'mortelle', schedule)
+
+    const result = await resolveWoundImprovement(trx, mortelle.wound.id, schedule, { steps: 2 })
+    assert.equal(result.wound.severity, 'mortelle', 'toutes les lignes en dessous sont pleines : la case retombe à la gravité d\'origine')
+    assert.equal(result.deletedWounds.length, 4)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'grave'), 0)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'critique'), 0)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'mortelle'), 1)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'mort_subite'), 0, 'jamais plus haut que la gravité d\'origine')
+
+    // Une ligne libre sur le chemin arrête la cascade : la Critique a de la place → la case y est cochée, la Mortelle n'est pas rejouée.
+    const second = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'mortelle', schedule)
+    await insertWounds(trx, charSheet.id, 'corps', 'grave', 3)    // pleine (corps : 3 cases)
+    const stopped = await resolveWoundImprovement(trx, second.wound.id, schedule, { steps: 2 })
+    assert.equal(stopped.wound.severity, 'critique', 'la première case libre au-dessus de la ligne pleine')
+    assert.equal(stopped.deletedWounds.length, 3)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison : un Membre détruit qui guérit vers une Critique pleine et une Mortelle pleine reste un Membre détruit (les lignes pleines sont effacées)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'bras_droit', 'critique', 2)
+    await insertWounds(trx, charSheet.id, 'bras_droit', 'mortelle', 1)
+    const [membre] = await insertWounds(trx, charSheet.id, 'bras_droit', 'mort_subite', 1)
+
+    const result = await resolveWoundImprovement(trx, membre.id, schedule)
+    assert.equal(result.wound.severity, 'mort_subite')
+    assert.equal(result.deletedWounds.length, 3, 'les 2 Critiques et la Mortelle')
+    assert.equal(await countAt(trx, charSheet.id, 'bras_droit', 'mort_subite'), 1)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison : jamais au-dessus de la gravité d\'origine, même sur une fiche déjà corrompue (ligne d\'origine au-dessus de sa capacité)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 3)   // pleine
+    const graves = await insertWounds(trx, charSheet.id, 'tete', 'grave', 3) // déjà AU-DESSUS de sa capacité (2) : fiche corrompue
+
+    const result = await resolveWoundImprovement(trx, graves[0].id, schedule)
+    assert.equal(result.wound.severity, 'grave')
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'critique'), 0, 'aucune escalade : une guérison n\'aggrave jamais la blessure')
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'moyenne'), 0)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('guérison sur ligne pleine : annuler l\'avance de temps restaure TOUT (case d\'origine, lignes effacées, échéances)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet, schedule } = await createFixture(trx)
+    const line = await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 3)
+    const lineEcheances = []
+    for (const row of line) lineEcheances.push(await healingEcheanceOf(trx, campaign, character, row.id))
+    const grave = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'grave', schedule)
+    const before = (await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.id).sort()
+
+    const result = await resolveWoundImprovement(trx, grave.wound.id, schedule)
+    const entries = buildWoundImprovementUndoEntries(grave.wound, result)
+    assert.equal(entries.filter(e => e.table === 'character_wounds' && e.previousValues !== null).length, 1 + 3, 'la Grave d\'origine + les 3 Moyennes effacées')
+
+    await replayUndoEntries(trx, entries)
+    const after = (await trx('character_wounds').where({ char_sheet_id: charSheet.id })).map(w => w.id).sort()
+    assert.deepEqual(after, before, 'les mêmes cases qu\'avant, la case cochée en plus a disparu')
+    for (const echeance of [grave.echeance, ...lineEcheances]) assert.equal(await statusOfEcheance(trx, echeance), 'active')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+// ─── La règle des cases du livre à l'aggravation (PLAN_GUERISON_RAW Lot A, REGLEBLESSURES.md:47-53) ────────────────────────────────────────────
+
+test('règle des cases : 3 Légères tiennent à la tête (ligne pleine), la 4ᵉ efface la ligne et coche une Moyenne', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    for (let i = 1; i <= 3; i += 1) {
+      const result = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'legere', schedule)
+      assert.equal(result.promoted, false, `la Légère n°${i} se coche sur la ligne`)
+    }
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'legere'), 3)
+
+    const fourth = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'legere', schedule)
+    assert.equal(fourth.promoted, true)
+    assert.equal(fourth.wound.severity, 'moyenne')
+    assert.equal(fourth.deletedWounds.length, 3)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'legere'), 0)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'moyenne'), 1)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('règle des cases : 2 Critiques tiennent à la tête (2 cases), la 3ᵉ convertit en Mortelle', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    assert.equal((await resolveWoundInsertion(trx, charSheet.id, 'tete', 'critique', schedule)).promoted, false)
+    assert.equal((await resolveWoundInsertion(trx, charSheet.id, 'tete', 'critique', schedule)).promoted, false)
+    const third = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'critique', schedule)
+    assert.equal(third.promoted, true)
+    assert.equal(third.wound.severity, 'mortelle')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('UNE seule définition de « pleine » : la Chance voit de la place (hasSeverityRoom) exactement quand la pose ne convertit pas — sur chaque ligne de la Tête', { skip }, async () => {
+  for (const severity of ['legere', 'moyenne', 'grave', 'critique', 'mortelle']) {
+    const max = WOUND_MAX_COUNTS.tete[severity]
+    for (let count = 0; count <= max; count += 1) {
+      await assert.rejects(db.transaction(async (trx) => {
+        const { charSheet, schedule } = await createFixture(trx)
+        await insertWounds(trx, charSheet.id, 'tete', severity, count)
+        const room = await hasSeverityRoom(trx, charSheet.id, 'tete', severity)
+        const result = await resolveWoundInsertion(trx, charSheet.id, 'tete', severity, schedule)
+        assert.equal(room, !result.promoted, `tete/${severity} avec ${count}/${max} cases : place = ${room}, conversion = ${result.promoted}`)
+        throw new Error('ROLLBACK_WOUND_TEST')
+      }), /ROLLBACK_WOUND_TEST/)
+    }
+  }
+})
+
+test("guérison : la cascade part de la Moyenne pleine et s'arrête à la Grave d'origine (2 cases, sa place est libre), sans toucher aux Légères pleines", { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet, schedule } = await createFixture(trx)
+    // Tête : Légères 3/3 et Moyennes 3/3 (pleines), une Grave. La Grave guérit vers la Moyenne : pleine → effacée, la case revient en Grave (2 cases : elle y a sa place).
+    await insertWounds(trx, charSheet.id, 'tete', 'legere', 3)
+    await insertWounds(trx, charSheet.id, 'tete', 'moyenne', 3)
+    const [grave] = await insertWounds(trx, charSheet.id, 'tete', 'grave', 1)
+    const result = await resolveWoundImprovement(trx, grave.id, schedule)
+    assert.equal(result.wound.severity, 'grave')
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'grave'), 1)
+    assert.equal(await countAt(trx, charSheet.id, 'tete', 'legere'), 3, 'la ligne Légère n\'est pas touchée : la cascade est partie de la Moyenne')
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
 })

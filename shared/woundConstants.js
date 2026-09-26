@@ -23,17 +23,14 @@ export const WOUND_MAX_COUNTS = {
   jambe_gauche:  { legere: 3, moyenne: 3, grave: 2, critique: 2, mortelle: 1, mort_subite: 1 },
 }
 
-// Promotion d'une ligne pleine vers la gravité supérieure. Règle générale (confirmée par Saar, ex. 3ᵉ Légère
-// sur une ligne à 3 cases = 1 Moyenne) : la blessure qui REMPLIRAIT la dernière case convertit la ligne
-// (`currentCount >= maxCount - 1`). Exception : la ligne Mortelle ne se convertit qu'au DÉPASSEMENT
-// (`currentCount >= maxCount`) — sinon, avec 1 case (Tête, bras, jambes), toute Mortelle deviendrait aussitôt
-// Mort/Membre détruit et une Mortelle à la tête (RAW : survie avec stabilisation) n'existerait jamais. Avant la
-// 6ᵉ ligne, ce comportement était celui de la ligne terminale (remplissage jusqu'à `maxCount`, puis refus).
-export const OVERFLOW_ONLY_SEVERITIES = ['mortelle']
-
-export function isWoundLinePromoted(severity, currentCount, maxCount) {
-  const threshold = OVERFLOW_ONLY_SEVERITIES.includes(severity) ? maxCount : maxCount - 1
-  return currentCount >= threshold
+// « Ligne pleine » — AUTORITÉ UNIQUE (REGLEBLESSURES.md:47-53 : « lorsque toutes les cases d'une ligne sont cochées
+// et que le personnage subit une nouvelle blessure de cette gravité » → cocher une case au degré supérieur, effacer la
+// ligne). Une ligne est pleine quand TOUTES ses cases sont cochées ; c'est la blessure SUIVANTE qui la convertit, jamais
+// celle qui remplit la dernière case. Lue par la pose d'une blessure (aggravation, guérison, infection) et par la Chance
+// (`hasSeverityRoom` = « pas pleine ») : aucune autre définition ne doit exister. `>=` et non `===` : une ligne déjà
+// au-dessus de sa capacité (ancien défaut de guérison) reste pleine.
+export function isWoundLineFull(currentCount, maxCount) {
+  return currentCount >= maxCount
 }
 
 // Gravités qu'un joueur ne pose ni ne retire à la main sur sa fiche : MJ seul (route `char-sheet` + panneau). La 6ᵉ

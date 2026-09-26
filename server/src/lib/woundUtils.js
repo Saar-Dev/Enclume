@@ -1,6 +1,6 @@
 import { AppError } from './AppError.js'
 import {
-  WOUND_MAX_COUNTS, WOUND_SEVERITIES, WOUND_IMPROVEMENT_TARGET, isWoundLinePromoted, isSuddenDeathLocation,
+  WOUND_MAX_COUNTS, WOUND_SEVERITIES, WOUND_IMPROVEMENT_TARGET, isWoundLineFull, isSuddenDeathLocation,
   chanceCostOfStep, maxNormalChanceDegrees,
 } from '../../../shared/woundConstants.js'
 import { canSpendChance } from '../../../shared/chanceRules.js'
@@ -113,8 +113,15 @@ function cancelledEcheanceUndoEntries(cancelledEcheances = []) {
 // wound_infection_check) sur une insertion qui peut être un mélange delete+insert, pas juste un insert.
 // Retourne aussi `echeance` : l'échéance de guérison de la case finale (null si elle guérit seule ou ne guérit pas), et
 // `cancelledEcheances` : celles des cases fusionnées par la cascade, annulées avec elles (deleteWoundRows).
-// `exceptEcheanceId` : l'échéance que le moteur résout en ce moment, jamais annulée ici (ex. l'infection dont la case est promue).
-export async function resolveWoundInsertion(trx, char_sheet_id, location, severity, schedule, { exceptEcheanceId = null } = {}) {
+// Règle des cases (REGLEBLESSURES.md:47-53, `isWoundLineFull`) : une ligne PLEINE (toutes ses cases cochées) qui reçoit une nouvelle blessure
+// est effacée et la case est cochée au degré supérieur — de ligne pleine en ligne pleine ; sinon la case est cochée sur la ligne.
+// Options : `exceptEcheanceId` : l'échéance que le moteur résout en ce moment, jamais annulée ici (ex. l'infection dont la case est promue) ;
+// `isStabilized` / `occurredAtGameMinutes` : état et départ de la durée de guérison de la case FINALE (défaut : non stabilisée, repère mécanique courant) ;
+// `ceilingSeverity` : gravité au-delà de laquelle la cascade ne monte jamais — posée par la guérison (la gravité d'origine) : la case d'origine vient
+// d'être supprimée, sa ligne a de la place, et à ce niveau la case rendue est réutilisée même si une fiche corrompue l'y croyait pleine (une guérison
+// n'aggrave jamais une blessure).
+export async function resolveWoundInsertion(trx, char_sheet_id, location, severity, schedule, options = {}) {
+  const { exceptEcheanceId = null, isStabilized = false, occurredAtGameMinutes, ceilingSeverity = null } = options
   requireSchedule(schedule)
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
   if (!maxCount) throw new AppError(400, `Gravité "${severity}" invalide pour "${location}"`)
@@ -123,13 +130,12 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
     .where({ char_sheet_id, location, severity })
     .select('*')
 
-  const currentCount = existingRows.length
   const next = nextSeverity(severity)
+  const isFull = severity !== ceilingSeverity && isWoundLineFull(existingRows.length, maxCount)
 
-  // Règle de promotion : shared/woundConstants.js:isWoundLinePromoted (Mortelle : au dépassement seulement).
-  if (next && isWoundLinePromoted(severity, currentCount, maxCount)) {
+  if (isFull && next) {
     const { cancelledEcheances } = await deleteWoundRows(trx, { char_sheet_id, location, severity }, { exceptEcheanceId })
-    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next, schedule, { exceptEcheanceId })
+    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next, schedule, options)
     return {
       ...result,
       promoted: true,
@@ -138,11 +144,10 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
     }
   }
 
-  if (currentCount >= maxCount) {
-    throw new WoundLineFullError()
-  }
+  // Pleine et sans degré supérieur : seule la 6ᵉ ligne peut l'être.
+  if (isFull) throw new WoundLineFullError()
 
-  const { wound, echeance } = await insertWoundRow(trx, { char_sheet_id, location, severity }, schedule)
+  const { wound, echeance } = await insertWoundRow(trx, { char_sheet_id, location, severity, is_stabilized: isStabilized, occurredAtGameMinutes }, schedule)
   return { wound, echeance, promoted: false, deletedWounds: [], cancelledEcheances: [] }
 }
 
@@ -160,23 +165,29 @@ export function buildWoundInsertionUndoEntries(insertionResult) {
   ]
 }
 
-// Même convention pour un résultat de resolveWoundImprovement : la case d'origine supprimée (previousValues = son contenu),
-// la case obtenue (previousValues: null) si elle existe, son échéance de guérison (previousValues: null) si elle en a une, et les échéances
-// annulées avec la case d'origine (ex. son infection en cours ; previousValues = la ligne d'origine).
+// Même convention pour un résultat de resolveWoundImprovement : la case d'origine supprimée (previousValues = son contenu), les cases d'une ligne PLEINE
+// effacées par la cascade (`deletedWounds`, previousValues = leur contenu), la case obtenue (previousValues: null) si elle existe, son échéance de
+// guérison (previousValues: null) si elle en a une, et les échéances annulées avec les cases supprimées (ex. une infection en cours ; previousValues =
+// la ligne d'origine).
 export function buildWoundImprovementUndoEntries(originalWound, improvementResult) {
   return [
     { table: 'character_wounds', rowId: originalWound.id, previousValues: originalWound },
+    ...(improvementResult.deletedWounds ?? []).map(w => ({ table: 'character_wounds', rowId: w.id, previousValues: w })),
     ...(improvementResult.wound ? [{ table: 'character_wounds', rowId: improvementResult.wound.id, previousValues: null }] : []),
     ...echeanceUndoEntries(improvementResult.echeance),
     ...cancelledEcheanceUndoEntries(improvementResult.cancelledEcheances),
   ]
 }
 
-// Inverse de resolveWoundInsertion — ne cascade jamais (RAW : la guérison diminue la gravité d'un
-// seul niveau par échéance, jamais plusieurs d'un coup). Supprime la case ; si une gravité inférieure
-// existe, insère une case fraîche à ce niveau (sa propre durée de guérison recommence à zéro, elle
-// ne reprend pas celle de la case d'origine) AVEC son échéance de guérison ; sinon (Légère) la case
-// disparaît simplement, la blessure est guérie.
+// Inverse de resolveWoundInsertion. Supprime la case ; si une gravité inférieure existe, insère une case fraîche à ce
+// niveau (sa propre durée de guérison recommence à zéro, elle ne reprend pas celle de la case d'origine) AVEC son échéance
+// de guérison ; sinon (Légère) la case disparaît simplement, la blessure est guérie.
+//
+// La case obtenue se POSE comme n'importe quelle nouvelle blessure (`resolveWoundInsertion`, règle des cases du livre, REGLEBLESSURES.md:47-53 ;
+// « durant la guérison, la règle des cases est toujours valable », Saar 2026-09-26) : si la ligne d'arrivée est PLEINE, elle est effacée et la case
+// est cochée au degré supérieur, de ligne pleine en ligne pleine. La cascade s'arrête AU PLUS TARD à la gravité d'origine (plafond, voir
+// `resolveWoundInsertion`) : la case d'origine vient d'être supprimée, sa place est libre — une guérison n'aggrave jamais la blessure, même sur une
+// fiche corrompue. Les lignes effacées sont retournées (`deletedWounds`) avec les échéances annulées (`cancelledEcheances`) pour l'annulation d'avance.
 // `steps` : nombre de crans d'un seul coup (la Chance en fait jusqu'à 2, ou plus avec l'exception « palier plein ») — UNE
 // SEULE case est écrite, à la gravité d'arrivée, jamais une case intermédiaire et son échéance aussitôt supprimées.
 // `occurredAtGameMinutes` : départ de la durée de guérison de la case obtenue. La guérison le fixe au jour d'échéance de la
@@ -196,35 +207,34 @@ export async function resolveWoundImprovement(trx, woundId, schedule, { steps = 
 
   let targetSeverity = wound.severity
   for (let step = 0; step < steps && targetSeverity; step += 1) targetSeverity = improvedSeverity(targetSeverity)
-  if (!targetSeverity) return { wound: null, echeance: null, cancelledEcheances, healed: true }
+  if (!targetSeverity) return { wound: null, echeance: null, cancelledEcheances, deletedWounds: [], promoted: false, healed: true }
 
-  const { wound: newWound, echeance } = await insertWoundRow(trx, {
-    char_sheet_id: wound.char_sheet_id,
-    location: wound.location,
-    severity: targetSeverity,
-    is_stabilized: wound.is_stabilized,
-    occurredAtGameMinutes,
-  }, schedule)
-  return { wound: newWound, echeance, cancelledEcheances, healed: false }
+  const insertion = await resolveWoundInsertion(trx, wound.char_sheet_id, wound.location, targetSeverity, schedule, {
+    exceptEcheanceId, isStabilized: wound.is_stabilized, occurredAtGameMinutes, ceilingSeverity: wound.severity,
+  })
+  return {
+    wound: insertion.wound, echeance: insertion.echeance, cancelledEcheances: [...cancelledEcheances, ...insertion.cancelledEcheances],
+    deletedWounds: insertion.deletedWounds, promoted: insertion.promoted, healed: false,
+  }
 }
 
-// hasSeverityRoom — vrai si ce palier a encore une case libre pour cette localisation (même règle
-// que resolveWoundInsertion, jamais dupliquée : `currentCount < maxCount`). Exportée : la réponse à un choix de Chance
-// REVÉRIFIE la place du palier visé (l'état a pu changer pendant les secondes d'attente).
+// hasSeverityRoom — vrai si ce palier a encore une case libre pour cette localisation, c'est-à-dire si sa ligne n'est PAS pleine (même règle
+// que resolveWoundInsertion : `isWoundLineFull`, jamais dupliquée). Exportée : la réponse à un choix de Chance REVÉRIFIE la place du palier
+// visé (l'état a pu changer pendant les secondes d'attente).
 export async function hasSeverityRoom(dbOrTrx, charSheetId, location, severity) {
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
   if (maxCount == null) return false
   const [{ count }] = await dbOrTrx('character_wounds')
     .where({ char_sheet_id: charSheetId, location, severity })
     .count('* as count')
-  return Number(count) < maxCount
+  return !isWoundLineFull(Number(count), maxCount)
 }
 
 // computeAvailableSeverityReductions — pour la réduction de gravité par dépense de Chance
 // (docs/PLANS/PLAN_CHANCE.md L5, REGLE_CHANCE.md:112-131). Calcule les degrés de réduction qui
 // aboutissent RÉELLEMENT à un palier disponible pour cette blessure — jamais un degré qui ferait
-// dépenser des points de Chance pour atterrir sur un palier déjà plein (resolveWoundImprovement ne
-// vérifie pas la capacité, cf. son commentaire : c'est à l'appelant de le faire en amont).
+// dépenser des points de Chance pour atterrir sur un palier déjà plein (la pose, elle, convertirait la ligne pleine — règle des cases —
+// et la réduction n'aurait plus le résultat payé : la Chance ne choisit que des paliers avec de la place).
 //
 // Un « degré » est un CRAN de réduction (`improvedSeverity` : la gravité juste en dessous, sauf la 6ᵉ ligne qui redescend
 // en Critique) ; son COÛT en points de Chance est distinct (`chanceCostOfStep` : 1 par cran, 3 pour quitter la 6ᵉ ligne —

@@ -1136,21 +1136,22 @@ test('applyWound : une promotion en cascade annule les échéances des cases fus
   const fixture = await createFixture(NO_CHANCE)
   const { io, emitted } = captureIo()
   try {
-    for (let i = 0; i < 2; i += 1) {
+    // Corps : la ligne Moyenne compte 3 cases ; elle est PLEINE après 3 Moyennes, la 4ᵉ la convertit (règle des cases du livre).
+    for (let i = 0; i < 3; i += 1) {
       await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne' })
     }
     const merged = await healingEcheancesOf(fixture.campaign.id)
-    assert.equal(merged.length, 2)
+    assert.equal(merged.length, 3)
     emitted.length = 0
 
-    const third = await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne' })
-    assert.equal(third.promoted, true)
-    assert.equal(third.wound.severity, 'grave')
+    const fourth = await applyWound(io, db, fixture.campaign.id, { charSheetId: fixture.charSheet.id, characterId: fixture.character.id, localisation: 'corps', severity: 'moyenne' })
+    assert.equal(fourth.promoted, true)
+    assert.equal(fourth.wound.severity, 'grave')
 
     const all = await healingEcheancesOf(fixture.campaign.id)
     const alive = all.filter(e => e.status === 'active')
     assert.equal(alive.length, 1)
-    assert.equal(alive[0].payload.woundId, third.wound.id)
+    assert.equal(alive[0].payload.woundId, fourth.wound.id)
     assert.deepEqual(new Set(all.filter(e => e.status === 'cancelled').map(e => e.id)), new Set(merged.map(e => e.id)))
     assert.deepEqual(new Set(echeanceEvents(emitted)), new Set(merged.map(e => e.id)))
   } finally {

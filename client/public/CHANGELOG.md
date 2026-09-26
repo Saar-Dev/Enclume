@@ -1,3 +1,13 @@
+## v260 — 2026-09-26 — Les blessures suivent la règle des cases du livre
+
+### Blessures
+- [fix] Une ligne de blessures se remplit entièrement avant de convertir, comme sur la fiche papier : à la Tête, 3 Blessures légères tiennent et c'est la 4ᵉ qui les efface pour cocher
+  une Moyenne ; 2 Graves ou 2 Critiques tiennent, la 3ᵉ convertit. Un personnage encaisse donc une blessure de plus par ligne avant qu'elle ne se transforme (la Mortelle ne change pas :
+  une 2ᵉ Mortelle à la Tête ou une 3ᵉ au Corps déborde toujours vers Mort / Membre détruit).
+- [fix] Une blessure qui guérit et arrive sur une ligne déjà pleine suit la même règle (la ligne pleine est effacée, la case est cochée au-dessus) et ne dépasse plus jamais la capacité de la ligne.
+  Elle ne peut pas non plus devenir plus grave qu'avant de guérir.
+- [change] Sur la fiche, une ligne pleine n'a plus de case vide à cocher : la conversion se fait à la prochaine blessure reçue (le MJ peut toujours cocher la case du dessus à la main).
+
 ## v259 — 2026-09-26 — Nouvel écran de revue des guérisons pour le MJ
 
 ### Blessures

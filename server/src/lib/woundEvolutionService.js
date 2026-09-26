@@ -72,7 +72,10 @@ async function describeImprovement(trx, wound, result) {
   const [{ count }] = await trx('character_wounds').where({ char_sheet_id: wound.char_sheet_id, location, severity }).count('* as count')
   const max = WOUND_MAX_COUNTS[location]?.[severity]
   const overflow = max != null && Number(count) > max ? ' ⚠ DÉPASSE LE MAXIMUM' : ''
-  return `→ devient ${severity} (nouvelle case ${shortId(result.wound?.id)}, échéance ${shortId(result.echeance?.id)}) ; ligne ${location}/${severity} : ${count} case(s) pour un maximum de ${max ?? '?'}${overflow} ; ${cancelled}`
+  const fused = result.promoted
+    ? ` ; LIGNE D'ARRIVÉE PLEINE : ${result.deletedWounds.length} case(s) effacée(s), la case est cochée en ${severity} (première case libre au-dessus)`
+    : ''
+  return `→ devient ${severity} (nouvelle case ${shortId(result.wound?.id)}, échéance ${shortId(result.echeance?.id)}) ; ligne ${location}/${severity} : ${count} case(s) pour un maximum de ${max ?? '?'}${overflow}${fused} ; ${cancelled}`
 }
 
 // Handler `wound_healing_check` (shared/echeanceTypeRegistry.js, interactive: true) — jamais de jet

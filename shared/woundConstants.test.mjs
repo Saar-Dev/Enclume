@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   WOUND_PENALTIES, isTestBlockingWound, isMortalWoundImmobilized, WOUND_HEALING, WOUND_INFECTION, woundSeverityForDamage,
   WOUND_SEVERITIES, WOUND_LOCATIONS, WOUND_MAX_COUNTS, SEVERITY_COLORS, BLESSURE_SEUILS_TABLE, TEST_BLOCKING_SEVERITIES,
-  isWoundLinePromoted, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
+  isWoundLineFull, isSuddenDeathLocation, getWoundEffects, isFatalWound, hasFatalWound,
   getWoundHealing, WOUND_IMPROVEMENT_TARGET, DUREE_GUERISON_SOINS_TABLE,
   WOUND_CHANCE_STEP_COST, chanceCostOfStep, maxNormalChanceDegrees,
   CARE_KIT_TYPES, SOINS_CONSTANTS_INTERVAL_MINUTES, getHealingTotalTests, isFirstHealingTest, getCareKits, defaultCareKits, sumCareKits,
@@ -118,21 +118,38 @@ test('capacités du compteur : identiques à la fiche papier (capture vérifiée
   }
 })
 
-test('isWoundLinePromoted - règle générale : la blessure qui remplirait la dernière case convertit', () => {
-  // Légère à 3 cases : 2 présentes → la 3ᵉ convertit, 1 présente → non.
-  assert.equal(isWoundLinePromoted('legere', 2, 3), true)
-  assert.equal(isWoundLinePromoted('legere', 1, 3), false)
-  assert.equal(isWoundLinePromoted('grave', 1, 2), true)
-  assert.equal(isWoundLinePromoted('grave', 0, 2), false)
+// Réécrit le 2026-09-26 (PLAN_GUERISON_RAW, Lot A) : les 2 tests `isWoundLinePromoted` encodaient « la case qui remplirait la
+// dernière convertit » (seuil max-1, exception Mortelle) ; le livre (REGLEBLESSURES.md:47-53) dit « toutes les cases cochées PUIS une nouvelle blessure ».
+test('isWoundLineFull - le livre : la ligne est pleine quand TOUTES ses cases sont cochées ; c\'est la blessure SUIVANTE qui convertit', () => {
+  // Légère à 3 cases (Tête) : 2 présentes → la 3ᵉ se coche (pas de conversion) ; 3 présentes → pleine, la 4ᵉ convertit.
+  assert.equal(isWoundLineFull(2, 3), false)
+  assert.equal(isWoundLineFull(3, 3), true)
+  assert.equal(isWoundLineFull(1, 2), false) // Grave à 2 cases : la 2ᵉ Grave tient
+  assert.equal(isWoundLineFull(2, 2), true)
+  assert.equal(isWoundLineFull(0, 3), false)
 })
 
-test('isWoundLinePromoted - Mortelle : seul le DÉPASSEMENT convertit (une Mortelle à la tête reste une Mortelle)', () => {
-  // Tête/bras/jambes (1 case) : la 1ʳᵉ Mortelle reste, la 2ᵉ convertit.
-  assert.equal(isWoundLinePromoted('mortelle', 0, 1), false)
-  assert.equal(isWoundLinePromoted('mortelle', 1, 1), true)
+test('isWoundLineFull - une seule règle pour toutes les lignes : la ligne Mortelle n\'est plus une exception', () => {
+  // Tête/bras/jambes (1 case) : la 1ʳᵉ Mortelle se coche, la 2ᵉ convertit.
+  assert.equal(isWoundLineFull(0, 1), false)
+  assert.equal(isWoundLineFull(1, 1), true)
   // Corps (2 cases) : 2 Mortelles tiennent, la 3ᵉ convertit.
-  assert.equal(isWoundLinePromoted('mortelle', 1, 2), false)
-  assert.equal(isWoundLinePromoted('mortelle', 2, 2), true)
+  assert.equal(isWoundLineFull(1, 2), false)
+  assert.equal(isWoundLineFull(2, 2), true)
+})
+
+test('isWoundLineFull - une ligne déjà au-dessus de sa capacité (ancien défaut de guérison) reste pleine', () => {
+  assert.equal(isWoundLineFull(5, 3), true)
+})
+
+test('isWoundLineFull - appliquée à la capacité réelle de chaque ligne : jamais pleine à vide, toujours pleine à la capacité', () => {
+  for (const loc of WOUND_LOCATIONS) {
+    for (const sev of WOUND_SEVERITIES) {
+      const max = WOUND_MAX_COUNTS[loc][sev]
+      assert.equal(isWoundLineFull(max - 1, max), false, `${loc}/${sev} : ${max - 1}/${max}`)
+      assert.equal(isWoundLineFull(max, max), true, `${loc}/${sev} : ${max}/${max}`)
+    }
+  }
 })
 
 test('isSuddenDeathLocation - Mort en Tête/Corps, Membre détruit sur un bras ou une jambe', () => {
