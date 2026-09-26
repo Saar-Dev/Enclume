@@ -326,4 +326,71 @@ test('resolveEcheanceNow : échéance inconnue -> AppError(404)', { skip }, asyn
   }), /ROLLBACK_ECHEANCE_TEST/)
 })
 
+// ─── Traces de la revue des guérisons (reviewTrace.js) ─────────────────────────────────────────────────────────────────────────────────────
+
+// Capture console.log / console.error le temps de `run` (restaure toujours).
+async function captureConsole(run) {
+  const logs = []
+  const errors = []
+  const original = { log: console.log, error: console.error }
+  console.log = (...args) => logs.push(args.join(' '))
+  console.error = (...args) => errors.push(args.join(' '))
+  try { await run() } finally { console.log = original.log; console.error = original.error }
+  return { logs, errors }
+}
+
+test('resolveEcheanceNow : l\'erreur d\'un handler n\'est plus AVALÉE en silence — elle sort toujours, même avec REVIEW_TRACE=0', { skip }, async () => {
+  const previous = process.env.REVIEW_TRACE
+  process.env.REVIEW_TRACE = '0'
+  try {
+    await withRegistryEntry(
+      { key: 'test_interactive_crash', interactive: true, handler: async () => { throw new Error('panne du handler de test') } },
+      async () => {
+        const { errors } = await captureConsole(() => assert.rejects(db.transaction(async (trx) => {
+          const { campaign, character } = await createFixture(trx)
+          const echeance = await createEcheance(trx, { campaignId: campaign.id, characterId: character.id, conditionType: 'test_interactive_crash', nextDueMinutes: 900 })
+          await trx('game_echeances').where({ id: echeance.id }).update({ status: 'pending_mj_review' })
+          assert.deepEqual(await resolveEcheanceNow(trx, echeance.id), { resolved: false, error: true })
+          assert.equal((await trx('game_echeances').where({ id: echeance.id }).first()).status, 'error')
+          throw new Error('ROLLBACK_ECHEANCE_TEST')
+        }), /ROLLBACK_ECHEANCE_TEST/))
+        assert.ok(errors.some(line => line.includes('test_interactive_crash') && line.includes('panne du handler de test')), 'la cause de l\'échec est écrite')
+      },
+    )
+  } finally {
+    if (previous === undefined) delete process.env.REVIEW_TRACE
+    else process.env.REVIEW_TRACE = previous
+  }
+})
+
+test('resolveEcheanceNow : le collecteur de trace reçoit la ligne du moteur ET celle du handler ; le retour reste { resolved: true }', { skip }, async () => {
+  await withRegistryEntry(
+    {
+      key: 'test_interactive_trace',
+      interactive: true,
+      handler: async (trx, echeance, context) => {
+        context.trace?.('fait du domaine : blessure avant → après')
+        return { resolved: true, reschedule: { intervalMinutes: 60, occurrencesRemaining: 2 }, spawn: [{ conditionType: 'test_interactive_trace', payload: {}, nextDueMinutes: 5000 }], undoEntries: [] }
+      },
+    },
+    () => assert.rejects(db.transaction(async (trx) => {
+      const { campaign, character } = await createFixture(trx)
+      const echeance = await createEcheance(trx, { campaignId: campaign.id, characterId: character.id, conditionType: 'test_interactive_trace', nextDueMinutes: 900 })
+      await trx('game_echeances').where({ id: echeance.id }).update({ status: 'pending_mj_review' })
+
+      const lines = []
+      assert.deepEqual(await resolveEcheanceNow(trx, echeance.id, { trace: line => lines.push(line) }), { resolved: true })
+      assert.equal(lines.length, 2)
+      assert.equal(lines[0], 'fait du domaine : blessure avant → après')
+      assert.match(lines[1], /reprogrammée : prochaine à 960 min de jeu \(\+60\), 2 occurrence\(s\) restante\(s\) ; créée\(s\) : test_interactive_trace ; 1 entrée\(s\) d'annulation/)
+
+      // Sans collecteur : aucun changement de comportement (contrat historique).
+      const second = await createEcheance(trx, { campaignId: campaign.id, characterId: character.id, conditionType: 'test_interactive_trace', nextDueMinutes: 900 })
+      await trx('game_echeances').where({ id: second.id }).update({ status: 'pending_mj_review' })
+      assert.deepEqual(await resolveEcheanceNow(trx, second.id), { resolved: true })
+      throw new Error('ROLLBACK_ECHEANCE_TEST')
+    }), /ROLLBACK_ECHEANCE_TEST/),
+  )
+})
+
 test.after(async () => { await db.destroy() })

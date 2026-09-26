@@ -8,6 +8,7 @@ import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
 import { getWorstWoundSeverity, improvedSeverity } from './woundUtils.js'
 import { calcWoundPenalty } from './charStats.js'
+import { reviewTrace, shortId } from './reviewTrace.js'
 import {
   WOUND_SEVERITIES, WOUND_LOCATIONS, isTestBlockingWound, getHealingTotalTests, isFirstHealingTest,
   getCareKits, defaultCareKits, sumCareKits,
@@ -47,7 +48,7 @@ async function enrichWoundEcheances(rows) {
 }
 
 // Écran de revue MJ (§6) — pending_mj_review ET awaiting_player_roll (le MJ voit tout le lot, même
-// les lignes en attente d'un jet joueur, pour suivre l'avancement — seul le joueur peut agir dessus).
+// les lignes en attente d'un jet joueur : il peut aussi les lancer en automatique pour débloquer un joueur absent).
 // **Correction 2026-07-30 (analyse à charge du chantier, trouvée en traçant Guérison→Infection de
 // bout en bout)** : inclut aussi les échéances encore `active` mais déjà dues (`next_due_minutes <=
 // game_time_resolved_minutes`) — un Échec/Catastrophe de Guérison fait naître un `wound_infection_check`
@@ -56,13 +57,23 @@ async function enrichWoundEcheances(rows) {
 // union, la ligne reste invisible dans cet écran tant que le MJ n'a pas tenté de confirmer — même
 // après un rafraîchissement manuel. `game_time_resolved_minutes` reste interne au serveur, jamais
 // renvoyé par `enrichWoundEcheances` (invariant de non-fuite du Lot 1, toujours respecté ici).
-// Échéances que l'écran de revue MJ doit montrer — source unique de l'ancienne liste plate (getPendingReviewForGm) et de la vue groupée
-// par personnage (getReviewCardsForGm).
-async function findReviewEcheances(campaignId) {
-  const campaign = await db('campaigns').where({ id: campaignId }).select('game_time_resolved_minutes').first()
-  if (!campaign) return []
+// État de la revue d'une campagne : l'avance de temps en attente (`campaigns.pending_advance_delta_minutes`, jusqu'ici inconnue du client)
+// et les échéances que l'écran de revue MJ doit montrer. `game_time_resolved_minutes` reste interne au serveur, jamais renvoyé.
+//
+// Horizon des échéances « déjà dues » (prochaine ronde) : EXACTEMENT celui de `confirmPendingAdvance` (gameTimeService.js) — la fin de l'avance en attente,
+// `max(résolu, affiché + avance)` — et non le seul repère résolu actuel. Constaté sur les traces de la revue (2026-09-26) : les infections nées d'un Échec
+// sont dues à la date de leur guérison, APRÈS le repère résolu (qui n'avance qu'à la confirmation) : avec l'ancien horizon la vue annonçait « 0 à la ronde
+// suivante » puis « Confirmer » ouvrait 4 échéances en refus 409. La vue doit prédire ce que « Confirmer » va faire, pas le découvrir après coup.
+async function loadReviewState(campaignId) {
+  const campaign = await db('campaigns').where({ id: campaignId })
+    .select('game_time_minutes', 'game_time_resolved_minutes', 'pending_advance_delta_minutes').first()
+  if (!campaign) return { advance: { pending: false, deltaMinutes: null }, rows: [] }
 
-  return db('game_echeances')
+  const deltaMinutes = campaign.pending_advance_delta_minutes ?? null
+  const dueHorizon = deltaMinutes === null
+    ? campaign.game_time_resolved_minutes
+    : Math.max(campaign.game_time_resolved_minutes, campaign.game_time_minutes + deltaMinutes)
+  const rows = await db('game_echeances')
     .where({ campaign_id: campaignId })
     .whereIn('condition_type', WOUND_CONDITION_TYPES)
     .where((builder) => {
@@ -70,19 +81,16 @@ async function findReviewEcheances(campaignId) {
         .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
         .orWhere((sub) => {
           sub.where({ status: 'active', interactive: true })
-            .where('next_due_minutes', '<=', campaign.game_time_resolved_minutes)
+            .where('next_due_minutes', '<=', dueHorizon)
         })
     })
     .select('*')
+  return { advance: { pending: deltaMinutes !== null, deltaMinutes }, rows }
 }
 
-export async function getPendingReviewForGm(campaignId) {
-  return enrichWoundEcheances(await findReviewEcheances(campaignId))
-}
-
-// ─── Vue groupée par personnage (PLAN_REVUE_GUERISON.md §10) ──────────────────────────────────────────────────────────────────────────────
+// ─── Vue groupée par personnage (PLAN_REVUE_GUERISON.md §10, §12) ─────────────────────────────────────────────────────────────────────────
 // Le SERVEUR construit la vue ; le client l'affiche et n'invente aucune règle. Requêtes groupées (`whereIn`), jamais une par personnage.
-// Elle remplace, au Lot 2a, la liste plate `getPendingReviewForGm` (qui disparaît avec son écran).
+// Source unique de l'écran de revue : la liste plate `getPendingReviewForGm` a disparu avec l'ancien écran (Lot 2a).
 
 const severityRank = (severity) => WOUND_SEVERITIES.indexOf(severity)
 const locationRank = (location) => WOUND_LOCATIONS.indexOf(location)
@@ -127,9 +135,37 @@ function buildLine(location, severity, items, casesOnLine) {
   }
 }
 
+// Compteurs de l'écran : `answerableCount` = échéances auxquelles le MJ peut répondre maintenant (ce sont elles qui bloquent « Confirmer ») ;
+// `awaitingPlayerCount` = sous-ensemble en attente d'un jet joueur (le MJ peut quand même les lancer en automatique) ; `queuedCount` = déjà dues
+// mais pas encore ouvertes (prochaine ronde).
+function summarize(rows) {
+  const answerableCount = rows.filter(isAnswerable).length
+  return {
+    answerableCount,
+    awaitingPlayerCount: rows.filter(r => r.status === 'awaiting_player_roll').length,
+    queuedCount: rows.length - answerableCount,
+  }
+}
+
+// `advance` = l'avance de temps en attente (le client ne pouvait pas la connaître : l'ancien écran, caché quand la liste était vide, emportait
+// « Confirmer » / « Annuler » — PLAN_REVUE_GUERISON.md §12.1). Une vue sans échéance renvoie donc quand même `advance`.
 export async function getReviewCardsForGm(campaignId) {
-  const rows = await findReviewEcheances(campaignId)
-  if (rows.length === 0) return { cards: [], summary: { answerableCount: 0, queuedCount: 0 } }
+  const started = Date.now()
+  const view = await buildReviewView(campaignId)
+  reviewTrace(() => {
+    const { advance, cards, summary } = view
+    const lines = cards.reduce((n, c) => n + c.lines.length, 0)
+    const infections = cards.reduce((n, c) => n + c.infections.length, 0)
+    const orphans = cards.reduce((n, c) => n + c.orphans.length, 0)
+    const advanceText = advance.pending ? `avance en attente de ${advance.deltaMinutes} min` : "aucune avance en attente"
+    return `vue de la revue lue (campagne ${shortId(campaignId)}, ${Date.now() - started} ms) : ${advanceText} ; ${cards.length} personnage(s) (${cards.filter(c => c.isPlayer).length} PJ), ${lines} ligne(s), ${infections} infection(s), ${orphans} anomalie(s) ; ${summary.answerableCount} réponse(s) à donner dont ${summary.awaitingPlayerCount} jet(s) de joueur, ${summary.queuedCount} à la ronde suivante${orphans > 0 ? ' ⚠ ANOMALIE : échéance sans blessure' : ''}`
+  })
+  return view
+}
+
+async function buildReviewView(campaignId) {
+  const { advance, rows } = await loadReviewState(campaignId)
+  if (rows.length === 0) return { advance, cards: [], summary: summarize(rows) }
 
   const characterIds = [...new Set(rows.map(r => r.character_id))]
   const [characters, sheets, statusRows] = await Promise.all([
@@ -209,8 +245,7 @@ export async function getReviewCardsForGm(campaignId) {
   // Joueurs d'abord, puis PNJ ; par nom (le RAW réserve le système détaillé aux PJ et aux adversaires marquants).
   cards.sort((a, b) => Number(b.isPlayer) - Number(a.isPlayer) || a.name.localeCompare(b.name, 'fr'))
 
-  const answerableCount = rows.filter(isAnswerable).length
-  return { cards, summary: { answerableCount, queuedCount: rows.length - answerableCount } }
+  return { advance, cards, summary: summarize(rows) }
 }
 
 

@@ -46,3 +46,19 @@ export function projectGameTime(gameTimeMinutes, { calendar_start_year, calendar
     minute: minuteOfDay % MINUTES_PER_HOUR,
   }
 }
+
+export const DAYS_PER_WEEK = 7
+
+// Décompose une durée en minutes (signée : une avance de temps peut reculer) en semaines / jours / heures / minutes, pour l'écran de revue
+// (PLAN_REVUE_GUERISON.md §13 B8). Pas de mois : ils font 31 jours dans ce calendrier, la semaine de 7 jours est la seule unité stable des
+// échéances de guérison. Fonction pure ; le texte est composé côté client (i18n).
+export function splitGameDuration(minutes) {
+  const negative = minutes < 0
+  let rest = Math.abs(minutes)
+  const weeks = floorDiv(rest, DAYS_PER_WEEK * MINUTES_PER_DAY)
+  rest = floorMod(rest, DAYS_PER_WEEK * MINUTES_PER_DAY)
+  const days = floorDiv(rest, MINUTES_PER_DAY)
+  rest = floorMod(rest, MINUTES_PER_DAY)
+  const hours = floorDiv(rest, MINUTES_PER_HOUR)
+  return { negative, weeks, days, hours, minutes: floorMod(rest, MINUTES_PER_HOUR) }
+}

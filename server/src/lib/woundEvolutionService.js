@@ -2,11 +2,12 @@
 // consommateur réel, docs/PLAN_BLESSURES_GUERISON.md §5). Payload des échéances reste minimal
 // (identifiants uniquement, convention Lot 2 2026-07-30) — l'état métier vit sur `character_wounds`,
 // jamais dupliqué ici.
-import { WOUND_INFECTION, getWoundHealing } from '../../../shared/woundConstants.js'
+import { WOUND_INFECTION, WOUND_MAX_COUNTS, getWoundHealing, getHealingTotalTests } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { resolveWoundImprovement, resolveWoundInsertion, buildWoundInsertionUndoEntries, buildWoundImprovementUndoEntries } from './woundUtils.js'
 import { getHealingRetrySchedule } from './woundHealingSchedule.js'
 import { calcAttributeNA } from './charStats.js'
+import { shortId } from './reviewTrace.js'
 import { getMutationEffects } from '../services/mutationService.js'
 
 const INFECTION_TICK_MINUTES = 2 * MINUTES_PER_DAY
@@ -62,10 +63,23 @@ function computeCatastropheInfectionOccurrences(wound, echeance) {
   return Math.round(windowMinutes / INFECTION_TICK_MINUTES)
 }
 
+// Trace (revue des guérisons) : ce que devient la blessure quand la guérison réussit à son dernier Test. Lue par le collecteur `context.trace` — jamais
+// appelée (donc aucune requête en plus) quand personne ne trace. Signale une ligne qui DÉPASSE son maximum (WOUND-HEAL-LINE-CAPACITY).
+async function describeImprovement(trx, wound, result) {
+  const cancelled = `${result.cancelledEcheances?.length ?? 0} échéance(s) annulée(s) avec l'ancienne case`
+  if (result.healed) return `→ blessure guérie : la case disparaît ; ${cancelled}`
+  const { location, severity } = result.wound
+  const [{ count }] = await trx('character_wounds').where({ char_sheet_id: wound.char_sheet_id, location, severity }).count('* as count')
+  const max = WOUND_MAX_COUNTS[location]?.[severity]
+  const overflow = max != null && Number(count) > max ? ' ⚠ DÉPASSE LE MAXIMUM' : ''
+  return `→ devient ${severity} (nouvelle case ${shortId(result.wound?.id)}, échéance ${shortId(result.echeance?.id)}) ; ligne ${location}/${severity} : ${count} case(s) pour un maximum de ${max ?? '?'}${overflow} ; ${cancelled}`
+}
+
 // Handler `wound_healing_check` (shared/echeanceTypeRegistry.js, interactive: true) — jamais de jet
 // serveur pour son propre résultat (§3.2, décision Saar) : lit payload.mjChoice déjà fourni par le
 // MJ dans l'écran de revue.
-export async function woundHealingCheckHandler(trx, echeance) {
+export async function woundHealingCheckHandler(trx, echeance, context = {}) {
+  const trace = context.trace ?? null
   const wound = await trx('character_wounds').where({ id: echeance.payload.woundId }).first()
   if (!wound) {
     // Blessure déjà guérie/supprimée par une autre voie entre-temps — rien à faire, l'échéance
@@ -75,6 +89,12 @@ export async function woundHealingCheckHandler(trx, echeance) {
 
   const { mjChoice } = echeance.payload
   if (!mjChoice) return { resolved: false } // attend la réponse du MJ
+
+  if (trace) {
+    const total = getHealingTotalTests(wound.severity, wound.location)
+    const step = total === null || echeance.occurrences_remaining == null ? 'Test unique' : `semaine ${total - echeance.occurrences_remaining + 1}/${total}`
+    trace(`guérison ${wound.location}/${wound.severity} (case ${shortId(wound.id)}, ${step}) — issue « ${mjChoice} »`)
+  }
 
   const undoEntries = []
   const spawn = []
@@ -93,17 +113,21 @@ export async function woundHealingCheckHandler(trx, echeance) {
         { occurredAtGameMinutes: echeance.next_due_minutes, exceptEcheanceId: echeance.id },
       )
       undoEntries.push(...buildWoundImprovementUndoEntries(wound, result))
+      if (trace) trace(await describeImprovement(trx, wound, result))
       reschedule = null
     } else {
       reschedule = buildRecurringReschedule(echeance)
+      trace?.('→ la guérison continue : la gravité ne change pas à ce Test')
     }
   } else if (mjChoice === 'echec') {
     reschedule = buildFailedHealingReschedule(wound, echeance)
     spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: null, occurrencesRemaining: null }))
+    trace?.("→ la blessure ne s'améliore pas ; un Test d'infection est créé (déjà dû)")
   } else if (mjChoice === 'catastrophe') {
     reschedule = buildFailedHealingReschedule(wound, echeance)
     const occurrencesRemaining = computeCatastropheInfectionOccurrences(wound, echeance)
     spawn.push(buildInfectionSpawn(wound, echeance, { intervalMinutes: INFECTION_TICK_MINUTES, occurrencesRemaining }))
+    trace?.(`→ la blessure ne s'améliore pas ; Catastrophe : ${occurrencesRemaining} Test(s) de Constitution contre l'infection`)
   } else {
     throw new Error(`mjChoice "${mjChoice}" invalide pour wound_healing_check`)
   }
@@ -163,7 +187,8 @@ export async function computeWoundInfectionThreshold(trx, wound, periodesSansSoi
 // dans payload.rollResult avant d'appeler resolveEcheanceNow. Ce handler ne lance jamais de dé
 // lui-même, il interprète un résultat déjà connu (même contrat que wound_healing_check.payload.mjChoice,
 // une réponse externe déjà fournie).
-export async function woundInfectionCheckHandler(trx, echeance) {
+export async function woundInfectionCheckHandler(trx, echeance, context = {}) {
+  const trace = context.trace ?? null
   const wound = await trx('character_wounds').where({ id: echeance.payload.woundId }).first()
   if (!wound) {
     return { resolved: true, reschedule: null, spawn: [], undoEntries: [] }
@@ -177,6 +202,10 @@ export async function woundInfectionCheckHandler(trx, echeance) {
   const undoEntries = []
 
   const infects = !isSuccess || rule.infectsOnSuccess
+  if (trace) {
+    const critical = rollResult.isCriticalFail ? ' (échec critique)' : (rollResult.isCriticalSuccess ? ' (réussite critique)' : '')
+    trace(`infection ${wound.location}/${wound.severity} (case ${shortId(wound.id)}, période sans soin n°${(echeance.payload.periodesSansSoin ?? 0) + 1}) — jet ${rollResult.roll} contre seuil ${rollResult.threshold} : ${isSuccess ? 'réussite' : 'échec'}${critical}`)
+  }
   // Une case supplémentaire seulement quand le RAW la prévoit (WOUND_INFECTION.extraCase) : jamais pour Mortelle.
   let woundPromotedAway = false
   if (infects && rule.extraCase) {
@@ -189,6 +218,9 @@ export async function woundInfectionCheckHandler(trx, echeance) {
     )
     undoEntries.push(...buildWoundInsertionUndoEntries(insertion))
     woundPromotedAway = insertion.deletedWounds.some(w => w.id === wound.id)
+    trace?.(`→ infection : une case supplémentaire naît (${insertion.wound?.location}/${insertion.wound?.severity}, case ${shortId(insertion.wound?.id)}, échéance ${shortId(insertion.echeance?.id)})${insertion.promoted ? ' ; la ligne débordait : promotion en cascade' : ''}${woundPromotedAway ? ' ; la case infectée a été fusionnée' : ''}`)
+  } else {
+    trace?.(infects ? "→ infection sans case supplémentaire (la règle n'en prévoit pas pour cette gravité)" : "→ pas d'infection")
   }
 
   // Mortelle/Membre détruit (§3.3, `survivalHours`) : délai de survie affiché au MJ, jamais appliqué automatiquement

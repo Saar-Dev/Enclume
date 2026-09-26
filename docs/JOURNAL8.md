@@ -8733,3 +8733,49 @@ deviennent l'autorité unique de l'intervalle et du nombre de Tests hebdomadaire
 (neutraliser l'annulation d'une entrée en échec fait échouer le test) ; rendu i18next réel des lignes de chat ; aucun résidu en base. **Non testé** : le TRANSPORT HTTP des routes (le dépôt n'a aucun harnais de test de
 routes — routes minces, logique testée aux services), le rendu du chat dans le client, tout le côté écran. **Données** : aucune migration ni écriture. **Retour arrière** : `git revert` du commit du lot (ajouts + une constante
 partagée ; l'écran actuel est intact).
+
+---
+
+## Session (Dev) — 2026-09-25 — Lot 2a de l'écran de revue des guérisons : l'écran refait (cartes par personnage), l'avance en attente n'est plus invisible
+
+**Problème** (`PLAN_REVUE_GUERISON.md` §12-§13) : l'écran de revue était inutilisable — lignes sans blessure, mêmes questions répétées, aucun état, refus de « Confirmer » avalés en console, et surtout **deux défauts de structure**
+trouvés à l'analyse : (B5) l'ancien composant se cachait dès que la liste d'échéances était vide et **emportait « Confirmer » / « Annuler »** — la base de Saar avait une avance d'1 semaine en attente sans aucune échéance, donc sans
+aucun bouton pour la confirmer ni l'annuler ; le client n'avait d'ailleurs aucun moyen de savoir qu'une avance était en attente ; (B6) le composant était monté par la barre latérale, rendue seulement quand elle est ouverte : la refermer faisait
+disparaître l'écran.
+
+**Livré** — serveur : `GET …/game-echeances/review` renvoie `{ advance: { pending, deltaMinutes }, cards, summary }` (`advance` présent même sans échéance ; `summary.awaitingPlayerCount` en plus) ; **suppression** de l'ancien écran, de
+`GET pending-review`, `POST :id/healing-choice`, `POST :id/infection-mode` et de `getPendingReviewForGm` (jamais deux moteurs) ; `REVIEW_BATCH_MAX_ENTRIES`, `HEALING_OUTCOMES`, `INFECTION_MODES` deviennent des constantes partagées
+(`shared/woundConstants.js`, lues par le serveur ET l'écran) ; `splitGameDuration` (`shared/gameTime.js`). Client : `WoundReviewWindow` (fenêtre flottante déplaçable, patron `.combat-win` + `useDraggable`, portail dans `<body>`,
+**montée par `SessionPage`**, visible tant qu'une avance est en attente ou qu'une réponse attend, bouton Réduire), une carte par personnage (état en texte, geste par défaut « Réussite / Échec / Catastrophe » pour toute la carte, détail
+par blessure replié avec la conséquence de « Réussite », infections, anomalies « Clore »), bloc PNJ replié avec geste « tous les PNJ » (envois découpés par lots de 200, arrêt au premier échec, bilan écrit), pied « Annuler l'avance » (en
+deux temps) / « Confirmer » (inactif tant qu'il reste des réponses, **raison écrite**, ronde suivante annoncée, refus du serveur relu et expliqué à l'écran). Données : hook `useWoundReview` — un événement déclenche le rechargement de la vue
+entière (le serveur est l'autorité), regroupé (150 ms), réponse tardive ignorée (compteur de requête), relecture à la reconnexion. Logique pure testée : `client/src/lib/woundReviewGestures.js`. Textes : `combat.json` `woundReview.*` ;
+12 clés mortes retirées de `fr.json` ; classes `.wound-review-*` dans `index.css`.
+
+**Décisions** : libellé « Réussite » (le RAW parle du résultat du Test, le chat du Lot 1 le dit déjà) — la valeur envoyée reste `amelioration` ; le geste « tous les PNJ » existe (77 échéances de PNJ dans la base locale) ; entre le Lot 2a et le
+Lot 2b aucune décision du MJ n'est racontée dans le chat (le contexte `care` n'est envoyé qu'au 2b, comme aujourd'hui : pas de régression) ; hors périmètre, à ticketer : `GameTimeWidget` avale ses erreurs (409 « avance déjà en attente »),
+route `game-time/adjust` inutilisée par le client.
+
+**Testé** : 153 tests en base (woundReviewService, woundReviewBatchService, woundUtils, woundEvolutionService, woundService — dont l'avance exposée sans échéance, `awaitingPlayerCount`, forme du payload figée), 61 tests purs ciblés
+(dont 14 pour `woundReviewGestures` : entrées envoyées, découpage à 200, arrêt au premier échec, comptes, conséquence de « Réussite », visibilité, état de « Confirmer », explication d'un refus) et 823 tests purs `shared/` ; `node --check` ;
+ESLint sur tous les fichiers touchés (0 erreur) ; build client ; **rendu réel** des composants côté Node (compilés avec rolldown, textes i18n réels) sur cinq scénarios — dont l'avance d'1 semaine sans échéance, où « Confirmer » est actif.
+**Non testé** : le comportement dans un navigateur (glisser la fenêtre, clics, sockets réels, mise en page), le transport HTTP des routes (aucun harnais dans le dépôt), la validation en jeu par Saar. **Données** : aucune migration ni écriture.
+**Retour arrière** : `git revert` du commit du lot (l'ancien écran et ses routes reviennent ; aucune donnée touchée).
+
+---
+
+## Session (Dev) — 2026-09-26 — Traces de la revue des guérisons : le serveur raconte chaque étape (`REVIEW_TRACE`)
+
+**Demande de Saar** (validation du Lot 2a en jeu) : « rendre le serveur bavard pour vérifier dans le détail ». **Constat** : le moteur d'échéances **avalait** l'erreur d'un handler sans aucune ligne (`catch {}` dans
+`resolveEcheanceHandler`) — une réponse refusée par le serveur n'avait aucune cause visible. **Livré** : `server/src/lib/reviewTrace.js` (module feuille : `reviewTrace`, `reviewTraceLines`, `reviewTraceError`, `shortId` ;
+interrupteur `REVIEW_TRACE=0`, allumé par défaut ; message évalué seulement si allumé ; une trace ne fait jamais échouer l'appelant) ; traces de la lecture de la vue, de chaque lot groupé (personnage, issue → résultat,
+faits du handler : blessure avant → après, **ligne cible « n cases / maximum m » avec ⚠ en cas de dépassement** — donnée utile au futur `WOUND-HEAL-LINE-CAPACITY`, jet d'infection contre son seuil, échéance terminée ou reprogrammée,
+échéances créées), des diffusions, de l'avance de temps (demandée / confirmée / refusée avec la raison / annulée) et du jet d'infection d'un joueur. **Décisions** : les lignes qui décrivent un résultat sont écrites APRÈS la validation
+(un lot interrompu dit s'il a écrit quelque chose ou non) ; les ERREURS sortent toujours (interrupteur ou non) ; le contrat de `resolveEcheanceNow` est inchangé (`{ resolved }`) — les traces passent par un collecteur optionnel
+`{ trace }` transmis aux handlers (`context.trace`) ; au-delà de 30 entrées, les entrées résolues sont résumées.
+
+**Suite de la validation en jeu (traces lues par Saar, 2026-09-26)** : la vue jugeait la « ronde suivante » sur le repère résolu actuel, pas sur la fin de l'avance en attente (comme `confirmPendingAdvance`) — corrigé, bouton « Passer à la ronde suivante », message d'information ; lectures en double supprimées ; la trace « 5 cases pour un maximum de 3 » est la preuve réelle de `WOUND-HEAL-LINE-CAPACITY` (`PLAN_REVUE_GUERISON.md` §14).
+
+**Testé** : 193 tests en base (woundReview, woundReviewBatch, woundUtils, woundEvolution, woundService, echeanceService — dont l'erreur de handler écrite même traces coupées et le collecteur —, gameTimeService, reviewTrace) ;
+les lots tracés et non tracés donnent les mêmes résultats ; aucune ligne quand c'est coupé. **Non testé** : la lecture des traces dans le terminal réel du serveur (nodemon), le jet d'infection d'un joueur par socket (une ligne de trace
+ajoutée, aucun harnais socket). **Données** : aucune migration ni écriture. **Retour arrière** : `git revert` du commit des traces (aucune donnée touchée).

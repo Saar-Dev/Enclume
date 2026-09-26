@@ -61,7 +61,7 @@ export default function GameTimeWidget({ campaignId }) {
 
   // docs/PLAN_BLESSURES_GUERISON.md §6.1 — request-advance remplace adjust : si des échéances de
   // Guérison/Infection sont dues, le serveur pose l'avance en attente au lieu de l'appliquer tout de
-  // suite. Ce composant n'a rien à faire du résultat `pending` lui-même — BlessuresReviewPanel.jsx,
+  // suite. Ce composant n'a rien à faire du résultat `pending` lui-même — WoundReviewWindow.jsx,
   // toujours monté, réagit à l'événement CAMPAIGN_ADVANCE_PENDING que le serveur diffuse dans ce cas
   // (analyse à charge du plan : pas besoin d'un état partagé pour "ouvrir" le panneau depuis ici).
   const adjust = async (deltaMinutes) => {

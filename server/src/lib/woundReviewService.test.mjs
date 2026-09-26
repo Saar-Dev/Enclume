@@ -1,13 +1,14 @@
+process.env.REVIEW_TRACE = '0' // les traces du serveur ne noient pas la sortie des tests (elles sont vérifiées dans reviewTrace.test.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { getPendingReviewForGm, getPendingRollsForPlayer, getReviewCardsForGm } from './woundReviewService.js'
+import { getPendingRollsForPlayer, getReviewCardsForGm } from './woundReviewService.js'
 import { resolveWoundInsertion } from './woundUtils.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (écrire une blessure programme son échéance de guérison)
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/woundReviewService.test.mjs
-// getPendingReviewForGm/getPendingRollsForPlayer utilisent `db` (pas `trx`, même raison que
+// getReviewCardsForGm/getPendingRollsForPlayer utilisent `db` (pas `trx`, même raison que
 // previewDueEcheances) — patron "committe réellement puis nettoie explicitement", pas le rollback
 // habituel (une connexion séparée ne verrait pas des écritures non commitées).
 const skip = !process.env.DATABASE_URL
@@ -41,72 +42,6 @@ async function cleanup({ campaign, gm, player }) {
   if (gm) await db('users').where({ id: gm.id }).del()
   if (player) await db('users').where({ id: player.id }).del()
 }
-
-test('getPendingReviewForGm : enrichit avec personnage + blessure, filtre statut et condition_type', { skip }, async () => {
-  const fixture = await createRealFixture()
-  try {
-    const { campaign, character, wound } = fixture
-    const [pending] = await db('game_echeances').insert({
-      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_healing_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'pending_mj_review',
-    }).returning('*')
-    // bruit : ne doit jamais apparaître (status actif, ou condition_type hors Blessures)
-    await db('game_echeances').insert({
-      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_healing_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'active',
-    })
-
-    const rows = await getPendingReviewForGm(campaign.id)
-    assert.equal(rows.length, 1)
-    assert.equal(rows[0].id, pending.id)
-    assert.equal(rows[0].characterName, 'Perso test revue')
-    assert.equal(rows[0].wound.severity, 'grave')
-    assert.equal(rows[0].wound.location, 'corps')
-  } finally {
-    await cleanup(fixture)
-  }
-})
-
-test('getPendingReviewForGm : inclut une échéance active déjà due (spawn pas encore "découvert" par confirmPendingAdvance)', { skip }, async () => {
-  const fixture = await createRealFixture()
-  try {
-    const { campaign, character, wound } = fixture
-    await db('campaigns').where({ id: campaign.id }).update({ game_time_resolved_minutes: 5000 })
-
-    const [spawned] = await db('game_echeances').insert({
-      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 4000, status: 'active',
-    }).returning('*')
-    // bruit : active mais PAS encore due (dans le futur du repère résolu) -> ne doit jamais apparaître
-    await db('game_echeances').insert({
-      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 9000, status: 'active',
-    })
-
-    const rows = await getPendingReviewForGm(campaign.id)
-    assert.equal(rows.length, 1)
-    assert.equal(rows[0].id, spawned.id)
-    assert.equal(rows[0].status, 'active')
-  } finally {
-    await cleanup(fixture)
-  }
-})
-
-test('getPendingReviewForGm : inclut aussi awaiting_player_roll (visibilité MJ sur tout le lot)', { skip }, async () => {
-  const fixture = await createRealFixture()
-  try {
-    const { campaign, character, wound } = fixture
-    await db('game_echeances').insert({
-      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
-      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 100, status: 'awaiting_player_roll',
-    })
-    const rows = await getPendingReviewForGm(campaign.id)
-    assert.equal(rows.length, 1)
-    assert.equal(rows[0].status, 'awaiting_player_roll')
-  } finally {
-    await cleanup(fixture)
-  }
-})
 
 test('getPendingRollsForPlayer : un joueur ne voit que les jets de son propre personnage', { skip }, async () => {
   const fixture = await createRealFixture()
@@ -293,7 +228,7 @@ test('getReviewCardsForGm : infections décrites (jets nécessaires) ; échéanc
   const f = await createCardsFixture()
   try {
     const empty = await getReviewCardsForGm(f.campaign.id)
-    assert.deepEqual(empty, { cards: [], summary: { answerableCount: 0, queuedCount: 0 } })
+    assert.deepEqual(empty, { advance: { pending: false, deltaMinutes: null }, cards: [], summary: { answerableCount: 0, awaitingPlayerCount: 0, queuedCount: 0 } })
 
     const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
     const [infection] = await db('game_echeances').insert({
@@ -325,8 +260,9 @@ test('getReviewCardsForGm : forme du payload FIGÉE (contrat lu par l\'écran du
   try {
     await woundInReview(f.pj, 'corps', 'critique')
     const result = await getReviewCardsForGm(f.campaign.id)
-    assert.deepEqual(Object.keys(result).sort(), ['cards', 'summary'])
-    assert.deepEqual(Object.keys(result.summary).sort(), ['answerableCount', 'queuedCount'])
+    assert.deepEqual(Object.keys(result).sort(), ['advance', 'cards', 'summary'])
+    assert.deepEqual(Object.keys(result.summary).sort(), ['answerableCount', 'awaitingPlayerCount', 'queuedCount'])
+    assert.deepEqual(Object.keys(result.advance).sort(), ['deltaMinutes', 'pending'])
     const [card] = result.cards
     assert.deepEqual(Object.keys(card).sort(), ['characterId', 'infections', 'isPlayer', 'kitTotals', 'lines', 'name', 'orphans', 'state', 'type'])
     assert.deepEqual(Object.keys(card.state).sort(), ['statuses', 'testBlocked', 'woundPenalty', 'wounds'])
@@ -336,6 +272,77 @@ test('getReviewCardsForGm : forme du payload FIGÉE (contrat lu par l\'écran du
     assert.deepEqual(Object.keys(line.kits).sort(), ['alternatives', 'defaultKits'])
     assert.deepEqual(Object.keys(line.items[0]).sort(), ['answerable', 'echeanceId', 'isFirstTest', 'isLastStep', 'step'])
     assert.deepEqual(Object.keys(line.items[0].step).sort(), ['n', 'total'])
+  } finally {
+    await cleanupCards(f)
+  }
+})
+
+test("getReviewCardsForGm : l'avance en attente est exposée même quand plus aucune échéance n'attend de réponse (l'écran garde alors Confirmer / Annuler)", { skip }, async () => {
+  const f = await createCardsFixture()
+  try {
+    await db('campaigns').where({ id: f.campaign.id }).update({ pending_advance_delta_minutes: 10080 })
+    const view = await getReviewCardsForGm(f.campaign.id)
+    assert.deepEqual(view, { advance: { pending: true, deltaMinutes: 10080 }, cards: [], summary: { answerableCount: 0, awaitingPlayerCount: 0, queuedCount: 0 } })
+
+    // Une avance sans échéance visible n'est pas un état à cacher ; une campagne sans avance ne prétend pas en avoir une.
+    await db('campaigns').where({ id: f.campaign.id }).update({ pending_advance_delta_minutes: null })
+    assert.deepEqual((await getReviewCardsForGm(f.campaign.id)).advance, { pending: false, deltaMinutes: null })
+  } finally {
+    await cleanupCards(f)
+  }
+})
+
+test('getReviewCardsForGm : `awaitingPlayerCount` compte les jets de joueurs attendus (sous-ensemble des réponses possibles), `queuedCount` les échéances pas encore ouvertes', { skip }, async () => {
+  const f = await createCardsFixture()
+  try {
+    const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
+    const insertInfection = (status, nextDue) => db('game_echeances').insert({
+      campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
+      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: nextDue, status,
+    }).returning('*')
+    const [awaiting] = await insertInfection('awaiting_player_roll', 100)
+    await insertInfection('pending_mj_review', 100)
+    await db('campaigns').where({ id: f.campaign.id }).update({ game_time_resolved_minutes: 5000 })
+    await insertInfection('active', 4000) // déjà due, pas encore ouverte : prochaine ronde
+    await insertInfection('active', 9000) // future : jamais montrée
+
+    const { cards, summary } = await getReviewCardsForGm(f.campaign.id)
+    // guérison (1) + infection en attente du MJ (1) + infection en attente d'un joueur (1)
+    assert.deepEqual(summary, { answerableCount: 3, awaitingPlayerCount: 1, queuedCount: 1 })
+    const waiting = cards[0].infections.find(i => i.echeanceId === awaiting.id)
+    assert.equal(waiting.status, 'awaiting_player_roll')
+    assert.equal(waiting.answerable, true, 'le MJ peut lancer en automatique pour débloquer un joueur absent')
+  } finally {
+    await cleanupCards(f)
+  }
+})
+
+test("getReviewCardsForGm : la « ronde suivante » est jugée sur la FIN de l'avance en attente (comme « Confirmer »), pas sur le repère résolu actuel — les infections d'un Échec y figurent", { skip }, async () => {
+  const f = await createCardsFixture()
+  try {
+    const moyenne = await woundInReview(f.pj, 'bras_droit', 'moyenne')
+    // Le repère résolu (1000) n'avance qu'à la confirmation ; l'avance en attente (10080) en fait 11080 : une infection due à 5000 y sera ouverte par « Confirmer ».
+    await db('campaigns').where({ id: f.campaign.id }).update({ game_time_minutes: 1000, game_time_resolved_minutes: 1000 })
+    await db('game_echeances').insert({
+      campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
+      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: 5000, status: 'active',
+    })
+
+    let view = await getReviewCardsForGm(f.campaign.id)
+    assert.equal(view.summary.queuedCount, 0, "sans avance en attente, l'horizon reste le repère résolu : l'échéance future n'est pas montrée")
+
+    await db('campaigns').where({ id: f.campaign.id }).update({ pending_advance_delta_minutes: 10080 })
+    view = await getReviewCardsForGm(f.campaign.id)
+    assert.equal(view.summary.queuedCount, 1, "avec l'avance en attente, l'infection due avant sa fin est annoncée à la ronde suivante")
+    assert.equal(view.summary.answerableCount, 1, 'la guérison ouverte reste la seule réponse possible')
+    assert.equal(view.cards[0].infections[0].answerable, false)
+
+    // Horizon strictement borné : une échéance due APRÈS la fin de l'avance n'est pas annoncée.
+    await db('game_echeances').insert({
+      campaign_id: f.campaign.id, character_id: f.pj.character.id, condition_type: 'wound_infection_check', interactive: true,
+      payload: { woundId: moyenne.wound.id, periodesSansSoin: 0 }, next_due_minutes: 11081, status: 'active',
+    })
+    assert.equal((await getReviewCardsForGm(f.campaign.id)).summary.queuedCount, 1)
   } finally {
     await cleanupCards(f)
   }

@@ -1,6 +1,7 @@
 import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import { sweepDueEcheances, previewDueEcheances } from './echeanceService.js'
+import { reviewTrace, shortId } from './reviewTrace.js'
 
 function assertValidDelta(deltaMinutes) {
   if (!Number.isInteger(deltaMinutes) || deltaMinutes === 0) {
@@ -78,6 +79,24 @@ export async function adjustGameTime(campaignId, deltaMinutes) {
 export async function requestGameTimeAdvance(campaignId, deltaMinutes) {
   assertValidDelta(deltaMinutes)
 
+  let result
+  try {
+    result = await requestGameTimeAdvanceTransaction(campaignId, deltaMinutes)
+  } catch (err) {
+    reviewTrace(`avance de temps de ${deltaMinutes} min REFUSÉE (${err.statusCode ?? 500}) : ${err.message}`)
+    throw err
+  }
+  reviewTrace(() => {
+    if (!result.pending) return `avance de temps de ${deltaMinutes} min APPLIQUÉE directement (aucune échéance interactive due) — horloge affichée : ${result.displayedAfter} min`
+    const byType = {}
+    for (const e of result.echeances) byType[e.condition_type] = (byType[e.condition_type] ?? 0) + 1
+    const summary = Object.entries(byType).map(([type, n]) => `${type}×${n}`).join(', ')
+    return `avance de temps de ${deltaMinutes} min EN ATTENTE DE REVUE : ${result.echeances.length} échéance(s) ouverte(s) — ${summary} (campagne ${shortId(campaignId)})`
+  })
+  return result
+}
+
+async function requestGameTimeAdvanceTransaction(campaignId, deltaMinutes) {
   return db.transaction(async (trx) => {
     const campaign = await trx('campaigns').where({ id: campaignId }).forUpdate().first()
     if (!campaign) throw new AppError(404, 'Campaign not found')
@@ -162,20 +181,27 @@ export async function confirmPendingAdvance(campaignId) {
       return { refused: 'newlyDue', count: newlyDue.length }
     }
 
-    const result = await performTimeAdjustment(trx, campaign, campaign.pending_advance_delta_minutes)
+    const deltaMinutes = campaign.pending_advance_delta_minutes
+    const result = await performTimeAdjustment(trx, campaign, deltaMinutes)
     await trx('campaigns').where({ id: campaignId }).update({
       pending_advance_delta_minutes: null,
       pending_advance_undo_log: null,
     })
-    return { result }
+    return { result, deltaMinutes }
   })
 
+  if (outcome.refused) {
+    reviewTrace(outcome.refused === 'unresolved'
+      ? `confirmation de l'avance REFUSÉE : ${outcome.count} échéance(s) encore en attente d'une réponse`
+      : `confirmation de l'avance REFUSÉE : ${outcome.count} nouvelle(s) échéance(s) déjà due(s) viennent de s'ouvrir en revue (ronde suivante)`)
+  }
   if (outcome.refused === 'unresolved') {
     throw new AppError(409, `${outcome.count} échéance(s) encore en attente d'une réponse`)
   }
   if (outcome.refused === 'newlyDue') {
     throw new AppError(409, 'De nouvelles échéances interactives sont dues depuis la proposition — revue à refaire')
   }
+  reviewTrace(`avance de temps CONFIRMÉE : +${outcome.deltaMinutes} min — horloge affichée : ${outcome.result.displayedAfter} min ; ${outcome.result.effects?.length ?? 0} effet(s) automatique(s) à appliquer (campagne ${shortId(campaignId)})`)
   return outcome.result
 }
 
@@ -197,6 +223,11 @@ async function replayUndoEntry(trx, { table, rowId, previousValues }) {
 // Défait les effets déjà appliqués par resolveEcheanceNow (pas seulement l'avance du compteur,
 // décidé Saar 2026-07-29) puis repasse tout à active.
 export async function cancelPendingAdvance(campaignId) {
+  const summary = await cancelPendingAdvanceTransaction(campaignId)
+  reviewTrace(`avance de temps ANNULÉE : ${summary.replayed} entrée(s) d'annulation rejouée(s), ${summary.reset} échéance(s) repassée(s) en « active » (campagne ${shortId(campaignId)})`)
+}
+
+async function cancelPendingAdvanceTransaction(campaignId) {
   return db.transaction(async (trx) => {
     const campaign = await trx('campaigns').where({ id: campaignId }).forUpdate().first()
     if (!campaign) throw new AppError(404, 'Campaign not found')
@@ -213,7 +244,7 @@ export async function cancelPendingAdvance(campaignId) {
     // revue PAR cette avance et doivent revenir à `active`. Une échéance À LA DEMANDE en
     // `pending_mj_review` (demande de réparation) est indépendante de l'horloge — la repasser à
     // `active` la sortirait de sa boîte de réception MJ et la rendrait balayable à tort.
-    await trx('game_echeances')
+    const reset = await trx('game_echeances')
       .where({ campaign_id: campaignId, advance_driven: true })
       .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
       .update({ status: 'active' })
@@ -222,5 +253,6 @@ export async function cancelPendingAdvance(campaignId) {
       pending_advance_delta_minutes: null,
       pending_advance_undo_log: null,
     })
+    return { replayed: undoLog.length, reset }
   })
 }

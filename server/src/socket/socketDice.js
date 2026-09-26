@@ -12,6 +12,7 @@ import {
   getNaturalArmorMod,
 } from '../../../shared/polarisUtils.js'
 import { resolveEcheanceNow } from '../lib/echeanceService.js'
+import { isReviewTraceEnabled, reviewTrace, reviewTraceLines, shortId } from '../lib/reviewTrace.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { getItemWithRef } from '../services/inventoryService.js'
@@ -300,16 +301,24 @@ export function registerDiceHandlers(io, socket, context) {
       }
 
       const wound = await db('character_wounds').where({ id: echeance.payload.woundId }).first()
-      if (!wound) return
+      if (!wound) {
+        reviewTrace(`jet d'infection du joueur IGNORÉ : la blessure de l'échéance ${shortId(echeance.id)} n'existe plus (l'échéance reste en attente)`)
+        return
+      }
 
+      // Revue des guérisons : lignes de trace du moteur, écrites APRÈS la validation de la transaction.
+      const traceLines = []
+      const trace = isReviewTraceEnabled() ? (line) => traceLines.push(line) : null
       const { rollResult, threshold, resolution } = await db.transaction(async (trx) => {
         const seuil = await computeWoundInfectionThreshold(trx, wound, echeance.payload.periodesSansSoin ?? 0)
         const roll = await resolvePolarisTest(seuil)
         await trx('game_echeances').where({ id: echeance.id })
           .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify({ rollResult: roll })]) })
-        const resolved = await resolveEcheanceNow(trx, echeance.id)
+        const resolved = await resolveEcheanceNow(trx, echeance.id, { trace })
         return { rollResult: roll, threshold: seuil, resolution: resolved }
       })
+      reviewTrace(() => `jet d'infection LANCÉ PAR LE JOUEUR (${user.username}) pour l'échéance ${shortId(echeance.id)} : ${resolution.resolved ? 'résolue' : (resolution.error ? "ÉCHEC DU HANDLER (voir ERREUR)" : 'non résolue')}`)
+      reviewTraceLines(traceLines.map(line => `    ${line}`))
 
       io.to(campaignId).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
       if (resolution.resolved) {

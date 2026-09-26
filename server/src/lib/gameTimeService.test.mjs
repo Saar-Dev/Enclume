@@ -1,3 +1,4 @@
+process.env.REVIEW_TRACE = '0' // les traces du serveur ne noient pas la sortie des tests (vérifiées dans reviewTrace.test.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
 

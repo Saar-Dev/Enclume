@@ -394,3 +394,12 @@ export const DUREE_GUERISON_SOINS_TABLE = {
     soinsNecessaires: 'Chirurgie + Médecine', difficulte: -3, soinsConstants: true,
   },
 }
+
+// Nombre maximal d'entrées d'une réponse GROUPÉE de l'écran de revue (`POST …/healing-choices`, `…/infection-modes`). Autorité unique : le serveur
+// refuse au-delà, le client découpe ses envois à cette taille (PLAN_REVUE_GUERISON.md §13 B7).
+export const REVIEW_BATCH_MAX_ENTRIES = 200
+
+// Réponses possibles du MJ à un Test de guérison (`payload.mjChoice`, lu par `woundHealingCheckHandler`) et modes d'un Test d'infection
+// (`auto` = jet serveur, `player` = le joueur lance son dé). Lues par le serveur (validation) ET par l'écran de revue (boutons).
+export const HEALING_OUTCOMES = ['amelioration', 'echec', 'catastrophe']
+export const INFECTION_MODES = ['auto', 'player']

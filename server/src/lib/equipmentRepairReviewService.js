@@ -73,7 +73,7 @@ async function enrichRepairEcheances(rows) {
 
 // Boîte de réception MJ des demandes de réparation (§8.2, étape 2). `pending_mj_review` ET
 // `awaiting_player_roll` : le MJ garde une vue sur les demandes qu'il a approuvées et qui attendent
-// le jet du joueur (même principe que `getPendingReviewForGm` pour les blessures).
+// le jet du joueur (même principe que `getReviewCardsForGm` pour les blessures).
 export async function getRepairRequestsForGm(campaignId) {
   const rows = await db('game_echeances')
     .where({ campaign_id: campaignId, condition_type: 'equipment_repair' })

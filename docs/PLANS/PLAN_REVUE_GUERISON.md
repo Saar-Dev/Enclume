@@ -2,7 +2,7 @@
 
 > 2026-09-25 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et fusionné dans
 > `docs/SYSTEME/BLESSURES.md` §« Guérison et Infection » une fois clos.
-> Statut : 🟡 **Cadré, analyse à charge faite (§9), toutes les questions tranchées (Q1-Q10). Bug n°1 commité (`3839638`), fantômes nettoyés en base. LOT 0 CODÉ, VALIDÉ EN JEU PAR SAAR ET COMMITÉ le 2026-09-25** : `woundUtils.js` unique suppresseur + annulation des échéances, Test suivant en une seule fonction — 135/135 tests ciblés. Analyse à charge du plan complet faite (§11) : Lot 3 supprimé, Lot 2 scindé. **LOT 1 CODÉ le 2026-09-25 (non commité, en attente du « ok » de Saar)** : 154 tests en base + 819 purs. Reste : ~~Lot 1~~ (serveur : kits dans `WOUND_HEALING`, vue groupée par
+> Statut : 🟡 **Cadré, analyse à charge faite (§9), toutes les questions tranchées (Q1-Q10). Bug n°1 commité (`3839638`), fantômes nettoyés en base. LOT 0 CODÉ, VALIDÉ EN JEU PAR SAAR ET COMMITÉ le 2026-09-25** : `woundUtils.js` unique suppresseur + annulation des échéances, Test suivant en une seule fonction — 135/135 tests ciblés. Analyse à charge du plan complet faite (§11) : Lot 3 supprimé, Lot 2 scindé. **LOT 1 COMMITÉ ET POUSSÉ le 2026-09-25 (`98c5f5f`)** : 154 tests en base + 819 purs. **LOT 2a (écran) CODÉ le 2026-09-25, NON commité, en attente de la validation en jeu de Saar** (§12-§13) : 153 tests en base, 823 purs, ESLint, build client, rendu réel des composants. Reste : ~~Lot 1~~ (serveur : kits dans `WOUND_HEALING`, vue groupée par
 > personnage, routes groupées guérison + infection, contexte de soins raconté dans le chat), **Lot 2a** (écran : cartes et gestes), **Lot 2b** (silhouette, kits, soignant).
 > Un seul problème (Règle « un plan = un bug ») : l'écran de revue MJ (`client/src/components/BlessuresReviewPanel.jsx`) ne permet pas de
 > décider — il affiche des lignes sans blessure, répète les mêmes questions, et n'offre pas les réponses dont le MJ a besoin.
@@ -267,3 +267,123 @@ Relecture critique des Lots 1 à 3 contre le code réel. **Bloquants** (changent
 **Le §10 est corrigé en conséquence** (contrat `care`, `dueCases`, `answerable`, savepoint par entrée, route d'infection groupée, requêtes groupées, test d'anti-dérive, limite de test HTTP). Lots restants : **1** (serveur) → **2a** → **2b**.
 
 **Verdict** : le plan tient, à condition de B1-B4 ; sans B1, le Lot 2 aurait livré des cases décoratives ; sans B2, un bug de handler tuerait une guérison en silence ; sans B3, le sentiment de blocage aurait survécu à la refonte. Aucun code avant validation de Saar.
+
+## 12. Lot 2a — plan exact (2026-09-25, avant code ; l'analyse à charge de ce plan : §13, faite le même jour)
+
+**Invariant** : le serveur construit la vue et applique les décisions ; le client affiche, envoie l'intention du MJ et n'invente aucune règle. **Un seul problème** : rendre l'écran de revue utilisable
+(état lisible, un geste par personnage, refus visibles, rien de décoratif) et supprimer l'ancien écran et ses routes.
+
+### 12.1 Trouvaille qui change le lot — B5 : l'écran disparaît avant que le MJ puisse confirmer  [VÉRIFIÉ, base locale 2026-09-25]
+
+- L'ancien composant se cache dès que la liste d'échéances est vide (`if (!isGm || echeances.length === 0) return null`, `BlessuresReviewPanel.jsx:45`). Or « Confirmer » et « Annuler » vivent
+  **dans** ce composant : dès que la dernière échéance est résolue, l'écran s'efface **et emporte les deux boutons**.
+- **Observé dans la base de Saar, à l'instant** : la campagne `LOCAL` a `pending_advance_delta_minutes = 10080` (une avance d'1 semaine **en attente**) et **aucune** échéance en revue
+  (`pending_mj_review` / `awaiting_player_roll` : 0 ligne). Aucun bouton de l'interface ne permet de la confirmer ni de l'annuler ; « Avancer le temps » renvoie 409 (« déjà en attente ») que le widget
+  d'horloge avale en console. C'est une cause **directe** du sentiment de blocage, indépendante des cases Soin/Médecin/Matériel.
+- Le client n'a **aucun moyen de savoir** qu'une avance est en attente : ni la route `GET /campaigns/:id`, ni aucune vue ne l'exposent (`pending_advance_*` n'apparaît nulle part dans `client/`).
+- **Correction (à la racine)** : la vue serveur porte l'état de l'avance (`advance`) ; l'écran est affiché **tant qu'une avance est en attente OU qu'une échéance attend une réponse**, et « Confirmer » / « Annuler »
+  restent affichés même quand il n'y a plus rien à répondre (c'est alors le geste normal : « Tout est répondu — confirmer l'avance d'1 semaine »).
+
+### 12.2 Contrat serveur (petits ajouts au Lot 1, aucun consommateur n'existe encore)
+
+`GET …/game-echeances/review` → `{ advance: { pending: boolean, deltaMinutes: number | null }, cards, summary }` :
+- `advance` lu sur `campaigns.pending_advance_delta_minutes` (la valeur d'avance est déjà connue du MJ ; `game_time_resolved_minutes` reste interne, invariant de non-fuite) ;
+- `summary` : `answerableCount` (échéances auxquelles le MJ peut répondre maintenant), `awaitingPlayerCount` (dont celles en attente d'un jet joueur — le MJ peut quand même les lancer en automatique), `queuedCount`
+  (échéances déjà dues mais pas encore ouvertes : prochaine ronde). La forme reste figée par test.
+- Une vue vide (aucune échéance) renvoie quand même `advance`.
+
+**Suppressions (jamais deux moteurs à la clôture)** : `getPendingReviewForGm` (+ ses tests), routes `GET pending-review`, `POST :echeanceId/healing-choice`, `POST :echeanceId/infection-mode`, et les imports devenus
+inutiles de `campaigns.js`. `enrichWoundEcheances` reste (le panneau « Jets en attente » du joueur l'utilise).
+
+### 12.3 Écran (client)
+
+**Emplacement (A8)** : une **fenêtre flottante déplaçable** (patron existant `.combat-win` + `useDraggable`, comme l'échange ou le roster) d'environ 640 px, rendue par portail dans `document.body`
+(patron `DocumentModal`), **et non plus** un panneau de 360 px collé à la barre latérale. **Corrigé par §13 B6** : le composant, renommé `WoundReviewWindow`, n'est **plus** monté par `Sidebar.jsx` (la barre latérale est rendue
+seulement `{sidebarVisible && …}` : la refermer ferait disparaître l'écran et ses boutons) mais par `SessionPage.jsx`, comme `ExchangeWindow`, MJ seulement. Il se peuple lui-même (l'écran
+s'ouvre tout seul quand une revue commence, et se retrouve au rechargement). Un bouton **Réduire** (l'en-tête seul + les compteurs) permet de regarder la carte ou une fiche avant de répondre — pas de bouton
+Fermer : l'écran ne se ferme pas tant qu'une avance est en attente (sinon on retombe dans B5).
+
+**Contenu** :
+- **En-tête** : « Avance de temps en attente : 1 semaine » (durée formatée avec les unités du calendrier existant) · compteurs : « N réponses à donner · M en attente d'un joueur · K à la ronde suivante ».
+- **Une carte par personnage** (PJ d'abord, puis bloc « PNJ » replié) :
+  - *État en texte* : pastilles de blessures (« Jambe gauche · Critique ×2 », libellés courts existants `charSheet:locationPanel.severityShort` / `deathWord`), statuts actifs (`status.<code>`,
+    registre `shared/tokenStatusRegistry.js`), malus de blessure, mention « ne peut entreprendre aucun Test » si `testBlocked`.
+  - *Geste par défaut* : trois boutons **Réussite / Échec / Catastrophe** appliqués à **toutes** les lignes répondables de la carte, avec une phrase qui dit ce qu'ils font (« 6 cases de blessure »).
+    Libellé **Réussite** au lieu d'« Amélioration » (le RAW parle du résultat du Test ; la ligne de chat du Lot 1 dit déjà « Réussite ») — la valeur envoyée au serveur reste `amelioration`.
+  - *Geste d'exception* : « Détail par blessure » (replié) : une ligne par (localisation, gravité) — « Jambe gauche — Blessure critique · 2 cases (1 échue) · semaine 2/3 » — avec ses trois boutons
+    et **la conséquence de « Réussite »** écrite (« passe à Blessure grave » / « continue, semaine 2/3 »), tirée de `targetSeverity` / `isLastStep` / `step` (le client ne calcule rien).
+    Une ligne dont aucune case n'est échue (`queuedCases`) est grisée : « prochaine ronde ».
+  - *Infections* : bloc distinct, un geste pour la carte (« Lancer automatiquement » / « Demander aux joueurs ») + le détail par infection ; une infection `awaiting_player_roll` dit « en attente du joueur »
+    et offre « Lancer automatiquement » (le MJ peut débloquer un joueur absent).
+  - *Anomalies* (échéance sans blessure, ne devrait plus exister depuis le Lot 0) : montrées avec un bouton « Clore » (le handler termine sans effet, déjà couvert par les tests du Lot 1) — jamais masquées.
+- **Bloc PNJ replié** : « PNJ — N personnages, M réponses restantes », avec un geste **« tous les PNJ »** (mêmes trois issues) ; déplié : les mêmes cartes. Un PNJ replié oublié ne bloque plus en silence.
+- **Pied** : « Annuler l'avance » (en deux temps : « les réponses données seront défaites ») · « Confirmer ». « Confirmer » est actif quand `answerableCount === 0`, sinon inactif **avec la raison écrite**
+  (« il reste 3 réponses »). Après un refus du serveur (409), l'écran **relit la vue** et affiche ce qui reste ; si les réponses données ont fait naître de nouvelles échéances (infections d'un Échec),
+  le message le dit : « de nouvelles échéances sont apparues à cause de vos réponses — ronde suivante ».
+- **Retours d'action** : pendant une requête, tous les boutons sont inactifs (jamais deux envois) ; le résultat par échéance est lu : une entrée `stale` (déjà traitée) ou `error` (le serveur l'a annulée,
+  elle reste à répondre) est **écrite dans l'écran**, pas en console ; toute erreur de transport affiche le message du serveur.
+
+**Données de l'écran** : un hook `useWoundReview(campaignId)` (chargement, socket, actions) ; l'affichage n'a aucun état métier. Rechargement de la vue **entière** (le serveur est l'autorité) sur
+`CAMPAIGN_ADVANCE_PENDING`, `CAMPAIGN_ADVANCE_CANCELLED`, `CAMPAIGN_ADVANCE_RESOLVED`, `GAME_ECHEANCE_RESOLVED`, `WOUND_UPDATED` (pendant qu'une avance est en attente) et à la reconnexion du socket ;
+**regroupé** (une rafale d'événements = un seul chargement, délai de 150 ms en fin de rafale) ; **une réponse tardive d'un ancien chargement est ignorée** (compteur de requête).
+
+**Logique pure testée** (`client/src/lib/woundReviewGestures.js` + `.test.mjs`, exécutable par `node --test`) : construction des entrées envoyées (toute la carte / une ligne / tous les PNJ / infections /
+anomalies), état du bouton « Confirmer » et sa raison, message d'un refus. Aucune règle de jeu : de la sélection d'identifiants d'après la vue serveur.
+
+### 12.4 Fichiers
+
+Serveur : `server/src/lib/woundReviewService.js` (+ `.test.mjs`), `server/src/routes/campaigns.js`, `server/src/lib/equipmentRepairReviewService.js` (un commentaire cite la fonction supprimée). Partagé :
+`shared/gameTime.js` (+ test : décomposition d'une durée, §13 B8). Client : `client/src/components/BlessuresReviewPanel.jsx` **supprimé** au profit de `client/src/components/woundReview/`
+(`WoundReviewWindow.jsx`, `useWoundReview.js`, `WoundReviewCard.jsx`, `WoundReviewLine.jsx`, `WoundReviewInfections.jsx`), montage : `client/src/pages/SessionPage.jsx` (+1 import, +1 ligne) et
+`client/src/components/Sidebar.jsx` (−1 import, −1 ligne), commentaire de `GameTimeWidget.jsx`, `client/src/lib/woundReviewGestures.js` (+ test), `client/src/index.css` (section `.wound-review-*`, aucune valeur
+visuelle en `style={}`), `client/src/locales/combat.json` (namespace `woundReview.*`, à côté de `woundCare.*`), `client/src/locales/fr.json` (retrait des clés mortes `session.contextSoin/Medecin/…`, `healingSoinsContinues`,
+et de celles de l'ancien écran devenues inutiles). Docs : `docs/SYSTEME/BLESSURES.md`, `docs/JOURNAL8.md`, ce plan. **Aucune migration.**
+
+### 12.5 Hors périmètre du Lot 2a
+
+Silhouette, décompte de kits, soignant/matériel (`care`) : **Lot 2b** (aucun contrôle décoratif d'ici là). Le widget d'horloge qui avale ses erreurs (`GameTimeWidget.jsx`, 409 « avance déjà en attente »)
+est un défaut voisin, **à ticketer** (script de création au moment de la clôture du lot), non traité ici : l'écran affiche désormais l'avance en attente, ce qui en supprime la cause pratique.
+
+### 12.6 Validation prévue
+
+`node --check` + tests en base du service (vue vide avec avance, `summary`, forme figée), tests purs du helper client, ESLint ciblé, build client. **Test en jeu de Saar** : (1) l'avance d'1 semaine actuellement
+bloquée apparaît avec « Confirmer / Annuler » ; (2) un personnage blessé : une seule carte, état lisible ; (3) « Réussite » pour la carte ; (4) « Confirmer » refusé tant qu'il reste des réponses, avec la raison ;
+(5) une ronde suivante après un Échec (infections) expliquée à l'écran.
+
+## 13. Analyse à charge du Lot 2a (2026-09-25, après le §12 et avant tout code)
+
+Relecture critique du §12 contre le code réel. **Bloquants** (changent le plan, déjà reportés dans le §12) : B6-B9. **Précisions** : P9-P16. (B5, l'écran qui disparaît, est traité au §12.1.)
+
+| # | Le §12 disait | La réalité [preuve] | Correction retenue |
+|---|---|---|---|
+| **B6** | L'écran reste monté par la barre latérale « comme aujourd'hui ». | `SessionPage.jsx:792` rend la barre latérale seulement `{sidebarVisible && …}` [VÉRIFIÉ, lecture] : le MJ qui la referme **démonte** l'écran de revue, donc « Confirmer » / « Annuler » — même défaut que B5 par une autre porte. | Le composant est renommé `WoundReviewWindow` et monté par `SessionPage.jsx` (MJ seulement), comme `ExchangeWindow` ; retiré de `Sidebar.jsx`. |
+| **B7** | Geste « tous les PNJ » : une requête. | Le serveur refuse tout le lot au-delà de **200 entrées** (`parseChoices`, Lot 1) ; la base compte déjà 77 échéances de PNJ et `WOUND-PNJ-ECHEANCES-FLOOD` dit que ce nombre croît [VÉRIFIÉ]. Un clic « tous les PNJ » pourrait donc échouer en bloc. | Le client découpe en lots de 200 au plus, envoyés **l'un après l'autre**, s'arrête au premier échec et **écrit** ce qui a été appliqué (chaque lot reste atomique). Le découpage est une fonction pure testée. |
+| **B8** | « Avance de temps en attente : 1 semaine » formatée « avec les unités du calendrier existant ». | Aucun formateur de durée n'existe : `shared/gameTime.js` n'a que `projectGameTime` (date), et le widget d'horloge ne connaît que des boutons de préréglage [VÉRIFIÉ, `grep export`]. | Ajouter à `shared/gameTime.js` une décomposition pure `splitGameDuration(minutes)` → `{ weeks, days, hours, minutes }` (test), composée en texte côté client avec des clés i18n à pluriel (`_one`/`_other`, convention déjà utilisée dans `combat.json`). Pas de mois : le calendrier a des mois de 31 jours, une « semaine » de 7 jours est la seule unité stable de la revue. |
+| **B9** | « Confirmer / Annuler » toujours affichés ; écran visible tant qu'une avance est en attente OU qu'une réponse attend. | Des échéances `active` déjà dues (`queued`) peuvent exister **sans** avance en attente (l'ancienne route `game-time/adjust`, encore en place, n'est plus appelée par le client) : « Confirmer » renverrait 409 « Aucune avance en attente » [VÉRIFIÉ, lecture ; `previewDueEcheances` ne filtre que `interactive`]. Les autres types d'échéance ne peuvent pas bloquer une avance : `cold_*` sont non interactifs, `equipment_repair` est hors avance (`advanceDriven: false`) [VÉRIFIÉ, registre]. | L'écran est visible si `advance.pending` **ou** `answerableCount > 0` ; les boutons « Confirmer » / « Annuler » ne sont rendus que si `advance.pending`. La route `game-time/adjust` inutilisée est un legacy voisin : **à ticketer**, pas touché ici. |
+
+| # | Précision à intégrer |
+|---|---|
+| **P9** | **Chat entre 2a et 2b** : sans `care`, le Lot 1 ne raconte rien (décision B1 : absent = rien de déclaré). Entre les deux lots, une décision du MJ n'a donc pas de ligne de chat — **comme aujourd'hui**, pas de régression. Le Lot 2b envoie toujours `care` et ferme le trou. À écrire dans la clôture du 2a. |
+| **P10** | **Reconnexion** : les événements manqués pendant une coupure ne reviennent pas ; le hook recharge la vue au `connect` du socket (le premier `connect` provoque un chargement de plus, inoffensif). |
+| **P11** | **Course entre chargements** : une réponse tardive d'un ancien `GET` ne doit pas écraser un état plus récent (compteur de requête) ; les rafales d'événements (un lot de 30 réponses émet 30 `GAME_ECHEANCE_RESOLVED` + N `WOUND_UPDATED`) sont regroupées (150 ms en fin de rafale). Les `WOUND_UPDATED` ne rechargent que si `advance.pending` (sinon chaque dégât de combat déclencherait une requête MJ). |
+| **P12** | **Statut inconnu du registre** (`iem_survival`, `ati_*`, posés hors registre) : `t('status.<code>', { defaultValue: code })`, jamais une clé brute affichée par accident ni une erreur. |
+| **P13** | **Gravité `mort_subite`** : son libellé dépend de la localisation (Mort au Tête/Corps, Membre détruit sur un membre) ; le client réutilise `isSuddenDeathLocation` (`shared/`) et `locationPanel.deathWord.*` comme `LocationPanel.jsx`, jamais un troisième libellé. |
+| **P14** | **Performance** : 77+ cartes de PNJ ne sont **pas rendues** tant que le bloc est replié (seulement leurs compteurs). |
+| **P15** | **Migration des tests** : les 3 tests de `getPendingReviewForGm` (active déjà due, `awaiting_player_roll`, enrichissement) portent des scénarios utiles — vérifier que `getReviewCardsForGm` les couvre déjà (`answerable`, `awaitingPlayerCount`, infections) avant de les supprimer, sinon les porter. |
+| **P16** | **Limites de test assumées** : aucun harnais de rendu JSX (pas de jsdom) ni de test de route — la couverture automatique est celle des services serveur et du module pur `woundReviewGestures.js` ; ESLint, build client et le test en jeu de Saar couvrent le reste. À écrire dans la clôture. |
+
+**Vérifié sans changement du plan** : aucun autre appelant des trois anciennes routes ni de `getPendingReviewForGm` (client, serveur, `shared/`, e2e) ; les douze clés `session.*` de l'ancien écran n'ont **aucun** autre usage (retrait sûr) ; le patron portail existe (`DocumentModal`) ; le patron de fenêtre déplaçable existe (`combat-win` + `useDraggable`) ; les événements `CAMPAIGN_ADVANCE_PENDING/RESOLVED/CANCELLED`, `GAME_ECHEANCE_RESOLVED`, `WOUND_UPDATED` existent (`shared/events.js`).
+
+**Verdict** : le plan tient, à condition de B5-B9 (intégrés au §12). Sans B6 et B5, l'écran refait aurait gardé exactement le défaut qui a bloqué le MJ ; sans B7 le geste « tous les PNJ » aurait échoué dès que le nombre d'échéances de PNJ dépasse 200 ; sans B9 le MJ aurait vu un bouton « Confirmer » voué au refus. Aucun code avant ton « ok ».
+
+## 14. Constats de la validation en jeu du Lot 2a (2026-09-26, lus dans les traces du serveur)
+
+Saar a joué une session complète (avances d'1 jour et d'1 semaine, Réussite / Échec / Catastrophe, infections) : l'écran est « visiblement fonctionnel » et les traces (`REVIEW_TRACE`) racontent chaque étape. Trois constats :
+
+| # | Constat [OBSERVÉ dans les traces] | Traitement |
+|---|---|---|
+| **C-a** | La vue annonçait « 0 à la ronde suivante » puis « Confirmer » ouvrait 4 échéances en refus 409 (« ronde suivante »), deux fois de suite (infections nées d'un Échec / d'une Catastrophe). Cause : la vue jugeait « déjà due » sur le repère résolu actuel, qui n'avance qu'à la confirmation ; `confirmPendingAdvance` juge sur la **fin de l'avance en attente**. | **Corrigé** : `loadReviewState` utilise le même horizon (`woundReviewService.js`, test dédié) ; le bouton devient « Passer à la ronde suivante » quand il reste des échéances à ouvrir, et l'ouverture de la ronde est un message d'**information** (pas une erreur). |
+| **C-b** | `tete/moyenne → légère` : « ligne tete/legere : **5 case(s) pour un maximum de 3 ⚠ DÉPASSE LE MAXIMUM** » — la guérison écrit une case sans vérifier la capacité de la ligne d'arrivée. | **Preuve réelle du bug n°2** `WOUND-HEAL-LINE-CAPACITY` (décision de règle + extrait du livre d'abord) ; hors périmètre ici. |
+| **C-c** | Deux lectures de la vue par action (une par événement regroupé, une par le rechargement propre). | **Corrigé** : le rechargement immédiat annule la lecture programmée (une seule lecture). |
+
+Vérifié conforme dans les traces : Critique semaine n/3 (la gravité ne change qu'au dernier Test), Grave/Moyenne (Test unique) → gravité inférieure, Échec → infection déjà due + reprogrammation d'une semaine, Catastrophe → 4 Tests de Constitution, Mortelle/Membre détruit → infection sans case supplémentaire, Critique → case supplémentaire même sur réussite du jet, promotion en cascade (Critique ×2 → Mortelle) qui fusionne la case infectée et met fin à son infection.

@@ -1,3 +1,16 @@
+## v259 — 2026-09-26 — Nouvel écran de revue des guérisons pour le MJ
+
+### Blessures
+- [add] Quand le temps avance et que des blessures doivent guérir, le MJ dispose d'un nouvel écran de **revue des guérisons** : une carte par personnage avec son état
+  (blessures, statuts, malus) et un geste unique **Réussite / Échec / Catastrophe** pour toutes ses blessures. Le détail blessure par blessure reste disponible, replié,
+  et annonce ce que « Réussite » va faire. Les PNJ sont repliés, avec un geste « Tous les PNJ ».
+- [add] L'écran reste ouvert tant qu'une avance de temps est en attente : « Confirmer » et « Annuler l'avance » ne disparaissent plus. Si « Confirmer » ne peut pas passer,
+  l'écran dit pourquoi (réponses restantes, ou nouvelle ronde d'infections à traiter). Quand une ronde reste à ouvrir, le bouton s'appelle « Passer à la ronde suivante ».
+- [fix] La guérison suit maintenant toute la chaîne (Critique → Grave → Moyenne → Légère) : chaque case de blessure a son propre rendez-vous de guérison, y compris celles obtenues
+  par une guérison, par la Chance ou par une infection.
+- [fix] Un Échec ou une Catastrophe ne met plus fin aux Tests de guérison : une nouvelle tentative est programmée (une semaine plus tard pour une Critique, une Mortelle ou un Membre détruit).
+- [fix] Supprimer une blessure retire aussi son rendez-vous de guérison : l'écran de revue ne montre plus de lignes sans blessure.
+
 ## v258 — 2026-09-25 — La Chance peut sauver d'une Mort ou d'un Membre détruit, dans une seule fenêtre
 
 ### Combat

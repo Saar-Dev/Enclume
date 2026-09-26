@@ -1,3 +1,4 @@
+process.env.REVIEW_TRACE = '0' // les traces du serveur ne noient pas la sortie des tests (elles sont vérifiées dans reviewTrace.test.mjs)
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -337,6 +338,73 @@ test('infections groupées : `auto` lance le jet serveur et résout ; `player` b
       resolveInfectionModes(io, f.campaign.id, { choices: [{ echeanceId: auto.id, mode: 'demain' }] }),
       (err) => err instanceof AppError && err.statusCode === 400,
     )
+  } finally {
+    await cleanup(f)
+  }
+})
+
+// ─── Traces de la revue (reviewTrace.js) : écrites APRÈS la validation, sans jamais changer un résultat ──────────────────────────────────────
+
+async function withTrace(value, run) {
+  const previousEnv = process.env.REVIEW_TRACE
+  const previousLog = console.log
+  const logs = []
+  process.env.REVIEW_TRACE = value
+  console.log = (...args) => logs.push(args.join(' '))
+  try { await run() } finally {
+    console.log = previousLog
+    process.env.REVIEW_TRACE = previousEnv
+  }
+  return logs
+}
+
+test('traces : le lot raconte chaque entrée (personnage, blessure avant → après, moteur) et le bilan des diffusions ; les résultats sont identiques traces coupées', { skip }, async () => {
+  const f = await createFixture()
+  const { io } = captureIo()
+  try {
+    const moyenne = await woundInReview(f.alice, 'corps', 'moyenne')
+    const grave = await woundInReview(f.alice, 'bras_droit', 'grave')
+    const ids = [moyenne.echeance.id, grave.echeance.id]
+    let withResults
+    const logs = await withTrace('1', async () => {
+      withResults = (await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf(ids, 'amelioration') })).results
+    })
+    const text = logs.join('\n')
+    assert.match(text, /lot guérisons \(campagne [0-9a-f]{8}\) : 2 entrée\(s\) — amelioration×2 ; aucun contexte de soins déclaré/)
+    assert.match(text, /▸ Alice · échéance [0-9a-f]{8} · « amelioration » → RÉSOLUE/)
+    assert.match(text, /guérison corps\/moyenne \(case [0-9a-f]{8}, Test unique\) — issue « amelioration »/)
+    assert.match(text, /→ devient legere \(nouvelle case [0-9a-f]{8}/)
+    assert.match(text, /→ devient moyenne .* ligne bras_droit\/moyenne : 1 case\(s\) pour un maximum de 3/)
+    assert.match(text, /échéance wound_healing_check [0-9a-f]{8} terminée/)
+    assert.match(text, /lot guérisons validé en \d+ ms : 2 résolue\(s\), 0 périmée\(s\), 0 annulée\(s\) par le serveur, 0 en attente du joueur ; diffusions : 2 GAME_ECHEANCE_RESOLVED .* 1 WOUND_UPDATED, 0 ligne\(s\) de chat/)
+    assert.deepEqual(withResults, ids.map(echeanceId => ({ echeanceId, resolved: true })), 'le résultat public ne porte AUCUNE trace')
+    assert.ok(logs.every(line => line.startsWith('[REVUE ')))
+
+    // Même lot, traces coupées : aucune ligne, mêmes résultats.
+    const moyenne2 = await woundInReview(f.alice, 'tete', 'moyenne')
+    let offResults
+    const offLogs = await withTrace('0', async () => {
+      offResults = (await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([moyenne2.echeance.id], 'amelioration') })).results
+    })
+    assert.deepEqual(offLogs, [])
+    assert.deepEqual(offResults, [{ echeanceId: moyenne2.echeance.id, resolved: true }])
+  } finally {
+    await cleanup(f)
+  }
+})
+
+test('traces : une entrée périmée et un refus de validation sont écrits (sans prétendre qu\'une écriture a eu lieu)', { skip }, async () => {
+  const f = await createFixture()
+  const { io } = captureIo()
+  try {
+    const active = await woundInReview(f.alice, 'corps', 'moyenne', { open: false })
+    const logs = await withTrace('1', async () => {
+      await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([active.echeance.id], 'echec') })
+      await assert.rejects(resolveHealingChoices(io, f.campaign.id, { choices: [] }), AppError)
+    })
+    const text = logs.join('\n')
+    assert.match(text, /→ PÉRIMÉE \(déjà traitée, annulée ou pas encore ouverte\) : rien écrit/)
+    assert.match(text, /lot guérisons INTERROMPU \(400\) : choices : une liste non vide est requise — rien n'a été écrit/)
   } finally {
     await cleanup(f)
   }

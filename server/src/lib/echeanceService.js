@@ -5,6 +5,7 @@
 import { AppError } from './AppError.js'
 import db from '../db/knex.js'
 import { findEcheanceRegistryEntry } from '../../../shared/echeanceTypeRegistry.js'
+import { reviewTraceError, shortId } from './reviewTrace.js'
 
 // interactive / advance_driven toujours résolus depuis le registre à la création — jamais fournis
 // par l'appelant (source unique, voir shared/echeanceTypeRegistry.js).
@@ -45,6 +46,7 @@ export async function createEcheance(trx, {
 async function resolveEcheanceHandler(trx, echeance, context) {
   const registryEntry = findEcheanceRegistryEntry(echeance.condition_type)
   if (!registryEntry) {
+    reviewTraceError(`échéance ${shortId(echeance.id)} : condition_type inconnu du registre ("${echeance.condition_type}"), passée en « error »`)
     await trx('game_echeances').where({ id: echeance.id }).update({ status: 'error', updated_at: trx.fn.now() })
     return null
   }
@@ -86,6 +88,7 @@ async function resolveEcheanceHandler(trx, echeance, context) {
       } else if (!Number.isInteger(reschedule.intervalMinutes) || reschedule.intervalMinutes <= 0) {
         // garde-fou anti-boucle infinie (analyse à charge Lot 2 point 3) — un reschedule qui ne fait
         // pas avancer next_due_minutes ne doit jamais être persisté tel quel.
+        reviewTraceError(`échéance ${echeance.condition_type} ${shortId(echeance.id)} : reprogrammation refusée (intervalMinutes=${reschedule.intervalMinutes}), passée en « error »`)
         await sp('game_echeances').where({ id: echeance.id })
           .update({ status: 'error', updated_at: sp.fn.now() })
       } else {
@@ -112,7 +115,9 @@ async function resolveEcheanceHandler(trx, echeance, context) {
       }
     })
     return handlerResult
-  } catch {
+  } catch (err) {
+    // Sans cette ligne, l'erreur d'un handler disparaissait : personne ne pouvait savoir POURQUOI une échéance passait en « error ».
+    reviewTraceError(`échéance ${echeance.condition_type} ${shortId(echeance.id)} (personnage ${shortId(echeance.character_id)}) : le handler a échoué, échéance passée en « error »`, err)
     await trx('game_echeances').where({ id: echeance.id }).update({ status: 'error', updated_at: trx.fn.now() })
     return null
   }
@@ -156,16 +161,34 @@ export async function previewDueEcheances(campaignId, resolvedAfter) {
 // dans l'écran de revue, joueur lance son dé) — le caller doit avoir déjà fusionné cette réponse dans
 // echeance.payload avant d'appeler cette fonction (payload reste opaque à ce fichier). N'avance
 // jamais le compteur d'horloge — seule la confirmation finale (Lot 2 orchestration) le fait.
-export async function resolveEcheanceNow(trx, echeanceId) {
+// Ligne de trace d'une résolution — ce que le handler a décidé pour l'échéance (fin, reprogrammation, échéances créées). Le contrat de retour de
+// resolveEcheanceNow ({ resolved }) reste INCHANGÉ : les traces passent par un collecteur OPTIONNEL fourni par l'appelant (`options.trace`, une fonction
+// ligne → void), aussi transmis aux handlers (`context.trace`) pour les faits de leur domaine (blessure avant → après…). L'appelant écrit les lignes
+// APRÈS la validation de sa transaction (jamais une ligne « appliqué » pour une écriture qui sera annulée).
+function describeResolution(echeance, handlerResult) {
+  const { reschedule, spawn = [], undoEntries = [] } = handlerResult
+  let fate
+  if (!reschedule || (reschedule.occurrencesRemaining !== null && reschedule.occurrencesRemaining <= 0)) {
+    fate = 'terminée'
+  } else {
+    const nextDue = echeance.next_due_minutes + reschedule.intervalMinutes
+    fate = `reprogrammée : prochaine à ${nextDue} min de jeu (+${reschedule.intervalMinutes}), ${reschedule.occurrencesRemaining ?? 'illimitée(s)'} occurrence(s) restante(s)`
+  }
+  const created = spawn.length > 0 ? ` ; créée(s) : ${spawn.map(entry => entry.conditionType).join(', ')}` : ''
+  return `échéance ${echeance.condition_type} ${shortId(echeance.id)} ${fate}${created} ; ${undoEntries.length} entrée(s) d'annulation`
+}
+
+export async function resolveEcheanceNow(trx, echeanceId, { trace = null } = {}) {
   const echeance = await trx('game_echeances').where({ id: echeanceId }).forUpdate().first()
   if (!echeance) throw new AppError(404, `Échéance "${echeanceId}" introuvable`)
   if (!['pending_mj_review', 'awaiting_player_roll'].includes(echeance.status)) {
     throw new AppError(409, `Échéance "${echeanceId}" n'est pas en attente de résolution (status: ${echeance.status})`)
   }
 
-  const handlerResult = await resolveEcheanceHandler(trx, echeance, {})
+  const handlerResult = await resolveEcheanceHandler(trx, echeance, { trace })
   if (!handlerResult) return { resolved: false, error: true }
   if (handlerResult.resolved === false) return { resolved: false }
+  trace?.(describeResolution(echeance, handlerResult))
 
   const undoEntries = handlerResult.undoEntries ?? []
   // Le journal d'annulation n'existe QUE pour défaire une avance d'horloge (cancelPendingAdvance).

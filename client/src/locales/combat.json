@@ -748,6 +748,122 @@
       "none": "aucun"
     }
   },
+  "woundReview": {
+    "title": "Revue des guérisons",
+    "reduce": "Réduire",
+    "expand": "Agrandir",
+    "loading": "Chargement de la revue…",
+    "busy": "Envoi en cours…",
+    "advance": {
+      "forward": "Avance de temps en attente : {{duration}}",
+      "backward": "Recul de temps en attente : {{duration}}"
+    },
+    "duration": {
+      "weeks_one": "{{count}} semaine",
+      "weeks_other": "{{count}} semaines",
+      "days_one": "{{count}} jour",
+      "days_other": "{{count}} jours",
+      "hours_one": "{{count}} heure",
+      "hours_other": "{{count}} heures",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "zero": "0 minute"
+    },
+    "counters": {
+      "answersLeft_one": "{{count}} réponse à donner",
+      "answersLeft_other": "{{count}} réponses à donner",
+      "awaitingPlayers_one": "dont {{count}} jet attendu d'un joueur",
+      "awaitingPlayers_other": "dont {{count}} jets attendus de joueurs",
+      "nextRound_one": "{{count}} échéance à la ronde suivante",
+      "nextRound_other": "{{count}} échéances à la ronde suivante"
+    },
+    "outcome": {
+      "amelioration": "Réussite",
+      "echec": "Échec",
+      "catastrophe": "Catastrophe"
+    },
+    "infectionMode": {
+      "auto": "Lancer automatiquement",
+      "player": "Demander aux joueurs"
+    },
+    "card": {
+      "dueCases_one": "{{count}} case de blessure échue",
+      "dueCases_other": "{{count}} cases de blessure échues",
+      "nothingDue": "Rien à traiter à cette ronde",
+      "noWound": "Aucune blessure",
+      "penalty": "Malus de blessure : {{value}}",
+      "testBlocked": "Ne peut entreprendre aucun Test",
+      "wound": "{{location}} · {{severity}} ×{{count}}",
+      "answerAll": "Réponse pour toute la carte",
+      "details": "Détail par blessure",
+      "infections_one": "{{count}} infection à traiter",
+      "infections_other": "{{count}} infections à traiter",
+      "anomaly": "Anomalie : une échéance de {{type}} n'a plus de blessure",
+      "anomalyType": {
+        "healing": "guérison",
+        "infection": "infection"
+      },
+      "closeAnomalies": "Clore"
+    },
+    "line": {
+      "title": "{{location}} — {{severity}}",
+      "cases_one": "{{count}} case",
+      "cases_other": "{{count}} cases",
+      "dueOf_one": "dont {{count}} échue",
+      "dueOf_other": "dont {{count}} échues",
+      "week": "semaine {{steps}}",
+      "queued": "prochaine ronde",
+      "consequence": {
+        "becomes": "Réussite : passe à « {{target}} »",
+        "gone": "Réussite : la blessure disparaît",
+        "continues": "Réussite : la guérison continue (semaine {{steps}})",
+        "mixed": "Réussite : selon la case (passe à « {{target}} » ou la guérison continue)"
+      }
+    },
+    "infection": {
+      "title": "Infection — {{location}} · {{severity}}",
+      "rolls_one": "{{count}} jet",
+      "rolls_other": "{{count}} jets",
+      "awaitingPlayer": "en attente du joueur"
+    },
+    "npc": {
+      "title_one": "PNJ — {{count}} personnage",
+      "title_other": "PNJ — {{count}} personnages",
+      "remaining_one": "{{count}} réponse restante",
+      "remaining_other": "{{count}} réponses restantes",
+      "answerAll": "Tous les PNJ",
+      "infectionsAuto": "Infections des PNJ : lancer automatiquement",
+      "show": "Voir les PNJ",
+      "hide": "Masquer les PNJ"
+    },
+    "footer": {
+      "confirm": "Confirmer",
+      "confirmNextRound": "Passer à la ronde suivante",
+      "cancel": "Annuler l'avance",
+      "cancelAsk": "Annuler l'avance défait les réponses déjà données. Continuer ?",
+      "cancelYes": "Oui, annuler l'avance",
+      "cancelNo": "Non",
+      "answersLeft_one": "Il reste {{count}} réponse à donner avant de confirmer.",
+      "answersLeft_other": "Il reste {{count}} réponses à donner avant de confirmer.",
+      "ready": "Tout est répondu : vous pouvez confirmer l'avance.",
+      "nextRound_one": "Après confirmation, {{count}} échéance issue de vos réponses s'ouvrira : ronde suivante.",
+      "nextRound_other": "Après confirmation, {{count}} échéances issues de vos réponses s'ouvriront : ronde suivante."
+    },
+    "notice": {
+      "loadError": "Impossible de charger la revue : {{message}}",
+      "error": "Erreur : {{message}}",
+      "partial": "Envoi interrompu : {{sent}} réponse(s) appliquée(s) sur {{total}}. {{message}}",
+      "stale_one": "{{count}} réponse était déjà traitée entre-temps (vue actualisée).",
+      "stale_other": "{{count}} réponses étaient déjà traitées entre-temps (vue actualisée).",
+      "failed_one": "{{count}} réponse n'a pas pu être appliquée par le serveur : elle reste à donner.",
+      "failed_other": "{{count}} réponses n'ont pas pu être appliquées par le serveur : elles restent à donner.",
+      "refusal": {
+        "nextRound": "Ronde suivante : de nouvelles échéances sont dues (par exemple les infections nées d'un Échec) — {{count}} à traiter avant de confirmer.",
+        "answersLeft": "Confirmation refusée : il reste {{count}} réponse(s) à donner.",
+        "unknown": "Confirmation refusée : {{message}}"
+      }
+    }
+  },
   "chance": {
     "choiceCard": {
       "gainPointButton": "Gagner 1 point de Chance",

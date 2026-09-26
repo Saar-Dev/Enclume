@@ -5,7 +5,6 @@ import { useSessionStore } from '../stores/sessionStore'
 import { WS } from '../../../shared/events.js'
 import LibraryPanel from './LibraryPanel.jsx'
 import GameTimeWidget from './GameTimeWidget.jsx'
-import BlessuresReviewPanel from './BlessuresReviewPanel.jsx'
 import PendingRollsPanel from './PendingRollsPanel.jsx'
 import {
   IconEdit, IconPlay, IconEye, IconEyeOff, IconRuler, IconPlus,
@@ -145,10 +144,9 @@ export default function Sidebar({
       {/* Masquée en mode Combat et Édition — décision Saar 2026-07-29, distraction non désirée */}
       {mode !== 'combat' && mode !== 'edit' && <GameTimeWidget campaignId={campaignId} />}
 
-      {/* ─── BLESSURES : revue MJ + jets en attente (docs/PLAN_BLESSURES_GUERISON.md §6.1) ────── */}
-      {/* Jamais masqués par le mode — une revue/un jet déjà ouvert avant un changement de mode reste
-          actionnable ; contrairement à l'horloge, rien ici n'en déclenche de nouveaux depuis ces modes. */}
-      <BlessuresReviewPanel campaignId={campaignId} />
+      {/* ─── BLESSURES : jets en attente (docs/PLAN_BLESSURES_GUERISON.md §6.1) ────── */}
+      {/* L'écran de revue MJ n'est PLUS ici : la barre latérale se referme (`sidebarVisible`), l'écran doit survivre à cela
+          (PLAN_REVUE_GUERISON.md §13 B6) — il est monté par SessionPage.jsx (WoundReviewWindow). */}
       {/* Réparation d'équipement (PLAN_USURE&INTEGRITE.md §8, L6c-A) — la demande MJ passe par une carte
           d'action dans le chat (useRepairRequestSocket, patron sell_request), plus de panneau flottant.
           PendingRollsPanel liste les jets de réparation approuvés à côté des jets d'infection. */}

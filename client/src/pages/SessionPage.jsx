@@ -44,6 +44,7 @@ import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
 import EncyclopediaWindow from '../components/encyclopedia/EncyclopediaWindow.jsx'
 import ExchangeWindow from '../components/ExchangeWindow'
+import WoundReviewWindow from '../components/woundReview/WoundReviewWindow.jsx'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
@@ -1365,6 +1366,10 @@ function SessionContent({ campaignId }) {
           sidebarWidth={sidebarVisible ? sidebarWidth : 0}
         />
       )}
+
+      {/* ─── WoundReviewWindow — revue MJ des guérisons (avance de temps en attente) ─────── */}
+      {/* Toujours montée (MJ seulement, le composant se cache lui-même) : indépendante de la barre latérale, qui se referme. */}
+      <WoundReviewWindow campaignId={campaignId} />
 
       {/* ─── ExchangeWindow — fenêtre d'échange PJ↔PJ (RadialMenu) ─────── */}
       {exchangeWindowOpen && (

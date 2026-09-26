@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { floorDiv, floorMod, projectGameTime, DAYS_PER_YEAR, DAYS_PER_MONTH, MINUTES_PER_DAY } from './gameTime.js'
+import { floorDiv, floorMod, projectGameTime, splitGameDuration, DAYS_PER_YEAR, DAYS_PER_MONTH, MINUTES_PER_DAY } from './gameTime.js'
 
 test('floorMod - reste toujours positif, y compris pour un dividende négatif', () => {
   assert.equal(floorMod(-1, 1440), 1439)
@@ -48,4 +48,27 @@ test('projectGameTime - point de départ non trivial (milieu de calendrier)', ()
   assert.deepEqual(projectGameTime(0, start), { year: 5, month: 6, day: 20, hour: 0, minute: 0 })
   assert.deepEqual(projectGameTime(11 * MINUTES_PER_DAY, start), { year: 5, month: 6, day: 31, hour: 0, minute: 0 })
   assert.deepEqual(projectGameTime(12 * MINUTES_PER_DAY, start), { year: 5, month: 7, day: 1, hour: 0, minute: 0 })
+})
+
+test('splitGameDuration - une semaine exacte (l\'avance type de la revue des guérisons)', () => {
+  assert.deepEqual(splitGameDuration(10080), { negative: false, weeks: 1, days: 0, hours: 0, minutes: 0 })
+})
+
+test('splitGameDuration - toutes les unités, sans mois (un mois = 31 jours, jamais une unité de revue)', () => {
+  const minutes = 3 * 7 * MINUTES_PER_DAY + 2 * MINUTES_PER_DAY + 5 * 60 + 12
+  assert.deepEqual(splitGameDuration(minutes), { negative: false, weeks: 3, days: 2, hours: 5, minutes: 12 })
+  assert.equal(splitGameDuration(DAYS_PER_MONTH * MINUTES_PER_DAY).weeks, 4, '31 jours = 4 semaines + 3 jours')
+  assert.equal(splitGameDuration(DAYS_PER_MONTH * MINUTES_PER_DAY).days, 3)
+})
+
+test('splitGameDuration - durée négative (recul) : mêmes unités, drapeau `negative`', () => {
+  assert.deepEqual(splitGameDuration(-90), { negative: true, weeks: 0, days: 0, hours: 1, minutes: 30 })
+  assert.deepEqual(splitGameDuration(0), { negative: false, weeks: 0, days: 0, hours: 0, minutes: 0 })
+})
+
+test('splitGameDuration - la somme des unités redonne la durée (aucune minute perdue)', () => {
+  for (const total of [1, 59, 60, 1439, 1440, 10079, 10080, 10081, 123456]) {
+    const d = splitGameDuration(total)
+    assert.equal(d.weeks * 7 * MINUTES_PER_DAY + d.days * MINUTES_PER_DAY + d.hours * 60 + d.minutes, total)
+  }
 })

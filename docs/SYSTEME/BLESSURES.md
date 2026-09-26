@@ -1,4 +1,5 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Amendé 2026-09-25 (nuit) — Lot 2a de `PLANS/PLAN_REVUE_GUERISON.md`** : l'écran de revue est refait (`WoundReviewWindow`), l'ancien écran et ses trois routes sont supprimés, la vue porte l'avance en attente (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`** : kits de soin dans `WOUND_HEALING`, vue et résolution GROUPÉES de l'écran de revue (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
 > terminent plus jamais l'échéance de guérison (§« Guérison et Infection »).
@@ -241,7 +242,8 @@ Autorité complète (archivée) : `docs/Old/PLAN_BLESSURES_GUERISON.md`.
 server/src/lib/woundEvolutionService.js  — les 2 handlers ci-dessous
 shared/echeanceTypeRegistry.js           — condition_type → handler, interactive: true
 server/src/routes/campaigns.js           — routes ci-dessous
-client/src/components/BlessuresReviewPanel.jsx  — écran de revue MJ groupé
+client/src/components/woundReview/              — écran de revue MJ (WoundReviewWindow, carte par personnage) ; données : client/src/lib/useWoundReview.js,
+                                                   logique pure testée : client/src/lib/woundReviewGestures.js
 client/src/components/PendingRollsPanel.jsx     — jets joueurs en attente (Infection)
 ```
 
@@ -249,7 +251,7 @@ client/src/components/PendingRollsPanel.jsx     — jets joueurs en attente (Inf
 `resolveEcheanceNow` (Lot 2), appelée dès qu'une réponse MJ/joueur est connue.
 
 **`wound_healing_check`** — jamais de jet serveur pour son propre résultat ; lit `payload.mjChoice`
-(`amelioration` / `echec` / `catastrophe`) déjà fourni par le MJ dans `BlessuresReviewPanel`. Table de
+(`amelioration` / `echec` / `catastrophe`) déjà fourni par le MJ dans l'écran de revue (`WoundReviewWindow`). Table de
 durée (`WOUND_HEALING`, `shared/woundConstants.js`), lue **uniquement** par `getWoundHealing(severity, location)` — autorité
 unique de « cette blessure guérit-elle, et en combien de temps ? » (jamais `WOUND_HEALING[severity]` : la clé `membreDetruit` n'est pas
 une gravité) :
@@ -394,25 +396,36 @@ système Shadowrun 5 de FoundryVTT — décision pure, application après les d�
 
 **Routes** (`campaigns.js`, toutes vérifient `game_echeances.campaign_id === :id`) :
 `POST .../game-time/request-advance|confirm-advance|cancel-advance`,
-`GET .../game-echeances/pending-review` (GM), `GET .../game-echeances/my-pending-rolls`,
-`POST .../game-echeances/:id/healing-choice`, `POST .../game-echeances/:id/infection-mode`.
+`GET .../game-echeances/review` (GM), `GET .../game-echeances/my-pending-rolls`,
+`POST .../game-echeances/healing-choices`, `POST .../game-echeances/infection-modes` (GM, groupées ci-dessous).
+Les anciennes routes unitaires (`pending-review`, `:id/healing-choice`, `:id/infection-mode`) et `getPendingReviewForGm` ont été **supprimées** au Lot 2a.
 
-**Vue et résolution GROUPÉES de l'écran de revue** (Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`, 2026-09-25 ; l'écran actuel les ignore encore, le Lot 2a
-migre puis **supprime** `pending-review`, `healing-choice`, `infection-mode` et `getPendingReviewForGm`) :
-- `GET .../game-echeances/review` (GM) → `{ cards, summary }` (`woundReviewService.js:getReviewCardsForGm`, requêtes groupées). Une carte par personnage :
+**Vue et résolution GROUPÉES de l'écran de revue** (Lots 1 et 2a de `PLANS/PLAN_REVUE_GUERISON.md`, 2026-09-25) :
+- `GET .../game-echeances/review` (GM) → `{ advance, cards, summary }` (`woundReviewService.js:getReviewCardsForGm`, requêtes groupées). `advance` = `{ pending, deltaMinutes }` : l'avance de temps en attente
+  (`campaigns.pending_advance_delta_minutes`), présente **même sans aucune échéance** — l'écran reste affiché tant qu'elle est en attente (l'ancien écran se cachait quand la liste était vide et emportait « Confirmer » / « Annuler »).
+  `summary` = `{ answerableCount, awaitingPlayerCount, queuedCount }` (réponses possibles maintenant · dont jets de joueurs attendus · déjà dues, prochaine ronde). Une carte par personnage :
   `state` (compteur groupé, malus, `testBlocked`, codes de statuts des tokens), `lines` (une par localisation + gravité : `cases`, `dueCases`, `queuedCases`, `answerable`,
   `dueEcheanceIds`, `targetSeverity`, `kits { alternatives, defaultKits }`, `items` avec `step { n, total }`, `isLastStep`, `isFirstTest`), `infections` (`rollsNeeded`),
   `orphans` (échéance sans blessure — montrée, jamais masquée : elle bloquerait « Confirmer » en silence), `kitTotals`. Joueurs (`characters.type = 'pj'`) d'abord, puis PNJ.
   Une ligne = UN Test (RAW « Localisation par Localisation », `REGLEBLESSURES.md:386-392`) donc un seul jeu de kits, celui du Test le plus exigeant de ses cases échues.
-  Une échéance `active` déjà due (prochaine ronde, pas encore ouverte par « Confirmer ») est `answerable: false`. Forme du payload figée par test.
+  Une échéance `active` déjà due (prochaine ronde, pas encore ouverte par « Confirmer ») est `answerable: false` ; « déjà due » se juge sur la **fin de l'avance en attente**
+  (`max(résolu, affiché + avance)`, comme `confirmPendingAdvance`), pas sur le repère résolu actuel — sinon les infections nées d'un Échec (dues à la date de leur guérison) ne seraient annoncées qu'après un refus 409. Forme du payload figée par test.
 - `POST .../game-echeances/healing-choices` (GM) — `{ choices: [{ echeanceId, mjChoice }], care? }` → `{ results: [{ echeanceId, resolved, stale?, error? }] }` ;
   `POST .../game-echeances/infection-modes` (GM) — `{ choices: [{ echeanceId, mode: 'auto' | 'player' }] }` (`woundReviewBatchService.js`, routes minces).
-  1 à 200 entrées, pas de doublon, toutes de la campagne et du bon type sinon la demande entière est refusée (400/404, rien d'écrit). **Un savepoint par entrée** : le moteur
+  1 à `REVIEW_BATCH_MAX_ENTRIES` (200, `shared/woundConstants.js`, lue aussi par l'écran qui découpe ses envois) entrées, pas de doublon, toutes de la campagne et du bon type sinon la demande entière est refusée (400/404, rien d'écrit). **Un savepoint par entrée** : le moteur
   d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif (une blessure sans échéance vivante) ; ici l'entrée est ANNULÉE (l'échéance reste en attente,
   `error: true`). Une échéance périmée ou pas encore ouverte est `stale` sans faire échouer le lot ; une erreur inattendue (SQL) annule TOUT le lot. Après validation :
   `GAME_ECHEANCE_RESOLVED` pour chaque échéance résolue ET pour celles annulées pendant le lot (avec leur case), `WOUND_UPDATED` une fois par personnage touché.
 - **`care` (facultatif)** : `{ provider ∈ {none, character, npc, hospital, professional}, providerCharacterId?, providerName?, equipment ∈ {complete, partial, none} }` — validé (personnage de la campagne,
   nom libre nettoyé et borné à 60 caractères), **non stocké**, raconté dans le chat : une ligne par personnage et par issue (`combat:woundCare.notice`). Absent = rien n'est déclaré, rien n'est raconté.
+**Traces du serveur** (`server/src/lib/reviewTrace.js`, 2026-09-26) — la revue s'écrit dans la console du serveur, une ligne par fait, préfixe `[REVUE hh:mm:ss.mmm]` :
+lecture de la vue (avance, personnages, lignes, infections, anomalies, compteurs) ; chaque lot groupé (entrées, personnage, issue → RÉSOLUE / PÉRIMÉE / ANNULÉE PAR LE SERVEUR / EN ATTENTE DU JOUEUR, faits du handler :
+guérison `corps/critique` semaine n/N → nouvelle gravité, **ligne cible « n cases pour un maximum de m » avec ⚠ si elle dépasse** (`WOUND-HEAL-LINE-CAPACITY`), jet d'infection contre son seuil, case créée / fusionnée,
+échéance terminée ou reprogrammée, échéances créées, entrées d'annulation ; bilan et diffusions émises) ; l'avance de temps (demandée, confirmée, refusée avec la raison, annulée) ; le jet d'infection d'un joueur.
+Règles : **allumées par défaut, `REVIEW_TRACE=0` dans `.env` les coupe** ; jamais de trace qui change un résultat (message évalué seulement si allumé, erreur de formatage avalée) ; les lignes qui décrivent un résultat sont
+écrites **après la validation** de la transaction (jamais « appliqué » pour une écriture annulée), sauf les **erreurs** ; au-delà de 30 entrées, les entrées résolues sont résumées (les périmées et les erreurs restent détaillées).
+**Une erreur de handler n'est plus avalée** : `resolveEcheanceHandler` (moteur d'échéances) l'écrit toujours (`ERREUR — échéance … : message` + pile), interrupteur ou non — avant, l'échéance passait en `error` sans aucune trace.
+Contrat du moteur inchangé : `resolveEcheanceNow(trx, id, { trace })` reçoit un collecteur OPTIONNEL (fonction ligne → void), transmis aux handlers (`context.trace`) ; le retour reste `{ resolved }`.
 - Non testé automatiquement : le **transport HTTP** (le dépôt n'a aucun harnais de test de routes) — routes minces, logique testée au niveau des services.
 
 **Kits de soin** (règle maison, décision de Saar 2026-09-25 — le RAW décrit First Aid / ChiriaT / Medi 1 000 comme un équipement à niveaux, jamais comme un consommable) :
@@ -431,7 +444,7 @@ quel (pas un nouvel événement) pour resynchroniser la fiche personnage après 
 | Code | Description |
 |---|---|
 | — | `character_wounds.occurred_at_game_minutes` ancré sur `campaigns.game_time_resolved_minutes`, jamais `game_time_minutes` (affiché) — sinon une blessure posée après un recul MJ de l'horloge peut déclencher son échéance dès la prochaine avance, sans qu'aucune minute ne se soit écoulée |
-| — | Fusion de `payload` avant `resolveEcheanceNow` (`healing-choice`/`infection-mode`) : toujours une expression SQL atomique (`payload \|\| ?::jsonb`), jamais un lire-puis-écrire JS |
+| — | Fusion de `payload` avant `resolveEcheanceNow` (`woundReviewBatchService`) : toujours une expression SQL atomique (`payload \|\| ?::jsonb`), jamais un lire-puis-écrire JS |
 | — | `wound_infection_check` n'est jamais créée à la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe du `wound_healing_check` |
 | — | `WOUND_INFECTION[severity]` doit exister pour toute gravité qui a une échéance de guérison : sans l'entrée `mort_subite`, un échec de guérison d'un Membre détruit ferait planter le handler (`rule` indéfini). L'entrée d'infection et l'échéance de guérison d'une gravité arrivent dans le même commit |
 | — | Ne jamais lire `WOUND_HEALING[severity]` directement : passer par `getWoundHealing(severity, location)` (Mort en Tête/Corps → `null`, Membre détruit → ligne `membreDetruit`) |
