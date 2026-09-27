@@ -8860,3 +8860,11 @@ résultats rendus dans l'ordre des entrées. Client : `healingEntriesForLocation
 
 **Testé** : 255 tests en base (wound*, combatantContext, echeanceService, reviewTrace, migrations 365-366) dont 4 nouveaux du lot groupé (garde 409, périmées non exigées, ordre du plus léger au plus grave — vérifié par mutation : l'ordre inversé le fait échouer —, échec d'une guérison = toute la localisation annulée)
 et 2 de la vue ; 17 tests des gestes client ; 882 tests purs de `shared` ; build client ; validé en jeu par Saar (« Test ok »). **Données** : aucune (ni migration ni donnée). **Retour arrière** : `git revert` du commit.
+
+---
+
+## Session (Dev) — 2026-09-27 — Chantier « guérison conforme au livre » laissé à ce stade
+
+**Décision de Saar (2026-09-27)** : « On va laisser ce chantier à ce stade dans l'immédiat. » Les Lots A, B1 et B2 sont clos, poussés et validés en jeu (`79f5557`, `e24da4c`, `5554b30`) : la règle des cases, l'infection par personnage et par localisation, et la réponse de soins par localisation
+sont conformes au livre. Rien n'est repris sans nouvelle demande de Saar. Restent en attente (voir `docs/ROADMAP.md`) : le Lot 2b de l'écran de revue (silhouette, choix des kits, `care` réellement envoyé), la reprise de l'ordre des bugs mis en pause pour ce chantier, et le ticket
+`EXO-AVARIE-LINE-CONVENTION` (décision de Saar en attente).
