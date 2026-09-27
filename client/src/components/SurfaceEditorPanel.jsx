@@ -69,6 +69,39 @@ const CHIP_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', minHeight: '48px',
 }
 
+// Regroupement du menu « Effet » par catégorie (PLAN_ZONES_DANGER.md §6.2 point 2) — la catégorie
+// existe déjà côté serveur (definition.category, serializeDefinition) et n'était jusqu'ici jamais
+// utilisée par ce panneau : liste à plat de ~20 entrées depuis que le catalogue RAW (Z0-Z2) a
+// rejoint les 5 anciens types. RAW (feu/acide/gaz/radiation/decompression) et legacy (catégories
+// namespacées 'hazard:fire'/'terrain:water'/'atmosphere:gas'/'terrain:footing') ne partagent pas le
+// même vocabulaire de catégorie — cette table les fait converger vers le même groupe visible ; une
+// définition custom MJ (`builtin:false`) va toujours dans son propre groupe, jamais mélangée au RAW.
+const EFFECT_CATEGORY_GROUPS = {
+  feu: 'effectCategoryFeu', 'hazard:fire': 'effectCategoryFeu',
+  acide: 'effectCategoryAcide',
+  decompression: 'effectCategoryDecompression',
+  radiation: 'effectCategoryRadiation',
+  gaz: 'effectCategoryGaz', 'atmosphere:gas': 'effectCategoryGaz',
+  'terrain:water': 'effectCategoryLegacy', 'terrain:footing': 'effectCategoryLegacy',
+}
+const EFFECT_CATEGORY_GROUP_ORDER = [
+  'effectCategoryFeu', 'effectCategoryAcide', 'effectCategoryDecompression',
+  'effectCategoryRadiation', 'effectCategoryGaz', 'effectCategoryLegacy', 'effectCategoryCustom',
+]
+function groupEffectDefinitions(definitions, t) {
+  const byGroup = new Map()
+  for (const definition of definitions) {
+    const groupKey = !definition.builtin
+      ? 'effectCategoryCustom'
+      : (EFFECT_CATEGORY_GROUPS[definition.category] || 'effectCategoryLegacy')
+    if (!byGroup.has(groupKey)) byGroup.set(groupKey, [])
+    byGroup.get(groupKey).push(definition)
+  }
+  return EFFECT_CATEGORY_GROUP_ORDER
+    .filter(groupKey => byGroup.has(groupKey))
+    .map(groupKey => ({ groupKey, label: t(`surfaceEditor.${groupKey}`), definitions: byGroup.get(groupKey) }))
+}
+
 // ─── Palette surface/entités (mode édition) ───────────────────────────────────
 // Extrait de Sidebar.jsx (PLAN_REFACTOR_SIDEBAR.md Lot 5) — comportement inchangé.
 // objectSearch/refreshingObjects/customEffectOpen/customEffectDraft restent des états contrôlés
@@ -579,24 +612,28 @@ export default function SurfaceEditorPanel({
             )}
             {surfaceToolState.mode === 'effect' && (
               <div className="sidebar-glass" style={styles.connectorPicker}>
-                <div style={styles.connectorPickerTitle}>Région environnementale</div>
+                <div style={styles.connectorPickerTitle}>{t('surfaceEditor.effectZone')}</div>
                 <div style={styles.roomToolGrid}>
                   <label style={styles.roomToolLabel}>
-                    <span>Effet</span>
+                    <span>{t('surfaceEditor.effectTypeLabel')}</span>
                     <select
                       value={surfaceToolState.effectDefinitionKey || 'fire'}
                       onChange={e => updateSurfaceTool({ effectDefinitionKey: e.target.value })}
                       className="sidebar-tool-field"
                     >
-                      {(worldEffects.definitions || []).map(definition => (
-                        <option key={definition.key} value={definition.key}>
-                          {definition.label}{definition.builtin ? '' : ' (MJ)'}
-                        </option>
+                      {groupEffectDefinitions(worldEffects.definitions || [], t).map(group => (
+                        <optgroup key={group.groupKey} label={group.label}>
+                          {group.definitions.map(definition => (
+                            <option key={definition.key} value={definition.key}>
+                              {definition.label}{definition.builtin ? '' : ` (${t('surfaceEditor.customEffectSuffix')})`}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </label>
                   <label style={styles.roomToolLabel}>
-                    <span>Intensité</span>
+                    <span>{t('surfaceEditor.effectIntensityLabel')}</span>
                     <input
                       type="number"
                       min="0.01"
@@ -608,7 +645,7 @@ export default function SurfaceEditorPanel({
                     />
                   </label>
                   <label style={styles.roomToolLabel}>
-                    <span>Hauteur du volume</span>
+                    <span>{t('surfaceEditor.effectVolumeHeightLabel')}</span>
                     <input
                       type="number"
                       min="0.1"
@@ -619,32 +656,44 @@ export default function SurfaceEditorPanel({
                       className="sidebar-tool-field"
                     />
                   </label>
+                  <label style={styles.roomToolLabel}>
+                    <span>{t('surfaceEditor.effectPuissanceLabel')}</span>
+                    <input
+                      type="number"
+                      min="-1000"
+                      max="1000"
+                      step="1"
+                      value={surfaceToolState.effectPuissance ?? 0}
+                      onChange={e => updateSurfaceTool({ effectPuissance: Math.round(Number(e.target.value) || 0) })}
+                      className="sidebar-tool-field"
+                    />
+                  </label>
                 </div>
                 <button type="button" onClick={() => setCustomEffectOpen(open => !open)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                  {customEffectOpen ? 'Fermer' : 'Nouvel effet MJ'}
+                  {customEffectOpen ? t('common.close') : t('surfaceEditor.newCustomEffect')}
                 </button>
                 {customEffectOpen && (
                   <div className="sidebar-glass" style={styles.connectorColorList}>
                     <label style={styles.roomToolLabel}>
-                      <span>Clé technique</span>
+                      <span>{t('surfaceEditor.customEffectKeyLabel')}</span>
                       <input
                         value={customEffectDraft.key}
                         onChange={e => setCustomEffectDraft(draft => ({ ...draft, key: e.target.value }))}
-                        placeholder="debris-lourds"
+                        placeholder={t('surfaceEditor.customEffectKeyPlaceholder')}
                         className="sidebar-tool-field"
                       />
                     </label>
                     <label style={styles.roomToolLabel}>
-                      <span>Nom</span>
+                      <span>{t('surfaceEditor.customEffectLabelField')}</span>
                       <input
                         value={customEffectDraft.label}
                         onChange={e => setCustomEffectDraft(draft => ({ ...draft, label: e.target.value }))}
-                        placeholder="Débris lourds"
+                        placeholder={t('surfaceEditor.customEffectLabelPlaceholder')}
                         className="sidebar-tool-field"
                       />
                     </label>
                     <label style={styles.roomToolLabel}>
-                      <span>Multiplicateur de déplacement</span>
+                      <span>{t('surfaceEditor.customEffectMovementMultiplier')}</span>
                       <input
                         type="number"
                         min="0.05"
@@ -656,7 +705,7 @@ export default function SurfaceEditorPanel({
                       />
                     </label>
                     <label style={styles.roomToolLabel}>
-                      <span>Note / règle MJ</span>
+                      <span>{t('surfaceEditor.customEffectNoteLabel')}</span>
                       <textarea
                         value={customEffectDraft.note}
                         onChange={e => setCustomEffectDraft(draft => ({ ...draft, note: e.target.value }))}
@@ -665,20 +714,23 @@ export default function SurfaceEditorPanel({
                       />
                     </label>
                     <button type="button" onClick={createCustomEffect} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                      Créer et sélectionner
+                      {t('surfaceEditor.createCustomEffect')}
                     </button>
                   </div>
                 )}
                 {(worldEffects.instances || []).length > 0 && (
                   <div className="sidebar-glass" style={styles.connectorColorList}>
-                    <div style={styles.connectorPickerTitle}>Effets actifs</div>
+                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.activeEffectsTitle')}</div>
                     {worldEffects.instances.map(instance => {
                       const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
                       return (
                         <div key={instance.id} className="sidebar-tool-selection" style={styles.roomToolSelection}>
-                          <span>{definition?.label || instance.definitionKey} ×{instance.intensity}</span>
+                          <span>
+                            {definition?.label || instance.definitionKey} ×{instance.intensity}
+                            {Number(instance.puissance) !== 0 && ` · ${t('surfaceEditor.effectPuissanceLabel')} ${instance.puissance > 0 ? '+' : ''}${instance.puissance}`}
+                          </span>
                           <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                            Supprimer
+                            {t('common.delete')}
                           </button>
                         </div>
                       )
