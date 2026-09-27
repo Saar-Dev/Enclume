@@ -424,17 +424,23 @@ Les anciennes routes unitaires (`pending-review`, `:id/healing-choice`, `:id/inf
 - `GET .../game-echeances/review` (GM) → `{ advance, cards, summary }` (`woundReviewService.js:getReviewCardsForGm`, requêtes groupées). `advance` = `{ pending, deltaMinutes }` : l'avance de temps en attente
   (`campaigns.pending_advance_delta_minutes`), présente **même sans aucune échéance** — l'écran reste affiché tant qu'elle est en attente (l'ancien écran se cachait quand la liste était vide et emportait « Confirmer » / « Annuler »).
   `summary` = `{ answerableCount, awaitingPlayerCount, queuedCount }` (réponses possibles maintenant · dont jets de joueurs attendus · déjà dues, prochaine ronde). Une carte par personnage :
-  `state` (compteur groupé, malus, `testBlocked`, codes de statuts des tokens), `lines` (une par localisation + gravité : `cases`, `dueCases`, `queuedCases`, `answerable`,
-  `dueEcheanceIds`, `targetSeverity`, `kits { alternatives, defaultKits }`, `items` avec `step { n, total }`, `isLastStep`, `isFirstTest`), `infections` (`rollsNeeded`),
+  `state` (compteur groupé, malus, `testBlocked`, codes de statuts des tokens), `locations` (une par localisation à soigner : `severity` (la pire gravité échue), `dueCases`, `queuedCases`, `answerable`,
+  `dueEcheanceIds` (TOUTES les échéances échues de la localisation), `kits { alternatives, defaultKits }`, et `lines` = le détail par gravité en lecture seule : `severity`, `cases`, `dueCases`, `queuedCases`, `targetSeverity`,
+  `items` avec `step { n, total }`, `isLastStep`, `isFirstTest`), `infections` (`rollsNeeded`),
   `orphans` (échéance sans blessure — montrée, jamais masquée : elle bloquerait « Confirmer » en silence), `kitTotals`. Joueurs (`characters.type = 'pj'`) d'abord, puis PNJ.
-  Une ligne = UN Test (RAW « Localisation par Localisation », `REGLEBLESSURES.md:386-392`) donc un seul jeu de kits, celui du Test le plus exigeant de ses cases échues.
+  **Une localisation = UN Test** (RAW « Localisation par Localisation, quel que soit le nombre de cases cochées sur chaque ligne », `REGLEBLESSURES.md:386-392`, Lot B2) : une seule réponse pour toutes ses guérisons échues, quelle que soit la gravité, et un seul
+  jeu de kits, celui de la pire gravité échue (Q5). Le regroupement est `groupHealingByLocation` (`woundReviewService.js`), lu par la vue ET par la garde de la résolution groupée.
   Une échéance `active` déjà due (prochaine ronde, pas encore ouverte par « Confirmer ») est `answerable: false` ; « déjà due » se juge sur la **fin de l'avance en attente**
   (`max(résolu, affiché + avance)`, comme `confirmPendingAdvance`), pas sur le repère résolu actuel — sinon les infections nées d'un Échec (dues à la date de leur guérison) ne seraient annoncées qu'après un refus 409. Forme du payload figée par test.
 - `POST .../game-echeances/healing-choices` (GM) — `{ choices: [{ echeanceId, mjChoice }], care? }` → `{ results: [{ echeanceId, resolved, stale?, error? }] }` ;
   `POST .../game-echeances/infection-modes` (GM) — `{ choices: [{ echeanceId, mode: 'auto' | 'player' }] }` (`woundReviewBatchService.js`, routes minces).
-  1 à `REVIEW_BATCH_MAX_ENTRIES` (200, `shared/woundConstants.js`, lue aussi par l'écran qui découpe ses envois) entrées, pas de doublon, toutes de la campagne et du bon type sinon la demande entière est refusée (400/404, rien d'écrit). **Un savepoint par entrée** : le moteur
-  d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif (une blessure sans échéance vivante) ; ici l'entrée est ANNULÉE (l'échéance reste en attente,
-  `error: true`). Une échéance périmée ou pas encore ouverte est `stale` sans faire échouer le lot ; une erreur inattendue (SQL) annule TOUT le lot. Après validation :
+  1 à `REVIEW_BATCH_MAX_ENTRIES` (200, `shared/woundConstants.js`, lue aussi par l'écran qui découpe ses envois) entrées, pas de doublon, toutes de la campagne et du bon type sinon la demande entière est refusée (400/404, rien d'écrit). **Un savepoint par unité** (une entrée, sauf pour les guérisons : une localisation) : le moteur
+  d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif (une blessure sans échéance vivante) ; ici l'unité est ANNULÉE (ses échéances restent en attente,
+  `error: true`) — l'échec d'une guérison annule TOUTE sa localisation, jamais à moitié répondue.
+  **Un Test de soins par localisation** (`planHealingUnits`, Lot B2) : le lot doit répondre à TOUTES les échéances répondables d'une localisation touchée, avec la MÊME issue (sinon 409, rien d'écrit) ; les échéances répondables des personnages visés sont
+  verrouillées (`FOR UPDATE`, ordre d'identifiant) avant la vérification, dans la transaction ; une échéance périmée, non ouverte ou sans blessure n'entre dans aucun Test. La localisation se résout du plus LÉGER au plus grave, quel que soit l'ordre envoyé :
+  une guérison qui aboutit se pose comme une nouvelle blessure (règle des cases), améliorer une gravité S ne touche que la ligne S−1, donc en commençant par le bas aucune case encore à traiter n'est effacée par une cascade (décision de méthode, JOURNAL8 2026-09-26).
+  Les résultats sortent dans l'ordre des entrées. Une échéance périmée ou pas encore ouverte est `stale` sans faire échouer le lot ; une erreur inattendue (SQL) annule TOUT le lot. Après validation :
   `GAME_ECHEANCE_RESOLVED` pour chaque échéance résolue ET pour celles annulées pendant le lot (avec leur case), `WOUND_UPDATED` une fois par personnage touché.
 - **`care` (facultatif)** : `{ provider ∈ {none, character, npc, hospital, professional}, providerCharacterId?, providerName?, equipment ∈ {complete, partial, none} }` — validé (personnage de la campagne,
   nom libre nettoyé et borné à 60 caractères), **non stocké**, raconté dans le chat : une ligne par personnage et par issue (`combat:woundCare.notice`). Absent = rien n'est déclaré, rien n'est raconté.

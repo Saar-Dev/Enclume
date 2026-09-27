@@ -805,14 +805,13 @@
       },
       "closeAnomalies": "Clore"
     },
-    "line": {
-      "title": "{{location}} — {{severity}}",
-      "cases_one": "{{count}} case",
-      "cases_other": "{{count}} cases",
+    "queued": "prochaine ronde",
+    "location": {
+      "cases_one": "{{severity}} : {{count}} case",
+      "cases_other": "{{severity}} : {{count}} cases",
       "dueOf_one": "dont {{count}} échue",
       "dueOf_other": "dont {{count}} échues",
       "week": "semaine {{steps}}",
-      "queued": "prochaine ronde",
       "consequence": {
         "becomes": "Réussite : passe à « {{target}} »",
         "gone": "Réussite : la blessure disparaît",

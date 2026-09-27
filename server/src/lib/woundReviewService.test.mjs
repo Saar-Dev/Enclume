@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { getPendingRollsForPlayer, getReviewCardsForGm } from './woundReviewService.js'
+import { getPendingRollsForPlayer, getReviewCardsForGm, groupHealingByLocation } from './woundReviewService.js'
 import { resolveWoundInsertion } from './woundUtils.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (écrire une blessure programme son échéance de guérison)
 
@@ -142,7 +142,7 @@ async function woundInReview(who, location, severity, { open = true } = {}) {
   return inserted
 }
 
-test('getReviewCardsForGm : une carte par personnage, joueurs avant PNJ, lignes du compteur (une par localisation+gravité) de la pire à la plus légère', { skip }, async () => {
+test('getReviewCardsForGm : une carte par personnage, joueurs avant PNJ, un bloc par LOCALISATION (un Test) de la pire à la plus légère', { skip }, async () => {
   const f = await createCardsFixture()
   try {
     await woundInReview(f.pj, 'corps', 'moyenne')
@@ -159,30 +159,32 @@ test('getReviewCardsForGm : une carte par personnage, joueurs avant PNJ, lignes 
     assert.equal(summary.queuedCount, 0)
 
     const [pjCard] = cards
-    assert.deepEqual(pjCard.lines.map(l => l.key), ['tete:mortelle', 'jambe_gauche:critique', 'corps:moyenne'])
+    assert.deepEqual(pjCard.locations.map(l => l.key), ['tete', 'jambe_gauche', 'corps'])
 
-    const moyenne = pjCard.lines.find(l => l.key === 'corps:moyenne')
-    assert.equal(moyenne.cases, 2)
+    const moyenne = pjCard.locations.find(l => l.key === 'corps')
+    assert.equal(moyenne.severity, 'moyenne')
     assert.equal(moyenne.dueCases, 2)
     assert.equal(moyenne.queuedCases, 0)
     assert.equal(moyenne.answerable, true)
     assert.equal(moyenne.dueEcheanceIds.length, 2)
-    assert.equal(moyenne.targetSeverity, 'legere')
+    const [moyenneLine] = moyenne.lines
+    assert.deepEqual([moyenneLine.severity, moyenneLine.cases, moyenneLine.dueCases, moyenneLine.queuedCases, moyenneLine.targetSeverity], ['moyenne', 2, 2, 0, 'legere'])
     assert.deepEqual(moyenne.kits, { alternatives: [['premiersSoins'], ['medecine']], defaultKits: ['premiersSoins'] })
-    assert.equal(moyenne.items.every(i => i.step === null && i.isLastStep === true), true, 'échéance unique : pas d\'étape')
+    assert.equal(moyenneLine.items.every(i => i.step === null && i.isLastStep === true), true, 'échéance unique : pas d\'étape')
 
-    const critique = pjCard.lines.find(l => l.key === 'jambe_gauche:critique')
-    assert.equal(critique.items[0].step.n, 1)
-    assert.equal(critique.items[0].step.total, 3)
-    assert.equal(critique.items[0].isLastStep, false)
-    assert.equal(critique.targetSeverity, 'grave')
+    const critique = pjCard.locations.find(l => l.key === 'jambe_gauche')
+    const [critiqueLine] = critique.lines
+    assert.equal(critiqueLine.items[0].step.n, 1)
+    assert.equal(critiqueLine.items[0].step.total, 3)
+    assert.equal(critiqueLine.items[0].isLastStep, false)
+    assert.equal(critiqueLine.targetSeverity, 'grave')
     assert.deepEqual(critique.kits.alternatives, [['medecine']])
 
-    const mortelle = pjCard.lines.find(l => l.key === 'tete:mortelle')
+    const mortelle = pjCard.locations.find(l => l.key === 'tete')
     assert.deepEqual(mortelle.kits.alternatives, [['chirurgie', 'medecine']], 'premier Test : l\'opération')
-    assert.deepEqual([mortelle.items[0].step.n, mortelle.items[0].step.total], [1, 5])
+    assert.deepEqual([mortelle.lines[0].items[0].step.n, mortelle.lines[0].items[0].step.total], [1, 5])
 
-    // Un jeu de kits par LIGNE (une Moyenne à 2 cases = un seul kit) : premiersSoins 1, médecine 1 (Critique) + 1 (Mortelle), chirurgie 1.
+    // Un jeu de kits par LOCALISATION (une Moyenne à 2 cases = un seul kit) : premiersSoins 1, médecine 1 (Critique) + 1 (Mortelle), chirurgie 1.
     assert.deepEqual(pjCard.kitTotals, { premiersSoins: 1, medecine: 2, chirurgie: 1 })
 
     // État du personnage : compteur groupé, malus, Test bloqué (Mortelle).
@@ -207,20 +209,20 @@ test('getReviewCardsForGm : cases échues ≠ cases de la ligne ; une échéance
 
     const { cards, summary } = await getReviewCardsForGm(f.campaign.id)
     const [card] = cards
-    const partial = card.lines.find(l => l.key === 'corps:moyenne')
-    assert.equal(partial.cases, 2)
+    const partial = card.locations.find(l => l.key === 'corps')
+    assert.equal(partial.lines[0].cases, 2)
     assert.equal(partial.dueCases, 1)
     assert.equal(partial.queuedCases, 1)
     assert.equal(partial.answerable, true)
     assert.equal(partial.dueEcheanceIds.length, 1)
 
-    const queued = card.lines.find(l => l.key === 'tete:grave')
+    const queued = card.locations.find(l => l.key === 'tete')
     assert.equal(queued.answerable, false)
     assert.deepEqual(queued.dueEcheanceIds, [])
     assert.equal(queued.kits, null)
     assert.equal(summary.answerableCount, 1)
     assert.equal(summary.queuedCount, 2)
-    assert.deepEqual(card.kitTotals, { premiersSoins: 1, medecine: 0, chirurgie: 0 }, 'seule la ligne répondable compte')
+    assert.deepEqual(card.kitTotals, { premiersSoins: 1, medecine: 0, chirurgie: 0 }, 'seule la localisation répondable compte')
   } finally {
     await cleanupCards(f)
   }
@@ -257,6 +259,46 @@ test('getReviewCardsForGm : infections décrites (jets nécessaires) ; échéanc
   }
 })
 
+test('getReviewCardsForGm : plusieurs gravités dans UNE localisation = UN bloc (un Test) : toutes les échéances échues, un seul jeu de kits (la pire gravité), détail par gravité', { skip }, async () => {
+  const f = await createCardsFixture()
+  try {
+    await woundInReview(f.pj, 'jambe_gauche', 'moyenne')
+    await woundInReview(f.pj, 'jambe_gauche', 'moyenne')
+    await woundInReview(f.pj, 'jambe_gauche', 'critique')
+    await woundInReview(f.pj, 'jambe_gauche', 'grave', { open: false }) // pas encore ouverte : n'entre pas dans la réponse
+    await db('campaigns').where({ id: f.campaign.id }).update({ game_time_resolved_minutes: 1000000 })
+
+    const { cards, summary } = await getReviewCardsForGm(f.campaign.id)
+    const [card] = cards
+    assert.equal(card.locations.length, 1, 'une seule localisation à soigner')
+    const [leg] = card.locations
+    assert.equal(leg.severity, 'critique', 'la gravité du Test : la pire échue')
+    assert.equal(leg.dueCases, 3)
+    assert.equal(leg.queuedCases, 1)
+    assert.equal(leg.dueEcheanceIds.length, 3, 'UNE réponse pour toutes les échéances échues de la localisation')
+    assert.deepEqual(leg.lines.map(l => [l.severity, l.cases, l.dueCases, l.queuedCases]), [['critique', 1, 1, 0], ['grave', 1, 0, 1], ['moyenne', 2, 2, 0]])
+    assert.deepEqual(leg.kits.alternatives, [['medecine']], 'le Test suit la Critique : Médecine, pas Premiers soins')
+    assert.deepEqual(card.kitTotals, { premiersSoins: 0, medecine: 1, chirurgie: 0 }, 'un jeu de kits pour la localisation, pas un par gravité')
+    assert.equal(summary.answerableCount, 3)
+  } finally {
+    await cleanupCards(f)
+  }
+})
+
+test('groupHealingByLocation : un groupe par (personnage, localisation), du plus léger au plus grave, les échéances sans blessure écartées', () => {
+  const wound = (id, location, severity) => [id, { id, location, severity }]
+  const woundById = Object.fromEntries([wound('w1', 'bras_droit', 'grave'), wound('w2', 'bras_droit', 'moyenne'), wound('w3', 'bras_droit', 'moyenne'), wound('w4', 'corps', 'critique'), wound('w5', 'bras_droit', 'critique')])
+  const row = (id, characterId, woundId) => ({ id, character_id: characterId, payload: { woundId } })
+  const groups = groupHealingByLocation([
+    row('e1', 'alice', 'w1'), row('e3', 'alice', 'w3'), row('e2', 'alice', 'w2'), row('e4', 'alice', 'w4'), row('e5', 'bob', 'w5'), row('e6', 'alice', 'absente'),
+  ], woundById)
+  assert.deepEqual(groups.map(g => [g.characterId, g.location, g.members.map(m => m.row.id)]), [
+    ['alice', 'bras_droit', ['e2', 'e3', 'e1']], // moyennes (par identifiant), puis la grave
+    ['alice', 'corps', ['e4']],
+    ['bob', 'bras_droit', ['e5']], // même localisation, autre personnage : autre Test
+  ])
+})
+
 test('getReviewCardsForGm : forme du payload FIGÉE (contrat lu par l\'écran du Lot 2a)', { skip }, async () => {
   const f = await createCardsFixture()
   try {
@@ -266,12 +308,14 @@ test('getReviewCardsForGm : forme du payload FIGÉE (contrat lu par l\'écran du
     assert.deepEqual(Object.keys(result.summary).sort(), ['answerableCount', 'awaitingPlayerCount', 'queuedCount'])
     assert.deepEqual(Object.keys(result.advance).sort(), ['deltaMinutes', 'pending'])
     const [card] = result.cards
-    assert.deepEqual(Object.keys(card).sort(), ['characterId', 'infections', 'isPlayer', 'kitTotals', 'lines', 'name', 'orphans', 'state', 'type'])
+    assert.deepEqual(Object.keys(card).sort(), ['characterId', 'infections', 'isPlayer', 'kitTotals', 'locations', 'name', 'orphans', 'state', 'type'])
     assert.deepEqual(Object.keys(card.state).sort(), ['statuses', 'testBlocked', 'woundPenalty', 'wounds'])
-    const [line] = card.lines
-    assert.deepEqual(Object.keys(line).sort(),
-      ['answerable', 'cases', 'dueCases', 'dueEcheanceIds', 'items', 'key', 'kits', 'location', 'queuedCases', 'severity', 'targetSeverity'])
-    assert.deepEqual(Object.keys(line.kits).sort(), ['alternatives', 'defaultKits'])
+    const [location] = card.locations
+    assert.deepEqual(Object.keys(location).sort(),
+      ['answerable', 'dueCases', 'dueEcheanceIds', 'key', 'kits', 'lines', 'location', 'queuedCases', 'severity'])
+    assert.deepEqual(Object.keys(location.kits).sort(), ['alternatives', 'defaultKits'])
+    const [line] = location.lines
+    assert.deepEqual(Object.keys(line).sort(), ['cases', 'dueCases', 'items', 'queuedCases', 'severity', 'targetSeverity'])
     assert.deepEqual(Object.keys(line.items[0]).sort(), ['answerable', 'echeanceId', 'isFirstTest', 'isLastStep', 'step'])
     assert.deepEqual(Object.keys(line.items[0].step).sort(), ['n', 'total'])
   } finally {

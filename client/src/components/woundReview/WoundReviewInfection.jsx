@@ -31,7 +31,7 @@ export default function WoundReviewInfection({ infection, busy, onAnswer }) {
           onPick={mode => onAnswer({ infection: [infectionEntryFor(infection, mode)] })}
         />
       ) : (
-        <div className="wound-review-meta">{t('woundReview.line.queued')}</div>
+        <div className="wound-review-meta">{t('woundReview.queued')}</div>
       )}
     </div>
   )

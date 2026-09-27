@@ -1,3 +1,12 @@
+## v262 — 2026-09-26 — Un seul Test de soins par localisation
+
+### Blessures
+- [fix] L'écran de revue des guérisons répond **par localisation**, comme le livre (« Localisation par Localisation, quel que soit le nombre de cases cochées sur chaque ligne ») : une seule réponse (Réussite, Échec ou Catastrophe) pour toutes les blessures échues
+  d'une même localisation, quelle que soit leur gravité. Le serveur refuse une réponse qui n'en couvre qu'une partie ou qui donne des issues différentes.
+- [fix] Dans une localisation, les blessures guérissent **du plus léger au plus grave**. Avant, la pire gravité passait d'abord : une Grave qui guérissait pouvait effacer une ligne de Moyennes pleine (les réponses données pour ces Moyennes étaient perdues).
+  Exemple : Corps avec 3 Moyennes et 1 Grave, Réussite : on obtient maintenant 3 Légères et 1 Moyenne.
+- [change] Le décompte des kits de soin compte un jeu par localisation (celui de sa pire blessure échue), et non plus un par ligne. Si la guérison d'une blessure échoue, toute sa localisation reste à répondre.
+
 ## v261 — 2026-09-26 — Un seul Test d'infection par localisation
 
 ### Blessures

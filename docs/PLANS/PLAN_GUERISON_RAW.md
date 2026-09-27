@@ -1,7 +1,7 @@
 # PLAN_GUERISON_RAW — Guérison, infection et cases des blessures : se conformer au texte du livre
 
 > 2026-09-26 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé dans `docs/Old/` et fusionné dans `docs/SYSTEME/BLESSURES.md` une fois clos.
-> Statut : 🟡 **Cadré le 2026-09-26. Lot A CLOS et poussé (`79f5557`, validé en jeu). Lot B1 (un seul Test d'infection par localisation) : analyse à charge faite (§8), CODÉ (297 tests en base verts, migrations 365-366 appliquées en local), en attente de validation en jeu par Saar. Lot B2 (réponse de l'écran par localisation) non commencé.** Il reprend et remplace le ticket `WOUND-HEAL-LINE-CAPACITY` (bug n°2 de la résolution de bugs) et le ticket
+> Statut : 🟡 **Cadré le 2026-09-26. Lot A CLOS et poussé (`79f5557`, validé en jeu). Lot B1 (un seul Test d'infection par localisation) CLOS, poussé (`e24da4c`), validé en jeu (migrations 365-366). Lot B2 (réponse de l'écran par localisation) CLOS, validé en jeu (255 tests en base + 17 tests client + 882 tests purs verts, build client OK).** Il reprend et remplace le ticket `WOUND-HEAL-LINE-CAPACITY` (bug n°2 de la résolution de bugs) et le ticket
 > `WOUND-FULL-LINE-TWO-CONVENTIONS`. Suite de `PLAN_REVUE_GUERISON.md` (écran de revue, Lots 0-2a livrés).
 > Base de travail : **`docs/MANUELS/MANUEL_BLESSURES.md`** (V1, 2026-09-26 : le chapitre du livre traduit et vérifié, à valider par Saar) — le §2 ci-dessous n'en est que l'extrait utile ; en cas de divergence, le manuel prévaut.
 > Hiérarchie : **Livre de Base Polaris (`docs/REGLES/REGLEBLESSURES.md`)** > `SYSTEME/BLESSURES.md` > ce plan.
@@ -170,3 +170,61 @@ Base locale : 3 infections vivantes (même personnage) — à convertir.
 **Ordre d'écriture** (nodemon applique les migrations dès l'écriture d'un fichier sous `server/`) : le code d'abord, les migrations en DERNIER (conversion des infections vivantes, puis contrainte d'unicité).
 
 **Fusion** (`ensureLocationInfection`, idempotente) : rien de vivant → création ; vivante → récurrente l'emporte sur ponctuelle, occurrences les plus nombreuses, échéance la plus proche ; aucun changement → aucune entrée d'annulation.
+
+---
+
+## 9. Lot B2 — plan : l'écran répond par localisation (2026-09-26, avant analyse à charge)
+
+Marquage : [VÉRIFIÉ] = lu dans le code ; [HYPOTHÈSE] = lecture non tranchée par le livre.
+
+### 9.1 Le problème [VÉRIFIÉ]
+Le livre (R4, l. 386-392) : « traitées **Localisation par Localisation**, quel que soit le nombre de cases cochées sur chaque ligne ». Aujourd'hui l'écran de revue répond par **ligne** (localisation × gravité) : une Jambe gauche avec 2 Moyennes et 1 Grave montre
+DEUX blocs, chacun avec ses boutons (`WoundReviewLine.jsx`) ; le MJ peut donc mettre Réussite sur l'un et Échec sur l'autre, alors que le livre ne connaît qu'UN Test par localisation. Rien, côté serveur, ne l'empêche (`resolveHealingChoices` accepte n'importe quelle combinaison d'issues).
+L'unité « ligne » vient de la vue (`buildLine`, clé `localisation:gravité`), pas du livre. Depuis B1, le seul autre écart avec R4 est cette unité de réponse : les jets d'infection sont déjà par localisation.
+
+### 9.2 Modèle visé
+- **Unité de réponse = (personnage, localisation)** : UNE issue (Réussite / Échec / Catastrophe) pour toutes les échéances de guérison **échues** (répondables) de cette localisation, quelle que soit la gravité. Les échéances non échues ou pas encore ouvertes (`active`, prochaine ronde) ne sont pas concernées : elles auront leur Test à leur date [HYPOTHÈSE = Q8, comportement actuel : un Test à la fin de la période de la blessure].
+- **Le serveur garde l'invariant** (autorité unique, jamais la seule vue) : `resolveHealingChoices` refuse (409, rien d'écrit) un lot qui, pour une localisation, ne contient pas TOUTES ses échéances répondables, ou leur donne des issues différentes. Une échéance périmée (`stale`) ou non ouverte n'entre pas dans le compte.
+  Choix « toutes ou aucune » plutôt que « même issue dans le lot » : deux clics successifs sur deux gravités de la même localisation feraient sinon deux Tests ; l'exigence de complétude ferme aussi ce cas.
+- **Une seule fonction pure de regroupement** (`groupHealingByLocation`, dans `woundReviewService.js`) lue par la vue ET par la garde : jamais deux définitions de « quelles échéances forment un Test ».
+- **La vue** : `card.lines` (ligne = localisation × gravité) devient `card.locations` : `{ key, location, severity (la pire gravité échue), dueCases, queuedCases, answerable, dueEcheanceIds (toutes les échues de la localisation), kits, lines: [détail par gravité, lecture seule : cases, échues, gravité d'arrivée, étapes] }`.
+  **Kits** : un seul jeu par localisation — celui de la pire gravité échue (Q5 : « le Test porte sur la pire blessure » ; à égalité, celui du premier Test) ; `kitTotals` = un jeu par localisation répondable. Le décompte reste AFFICHÉ, jamais consommé (décision de Saar).
+- **Le client** : `healingEntriesForLocation(location, outcome)` remplace `…ForLine` ; le détail replié de la carte affiche un bloc PAR LOCALISATION (boutons Réussite/Échec/Catastrophe), avec en dessous la conséquence de « Réussite » gravité par gravité ; le geste par défaut (« toute la carte ») ne change pas de sens.
+  Le découpage en lots (200 entrées) ne coupe JAMAIS une localisation (sinon la garde refuserait les deux moitiés) : chaque entrée porte sa localisation, `chunkEntries` ne sépare pas deux entrées du même groupe.
+- **Hors périmètre** : l'infection reste son propre bloc (une par localisation, B1) ; Lot 2b (silhouette, choix des kits, `care`) ; aucune migration, aucune donnée touchée ; la règle « −2 par case en plus » du Test de soins n'est pas calculée par l'application (le Test se joue à la table).
+
+### 9.3 Fichiers
+`server/src/lib/woundReviewService.js` (+ test) · `server/src/lib/woundReviewBatchService.js` (+ test) · `client/src/lib/woundReviewGestures.js` (+ test) · `WoundReviewLine.jsx` → `WoundReviewLocation.jsx` (renommage) · `WoundReviewCard.jsx` · `client/src/locales/combat.json` (clés `woundReview.line.*` → `woundReview.location.*`) · `client/src/index.css` (classes de ligne, si renommées) ·
+commentaire de `shared/woundConstants.js` (« un kit par Test et par ligne » → par localisation) · docs : `SYSTEME/BLESSURES.md` (payload de la vue, invariant de la garde), `PLAN_REVUE_GUERISON.md` (contrat §12, note datée), `VOCABULARY.md` (unité de réponse), CHANGELOG v262, ROADMAP, JOURNAL8 (rejeu).
+
+### 9.4 Tests visés
+Vue : deux gravités dans une localisation → un seul bloc, toutes les échéances échues, un seul jeu de kits (la pire gravité) ; payload figé mis à jour. Garde : réponse partielle refusée, issues différentes refusées, échéance périmée/non ouverte non exigée, deux personnages d'une même localisation indépendants, échéance orpheline hors groupe, rien d'écrit sur refus.
+Client : entrées par localisation, découpage en lots qui ne sépare pas un groupe, comptes de carte. Rejouer les 297 tests en base du domaine + tests purs.
+
+### 9.5 À examiner dans l'analyse à charge
+Course entre la lecture de la vue et l'envoi (une échéance devient répondable entre-temps → refus 409, la vue est relue) ; échec de handler sur UNE entrée d'une localisation (le savepoint de l'entrée est annulé, les autres passent : la localisation est alors à moitié répondue — à trancher) ; kits quand la pire gravité échue est en cours de soins constants et qu'une gravité plus légère est à son premier Test ; message d'erreur du refus (i18n) ; compatibilité du payload avec l'ancien client déjà chargé dans un navigateur ouvert.
+
+---
+
+## 10. Lot B2 — analyse à charge (2026-09-26)
+
+**Défaut trouvé dans le code existant, que B2 rend inévitable à traiter : l'ORDRE de résolution dans une localisation** [VÉRIFIÉ par lecture de `placeWound` / `resolveWoundImprovement`]
+Une guérison qui aboutit se pose comme une nouvelle blessure (Lot A) : si la ligne d'arrivée est pleine, elle est effacée, ses échéances annulées, et la case est cochée au-dessus. Aujourd'hui l'ordre des réponses est celui de l'écran — la pire gravité d'abord (`byWorstFirst`), par accident d'affichage.
+Exemple : Corps, 3 Moyennes (ligne pleine, capacité 3) + 1 Grave, toutes échues, « Réussite ». **Pire d'abord** : la Grave veut devenir Moyenne, la ligne est pleine → les 3 Moyennes sont effacées, la Grave est recochée (période repartie de zéro) ; les 3 réponses « Moyenne » deviennent périmées (« déjà traitées ») et sont perdues.
+**Du plus léger d'abord** : les 3 Moyennes deviennent 3 Légères, puis la Grave devient Moyenne (place libre) → 3 Légères + 1 Moyenne, aucune réponse perdue. Démontré : améliorer une case de gravité S ne touche que la ligne S−1 (et écrit au plus à S) ; en traitant du plus léger au plus grave, aucune case encore à traiter n'est jamais effacée par une cascade.
+Les issues Échec/Catastrophe ne dépendent pas de l'ordre (l'infection est fusionnée, idempotente). → Le **serveur** fixe l'ordre (du plus léger au plus grave, puis identifiant), jamais le client ; c'est aussi ce qui évite un blocage mutuel entre deux lots (verrous pris dans le même ordre).
+Le livre ne dit rien de l'ordre (aucun texte : R4/R5 parlent de blessures qui « diminuent d'un niveau ») : c'est un choix, à faire valider par Saar avant de coder (question posée), consigné au JOURNAL8.
+
+**Corrections apportées au plan §9**
+1. **Atomicité par localisation** (répond au §9.5 « échec de handler sur une entrée ») : le point de sauvegarde n'est plus par entrée mais par LOCALISATION pour les guérisons. Si une seule échoue, toute la localisation est annulée (toutes ses entrées `error`), reste à répondre, jamais à moitié répondue ; les autres localisations du lot passent. Les infections gardent une entrée = un point de sauvegarde.
+2. **La garde tourne DANS la transaction**, après verrouillage (`FOR UPDATE`, ordre d'identifiant) des échéances de guérison répondables des personnages visés : la complétude et l'unicité d'issue sont vérifiées sur des lignes qui ne peuvent plus bouger (une lecture avant la transaction laissait une fenêtre : une échéance ouverte entre-temps). Un refus annule tout (rien n'était écrit).
+3. **L'ordre des résultats** : `traceBatch` associe `results[i]` à `entries[i]` ; le regroupement et le tri par localisation changent l'ordre d'exécution → les résultats sont remis dans l'ordre d'entrée avant de sortir.
+4. **Clé de groupe côté client = personnage + localisation** (deux personnages ont la même « jambe_gauche » : le bloc PNJ envoie leurs entrées dans un seul lot).
+5. **Pas de couche de compatibilité** avec l'ancien format `lines` : deux formats en parallèle seraient un second contrat. Un onglet resté ouvert avant le déploiement se recharge (F5) ; ses réponses partielles sont de toute façon refusées par la garde, avec un message.
+6. **Classes CSS inchangées** (`wound-review-line` sert aussi au bloc d'infection : ce n'est pas un nom de « ligne du compteur ») ; la clé de traduction `woundReview.line.queued` (partagée avec le bloc d'infection) devient `woundReview.queued`.
+7. **Message du refus** : texte français brut comme les autres refus de ce service (`choices : …`, 404) ; il ne s'affiche que si le client envoie une réponse incomplète (bug de client ou onglet périmé), l'écran normal ne peut pas le provoquer.
+
+**Vérifié, sans changement**
+- **Kits** : la pire gravité échue fixe le jeu de kits ; les gravités plus légères sont couvertes (Médecine couvre Premiers soins ; la Chirurgie du premier Test n'est demandée que par Mortelle / Membre détruit, les plus graves). Seul cas pathologique (un Membre détruit en soins constants et une Mortelle à son premier Test sur le même membre) : le décompte affiché serait celui du Membre détruit ; il n'est jamais consommé.
+- **Course lecture/envoi** : couverte par le point 2. **Lots de plus de 200 entrées** : une localisation compte quelques entrées au plus (capacités de la fiche), `chunkEntries` ne la sépare pas.
+- Aucun autre lecteur de `card.lines` que `WoundReviewCard` et `woundReviewGestures` [VÉRIFIÉ par recherche] ; aucun autre appelant de `resolveHealingChoices` que la route MJ.

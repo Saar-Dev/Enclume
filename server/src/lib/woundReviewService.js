@@ -108,6 +108,7 @@ function buildHealingItem(row, wound) {
   const occurrences = row.occurrences_remaining
   return {
     echeanceId: row.id,
+    severity: wound.severity,
     answerable: isAnswerable(row),
     // « semaine n/N » d'une échéance à soins constants ; une échéance unique (Moyenne/Grave) n'a pas d'étape.
     step: total === null ? null : { n: total - occurrences + 1, total },
@@ -117,24 +118,59 @@ function buildHealingItem(row, wound) {
   }
 }
 
-// Une ligne du compteur = UN Test (RAW « Localisation par Localisation », REGLEBLESSURES.md:386-392), donc un seul jeu de kits : celui du Test
-// le plus exigeant parmi ses cases échues (le premier Test d'une blessure, s'il y en a un).
-function buildLine(location, severity, items, casesOnLine) {
+// UN TEST = (personnage, localisation) : « Les blessures sont traitées Localisation par Localisation, quel que soit le nombre de cases cochées sur chaque
+// ligne » (REGLEBLESSURES.md:386-392). Autorité unique de « quelles échéances de guérison forment un Test », lue par la vue de revue ET par la garde de la
+// résolution groupée (woundReviewBatchService.js) — jamais deux définitions. `rows` : échéances de guérison ; `woundById` : les blessures visées (une échéance
+// dont la blessure a disparu est une anomalie : elle n'appartient à aucun Test). Chaque groupe est rendu dans l'ordre de RÉSOLUTION : du plus léger au plus
+// grave (puis par identifiant). Une guérison qui aboutit se pose comme une nouvelle blessure (règle des cases) : améliorer une case de gravité S ne touche que
+// la ligne S-1 ; en traitant les plus légères d'abord, aucune case encore à traiter n'est jamais effacée par une cascade et le résultat ne dépend plus de
+// l'ordre d'affichage (docs/PLANS/PLAN_GUERISON_RAW.md §10).
+export function groupHealingByLocation(rows, woundById) {
+  const groups = new Map()
+  for (const row of rows) {
+    const wound = woundById[row.payload?.woundId]
+    if (!wound) continue
+    const key = `${row.character_id}:${wound.location}`
+    if (!groups.has(key)) groups.set(key, { key, characterId: row.character_id, location: wound.location, members: [] })
+    groups.get(key).members.push({ row, wound })
+  }
+  for (const group of groups.values()) {
+    group.members.sort((a, b) => severityRank(a.wound.severity) - severityRank(b.wound.severity) || (a.row.id < b.row.id ? -1 : 1))
+  }
+  return [...groups.values()]
+}
+
+// Un bloc de la vue = UN Test (une localisation), donc UN seul jeu de kits : celui de la PIRE gravité échue (Q5 du manuel : « le Test porte sur la pire
+// blessure » ; à gravité égale, celui du premier Test). `lines` : le détail par gravité, en lecture seule (la réponse, elle, est unique).
+function buildLocation(group, casesByLine) {
+  const items = group.members.map(({ row, wound }) => buildHealingItem(row, wound))
   const answerableItems = items.filter(item => item.answerable)
-  const reference = answerableItems.find(item => item.isFirstTest) ?? answerableItems[0] ?? null
-  const alternatives = reference ? getCareKits(severity, location, reference.occurrences) : null
+  const worstFirst = (a, b) => severityRank(b.severity) - severityRank(a.severity) || Number(b.isFirstTest) - Number(a.isFirstTest)
+  const reference = [...answerableItems].sort(worstFirst)[0] ?? null
+  const alternatives = reference ? getCareKits(reference.severity, group.location, reference.occurrences) : null
+  const severities = [...new Set(items.map(item => item.severity))].sort((a, b) => severityRank(b) - severityRank(a))
+
   return {
-    key: `${location}:${severity}`,
-    location,
-    severity,
-    cases: casesOnLine,
+    key: group.location,
+    location: group.location,
+    severity: reference?.severity ?? severities[0], // la gravité du Test : la pire échue (à défaut, la pire de la localisation)
     dueCases: answerableItems.length,
     queuedCases: items.length - answerableItems.length,
     answerable: answerableItems.length > 0,
     dueEcheanceIds: answerableItems.map(item => item.echeanceId),
-    targetSeverity: improvedSeverity(severity),
     kits: alternatives ? { alternatives, defaultKits: defaultCareKits(alternatives) } : null,
-    items: items.map(({ occurrences, ...item }) => item),
+    lines: severities.map((severity) => {
+      const ofSeverity = items.filter(item => item.severity === severity)
+      const due = ofSeverity.filter(item => item.answerable)
+      return {
+        severity,
+        cases: casesByLine.get(`${group.location}:${severity}`) ?? 0,
+        dueCases: due.length,
+        queuedCases: ofSeverity.length - due.length,
+        targetSeverity: improvedSeverity(severity),
+        items: ofSeverity.map(({ echeanceId, answerable, step, isLastStep, isFirstTest }) => ({ echeanceId, answerable, step, isLastStep, isFirstTest })),
+      }
+    }),
   }
 }
 
@@ -157,11 +193,11 @@ export async function getReviewCardsForGm(campaignId) {
   const view = await buildReviewView(campaignId)
   reviewTrace(() => {
     const { advance, cards, summary } = view
-    const lines = cards.reduce((n, c) => n + c.lines.length, 0)
+    const locations = cards.reduce((n, c) => n + c.locations.length, 0)
     const infections = cards.reduce((n, c) => n + c.infections.length, 0)
     const orphans = cards.reduce((n, c) => n + c.orphans.length, 0)
     const advanceText = advance.pending ? `avance en attente de ${advance.deltaMinutes} min` : "aucune avance en attente"
-    return `vue de la revue lue (campagne ${shortId(campaignId)}, ${Date.now() - started} ms) : ${advanceText} ; ${cards.length} personnage(s) (${cards.filter(c => c.isPlayer).length} PJ), ${lines} ligne(s), ${infections} infection(s), ${orphans} anomalie(s) ; ${summary.answerableCount} réponse(s) à donner dont ${summary.awaitingPlayerCount} jet(s) de joueur, ${summary.queuedCount} à la ronde suivante${orphans > 0 ? ' ⚠ ANOMALIE : échéance sans blessure' : ''}`
+    return `vue de la revue lue (campagne ${shortId(campaignId)}, ${Date.now() - started} ms) : ${advanceText} ; ${cards.length} personnage(s) (${cards.filter(c => c.isPlayer).length} PJ), ${locations} localisation(s) à soigner, ${infections} infection(s), ${orphans} anomalie(s) ; ${summary.answerableCount} réponse(s) à donner dont ${summary.awaitingPlayerCount} jet(s) de joueur, ${summary.queuedCount} à la ronde suivante${orphans > 0 ? ' ⚠ ANOMALIE : échéance sans blessure' : ''}`
   })
   return view
 }
@@ -201,20 +237,18 @@ async function buildReviewView(campaignId) {
       casesByLine.set(key, (casesByLine.get(key) ?? 0) + 1)
     }
 
-    const itemsByLine = new Map()
     const infections = []
     const orphans = []
+    const healingRows = []
     for (const row of characterRows) {
-      // Une guérison appartient à une CASE ; une infection à une LOCALISATION, décrite par sa pire blessure susceptible de s'infecter.
+      // Une guérison appartient à une CASE (et se répond par LOCALISATION) ; une infection à une LOCALISATION, décrite par sa pire blessure susceptible de s'infecter.
       const isHealing = row.condition_type === 'wound_healing_check'
       const wound = isHealing ? woundById[row.payload?.woundId] : null
       const infectionTarget = isHealing ? null : findInfectionTarget(characterWounds.filter(w => w.location === row.payload?.location))
       if (isHealing ? !wound : !infectionTarget) { // ne devrait plus exister depuis le Lot 0 : montré, jamais masqué (il bloquerait « Confirmer » en silence)
         orphans.push({ echeanceId: row.id, conditionType: row.condition_type, status: row.status, answerable: isAnswerable(row) })
       } else if (isHealing) {
-        const key = `${wound.location}:${wound.severity}`
-        if (!itemsByLine.has(key)) itemsByLine.set(key, { location: wound.location, severity: wound.severity, items: [] })
-        itemsByLine.get(key).items.push(buildHealingItem(row, wound))
+        healingRows.push(row)
       } else {
         infections.push({
           echeanceId: row.id, location: row.payload.location, severity: infectionTarget.severity,
@@ -223,8 +257,8 @@ async function buildReviewView(campaignId) {
       }
     }
 
-    const lines = [...itemsByLine.entries()]
-      .map(([key, { location, severity, items }]) => buildLine(location, severity, items, casesByLine.get(key) ?? 0))
+    const locations = groupHealingByLocation(healingRows, woundById)
+      .map(group => buildLocation(group, casesByLine))
       .sort(byWorstFirst)
 
     const stateWounds = [...casesByLine.entries()]
@@ -242,10 +276,10 @@ async function buildReviewView(campaignId) {
         testBlocked: isTestBlockingWound(characterWounds),
         statuses: [...(statusesByCharacter.get(character.id) ?? [])].sort(),
       },
-      lines,
+      locations,
       infections: infections.sort(byWorstFirst),
       orphans,
-      kitTotals: sumCareKits(lines.filter(l => l.answerable && l.kits).map(l => l.kits.defaultKits)),
+      kitTotals: sumCareKits(locations.filter(l => l.answerable && l.kits).map(l => l.kits.defaultKits)),
     }
   })
   // Joueurs d'abord, puis PNJ ; par nom (le RAW réserve le système détaillé aux PJ et aux adversaires marquants).

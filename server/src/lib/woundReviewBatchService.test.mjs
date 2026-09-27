@@ -437,3 +437,103 @@ test('deux cases d\'une même localisation en Échec dans un même lot -> UN seu
     await cleanup(f)
   }
 })
+
+// ─── Lot B2 — un seul Test de soins par localisation ────────────────────────────────────────────────────────────────────────────────────────
+
+const refusal409 = (err) => err instanceof AppError && err.statusCode === 409
+
+test('un Test par localisation : une réponse qui ne couvre pas TOUTES les échéances échues de la localisation, ou leur donne des issues différentes, est refusée (409) — rien n\'est écrit', { skip }, async () => {
+  const f = await createFixture()
+  const { io, emitted } = captureIo()
+  try {
+    const moyenne = await woundInReview(f.alice, 'jambe_gauche', 'moyenne')
+    const grave = await woundInReview(f.alice, 'jambe_gauche', 'grave')
+    const ailleurs = await woundInReview(f.alice, 'tete', 'moyenne')
+
+    // Une seule des deux gravités de la jambe (l'ancien geste « ligne par ligne »).
+    await assert.rejects(resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([grave.echeance.id, ailleurs.echeance.id], 'amelioration') }), refusal409)
+    // Toute la jambe, mais deux issues.
+    await assert.rejects(resolveHealingChoices(io, f.campaign.id, {
+      choices: [{ echeanceId: moyenne.echeance.id, mjChoice: 'amelioration' }, { echeanceId: grave.echeance.id, mjChoice: 'echec' }],
+    }), refusal409)
+
+    for (const c of [moyenne, grave, ailleurs]) assert.equal((await echeanceRow(c.echeance.id)).status, 'pending_mj_review', 'rien n\'est résolu, même l\'autre localisation du lot')
+    assert.deepEqual(await severitiesOf(f.alice), ['grave', 'moyenne', 'moyenne'])
+    assert.equal(emitted.length, 0)
+
+    // Toute la jambe avec la même issue : accepté.
+    const { results } = await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([moyenne.echeance.id, grave.echeance.id], 'echec') })
+    assert.deepEqual(results.map(r => r.resolved), [true, true])
+  } finally {
+    await cleanup(f)
+  }
+})
+
+test('un Test par localisation : une échéance périmée ou pas encore ouverte de la localisation n\'est pas exigée ; un autre personnage (même localisation) est un autre Test', { skip }, async () => {
+  const f = await createFixture()
+  const { io } = captureIo()
+  try {
+    const due = await woundInReview(f.alice, 'jambe_gauche', 'moyenne')
+    await woundInReview(f.alice, 'jambe_gauche', 'grave', { open: false }) // active : prochaine ronde
+    const bobLeg = await woundInReview(f.bob, 'jambe_gauche', 'moyenne')
+
+    const { results } = await resolveHealingChoices(io, f.campaign.id, {
+      choices: [{ echeanceId: due.echeance.id, mjChoice: 'amelioration' }, { echeanceId: bobLeg.echeance.id, mjChoice: 'echec' }],
+    })
+    assert.deepEqual(results.map(r => r.resolved), [true, true], 'issues différentes pour deux personnages : deux Tests')
+  } finally {
+    await cleanup(f)
+  }
+})
+
+test('un Test par localisation : la localisation se résout du plus LÉGER au plus grave, quel que soit l\'ordre envoyé — 3 Moyennes (ligne pleine) + 1 Grave en Réussite : aucune réponse perdue', { skip }, async () => {
+  const f = await createFixture()
+  const { io } = captureIo()
+  try {
+    const moyennes = []
+    for (let i = 0; i < 3; i += 1) moyennes.push(await woundInReview(f.alice, 'corps', 'moyenne')) // capacité du Corps : 3 Moyennes
+    const grave = await woundInReview(f.alice, 'corps', 'grave')
+    const ids = [grave.echeance.id, ...moyennes.map(m => m.echeance.id)] // l'ordre de l'ancien écran : la pire d'abord
+
+    const { results } = await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf(ids, 'amelioration') })
+    assert.deepEqual(results.map(r => r.echeanceId), ids, 'résultats rendus dans l\'ordre des entrées')
+    assert.ok(results.every(r => r.resolved && !r.stale), 'aucune réponse périmée par une cascade')
+    // Les Moyennes deviennent des Légères d'abord ; la Grave arrive alors sur une ligne Moyenne libre.
+    assert.deepEqual(await severitiesOf(f.alice), ['legere', 'legere', 'legere', 'moyenne'])
+  } finally {
+    await cleanup(f)
+  }
+})
+
+test('un Test par localisation : l\'échec d\'UNE guérison annule TOUTE la localisation (jamais à moitié répondue) sans empêcher les autres localisations', { skip }, async () => {
+  const f = await createFixture()
+  const { io, emitted } = captureIo()
+  const entry = findEcheanceRegistryEntry('wound_healing_check')
+  const original = entry.handler
+  try {
+    const moyenne = await woundInReview(f.alice, 'jambe_gauche', 'moyenne')
+    const grave = await woundInReview(f.alice, 'jambe_gauche', 'grave')
+    const ailleurs = await woundInReview(f.alice, 'tete', 'moyenne')
+    entry.handler = async (trx, echeance, context) => {
+      if (echeance.payload.woundId === grave.wound.id) throw new Error('handler en panne (test)')
+      return original(trx, echeance, context)
+    }
+
+    const { results } = await resolveHealingChoices(io, f.campaign.id, { choices: choicesOf([moyenne.echeance.id, grave.echeance.id, ailleurs.echeance.id], 'amelioration') })
+    assert.deepEqual(results, [
+      { echeanceId: moyenne.echeance.id, resolved: false, error: true },
+      { echeanceId: grave.echeance.id, resolved: false, error: true },
+      { echeanceId: ailleurs.echeance.id, resolved: true },
+    ])
+    for (const c of [moyenne, grave]) {
+      const row = await echeanceRow(c.echeance.id)
+      assert.equal(row.status, 'pending_mj_review')
+      assert.equal(row.payload.mjChoice, undefined, 'aucune issue restée écrite')
+    }
+    assert.deepEqual(await severitiesOf(f.alice), ['grave', 'legere', 'moyenne'].sort(), 'la Moyenne de la jambe est intacte (l\'Amélioration déjà appliquée a été défaite), la tête a guéri')
+    assert.ok(!resolvedEvents(emitted).includes(moyenne.echeance.id))
+  } finally {
+    entry.handler = original
+    await cleanup(f)
+  }
+})

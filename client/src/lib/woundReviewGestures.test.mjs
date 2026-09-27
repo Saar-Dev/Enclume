@@ -2,51 +2,72 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  healingEntriesForLine, healingEntriesForCard, healingEntriesForCards, infectionEntriesForCard, infectionEntriesForCards, infectionEntryFor,
-  orphanEntries, chunkEntries, sendInChunks, summarizeResults, cardAnswerableCount, cardDueCases, splitByPlayerType, successConsequence,
+  healingEntriesForLocation, healingEntriesForCard, healingEntriesForCards, infectionEntriesForCard, infectionEntriesForCards, infectionEntryFor,
+  entryForServer, orphanEntries, chunkEntries, sendInChunks, summarizeResults, cardAnswerableCount, cardDueCases, splitByPlayerType, successConsequence,
   lineStepLabels, isWindowVisible, confirmState, explainConfirmRefusal,
 } from './woundReviewGestures.js'
 import { REVIEW_BATCH_MAX_ENTRIES } from '../../../shared/woundConstants.js'
 
 // Forme de la vue serveur : figée par server/src/lib/woundReviewService.test.mjs (« forme du payload FIGÉE »).
 const item = (echeanceId, over = {}) => ({ echeanceId, answerable: true, step: null, isLastStep: true, isFirstTest: true, ...over })
-const line = (location, severity, items, over = {}) => ({
-  key: `${location}:${severity}`, location, severity, cases: items.length,
-  dueCases: items.filter(i => i.answerable).length, queuedCases: items.filter(i => !i.answerable).length,
-  answerable: items.some(i => i.answerable), dueEcheanceIds: items.filter(i => i.answerable).map(i => i.echeanceId),
-  targetSeverity: 'grave', kits: null, items, ...over,
+// Détail par gravité d'une localisation (lecture seule) et bloc de localisation (UN Test) — comme la vue du serveur.
+const line = (severity, items, over = {}) => ({
+  severity, cases: items.length, dueCases: items.filter(i => i.answerable).length, queuedCases: items.filter(i => !i.answerable).length,
+  targetSeverity: 'grave', items, ...over,
 })
+const location = (name, lines) => {
+  const items = lines.flatMap(l => l.items)
+  return {
+    key: name, location: name, severity: lines[0].severity, dueCases: items.filter(i => i.answerable).length, queuedCases: items.filter(i => !i.answerable).length,
+    answerable: items.some(i => i.answerable), dueEcheanceIds: items.filter(i => i.answerable).map(i => i.echeanceId), kits: null, lines,
+  }
+}
 const card = (name, over = {}) => ({
   characterId: `c-${name}`, name, type: 'pj', isPlayer: true,
-  state: { wounds: [], woundPenalty: 0, testBlocked: false, statuses: [] }, lines: [], infections: [], orphans: [], kitTotals: {}, ...over,
+  state: { wounds: [], woundPenalty: 0, testBlocked: false, statuses: [] }, locations: [], infections: [], orphans: [], kitTotals: {}, ...over,
 })
 const view = (advance, summary, cards = []) => ({
   advance: { pending: advance, deltaMinutes: advance ? 10080 : null },
   cards, summary: { answerableCount: 0, awaitingPlayerCount: 0, queuedCount: 0, ...summary },
 })
 
-test('geste « toute la carte » : une entrée par échéance échue de chaque ligne répondable, la même issue partout', () => {
-  const c = card('Zed', { lines: [
-    line('corps', 'critique', [item('e1'), item('e2')]),
-    line('tete', 'moyenne', [item('e3')]),
+test('geste « toute la carte » : une entrée par échéance échue de chaque localisation répondable, la même issue partout, un groupe par personnage et localisation', () => {
+  const c = card('Zed', { locations: [
+    location('corps', [line('critique', [item('e1'), item('e2')])]),
+    location('tete', [line('moyenne', [item('e3')])]),
   ] })
   assert.deepEqual(healingEntriesForCard(c, 'amelioration'), [
-    { echeanceId: 'e1', mjChoice: 'amelioration' }, { echeanceId: 'e2', mjChoice: 'amelioration' }, { echeanceId: 'e3', mjChoice: 'amelioration' },
+    { echeanceId: 'e1', mjChoice: 'amelioration', group: 'c-Zed:corps' }, { echeanceId: 'e2', mjChoice: 'amelioration', group: 'c-Zed:corps' },
+    { echeanceId: 'e3', mjChoice: 'amelioration', group: 'c-Zed:tete' },
   ])
-  assert.deepEqual(healingEntriesForLine(c.lines[1], 'catastrophe'), [{ echeanceId: 'e3', mjChoice: 'catastrophe' }])
+  assert.deepEqual(healingEntriesForLocation(c, c.locations[1], 'catastrophe'), [{ echeanceId: 'e3', mjChoice: 'catastrophe', group: 'c-Zed:tete' }])
 })
 
-test('une ligne dont aucune case n\'est échue (prochaine ronde) n\'envoie rien ; une ligne mixte n\'envoie que ses cases échues', () => {
-  const queued = line('corps', 'grave', [item('q1', { answerable: false })])
-  const mixed = line('corps', 'critique', [item('m1'), item('m2', { answerable: false })])
-  assert.deepEqual(healingEntriesForLine(queued, 'echec'), [])
-  assert.deepEqual(healingEntriesForLine(mixed, 'echec'), [{ echeanceId: 'm1', mjChoice: 'echec' }])
+test('UNE réponse par localisation : plusieurs gravités échues = les mêmes entrées, la même issue, un seul groupe', () => {
+  const c = card('Zed', { locations: [location('jambe_gauche', [line('grave', [item('g1')]), line('moyenne', [item('m1'), item('m2')])])] })
+  const entries = healingEntriesForLocation(c, c.locations[0], 'echec')
+  assert.deepEqual(entries.map(e => [e.echeanceId, e.mjChoice, e.group]), [['g1', 'echec', 'c-Zed:jambe_gauche'], ['m1', 'echec', 'c-Zed:jambe_gauche'], ['m2', 'echec', 'c-Zed:jambe_gauche']])
 })
 
-test('geste « tous les PNJ » : les entrées de plusieurs cartes, dans l\'ordre des cartes', () => {
-  const a = card('A', { lines: [line('corps', 'grave', [item('a1')])] })
-  const b = card('B', { lines: [line('corps', 'grave', [item('b1')])] })
-  assert.deepEqual(healingEntriesForCards([a, b], 'echec').map(e => e.echeanceId), ['a1', 'b1'])
+test('une localisation dont aucune case n\'est échue (prochaine ronde) n\'envoie rien ; une localisation mixte n\'envoie que ses cases échues', () => {
+  const c = card('Zed')
+  const queued = location('corps', [line('grave', [item('q1', { answerable: false })])])
+  const mixed = location('corps', [line('critique', [item('m1'), item('m2', { answerable: false })])])
+  assert.deepEqual(healingEntriesForLocation(c, queued, 'echec'), [])
+  assert.deepEqual(healingEntriesForLocation(c, mixed, 'echec').map(e => e.echeanceId), ['m1'])
+})
+
+test('geste « tous les PNJ » : les entrées de plusieurs cartes, dans l\'ordre des cartes ; la même localisation de deux personnages = deux groupes', () => {
+  const a = card('A', { locations: [location('corps', [line('grave', [item('a1')])])] })
+  const b = card('B', { locations: [location('corps', [line('grave', [item('b1')])])] })
+  const entries = healingEntriesForCards([a, b], 'echec')
+  assert.deepEqual(entries.map(e => e.echeanceId), ['a1', 'b1'])
+  assert.notEqual(entries[0].group, entries[1].group)
+})
+
+test('ce que le serveur reçoit : jamais le groupe, propre au client', () => {
+  assert.deepEqual(entryForServer({ echeanceId: 'e1', mjChoice: 'echec', group: 'g' }), { echeanceId: 'e1', mjChoice: 'echec' })
+  assert.deepEqual(entryForServer({ echeanceId: 'i1', mode: 'auto' }), { echeanceId: 'i1', mode: 'auto' })
 })
 
 test('infections : `auto` couvre aussi les jets en attente d\'un joueur (débloquer un absent) ; `player` ignore celles qui y sont déjà', () => {
@@ -68,7 +89,7 @@ test('anomalies (échéance sans blessure) : clôturées par la route de leur ty
     { echeanceId: 'o3', conditionType: 'wound_healing_check', status: 'active', answerable: false },
   ] })
   assert.deepEqual(orphanEntries(c), {
-    healing: [{ echeanceId: 'o1', mjChoice: 'amelioration' }],
+    healing: [{ echeanceId: 'o1', mjChoice: 'amelioration' }], // sans groupe : une anomalie n'appartient à aucun Test
     infection: [{ echeanceId: 'o2', mode: 'auto' }],
   })
 })
@@ -80,6 +101,14 @@ test('découpage : jamais plus que la limite du serveur par lot, aucune entrée 
   assert.deepEqual(chunks.flat(), entries)
   assert.deepEqual(chunkEntries([]), [])
   assert.deepEqual(chunkEntries([1, 2, 3], 2), [[1, 2], [3]])
+})
+
+test('découpage : un Test (même groupe) n\'est JAMAIS coupé entre deux lots — il passe entier au lot suivant', () => {
+  const entry = (echeanceId, group) => ({ echeanceId, group })
+  const entries = [entry('a1', 'A'), entry('a2', 'A'), entry('b1', 'B'), entry('b2', 'B'), entry('b3', 'B'), entry('c1', 'C')]
+  assert.deepEqual(chunkEntries(entries, 4).map(c => c.map(e => e.echeanceId)), [['a1', 'a2'], ['b1', 'b2', 'b3', 'c1']])
+  assert.deepEqual(chunkEntries(entries, 3).map(c => c.map(e => e.echeanceId)), [['a1', 'a2'], ['b1', 'b2', 'b3'], ['c1']])
+  assert.deepEqual(chunkEntries(entries, 1).map(c => c.length), [2, 3, 1], 'un Test plus grand que la limite part seul (le serveur tranchera)')
 })
 
 test('envoi en lots : séquentiel, résultats réunis dans l\'ordre', async () => {
@@ -121,7 +150,7 @@ test('bilan des résultats : résolues, en attente d\'un joueur, périmées, ann
 
 test('comptes d\'une carte : mêmes définitions que le serveur (échéances répondables, cases échues)', () => {
   const c = card('Zed', {
-    lines: [line('corps', 'critique', [item('e1'), item('e2'), item('e3', { answerable: false })])],
+    locations: [location('corps', [line('critique', [item('e1'), item('e2'), item('e3', { answerable: false })])])],
     infections: [{ echeanceId: 'i1', answerable: true }, { echeanceId: 'i2', answerable: false }],
     orphans: [{ echeanceId: 'o1', answerable: true }],
   })
@@ -132,19 +161,19 @@ test('comptes d\'une carte : mêmes définitions que le serveur (échéances ré
 })
 
 test('conséquence de « Réussite » : dernière étape → gravité d\'arrivée ; étape intermédiaire → continue ; mélange → les deux', () => {
-  const last = line('corps', 'moyenne', [item('e1')], { targetSeverity: 'legere' })
+  const last = line('moyenne', [item('e1')], { targetSeverity: 'legere' })
   assert.deepEqual(successConsequence(last), { kind: 'becomes', target: 'legere' })
 
-  const middle = line('corps', 'critique', [item('e1', { step: { n: 2, total: 3 }, isLastStep: false })])
+  const middle = line('critique', [item('e1', { step: { n: 2, total: 3 }, isLastStep: false })])
   assert.deepEqual(successConsequence(middle), { kind: 'continues', steps: ['2/3'] })
   assert.deepEqual(lineStepLabels(middle), ['2/3'])
 
-  const mixed = line('corps', 'critique', [
+  const mixed = line('critique', [
     item('e1', { step: { n: 2, total: 3 }, isLastStep: false }), item('e2', { step: { n: 3, total: 3 }, isLastStep: true }),
   ], { targetSeverity: 'grave' })
   assert.deepEqual(successConsequence(mixed), { kind: 'mixed', target: 'grave', steps: ['2/3'] })
 
-  const queuedOnly = line('corps', 'grave', [item('e1', { answerable: false })])
+  const queuedOnly = line('grave', [item('e1', { answerable: false })])
   assert.equal(successConsequence(queuedOnly), null, 'rien d\'échu : aucune conséquence à annoncer')
 })
 

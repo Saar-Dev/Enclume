@@ -95,7 +95,7 @@ export function isMortalWoundImmobilized(wounds) {
 // ─── Kits de soin ────────────────────────────────────────────────────────────────────────────────────────────────
 // Les KITS DE SOIN mobilisés par UN Test de guérison (colonne « Soins nécessaires » de la table RAW ci-dessous). Règle maison (décision de Saar,
 // 2026-09-25, docs/PLANS/PLAN_REVUE_GUERISON.md §6 Q6-Q8/Q10) : le RAW décrit trois trousses comme un équipement à niveaux (First Aid, ChiriaT,
-// Medi 1 000), jamais comme un consommable — le décompte est un écart assumé (docs/JOURNAL8.md). Un kit par Test et par ligne du compteur (le RAW soigne
+// Medi 1 000), jamais comme un consommable — le décompte est un écart assumé (docs/JOURNAL8.md). Un jeu de kits par Test et par LOCALISATION (le RAW soigne
 // « Localisation par Localisation »). `first` = le premier Test d'une blessure, `following` = les suivants : la Chirurgie est l'opération « avant toute
 // phase de soins médicaux », une seule fois ; le Test hebdomadaire des soins constants est un Test de Médecine (`REGLEBLESSURES.md:374-375, 391-392`).
 // Chaque liste = des ALTERNATIVES ; chaque alternative = les kits requis ENSEMBLE.

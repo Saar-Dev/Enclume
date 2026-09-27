@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import api from './api'
 import { WS } from '../../../shared/events.js'
 import { useSocket } from './SocketContext'
-import { sendInChunks, summarizeResults, explainConfirmRefusal } from './woundReviewGestures.js'
+import { sendInChunks, summarizeResults, explainConfirmRefusal, entryForServer } from './woundReviewGestures.js'
 
 // Données de l'écran de revue des guérisons (PLAN_REVUE_GUERISON.md §12.3, §13). Hook MJ, monté avec l'écran (SessionPage), même patron que
 // useRepairRequestSocket : la VÉRITÉ est le serveur, jamais une copie locale qui dérive.
@@ -113,7 +113,7 @@ export function useWoundReview({ campaignId, isGm }) {
     for (const [route, entries] of routes) {
       if (entries.length === 0 || failure) continue
       const outcome = await sendInChunks(entries, async (chunk) => (
-        await api.post(`/campaigns/${campaignId}/game-echeances/${route}`, { choices: chunk })
+        await api.post(`/campaigns/${campaignId}/game-echeances/${route}`, { choices: chunk.map(entryForServer) })
       ).data)
       results.push(...outcome.results)
       sent += outcome.sent

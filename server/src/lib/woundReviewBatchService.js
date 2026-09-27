@@ -3,9 +3,11 @@
 // pour les deux gestes. Les routes (campaigns.js) restent minces : validation, appel de ce service, réponse.
 //
 // Garanties :
-// - UNE transaction, mais un SAVEPOINT PAR ENTRÉE : le moteur d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif
-//   (une blessure sans échéance vivante, en silence) ; ici l'entrée est ANNULÉE — l'échéance reste en attente, le MJ peut recommencer — et
-//   rapportée (`error: true`). Une échéance périmée (déjà résolue, annulée entre-temps) ou pas encore ouverte (`active`, prochaine ronde) est
+// - UNE transaction, mais un SAVEPOINT PAR UNITÉ : le moteur d'échéances avale l'échec d'un handler et passerait l'échéance en `error` définitif
+//   (une blessure sans échéance vivante, en silence) ; ici l'unité est ANNULÉE — ses échéances restent en attente, le MJ peut recommencer — et
+//   rapportée (`error: true`). Une unité = une entrée, sauf pour les guérisons : UN TEST = une localisation d'un personnage (RAW « Localisation par
+//   Localisation », REGLEBLESSURES.md:386-392) — toutes ses échéances échues sont répondues ensemble, avec la MÊME issue, ou pas du tout (garde
+//   `planHealingUnits`) ; l'échec de l'une annule toute la localisation, jamais à moitié répondue. Une échéance périmée (déjà résolue, annulée entre-temps) ou pas encore ouverte (`active`, prochaine ronde) est
 //   rapportée `stale`, sans faire échouer le lot. Une erreur inattendue (SQL) annule TOUT le lot : jamais un état à moitié.
 // - Les diffusions partent APRÈS la validation : `GAME_ECHEANCE_RESOLVED` pour chaque échéance résolue ET pour celles passées à `cancelled` pendant le
 //   lot (annulées avec leur case par un handler : leur ligne reste sinon affichée), `WOUND_UPDATED` une fois par personnage touché.
@@ -15,7 +17,7 @@ import { WS } from '../../../shared/events.js'
 import { resolveEcheanceNow } from './echeanceService.js'
 import { computeLocationInfectionThreshold } from './woundEvolutionService.js'
 import { resolvePolarisTest } from './polarisTestService.js'
-import { broadcastWoundUpdate } from './woundReviewService.js'
+import { broadcastWoundUpdate, groupHealingByLocation } from './woundReviewService.js'
 import { emitSystemNotice } from './systemNotice.js'
 import { REVIEW_BATCH_MAX_ENTRIES, HEALING_OUTCOMES, INFECTION_MODES } from '../../../shared/woundConstants.js'
 import { isReviewTraceEnabled, reviewTrace, shortId } from './reviewTrace.js'
@@ -81,26 +83,38 @@ async function parseCare(care, campaignId) {
 
 // ─── Exécution d'un lot ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-async function runBatch(campaignId, entries, applyEntry) {
+// Une entrée = une unité (infections). `planUnits(trx, campaignId, entries)` regroupe les entrées en unités atomiques (voir `planHealingUnits`) ; elle tourne
+// DANS la transaction du lot : un refus n'a encore rien écrit. Les résultats sont rendus dans l'ORDRE DES ENTRÉES, quel que soit l'ordre d'exécution.
+const singleEntryUnits = async (trx, campaignId, entries) => entries.map(entry => [entry])
+
+async function runBatch(campaignId, entries, applyEntry, planUnits = singleEntryUnits) {
   const tracing = isReviewTraceEnabled()
   // Échéances vivantes AVANT le lot : celles qui passent à `cancelled` pendant le lot ont été annulées avec leur case par un handler.
   const liveBefore = await db('game_echeances')
     .where({ campaign_id: campaignId }).whereIn('condition_type', WOUND_ECHEANCE_TYPES).whereIn('status', LIVE_STATUSES).pluck('id')
 
-  const results = []
+  const resultById = new Map()
   await db.transaction(async (trx) => {
-    for (const entry of entries) {
+    for (const unit of await planUnits(trx, campaignId, entries)) {
       try {
-        const lines = []
-        const trace = tracing ? (line) => lines.push(line) : null
-        const outcome = await trx.transaction(savepoint => applyEntry(savepoint, campaignId, entry, trace))
-        results.push({ echeanceId: entry.echeanceId, ...outcome, trace: lines })
+        const unitResults = await trx.transaction(async (savepoint) => {
+          const done = []
+          for (const entry of unit) {
+            const lines = []
+            const trace = tracing ? (line) => lines.push(line) : null
+            const outcome = await applyEntry(savepoint, campaignId, entry, trace)
+            done.push({ echeanceId: entry.echeanceId, ...outcome, trace: lines })
+          }
+          return done
+        })
+        for (const result of unitResults) resultById.set(result.echeanceId, result)
       } catch (err) {
         if (!(err instanceof EntryRolledBack)) throw err
-        results.push({ echeanceId: entry.echeanceId, resolved: false, error: true, trace: [] })
+        for (const entry of unit) resultById.set(entry.echeanceId, { echeanceId: entry.echeanceId, resolved: false, error: true, trace: [] })
       }
     }
   })
+  const results = entries.map(entry => resultById.get(entry.echeanceId))
 
   const cancelledDuringBatch = liveBefore.length > 0
     ? await db('game_echeances').whereIn('id', liveBefore).where({ status: 'cancelled' }).pluck('id')
@@ -124,6 +138,50 @@ async function applyHealingEntry(savepoint, campaignId, { echeanceId, value: mjC
   const outcome = await resolveEcheanceNow(savepoint, row.id, { trace })
   if (outcome.error) throw new EntryRolledBack()
   return { resolved: Boolean(outcome.resolved), characterId: row.character_id, woundId: row.payload?.woundId ?? null, choice: mjChoice }
+}
+
+// UN TEST DE SOINS PAR LOCALISATION (Lot B2, docs/PLANS/PLAN_GUERISON_RAW.md §9-§10) — la garde de l'invariant côté serveur, qui ne se fie jamais à la vue.
+// Pour chaque localisation touchée par le lot : le lot doit répondre à TOUTES ses échéances répondables, avec la MÊME issue (sinon 409, rien n'est écrit) ;
+// sans cela, deux clics successifs sur deux gravités d'une même localisation feraient deux Tests. Les échéances répondables des personnages visés sont
+// verrouillées (ordre d'identifiant : pas de blocage mutuel entre deux lots) AVANT la vérification : la complétude se juge sur des lignes qui ne peuvent
+// plus bouger. Une échéance périmée, non ouverte (`active`) ou sans blessure n'entre dans aucun Test : elle reste une unité à part (résultat `stale`, ou
+// clôture d'anomalie). Rend les unités dans l'ordre d'apparition des entrées ; une localisation s'exécute du plus léger au plus grave (voir `groupHealingByLocation`).
+async function planHealingUnits(trx, campaignId, entries) {
+  const asked = new Map(entries.map(entry => [entry.echeanceId, entry.value]))
+  const entryRows = await trx('game_echeances').whereIn('id', [...asked.keys()]).select('character_id')
+  const characterIds = [...new Set(entryRows.map(row => row.character_id))]
+  const answerable = await trx('game_echeances')
+    .where({ campaign_id: campaignId, condition_type: 'wound_healing_check' })
+    .whereIn('character_id', characterIds).whereIn('status', ANSWERABLE_STATUSES)
+    .orderBy('id').forUpdate().select('id', 'character_id', 'payload')
+  const woundIds = [...new Set(answerable.map(row => row.payload?.woundId).filter(id => typeof id === 'string' && UUID_PATTERN.test(id)))]
+  const wounds = woundIds.length > 0 ? await trx('character_wounds').whereIn('id', woundIds).select('id', 'location', 'severity') : []
+  const groups = groupHealingByLocation(answerable, Object.fromEntries(wounds.map(wound => [wound.id, wound])))
+
+  const groupOf = new Map()
+  for (const group of groups) {
+    const memberIds = group.members.map(({ row }) => row.id)
+    if (!memberIds.some(id => asked.has(id))) continue // localisation non concernée par ce lot
+    const missing = memberIds.filter(id => !asked.has(id))
+    if (missing.length > 0) {
+      throw new AppError(409, `Un seul Test de soins par localisation : la réponse doit couvrir toutes les échéances échues de « ${group.location} » (il en manque ${missing.length})`)
+    }
+    if (new Set(memberIds.map(id => asked.get(id))).size > 1) {
+      throw new AppError(409, `Un seul Test de soins par localisation : « ${group.location} » ne peut pas recevoir des issues différentes`)
+    }
+    for (const id of memberIds) groupOf.set(id, group)
+  }
+
+  const units = []
+  const emitted = new Set()
+  for (const entry of entries) {
+    const group = groupOf.get(entry.echeanceId)
+    if (!group) { units.push([entry]); continue }
+    if (emitted.has(group.key)) continue
+    emitted.add(group.key)
+    units.push(group.members.map(({ row }) => ({ echeanceId: row.id, value: asked.get(row.id) })))
+  }
+  return units
 }
 
 // Une infection (celle d'une LOCALISATION, Lot B1) : `player` bascule seulement le statut (le jet arrive par socket) ; `auto` calcule le seuil sur la pire blessure
@@ -254,7 +312,7 @@ export async function resolveHealingChoices(io, campaignId, { choices, care } = 
     const parsedCare = await parseCare(care, campaignId)
     await assertEcheancesBelong(campaignId, entries, 'wound_healing_check')
 
-    const { results, cancelledDuringBatch } = await runBatch(campaignId, entries, applyHealingEntry)
+    const { results, cancelledDuringBatch } = await runBatch(campaignId, entries, applyHealingEntry, planHealingUnits)
     committed = true
     const effects = await emitBatchEffects(io, campaignId, results, cancelledDuringBatch)
     const careNotices = await emitCareNotices(io, campaignId, results, parsedCare)

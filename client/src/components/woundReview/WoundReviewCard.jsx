@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import OutcomeButtons from './OutcomeButtons.jsx'
 import InfectionModeButtons from './InfectionModeButtons.jsx'
-import WoundReviewLine from './WoundReviewLine.jsx'
+import WoundReviewLocation from './WoundReviewLocation.jsx'
 import WoundReviewInfection from './WoundReviewInfection.jsx'
 import { locationLabel, severityShortLabel } from './woundLabels.js'
 import { SEVERITY_COLORS } from '../../../../shared/woundConstants.js'
@@ -21,7 +21,7 @@ export default function WoundReviewCard({ card, busy, onAnswer }) {
   const askablePlayers = infectionEntriesForCard(card, 'player')
   const orphans = orphanEntries(card)
   const orphanCount = orphans.healing.length + orphans.infection.length
-  const hasDetail = card.lines.length > 0 || card.infections.length > 0
+  const hasDetail = card.locations.length > 0 || card.infections.length > 0
   const { wounds, woundPenalty, testBlocked, statuses } = card.state
 
   return (
@@ -83,7 +83,7 @@ export default function WoundReviewCard({ card, busy, onAnswer }) {
       {hasDetail && (
         <details className="wound-review-details">
           <summary>{t('woundReview.card.details')}</summary>
-          {card.lines.map(line => <WoundReviewLine key={line.key} line={line} busy={busy} onAnswer={onAnswer} />)}
+          {card.locations.map(location => <WoundReviewLocation key={location.key} card={card} location={location} busy={busy} onAnswer={onAnswer} />)}
           {card.infections.map(infection => (
             <WoundReviewInfection key={infection.echeanceId} infection={infection} busy={busy} onAnswer={onAnswer} />
           ))}

@@ -8841,3 +8841,22 @@ localisation, doublons fusionnés, sans cible annulées). Écran de revue et pan
 **Testé** : 297 tests en base (woundConstants, woundUtils, woundService, woundEvolutionService, woundReviewService, woundReviewBatchService, combatantContextService, echeanceService, migrations 365-366, woundReviewGestures) + 833 tests purs de `shared` ; 5 tests de migration
 (plan pur, conversion + idempotence + down, index) ; tests nouveaux : trois cases en Échec = un Test, pire blessure, fusion, règlement des infections (promotion, Mort, dernière blessure). **Non testé** : en jeu (à faire par Saar), le jet du joueur par socket (le seuil est le même
 code que le jet automatique, testé). **Données** : migrations 365 (3 infections vivantes de la base locale, déjà à leur localisation, aucune fusion) et 366 appliquées par le serveur de Saar en cours d'exécution. **Retour arrière** : `git revert` du commit + `down()` de 366 puis de 365.
+
+---
+
+## Session (Dev) — 2026-09-26 — Un seul Test de soins par localisation (Lot B2 de PLAN_GUERISON_RAW)
+
+**Problème** : le livre soigne « Localisation par Localisation, quel que soit le nombre de cases cochées sur chaque ligne » (`REGLEBLESSURES.md:386-392`). L'écran de revue répondait par ligne (localisation × gravité) : le MJ pouvait mettre Réussite sur les Moyennes d'une jambe et Échec sur sa Grave,
+et le serveur l'acceptait. **Défaut de l'existant trouvé à l'analyse à charge** : l'ordre de résolution était celui de l'affichage (pire gravité d'abord). Une guérison qui aboutit se pose comme une nouvelle blessure (Lot A) : sur un Corps à 3 Moyennes (ligne pleine) et 1 Grave, « Réussite » partout
+effaçait les 3 Moyennes (la Grave, recochée à son niveau) et perdait leurs 3 réponses.
+
+**Décision de méthode (2026-09-26, Saar : « code si sûr à 100 % » après ma recommandation ; à confirmer en jeu)** : le SERVEUR fixe l'ordre — du plus léger au plus grave, puis identifiant. Le livre ne dit rien de l'ordre. Améliorer une gravité S ne touche que la ligne S−1 : en commençant par le bas,
+aucune case encore à traiter n'est effacée par une cascade et aucune réponse n'est perdue (Corps 3 Moyennes + 1 Grave : 3 Légères + 1 Moyenne). Les issues Échec/Catastrophe ne dépendent pas de l'ordre (infection fusionnée, idempotente).
+
+**Livré** : `groupHealingByLocation` (`woundReviewService.js`) — UNE définition de « quelles échéances forment un Test », lue par la vue et par la garde ; vue : `card.locations` (`dueEcheanceIds` de toutes les gravités échues, kits de la pire gravité échue, `lines` = détail par gravité) à la place de `card.lines` ;
+`planHealingUnits` (`woundReviewBatchService.js`) — le lot doit répondre à TOUTES les échéances répondables d'une localisation touchée, avec la MÊME issue (409 sinon), verrouillées `FOR UPDATE` dans la transaction ; un savepoint par localisation (l'échec d'une guérison annule toute la localisation) ;
+résultats rendus dans l'ordre des entrées. Client : `healingEntriesForLocation`, groupe personnage+localisation jamais coupé par le découpage en lots (`chunkEntries`), `entryForServer` (le groupe ne part pas), `WoundReviewLocation.jsx` (ex-`WoundReviewLine.jsx`), clés `woundReview.location.*`. Pas de couche de compatibilité avec l'ancien format
+(un onglet ouvert avant le déploiement se recharge ; ses réponses partielles sont refusées avec un message).
+
+**Testé** : 255 tests en base (wound*, combatantContext, echeanceService, reviewTrace, migrations 365-366) dont 4 nouveaux du lot groupé (garde 409, périmées non exigées, ordre du plus léger au plus grave — vérifié par mutation : l'ordre inversé le fait échouer —, échec d'une guérison = toute la localisation annulée)
+et 2 de la vue ; 17 tests des gestes client ; 882 tests purs de `shared` ; build client ; validé en jeu par Saar (« Test ok »). **Données** : aucune (ni migration ni donnée). **Retour arrière** : `git revert` du commit.
