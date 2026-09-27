@@ -52,7 +52,6 @@
     "kicker": "Mur",
     "wallsSelectedCount_one": "{{count}} mur sélectionné",
     "wallsSelectedCount_other": "{{count}} murs sélectionnés",
-    "technicalNameLabel": "Nom technique du mur",
     "selectionHint": "Clique d’autres murs pour composer la sélection. Deux murs contigus peuvent devenir un seul arc canonique.",
     "selectAllWalls": "Sélectionner tous les murs de la salle",
     "allWallsSelected": "Tous les murs sont sélectionnés",

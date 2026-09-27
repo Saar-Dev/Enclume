@@ -1,6 +1,33 @@
-export default function FloatingPanelSection({ title, defaultOpen = false, children }) {
+import { useState } from 'react'
+
+// storageKey : ouvert/ferme memorise par section (retour Saar 2026-09-27) — sans cle, se comporte
+// comme avant (etat interne initialise a defaultOpen, jamais persiste).
+export default function FloatingPanelSection({ title, defaultOpen = false, storageKey = null, children }) {
+  const [open, setOpen] = useState(() => {
+    if (!storageKey) return defaultOpen
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved === '1') return true
+      if (saved === '0') return false
+    } catch {
+      // localStorage indisponible : retombe sur defaultOpen.
+    }
+    return defaultOpen
+  })
+
+  const handleToggle = event => {
+    const next = event.target.open
+    setOpen(next)
+    if (!storageKey) return
+    try {
+      localStorage.setItem(storageKey, next ? '1' : '0')
+    } catch {
+      // localStorage indisponible (quota, navigation privee) : l'etat reste valide en memoire.
+    }
+  }
+
   return (
-    <details open={defaultOpen} style={S.section}>
+    <details open={open} onToggle={handleToggle} style={S.section}>
       <summary style={S.summary}>{title}</summary>
       <div style={S.content}>{children}</div>
     </details>

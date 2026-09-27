@@ -673,7 +673,6 @@ export default function SurfaceEditorScene({
     const allowedEdgeKeys = new Set(
       (surfaceTool?.connectorWallEdgeKeys || surfaceTool?.selectedRoomWallKeys || []).map(String),
     )
-    if (!selectedRoomId || allowedEdgeKeys.size === 0) return null
 
     const ray = setPointerRay(clientX, clientY)
     const levelY = getToolElevation(surfaceTool)
@@ -681,8 +680,8 @@ export default function SurfaceEditorScene({
 
     for (const panel of roomWallPanels) {
       if (!sameLevel(panel.y, levelY)) continue
-      if (!panel.roomIds?.includes(selectedRoomId)) continue
-      if (!(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
+      if (selectedRoomId && !panel.roomIds?.includes(selectedRoomId)) continue
+      if (allowedEdgeKeys.size > 0 && !(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
 
       const x0 = Number(panel.x0) / SURFACE_FINE
       const z0 = Number(panel.z0) / SURFACE_FINE
@@ -1149,6 +1148,8 @@ export default function SurfaceEditorScene({
       MIDDLE: THREE.MOUSE.ROTATE,
       RIGHT: THREE.MOUSE.PAN,
     }
+    orbitRef.current.listenToKeyEvents(window)
+    orbitRef.current.keyPanSpeed = 20
   }, [])
 
   const gridElevation = getEditPlaneY(surfaceTool)

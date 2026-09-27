@@ -10,7 +10,12 @@ export const SKYDOME_PRESETS = {
     groundColorCenter: '#2f4a3a',
     groundColorEdge: '#04110f',
     fogColor: '#0b3d4a',
-    fogDensity: 0.045,
+    // Brouillard lineaire (near/far), pas exponentiel : doit rester nul sur la carte construite
+    // (GRID_SIZE=50 dans Canvas3D/Editor3D/SurfaceEditorScene) et ne densifier qu'au-dela, jusqu'au
+    // raccord sol/dome (GROUND_RADIUS=180, DOME_RADIUS=300 dans Skydome.jsx) — retour Saar 2026-09-27,
+    // l'ancien fogExp2 (densite 0.045) fogait deja ~55% a 20 unites, bien avant le bord de la grille.
+    fogNear: 70,
+    fogFar: 220,
     particleColor: '#bcd9c8',
     particleCount: 220,
     particleSpeed: 0.15,

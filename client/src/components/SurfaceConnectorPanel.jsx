@@ -182,6 +182,7 @@ export default function SurfaceConnectorPanel({
     y,
     width: PANEL_W,
     height: PANEL_H_EST,
+    storageKey: 'enclume.surfaceConnectorPanel.position',
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
   const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)

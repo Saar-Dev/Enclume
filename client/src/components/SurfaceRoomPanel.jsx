@@ -20,6 +20,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     y,
     width: PANEL_W,
     height: PANEL_H_EST,
+    storageKey: 'enclume.surfaceRoomPanel.position',
   })
   const [materialFace, setMaterialFace] = useState(
     tool?.materialFace === 'ceiling' ? 'ceiling' : 'floor',
@@ -71,20 +72,18 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
       </div>
 
       <div style={S.body}>
-        <FloatingPanelSection title={t('common.identitySection')} defaultOpen>
-          <label style={S.field}>
-            <span style={S.label}>{t('surfaceRoomPanel.roomNameLabel')}</span>
-            <input
-              type="text"
-              value={tool?.roomName ?? room.label ?? room.name ?? room.id}
-              onChange={event => onPatch?.({ roomName: event.target.value })}
-              onPointerDown={event => event.stopPropagation()}
-              style={{ ...S.input, userSelect: 'text' }}
-              maxLength={96}
-            />
-          </label>
-        </FloatingPanelSection>
-        <FloatingPanelSection title={t('surfaceRoomPanel.geometrySection')} defaultOpen>
+        <label style={{ ...S.field, padding: '0 2px' }}>
+          <span style={S.label}>{t('surfaceRoomPanel.roomNameLabel')}</span>
+          <input
+            type="text"
+            value={tool?.roomName ?? room.label ?? room.name ?? room.id}
+            onChange={event => onPatch?.({ roomName: event.target.value })}
+            onPointerDown={event => event.stopPropagation()}
+            style={{ ...S.input, userSelect: 'text' }}
+            maxLength={96}
+          />
+        </label>
+        <FloatingPanelSection title={t('surfaceRoomPanel.geometrySection')} defaultOpen storageKey="enclume.surfaceRoomPanel.section.geometry">
         <div style={S.infoGrid}>
           <span>{t('surfaceRoomPanel.baseFloorLabel')}</span>
           <strong>{yToLevel(getRoomBaseY(room))}</strong>
@@ -153,7 +152,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
         </div>
         </FloatingPanelSection>
 
-        <FloatingPanelSection title={t('surfaceRoomPanel.movementSection')}>
+        <FloatingPanelSection title={t('surfaceRoomPanel.movementSection')} storageKey="enclume.surfaceRoomPanel.section.movement">
         <div style={S.grid}>
           <label style={S.field}>
             <span style={S.label}>{t('surfaceRoomPanel.movementCostLabel')}</span>
@@ -184,7 +183,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
         </div>
         </FloatingPanelSection>
 
-        <FloatingPanelSection title={t('common.appearanceSection')}>
+        <FloatingPanelSection title={t('common.appearanceSection')} storageKey="enclume.surfaceRoomPanel.section.appearance">
           <span style={S.label}>{t('surfaceRoomPanel.roomAppearanceLabel')}</span>
           <div style={S.faceTabs}>
             {MATERIAL_FACES.map(([face, labelKey]) => (
@@ -204,7 +203,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
           <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
         </FloatingPanelSection>
 
-        <FloatingPanelSection title={t('surfaceRoomPanel.connectorsSection')}>
+        <FloatingPanelSection title={t('surfaceRoomPanel.connectorsSection')} storageKey="enclume.surfaceRoomPanel.section.connectors">
           <div style={S.actionRow}>
             <button type="button" onClick={() => startConnector('elevator')} style={S.action}>{t('surfaceRoomPanel.elevatorButton')}</button>
             <button type="button" onClick={() => startConnector('ladder')} style={S.action}>{t('surfaceRoomPanel.ladderButton')}</button>

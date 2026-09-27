@@ -19,6 +19,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
     y,
     width: PANEL_W,
     height: PANEL_H_EST,
+    storageKey: 'enclume.surfaceWallPanel.position',
   })
   if (!room || !tool?.selectedRoomWallCount) return null
 
@@ -29,9 +30,6 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
   const selectedKeySet = new Set(selectedKeys.map(String))
   const allWallsSelected = allWallKeys.length > 0 && allWallKeys.every(key => selectedKeySet.has(String(key)))
   const selectedRuns = selectableRuns.filter(run => run.edgeKeys.every(key => selectedKeySet.has(String(key))))
-  const wallName = selectedRuns.length === 1
-    ? selectedRuns[0].id
-    : selectedRuns.map(run => run.id).join('\n')
   const elevationProfile = roomWallElevationProfileForEdges(room, selectedKeys)
   const storedAppearance = roomWallAppearanceForEdges(room, selectedKeys)
   const interiorTex = storedAppearance?.interiorTex ?? room.wallInteriorTex ?? null
@@ -77,19 +75,6 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
       </div>
 
       <div style={S.body}>
-        <FloatingPanelSection title={t('common.identitySection')} defaultOpen>
-          <label style={S.field}>
-            <span style={S.label}>{t('surfaceWallPanel.technicalNameLabel')}</span>
-            <textarea
-              readOnly
-              value={wallName}
-              rows={Math.min(3, Math.max(1, selectedRuns.length))}
-              onPointerDown={event => event.stopPropagation()}
-              style={S.readOnlyName}
-              aria-label={t('surfaceWallPanel.technicalNameLabel')}
-            />
-          </label>
-        </FloatingPanelSection>
         <p style={S.hint}>
           {t('surfaceWallPanel.selectionHint')}
         </p>
@@ -107,12 +92,12 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           {allWallsSelected ? t('surfaceWallPanel.allWallsSelected') : t('surfaceWallPanel.selectAllWalls')}
         </button>
 
-        <FloatingPanelSection title={t('common.appearanceSection')}>
+        <FloatingPanelSection title={t('common.appearanceSection')} storageKey="enclume.surfaceWallPanel.section.appearance">
           <span style={S.label}>{t('surfaceWallPanel.wallSideAppearance')}</span>
           <SurfaceMaterialEditor profile={appearanceMaterial} onChange={patchAppearance} />
         </FloatingPanelSection>
 
-        <FloatingPanelSection title={t('surfaceWallPanel.elevationProfileSection')} defaultOpen>
+        <FloatingPanelSection title={t('surfaceWallPanel.elevationProfileSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.elevationProfile">
           <span style={S.label}>{t('surfaceWallPanel.elevationProfileSideView')}</span>
           <div style={S.profileButtons}>
             {[
@@ -185,7 +170,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           )}
         </FloatingPanelSection>
 
-        <FloatingPanelSection title={t('surfaceWallPanel.openingsSection')} defaultOpen>
+        <FloatingPanelSection title={t('surfaceWallPanel.openingsSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.openings">
           <button
             type="button"
             disabled={selectedRuns.length !== 1}
@@ -278,9 +263,4 @@ const S = {
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
   disabled: { opacity: 0.38, cursor: 'not-allowed' },
   error: { margin: 0, padding: '7px 8px', borderRadius: '5px', background: 'rgba(127, 29, 29, 0.24)', color: '#fda4af', fontSize: '11px' },
-  readOnlyName: {
-    width: '100%', boxSizing: 'border-box', resize: 'none', userSelect: 'text',
-    background: '#090912', border: '1px solid #25253a', borderRadius: '5px',
-    padding: '7px 8px', color: '#cbd5e1', fontFamily: 'monospace', fontSize: '10px',
-  },
 }

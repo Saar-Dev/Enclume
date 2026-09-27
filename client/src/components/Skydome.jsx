@@ -15,7 +15,7 @@ export default function Skydome({ preset = 'ocean_floor' }) {
   const config = SKYDOME_PRESETS[preset] || SKYDOME_PRESETS.ocean_floor
   return (
     <>
-      <fogExp2 attach="fog" args={[config.fogColor, config.fogDensity]} />
+      <fog attach="fog" args={[config.fogColor, config.fogNear, config.fogFar]} />
       <mesh>
         <sphereGeometry args={[DOME_RADIUS, 32, 32]} />
         <meshBasicMaterial side={THREE.BackSide} depthWrite={false} fog={false}>

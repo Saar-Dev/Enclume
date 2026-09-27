@@ -50,21 +50,53 @@ export function floatingPanelPositionBesideAnchor({
   })
 }
 
-export function useDraggablePanelPosition({ x, y, width, height, placement = 'beside', panelRef: suppliedPanelRef = null }) {
+// storageKey : position mémorisée par TYPE de panneau (pas par salle/mur/connecteur sélectionné) —
+// retour Saar 2026-09-27, la fenêtre doit rouvrir au même endroit quel que soit l'objet édité.
+function readStoredPanelPosition(storageKey) {
+  if (!storageKey) return null
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey))
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) return saved
+  } catch {
+    // localStorage indisponible ou valeur corrompue : retombe sur le placement par defaut.
+  }
+  return null
+}
+
+export function useDraggablePanelPosition({ x, y, width, height, placement = 'beside', panelRef: suppliedPanelRef = null, storageKey = null }) {
   const internalPanelRef = useRef(null)
   const panelRef = suppliedPanelRef || internalPanelRef
-  const initialPosition = useCallback(() => clampFloatingPanelPosition({
-    ...(placement === 'beside'
-      ? floatingPanelPositionBesideAnchor({ x, y, width, height, ...viewport() })
-      : { left: x, top: y }),
-    width,
-    height,
-    ...viewport(),
-  }), [height, placement, width, x, y])
+  const initialPosition = useCallback(() => {
+    const stored = readStoredPanelPosition(storageKey)
+    if (stored) return clampFloatingPanelPosition({ left: stored.left, top: stored.top, width, height, ...viewport() })
+    return clampFloatingPanelPosition({
+      ...(placement === 'beside'
+        ? floatingPanelPositionBesideAnchor({ x, y, width, height, ...viewport() })
+        : { left: x, top: y }),
+      width,
+      height,
+      ...viewport(),
+    })
+  }, [height, placement, storageKey, width, x, y])
   const [position, setPosition] = useState(initialPosition)
+  const positionRef = useRef(position)
   const dragRef = useRef(null)
   const measuredRef = useRef(false)
   const measuredSizeRef = useRef({ width, height })
+
+  const updatePosition = useCallback(next => {
+    positionRef.current = typeof next === 'function' ? next(positionRef.current) : next
+    setPosition(positionRef.current)
+  }, [])
+
+  const persistPosition = useCallback(() => {
+    if (!storageKey) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(positionRef.current))
+    } catch {
+      // localStorage indisponible (quota, navigation privee) : la position reste valide en memoire.
+    }
+  }, [storageKey])
 
   useEffect(() => {
     const element = panelRef.current
@@ -77,12 +109,15 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
       measuredSizeRef.current = { width: measuredWidth, height: measuredHeight }
       if (!measuredRef.current) {
         measuredRef.current = true
-        setPosition(placement === 'beside'
-          ? floatingPanelPositionBesideAnchor({ x, y, width: measuredWidth, height: measuredHeight, ...viewport() })
-          : clampFloatingPanelPosition({ left: x, top: y, width: measuredWidth, height: measuredHeight, ...viewport() }))
+        const stored = readStoredPanelPosition(storageKey)
+        updatePosition(stored
+          ? clampFloatingPanelPosition({ left: stored.left, top: stored.top, width: measuredWidth, height: measuredHeight, ...viewport() })
+          : (placement === 'beside'
+            ? floatingPanelPositionBesideAnchor({ x, y, width: measuredWidth, height: measuredHeight, ...viewport() })
+            : clampFloatingPanelPosition({ left: x, top: y, width: measuredWidth, height: measuredHeight, ...viewport() })))
         return
       }
-      setPosition(current => clampFloatingPanelPosition({
+      updatePosition(current => clampFloatingPanelPosition({
         ...current,
         width: measuredWidth,
         height: measuredHeight,
@@ -91,13 +126,13 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [height, panelRef, placement, width, x, y])
+  }, [height, panelRef, placement, storageKey, updatePosition, width, x, y])
 
   useEffect(() => {
     const move = event => {
       const drag = dragRef.current
       if (!drag || (event.pointerId != null && drag.pointerId !== event.pointerId)) return
-      setPosition(clampFloatingPanelPosition({
+      updatePosition(clampFloatingPanelPosition({
         left: drag.left + event.clientX - drag.clientX,
         top: drag.top + event.clientY - drag.clientY,
         width: measuredSizeRef.current.width,
@@ -108,8 +143,9 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
     const stop = event => {
       if (!dragRef.current || (event.pointerId != null && dragRef.current.pointerId !== event.pointerId)) return
       dragRef.current = null
+      persistPosition()
     }
-    const resize = () => setPosition(current => clampFloatingPanelPosition({
+    const resize = () => updatePosition(current => clampFloatingPanelPosition({
       ...current,
       width: measuredSizeRef.current.width,
       height: measuredSizeRef.current.height,
@@ -125,7 +161,7 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
       window.removeEventListener('pointercancel', stop)
       window.removeEventListener('resize', resize)
     }
-  }, [height, width])
+  }, [height, persistPosition, updatePosition, width])
 
   const beginDrag = useCallback(event => {
     if (event.button !== 0) return

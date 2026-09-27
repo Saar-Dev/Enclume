@@ -28,6 +28,47 @@ const MODEL_SLOT_LABELS = {
   SLOT_05: 'Verre',
 }
 
+// ─── Icônes placeholder (SVG simples, à remplacer — Saar fournit les icônes définitives) ───
+const ICON_PROPS = { width: 16, height: 16, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6 }
+const ICON_STRUCTURE = (
+  <svg {...ICON_PROPS}><rect x="3" y="8" width="14" height="9" rx="1" /><path d="M5 8V5l5-3 5 3v3" strokeLinejoin="round" /></svg>
+)
+const ICON_OBJECTS3D = (
+  <svg {...ICON_PROPS}><path d="M10 2l7 4v8l-7 4-7-4V6l7-4z" strokeLinejoin="round" /><path d="M3 6l7 4 7-4M10 10v8" /></svg>
+)
+const ICON_HAZARD = (
+  <svg {...ICON_PROPS}><path d="M10 3l8 14H2L10 3z" strokeLinejoin="round" /><line x1="10" y1="8.5" x2="10" y2="12" /><circle cx="10" cy="14.5" r="0.9" fill="currentColor" stroke="none" /></svg>
+)
+const ICON_SELECT = (
+  <svg {...ICON_PROPS}><path d="M4 3l4.5 13 2-5.5L16 8.5 4 3z" strokeLinejoin="round" strokeLinecap="round" /></svg>
+)
+const ICON_ROOM = <svg {...ICON_PROPS}><rect x="3" y="3" width="14" height="14" rx="1.5" /></svg>
+const ICON_WALL = <svg {...ICON_PROPS}><rect x="2" y="8.5" width="16" height="3" rx="1" /></svg>
+const ICON_STAIRS = (
+  <svg {...ICON_PROPS}><polyline points="3,17 3,13 8,13 8,9 13,9 13,5 17,5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+)
+const ICON_BRIDGE = (
+  <svg {...ICON_PROPS}><path d="M2 13c3-3 13-3 16 0" strokeLinecap="round" /><line x1="3" y1="15" x2="3" y2="10" /><line x1="17" y1="15" x2="17" y2="10" /></svg>
+)
+const ICON_DOOR = (
+  <svg {...ICON_PROPS}><rect x="5" y="2" width="9" height="16" rx="0.8" /><path d="M14 3.5A9 9 0 0117 10" strokeLinecap="round" /></svg>
+)
+const ICON_ELEVATOR = (
+  <svg {...ICON_PROPS}><rect x="4" y="2" width="12" height="16" rx="1.2" /><polyline points="8,8 10,5.5 12,8" strokeLinecap="round" strokeLinejoin="round" /><polyline points="8,12 10,14.5 12,12" strokeLinecap="round" strokeLinejoin="round" /></svg>
+)
+const ICON_LADDER = (
+  <svg {...ICON_PROPS}><line x1="6" y1="2" x2="6" y2="18" /><line x1="14" y1="2" x2="14" y2="18" /><line x1="6" y1="5" x2="14" y2="5" /><line x1="6" y1="10" x2="14" y2="10" /><line x1="6" y1="15" x2="14" y2="15" /></svg>
+)
+const ICON_ERASE = (
+  <svg {...ICON_PROPS}><path d="M4 5.5h12M7.5 5.5V4a1 1 0 011-1h3a1 1 0 011 1v1.5M6 5.5l.6 10.2a1 1 0 001 .8h4.8a1 1 0 001-.8L14 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+)
+const TAB_ICON_BTN_STYLE = {
+  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '7px 0',
+}
+const CHIP_BTN_STYLE = {
+  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', minHeight: '48px',
+}
+
 // ─── Palette surface/entités (mode édition) ───────────────────────────────────
 // Extrait de Sidebar.jsx (PLAN_REFACTOR_SIDEBAR.md Lot 5) — comportement inchangé.
 // objectSearch/refreshingObjects/customEffectOpen/customEffectDraft restent des états contrôlés
@@ -119,6 +160,13 @@ export default function SurfaceEditorPanel({
     ...surfaceTool,
   }
   const updateSurfaceTool = (patch) => onSurfaceToolChange?.({ ...surfaceToolState, ...patch })
+  // Structure et Connecteurs forment un seul écran (la catégorie "Structure" du haut) ; Zones
+  // dangereuses est un écran à part (sa propre icône de haut niveau) — jamais les deux ensemble.
+  const isZonesToolMode = surfaceToolState.mode === 'effect'
+  const showStructureScreen = !isZonesToolMode
+  // Grille de textures pré-faites : seules Salle et Mur portent une texture de surface — inutile en
+  // Escalier/Passerelle/Zones dangereuses/Sélection/Effacer, où elle ne s'appliquait jamais à rien.
+  const showTexturePalette = ['room', 'wall'].includes(surfaceToolState.mode)
   const surfaceMaterialFace = surfaceToolState.materialFace || 'floor'
   const rawSurfaceMaterialProfiles = surfaceToolState.materialProfiles || {}
   const surfaceMaterialProfiles = {
@@ -289,21 +337,43 @@ export default function SurfaceEditorPanel({
 
   return (
     <div style={styles.palette}>
-      {/* ── Onglets éditeur : Voxels / Entités ── */}
+      {/* ── Trois catégories de haut niveau : Structure / Objets 3D / Zones dangereuses ──
+          Toujours 2 onglets sous le capot (activeEditorTab: 'world'|'entity', lu par Editor3D.jsx) —
+          Structure et Zones dangereuses partagent l'onglet 'world', distingués par surfaceToolState.mode
+          (mode === 'effect' -> Zones dangereuses). Aucun nouvel état, zéro risque pour le parent. */}
       <div className="sidebar-editor-tabs">
         <button
           className="sidebar-editor-tab"
-          data-active={activeEditorTab === 'world'}
-          onClick={() => onEditorTabChange?.('world')}
+          data-active={activeEditorTab === 'world' && surfaceToolState.mode !== 'effect'}
+          onClick={() => {
+            onEditorTabChange?.('world')
+            if (surfaceToolState.mode === 'effect') updateSurfaceTool({ mode: 'select' })
+          }}
+          style={TAB_ICON_BTN_STYLE}
         >
-          Monde
+          {ICON_STRUCTURE}
+          <span>{t('surfaceEditor.structureSection')}</span>
         </button>
         <button
           className="sidebar-editor-tab"
           data-active={activeEditorTab === 'entity'}
           onClick={() => onEditorTabChange?.('entity')}
+          style={TAB_ICON_BTN_STYLE}
         >
-          {t('sidebar.editorTabEntities')}
+          {ICON_OBJECTS3D}
+          <span>{t('sidebar.editorTabEntities')}</span>
+        </button>
+        <button
+          className="sidebar-editor-tab"
+          data-active={activeEditorTab === 'world' && surfaceToolState.mode === 'effect'}
+          onClick={() => {
+            onEditorTabChange?.('world')
+            updateSurfaceTool({ mode: 'effect' })
+          }}
+          style={TAB_ICON_BTN_STYLE}
+        >
+          {ICON_HAZARD}
+          <span>{t('surfaceEditor.effectsSection')}</span>
         </button>
       </div>
       <div style={styles.undoRow}>
@@ -329,28 +399,37 @@ export default function SurfaceEditorPanel({
         </button>
       </div>
 
-      {/* ── Palette voxels — visible uniquement en onglet Voxels ── */}
+      {/* ── Palette monde (salles, murs, connecteurs, zones) — visible en onglet Monde ── */}
       {activeEditorTab === 'world' && (
         <>
-          <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-            <span>{t('sidebar.paletteTextures')}</span>
-            {activeMaterial?.geo && (
-              <span style={{ color: '#5b8dee', lineHeight: 0 }}>
-                <GeometryIcon geometry={activeMaterial.geo} size={12} />
-              </span>
-            )}
-          </div>
+          {showTexturePalette && (
+            <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+              <span>{t('sidebar.paletteTextures')}</span>
+              {activeMaterial?.geo && (
+                <span style={{ color: '#5b8dee', lineHeight: 0 }}>
+                  <GeometryIcon geometry={activeMaterial.geo} size={12} />
+                </span>
+              )}
+            </div>
+          )}
           <div className="sidebar-glass" style={styles.roomTool}>
+            {showStructureScreen && (
+            <>
             <div style={styles.roomToolModes}>
               <button
                 type="button"
                 onClick={() => updateSurfaceTool({ mode: 'select' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'select'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                {t('surfaceEditor.select')}
+                {ICON_SELECT}
+                <span>{t('surfaceEditor.select')}</span>
               </button>
+            </div>
+
+            <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.structureSection')}</div>
+            <div style={styles.roomToolModes}>
               <button
                 type="button"
                 onClick={() => updateSurfaceTool({
@@ -364,9 +443,10 @@ export default function SurfaceEditorPanel({
                 })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'room'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                {t('surfaceEditor.addRoom')}
+                {ICON_ROOM}
+                <span>{t('surfaceEditor.addRoom')}</span>
               </button>
               <button
                 type="button"
@@ -381,36 +461,63 @@ export default function SurfaceEditorPanel({
                 })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'wall'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                Mur droit
+                {ICON_WALL}
+                <span>{t('surfaceEditor.straightWall')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => updateSurfaceTool({ mode: 'stair' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'stair'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                Escalier
+                {ICON_STAIRS}
+                <span>{t('surfaceEditor.stairs')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => updateSurfaceTool({ mode: 'bridge' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'bridge'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                Passerelle
+                {ICON_BRIDGE}
+                <span>{t('surfaceEditor.bridge')}</span>
+              </button>
+            </div>
+
+            <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
+            <div style={styles.roomToolModes}>
+              <button
+                type="button"
+                onClick={() => updateSurfaceTool({
+                  mode: 'connector',
+                  connectorType: 'door',
+                  ...connectorModelPatch(surfaceToolState.connectorType === 'door' ? selectedConnectorChoice : (doorConnectorBlueprints[0] || null)),
+                })}
+                className="sidebar-tool-mode-btn"
+                data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'door'}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
+              >
+                {ICON_DOOR}
+                <span>{t('surfaceEditor.addDoor')}</span>
               </button>
               <button
                 type="button"
-                onClick={() => updateSurfaceTool({ mode: 'effect' })}
+                onClick={() => updateSurfaceTool({
+                  mode: 'connector',
+                  connectorType: 'elevator',
+                  connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                  ...connectorModelPatch(surfaceToolState.connectorType === 'elevator' ? selectedConnectorChoice : (elevatorConnectorBlueprints[0] || genericElevatorChoice)),
+                })}
                 className="sidebar-tool-mode-btn"
-                data-active={surfaceToolState.mode === 'effect'}
-                style={styles.roomToolModeBtn}
+                data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator'}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                Zone / effet
+                {ICON_ELEVATOR}
+                <span>{t('surfaceEditor.addElevator')}</span>
               </button>
               <button
                 type="button"
@@ -422,20 +529,27 @@ export default function SurfaceEditorPanel({
                 })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                Échelle
+                {ICON_LADDER}
+                <span>{t('surfaceEditor.addLadder')}</span>
               </button>
+            </div>
+
+            <div style={styles.roomToolModes}>
               <button
                 type="button"
                 onClick={() => updateSurfaceTool({ mode: 'erase' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'erase'}
-                style={styles.roomToolModeBtn}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                {t('surfaceEditor.erase')}
+                {ICON_ERASE}
+                <span>{t('surfaceEditor.erase')}</span>
               </button>
             </div>
+            </>
+            )}
             {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
               <div style={styles.roomToolGrid}>
                 <label style={styles.roomToolLabel}>
@@ -591,38 +705,7 @@ export default function SurfaceEditorPanel({
             )}
             {surfaceToolState.mode === 'connector' && (
               <>
-                <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
-                <div style={styles.roomToolModes}>
-                  <button
-                    type="button"
-                    onClick={() => updateSurfaceTool({
-                      mode: 'connector',
-                      connectorType: 'elevator',
-                      connectorToLevel: Number(surfaceToolState.level || 0) + 1,
-                      ...connectorModelPatch(surfaceToolState.connectorType === 'elevator' ? selectedConnectorChoice : (elevatorConnectorBlueprints[0] || genericElevatorChoice)),
-                    })}
-                    className="sidebar-tool-mode-btn"
-                    data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator'}
-                    style={styles.roomToolModeBtn}
-                  >
-                    {t('surfaceEditor.addElevator')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateSurfaceTool({
-                      mode: 'connector',
-                      connectorType: 'ladder',
-                      connectorToLevel: Number(surfaceToolState.level || 0) + 1,
-                      ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
-                    })}
-                    className="sidebar-tool-mode-btn"
-                    data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder'}
-                    style={styles.roomToolModeBtn}
-                  >
-                    Échelle
-                  </button>
-                </div>
-                {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
+                {surfaceToolState.connectorType === 'elevator' && (
                   <div className="sidebar-glass" style={styles.connectorPicker}>
                   <label style={styles.roomToolLabel}>
                     <span>{t('surfaceEditor.elevatorToLevel')}</span>
@@ -684,6 +767,23 @@ export default function SurfaceEditorPanel({
                       <div style={styles.connectorPickerEmpty}>{t('surfaceEditor.noConnectorModels')}</div>
                     ) : (
                       <>
+                        {connectorChoices.map(choice => {
+                          const isSelected = String(surfaceToolState.connectorBlueprintId) === String(choice.id)
+                            || (!surfaceToolState.connectorBlueprintId && selectedConnectorChoice?.id === choice.id)
+                          return (
+                            <button
+                              key={choice.id}
+                              type="button"
+                              onClick={() => selectConnectorModel(choice)}
+                              className="sidebar-connector-model-btn"
+                              data-active={isSelected}
+                              style={styles.connectorModelBtn}
+                            >
+                              <span>{isSelected ? '✓ ' : ''}{choice.label}</span>
+                              <small>{choice.category || t('surfaceEditor.connectorModel')}</small>
+                            </button>
+                          )
+                        })}
                         {selectedConnectorChoice && (
                           <div className="sidebar-connector-selected" style={styles.connectorSelectedModel}>
                             <span>✓ {t('surfaceEditor.selectedConnectorModel')}</span>
@@ -726,23 +826,6 @@ export default function SurfaceEditorPanel({
                             })}
                           </div>
                         )}
-                        {connectorChoices.map(choice => {
-                          const isSelected = String(surfaceToolState.connectorBlueprintId) === String(choice.id)
-                            || (!surfaceToolState.connectorBlueprintId && selectedConnectorChoice?.id === choice.id)
-                          return (
-                            <button
-                              key={choice.id}
-                              type="button"
-                              onClick={() => selectConnectorModel(choice)}
-                              className="sidebar-connector-model-btn"
-                              data-active={isSelected}
-                              style={styles.connectorModelBtn}
-                            >
-                              <span>{isSelected ? '✓ ' : ''}{choice.label}</span>
-                              <small>{choice.category || t('surfaceEditor.connectorModel')}</small>
-                            </button>
-                          )
-                        })}
                       </>
                     )}
                   </div>
@@ -975,7 +1058,7 @@ export default function SurfaceEditorPanel({
                   : t('surfaceEditor.hintSlab')}
             </div>
           </div>
-          {surfaceToolState.mode !== 'connector' && (
+          {showTexturePalette && (
             <>
               {availableBlocks.length === 0 && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
