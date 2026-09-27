@@ -101,8 +101,14 @@ d'abord) — cette séquence est une recommandation motivée, pas une contrainte
   contrôleur) avant tout code, pas un enchaînement improvisé après les caisses.
 - **Dépendance** : aucune dépendance technique aux lots A/B — uniquement une question de
   séquencement délibéré (voir "Logique d'ensemble").
-- **Non démarré** : nécessitera son propre `PLAN_XXX.md` détaillé (exploration du composant de
-  rendu concerné, conception du contrôleur multi-clips) avant tout code — pas cadré ici.
+- **CLOS et validé en jeu (2026-09-27)** : `docs/PLANS/PLAN_PORTES.md` — `DoorConnectorModel`
+  (`SurfaceDungeonScene.jsx`) généralise le mixer mono-clip des entités (caisses) à N clips, piloté par
+  l'état runtime du connecteur. Instrumentation réelle des 8 `.glb` : tous ont déjà des clips nommés
+  correctement structurés, aucun rework d'asset. Confirmé fonctionnel par Saar sur les 8 types de
+  portes. Doc définitive : `.claude/rules/world.md` § « Interaction runtime sur une porte ». Deux bugs
+  hors périmètre trouvés en chemin dans `entity_blueprints`/`EntityBuilderTab.jsx` (Atelier à 0 pack,
+  code mort) : voir PLAN_PORTES.md §5, restent à traiter séparément (attendent une décision produit sur
+  l'Atelier).
 
 ## Suivi
 

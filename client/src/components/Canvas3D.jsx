@@ -1865,6 +1865,16 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     refreshRuntimeElevators,
   } = useWorldRuntimeSync(battlemap?.id, socket)
 
+  // Fusion des états runtime par connecteur pour le rendu 3D — clés disjointes par construction
+  // (un worldId d'ascenseur n'apparaît jamais dans featureStates côté porte, et inversement) :
+  // `runtimeElevatorStates` est l'état enrichi (phase/position) des ascenseurs, `worldEffects.
+  // featureStates` la ligne brute `world_feature_states` des portes (et de tout futur connecteur à
+  // état). PLAN_PORTES.md §7.1 — ne jamais réutiliser runtimeElevatorStates pour une porte.
+  const connectorRuntimeStates = useMemo(
+    () => ({ ...worldEffects.featureStates, ...runtimeElevatorStates }),
+    [worldEffects.featureStates, runtimeElevatorStates],
+  )
+
   // ─── Liseré surbrillance entités (touche Alt) ─────────────────────────────
   // PE16 : e.code obligatoire (invariant AZERTY/QWERTY)
   const [altPressed, setAltPressed] = useState(false)
@@ -2087,7 +2097,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           runtimeEffectRegions={worldEffects.regions}
-          runtimeFeatureStates={runtimeElevatorStates}
+          runtimeFeatureStates={connectorRuntimeStates}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}

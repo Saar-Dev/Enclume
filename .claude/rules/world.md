@@ -69,8 +69,10 @@ Lire `docs/SYSTEME/MOTEUR_MONDE.md` avant toute modification de ce périmètre.
 - Tout clic MJ sur le panneau connecteur est instantané, sans Test ni portée (mirroir de l'action
   directe MJ sur une entité), et peut re-verrouiller; un payload joueur ne verrouille jamais.
 - Une mutation d'état émet `WORLD_RUNTIME_UPDATED { kind: 'door-state' }` et rafraîchit `featureStates`
-  chez tous les clients. Le GLB ne reflète pas encore l'état ouvert/fermé — rendu 3D seul, la
-  collision et la LOS sont correctes.
+  chez tous les clients. Le GLB reflète l'état ouvert/fermé (`DoorConnectorModel`,
+  `SurfaceDungeonScene.jsx` — mixer multi-clips généralisé depuis le patron mono-clip des entités,
+  progression pilotée par `connector.runtimeState?.state ?? connector.state ?? 'closed'`, validé en
+  jeu réel sur les 8 assets `futuristic_doors` le 2026-09-27, `docs/PLANS/PLAN_PORTES.md` §7).
 
 ## Résolution serveur
 

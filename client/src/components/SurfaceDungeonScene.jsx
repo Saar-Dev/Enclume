@@ -1526,7 +1526,7 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   )
   const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
   const preserveAuthoredOrigin = connector?.modelGeometry?.origin === 'floor-center' || Boolean(connector?.modelBuiltinKey)
-  const { scene: sourceScene } = useGLTF(url)
+  const { scene: sourceScene, animations: sourceAnimations } = useGLTF(url)
   const { scene, offset, uniformScale } = useMemo(() => {
     const clone = SkeletonUtils.clone(sourceScene)
     clone.traverse((child) => {
@@ -1575,6 +1575,58 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
     }
   }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight,
     connectorAxis, connectorAnchorX, connectorAnchorZ, connectorNormalX, connectorNormalZ, curveWall])
+
+  // Progression d'ouverture pilotée par l'état runtime du connecteur — généralisation à N clips du
+  // patron mono-clip déjà en production (EntityMesh.jsx, caisses/coffres) : même formule de repli que
+  // le serveur (socketConnector.js / PLAN_INTERACTIONS_CONNECTEURS.md §4 point 3), jamais une 2ᵉ
+  // autorité. `locked` est visuellement fermé (RAW : une porte verrouillée est par définition fermée).
+  // Une seule progression pilote tous les clips d'un même GLB (PLAN_PORTES.md §7.3 — sur les 8 assets,
+  // les clips d'un même fichier représentent toujours une seule ouverture, jamais deux transitions).
+  const effectiveState = connector?.runtimeState?.state ?? connector?.state ?? 'closed'
+  const targetProgress = effectiveState === 'open' ? 1 : 0
+  const animMixerRef = useRef(null)
+  const animActionsRef = useRef([])
+  const progressRef = useRef(0)
+  const targetProgressRef = useRef(0)
+  useEffect(() => {
+    if (!scene || !sourceAnimations || sourceAnimations.length === 0) {
+      animMixerRef.current = null
+      animActionsRef.current = []
+      return undefined
+    }
+    const newMixer = new THREE.AnimationMixer(scene)
+    const actions = sourceAnimations.map(clip => {
+      const action = newMixer.clipAction(clip)
+      action.play()
+      action.paused = true
+      return action
+    })
+    const startProgress = targetProgress
+    for (const action of actions) {
+      action.time = startProgress * action.getClip().duration
+    }
+    newMixer.update(0)
+    progressRef.current = startProgress
+    targetProgressRef.current = startProgress
+    animMixerRef.current = newMixer
+    animActionsRef.current = actions
+    return () => newMixer.stopAllAction()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snap initial volontaire, la cible suit ensuite via l'effet ci-dessous (patron EntityMesh.jsx)
+  }, [scene, sourceAnimations])
+  useEffect(() => {
+    targetProgressRef.current = targetProgress
+  }, [targetProgress])
+  useFrame((_, delta) => {
+    const actions = animActionsRef.current
+    const mixer = animMixerRef.current
+    if (!mixer || actions.length === 0) return
+    const alpha = 1 - Math.exp(-delta / 0.25)
+    progressRef.current += (targetProgressRef.current - progressRef.current) * alpha
+    for (const action of actions) {
+      action.time = progressRef.current * action.getClip().duration
+    }
+    mixer.update(0)
+  })
 
   if (!url || !box || !scene) return null
 

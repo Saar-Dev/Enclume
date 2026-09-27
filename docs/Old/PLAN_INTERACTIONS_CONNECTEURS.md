@@ -4,7 +4,8 @@
 > Doc définitive : `.claude/rules/world.md` § « Interaction runtime sur une porte ». Compte-rendu de
 > clôture (décisions, fichiers, testé/non testé) : `docs/JOURNAL8.md` 2026-09-02, commits `10cde1e`
 > puis `05129fe`. Restes hors périmètre, suivis ailleurs : échelle (traversée verticale, non cadrée) ;
-> 2 points visuels non bloquants (cadre de sélection porte déformé, modèle GLB statique) ;
+> modèle GLB statique — **résolu 2026-09-27**, `docs/PLANS/PLAN_PORTES.md`, validé en jeu sur les
+> 8 assets ; cadre de sélection porte déformé — toujours ouvert, même document §4 ;
 > non-régression de l'interaction d'entité après extraction de `gmArbitratedTestService.js`.
 > Le contenu ci-dessous est conservé tel quel pour l'historique de conception.
 
