@@ -1,8 +1,9 @@
 # PLAN_ZONES_DANGER.md — Fondation « zones dangereuses »
 
 > Rédigé 2026-09-09, **réécrit propre 2026-09-10** (consolidation d'un cadrage de ~35 tours).
-> **Cadrage terminé. Aucun code écrit.** Ce document est auto-suffisant : il porte le contrat,
-> l'architecture, les décisions RAW tranchées avec Saar, le catalogue exemple et le plan d'incréments.
+> **Cadrage terminé. Z0 codé 2026-09-27** (§11 historique, §13.6 validation) — `Z1→Z7` restent à
+> coder. Ce document est auto-suffisant : il porte le contrat, l'architecture, les décisions RAW
+> tranchées avec Saar, le catalogue exemple et le plan d'incréments.
 >
 > **Responsabilité unique** (`docs/RegleDocumentaire.md` R1) : *comment une zone d'effet runtime,
 > posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle naît /
@@ -626,6 +627,139 @@ consommateur du rework world builder, §12).
   `weaponModService` mais *sémantique* lookup-par-type sans agrégation (invariant Lot 3 préservé) ;
   §5.5 dédupliqué ; instance `geometry` vs `targetKind` existant = réconciliation explicitement
   reportée à Z2, orthographe `compartment` ; INDEX.md §6 complété.
+- **2026-09-27** — **Z0 codé** (`shared/world/dangerEffectLines.js`, `shared/world/dangerCatalog.js` +
+  extension additive de `worldEffects.js`, tests aux 3 fichiers). Recherche externe avant code :
+  Foundry pf2e (`foundryvtt/pf2e`, Rule Elements — registre clé→classe builtin+custom, clé inconnue =
+  log + skip jamais un throw, un fichier par type) confirme l'architecture registre/dispatch déjà
+  retenue contre un système mature en production, pas seulement des principes de design (GAS/DOS2 déjà
+  cités). Corrections trouvées en écrivant (le plan divergeait de son propre contrat sur ces points,
+  jamais un choix RAW) :
+  - `EFFECT_KEY_RE` (`worldEffects.js`) élargie pour accepter `:` — aucune clé namespacée
+    (`feu:grand`, `gaz:irritant`) n'aurait passé la validation existante.
+  - Clés catalogue toujours ASCII, jamais accentuées (`gaz:décomposant` → `gaz:decomposant`, `vésicant`
+    → `vesicant`) — convention machine/label déjà en vigueur partout ailleurs (labels accentués,
+    codes ASCII) ; §4 les écrivait accentuées par glissement, jamais une décision RAW.
+  - `modifier` (ligne) gagne `valueFromFailMargin`/`cumulative` (optionnels) : le `test.onFail` de
+    gaz:irritant (§4) n'a pas de `value` fixe, sa magnitude vient de la marge d'échec — absent du
+    tableau générique §3, présent dans l'exemple.
+  - `attenuations[].tag` accepté en synonyme de `key` (§4 gaz:irritant, entrée `behavior` écrite avec
+    `tag` pas `key`) + champ `cost` optionnel (ressource dépensée, ex. `souffle`).
+  - Une ligne IMBRIQUÉE (`test.onFail`, `chance.onSuccess/onFail`, `drainResource.onEmpty`) ne porte
+    pas de `phase` (ressort `phase:null`) — les exemples §4 n'en donnaient jamais une, l'exiger cassait
+    le contrat déjà écrit.
+  - `DANGER_CATALOG` est un objet plain gelé, jamais un `Map` : `Object.freeze(map)` ne bloque pas
+    `.set()`/`.delete()` (piège JS), seul un objet gelé l'empêche vraiment — même patron que
+    `BUILTIN_WORLD_EFFECTS`.
+  - `hazardCode` n'est renseigné que pour les 3 familles déjà couvertes par le Lot 3 (`feu:*`→`burning`,
+    `acide:capsule`→`acid`, `decompression`→`decompression`) — gaz et radiations n'ont pas encore de
+    condition token Lot-3-style, `hazardCode` y reste `null` (pas une valeur inventée) ; la dérivation
+    Z1.4 doit dédupliquer les 4 `feu:*` sur un seul code `burning`.
+  - **4 entrées gaz restées à sourcer verbatim** (`gaz:vesicant`/`suffocant`/`neurotoxique`/`assommant`) :
+    écrites à partir du tableau condensé §5.3 (déjà `[VÉRIFIÉ Livre de Base, Saar]` pour ses CHIFFRES),
+    mais avec des mappings `[HYPOTHÈSE]` marqués en commentaire dans `dangerCatalog.js` — **à confirmer
+    par Saar contre le Livre de Base avant de les considérer RAW-closes** : `damageType:'gaz'` du
+    vésicant (aucune analogie "comme le feu" sourcée, contrairement au décomposant) ; `skill:'choc'` de
+    l'assommant (code de compétence non vérifié contre l'implémentation réelle du Test de Choc) ; la
+    persistance "même hors zone" du neurotoxique (RAW) n'a aucun champ dans le contrat de ligne `test`
+    actuel (seuls damage/status/modifier portent une rémanence) — signalé en commentaire, aucun champ
+    inventé pour la contourner, à trancher explicitement au cadrage du résolveur `test` (v2).
+  - Validation : `node --check` ×3, `node --test` ciblé (39 tests Z0) + `node --test 'shared/**/*.test.mjs'`
+    (915 tests, zéro régression) + `git diff --check`. Aucun consommateur en Z0 : comportement de jeu
+    inchangé, confirmé par le test de non-régression des 5 builtins legacy.
+- **2026-09-27 (suite)** — **Z1.1 codé** : `server/src/services/effectLineResolverService.js`
+  (`resolveDamageLine` + `RESOLVERS`/`findEffectLineResolver`, patron `weaponModService.js` — carte
+  locale, jamais un throw pour un type sans résolveur). **Simplification vs §14.2** : le
+  `shared/world/effectLineResolverRegistry.js` prévu par le plan (`{type, phase, validateParams}`)
+  n'est PAS créé — ce vocabulaire existe déjà dans `dangerEffectLines.js` (Z0, `EFFECT_LINE_TYPES`/
+  `TYPE_NORMALIZERS`), le recréer aurait été un 2ᵉ moteur de validation (invariant 2). La carte
+  type→résolveur reste côté serveur seul, comme `weaponModService.js` le fait déjà pour ses hooks.
+  `resolveForcedSlotCodes` implémente la précédence §3 (définition > ligne > mode, `'all'` = les 6
+  Localisations RAW une fois chacune, `locations` ignoré) — logique NEUVE, la boucle historique de
+  `resolveEnvironmentalHazardTicks` ne connaissait qu'un seul `forcedSlotCode` répété. `armorFactor`
+  (Z0) branché sur `resolveTargetHit({armorReductionFactor})` (valeur 1 partout au catalogue → aucun
+  effet observable aujourd'hui, `damageService.js` n'agit que si `!== 1`). Rien n'appelle ce service
+  (Z1.2 = la bascule). Test d'intégration base locale (5 cas, fixture créée/nettoyée, patron
+  `deathStateService.test.mjs`/`woundService.test.mjs` NO_CHANCE) : résolveur inconnu → `undefined` ;
+  `locationMode:'exposed'` + choix MJ → 1 frappe à l'endroit choisi, blessure posée ; `locationMode:'all'`
+  (`feu:brasier`) → 6 frappes, une par Localisation, `locations:null` bien ignoré ; `forcedLocation` de
+  définition (`decompression`) prime sur la ligne ; token sans personnage → neutre, aucune émission.
+  **Non-régression à surveiller en Z1.2** (pas un blocage Z1.1) : sous ce modèle, `acide:capsule` a
+  `locationMode:'random'` (texte littéral du plan §4) — un `forcedLocation` MJ posé aujourd'hui sur une
+  exposition Acide via `/hazards/acid/expose` ne sera plus honoré après la bascule (seul `'exposed'` lit
+  l'instance, §3 texte littéral). À confirmer avec Saar en session au moment de Z1.2, pas avant.
+- **2026-09-27 (suite) — Z1.2 codé** (bascule réelle, incrément le plus risqué du plan) :
+  `combatTurnEngine.js` appelle désormais `effectLineResolverService.js:resolveActiveEffects` au lieu
+  de `resolveEnvironmentalHazardTicks` (supprimée, plus aucun appelant — import mort retiré aussi de
+  `socketCombatHelpers.js`, confirmé par grep avant suppression : aucun autre appelant réel dans tout
+  `server/`, seuls 3 fichiers la citaient en commentaire). **Non-régression stricte respectée** :
+  `resolveActiveEffects` reconstruit une ligne `damage` depuis `token_statuses.data` (jamais depuis
+  `dangerCatalog.js` — la note d'en-tête du fichier l'explicite) ; `entry.forcedLocation` (registre
+  INCHANGÉ) prime toujours, exactement comme avant ; l'ancienne précédence
+  `entry.forcedLocation ?? data.forcedLocation ?? aléatoire` est préservée à l'identique (donc
+  l'inquiétude notée au-dessus pour Z1.1 — Acide qui perdrait son `forcedLocation` MJ — **ne se
+  matérialise PAS** : `resolveActiveEffects` la contourne en injectant `data.forcedLocation` directement
+  dans `line.forcedLocation`, jamais via `instanceForcedLocation`/`locationMode:'exposed'` qui l'aurait
+  ignorée. Le point à surveiller décale donc à Z1.3+, quand la lecture basculera vers le catalogue).
+  **Bug réel trouvé et corrigé par un test, pas par relecture** : `resolveForcedSlotCodes` (Z1.1)
+  renvoyait la CLÉ de Localisation (`'bras_gauche'`) au lieu du slotCode attendu par `resolveTargetHit`
+  (`'BG'`) — `damageService.js:354` (`SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'`) absorbait l'erreur en
+  retombant SILENCIEUSEMENT sur `'corps'`, ce qui faisait passer à tort les tests Z1.1 (qui testaient
+  tous une Localisation forcée = `'corps'`, jamais une autre). Trouvé par le test « Acide/bras_gauche »
+  de Z1.2 (seul cas testé avec une Localisation forcée ≠ corps) ; corrigé (conversion `LOCATION_TO_SLOT`
+  ajoutée dans `resolveForcedSlotCodes`) ; 9/9 tests dédiés + 127 tests serveur des fichiers liés
+  (`combatTurnEngine.test.mjs` inclus) + `node --test 'shared/**/*.test.mjs'` (915) tous verts après
+  correction. Aucun résidu de fixture (vérifié par lecture de la base). `git diff --check` propre.
+- **2026-09-27 (suite) — Z1.3 partiel : `ENVIRONMENTAL_HAZARD_REGISTRY` dérivé.**
+  `shared/environmentalHazardRegistry.js` n'est plus la source : `deriveEnvironmentalHazardRegistry()`
+  construit le tableau depuis `dangerCatalog.js` (dédup par `hazardCode`, ordre figé
+  `['acid','decompression','burning']` pour ne pas casser les tests `deepEqual`, `lingersOnClear`
+  dérivé de `remanence==='fixed'` sur la ligne damage — trouvaille du run à vide §14.8 pt7, appliquée
+  ici). **Sortie bit-à-bit identique** à l'ancien tableau littéral (vérifié directement en chargeant le
+  module). Les 3 tests existants (`environmentalHazardRegistry.test.mjs` — deepEqual strict,
+  `tokenStatusRegistry.test.mjs`, `dangerCatalog.test.mjs`) passent **sans modification** (pas
+  « portés » : ils n'avaient pas besoin de changer, la dérivation reproduit l'ancien contrat au bit).
+  `TokenStatusPanel.jsx` (client) importe ce fichier directement — chaîne d'import vérifiée sans aucun
+  module server-only (`crypto`/`db`), **build client relancé et vert** pour le confirmer, pas seulement
+  lu.
+  **Volontairement PAS fait dans ce lot** (périmètre resserré, deux raisons distinctes) :
+  1. `shared/environmentalHazardPresets.js` / `TokenStatusPanel.jsx` — absorption reportée. Le
+     formulaire d'exposition manuelle n'a pas de notion de `locationMode` ; représenter `feu:brasier`
+     (`locationMode:'all'`) dans ce formulaire texte n'a pas de traduction honnête aujourd'hui
+     (`locations:null` → un champ texte qui afficherait littéralement "null"). Question produit/UX
+     (le brasier doit-il être exposable à la main via ce panneau, ou seulement via une zone/un
+     lance-flammes plus tard ?), pas une décision d'archi pure — à trancher avec Saar au moment de Z6
+     (éditeur MJ) plutôt que de forcer une réponse maintenant. Zéro régression : fichier non touché.
+  2. Résolveurs `note` / `status` / `modifier` (base) — non ajoutés : **aucune ligne du catalogue
+     actuel n'est atteignable par un chemin réel** (les lignes `modifier`/`status`/`chance` n'existent
+     que sur les gaz, dont `hazardCode` reste `null` — `getAllHazardCodes()` ne les remonte pas, donc
+     `resolveActiveEffects` ne les verra jamais avant Z5). Les construire maintenant serait un « v2
+     inventé sans besoin exprimé » (piège inverse déjà noté par Saar, chantier drones). `modifier`
+     attend de toute façon Z4 (`ACTIVE_MALUS_SOURCES`) pour avoir un sens complet.
+  Reste donc de Z1 : **Z1.4** (migration `ref_equipment`, §14.5 — nettoyage isolé, faible risque).
+- **2026-09-27 (suite) — Z1.4 codé. Z1 est clos.** Migration `367_fix_ref_equipment_gas_mechanic_text.js`
+  (numéro vérifié sur `ls migrations/` **et** `knex_migrations`, pas depuis EN_COURS.md — piège connu
+  de la règle migrations). **Les 6 lignes réellement corrompues ont été interrogées en base avant
+  d'écrire quoi que ce soit** (invariant 1 : ne pas recopier §5.4 tel quel) — confirmation exacte :
+  Grenade+Capsule pour décomposants/vésicants (colonne `nation`) et assommants (colonne `damage_h`),
+  6 valeurs exactes obtenues par requête directe. Les 6 lignes irritant/neurotoxique/suffocant
+  (Grenade+Capsule) étaient bien déjà `null` ; la ligne Acide (`damage_h:'1D10'`) est propre (une
+  formule y est normale, pas une corruption) — vérifié, pas supposé.
+  **nodemon tournait réellement en tâche de fond** (une autre session a la stack dev lancée) :
+  la migration s'est auto-appliquée à l'écriture du fichier, détecté en interrogeant
+  `knex_migrations` AVANT d'appeler `up()` moi-même (règle `migrations.md`, pour ne jamais la
+  rappeler à l'aveugle sur des données déjà correctes). Round-trip testé en important le module et en
+  appelant `down()` puis `up()` directement (jamais la CLI knex) : restauration exacte des 6 valeurs
+  d'origine puis re-nettoyage confirmés par lecture directe de la base ; un 3ᵉ `up()` sur des lignes
+  déjà propres lève bien l'erreur de garde prévue (`"nation" inattendu... déjà nettoyé ?`), pas une
+  corruption silencieuse. État final vérifié : les 6 lignes sont propres. Aucun test existant ne
+  référence les anciennes valeurs (grep négatif hors seeds d'origine et cette migration).
+  **Z1 est maintenant clos dans son ensemble** (Z1.1→Z1.4) : bascule réelle faite et testée, registre
+  dérivé du catalogue, données corrompues nettoyées. Reste, hors Z1 : Z1b (protections JSONB), Z2
+  (balayage spatial — le premier incrément qui rend une zone posée sur une carte réellement active),
+  Z3 (grenade incendiaire), Z4 (modifier complet), Z5 (preuve gaz), Z6/Z7 (éditeur MJ, avertissement
+  joueur). Les 3 points volontairement différés plus haut (presets/TokenStatusPanel, résolveurs
+  note/status/modifier, les 4 gaz `[HYPOTHÈSE]`) restent ouverts, chacun rattaché à l'incrément où il
+  redeviendra pertinent.
 
 ---
 
@@ -833,11 +967,20 @@ Balayage de présence spatial (**Z2**) · `puissance` sur l'instance / migration
 
 1. `resolveActiveEffects` : itère les `token_statuses` **ou** reçoit les `rows` de l'appelant (comme
    `resolveEnvironmentalHazardTicks` aujourd'hui) ? Cohérence avec le futur balayage Z2.
-2. `shared/statusCodes.js` : périmètre exact (fusionner `VALID_STATUS_CODES` + hazards + mod statuses ?)
-   — risque de casser `socketToken.js` si mal cadré. Peut-être un incrément séparé avant Z1.
+2. ~~`shared/statusCodes.js`~~ **résolu (Z0, run à vide 2026-09-27)** : `shared/tokenStatusRegistry.js`
+   existe déjà (créé 2026-09-24, après le cadrage) et couvre exactement ce besoin — `findTokenStatus`
+   est l'autorité à utiliser pour vérifier l'existence d'un `statusCode` de ligne `status`. Aucun
+   fichier à créer, aucun risque sur `socketToken.js` (rien n'y change).
 3. `modifier` base en Z1 vs tout en Z4 : est-ce que « poser le `token_status` sans le lire » a une
    valeur, ou Z1 s'arrête à `damage`/`status`/`note` ?
 4. Tests service Lot 3 : localiser (`server/src/**/*hazard*.test` — aucun trouvé au grep initial ;
    vérifier `combatTurnEngine` / intégration).
-5. `getAllHazardCodes()` dérivé : ordre des codes (le test `deepEqual` est sensible à l'ordre).
+5. `getAllHazardCodes()` dérivé : ordre des codes (le test `deepEqual` est sensible à l'ordre) — **et
+   dédupliquer** : les 4 `feu:*` du catalogue (Z0) partagent le même `hazardCode:'burning'`, la
+   dérivation doit produire une seule entrée `burning`, pas 4.
 6. Le `down()` de la migration `ref_equipment` : re-vérifier les 6 valeurs exactes avant d'écrire.
+7. **`lingersOnClear`** (`environmentalHazardRegistry.js`, ajouté 2026-09-24 — après le cadrage, pas
+   dans le contrat §3 d'origine) : à dériver de `remanence === 'fixed'` sur la ligne `damage` de la
+   définition catalogue portant ce `hazardCode` — vrai seulement pour `acide:capsule` en Z0 (feu:*/
+   decompression ont `remanence:'none'`). Pas un champ à ajouter au contrat : la donnée existe déjà
+   dans `remanence`, `clearHazard(..., {linger:true})` n'a besoin que du booléen dérivé.

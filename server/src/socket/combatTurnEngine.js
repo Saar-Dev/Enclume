@@ -35,7 +35,8 @@ import db from '../db/knex.js'
 import { setFSMSubPhase } from '../lib/combatFSM.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
-import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
+import { getAllHazardCodes } from '../lib/environmentalHazardService.js'
+import { resolveActiveEffects } from '../services/effectLineResolverService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
@@ -391,12 +392,14 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
     // deux registres séparés (équipement vs danger environnemental), jamais fusionnés. Un statut
     // environnemental n'est jamais balayé à COMBAT_END (§9 point ouvert 7, décision assumée) — un
     // token qui rentre dans un nouveau combat avec un badge encore actif retickera automatiquement ici.
+    // La jointure/le filtre restent ceux de Lot 3 ; seule la résolution a basculé vers le dispatch
+    // générique par type de ligne (docs/PLANS/PLAN_ZONES_DANGER.md §14.3, Z1.2, 2026-09-27).
     const hazardRows = await db('combat_roster as roster')
       .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
       .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active' })
       .whereIn('ts.status_code', getAllHazardCodes())
       .select('roster.token_id', 'ts.status_code', 'ts.data')
-    await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
+    await resolveActiveEffects(io, db, campaignId, hazardRows)
 
     // Informatique Lot 3b (docs/PLANS/PLAN_INFORMATIQUE.md §4 Lot 3b) — Survie I.E.M. : tentative
     // de redémarrage à chaque Tour pour toute exo-armure immobilisée (`iem_survival`), boucle
