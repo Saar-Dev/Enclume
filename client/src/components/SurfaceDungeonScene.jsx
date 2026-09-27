@@ -1363,8 +1363,14 @@ function connectorDoorBox(connector) {
   )
   const modelDepth = Math.max(0.05, geometryDepth || Number(connector.depth) || wallDepth)
   const fallbackDepth = Math.max(wallDepth, modelDepth)
-  const width = connector.axis === 'segment' || connector.axis === 'x' ? alongLength : fallbackDepth
-  const depth = connector.axis === 'segment' ? fallbackDepth : connector.axis === 'z' ? alongLength : fallbackDepth
+  // Dimensions TOUJOURS dans la convention locale « axe x » (ouverture le long de X, épaisseur le
+  // long de Z) — jamais pré-échangées selon l'axe : c'est `rotationY` ci-dessous qui porte à lui
+  // seul toute la correction d'orientation. Avant ce correctif, l'axe 'z' échangeait déjà largeur/
+  // profondeur PUIS appliquait une rotation de 90° par-dessus — double compensation qui annulait la
+  // correction et rendait la boîte de sélection toujours orientée comme un connecteur d'axe 'x',
+  // quelle que soit l'orientation réelle du mur (signalé par Saar, 2026-09-27, PLAN_PORTES.md §4).
+  const width = alongLength
+  const depth = fallbackDepth
   const x = connector.axis === 'segment' || connector.axis === 'x' ? (x0 + x1) / 2 : x0
   const z = connector.axis === 'segment' || connector.axis === 'z' ? (z0 + z1) / 2 : z0
   const height = Math.max(0.5, Number(modelGeometry.height) || Number(connector.height) || 2)

@@ -101,16 +101,27 @@ suffisent, pas besoin de l'alternative procédurale.
 
 ---
 
-## 4. Bug cosmétique secondaire, non bloquant [HYPOTHÈSE]
+## 4. Bug du cadre de sélection — CLOS (2026-09-27) [VÉRIFIÉ]
 
-`ConnectorSelectionOutline` (ligne 1406) et `DoorConnectorFallback` (ligne 1395) utilisent tous deux
-`connectorDoorBox(connector)` — une boîte générique dérivée de `connector.thickness`/dimensions
-autorées. `DoorConnectorModel` (le rendu réel) calcule lui une échelle différente
-(`targetHeight / modelHeight`, à partir du **vrai** bounding box du GLB chargé, ligne 1558-1560). Si
-ces deux calculs divergent pour un asset donné, le cadre de sélection (doré, ligne 1406-1418) ne colle
-pas au modèle réellement affiché — c'est très probablement le « cadre de sélection porte déformé »
-listé comme reste non bloquant dans `PLAN_INTERACTIONS_CONNECTEURS.md`. Non vérifié en jeu (nécessite
-de sélectionner chacun des 8 assets et comparer visuellement) — à confirmer avant de le corriger.
+**Signalé par Saar en jeu** (capture d'écran) : le cadre de sélection jaune d'une porte ne suit pas
+l'orientation réelle de la porte — toujours la même orientation, quel que soit le mur. Root cause
+vérifiée par calcul, pas devinée : `connectorDoorBox` (ligne 1348-1387, partagée par
+`ConnectorSelectionOutline` et `DoorConnectorFallback`) échangeait déjà `width`/`depth` selon
+`connector.axis === 'z'` **puis** appliquait `rotationY = Math.PI / 2` par-dessus — double
+compensation. Pour un connecteur d'axe `'z'`, l'échange de dimensions ET la rotation de 90° annulent
+mutuellement la correction : la boîte ressort systématiquement dans la forme d'un connecteur d'axe
+`'x'`, quelle que soit l'orientation réelle du mur — exactement le symptôme rapporté (« toujours dans
+le même sens »). `rotationY` seul porte déjà toute la correction d'orientation nécessaire (vérifié
+matriciellement : une rotation de 90° échange déjà les étendues X/Z d'une boîte) — les dimensions
+doivent rester dans une convention locale fixe, jamais pré-échangées.
+
+**Correctif** : `width`/`depth` toujours assignés dans la convention locale de l'axe `'x'`
+(`width = alongLength`, `depth = fallbackDepth`), sans branche spécifique à `'z'`. `rotationY`
+inchangé. `DoorConnectorModel` (le rendu réel du GLB) ne lit jamais `box.args` — seulement
+`box.floorPosition`/`box.rotationY`/sa propre échelle — donc l'apparence de la porte elle-même est
+inchangée ; seul le cadre de sélection (et le placeholder avant chargement du GLB) est affecté.
+`npx eslint`/`npm run build` propres. **Non testé en jeu** — à confirmer par Saar sur une porte posée
+sur un mur d'axe Z (le cas qui était visiblement cassé).
 
 ---
 
