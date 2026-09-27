@@ -1,10 +1,9 @@
 # PLAN_ZONES_DANGER.md — Fondation « zones dangereuses »
 
 > Rédigé 2026-09-09, **réécrit propre 2026-09-10** (consolidation d'un cadrage de ~35 tours).
-> **Cadrage terminé. Z0+Z1 codés et clos, Z2 en cours (étapes 1+2/4 codées)** — détail §11
-> historique, 2026-09-27. `Z2 (reste étapes 3-4) → Z7` restent à coder. Ce document est
-> auto-suffisant : il porte le contrat, l'architecture, les décisions RAW tranchées avec Saar, le
-> catalogue exemple et le plan d'incréments.
+> **Cadrage terminé. Z0+Z1+Z2 codés et clos** — détail §11 historique, 2026-09-27. `Z3 → Z7` restent
+> à coder. Ce document est auto-suffisant : il porte le contrat, l'architecture, les décisions RAW
+> tranchées avec Saar, le catalogue exemple et le plan d'incréments.
 >
 > **Responsabilité unique** (`docs/RegleDocumentaire.md` R1) : *comment une zone d'effet runtime,
 > posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle naît /
@@ -849,6 +848,35 @@ consommateur du rework world builder, §12).
   l'étape 2 — `tickWorldEffectInstanceDurations` est exercée directement, câbler tout `combat_state`
   pour ce seul ajout aurait dupliqué la fixture de `combatTurnEngine.test.mjs` sans rien vérifier de
   plus sur cette fonction précise). Reste Z2 étape 4 (`puissance`, migration).
+- **2026-09-27 (suite) — Z2 étape 4 codée : champ `puissance`. Z2 est clos dans son ensemble.**
+  Migration `368_world_effect_instances_puissance.js` : colonne `numeric(10,4)` défaut `0` (déjà
+  auto-appliquée par nodemon avant mon propre `up()` — vérifié dans `knex_migrations` avant de rien
+  rappeler, round-trip `down()`/`up()` direct confirmé, jamais la CLI). `puissance` = **entier signé**
+  (§2.E), toujours additif, jamais un mode `multiply` — distinct d'`intensity` (multiplicatif,
+  géométrie/ambiance seule, inchangé). Chaîne complète câblée : `worldEffects.js:
+  normalizeEffectInstance` (défaut 0, arrondi à l'entier) → `compileEffectRegions` (porté sur la
+  région) → `tokensInsideEffectRegions` (porté sur le membership) → `sweepZoneExposure` (écrit dans
+  `token_statuses.data.puissance`, réécrit chaque Tour comme le reste — un MJ qui change la puissance
+  d'une zone déjà posée n'a rien à resynchroniser à la main) → `resolveActiveEffects` (`row.data.
+  puissance ?? 0`) → `resolveDamageLine` (`degautsBruts = jet + puissance`, câblé depuis Z1.1, jamais
+  alimenté jusqu'ici). `exposeToHazard` gagne le paramètre, écrit dans `data` UNIQUEMENT côté zone
+  (même garde que `zoneInstanceId`/`remanence`, étape 2) — chemin MJ-manuel inchangé.
+  **Testé** : 2 tests dans `worldEffects.test.mjs` (round-trip signé + arrondi entier, jamais de
+  valeur fractionnaire) ; 1 test dans `worldEffectService.test.mjs` (persistance création + mise à
+  jour, défaut 0, valeur négative valide) ; 1 test bout-en-bout dans `effectLineResolverService.
+  test.mjs` — zone `feu:petit` (`1d6`) posée avec `puissance:100` → balayage → tick → `degautsBruts`
+  émis vérifié ≥ 101 (preuve que la puissance atteint réellement le jet, pas seulement stockée).
+  `node --test 'shared/**/*.test.mjs'` = 920, tests ciblés en base = 60/60, build client vérifié,
+  aucun résidu de fixture. Un test PRÉ-EXISTANT sans rapport (`combatTurnEngine.test.mjs`, surprise/
+  Initiative, jet de dés réel) a échoué une fois de façon isolée puis est repassé au vert deux fois de
+  suite juste après, sans qu'aucun fichier touché ici n'ait de lien avec ce mécanisme — noté à Saar
+  par transparence, non retenu comme régression de ce lot (aucune reproduction).
+  **Z2 est maintenant clos dans son ensemble** (étapes 1→4) : une zone posée en base a un cycle de vie
+  complet — présence détectée, condition posée/rafraîchie, dégâts tiqués (puissance comprise),
+  extinction/persistance à la sortie, expiration après sa durée. Reste dans le plan : Z3 (grenade
+  incendiaire — dégèle le chantier grenades), Z4 (malus `modifier` complet), Z5 (gaz RAW complet,
+  preuve utilisateur #2), Z6 (éditeur MJ digne de ce nom, griefs Saar déjà consignés ci-dessus), Z7
+  (avertissement joueur).
 
 ---
 

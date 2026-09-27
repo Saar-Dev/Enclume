@@ -239,6 +239,10 @@ export function normalizeEffectInstance(value) {
     volume: volume ? normalizeEffectBounds(volume, 'instance.volume') : null,
     intensity: clamp(value.intensity, 0.01, 100, 1),
     durationRounds: value.durationRounds ?? value.duration_rounds ?? null,
+    // puissance (PLAN_ZONES_DANGER.md §2.E) : entier SIGNÉ, défaut 0, TOUJOURS additif — distinct
+    // d'`intensity` (multiplicatif, géométrie/ambiance seulement). Pas de clamp de bornes : le contrat
+    // ne fixe aucune limite (« pas de mode multiply » ≠ « valeur plafonnée »), seulement un entier fini.
+    puissance: Math.round(finite(value.puissance, 0)),
     state,
     source: clone(value.source || {}),
     metadata: clone(value.metadata || {}),
@@ -292,6 +296,7 @@ export function compileEffectRegions(snapshot, { definitions = [], instances = [
       stacking: definition.stacking,
       bounds,
       intensity: instance.intensity,
+      puissance: instance.puissance,
       movementMultiplier,
       sightOpacity,
       hooks: definition.hooks,
@@ -418,7 +423,10 @@ export function tokensInsideEffectRegions(regions = [], tokenPoints = []) {
   for (const { tokenId, point } of tokenPoints) {
     for (const region of regions) {
       if (pointInsideEffectBounds(point, region.bounds)) {
-        memberships.push({ tokenId, instanceId: region.instanceId, definitionKey: region.definitionKey })
+        memberships.push({
+          tokenId, instanceId: region.instanceId, definitionKey: region.definitionKey,
+          puissance: region.puissance,
+        })
       }
     }
   }

@@ -223,3 +223,30 @@ test('tokensInsideEffectRegions — aucune région ou aucun token : tableau vide
   })
   assert.deepEqual(tokensInsideEffectRegions(regions, []), [])
 })
+
+// PLAN_ZONES_DANGER.md §2.E (Z2 étape 4) — `puissance` : entier signé de l'INSTANCE, défaut 0,
+// toujours additif. Round-trip normalizeEffectInstance → compileEffectRegions → membership.
+test('puissance — défaut 0 sans la fournir, round-trip signé jusqu’au membership', () => {
+  const regionsDefault = compileEffectRegions(snapshot(), {
+    instances: [{ id: 'fire-1', definitionKey: 'fire', targetKind: 'volume', volume, state: 'active' }],
+  })
+  assert.equal(regionsDefault[0].puissance, 0)
+  const membershipsDefault = tokensInsideEffectRegions(regionsDefault, [{ tokenId: 't', point: { x: 1.5, y: 1, z: 0.5 } }])
+  assert.equal(membershipsDefault[0].puissance, 0)
+
+  const regionsSigned = compileEffectRegions(snapshot(), {
+    instances: [{ id: 'fire-2', definitionKey: 'fire', targetKind: 'volume', volume, state: 'active', puissance: -3 }],
+  })
+  assert.equal(regionsSigned[0].puissance, -3)
+  const membershipsSigned = tokensInsideEffectRegions(regionsSigned, [{ tokenId: 't', point: { x: 1.5, y: 1, z: 0.5 } }])
+  assert.equal(membershipsSigned[0].puissance, -3)
+})
+
+test('puissance — jamais un mode multiply, toujours arrondie à l’entier le plus proche', () => {
+  const definition = normalizeEffectDefinition({ key: 'test:puissance', label: 'x' }, { custom: true })
+  const regions = compileEffectRegions(snapshot(), {
+    definitions: [definition],
+    instances: [{ id: 'i', definitionKey: 'test:puissance', targetKind: 'volume', volume, state: 'active', puissance: 4.7 }],
+  })
+  assert.equal(regions[0].puissance, 5, 'entier signé (§2.E) — pas de valeur fractionnaire')
+})

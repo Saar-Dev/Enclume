@@ -159,6 +159,10 @@ export async function resolveActiveEffects(io, db, campaignId, rows) {
     const result = await resolveDamageLine(io, db, campaignId, {
       line, definitionForcedLocation: entry.forcedLocation,
       sourceCode: row.status_code, tokenId: row.token_id,
+      // puissance (§2.E, Z2 étape 4) : posée par sweepZoneExposure quand la source est une zone
+      // (data.puissance) ; absente pour une exposition MJ-manuelle (jamais posée par ce chemin) →
+      // défaut 0, aucun changement de comportement pour l'exposition manuelle historique.
+      puissance: row.data.puissance ?? 0,
     })
     results.push(result)
   }
@@ -221,6 +225,11 @@ export async function sweepZoneExposure(io, db, campaignId, battlemapId) {
         forcedLocation: damageLine.forcedLocation ?? null,
         zoneInstanceId: membership.instanceId,
         remanence: damageLine.remanence,
+        // puissance (§2.E, Z2 étape 4) : scalaire de l'INSTANCE de zone (jamais de la définition —
+        // c'est le MJ qui renforce une zone précise, pas le catalogue). Réécrite chaque Tour comme le
+        // reste (idempotent) : si le MJ change la puissance d'une zone déjà posée, le prochain
+        // rafraîchissement la reprend automatiquement, aucune resynchronisation manuelle nécessaire.
+        puissance: membership.puissance,
       })
     }
   }

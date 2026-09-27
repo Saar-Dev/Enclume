@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { createWorldEffectInstance, tickWorldEffectInstanceDurations } from './worldEffectService.js'
+import { createWorldEffectInstance, updateWorldEffectInstance, tickWorldEffectInstanceDurations } from './worldEffectService.js'
 
 // Lancement (depuis la racine) : node --env-file=.env --test server/src/services/worldEffectService.test.mjs
 // Écrit puis supprime des lignes dans la base locale — sans DATABASE_URL, tout est ignoré.
@@ -108,6 +108,34 @@ test('tickWorldEffectInstanceDurations — aucune instance à durée finie : ne 
     })
     const result = await tickWorldEffectInstanceDurations({ battlemapId: fx.battlemap.id, database: db })
     assert.deepEqual(result.expiredIds, [])
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// PLAN_ZONES_DANGER.md §2.E (Z2 étape 4) — `puissance` persiste par la création ET la mise à jour
+// d'une instance (migration 368_world_effect_instances_puissance.js).
+test('createWorldEffectInstance / updateWorldEffectInstance — puissance persiste (défaut 0, signée, modifiable)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const withoutPuissance = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'feu:grand', targetKind: 'volume', volume: VOLUME },
+    })
+    assert.equal(withoutPuissance.instance.puissance, 0, 'défaut neutre sans la fournir')
+
+    const withPuissance = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'acide:capsule', targetKind: 'volume', volume: VOLUME, puissance: -2 },
+    })
+    assert.equal(withPuissance.instance.puissance, -2, 'entier signé — une puissance négative est valide')
+
+    const updated = await updateWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      instanceId: withoutPuissance.instance.id,
+      patch: { puissance: 7 },
+    })
+    assert.equal(updated.instance.puissance, 7)
   } finally {
     await cleanup(fx)
   }

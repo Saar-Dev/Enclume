@@ -264,6 +264,37 @@ test('sweepZoneExposure — zone acide (remanence:fixed) : la sortie de zone per
   }
 })
 
+test('sweepZoneExposure + resolveActiveEffects — puissance de l\'instance s\'ajoute au jet de dégâts (§2.E)', { skip }, async () => {
+  const fx = await createFixture()
+  events = []
+  let instanceId = null
+  try {
+    await db('combat_roster').insert({ campaign_id: fx.campaign.id, token_id: fx.token.id, status: 'active' })
+    const created = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'feu:petit', targetKind: 'volume', volume: VOLUME_AROUND_ORIGIN, puissance: 100 },
+    })
+    instanceId = created.instance.id
+
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    const status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'burning' }).first()
+    assert.equal(status.data.puissance, 100, 'posée par le balayage, pas par un chemin MJ-manuel')
+
+    // Même jointure que startResolutionPhase (combatTurnEngine.js) : sweep, puis résolution du tick.
+    const rows = [{ token_id: fx.token.id, status_code: status.status_code, data: status.data }]
+    await resolveActiveEffects(fakeIo, db, fx.campaign.id, rows)
+    assert.equal(events.length, 1)
+    assert.ok(
+      events[0].degautsBruts >= 101,
+      `feu:petit = 1d6 (1 à 6) + puissance 100 : attendu ≥ 101, obtenu ${events[0].degautsBruts}`,
+    )
+  } finally {
+    if (instanceId) await db('world_effect_instances').where({ id: instanceId }).del()
+    await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: fx.token.id }).del()
+    await cleanup(fx)
+  }
+})
+
 test('sweepZoneExposure — aucune zone, aucun roster, campagne sans battlemap : ne fait rien, jamais un throw', { skip }, async () => {
   const fx = await createFixture()
   try {
