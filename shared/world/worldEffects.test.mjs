@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { createWorldSnapshot } from './worldContracts.js'
 import {
+  BUILTIN_WORLD_EFFECTS,
   collectPathEffectEvents,
   compileEffectRegions,
   collectTargetEffectHooks,
@@ -127,4 +128,58 @@ test('un effet attaché à un token expose ses hooks de début de tour sans rég
   })
   assert.equal(hooks.length, 1)
   assert.equal(hooks[0].hook.damageType, 'fire')
+})
+
+// PLAN_ZONES_DANGER.md §13.2/§13.6 (Z0) — les 5 builtins legacy ne passent aucun des 8 blocs danger :
+// leur sortie doit rester EXACTEMENT celle d'avant l'extension, défauts neutres partout.
+test('les 5 builtins legacy ressortent avec les blocs danger à leur défaut neutre (non-régression Z0)', () => {
+  for (const key of ['fire', 'flooded', 'gas', 'oil', 'unstable']) {
+    const definition = BUILTIN_WORLD_EFFECTS[key]
+    assert.deepEqual(definition.tags, [])
+    assert.equal(definition.durationPolicy, 'permanent')
+    assert.equal(definition.stackingPolicy, 'max')
+    assert.deepEqual(definition.effects, [])
+    assert.deepEqual(definition.attenuations, [])
+    assert.deepEqual(definition.chaining, [])
+    assert.deepEqual(definition.corrodes, [])
+    assert.equal(definition.source, null)
+    assert.equal(definition.hazardCode, null)
+    assert.equal(definition.forcedLocation, null)
+  }
+  // Les champs legacy eux-mêmes n'ont pas bougé (mêmes valeurs qu'avant Z0).
+  assert.equal(BUILTIN_WORLD_EFFECTS.fire.category, 'hazard:fire')
+  assert.equal(BUILTIN_WORLD_EFFECTS.fire.hooks.length, 1)
+  assert.equal(BUILTIN_WORLD_EFFECTS.fire.hooks[0].amountPerIntensity, 1)
+})
+
+test('une définition custom round-trip les 8 blocs danger + hazardCode/forcedLocation (Z0)', () => {
+  const definition = normalizeEffectDefinition({
+    key: 'test:danger', label: 'Danger de test', category: 'test',
+    tags: ['hazard:test'],
+    durationPolicy: 'conditional', durationParams: { condition: 'aération' },
+    stackingPolicy: 'independent',
+    effects: [{ type: 'damage', phase: 'onTurn', formula: '1d6', damageType: 'test' }],
+    attenuations: [{ by: 'trait', key: 'fireproof', effect: 'partial' }],
+    chaining: [{ engendre: 'test:autre', délai: 1 }],
+    corrodes: ['chair'],
+    source: 'test unitaire',
+    hazardCode: 'test_hazard',
+    forcedLocation: 'corps',
+  }, { custom: true })
+  assert.equal(definition.durationPolicy, 'conditional')
+  assert.deepEqual(definition.durationParams, { condition: 'aération' })
+  assert.equal(definition.effects[0].formula, '1d6')
+  assert.equal(definition.attenuations[0].effect, 'partial')
+  assert.equal(definition.chaining[0].engendre, 'test:autre')
+  assert.deepEqual(definition.corrodes, ['chair'])
+  assert.equal(definition.hazardCode, 'test_hazard')
+  assert.equal(definition.forcedLocation, 'corps')
+})
+
+test('key namespacée par ":" désormais acceptée (catalogue danger) ; forcedLocation de définition invalide rejeté', () => {
+  const definition = normalizeEffectDefinition({ key: 'feu:test', label: 'x' }, { custom: true })
+  assert.equal(definition.key, 'feu:test')
+  assert.throws(() => normalizeEffectDefinition({
+    key: 'x', label: 'x', forcedLocation: 'aile_gauche',
+  }, { custom: true }), RangeError)
 })

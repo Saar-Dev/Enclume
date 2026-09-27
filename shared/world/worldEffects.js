@@ -2,13 +2,33 @@
 // Les définitions personnalisées n'exécutent jamais de code : seules les clés validées ci-dessous
 // peuvent produire une conséquence de jeu.
 
+import { LOCATION_TO_SLOT } from '../armorConstants.js'
+import {
+  normalizeEffectLines,
+  normalizeAttenuations,
+  normalizeChainingRules,
+  normalizeCorrodes,
+} from './dangerEffectLines.js'
+
 const EPSILON = 1e-9
-const EFFECT_KEY_RE = /^[a-z][a-z0-9._-]{1,63}$/
+// ':' ajouté (PLAN_ZONES_DANGER.md §13.7 pt7, Z0) : le catalogue danger namespace ses clés par famille
+// ('feu:grand', 'gaz:irritant') — même convention que le champ `category` des builtins legacy
+// ('hazard:fire', 'terrain:water'), jamais autorisée jusqu'ici sur `key`. Élargissement pur : les 5
+// builtins existants (aucun ':') et tout custom déjà écrit restent acceptés à l'identique.
+const EFFECT_KEY_RE = /^[a-z][a-z0-9:._-]{1,63}$/
 const INSTANCE_STATES = new Set(['active', 'paused', 'expired'])
 const TARGET_KINDS = new Set(['volume', 'support', 'feature', 'compartment', 'entity', 'token'])
 const STACKING_RULES = new Set(['max', 'multiply'])
 const HOOK_EVENTS = new Set(['enter', 'exit', 'traverse', 'turnStart', 'turnEnd'])
 const HOOK_TYPES = new Set(['note', 'test', 'damage', 'restriction'])
+
+// Blocs danger (PLAN_ZONES_DANGER.md §3/§13.2, Z0) — tous optionnels sur normalizeEffectDefinition,
+// défaut neutre : aucun consommateur actuel (5 builtins legacy, 6 custom déjà en base) n'en passe un
+// seul, la sortie pour eux est donc inchangée bit à bit. `stackingPolicy` (cumul d'un DANGER sur un
+// token, Lot 3) est distinct de `stacking` ci-dessus (cumul de plusieurs RÉGIONS actives de la même
+// catégorie sur le mouvement/la vue, mécanique géométrie existante) — deux axes, jamais fusionnés.
+const DURATION_POLICIES = new Set(['permanent', 'timerFixed', 'timerDice', 'conditional', 'oneShot'])
+const STACKING_POLICIES = new Set(['max', 'independent', 'stackCount', 'refreshDuration'])
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
@@ -102,6 +122,34 @@ export function normalizeEffectDefinition(value, { custom = false } = {}) {
   const stacking = value.stacking || 'max'
   if (!STACKING_RULES.has(stacking)) throw new RangeError(`Règle de cumul inconnue : ${stacking}`)
   const hooks = Array.isArray(value.hooks) ? value.hooks.map(normalizeHook) : []
+
+  // Blocs danger (Z0) — additifs, défaut neutre/vide. `tags` : vocabulaire libre référencé par les
+  // attenuations (§2.F) — pas de Set fermé, un tag inconnu n'est une erreur qu'au moment où une
+  // attenuation le référence sans qu'aucune définition ne le porte (vérification hors Z0).
+  const tags = Array.isArray(value.tags) ? deepFreeze(value.tags.map(tag => String(tag).trim())) : deepFreeze([])
+  const durationPolicy = value.durationPolicy ?? 'permanent'
+  if (!DURATION_POLICIES.has(durationPolicy)) throw new RangeError(`durationPolicy inconnue : ${durationPolicy}`)
+  const durationParams = value.durationParams && typeof value.durationParams === 'object' && !Array.isArray(value.durationParams)
+    ? deepFreeze({ ...value.durationParams })
+    : deepFreeze({})
+  const stackingPolicy = value.stackingPolicy ?? 'max'
+  if (!STACKING_POLICIES.has(stackingPolicy)) throw new RangeError(`stackingPolicy inconnue : ${stackingPolicy}`)
+  const effects = value.effects != null ? normalizeEffectLines(value.effects, `${key}.effects`) : deepFreeze([])
+  const attenuations = value.attenuations != null ? normalizeAttenuations(value.attenuations, `${key}.attenuations`) : deepFreeze([])
+  const chaining = value.chaining != null ? normalizeChainingRules(value.chaining, `${key}.chaining`) : deepFreeze([])
+  const corrodes = value.corrodes != null ? normalizeCorrodes(value.corrodes, `${key}.corrodes`) : deepFreeze([])
+  const source = value.source ? String(value.source).trim().slice(0, 500) : null
+  // hazardCode : status_code posé par cette famille de danger (dérive environmentalHazardRegistry en
+  // Z1, §14.4) ; null = définition non postable comme condition token (ex. terrain, radiations non
+  // encore branchées). forcedLocation : prime sur `locationMode` de CHAQUE ligne damage (décompression
+  // → 'corps', RAW "pour simplifier... dans le Corps") — même vocabulaire LOCATION_TO_SLOT que le champ
+  // homonyme d'une ligne damage, au niveau définition cette fois.
+  const hazardCode = value.hazardCode ? String(value.hazardCode).trim().slice(0, 40) : null
+  const forcedLocation = value.forcedLocation ?? null
+  if (forcedLocation != null && !(forcedLocation in LOCATION_TO_SLOT)) {
+    throw new RangeError(`forcedLocation inconnue de LOCATION_TO_SLOT : ${forcedLocation}`)
+  }
+
   return deepFreeze({
     key,
     label: label.slice(0, 120),
@@ -112,6 +160,17 @@ export function normalizeEffectDefinition(value, { custom = false } = {}) {
     builtin: !custom,
     modifiers: normalizeModifiers(value.modifiers),
     hooks,
+    tags,
+    durationPolicy,
+    durationParams,
+    stackingPolicy,
+    effects,
+    attenuations,
+    chaining,
+    corrodes,
+    source,
+    hazardCode,
+    forcedLocation,
   })
 }
 
