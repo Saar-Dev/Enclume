@@ -1,3 +1,17 @@
+## v263 — 2026-09-27 — Éditeur de carte : sidebar réorganisée, nouveaux matériaux, corrections
+
+### Éditeur de carte
+- [change] La barre latérale de l'éditeur est réorganisée en trois écrans clairs : **Structure** (murs, connecteurs), **Objets 3D** (entités) et **Zones dangereuses** — au lieu d'une liste unique mélangeant tout. Un bouton « Porte » direct a été ajouté (plus besoin de sélectionner un mur au préalable).
+- [fix] Le déplacement de la caméra au clavier (flèches) ne fonctionnait pas dans les écrans Structure et Zones dangereuses.
+- [fix] La position des fenêtres flottantes (Salle, Mur, Connecteur) et l'état ouvert/fermé de leurs sections sont maintenant mémorisés, quel que soit l'objet sélectionné.
+- [fix] Le brouillard d'ambiance masquait une partie de la carte construite ; il ne s'applique plus qu'à la périphérie, au-delà de la zone constructible.
+- [change] La fiche d'un mur n'affiche plus d'identifiant technique interne ; celle d'une salle garde son champ de nom, en plus discret.
+
+### Matériaux procéduraux
+- [add] Quatre nouvelles matières : Acier inoxydable, Aluminium, Titane, Revêtement anticorrosion.
+- [add] Onze nouveaux motifs de surface (surface rugueuse, panneaux nervurés, tôle ondulée, plaques boulonnées, béton coffré/segmenté, soudures, peinture cloquée, etc.).
+- [fix] La rugosité de chaque matériau réagit maintenant à l'usure, la rouille et la saleté générées (une rayure brille, la rouille et la crasse sont mates) au lieu d'un rendu plat identique pour toute matière.
+
 ## v262 — 2026-09-26 — Un seul Test de soins par localisation
 
 ### Blessures

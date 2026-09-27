@@ -66,6 +66,57 @@ Cadrage → analyse à charge (lecture seule) → plan exact (fichiers, invarian
 `rules/voxels.md` à supprimer ou archiver, Règle 10). Migrations : `.claude/rules/migrations.md` (nodemon applique une migration dès
 l'écriture du fichier ; vérifier `knex_migrations`).
 
+## 6. Système de matériau procédural — répertorié le 2026-09-27 (pas un doublon, un pipeline à deux étages)
+
+Contexte : en réorganisant la sidebar Structure, la grille de textures pré-faites (§2, `voxel_textures`)
+et le système « Matière + Motif » (procédural) ont d'abord semblé deux mécaniques concurrentes.
+`[VÉRIFIÉ]` lecture de code + requête en base le 2026-09-27 : ce n'est pas le cas — deux étages d'un
+même pipeline.
+
+**Étage 1 — moteur procédural, vivant** : `client/src/lib/proceduralMaterials.js` génère en direct
+(canvas 2D, par surface) une texture albedo + une normal map, à partir de :
+- 4 matières (Acier, Plastique, Bois, Béton), chacune avec son propre bruit procédural (grain du bois,
+  mouchetures du béton, brossé de l'acier) ;
+- 5 motifs (Aucun, Plaques rivetées, Dalles jointes, Planches, Tôle striée), chacun avec son propre
+  relief simulé (fonctions `applyX`/`sampleXHeight` séparées) ;
+- Usure : rayures + éclats de peinture (révèle le substrat) + **simulation de rouille dédiée à
+  l'acier**, concentrée près des arêtes/rivets ;
+- Saleté : accumulation près des bords, traînées de coulure façon ruissellement, mouchetures de
+  poussière ;
+- **Relief réel** (`realRelief`) : pas un simple normal map cosmétique — `client/src/lib/reliefGeometry.js`
+  transforme la hauteur procédurale en vraie géométrie de mesh (déplacement réel, confirmé par grep) ;
+- Variation par graine (`seed`/`autoVariants`) : chaque surface obtient une variante reproductible,
+  jamais un copier-coller visuel identique.
+
+Exposé aujourd'hui via `SurfaceMaterialEditor.jsx` (composant partagé, utilisé par
+`SurfaceRoomPanel.jsx`/`SurfaceWallPanel.jsx`) ET, en double, ré-implémenté à la main dans
+`SurfaceEditorPanel.jsx` (mode Salle) — mêmes six champs, code dupliqué, non signalé au moment de la
+refonte de la sidebar (Structure/Objets 3D/Zones dangereuses) — à corriger un jour, hors périmètre de
+cette session-ci.
+
+**Étage 2 — le catalogue (`voxel_textures`, §2/§3), un four de cuisson optionnel** :
+`MaterialGeneratorTab.jsx` (atelier, onglet « Générateur de matériau ») appelle **la même fonction**
+(`generateProceduralMaterialTexture`), prévisualise, puis **cuit** le résultat (PNG albedo + PNG
+normal) et l'enregistre via `POST /voxel-textures/from-paths`. `[VÉRIFIÉ en base]` `voxel_textures`
+contient 0 ligne localement (2026-09-27) — la grille de textures pré-faites de l'éditeur de surface
+n'est donc jamais vide par bug : elle est vide parce que ce four n'a encore jamais servi.
+
+**Conclusion pour ce chantier** : pas un doublon à trancher (garder l'un, jeter l'autre) — un moteur
+vivant (édition par surface, toujours à jour) et un four de cuisson optionnel (fige un résultat en
+texture réutilisable ailleurs, catalogue partagé avec `EntityBuilderTab.jsx`/`TexturePacksPage.jsx`).
+Décision de Saar (2026-09-27) : garder l'option de peupler `voxel_textures` via l'atelier **sous le
+coude** — répertorié ici, **rien à coder ni migrer maintenant**.
+
+**Lien avec `PLAN_DECALS.md`** : plan distinct, cadré (stratégie de rendu tranchée le 2026-09-16 : quad
+simple sur mur plan, `THREE.DecalGeometry` sur mur courbe/profilé) mais **non implémenté (0 code)**.
+Une décoration murale (câble, panneau, affiche) y est un **objet ponctuel positionné sur le mur**,
+indépendant du matériau de base — les deux systèmes coexistent sur le même mur, ne se recouvrent pas
+(ambiguïté déjà tranchée dans `docs/VOCABULARY.md`, citée en tête de ce plan). Sa section « Documentation
+dont j'ai besoin » liste le système de matériaux comme prérequis non lu — ce §6 y répond désormais.
+
 ## Historique
 
+- **2026-09-27** — §6 ajouté : système de matériau procédural répertorié en détail (capacités réelles,
+  pipeline moteur→catalogue via l'atelier, lien avec `PLAN_DECALS.md`) sur demande de Saar, qui
+  découvrait mal l'étendue de « Matière + Motif ». Documentation seule, aucun code touché.
 - **2026-09-26** — stub créé sur décision de Saar ; inventaire par recherche de texte, à confirmer.

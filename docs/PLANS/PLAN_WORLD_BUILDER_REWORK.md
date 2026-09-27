@@ -98,8 +98,93 @@ cadrage dédié (§3, jamais commencé) devra inclure une vraie passe UI/UX — 
 ressemble concrètement l'outil de mur de Dungeondraft (pas seulement son modèle de données), pas
 uniquement la question technique déjà tranchée ici.
 
+## 7. Session 2026-09-27 — bilan : pivot UI/UX + matériaux, la forme des salles n'a toujours pas avancé
+
+**Constat d'ouverture, vérifié empiriquement (scripts Node jetables important `roomGeometry.js` /
+`worldCompiler.js` directement)** : le moteur (`shared/world/roomGeometry.js`,
+`worldCompiler.js`) supporte déjà, **sans aucun changement de code**, les salles en L/T/U, les trous,
+les îlots disjoints, l'arrondi automatique aux angles rentrants, l'ouverture de mur n'importe où, et
+le multi-niveau à recouvrement partiel — via le modèle `room.cells` (cases `"x:z"`) déjà utilisé par
+`makeRoomFromSelection`. Ceci a redirigé tout le chantier : **Tier A** retenu (formes rectilignes
+multi-cellules, toujours à 90°, jamais d'arête libre) plutôt que Tier B (arêtes à angle libre) —
+décision de Saar, le moteur combat ne gère pas les cellules fragmentées par un mur en diagonale.
+Référence d'interface changée de Foundry/Dungeondraft vers **le mode construction des Sims 4** (cet
+éditeur est un outil 3D, pas une carte 2D). Reformulation du chantier par Saar : « pas ajouter des
+fonctionnalités mais les rendre accessibles, pertinentes et logiques » — l'essentiel du travail
+constaté ci-dessous est donc de l'UI/UX sur des capacités déjà existantes, pas du moteur.
+
+**Codé, validé par Saar en usage réel** :
+- Sidebar réorganisée en 3 écrans (Structure / Objets 3D / Zones dangereuses) au lieu d'une liste
+  plate ; bouton « Porte » direct (avant : fallait sélectionner un mur au préalable, corrigé aussi
+  côté logique de sélection dans `SurfaceEditorScene.jsx`) ; doublon de section « Connecteurs »
+  retiré de la sidebar.
+- Déplacement caméra au clavier : cassé dans les écrans Structure/Zones dangereuses
+  (`SurfaceEditorScene.jsx` posait `mouseButtons` sans jamais appeler
+  `orbitRef.current.listenToKeyEvents(window)`, contrairement à `EntityEditorScene` qui, lui,
+  fonctionnait) — corrigé.
+- Position des fenêtres flottantes (Salle/Mur/Connecteur) et sections accordéon ouvertes/fermées :
+  mémorisées en `localStorage` par type de panneau (`useDraggablePanelPosition`,
+  `FloatingPanelSection`), indépendamment de l'objet sélectionné.
+- Brouillard d'ambiance (`Skydome.jsx`) : passé d'exponentiel (`FogExp2`, sans distance de départ —
+  masquait déjà ~55 % de la scène à 20 unités alors que la grille va jusqu'à 50) à linéaire
+  (`near`/`far`), nul sur toute la zone constructible, dense seulement en périphérie.
+- Section « Identité » : réduite (champ nom seul, sans cadre accordéon) sur le panneau Salle ;
+  retirée entièrement du panneau Mur (elle n'affichait qu'un identifiant technique interne en lecture
+  seule, jugée inutile).
+
+**Matériaux procéduraux — Lot 1, validé par Saar (« tous les bons marchés » en matières, « bons
+marchés + coût modéré » en motifs)**, dans `client/src/lib/proceduralMaterials.js` :
+- 4 matières ajoutées (Acier inoxydable, Aluminium, Titane, Revêtement anticorrosion) et 11 motifs
+  (surface rugueuse, panneaux nervurés, tôle ondulée, bandes longitudinales, anneaux boulonnés, trame
+  hexagonale, plaques superposées, béton coffré, béton segmenté, plaques soudées, peinture cloquée).
+- Après un premier retour de Saar (« nul, générique ») : recherche des techniques pro confirmée
+  (Material Maker génère toujours albedo+rugosité+métallique+normal+AO ensemble, jamais une seule
+  couleur isolée) → ajout d'une **vraie carte de rugosité par pixel**, dérivée des mêmes données que
+  l'albédo (usure, rouille, saleté, arêtes), remplaçant la constante unique par famille de matériau
+  qui rendait les 4 nouvelles matières quasi non-métalliques par défaut (`metalness: 0.08`) ; valeurs
+  de base rugosité/métallisation déplacées sur le preset (source unique, plus de switch dupliqué dans
+  `SurfaceDungeonScene.jsx`) ; bande de rugosité bornée autour de la base de chaque matériau pour
+  empêcher l'accumulation usure+rouille+arêtes de pousser vers un miroir ou un mat total irréalistes
+  (trouvé sur l'Acier, seul matériau `rust: true`) ; Revêtement anticorrosion recalé sur la texture de
+  base lisse du Plastique (il héritait à tort des stries de métal brossé des métaux nus).
+- **Connu incomplet, délibérément pas retouché ce lot** (Saar : « Lot A seul pour commencer ») :
+  - `hex_grid` : approximation par 3 familles de droites — donne une grille **triangulaire**, pas de
+    vrais hexagones (le code l'admettait déjà en commentaire).
+  - `rivet_rings` : anneau creux + cratère, pas un dôme plein — jugé « moche et inutilisable ».
+  - Bruit de base = bruit de valeur uniquement (`fractalNoise`/`valueNoise`), documenté comme
+    « blobby/mou » comparé au bruit de gradient/cellulaire des outils pro — contribue à l'aspect
+    générique sur tous les matériaux, anciens compris. Gros rayon d'action, pas commencé (« Lot B »).
+  - Matières « coût modéré » (Caoutchouc, Céramique, Cuivre-patine, Époxy/résine) et « vrai nouveau
+    morceau » (Verre/transparence, Composites, Mousse technique, Béton fissuré, Grille à vrai trou) :
+    hors périmètre de ce lot, les derniers dépendent d'un bruit de Voronoi/cellulaire pas encore écrit
+    et/ou d'un support de transparence que le moteur n'a pas.
+- Dette déjà connue, pas corrigée : `SurfaceEditorPanel.jsx` réimplémente à la main les 6 champs
+  matière déjà factorisés dans `SurfaceMaterialEditor.jsx` (doublon, signalé au §6 de
+  `PLAN_PURGE_VOXEL.md`).
+
+**Catalogue de textures (`voxel_textures`)** : documenté en détail (pas codé, sur demande explicite
+de Saar) dans `PLAN_PURGE_VOXEL.md` §6 — ce n'est pas un système concurrent du moteur procédural mais
+un four de cuisson optionnel (même fonction `generateProceduralMaterialTexture`, résultat figé en PNG
+via l'atelier), actuellement vide en base parce que jamais utilisé, pas par bug.
+
+**Piste explorée puis abandonnée** : import de textures image PBR (Poly Haven/ambientCG) pour étendre
+les matériaux — Saar a explicitement tranché que la demande était d'étendre la **génération
+procédurale**, pas d'importer des fichiers image (« Aucune utilisation de fichier image comme
+texture »). Problèmes techniques réels trouvés en cours de route avant l'abandon (non actionnés) :
+convention de normal map incorrecte (`_nor_dx_` au lieu de `_nor_gl_`), fichiers dépassant la limite
+serveur de 20 Mo, `.exr` non supporté (ni filtre MIME serveur, ni `EXRLoader` côté client).
+
+**Ce qui n'a toujours pas avancé** : le sujet-titre de ce document (édition de forme non-rectangulaire
+par arêtes/sommets, §1-§6 ci-dessus) — cadrage détaillé jamais commencé, zéro code. Le Plan B
+(nettoyage `SurfaceWallPanel.jsx` + geste de modification de forme 3D façon Sims sur les murs) a été
+maquetté en Artifact (glisser une arête de mur pour agrandir/rétrécir une salle) mais attend encore
+d'être codé, après validation du Plan A ci-dessus (qui vient d'arriver).
+
 ## Historique
 
+- **2026-09-27** — §7 ajouté : bilan de session (réorganisation sidebar + corrections UX validées en
+  jeu, extension matériaux procéduraux Lot 1 validée, dettes et pistes abandonnées consignées). Le
+  chantier de forme des salles proprement dit (titre du document) n'a toujours pas de cadrage détaillé.
 - **2026-09-16** — Confirmation externe ajoutée (§6) suite à une question directe de Saar sur
   l'éditeur d'entités qui a élargi la discussion à l'éditeur de surface dans son ensemble. Point
   UI/UX explicitement noté comme non couvert, cadrage détaillé toujours pas démarré.
