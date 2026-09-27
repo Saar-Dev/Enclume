@@ -485,7 +485,100 @@ zone × zone. **Le catalogue est complet dès Z0** ; seuls les résolveurs sont 
 | **Z4** | résolveur `modifier` complet (entrée `ACTIVE_MALUS_SOURCES` alimentée par les zones) ; `escalation` = accumulateur mutable dans `token_statuses.data` ; `remanence:'decay'` (tique hors zone via `resolveActiveEffects`). | serveur | zone de gaz : malus qui monte en présence, décroît après la sortie |
 | **Z5** | `gaz:irritant` (`modifier −3` + `decay`) **et** `gaz:décomposant` (`damage 1D6` + `escalade +2` + `decay`) — les 2 entièrement RAW en v1 ; atténuation `behavior` « retenir sa respiration » = ½ ; `aoeMechanisms/grenade_gas_*.js`. | serveur + migration | **preuve utilisateur #2** |
 | **Z6** | **Éditeur E-v1** (§7.2) — porter l'outil effet sur le plateau de session (`Canvas3D.jsx`, aujourd'hui Editor3D seulement), MJ-only, aperçu optimiste + confirmation serveur ; flux catégorie → préréglage → géométrie ; 2 modes de géométrie : « remplir un compartiment » (`targetKind:'compartment'`, zéro géométrie neuve) + rectangle + hauteur (existant) ; « Personnalisé » ; bascule visibilité MJ/joueur ; mesh translucide par catégorie ; i18n. **Pas de polygone (E-v2, §12).** | client | build + session Saar |
-> **Griefs remontés par Saar en testant l'éditeur ACTUEL** (`SurfaceEditorPanel.jsx`/`SurfaceEditorScene.jsx`, l'outil « Région environnementale » qui préexistait à ce plan) — à reprendre pour cadrer Z6, pas un TODO générique : 1/ chaque clic crée une nouvelle instance, aucun moyen d'éditer celle déjà posée (sélection/édition d'une instance existante à ajouter, pas seulement la création) ; 2/ la liste déroulante des définitions n'a ni tri ni regroupement (déjà 20 entrées avec le catalogue RAW ajouté aujourd'hui — le flux « catégorie → préréglage » prévu ici répond à ça, mais vérifier le tri à l'intérieur d'une catégorie aussi) ; 3/ le panneau « Région environnementale » se superpose mal aux autres panneaux ouverts ; 4/ aucun retour visuel clair sur la zone posée (le « mesh translucide par catégorie » prévu ici doit vraiment se voir, pas juste exister en théorie). Zéro code aujourd'hui (Saar : priorité au chantier RAW) — juste noté pour ne pas être reperdu au moment de cadrer Z6.
+### 6.1 — Analyse critique de l'éditeur de zones ACTUEL (2026-09-27, vérifiée dans le code après `165be2b`)
+
+Griefs initiaux de Saar, ré-examinés fichier par fichier après la réorganisation de la sidebar
+(`165be2b`, Structure / Objets 3D / Zones dangereuses) pour savoir ce qu'elle a réellement réglé et
+ce qui reste identique. Portée : `client/src/components/SurfaceEditorPanel.jsx` (bloc
+`mode === 'effect'`, ligne ~580) et `SurfaceEditorScene.jsx` (création de zone, ligne ~1079 ;
+rendu 3D, ligne ~445).
+
+**Réglé par `165be2b`** : les zones ont désormais leur propre onglet de haut niveau (icône dédiée),
+distinct de « Structure ». Le déplacement caméra au clavier fonctionne maintenant sur cet écran.
+C'est une vraie amélioration de navigation — mais elle s'arrête à l'onglet : le **contenu** de
+l'écran Zones dangereuses n'a pas été touché par ce commit.
+
+**Confirmé toujours présent (grief 1 — pas d'édition)** : `SurfaceEditorScene.jsx:1079-1099`,
+`mode === 'effect'` appelle TOUJOURS `onRuntimeEffectCreate` au relâchement du glisser — aucune
+branche de sélection d'une instance existante (contrairement à Salle/Mur qui ont
+`selectedRoomId`/`roomWallEdit`). La liste « Effets actifs » (`SurfaceEditorPanel.jsx` ligne ~672)
+n'offre qu'un bouton « Supprimer » — aucun « Modifier ». Changer l'intensité ou la hauteur d'une
+zone déjà posée = la supprimer et la redessiner à l'identique, avec risque de décalage.
+
+**Confirmé toujours présent, et AGGRAVÉ par le travail de ce jour (grief 2 — liste sans tri)** : le
+`<select>` (`SurfaceEditorPanel.jsx` ligne ~586) reste un menu plat, dans l'ordre brut de
+`worldEffects.definitions`. Avant Z0-Z2 il listait 5 entrées (les anciens types vides) ; il en liste
+maintenant ~20 (5 legacy + 15 entrées RAW du catalogue) depuis que `loadWorldEffectDefinitions` les
+réconcilie (Z2 étape 2). **Le tri par catégorie n'a jamais été codé, seulement prévu dans ce plan**
+(§9 tableau Z6, « flux catégorie → préréglage ») — la donnée existe déjà et est déjà envoyée au
+client (`definition.category` : `feu`/`acide`/`gaz`/`radiation`/`decompression`, servi par
+`serializeDefinition`), simplement inutilisée côté panneau.
+
+**Confirmé toujours présent (grief 3 — superposition)** : Salle, Mur et Connecteur ont chacun leur
+PROPRE fenêtre flottante (`SurfaceRoomPanel.jsx`, `SurfaceWallPanel.jsx`,
+`SurfaceConnectorPanel.jsx`, tous `FloatingPanelSection` + position mémorisée en localStorage —
+exactement ce que `165be2b` vient d'améliorer pour ces trois-là). **Aucun `SurfaceEffectPanel.jsx`
+n'existe** : la configuration de zone (type, intensité, hauteur, effet MJ personnalisé, liste des
+zones actives) reste entassée dans la colonne étroite de la sidebar, sans bénéficier d'aucune des
+améliorations de ce commit. C'est une vraie asymétrie structurelle, pas une impression.
+
+**Confirmé toujours présent (grief 4 — aucun retour visuel)** : `SurfaceEditorScene.jsx:445` —
+`region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' :
+'#fb7185'`. Deux cas spéciaux (gaz vert, inondé bleu), TOUT LE RESTE retombe sur la même couleur
+saumon à opacité 0,13 — donc aujourd'hui, les ~15 nouvelles entrées RAW (tous les feux, l'acide, la
+décompression, les radiations, tous les gaz RAW) sont visuellement identiques sur la carte. Avec
+seulement 5 types ce défaut passait presque inaperçu ; avec 20, il devient bloquant : impossible de
+distinguer un « grand feu » d'une « décompression » posée à côté sans rouvrir la liste et lire
+l'étiquette de chacune une par une.
+
+**Trouvé en creusant, non signalé par Saar mais réel** : le champ `puissance` (Z2 étape 4, ajouté
+aujourd'hui côté serveur) n'a AUCUN champ dans ce panneau — seules l'intensité et la hauteur du
+volume sont éditables. Un MJ ne peut pas encore renforcer une zone depuis l'interface. Aucune trace
+non plus de la durée restante dans la liste « Effets actifs » (juste le label et l'intensité).
+
+**Trouvé en creusant, violation d'une règle du projet** : tout le texte de cet écran est en dur en
+français, jamais passé par `t()` — « Région environnementale », « Effet », « Intensité », « Hauteur
+du volume », « Nouvel effet MJ », « Clé technique », « Nom », « Multiplicateur de déplacement »,
+« Note / règle MJ », « Créer et sélectionner », « Effets actifs », « Supprimer ». Chaque autre bloc
+de ce même fichier (Salle, Mur, Connecteur) passe déjà par `useTranslation()` — l'écran Zones
+dangereuses est le seul oublié, `.claude/rules/react.md` l'interdit formellement.
+
+### 6.2 — Proposition de rework (toujours dans le périmètre Z6, zéro code fait)
+
+Rien ci-dessous n'est codé. Ordre proposé du moins coûteux au plus structurant — chaque point est
+indépendant, aucun ne nécessite un changement serveur (tout ce qu'il faut existe déjà côté base
+depuis Z0→Z2) :
+
+1. **i18n d'abord** (§ règle du projet) — sortir les ~12 chaînes en dur vers `builder.json`/`fr.json`
+   avant de toucher à autre chose : sinon chaque point suivant ajoute encore plus de texte en dur à
+   défaire ensuite.
+2. **Regroupement du menu par catégorie** — `<optgroup>` sur `definition.category` (déjà servi par
+   `serializeDefinition`, aucun changement serveur). Coût : quelques lignes, gain immédiat sur le
+   grief le plus visible (20 entrées en vrac).
+3. **Couleur/occlusion par catégorie** — remplacer le double `? :` de `SurfaceEditorScene.jsx:445`
+   par une petite table `category → couleur` (feu, acide, gaz, radiation, décompression, + les 5
+   legacy) au lieu d'un cas spécial par clé technique. Rend chaque zone reconnaissable au premier
+   coup d'œil sans ouvrir aucun panneau.
+4. **Fenêtre flottante dédiée** — extraire un `SurfaceEffectPanel.jsx` sur le patron exact de
+   `SurfaceRoomPanel.jsx`/`SurfaceWallPanel.jsx` (`FloatingPanelSection`, position mémorisée) :
+   récupère gratuitement tout ce que `165be2b` vient d'apporter aux trois autres.
+5. **Sélection = édition** — un clic sur une zone existante (dans la liste « Effets actifs » ou
+   directement dans la scène 3D) charge ses valeurs dans le panneau au lieu d'ouvrir seulement un
+   bouton « Supprimer » ; valider modifie l'instance (`updateWorldEffectInstance`, déjà existant côté
+   serveur, jamais appelé côté client aujourd'hui) au lieu d'en créer une nouvelle.
+6. **Champ `puissance`** — ajouter le champ manquant au panneau (et l'afficher dans la liste des
+   zones actives, avec la durée restante si l'instance en a une).
+
+Ordre 1→3 est purement additif et sans risque (aucun contrat existant ne change). 4→6 touchent la
+structure du composant (nouvelle fenêtre flottante, nouveau flux de sélection) — plus proches d'un
+vrai incrément Z6 qu'd'une correction ponctuelle, à cadrer normalement (plan exact, analyse à
+charge) avant de coder, comme toute autre étape de ce plan.
+
+**Chevauchement à surveiller** : ce panneau appartient au même ensemble de panneaux flottants que
+l'audit UI/UX de S1 (`PLAN_WORLD_BUILDER_REWORK.md` §6, cité aussi par `PLAN_EDITEUR_CARTE.md` §8) —
+avant de coder quoi que ce soit ci-dessus, vérifier avec Saar/META EDITEUR que S1 n'a pas déjà
+statué sur un patron de panneau flottant commun qu'il faudrait suivre plutôt qu'en réinventer un
+pour les zones seules.
 | **Z7** | Joueur — avertissement **non bloquant** si le chemin déclaré traverse une zone visible ; zones `cachée` masquées aux joueurs. | client | build + session Saar |
 
 **Noyau v1 = Z0 → Z5.**
@@ -877,6 +970,20 @@ consommateur du rework world builder, §12).
   incendiaire — dégèle le chantier grenades), Z4 (malus `modifier` complet), Z5 (gaz RAW complet,
   preuve utilisateur #2), Z6 (éditeur MJ digne de ce nom, griefs Saar déjà consignés ci-dessus), Z7
   (avertissement joueur).
+- **2026-09-27 (suite) — Analyse critique de l'éditeur de zones ACTUEL + proposition de rework,
+  zéro code.** Demande explicite de Saar après sa propre session (`165be2b`, sidebar réorganisée en
+  3 écrans Structure/Objets 3D/Zones dangereuses avec META EDITEUR). Chaque grief original ré-vérifié
+  ligne par ligne dans le code actuel (pas supposé) : la réorganisation a résolu la navigation
+  (onglet dédié, icône, clavier) mais n'a touché AUCUN contenu de l'écran Zones dangereuses lui-même —
+  les 4 griefs originaux sont tous encore présents tels quels, et le grief « liste sans tri » s'est
+  même aggravé (5 → 20 entrées suite à la réconciliation du catalogue RAW, Z2 étape 2). Deux points
+  supplémentaires trouvés en creusant, jamais signalés par Saar : `puissance` (Z2 étape 4) n'a aucun
+  champ dans ce panneau ; tout le texte de cet écran est en dur en français (seul bloc de ce fichier
+  qui ne passe pas par `t()`, viole `.claude/rules/react.md`). Détail complet et proposition de
+  rework en 6 points (ordre du moins coûteux au plus structurant) : §6.1/§6.2 ci-dessus. Signalé le
+  chevauchement avec l'audit S1 (`PLAN_WORLD_BUILDER_REWORK.md` §6) à vérifier avant tout code.
+  Toujours zéro ligne codée sur ce point — Saar mène sa propre revue d'ergonomie, cette session reste
+  en stand-by.
 
 ---
 
