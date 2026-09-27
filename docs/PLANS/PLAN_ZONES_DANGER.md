@@ -574,11 +574,13 @@ structure du composant (nouvelle fenêtre flottante, nouveau flux de sélection)
 vrai incrément Z6 qu'd'une correction ponctuelle, à cadrer normalement (plan exact, analyse à
 charge) avant de coder, comme toute autre étape de ce plan.
 
-**Chevauchement à surveiller** : ce panneau appartient au même ensemble de panneaux flottants que
-l'audit UI/UX de S1 (`PLAN_WORLD_BUILDER_REWORK.md` §6, cité aussi par `PLAN_EDITEUR_CARTE.md` §8) —
-avant de coder quoi que ce soit ci-dessus, vérifier avec Saar/META EDITEUR que S1 n'a pas déjà
-statué sur un patron de panneau flottant commun qu'il faudrait suivre plutôt qu'en réinventer un
-pour les zones seules.
+**Chevauchement avec S1 — vérifié, levé (2026-09-27, réponse META EDITEUR)** : le patron de fenêtre
+flottante existe déjà et n'attend aucun audit S1 séparé — `client/src/lib/floatingPanel.js`
+(`useDraggablePanelPosition`, position mémorisée en localStorage par type de panneau) consommé via
+`FloatingPanelSection.jsx`, déjà adopté par `SurfaceRoomPanel.jsx`/`SurfaceWallPanel.jsx`/
+`SurfaceConnectorPanel.jsx` (`165be2b`) et `EntityInstancePanel.jsx` (autre domaine). Le point 4
+(« fenêtre flottante dédiée ») doit rejoindre cette même famille, pas en inventer une nouvelle. Les
+5 autres points ne touchent pas ce patron — confirmé sans dépendance à vérifier.
 | **Z7** | Joueur — avertissement **non bloquant** si le chemin déclaré traverse une zone visible ; zones `cachée` masquées aux joueurs. | client | build + session Saar |
 
 **Noyau v1 = Z0 → Z5.**
