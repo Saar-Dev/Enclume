@@ -406,6 +406,25 @@ export function collectPointEffectHooks(regions = [], point, event) {
       .map(hook => ({ instanceId: region.instanceId, definitionKey: region.definitionKey, event, hook }))))
 }
 
+// tokensInsideEffectRegions — PLAN_ZONES_DANGER.md §2.H/§6 (Z2) : quels tokens sont géométriquement
+// DANS quelles régions, "centreDedans" (décision Saar F4 — le centre du token suffit, jamais un
+// recouvrement de volume ; `toutRecouvrement` reste v2 si le jeu réel le réclame). Pure — même
+// primitif que collectPointEffectHooks (pointInsideEffectBounds), généralisé à plusieurs points en
+// une passe : le balayage 1×/Tour (combatTurnEngine.js) et la pose de condition restent côté serveur
+// (worldSpatialQueryService.tokensInsideEffectVolume, effectLineResolverService.js) — cette fonction
+// ne sait rien d'un Tour, d'une condition ni d'une base.
+export function tokensInsideEffectRegions(regions = [], tokenPoints = []) {
+  const memberships = []
+  for (const { tokenId, point } of tokenPoints) {
+    for (const region of regions) {
+      if (pointInsideEffectBounds(point, region.bounds)) {
+        memberships.push({ tokenId, instanceId: region.instanceId, definitionKey: region.definitionKey })
+      }
+    }
+  }
+  return deepFreeze(memberships)
+}
+
 export function collectTargetEffectHooks({
   definitions = [],
   instances = [],

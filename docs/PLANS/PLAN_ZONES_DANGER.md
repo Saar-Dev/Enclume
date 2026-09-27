@@ -760,6 +760,23 @@ consommateur du rework world builder, §12).
   joueur). Les 3 points volontairement différés plus haut (presets/TokenStatusPanel, résolveurs
   note/status/modifier, les 4 gaz `[HYPOTHÈSE]`) restent ouverts, chacun rattaché à l'incrément où il
   redeviendra pertinent.
+- **2026-09-27 (suite) — Z2 démarré, découpé en sous-étapes (le plan ne le faisait pas, contrairement
+  à Z1) : 1/ requête spatiale pure ; 2/ branchement au Tour + pose de condition ; 3/ expiration
+  (`duration_rounds`) ; 4/ champ `puissance`.**
+  **Sous-étape 1 codée** (recherche externe faite avant code : les événements de région de Foundry VTT
+  V12+ — `TOKEN_ENTER`/`TOKEN_EXIT`/`TOKEN_MOVE_WITHIN`/`TOKEN_TURN_START`/`TOKEN_ROUND_START` —
+  confirment que la distinction déjà retenue ici, enter/exit one-shot vs balayage 1×/Tour, est le
+  découpage standard d'un système de zones dans un moteur de jeu en production, pas une invention).
+  `shared/world/worldEffects.js:tokensInsideEffectRegions` (pure, "centreDedans" F4, réutilise
+  `pointInsideEffectBounds` déjà existant — même primitif que `collectPointEffectHooks`, généralisé à
+  plusieurs tokens) + `server/src/services/worldSpatialQueryService.js:tokensInsideEffectVolume`
+  (wrapper IO mince, patron `queryTokensInShape` du même fichier — même réconciliation d'ascenseurs).
+  6 tests purs sur la primitive (chevauchement de zones, frontière incluse, cas vides). Le wrapper
+  IO n'a PAS son propre test dédié : construire une `surface_data` réelle pour ça seul aurait été
+  disproportionné (aucun test existant ne le fait pour tout `worldEffectService.js`) — il sera exercé
+  pour de vrai par l'étape 2 (preuve du plan : « insert manuel zone feu:grand → un token dedans brûle
+  chaque Tour »), ce qui est un test plus significatif qu'un test isolé du wrapper seul. `node --test
+  'shared/**/*.test.mjs'` = 918 (915+3), zéro régression, zéro consommateur encore (comme Z0).
 
 ---
 

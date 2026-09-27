@@ -11,6 +11,7 @@ import {
   effectOccludersFromRegions,
   normalizeEffectDefinition,
   propagateEffectThroughCompartments,
+  tokensInsideEffectRegions,
 } from './worldEffects.js'
 
 function snapshot(spatial = {}) {
@@ -182,4 +183,43 @@ test('key namespacée par ":" désormais acceptée (catalogue danger) ; forcedLo
   assert.throws(() => normalizeEffectDefinition({
     key: 'x', label: 'x', forcedLocation: 'aile_gauche',
   }, { custom: true }), RangeError)
+})
+
+// PLAN_ZONES_DANGER.md §2.H (Z2) — tokensInsideEffectRegions : « centreDedans » (décision F4), la
+// seule primitive pure du balayage de présence (le reste — Tour, condition, base — est côté serveur).
+test('tokensInsideEffectRegions — un token dans le volume, un hors du volume, un pile sur la frontière (inclus)', () => {
+  const regions = compileEffectRegions(snapshot(), {
+    instances: [{ id: 'fire-1', definitionKey: 'fire', targetKind: 'volume', volume, state: 'active' }],
+  })
+  const memberships = tokensInsideEffectRegions(regions, [
+    { tokenId: 'inside', point: { x: 1.5, y: 1, z: 0.5 } },
+    { tokenId: 'outside', point: { x: 10, y: 1, z: 0.5 } },
+    { tokenId: 'on-edge', point: { x: 1, y: 0, z: 0 } },
+  ])
+  assert.deepEqual(
+    memberships.map(m => m.tokenId).sort(),
+    ['inside', 'on-edge'],
+  )
+  assert.equal(memberships.find(m => m.tokenId === 'inside').definitionKey, 'fire')
+  assert.equal(memberships.find(m => m.tokenId === 'inside').instanceId, 'fire-1')
+})
+
+test('tokensInsideEffectRegions — un même token peut être compté dans plusieurs zones qui se superposent', () => {
+  const regions = compileEffectRegions(snapshot(), {
+    instances: [
+      { id: 'fire-1', definitionKey: 'fire', targetKind: 'volume', volume, state: 'active' },
+      { id: 'gas-1', definitionKey: 'gas', targetKind: 'volume', volume, state: 'active' },
+    ],
+  })
+  const memberships = tokensInsideEffectRegions(regions, [{ tokenId: 'both', point: { x: 1.5, y: 1, z: 0.5 } }])
+  assert.equal(memberships.length, 2)
+  assert.deepEqual(memberships.map(m => m.definitionKey).sort(), ['fire', 'gas'])
+})
+
+test('tokensInsideEffectRegions — aucune région ou aucun token : tableau vide, jamais une erreur', () => {
+  assert.deepEqual(tokensInsideEffectRegions([], [{ tokenId: 'x', point: { x: 0, y: 0, z: 0 } }]), [])
+  const regions = compileEffectRegions(snapshot(), {
+    instances: [{ id: 'fire-1', definitionKey: 'fire', targetKind: 'volume', volume, state: 'active' }],
+  })
+  assert.deepEqual(tokensInsideEffectRegions(regions, []), [])
 })

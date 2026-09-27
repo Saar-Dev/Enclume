@@ -5,7 +5,7 @@ import {
   distanceToSegmentM,
   horizontalDistanceBetweenWorldPointsM,
 } from '../../../shared/world/worldMetrics.js'
-import { pointInsideEffectBounds } from '../../../shared/world/worldEffects.js'
+import { pointInsideEffectBounds, tokensInsideEffectRegions } from '../../../shared/world/worldEffects.js'
 import { isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
@@ -286,4 +286,26 @@ export async function queryTokensInShape({
       passengerTokens: elevatorRuntime.passengerTokens,
     }),
   })
+}
+
+/**
+ * tokensInsideEffectVolume — PLAN_ZONES_DANGER.md §2.H/§6 (Z2). Wrapper IO mince : récupère les
+ * tokens de la battlemap + les régions d'effet déjà compilées (loadBattlemapRuntimeContext,
+ * `runtimeContext.regions`) et délègue tout le calcul géométrique à la primitive pure
+ * `tokensInsideEffectRegions` (shared/world/worldEffects.js — "centreDedans", décision F4). Même
+ * réconciliation d'ascenseurs que `queryTokensInShape` ci-dessus : une cabine en mouvement ne doit pas
+ * laisser un balayage travailler sur une position périmée. Aucune notion de Tour ni de condition ici
+ * — le caller (combatTurnEngine.js, Z2 suite) décide qui, dans le résultat, appartient au roster actif.
+ */
+export async function tokensInsideEffectVolume({ battlemapId, database = db } = {}) {
+  const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId, database })
+  const battlemap = elevatorRuntime.battlemap
+  const [tokens, runtimeContext] = await Promise.all([
+    database('tokens').where({ battlemap_id: battlemap.id }),
+    loadBattlemapRuntimeContext(battlemap, database),
+  ])
+  const tokenPoints = tokens
+    .filter(token => token.position_space === 'world-feet' && token.layer !== 'gm')
+    .map(token => ({ tokenId: token.id, point: dbPositionToWorldPoint(token) }))
+  return tokensInsideEffectRegions(runtimeContext.regions, tokenPoints)
 }
