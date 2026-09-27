@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
-import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
+import { generateProceduralMaterialTexture, PROCEDURAL_MATERIAL_PRESETS } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
@@ -168,19 +168,13 @@ function makeDataTexture(dataUrl, color = true) {
   return texture
 }
 
+// Source unique : les valeurs de base vivent sur le preset (proceduralMaterials.js), jamais
+// dupliquees ici — sinon un materiau ajoute cote preset retombe silencieusement sur un defaut
+// generique (deja arrive : Inox/Alu/Titane rendus quasi non-metalliques faute d'entree ici).
 function pbrForProcedural(materialId) {
-  switch (materialId) {
-    case 'steel':
-      return { roughness: 0.55, metalness: 0.42 }
-    case 'plastic':
-      return { roughness: 0.62, metalness: 0.02 }
-    case 'wood':
-      return { roughness: 0.78, metalness: 0.02 }
-    case 'concrete':
-      return { roughness: 0.88, metalness: 0.01 }
-    default:
-      return { roughness: 0.72, metalness: 0.08 }
-  }
+  const preset = PROCEDURAL_MATERIAL_PRESETS.find(entry => entry.id === materialId)
+  if (preset) return { roughness: preset.roughness, metalness: preset.metalness }
+  return { roughness: 0.72, metalness: 0.08 }
 }
 
 function proceduralMaterialAt(descriptor) {
@@ -191,14 +185,18 @@ function proceduralMaterialAt(descriptor) {
   const generated = generateProceduralMaterialTexture({ ...descriptor, size: 128 })
   const map = makeDataTexture(generated.albedoDataUrl, true)
   const normalMap = makeDataTexture(generated.normalDataUrl, false)
+  const roughnessMap = makeDataTexture(generated.roughnessDataUrl, false)
   const pbr = pbrForProcedural(generated.material?.id)
   const reliefStrength = Math.max(0, Math.min(1, Number(descriptor.relief) / 100 || 0))
   const material = new THREE.MeshStandardMaterial({
     map,
     normalMap,
+    roughnessMap,
     normalScale: new THREE.Vector2(0.8 + reliefStrength * 0.7, 0.8 + reliefStrength * 0.7),
     color: 0xffffff,
-    roughness: pbr.roughness,
+    // La carte de rugosite porte deja la valeur absolue (base + usure/rouille/salete par pixel) :
+    // le scalaire reste neutre pour ne pas l'appliquer deux fois (Three multiplie roughness * carte).
+    roughness: 1,
     metalness: pbr.metalness,
   })
   const entry = {
