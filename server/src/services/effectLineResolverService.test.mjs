@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { resolveDamageLine, resolveActiveEffects, findEffectLineResolver } from './effectLineResolverService.js'
+import { resolveDamageLine, resolveActiveEffects, findEffectLineResolver, sweepZoneExposure } from './effectLineResolverService.js'
+import { createWorldEffectInstance } from './worldEffectService.js'
 import { getDangerDefinition } from '../../../shared/world/dangerCatalog.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import '../lib/echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (applyWound crée une échéance de guérison à l'insertion)
@@ -192,6 +193,83 @@ test('resolveActiveEffects — status_code hors registre ou data.formula absente
     const results = await resolveActiveEffects(fakeIo, db, fx.campaign.id, rows)
     assert.deepEqual(results, [])
     assert.equal(events.length, 0)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// ─── sweepZoneExposure (Z2 étape 2 — PLAN_ZONES_DANGER.md §2.H point 1) ───
+// Preuve du plan (§9 tableau, ligne Z2) : « insert manuel zone feu:grand → un token dedans brûle
+// chaque Tour + s'éteint en sortant ». `createWorldEffectInstance` exerce aussi la réconciliation
+// (worldEffectService.js:loadWorldEffectDefinitions) : sans elle, 'feu:grand'/'acide:capsule' ne
+// seraient pas des clés connues et cet insert échouerait avec « Définition d'effet inconnue ».
+const VOLUME_AROUND_ORIGIN = { min: { x: -5, y: -5, z: -5 }, max: { x: 5, y: 5, z: 5 } }
+
+test('sweepZoneExposure — zone feu:grand : un token dedans reçoit burning, s\'éteint en sortant (remanence:none)', { skip }, async () => {
+  const fx = await createFixture()
+  events = []
+  let instanceId = null
+  try {
+    await db('combat_roster').insert({ campaign_id: fx.campaign.id, token_id: fx.token.id, status: 'active' })
+    const created = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'feu:grand', targetKind: 'volume', volume: VOLUME_AROUND_ORIGIN },
+    })
+    instanceId = created.instance.id
+
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    let status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'burning' }).first()
+    assert.ok(status, 'le token dans la zone doit porter la condition burning')
+    assert.equal(status.data.zoneInstanceId, instanceId)
+    assert.equal(status.data.formula, '2d10')
+    assert.equal(status.expires_at_turn, null, 'exposition zone-driven : pas d\'expiry propre, pilotée par la présence')
+
+    // Le token quitte le volume (déplacement hors combat, suffisant pour ce test du balayage seul).
+    await db('tokens').where({ id: fx.token.id }).update({ pos_x: 100 })
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'burning' }).first()
+    assert.equal(status, undefined, 'remanence:none => clearHazard immédiat à la sortie')
+  } finally {
+    if (instanceId) await db('world_effect_instances').where({ id: instanceId }).del()
+    await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: fx.token.id }).del()
+    await cleanup(fx)
+  }
+})
+
+test('sweepZoneExposure — zone acide (remanence:fixed) : la sortie de zone persiste (linger), ne supprime pas tout de suite', { skip }, async () => {
+  const fx = await createFixture()
+  events = []
+  let instanceId = null
+  try {
+    await db('combat_roster').insert({ campaign_id: fx.campaign.id, token_id: fx.token.id, status: 'active' })
+    const created = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'acide:capsule', targetKind: 'volume', volume: VOLUME_AROUND_ORIGIN },
+    })
+    instanceId = created.instance.id
+
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    let status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'acid' }).first()
+    assert.ok(status)
+
+    await db('tokens').where({ id: fx.token.id }).update({ pos_x: 100 })
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'acid' }).first()
+    assert.ok(status, 'remanence:fixed => linger : la ligne reste, expiration différée (1d6 Tours), pas une suppression immédiate')
+    assert.ok(status.expires_at_turn > 0)
+  } finally {
+    if (instanceId) await db('world_effect_instances').where({ id: instanceId }).del()
+    await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: fx.token.id }).del()
+    await cleanup(fx)
+  }
+})
+
+test('sweepZoneExposure — aucune zone, aucun roster, campagne sans battlemap : ne fait rien, jamais un throw', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id)
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, null)
+    assert.ok(true, 'aucune exception levée')
   } finally {
     await cleanup(fx)
   }

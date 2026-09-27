@@ -36,7 +36,7 @@ import { setFSMSubPhase } from '../lib/combatFSM.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { getAllHazardCodes } from '../lib/environmentalHazardService.js'
-import { resolveActiveEffects } from '../services/effectLineResolverService.js'
+import { resolveActiveEffects, sweepZoneExposure } from '../services/effectLineResolverService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
@@ -386,6 +386,20 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
         }
       }
     }
+
+    // Zones dangereuses (docs/PLANS/PLAN_ZONES_DANGER.md §2.H, Z2 étape 2, 2026-09-27) — balayage de
+    // présence : un token géométriquement dans une zone active reçoit/garde la condition
+    // correspondante (idempotent), un token qui en sort la perd. Seul endroit où « qui est dans la
+    // zone » se calcule, 1×/Tour, TOUJOURS avant le tick généralisé ci-dessous (qui, lui, résout les
+    // dégâts de la condition qu'on vient de poser/garder). `current_battlemap_id` avec repli
+    // `default_battlemap_id` (même résolution que woundService.js:healCampaignCharacters) — pas de
+    // carte résolvable = combat sans monde spatial, balayage sauté sans erreur.
+    const campaignForZones = await db('campaigns')
+      .where({ id: campaignId })
+      .select('current_battlemap_id', 'default_battlemap_id')
+      .first()
+    const zoneBattlemapId = campaignForZones?.current_battlemap_id ?? campaignForZones?.default_battlemap_id
+    if (zoneBattlemapId) await sweepZoneExposure(io, db, campaignId, zoneBattlemapId)
 
     // Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9 increment F) — tick de début de tour pour les dangers
     // environnementaux (Acide/Décompression/Feu), boucle indépendante de celle des mods ci-dessus :

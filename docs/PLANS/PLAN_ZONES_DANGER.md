@@ -777,6 +777,52 @@ consommateur du rework world builder, §12).
   pour de vrai par l'étape 2 (preuve du plan : « insert manuel zone feu:grand → un token dedans brûle
   chaque Tour »), ce qui est un test plus significatif qu'un test isolé du wrapper seul. `node --test
   'shared/**/*.test.mjs'` = 918 (915+3), zéro régression, zéro consommateur encore (comme Z0).
+- **2026-09-27 (suite) — Z2 étape 2 codée : branchement au Tour, comportement visible.** Trouvaille
+  AVANT code (lecture, pas hypothèse) : `effectDefinitionRegistry`/`compileEffectRegions`/
+  `createWorldEffectInstance` ne connaissaient QUE les 5 builtins legacy (`fire`/`flooded`/`gas`/`oil`/
+  `unstable`) + le custom MJ (`world_effect_definitions`) — jamais `dangerCatalog.js` (Z0). Poser une
+  zone `feu:grand`/`decompression`/`acide:capsule` aurait donc échoué (« Définition d'effet inconnue »)
+  avant même d'atteindre le balayage. C'était noté « à trancher en Z2 » (§3, commentaire
+  « Réconciliation avec l'existant ») — tranché : `worldEffectService.js:loadWorldEffectDefinitions`
+  fait rejoindre `listDangerDefinitions()` aux lignes custom (un seul point d'entrée, déjà utilisé par
+  tous les consommateurs) ; les entrées catalogue sont déjà normalisées (`builtin:true`) mais
+  `effectDefinitionRegistry` les re-normalise avec `custom:true` (elle ne fait pas la différence) —
+  effet cosmétique uniquement (`definition.builtin` n'est lu que par la liste UI de l'éditeur, pas
+  construite avant Z6), noté ici pour ne pas être oublié, pas corrigé maintenant (pas dans le périmètre
+  de cette étape).
+  **Le balayage** (`effectLineResolverService.js:sweepZoneExposure`, appelé depuis
+  `combatTurnEngine.js:startResolutionPhase` juste avant le tick `resolveActiveEffects` existant,
+  résolution de la carte active = `campaigns.current_battlemap_id` repli `default_battlemap_id`, même
+  patron que `woundService.js:healCampaignCharacters`) réutilise `exposeToHazard`/`clearHazard` (Lot 3,
+  MJ-manuel) plutôt qu'une 2ᵉ voie d'écriture de `token_statuses` : une zone qui expose EST la même
+  mécanique qu'un MJ qui expose à la main, seule la source diffère. `exposeToHazard` gagne deux clés
+  optionnelles (`zoneInstanceId`, `remanence`) écrites dans `data` UNIQUEMENT quand l'appelant est le
+  balayage — le chemin MJ-manuel produit exactement le même `data` qu'avant (non-régression). Sortie
+  de zone : `remanence:'none'` (feu/décompression) → `clearHazard` immédiat ; `remanence:'fixed'`
+  (acide) → `clearHazard({linger:true})`, réutilise le `lingersOnClear` déjà dérivé en Z1.3.
+  Deux limites connues et acceptées (déjà présentes ailleurs dans le système, pas introduites ici) :
+  1/ deux zones qui partagent le même `hazardCode` sur un même token (ex. deux feux qui se recouvrent)
+  ne s'agrègent jamais (« zéro agrégation », §2 architecture) — sortir de l'une peut éteindre la
+  condition même si l'autre couvre encore, comme deux expositions manuelles du même danger se
+  seraient déjà écrasées (commentaire « décision G », `environmentalHazardService.js`) ; 2/
+  `feu:brasier` (`locationMode:'all'`) est exposé comme un feu à Localisation unique — `resolveActiveEffects`
+  force encore `locationMode:'random'` (§14.3), exactement le même écart que le préréglage "inferno"
+  du panneau MJ actuel (`environmentalHazardPresets.js`, `locations:1`), déjà rattaché à Z6.
+  **Testé** : 3 nouveaux tests dans `effectLineResolverService.test.mjs` (12 au total, tous verts) —
+  zone `feu:grand` posée par `createWorldEffectInstance` → un token dedans reçoit `burning`
+  (`data.zoneInstanceId`, `expires_at_turn:null`) → le token sort (déplacé hors du volume) → la
+  condition disparaît immédiatement ; même scénario avec `acide:capsule` → la sortie laisse une
+  persistance (`expires_at_turn` posé, la ligne reste) au lieu de disparaître ; aucune zone/roster/
+  carte → aucune exception. `node --test 'shared/**/*.test.mjs'` = 918 (inchangé, aucun fichier
+  partagé nouveau). Résidu de fixture vérifié par lecture directe de la base : zéro ligne de test
+  restante (les 4 `world_effect_instances` `fire`/`gas` trouvées en base sont les zones posées par
+  Saar lors de son test en jeu du 2026-09-27, pas touchées). Build client vérifié (aucun changement
+  server-only ne devait le casser, confirmation systématique). **Non testé** : le passage réel par
+  `combatTurnEngine.js:startResolutionPhase` (un vrai Tour de combat) — les tests exercent
+  `sweepZoneExposure` directement ; câbler `combat_state`/`campaigns.current_battlemap_id` pour un
+  scénario de combat complet aurait dupliqué la fixture déjà lourde de `combatTurnEngine.test.mjs`
+  sans rien vérifier de plus sur CETTE fonction. Reste Z2 étape 3 (expiration `duration_rounds`) et
+  étape 4 (`puissance`).
 
 ---
 

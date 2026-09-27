@@ -14,6 +14,7 @@ import {
   normalizeEffectInstance,
   propagateEffectThroughCompartments,
 } from '../../../shared/world/worldEffects.js'
+import { listDangerDefinitions } from '../../../shared/world/dangerCatalog.js'
 
 function definitionFromRow(row) {
   return normalizeEffectDefinition({
@@ -63,11 +64,18 @@ function ensureObject(value, label) {
   return JSON.parse(JSON.stringify(value))
 }
 
+// listDangerDefinitions() (dangerCatalog.js, PLAN_ZONES_DANGER.md §2.D) rejoint ici les définitions
+// custom MJ — seul point d'entrée de `effectDefinitionRegistry`/`compileEffectRegions`/
+// `createWorldEffectInstance` pour la clé d'une instance (§3 « Réconciliation avec l'existant, à
+// trancher en Z2 »). Sans ça, poser une zone `feu:grand`/`decompression`/`acide:capsule` échouerait
+// (« Définition d'effet inconnue ») : ces clés n'existaient que dans le catalogue RAW (Z0), jamais
+// dans BUILTIN_WORLD_EFFECTS (les 5 legacy) ni dans world_effect_definitions (custom MJ). Déjà
+// normalisées (builtin:true, gelées) — passées telles quelles, jamais re-normalisées ici.
 export async function loadWorldEffectDefinitions(campaignId, database = db) {
   const rows = await database('world_effect_definitions')
     .where({ campaign_id: campaignId })
     .orderBy('effect_key')
-  return Object.freeze(rows.map(definitionFromRow))
+  return Object.freeze([...listDangerDefinitions(), ...rows.map(definitionFromRow)])
 }
 
 export async function loadWorldFeatureStates(battlemapId, database = db) {

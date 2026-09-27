@@ -17,6 +17,9 @@ import { parseDice } from '../lib/diceParser.js'
 import { calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { resolveTargetHit } from '../lib/damageService.js'
+import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
+import { loadWorldEffectDefinitions } from './worldEffectService.js'
+import { tokensInsideEffectVolume } from './worldSpatialQueryService.js'
 import { WS } from '../../../shared/events.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { findHazardRegistryEntry } from '../../../shared/environmentalHazardRegistry.js'
@@ -160,4 +163,83 @@ export async function resolveActiveEffects(io, db, campaignId, rows) {
     results.push(result)
   }
   return results
+}
+
+// sweepZoneExposure — Z2 étape 2 (§2.H point 1) : balayage de présence, appelé 1×/Tour depuis
+// startResolutionPhase, JUSTE AVANT le tick `resolveActiveEffects` ci-dessus. Réutilise
+// exposeToHazard/clearHazard (Lot 3, MJ-manuel) plutôt qu'une 2ᵉ voie d'écriture de
+// `token_statuses` — une zone qui expose un token EST la même mécanique qu'un MJ qui l'expose à la
+// main, seule la source diffère. Ne résout AUCUN dégât ici : poser/retirer la condition seulement,
+// `resolveActiveEffects` (déjà appelée juste après, inchangée) fait le tick.
+//
+// Provenance (`data.zoneInstanceId`) : ajoutée à `exposeToHazard` pour que la sortie de zone sache
+// quelle zone avait posé la condition, sans jamais relire `world_effect_instances` au moment de la
+// sortie. Limite connue et acceptée (même logique que le commentaire « décision G » d'exposeToHazard
+// pour deux expositions manuelles du même hazardCode) : si un token est DANS DEUX zones qui partagent
+// le même hazardCode (ex. deux feux qui se recouvrent), une seule ligne `token_statuses` existe pour
+// ce hazardCode — sortir de l'une des deux zones peut éteindre la condition même si l'autre continue
+// de le couvrir. Le système n'a jamais agrégé plusieurs dangers d'un même token (§2 architecture,
+// "zéro agrégation") ; ce n'est pas une régression introduite ici.
+//
+// `feu:brasier` (locationMode:'all') : `resolveActiveEffects` ne lit pas encore `locationMode` (elle
+// force `'random'`, §14.3) — un brasier expose donc comme un feu à Localisation unique aujourd'hui,
+// EXACTEMENT le même écart que l'exposition manuelle "inferno" du presets UI existant
+// (`environmentalHazardPresets.js`, `locations:1`). Pas une régression : même écart déjà noté §5.1,
+// déjà rattaché à Z6 (absorption des presets UI). `locations: null` (valeur catalogue pour 'all',
+// ignorée par ce mode) est donc replié sur `1` ici pour rester une valeur valide pour exposeToHazard.
+export async function sweepZoneExposure(io, db, campaignId, battlemapId) {
+  if (!battlemapId) return
+
+  const [rosterTokenIds, memberships, definitions] = await Promise.all([
+    db('combat_roster').where({ campaign_id: campaignId, status: 'active' }).pluck('token_id'),
+    tokensInsideEffectVolume({ battlemapId, database: db }),
+    loadWorldEffectDefinitions(campaignId, db),
+  ])
+  if (!rosterTokenIds.length) return
+
+  const rosterSet = new Set(rosterTokenIds)
+  const definitionByKey = new Map(definitions.map(definition => [definition.key, definition]))
+
+  const membershipsByToken = new Map()
+  for (const membership of memberships) {
+    if (!rosterSet.has(membership.tokenId)) continue
+    if (!membershipsByToken.has(membership.tokenId)) membershipsByToken.set(membership.tokenId, [])
+    membershipsByToken.get(membership.tokenId).push(membership)
+  }
+
+  // Entrée / rafraîchissement — idempotent : reposer la même zone chaque Tour ne fait que réécrire
+  // les mêmes valeurs (comportement voulu, cf. commentaire exposeToHazard sur expiresAtTurn=null).
+  for (const [tokenId, tokenMemberships] of membershipsByToken) {
+    for (const membership of tokenMemberships) {
+      const definition = definitionByKey.get(membership.definitionKey)
+      if (!definition?.hazardCode || !findHazardRegistryEntry(definition.hazardCode)) continue
+      const damageLine = definition.effects.find(effect => effect.type === 'damage' && effect.phase === 'onTurn')
+      if (!damageLine) continue
+      await exposeToHazard(io, db, campaignId, tokenId, definition.hazardCode, {
+        formula: damageLine.formula,
+        locations: damageLine.locations ?? 1,
+        forcedLocation: damageLine.forcedLocation ?? null,
+        zoneInstanceId: membership.instanceId,
+        remanence: damageLine.remanence,
+      })
+    }
+  }
+
+  // Sortie — tout statut posé par une zone (`data.zoneInstanceId`) que le token ne recouvre plus.
+  const zoneSourcedRows = await db('token_statuses')
+    .whereIn('token_id', rosterTokenIds)
+    .whereRaw("data->>'zoneInstanceId' is not null")
+  for (const row of zoneSourcedRows) {
+    const stillInside = membershipsByToken.get(row.token_id)
+      ?.some(membership => membership.instanceId === row.data.zoneInstanceId)
+    if (stillInside) continue
+    if (row.data.remanence === 'fixed') {
+      await clearHazard(io, db, campaignId, row.token_id, row.status_code, { linger: true })
+    } else if (row.data.remanence === 'none') {
+      await clearHazard(io, db, campaignId, row.token_id, row.status_code)
+    }
+    // remanence 'decay'/'conditional' : hors zone, tique seul via resolveActiveEffects (Z4) — rien à
+    // faire ici. Aujourd'hui inatteignable (les entrées gaz correspondantes ont hazardCode:null, donc
+    // jamais posées par la boucle d'entrée ci-dessus).
+  }
 }

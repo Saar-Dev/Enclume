@@ -48,7 +48,7 @@ async function turnsFromNow(db, campaignId, diceFormula) {
 //    inconditionnellement `expires_at_turn`. Une 2ᵉ brûlure avec un `roll` faible RACCOURCIRAIT donc
 //    un feu qui avait plus longtemps à courir. On ne peut que rendre le feu pire (décision G). Un vrai
 //    stacking (double-tick) serait une refonte du système de dangers — hors périmètre.
-export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { formula, locations = 1, forcedLocation = null, durationDice = null } = {}) {
+export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { formula, locations = 1, forcedLocation = null, durationDice = null, zoneInstanceId = null, remanence = null } = {}) {
   if (!findHazardRegistryEntry(hazardCode)) {
     throw new AppError(400, `Danger environnemental "${hazardCode}" absent de shared/environmentalHazardRegistry.js`)
   }
@@ -81,7 +81,11 @@ export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { 
 
   await statusService.applyModStatus(io, db, campaignId, tokenId, hazardCode, {
     expiresAtTurn,
-    data: { formula, locations, forcedLocation },
+    // zoneInstanceId/remanence (PLAN_ZONES_DANGER.md §2.H, Z2 étape 2) : provenance écrite UNIQUEMENT
+    // quand l'appelant est le balayage de zone (effectLineResolverService.js:sweepZoneExposure) — un
+    // MJ qui pose une exposition à la main ne passe jamais ces clés, `data` reste inchangé pour ce
+    // chemin (non-régression).
+    data: { formula, locations, forcedLocation, ...(zoneInstanceId != null ? { zoneInstanceId, remanence } : {}) },
     throwOnFailure: true,
   })
 }
