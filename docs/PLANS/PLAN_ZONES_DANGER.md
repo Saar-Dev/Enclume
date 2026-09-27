@@ -1,9 +1,10 @@
 # PLAN_ZONES_DANGER.md — Fondation « zones dangereuses »
 
 > Rédigé 2026-09-09, **réécrit propre 2026-09-10** (consolidation d'un cadrage de ~35 tours).
-> **Cadrage terminé. Z0 codé 2026-09-27** (§11 historique, §13.6 validation) — `Z1→Z7` restent à
-> coder. Ce document est auto-suffisant : il porte le contrat, l'architecture, les décisions RAW
-> tranchées avec Saar, le catalogue exemple et le plan d'incréments.
+> **Cadrage terminé. Z0+Z1 codés et clos, Z2 en cours (étapes 1+2/4 codées)** — détail §11
+> historique, 2026-09-27. `Z2 (reste étapes 3-4) → Z7` restent à coder. Ce document est
+> auto-suffisant : il porte le contrat, l'architecture, les décisions RAW tranchées avec Saar, le
+> catalogue exemple et le plan d'incréments.
 >
 > **Responsabilité unique** (`docs/RegleDocumentaire.md` R1) : *comment une zone d'effet runtime,
 > posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle naît /
@@ -485,6 +486,7 @@ zone × zone. **Le catalogue est complet dès Z0** ; seuls les résolveurs sont 
 | **Z4** | résolveur `modifier` complet (entrée `ACTIVE_MALUS_SOURCES` alimentée par les zones) ; `escalation` = accumulateur mutable dans `token_statuses.data` ; `remanence:'decay'` (tique hors zone via `resolveActiveEffects`). | serveur | zone de gaz : malus qui monte en présence, décroît après la sortie |
 | **Z5** | `gaz:irritant` (`modifier −3` + `decay`) **et** `gaz:décomposant` (`damage 1D6` + `escalade +2` + `decay`) — les 2 entièrement RAW en v1 ; atténuation `behavior` « retenir sa respiration » = ½ ; `aoeMechanisms/grenade_gas_*.js`. | serveur + migration | **preuve utilisateur #2** |
 | **Z6** | **Éditeur E-v1** (§7.2) — porter l'outil effet sur le plateau de session (`Canvas3D.jsx`, aujourd'hui Editor3D seulement), MJ-only, aperçu optimiste + confirmation serveur ; flux catégorie → préréglage → géométrie ; 2 modes de géométrie : « remplir un compartiment » (`targetKind:'compartment'`, zéro géométrie neuve) + rectangle + hauteur (existant) ; « Personnalisé » ; bascule visibilité MJ/joueur ; mesh translucide par catégorie ; i18n. **Pas de polygone (E-v2, §12).** | client | build + session Saar |
+> **Griefs remontés par Saar en testant l'éditeur ACTUEL** (`SurfaceEditorPanel.jsx`/`SurfaceEditorScene.jsx`, l'outil « Région environnementale » qui préexistait à ce plan) — à reprendre pour cadrer Z6, pas un TODO générique : 1/ chaque clic crée une nouvelle instance, aucun moyen d'éditer celle déjà posée (sélection/édition d'une instance existante à ajouter, pas seulement la création) ; 2/ la liste déroulante des définitions n'a ni tri ni regroupement (déjà 20 entrées avec le catalogue RAW ajouté aujourd'hui — le flux « catégorie → préréglage » prévu ici répond à ça, mais vérifier le tri à l'intérieur d'une catégorie aussi) ; 3/ le panneau « Région environnementale » se superpose mal aux autres panneaux ouverts ; 4/ aucun retour visuel clair sur la zone posée (le « mesh translucide par catégorie » prévu ici doit vraiment se voir, pas juste exister en théorie). Zéro code aujourd'hui (Saar : priorité au chantier RAW) — juste noté pour ne pas être reperdu au moment de cadrer Z6.
 | **Z7** | Joueur — avertissement **non bloquant** si le chemin déclaré traverse une zone visible ; zones `cachée` masquées aux joueurs. | client | build + session Saar |
 
 **Noyau v1 = Z0 → Z5.**
@@ -823,6 +825,30 @@ consommateur du rework world builder, §12).
   scénario de combat complet aurait dupliqué la fixture déjà lourde de `combatTurnEngine.test.mjs`
   sans rien vérifier de plus sur CETTE fonction. Reste Z2 étape 3 (expiration `duration_rounds`) et
   étape 4 (`puissance`).
+- **2026-09-27 (suite) — Z2 étape 3 codée : expiration `duration_rounds`.** Symétrique de l'étape 2 :
+  décrément en FIN de Tour (`combatTurnEngine.js:endTurn`), balayage de présence en DÉBUT de Tour
+  (étape 2, inchangée). `worldEffectService.js:tickWorldEffectInstanceDurations` (neuf) décrémente les
+  instances actives à `duration_rounds` non nul, passe `state:'expired'` à 0 — ne touche JAMAIS
+  `token_statuses` : `compileEffectRegions` filtre déjà `state!=='active'` (vérifié en lisant le code
+  avant d'écrire, pas supposé), donc le balayage du Tour suivant ne verra plus l'instance expirée et
+  retirera lui-même la condition posée (logique déjà en place, étape 2) — pas une 2ᵉ voie de retrait à
+  maintenir en parallèle. `WORLD_RUNTIME_UPDATED{kind:'effect-expired'}` émis UNIQUEMENT si une
+  instance a réellement expiré ce Tour (une simple décrémentation ne rafraîchit rien côté client —
+  aucun rendu de `duration_rounds` avant Z6, l'émettre à chaque Tour aurait été du bruit réseau gratuit).
+  Petit refactor en passant : la résolution `current_battlemap_id ?? default_battlemap_id`, dupliquée
+  entre l'étape 2 (`startResolutionPhase`) et cette étape (`endTurn`), extraite en
+  `resolveActiveBattlemapId(campaignId)` (une seule fois, appelée aux deux endroits).
+  **Testé** : 3 tests neufs dans `server/src/services/worldEffectService.test.mjs` (fichier qui
+  n'existait pas — premier test dédié à ce service) : décrément + expiration à 0 + permanente jamais
+  touchée ; `runtimeRevision` bumpée seulement quand une expiration réelle a lieu (pas à chaque simple
+  décrément) ; aucune instance à durée finie → aucun effet, jamais un throw. `node --test
+  'shared/**/*.test.mjs'` = 918 (inchangé), tests ciblés en base = 55/55 (effectLineResolverService +
+  worldEffectService + combatTurnEngine), build client vérifié, aucun résidu de fixture (les
+  `world_effect_instances` `fire`/`gas` restantes en base sont celles de Saar, pas touchées).
+  **Non testé** : le passage réel par `combatTurnEngine.js:endTurn` en combat (même raisonnement que
+  l'étape 2 — `tickWorldEffectInstanceDurations` est exercée directement, câbler tout `combat_state`
+  pour ce seul ajout aurait dupliqué la fixture de `combatTurnEngine.test.mjs` sans rien vérifier de
+  plus sur cette fonction précise). Reste Z2 étape 4 (`puissance`, migration).
 
 ---
 

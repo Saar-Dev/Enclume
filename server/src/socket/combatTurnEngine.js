@@ -37,6 +37,7 @@ import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { resolveActiveEffects, sweepZoneExposure } from '../services/effectLineResolverService.js'
+import { tickWorldEffectInstanceDurations } from '../services/worldEffectService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
@@ -345,6 +346,18 @@ export async function skipPlayer(io, campaignId, tokenId, pendingMaps) {
   }
 }
 
+// resolveActiveBattlemapId — carte sur laquelle CE combat se joue (docs/PLANS/PLAN_ZONES_DANGER.md
+// §2.H) : `current_battlemap_id`, repli `default_battlemap_id` (même résolution que
+// woundService.js:healCampaignCharacters). `null` = campagne jamais ouverte sur une carte, cas
+// valide (combat sans monde spatial) — les deux appelants sautent leur traitement zone sans erreur.
+async function resolveActiveBattlemapId(campaignId) {
+  const campaign = await db('campaigns')
+    .where({ id: campaignId })
+    .select('current_battlemap_id', 'default_battlemap_id')
+    .first()
+  return campaign?.current_battlemap_id ?? campaign?.default_battlemap_id ?? null
+}
+
 // ─── Helper — transition vers la phase RÉSOLUTION ─────────────────────────────
 // Appelé automatiquement quand tous les participants ont annoncé (PC13).
 // Sprint 2 : stub — met à jour la phase et broadcast COMBAT_PHASE_CHANGED.
@@ -391,14 +404,10 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
     // présence : un token géométriquement dans une zone active reçoit/garde la condition
     // correspondante (idempotent), un token qui en sort la perd. Seul endroit où « qui est dans la
     // zone » se calcule, 1×/Tour, TOUJOURS avant le tick généralisé ci-dessous (qui, lui, résout les
-    // dégâts de la condition qu'on vient de poser/garder). `current_battlemap_id` avec repli
-    // `default_battlemap_id` (même résolution que woundService.js:healCampaignCharacters) — pas de
-    // carte résolvable = combat sans monde spatial, balayage sauté sans erreur.
-    const campaignForZones = await db('campaigns')
-      .where({ id: campaignId })
-      .select('current_battlemap_id', 'default_battlemap_id')
-      .first()
-    const zoneBattlemapId = campaignForZones?.current_battlemap_id ?? campaignForZones?.default_battlemap_id
+    // dégâts de la condition qu'on vient de poser/garder). Pas de carte résolvable = combat sans monde
+    // spatial, balayage sauté sans erreur (resolveActiveBattlemapId, même résolution que
+    // woundService.js:healCampaignCharacters).
+    const zoneBattlemapId = await resolveActiveBattlemapId(campaignId)
     if (zoneBattlemapId) await sweepZoneExposure(io, db, campaignId, zoneBattlemapId)
 
     // Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9 increment F) — tick de début de tour pour les dangers
@@ -959,6 +968,26 @@ export async function endTurn(io, campaignId, pendingMaps) {
           io.to(campaignId).emit(WS.COMBAT_STUN_EXPIRED, { tokenId: token_id })
           console.log(`[WS] endTurn — étourdissement expiré. token:${token_id} turn:${newTurn}`)
         }
+      }
+    }
+
+    // Zones dangereuses (docs/PLANS/PLAN_ZONES_DANGER.md §2.H point 4, Z2 étape 3, 2026-09-27) — cycle
+    // de vie des zones à durée finie (`duration_rounds`), décrémenté en FIN de Tour, symétrique du
+    // balayage de présence fait en DÉBUT de Tour (startResolutionPhase, Z2 étape 2). Une zone qui
+    // expire ne touche rien à `token_statuses` ici : `compileEffectRegions` (worldEffects.js) filtre
+    // déjà `state !== 'active'`, le balayage du Tour suivant ne la verra plus et retirera lui-même la
+    // condition posée (remanence:'none'/'fixed', logique déjà en place, Z2 étape 2) — pas une 2ᵉ voie
+    // de retrait à maintenir. Permanentes (`duration_rounds:null`, tout le catalogue RAW actuel) :
+    // jamais touchées, aucun coût. `WORLD_RUNTIME_UPDATED` émis seulement si une zone a réellement
+    // expiré (pas à chaque simple décrément — rien ne rend `duration_rounds` visuellement avant Z6).
+    const zoneDurationBattlemapId = await resolveActiveBattlemapId(campaignId)
+    if (zoneDurationBattlemapId) {
+      const { expiredIds, runtimeRevision } = await tickWorldEffectInstanceDurations({ battlemapId: zoneDurationBattlemapId, database: db })
+      if (expiredIds.length > 0) {
+        io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+          battlemapId: zoneDurationBattlemapId, runtimeRevision, kind: 'effect-expired',
+        })
+        console.log(`[WS] endTurn — ${expiredIds.length} zone(s) de danger expirée(s). turn:${newTurn}`)
       }
     }
 

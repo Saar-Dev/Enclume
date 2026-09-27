@@ -262,6 +262,39 @@ export async function updateWorldEffectInstance({ battlemapId, instanceId, patch
   })
 }
 
+// tickWorldEffectInstanceDurations — Z2 étape 3 (PLAN_ZONES_DANGER.md §2.H point 4). Décrémente
+// `duration_rounds` des instances actives qui en portent une (permanentes = null, jamais touchées),
+// expire (`state:'expired'`) celles qui atteignent 0. Appelé 1×/Tour depuis `combatTurnEngine.js:
+// endTurn` — ne touche jamais `token_statuses` : `compileEffectRegions` filtre déjà `state!=='active'`,
+// le prochain balayage de présence (Z2 étape 2) ne verra plus l'instance et retirera lui-même la
+// condition posée. `runtimeRevision` seulement bumpée si au moins une instance a expiré (une simple
+// décrémentation n'a aujourd'hui aucun rendu à rafraîchir — rien n'affiche `duration_rounds`).
+export async function tickWorldEffectInstanceDurations({ battlemapId, database = db } = {}) {
+  return database.transaction(async trx => {
+    const battlemap = await lockBattlemap(trx, battlemapId)
+    const rows = await trx('world_effect_instances')
+      .where({ battlemap_id: battlemapId, state: 'active' })
+      .whereNotNull('duration_rounds')
+      .select('id', 'duration_rounds')
+
+    const expiredIds = []
+    for (const row of rows) {
+      const next = Number(row.duration_rounds) - 1
+      if (next <= 0) {
+        expiredIds.push(row.id)
+        await trx('world_effect_instances').where({ id: row.id })
+          .update({ duration_rounds: 0, state: 'expired', updated_at: trx.fn.now() })
+      } else {
+        await trx('world_effect_instances').where({ id: row.id })
+          .update({ duration_rounds: next, updated_at: trx.fn.now() })
+      }
+    }
+    if (!expiredIds.length) return Object.freeze({ expiredIds, runtimeRevision: Number(battlemap.runtime_revision || 0) })
+    const runtimeRevision = await bumpRuntimeRevision(trx, battlemap)
+    return Object.freeze({ expiredIds, runtimeRevision })
+  })
+}
+
 export async function deleteWorldEffectInstance({ battlemapId, instanceId, database = db }) {
   return database.transaction(async trx => {
     const battlemap = await lockBattlemap(trx, battlemapId)
