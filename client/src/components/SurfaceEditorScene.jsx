@@ -59,6 +59,7 @@ import {
   applyWallDrag,
   getToolWallThicknessFine,
 } from '../lib/surfaceGeometry.js'
+import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 
 import {
   makeRoomBoundaryArc,
@@ -420,24 +421,6 @@ function EffectVolumePreview({ selection, surfaceTool }) {
   )
 }
 
-// Couleur par catégorie (PLAN_ZONES_DANGER.md §6.2 point 3) — `region.category` vient déjà de
-// `compileEffectRegions` (worldEffects.js, `definition.category`), aucun changement serveur. Couvre
-// à la fois le vocabulaire RAW (feu/acide/gaz/radiation/decompression, Z0-Z2) et celui, différent,
-// des 5 anciens types (catégories namespacées 'hazard:fire'/'terrain:water'/'atmosphere:gas'/
-// 'terrain:footing') pour qu'un ancien "Feu" et un nouveau "Grand feu" restent visuellement
-// cohérents. Remplace le double `? :` qui ne connaissait que 'gas'/'flooded' — tout le reste (donc,
-// avant ce lot, ~18 des ~20 types du catalogue) retombait sur la même teinte saumon.
-const EFFECT_CATEGORY_COLORS = {
-  feu: '#f5934a', 'hazard:fire': '#f5934a',
-  acide: '#b6e05a',
-  decompression: '#6ec3ff',
-  radiation: '#d4e157',
-  gaz: '#b39ddb', 'atmosphere:gas': '#b39ddb',
-  'terrain:water': '#38bdf8',
-  'terrain:footing': '#c9a86a',
-}
-const EFFECT_REGION_FALLBACK_COLOR = '#fb7185'
-
 function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
   return regions.map(region => {
     const bounds = region?.bounds
@@ -460,7 +443,7 @@ function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
     return (
       <mesh key={region.id} position={center} renderOrder={20}>
         <boxGeometry args={size} />
-        <meshBasicMaterial color={EFFECT_CATEGORY_COLORS[region.category] || EFFECT_REGION_FALLBACK_COLOR} transparent opacity={0.13} depthWrite={false} />
+        <meshBasicMaterial color={getEffectRegionColor(region)} transparent opacity={0.13} depthWrite={false} />
       </mesh>
     )
   })

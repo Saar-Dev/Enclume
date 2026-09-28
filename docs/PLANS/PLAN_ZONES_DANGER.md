@@ -1013,6 +1013,20 @@ consommateur du rework world builder, §12).
   **Testé** : lint ciblé propre, build client vérifié aux deux lots. Aucun changement serveur (tout
   le nécessaire existait déjà depuis Z2 étapes 2 et 4). **Non testé en jeu** — Saar teste l'UI
   lui-même (`.claude/rules` : jamais le serveur/navigateur lancés par l'agent).
+- **2026-09-28 — Rapport Saar « fonctionnel » + 2 correctifs trouvés en vérifiant.**
+  (1) Menu déroulant illisible (texte clair sur fond blanc à l'ouverture) : cause racine, pas un
+  style de `<select>` à corriger — aucun `color-scheme` n'était déclaré sur la page, donc Chromium/
+  Firefox ouvraient la liste d'options avec le thème CLAIR natif du navigateur quel que soit le CSS
+  de la page. `color-scheme: dark` ajouté sur `:root` (`client/src/index.css`) — corrige ce menu et
+  protège au passage tout autre `<select>` de l'appli (dont `.wiz4-skillselect`, vérifié : même
+  vulnérabilité latente, jamais déclenchée visiblement). (2) En vérifiant le point 3 (couleur par
+  catégorie) : la correction du 2026-09-28 n'avait touché QUE l'éditeur de carte
+  (`SurfaceEditorScene.jsx`) — le plateau de **session** (`Canvas3D.jsx`, ce qu'un joueur/MJ voit
+  réellement en partie) avait une copie strictement identique de l'ancien double ternaire
+  `gas`/`flooded`, jamais corrigée. Extrait en `client/src/lib/effectRegionColors.js`
+  (`getEffectRegionColor`), consommé par les deux fichiers — une seule table, plus de duplication.
+  Testé : lint ciblé (erreurs pré-existantes de `Canvas3D.jsx` confirmées identiques avant/après via
+  `git stash`, aucune régression introduite), build client vérifié.
 
 ---
 

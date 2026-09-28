@@ -35,6 +35,7 @@ import {
 import { useTokenStore } from '../stores/tokenStore'
 import { resolveActingToken } from '../lib/actingToken.js'
 import { useDoubleClickTracker } from '../lib/doubleClickTracker.js'
+import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
 import { useMapStore } from '../stores/mapStore'
@@ -1478,11 +1479,10 @@ function Scene({
           (bounds.min.y + bounds.max.y) / 2,
           centerZ,
         ]
-        const color = region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' : '#fb7185'
         return (
           <mesh key={region.id} position={center} renderOrder={19}>
             <boxGeometry args={size} />
-            <meshBasicMaterial color={color} transparent opacity={0.1} depthWrite={false} />
+            <meshBasicMaterial color={getEffectRegionColor(region)} transparent opacity={0.1} depthWrite={false} />
           </mesh>
         )
       })}
