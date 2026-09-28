@@ -49,6 +49,8 @@ import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import BattlemapSelectorPanel from '../components/BattlemapSelectorPanel.jsx'
+import SessionDangerZonePanel from '../components/SessionDangerZonePanel.jsx'
+import { useWorldRuntimeStore } from '../stores/worldRuntimeStore.js'
 
 // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — liste plate de dossiers → options de <select> indentées,
 // pour la modale "Déplacer vers…". Séparé de BattlemapSelectorPanel.jsx (arbre interactif) : ici on
@@ -111,6 +113,31 @@ function SessionContent({ campaignId }) {
   const [exchangeWindowOpen,  setExchangeWindowOpen]  = useState(false)
   const [exchangeContext,     setExchangeContext]     = useState(null)
   const [encyclopediaWindowOpen, setEncyclopediaWindowOpen] = useState(false)
+  // Zone de danger (PLAN_ZONES_DANGER.md §7.2, Z6) — fenêtre flottante ouverte depuis Sidebar > Outils
+  // (patron Commerce/Encyclopédie ci-dessus). `placingZone` arme le mode de pose sur Canvas3D.jsx
+  // (rectangle glissé, aperçu translucide) — null = pas de pose en cours, aucun changement de
+  // comportement sur le reste du plateau.
+  const [dangerZoneToolOpen, setDangerZoneToolOpen] = useState(false)
+  const [placingZone, setPlacingZone] = useState(null)
+  const fetchWorldEffects = useWorldRuntimeStore(s => s.fetchWorldEffects)
+  const handleZonePlaceCommit = useCallback(async ({ volume }) => {
+    if (!battlemap?.id || !placingZone) return
+    try {
+      await api.post(`/battlemaps/${battlemap.id}/world-effects/instances`, {
+        definitionKey: placingZone.definitionKey,
+        targetKind: 'volume',
+        volume,
+        intensity: placingZone.intensity,
+        puissance: placingZone.puissance,
+        source: { kind: 'session' },
+      })
+      await fetchWorldEffects(battlemap.id)
+    } catch (error) {
+      console.error('[SessionPage] Pose de zone dangereuse refusée :', error)
+    } finally {
+      setPlacingZone(null)
+    }
+  }, [battlemap?.id, placingZone, fetchWorldEffects])
   const [activeEditorTab, setActiveEditorTab] = useState('world') // 'world' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
@@ -726,6 +753,9 @@ function SessionContent({ campaignId }) {
               displayLevel={displayLevel}
               statusEffectsMode={statusEffectsMode}
               onCharacterDrop={handleCharacterDrop}
+              placingZone={placingZone}
+              onZonePlaceCommit={handleZonePlaceCommit}
+              onZonePlaceCancel={() => setPlacingZone(null)}
             />
         )}
         {!canvasVisible && (
@@ -824,6 +854,7 @@ function SessionContent({ campaignId }) {
           onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
           onOpenExchange={(ctx) => { setExchangeContext(ctx ?? null); setExchangeWindowOpen(true) }}
           onOpenEncyclopedia={() => setEncyclopediaWindowOpen(true)}
+          onOpenDangerZoneTool={() => setDangerZoneToolOpen(true)}
         />
       )}
 
@@ -1401,6 +1432,17 @@ function SessionContent({ campaignId }) {
         <EncyclopediaWindow
           sidebarWidth={sidebarVisible ? sidebarWidth : 0}
           onClose={() => setEncyclopediaWindowOpen(false)}
+        />
+      )}
+
+      {/* ─── SessionDangerZonePanel — pose/édition de zones en session (Sidebar > Outils, Z6) ─── */}
+      {dangerZoneToolOpen && (
+        <SessionDangerZonePanel
+          battlemapId={battlemap?.id}
+          onClose={() => { setDangerZoneToolOpen(false); setPlacingZone(null) }}
+          placingZone={placingZone}
+          onArmPlacement={setPlacingZone}
+          onCancelPlacement={() => setPlacingZone(null)}
         />
       )}
 

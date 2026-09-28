@@ -588,6 +588,8 @@ function Scene({
   hoveringEntityRef,
   hoveringTokenRef,
   aimModeActive,
+  placingZone,
+  onZonePlaceCommit,
 }) {
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
@@ -850,6 +852,35 @@ function Scene({
     return hit ? target : null
   }, [camera, gl])
 
+  // ─── Pose de zone dangereuse en session (Z6, PLAN_ZONES_DANGER.md §7.2) ───────────────────────
+  // Isolé du reste des modes de visée (P40, ref miroir) : guard EN PREMIER dans handlePointerMove/Up
+  // ci-dessous, jamais entrelacé avec le déplacement/l'attaque/la visée — un `placingZone` null (99%
+  // du temps) laisse tout le reste de ce fichier strictement inchangé. Seul mode de ce fichier avec
+  // son propre listener `pointerdown` (aucun autre mode de visée n'a besoin de savoir où le geste
+  // COMMENCE, seulement où il pointe/se termine) — glisser un rectangle exige les trois.
+  const placingZoneRef = useRef(null)
+  placingZoneRef.current = placingZone
+  const zonePlacementDragRef = useRef({ active: false, startX: 0, startZ: 0 })
+  const [zonePlacementPreview, setZonePlacementPreview] = useState(null) // null | { minX, maxX, minZ, maxZ }
+
+  const handleZonePlacementPointerDown = useCallback((e) => {
+    if (!placingZoneRef.current) return
+    const hit = raycastGround(e.clientX, e.clientY)
+    if (!hit) return
+    zonePlacementDragRef.current = { active: true, startX: Math.floor(hit.x), startZ: Math.floor(hit.z) }
+    setZonePlacementPreview({
+      minX: zonePlacementDragRef.current.startX, maxX: zonePlacementDragRef.current.startX,
+      minZ: zonePlacementDragRef.current.startZ, maxZ: zonePlacementDragRef.current.startZ,
+    })
+    e.stopPropagation()
+  }, [raycastGround])
+
+  useEffect(() => {
+    const canvas = gl.domElement
+    canvas.addEventListener('pointerdown', handleZonePlacementPointerDown, true)
+    return () => canvas.removeEventListener('pointerdown', handleZonePlacementPointerDown, true)
+  }, [gl, handleZonePlacementPointerDown])
+
   const raycastWorldSupport = useCallback((clientX, clientY) => {
     if (!hasSurfaceContent(surfaceData)) return null
     const rect = gl.domElement.getBoundingClientRect()
@@ -1045,6 +1076,20 @@ function Scene({
   }, [isGm, user, characters, onTokenClick, clearLine])
 
   const handlePointerMove = useCallback((e) => {
+    // ─── Pose de zone dangereuse — prioritaire sur tout le reste (voir commentaire plus haut) ───
+    if (placingZoneRef.current && zonePlacementDragRef.current.active) {
+      const hit = raycastGround(e.clientX, e.clientY)
+      if (hit) {
+        const x = Math.floor(hit.x)
+        const z = Math.floor(hit.z)
+        const { startX, startZ } = zonePlacementDragRef.current
+        setZonePlacementPreview({
+          minX: Math.min(startX, x), maxX: Math.max(startX, x),
+          minZ: Math.min(startZ, z), maxZ: Math.max(startZ, z),
+        })
+      }
+      return
+    }
     // Marque un mouvement RÉEL de souris sur le canvas depuis le dernier armement AOE (indépendant de
     // tout mode actif) — lu par le useFrame de l'aperçu zone d'effet plus bas, garde-fou contre un
     // state.raycaster R3F encore positionné sur un survol antérieur à l'armement (cf. commentaire sur
@@ -1177,6 +1222,28 @@ function Scene({
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
+    // ─── Pose de zone dangereuse — prioritaire sur tout le reste (voir commentaire plus haut) ───
+    if (placingZoneRef.current && zonePlacementDragRef.current.active) {
+      const { startX, startZ } = zonePlacementDragRef.current
+      zonePlacementDragRef.current = { active: false, startX: 0, startZ: 0 }
+      setZonePlacementPreview(null)
+      const hit = raycastGround(e.clientX, e.clientY)
+      const endX = hit ? Math.floor(hit.x) : startX
+      const endZ = hit ? Math.floor(hit.z) : startZ
+      const minX = Math.min(startX, endX)
+      const maxX = Math.max(startX, endX)
+      const minZ = Math.min(startZ, endZ)
+      const maxZ = Math.max(startZ, endZ)
+      const baseY = levelToY(displayLevel)
+      const height = placingZoneRef.current.height
+      onZonePlaceCommit?.({
+        volume: {
+          min: { x: minX, y: baseY, z: minZ },
+          max: { x: maxX + 1, y: baseY + height, z: maxZ + 1 },
+        },
+      })
+      return
+    }
     // ─── Mode visée zone d'effet (fusil à pompe) — prioritaire sur tout le reste ────────────────
     // Clic = fige la DERNIÈRE direction survolée (aoePreviewDegRef), jamais un second raycast
     // indépendant — garantit que la valeur figée est exactement celle affichée à l'écran au moment du
@@ -1306,7 +1373,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, ambientMapClickActive, findOccupantAt, checkTokenDoubleClick])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, ambientMapClickActive, findOccupantAt, checkTokenDoubleClick, raycastGround, displayLevel, onZonePlaceCommit])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -1486,6 +1553,26 @@ function Scene({
           </mesh>
         )
       })}
+
+      {/* Aperçu de pose de zone dangereuse en session (Z6) — glisser-déposer, jamais écrit tant que le
+          bouton n'est pas relâché (handlePointerUp ci-dessus). Couleur par catégorie, comme les zones
+          confirmées ci-dessus, mais opacité plus marquée pour signaler « pas encore posée ». */}
+      {placingZone && zonePlacementPreview && (() => {
+        const baseY = levelToY(displayLevel)
+        const height = placingZone.height
+        const { minX, maxX, minZ, maxZ } = zonePlacementPreview
+        const size = [maxX - minX + 1, height, maxZ - minZ + 1]
+        const center = [(minX + maxX + 1) / 2, baseY + height / 2, (minZ + maxZ + 1) / 2]
+        return (
+          <mesh position={center} renderOrder={19}>
+            <boxGeometry args={size} />
+            <meshBasicMaterial
+              color={getEffectRegionColor({ category: placingZone.definitionCategory })}
+              transparent opacity={0.3} depthWrite={false}
+            />
+          </mesh>
+        )
+      })()}
 
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
@@ -1807,7 +1894,7 @@ function Scene({
 //     onPendingDirection — un cap ; origine = position du tireur.
 //   - 'point' (grenade) : + pendingPoint {x,y,z} / onPointSelected / onPendingPoint — le point
 //     d'impact au sol ; l'aperçu (disque) est centré dessus, pas sur le tireur.
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop, placingZone, onZonePlaceCommit, onZonePlaceCancel }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm, characters } = useCharacterStore()
@@ -1836,7 +1923,10 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     { key: 'losMode',             active: !!losMode?.active,     cursor: 'cible', blocksEntityClick: true,  onCancel: () => onLosCancel?.() },
     { key: 'combatMoveMode',      active: !!combatMoveMode,      cursor: 'case',  blocksEntityClick: false, onCancel: () => combatMoveMode.onCancel() },
     { key: 'moveTarget',          active: !!moveTarget,          cursor: 'case',  blocksEntityClick: true,  onCancel: () => onMoveCancel?.() },
-  ], [combatTargetMode, combatAoeTargetMode, losMode, combatMoveMode, moveTarget, onLosCancel, onMoveCancel])
+    // Pose de zone dangereuse en session (Z6, PLAN_ZONES_DANGER.md §7.2) — même autorité Échap/curseur
+    // que les autres modes de visée, aucun 2ᵉ mécanisme d'annulation inventé pour celui-ci.
+    { key: 'placingZone',         active: !!placingZone,         cursor: 'case',  blocksEntityClick: true,  onCancel: () => onZonePlaceCancel?.() },
+  ], [combatTargetMode, combatAoeTargetMode, losMode, combatMoveMode, moveTarget, onLosCancel, onMoveCancel, placingZone, onZonePlaceCancel])
   const aimModeActive = aimModes.some(m => m.active && m.blocksEntityClick)
   const sceneCursor = useSceneCursor(aimModes)
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
@@ -2132,6 +2222,8 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           hoveringEntityRef={hoveringEntityRef}
           hoveringTokenRef={hoveringTokenRef}
           aimModeActive={aimModeActive}
+          placingZone={placingZone}
+          onZonePlaceCommit={onZonePlaceCommit}
         />
       )}
     </Canvas>

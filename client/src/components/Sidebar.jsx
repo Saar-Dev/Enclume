@@ -49,6 +49,7 @@ export default function Sidebar({
   onOpenTrade,
   onOpenExchange,
   onOpenEncyclopedia,
+  onOpenDangerZoneTool,
 }) {
   const { t } = useTranslation()
   const { isGm } = useCharacterStore()
@@ -198,6 +199,15 @@ export default function Sidebar({
               <button className="sidebar-tools-dropdown-item enabled" onClick={() => { setToolsOpen(false); onOpenEncyclopedia?.() }}>
                 {t('session.encyclopedia')}
               </button>
+              {/* Zone de danger — MJ uniquement (PLAN_ZONES_DANGER.md §7.2, Z6). Décision Saar
+                  2026-09-28 : fenêtre flottante peu fréquente plutôt qu'un bouton permanent de la
+                  barre MJ — même patron Commerce/Encyclopédie ci-dessus, garde isGm explicite (ce
+                  menu n'en a aucune par défaut, contrairement au reste de la barre MJ). */}
+              {isGm && (
+                <button className="sidebar-tools-dropdown-item enabled" onClick={() => { setToolsOpen(false); onOpenDangerZoneTool?.() }}>
+                  {t('session.dangerZoneTool')}
+                </button>
+              )}
             </div>
           )}
         </div>}

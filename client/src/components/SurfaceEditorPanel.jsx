@@ -8,6 +8,7 @@ import api from '../lib/api.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import SurfaceEffectPanel from './SurfaceEffectPanel.jsx'
+import { groupEffectDefinitions } from '../lib/effectDefinitionGroups.js'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -63,44 +64,23 @@ const ICON_LADDER = (
 const ICON_ERASE = (
   <svg {...ICON_PROPS}><path d="M4 5.5h12M7.5 5.5V4a1 1 0 011-1h3a1 1 0 011 1v1.5M6 5.5l.6 10.2a1 1 0 001 .8h4.8a1 1 0 001-.8L14 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
 )
+const ICON_PAINT_WALL = (
+  <svg {...ICON_PROPS}>
+    <path d="M13 3l4 4-7.5 7.5c-.6.6-1.6.9-2.5.7l-2.3-.5.6-2.4c.2-.8.6-1.6 1.2-2.2L13 3z" strokeLinejoin="round" />
+    <path d="M4 17c1.2 0 1.8-1 1.2-2-.4-.7 0-1.6.9-1.8" strokeLinecap="round" />
+  </svg>
+)
+const ICON_RESHAPE_WALL = (
+  <svg {...ICON_PROPS}>
+    <rect x="2" y="8.5" width="16" height="3" rx="1" />
+    <path d="M15 6l3 4-3 4M5 6L2 10l3 4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 const TAB_ICON_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '7px 0',
 }
 const CHIP_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', minHeight: '48px',
-}
-
-// Regroupement du menu « Effet » par catégorie (PLAN_ZONES_DANGER.md §6.2 point 2) — la catégorie
-// existe déjà côté serveur (definition.category, serializeDefinition) et n'était jusqu'ici jamais
-// utilisée par ce panneau : liste à plat de ~20 entrées depuis que le catalogue RAW (Z0-Z2) a
-// rejoint les 5 anciens types. RAW (feu/acide/gaz/radiation/decompression) et legacy (catégories
-// namespacées 'hazard:fire'/'terrain:water'/'atmosphere:gas'/'terrain:footing') ne partagent pas le
-// même vocabulaire de catégorie — cette table les fait converger vers le même groupe visible ; une
-// définition custom MJ (`builtin:false`) va toujours dans son propre groupe, jamais mélangée au RAW.
-const EFFECT_CATEGORY_GROUPS = {
-  feu: 'effectCategoryFeu', 'hazard:fire': 'effectCategoryFeu',
-  acide: 'effectCategoryAcide',
-  decompression: 'effectCategoryDecompression',
-  radiation: 'effectCategoryRadiation',
-  gaz: 'effectCategoryGaz', 'atmosphere:gas': 'effectCategoryGaz',
-  'terrain:water': 'effectCategoryLegacy', 'terrain:footing': 'effectCategoryLegacy',
-}
-const EFFECT_CATEGORY_GROUP_ORDER = [
-  'effectCategoryFeu', 'effectCategoryAcide', 'effectCategoryDecompression',
-  'effectCategoryRadiation', 'effectCategoryGaz', 'effectCategoryLegacy', 'effectCategoryCustom',
-]
-function groupEffectDefinitions(definitions, t) {
-  const byGroup = new Map()
-  for (const definition of definitions) {
-    const groupKey = !definition.builtin
-      ? 'effectCategoryCustom'
-      : (EFFECT_CATEGORY_GROUPS[definition.category] || 'effectCategoryLegacy')
-    if (!byGroup.has(groupKey)) byGroup.set(groupKey, [])
-    byGroup.get(groupKey).push(definition)
-  }
-  return EFFECT_CATEGORY_GROUP_ORDER
-    .filter(groupKey => byGroup.has(groupKey))
-    .map(groupKey => ({ groupKey, label: t(`surfaceEditor.${groupKey}`), definitions: byGroup.get(groupKey) }))
 }
 
 // ─── Palette surface/entités (mode édition) ───────────────────────────────────
@@ -591,6 +571,31 @@ export default function SurfaceEditorPanel({
             <div style={styles.roomToolModes}>
               <button
                 type="button"
+                onClick={() => updateSurfaceTool({
+                  mode: 'paint-wall',
+                  materialFace: 'wallInterior',
+                  wallPaintScope: surfaceToolState.wallPaintScope || 'case',
+                  wallPaintClearOverrides: false,
+                })}
+                className="sidebar-tool-mode-btn"
+                data-active={surfaceToolState.mode === 'paint-wall'}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
+              >
+                {ICON_PAINT_WALL}
+                <span>{t('surfaceEditor.paintWall')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => updateSurfaceTool({ mode: 'reshape-wall', roomArcError: null })}
+                className="sidebar-tool-mode-btn"
+                data-active={surfaceToolState.mode === 'reshape-wall'}
+                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
+              >
+                {ICON_RESHAPE_WALL}
+                <span>{t('surfaceEditor.reshapeWall')}</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => updateSurfaceTool({ mode: 'erase' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'erase'}
@@ -600,6 +605,46 @@ export default function SurfaceEditorPanel({
                 <span>{t('surfaceEditor.erase')}</span>
               </button>
             </div>
+            {surfaceToolState.mode === 'paint-wall' && (
+              <div className="sidebar-glass" style={styles.roomToolGrid}>
+                <div style={styles.roomToolModes}>
+                  {[
+                    { key: 'case', label: t('surfaceEditor.paintWallScopeCase') },
+                    { key: 'run', label: t('surfaceEditor.paintWallScopeRun') },
+                    { key: 'room', label: t('surfaceEditor.paintWallScopeRoom') },
+                  ].map(scope => (
+                    <button
+                      key={scope.key}
+                      type="button"
+                      onClick={() => updateSurfaceTool({ wallPaintScope: scope.key })}
+                      className="sidebar-tool-mode-btn"
+                      data-active={(surfaceToolState.wallPaintScope || 'case') === scope.key}
+                      style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
+                    >
+                      <span>{scope.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {(surfaceToolState.wallPaintScope || 'case') === 'room' && (
+                  <label style={styles.roomToolLabel}>
+                    <input
+                      type="checkbox"
+                      checked={!!surfaceToolState.wallPaintClearOverrides}
+                      onChange={e => updateSurfaceTool({ wallPaintClearOverrides: e.target.checked })}
+                    />
+                    <span>{t('surfaceEditor.paintWallClearOverrides')}</span>
+                  </label>
+                )}
+              </div>
+            )}
+            {surfaceToolState.mode === 'reshape-wall' && (
+              <div className="sidebar-glass" style={styles.roomToolGrid}>
+                <p className="sidebar-tool-hint" style={styles.roomToolHint}>{t('surfaceEditor.reshapeWallHint')}</p>
+                {surfaceToolState.roomArcError && (
+                  <p className="sidebar-tool-error">{surfaceToolState.roomArcError}</p>
+                )}
+              </div>
+            )}
             </>
             )}
             {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (

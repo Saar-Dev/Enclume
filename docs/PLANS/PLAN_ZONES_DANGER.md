@@ -1078,6 +1078,37 @@ consommateur du rework world builder, §12).
   reste donc à moitié fonctionnel (le `1d6`/Tour de base tourne déjà via `RESOLVERS.damage` depuis Z2,
   l'escalade +2/Tour non). Rattaché à Z5, pas à Z4 (Z4 = « malus modifier de zone », pas « toute
   escalade du catalogue ») — à traiter explicitement quand Z5 sera repris.
+- **2026-09-28 — Z6 (portage en session, lot 1/2) codé, NON TESTÉ EN JEU, pas encore commité.**
+  Décisions Saar avant de coder : point d'entrée = **Sidebar > Outils > « Zone de danger »** (menu
+  déroulant existant, patron Commerce/Encyclopédie — pas un onglet permanent, la pose est trop rare
+  pour ça), fenêtre **flottante** (pas un onglet). Périmètre explicitement réduit à ce lot (décision
+  agent, technique déléguée par Saar) : **seul le mode rectangle est câblé** — « remplir un
+  compartiment » reste un lot suivant (aucune détection de pièce au clic dans `Canvas3D.jsx`
+  aujourd'hui, contrairement à l'éditeur ; `findRoomAtCell` existe et est réutilisable quand ce lot
+  sera repris).
+  Livré : `client/src/lib/effectDefinitionGroups.js` (neuf — extraction du regroupement par catégorie
+  de `SurfaceEditorPanel.jsx`, une seule table partagée) ; `client/src/components/
+  SessionDangerZonePanel.jsx` (neuf — formulaire de pose + liste « Effets actifs » réutilisant
+  `SurfaceEffectPanel.jsx` tel quel) ; `Sidebar.jsx` (entrée de menu, gardée `isGm` — le menu Outils
+  n'en avait aucune par défaut) ; `SessionPage.jsx` (état `dangerZoneToolOpen`/`placingZone`,
+  `handleZonePlaceCommit` = POST `/battlemaps/:id/world-effects/instances` + refresh, aucune route
+  serveur nouvelle) ; `Canvas3D.jsx` (mode de pose isolé — voir ci-dessous).
+  **Risque identifié et traité** : `Canvas3D.jsx` est le plateau de SESSION (pas l'éditeur hors-partie)
+  — `handlePointerMove`/`handlePointerUp` y sont déjà une fonction dense partagée par 6+ mécaniques
+  (déplacement, attaque, visée AOE/LOS, drag de token…), avec un historique de bugs de conflit entre
+  modes (commentaires `CLICKATTACK-MOVECONFLICT1`, `COMBAT-DEPLACEMENT-HOVER` déjà dans le fichier).
+  Plutôt que d'entrelacer une 7ᵉ mécanique dans cette logique, le mode `placingZone` est un **guard
+  isolé en tout premier** dans les deux handlers (return immédiat, rien d'autre n'exécute tant qu'une
+  pose est armée) + son propre listener `pointerdown` séparé (aucun autre mode n'en avait besoin,
+  aucun n'existait avant). Rejoint l'autorité unique `aimModes` de l'export par défaut
+  (PLAN_CLIC_3D_UNIFICATION.md §9.1) pour Échap/curseur — pas un 2ᵉ mécanisme d'annulation inventé.
+  Un `placingZone` null (99,9% du temps) laisse tout le reste du fichier strictement inchangé.
+  **Testé** : lint ciblé (Canvas3D.jsx : 17→18 problèmes, +1 — exactement le même patron `react-hooks/
+  refs` pré-existant sur 14 autres ref-miroirs de ce fichier, confirmé par comparaison directe avant/
+  après, pas une nouvelle catégorie de dette ; les autres fichiers touchés : 0 problème neuf), build
+  client réussi. **Non testé en jeu — ⚠️ clos partiel** : geste de glisser-rectangle, aperçu
+  translucide, ouverture/fermeture du panneau, jamais vérifiés dans un navigateur réel (Saar teste
+  l'UI, jamais l'agent). Pas encore commité — attend sa confirmation fonctionnelle (AGENTS.md).
 
 ---
 
