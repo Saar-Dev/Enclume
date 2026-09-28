@@ -295,6 +295,46 @@ test('sweepZoneExposure + resolveActiveEffects — puissance de l\'instance s\'a
   }
 })
 
+// ─── sweepZoneExposure — ligne `modifier` (Z4, docs/PLANS/PLAN_ZONES_DANGER.md §6) ───
+// gaz:irritant est la seule définition du catalogue avec une ligne `modifier` de phase 'onTurn' non
+// imbriquée (la 2ᵉ ligne, test.onFail, est v2/no-op) : hazardCode:null par construction (Z0), donc
+// AUCUNE des assertions ci-dessous ne peut passer par exposeToHazard/hazardCode — c'est exactement la
+// non-couverture que Z4 corrige.
+
+test('sweepZoneExposure — zone gaz:irritant (type:modifier) : malus posé sans hazardCode, persiste (decay) à la sortie', { skip }, async () => {
+  const fx = await createFixture()
+  let instanceId = null
+  try {
+    await db('combat_roster').insert({ campaign_id: fx.campaign.id, token_id: fx.token.id, status: 'active' })
+    const created = await createWorldEffectInstance({
+      battlemapId: fx.battlemap.id,
+      input: { definitionKey: 'gaz:irritant', targetKind: 'volume', volume: VOLUME_AROUND_ORIGIN },
+    })
+    instanceId = created.instance.id
+
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id, 1)
+    let status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'gaz:irritant' }).first()
+    assert.ok(status, 'aucun hazardCode pour gaz:irritant : ce statut ne peut venir que du nouveau chemin modifier')
+    assert.equal(status.data.kind, 'zoneModifier')
+    assert.equal(status.data.target, 'actions')
+    assert.equal(status.data.value, -3)
+    assert.equal(status.data.remanence, 'decay')
+    assert.equal(status.data.lastRefreshedTurn, 1)
+
+    // Le token quitte le volume — remanence:'decay' : la ligne persiste (décroissance pilotée
+    // ailleurs par resolveZoneModifierTicks, jamais par sweepZoneExposure lui-même).
+    await db('tokens').where({ id: fx.token.id }).update({ pos_x: 100 })
+    await sweepZoneExposure(fakeIo, db, fx.campaign.id, fx.battlemap.id, 2)
+    status = await db('token_statuses').where({ token_id: fx.token.id, status_code: 'gaz:irritant' }).first()
+    assert.ok(status, 'remanence:decay => la ligne reste après la sortie, pas un clear immédiat')
+    assert.equal(status.data.value, -3, 'sweepZoneExposure ne fait pas décroître lui-même — resolveZoneModifierTicks seul')
+  } finally {
+    if (instanceId) await db('world_effect_instances').where({ id: instanceId }).del()
+    await db('combat_roster').where({ campaign_id: fx.campaign.id, token_id: fx.token.id }).del()
+    await cleanup(fx)
+  }
+})
+
 test('sweepZoneExposure — aucune zone, aucun roster, campagne sans battlemap : ne fait rien, jamais un throw', { skip }, async () => {
   const fx = await createFixture()
   try {

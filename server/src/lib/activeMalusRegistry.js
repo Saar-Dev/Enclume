@@ -42,6 +42,15 @@ export const ACTIVE_MALUS_SOURCES = [
     key: 'iemSurvival',
     compute: (ctx) => ctx.iemSurvivalMalus ?? 0,
   },
+  // Zones dangereuses Z4 (docs/PLANS/PLAN_ZONES_DANGER.md §6, gaz:irritant) — malus `modifier`
+  // `target:'actions'` d'une zone où le token du personnage se trouve (ou vient d'en sortir,
+  // remanence:'decay'). Alimenté par `combatantContextService.js`
+  // (`zoneModifierService.js:resolveZoneModifierMalus`, indexé par TOKEN, pas par personnage —
+  // contrairement à `iemSurvival` ci-dessus), jamais par `token_statuses` lu directement ici.
+  {
+    key: 'zoneModifier',
+    compute: (ctx) => ctx.zoneModifierMalus ?? 0,
+  },
 ]
 
 // exclude : clés à ignorer — utilisé par le Test de Fatigue lui-même pour s'auto-exempter du malus

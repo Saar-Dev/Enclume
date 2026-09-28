@@ -266,6 +266,30 @@ test('resolveHumanoidTestContext — inventaire au-dessus du seuil FOR×3 : effe
   }
 })
 
+// Z4 (docs/PLANS/PLAN_ZONES_DANGER.md §6) — malus de zone `target:'actions'` (ex. gaz:irritant),
+// indexé par TOKEN (zoneModifierService.js:resolveZoneModifierMalus), pas par personnage comme les
+// autres sources : d'où un token créé explicitement ici, contrairement aux tests ci-dessus.
+test('resolveHumanoidTestContext — malus de zone (token_statuses.data.kind=zoneModifier, target:actions) : effectiveMalus le reflète', { skip }, async () => {
+  const fx = await createFixture()
+  const [battlemap] = await db('battlemaps').insert({ campaign_id: fx.campaign.id, name: 'BM test' }).returning('*')
+  const [token] = await db('tokens')
+    .insert({ battlemap_id: battlemap.id, character_id: fx.character.id, label: 'Token test' })
+    .returning('*')
+  await db('token_statuses').insert({
+    token_id: token.id, status_code: 'gaz:irritant',
+    data: { kind: 'zoneModifier', target: 'actions', value: -3 },
+  })
+  try {
+    const ctx = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.effectiveMalus, -3)
+  } finally {
+    await db('token_statuses').where({ token_id: token.id }).del()
+    await db('tokens').where({ id: token.id }).del()
+    await db('battlemaps').where({ id: battlemap.id }).del()
+    await cleanup(fx)
+  }
+})
+
 // PLAN_COMBATANT_CONTEXT.md Lot G — resolveCombatantTestContext (dispatcher) + branche exo.
 
 test('resolveCombatantTestContext — exo avec pilote+template : for_na/modDom viennent de l\'EXF, skillTotal/con_na/vol_na du pilote', { skip }, async () => {

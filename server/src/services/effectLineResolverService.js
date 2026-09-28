@@ -18,6 +18,7 @@ import { calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { resolveTargetHit } from '../lib/damageService.js'
 import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
+import { applyZoneModifier, clearZoneModifier } from '../lib/zoneModifierService.js'
 import { loadWorldEffectDefinitions } from './worldEffectService.js'
 import { tokensInsideEffectVolume } from './worldSpatialQueryService.js'
 import { WS } from '../../../shared/events.js'
@@ -191,7 +192,10 @@ export async function resolveActiveEffects(io, db, campaignId, rows) {
 // (`environmentalHazardPresets.js`, `locations:1`). Pas une régression : même écart déjà noté §5.1,
 // déjà rattaché à Z6 (absorption des presets UI). `locations: null` (valeur catalogue pour 'all',
 // ignorée par ce mode) est donc replié sur `1` ici pour rester une valeur valide pour exposeToHazard.
-export async function sweepZoneExposure(io, db, campaignId, battlemapId) {
+// `currentTurn` (Z4) : fourni par l'appelant (startResolutionPhase l'a déjà résolu) — écrit dans
+// data.lastRefreshedTurn par applyZoneModifier, seul signal qui distingue pour
+// resolveZoneModifierTicks « encore dans sa zone ce Tour » de « vient d'en sortir ».
+export async function sweepZoneExposure(io, db, campaignId, battlemapId, currentTurn) {
   if (!battlemapId) return
 
   const [rosterTokenIds, memberships, definitions] = await Promise.all([
@@ -216,21 +220,42 @@ export async function sweepZoneExposure(io, db, campaignId, battlemapId) {
   for (const [tokenId, tokenMemberships] of membershipsByToken) {
     for (const membership of tokenMemberships) {
       const definition = definitionByKey.get(membership.definitionKey)
-      if (!definition?.hazardCode || !findHazardRegistryEntry(definition.hazardCode)) continue
-      const damageLine = definition.effects.find(effect => effect.type === 'damage' && effect.phase === 'onTurn')
-      if (!damageLine) continue
-      await exposeToHazard(io, db, campaignId, tokenId, definition.hazardCode, {
-        formula: damageLine.formula,
-        locations: damageLine.locations ?? 1,
-        forcedLocation: damageLine.forcedLocation ?? null,
-        zoneInstanceId: membership.instanceId,
-        remanence: damageLine.remanence,
-        // puissance (§2.E, Z2 étape 4) : scalaire de l'INSTANCE de zone (jamais de la définition —
-        // c'est le MJ qui renforce une zone précise, pas le catalogue). Réécrite chaque Tour comme le
-        // reste (idempotent) : si le MJ change la puissance d'une zone déjà posée, le prochain
-        // rafraîchissement la reprend automatiquement, aucune resynchronisation manuelle nécessaire.
-        puissance: membership.puissance,
-      })
+      if (!definition) continue
+
+      if (definition.hazardCode && findHazardRegistryEntry(definition.hazardCode)) {
+        const damageLine = definition.effects.find(effect => effect.type === 'damage' && effect.phase === 'onTurn')
+        if (damageLine) {
+          await exposeToHazard(io, db, campaignId, tokenId, definition.hazardCode, {
+            formula: damageLine.formula,
+            locations: damageLine.locations ?? 1,
+            forcedLocation: damageLine.forcedLocation ?? null,
+            zoneInstanceId: membership.instanceId,
+            remanence: damageLine.remanence,
+            // puissance (§2.E, Z2 étape 4) : scalaire de l'INSTANCE de zone (jamais de la définition —
+            // c'est le MJ qui renforce une zone précise, pas le catalogue). Réécrite chaque Tour comme le
+            // reste (idempotent) : si le MJ change la puissance d'une zone déjà posée, le prochain
+            // rafraîchissement la reprend automatiquement, aucune resynchronisation manuelle nécessaire.
+            puissance: membership.puissance,
+          })
+        }
+      }
+
+      // modifier (Z4, gaz) : AUCUN hazardCode par construction (Z0) — chemin d'écriture séparé
+      // (zoneModifierService.js), jamais exposeToHazard/hazardCode. Une définition peut en principe
+      // porter les deux lignes (aucun cas réel au catalogue aujourd'hui) : les deux branches sont
+      // indépendantes, pas un elseif.
+      const modifierLine = definition.effects.find(effect => effect.type === 'modifier' && effect.phase === 'onTurn')
+      if (modifierLine) {
+        await applyZoneModifier(io, db, campaignId, tokenId, definition.key, {
+          zoneInstanceId: membership.instanceId,
+          target: modifierLine.target,
+          value: modifierLine.value,
+          escalation: modifierLine.escalation,
+          remanence: modifierLine.remanence,
+          remanenceParams: modifierLine.remanenceParams,
+          currentTurn,
+        })
+      }
     }
   }
 
@@ -242,13 +267,24 @@ export async function sweepZoneExposure(io, db, campaignId, battlemapId) {
     const stillInside = membershipsByToken.get(row.token_id)
       ?.some(membership => membership.instanceId === row.data.zoneInstanceId)
     if (stillInside) continue
+    if (row.data.kind === 'zoneModifier') {
+      // modifier (Z4) : jamais clearHazard (son mode `linger` interroge findHazardRegistryEntry, qui
+      // ne connaît que les 3 hazardCode RAW — lèverait pour un status_code de définition gaz). 'none'
+      // seul se retire ici ; 'decay' tique seul via resolveZoneModifierTicks (combatTurnEngine.js,
+      // juste après ce balayage) ; 'fixed'/'conditional' sur une ligne modifier : aucune entrée au
+      // catalogue aujourd'hui, laissés tels quels (v2 tant qu'un cas concret ne le justifie).
+      if (row.data.remanence === 'none') await clearZoneModifier(io, db, campaignId, row.token_id, row.status_code)
+      continue
+    }
     if (row.data.remanence === 'fixed') {
       await clearHazard(io, db, campaignId, row.token_id, row.status_code, { linger: true })
     } else if (row.data.remanence === 'none') {
       await clearHazard(io, db, campaignId, row.token_id, row.status_code)
     }
-    // remanence 'decay'/'conditional' : hors zone, tique seul via resolveActiveEffects (Z4) — rien à
-    // faire ici. Aujourd'hui inatteignable (les entrées gaz correspondantes ont hazardCode:null, donc
-    // jamais posées par la boucle d'entrée ci-dessus).
+    // remanence 'decay'/'conditional' (ligne damage) : hors zone, tique seul via resolveActiveEffects
+    // (Z4) — rien à faire ici. Aujourd'hui inatteignable (les entrées gaz correspondantes portent
+    // leur ligne sur `damage` UNIQUEMENT pour gaz:decomposant, qui a hazardCode:null comme les autres
+    // gaz — donc jamais posées par la boucle d'entrée ci-dessus non plus ; seule gaz:irritant, une
+    // ligne `modifier`, est aujourd'hui réellement posée par ce balayage).
   }
 }

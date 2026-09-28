@@ -1,9 +1,11 @@
 # PLAN_ZONES_DANGER.md — Fondation « zones dangereuses »
 
 > Rédigé 2026-09-09, **réécrit propre 2026-09-10** (consolidation d'un cadrage de ~35 tours).
-> **Cadrage terminé. Z0+Z1+Z2 codés et clos** — détail §11 historique, 2026-09-27. `Z3 → Z7` restent
-> à coder. Ce document est auto-suffisant : il porte le contrat, l'architecture, les décisions RAW
-> tranchées avec Saar, le catalogue exemple et le plan d'incréments.
+> **Cadrage terminé. Z0+Z1+Z2+Z4 codés et clos** — détail §11 historique, 2026-09-28. `Z3, Z5→Z7`
+> restent à coder (Z5 reste partiel : `gaz:irritant` fonctionne de bout en bout depuis Z4, mais
+> `gaz:décomposant`, l'escalade sur ligne `damage` et `grenade_gas_*` ne sont pas faits). Ce document
+> est auto-suffisant : il porte le contrat, l'architecture, les décisions RAW tranchées avec Saar, le
+> catalogue exemple et le plan d'incréments.
 >
 > **Responsabilité unique** (`docs/RegleDocumentaire.md` R1) : *comment une zone d'effet runtime,
 > posée sur une battlemap, est résolue tour après tour sur ses occupants, et comment elle naît /
@@ -1027,6 +1029,55 @@ consommateur du rework world builder, §12).
   (`getEffectRegionColor`), consommé par les deux fichiers — une seule table, plus de duplication.
   Testé : lint ciblé (erreurs pré-existantes de `Canvas3D.jsx` confirmées identiques avant/après via
   `git stash`, aucune régression introduite), build client vérifié.
+- **2026-09-28 — Z4 codé et clos (« on termine le plan », effets visuels reportés).**
+  Le vrai problème, creusé avant de coder (plus profond que la ligne Z4 du tableau ne le dit) :
+  `RESOLVERS` (`effectLineResolverService.js`) ne contenait que `damage` ; `sweepZoneExposure` ne
+  repérait que les lignes `type:'damage'` et posait la condition via `exposeToHazard`/`hazardCode` —
+  un mécanisme structurellement inapplicable aux zones `modifier` (gaz), qui ont `hazardCode:null`
+  par construction (Z0). **Nouveau domaine séparé** `server/src/lib/zoneModifierService.js` (patron
+  `iemSurvivalService.js` : pose + tick dans un seul fichier), jamais `exposeToHazard`/`clearHazard`
+  (gardés par `findHazardRegistryEntry`, qui ne connaît que les 3 hazardCode RAW) :
+  `applyZoneModifier`/`clearZoneModifier` (écriture `token_statuses` directe, `status_code =
+  definition.key`, `data.kind:'zoneModifier'`) + `resolveZoneModifierTicks` (décroissance
+  `remanence:'decay'`, appelée depuis `combatTurnEngine.js` juste après `resolveIemSurvivalTicks`,
+  filtrée par `data.kind` — jamais `getAllHazardCodes()`) + `resolveZoneModifierMalus` (somme des
+  malus `target:'actions'` actifs, pour le point 4).
+  `sweepZoneExposure` (`effectLineResolverService.js`) étendue : boucle d'entrée pose aussi une ligne
+  `modifier` `onTurn` (indépendante de la branche `damage` existante, pas un elseif) ; boucle de
+  sortie distingue `row.data.kind === 'zoneModifier'` (retrait immédiat si `remanence:'none'`, sinon
+  laissé tel quel — jamais `clearHazard`, qui lèverait pour un `status_code` de définition gaz sans
+  entrée au registre hazard). Escalade (`escalation:{perTurn,cap}`) : la magnitude s'éloigne de zéro
+  d'un cran par Tour de présence CONTINUE dans la MÊME zone (`escalationStacks`, remis à 0 sur un
+  changement de `zoneInstanceId`), plafonnée par `cap`.
+  **Point 4 (nouvelle entrée `ACTIVE_MALUS_SOURCES`) corrigé en cours de route** : le patron annoncé
+  à Saar (« même patron que `iemSurvivalMalus` ») s'est révélé inexact une fois le code relu —
+  `iemSurvivalMalus` est indexé par PERSONNAGE (`exo_computers`, pas de token nécessaire), alors que
+  le malus de zone dépend de la POSITION d'un TOKEN. Faire passer un `tokenId` à travers les 9 sites
+  d'appel de `resolveCombatantTestContext` (`socketCombatHelpers.js`/`socketCombatExo.js`/
+  `socketCombatAoe.js`) aurait été un chantier à part, avec un vrai risque de mélanger attaquant/
+  défenseur. Solution retenue à la place, sans toucher aucun des 9 sites : `resolveZoneModifierMalus`
+  dérive les tokens actifs depuis le `characterId` déjà en main (`statusService.resolveCharacterTokens`,
+  déjà utilisé par `reconcileWoundDeath`) — appelée automatiquement DANS
+  `resolveHumanoidTestContext` (`combatantContextService.js`) pour un appelant humanoïde direct ;
+  `resolveExoTestContext` calcule la sienne depuis le token DE L'EXO (`exoCharacter.id`, jamais celui
+  du pilote — c'est l'exo qui est physiquement dans le gaz) et la passe en `zoneModifierMalusOverride`.
+  **Non-régression `damage` (Z0-Z2)** : les 14 tests existants d'`effectLineResolverService.test.mjs`
+  passent inchangés ; les 41 tests existants de `combatantContextService.test.mjs` passent inchangés
+  (aucun n'exerçait un malus de zone non nul avant ce jour — la non-régression est donc garantie
+  aussi par construction : `zoneModifierMalus` vaut `0` par défaut pour tout token sans ligne
+  `zoneModifier`, `??` jamais `||`).
+  **Testé** : `node --env-file=.env --test` sur les 3 fichiers touchés — 8 tests neufs
+  (`zoneModifierService.test.mjs`, pose/escalade/cap/reset-de-zone/decay/somme), 1 test neuf
+  (`sweepZoneExposure` sur `gaz:irritant`, bout en bout), 1 test neuf (`combatantContextService`,
+  `effectiveMalus` reflète une ligne `zoneModifier`) — 64/64 verts au total sur ces 3 fichiers.
+  Aucune migration. **Non testé en jeu** (Saar : « les tests devront attendre », malus sans effet
+  visuel — cohérent avec « les effets visuels restent reportés »).
+  **Non fait, hors périmètre déclaré de Z4** : l'escalade (`escalation:{perTurn:2,cap:null}`) de la
+  ligne `damage` de `gaz:décomposant` n'est PAS câblée dans `resolveDamageLine`/`resolveActiveEffects`
+  — seule l'escalade côté `modifier` (nouvelle, `zoneModifierService.js`) est faite. `gaz:décomposant`
+  reste donc à moitié fonctionnel (le `1d6`/Tour de base tourne déjà via `RESOLVERS.damage` depuis Z2,
+  l'escalade +2/Tour non). Rattaché à Z5, pas à Z4 (Z4 = « malus modifier de zone », pas « toute
+  escalade du catalogue ») — à traiter explicitement quand Z5 sera repris.
 
 ---
 

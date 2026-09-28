@@ -39,6 +39,7 @@ import { getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { resolveActiveEffects, sweepZoneExposure } from '../services/effectLineResolverService.js'
 import { tickWorldEffectInstanceDurations } from '../services/worldEffectService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
+import { resolveZoneModifierTicks } from '../lib/zoneModifierService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -408,7 +409,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
     // spatial, balayage sauté sans erreur (resolveActiveBattlemapId, même résolution que
     // woundService.js:healCampaignCharacters).
     const zoneBattlemapId = await resolveActiveBattlemapId(campaignId)
-    if (zoneBattlemapId) await sweepZoneExposure(io, db, campaignId, zoneBattlemapId)
+    if (zoneBattlemapId) await sweepZoneExposure(io, db, campaignId, zoneBattlemapId, currentTurn)
 
     // Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9 increment F) — tick de début de tour pour les dangers
     // environnementaux (Acide/Décompression/Feu), boucle indépendante de celle des mods ci-dessus :
@@ -435,6 +436,20 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active', 'ts.status_code': IEM_SURVIVAL_STATUS_CODE })
       .select('roster.token_id', 'ts.data')
     await resolveIemSurvivalTicks(io, db, campaignId, currentTurn, iemSurvivalRows)
+
+    // Zones dangereuses — malus `modifier` (Z4, docs/PLANS/PLAN_ZONES_DANGER.md §6) : décroissance
+    // `remanence:'decay'` des lignes posées par zoneModifierService.js (`data.kind:'zoneModifier'`),
+    // boucle indépendante de `hazardRows` ci-dessus — jamais `getAllHazardCodes()`, qui ne connaît que
+    // les 3 hazardCode RAW des dangers à dégâts, structurellement absents des zones gaz (Z0). Une ligne
+    // encore dans sa zone a déjà été rafraîchie par `sweepZoneExposure` plus haut CE Tour (filtrée par
+    // `resolveZoneModifierTicks` via `data.lastRefreshedTurn`) : cette boucle ne fait donc décroître
+    // que les lignes dont le token est sorti.
+    const zoneModifierRows = await db('combat_roster as roster')
+      .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
+      .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active' })
+      .whereRaw("ts.data->>'kind' = 'zoneModifier'")
+      .select('roster.token_id', 'ts.status_code', 'ts.data')
+    await resolveZoneModifierTicks(io, db, campaignId, currentTurn, zoneModifierRows)
 
     const broadcastRoster = await buildBroadcastRoster(db, fullRoster)
 

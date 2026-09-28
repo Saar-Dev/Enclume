@@ -13,6 +13,7 @@ import { fetchCibleNA } from './damageService.js'
 import { computeExoStats } from '../../../shared/exoStats.js'
 import { resolvePilot, resolveExoContext } from './exoPilotService.js'
 import { resolveActiveComputer } from '../../../shared/computerStats.js'
+import { resolveZoneModifierMalus } from './zoneModifierService.js'
 
 // skillId=null → palier NA seul (cibles Tir/Drone, PLAN_COMBATANT_CONTEXT.md §2 palier 2) : pas de
 // fetch ref_skills/char_skills, { for_na, con_na, vol_na, sheetId } seulement. Délègue à
@@ -50,10 +51,18 @@ import { resolveActiveComputer } from '../../../shared/computerStats.js'
 // pour d'autres Tests d'attribut (Chance, sauvegardes de Volonté…).
 // `iemSurvivalMalus` (interne, réservé à resolveExoTestContext ci-dessous, Lot 3b,
 // PLAN_INFORMATIQUE.md §4 Lot 3b) : séquelle cumulative de Survie I.E.M. de l'ordinateur actif du
-// pilote (`exo_computers.sequelle_malus`) — transmis tel quel à `calcActiveMalus` (4ᵉ source
+// pilote (`exo_computers.sequelle_malus`) — transmis tel quel à `calcActiveMalus` (5ᵉ source
 // `iemSurvival`, `activeMalusRegistry.js`), jamais recalculé ici. `undefined` par défaut : aucun
 // changement de comportement pour un appelant humanoïde direct.
-export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride, limitingSkillId, attributeId, iemSurvivalMalus } = {}) {
+// `zoneModifierMalusOverride` (Z4, docs/PLANS/PLAN_ZONES_DANGER.md §6) : par défaut (appelant
+// humanoïde direct), le malus de zone est calculé ICI depuis les tokens DU PERSONNAGE TESTÉ
+// (`character.id`/`character.campaign_id` — contrairement à `iemSurvivalMalus`, une donnée par TOKEN,
+// pas par personnage : c'est le token physiquement dans le gaz qui compte, pas l'entité abstraite).
+// `resolveExoTestContext` ci-dessous fournit l'override : `character` y est le PILOTE (ses propres
+// attributs/Compétences), jamais l'exo — mais c'est le TOKEN DE L'EXO qui est dans le gaz, pas un
+// éventuel token du pilote (qui n'existe généralement pas en combat exo) ; sans cet override, le
+// calcul par défaut interrogerait le mauvais personnage et manquerait silencieusement le malus.
+export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride, limitingSkillId, attributeId, iemSurvivalMalus, zoneModifierMalusOverride } = {}) {
   const sheet = await db('char_sheet').where({ character_id: character.id }).first()
   if (!sheet) return null
 
@@ -101,8 +110,11 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
   const totalWeight = inventory.reduce((sum, i) =>
     (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
   )
+  const zoneModifierMalus = zoneModifierMalusOverride
+    ?? await resolveZoneModifierMalus(db, character.campaign_id, character.id)
   const effectiveMalus = calcActiveMalus({
     wounds, fatiguePoints: sheet.fatigue_points, totalWeight, forNA: for_na, settings, iemSurvivalMalus,
+    zoneModifierMalus,
   })
   const modDom = getModDom(for_na)
 
@@ -267,12 +279,19 @@ async function resolveExoTestContext(db, exoCharacter, skillId) {
   const activeComputer = resolveActiveComputer(computers)
   const iemSurvivalMalus = activeComputer?.sequelle_malus ?? 0
 
+  // Malus de zone (Z4) : calculé depuis le token DE L'EXO (`exoCharacter.id`), jamais celui du pilote
+  // — voir le commentaire `zoneModifierMalusOverride` sur resolveHumanoidTestContext ci-dessus.
+  const zoneModifierMalus = await resolveZoneModifierMalus(db, exoCharacter.campaign_id, exoCharacter.id)
+
   // forNAOverride propage l'EXF à for_na/modDom/l'encombrement de effectiveMalus, calculés depuis le
   // départ avec l'EXF plutôt que rafistolés après coup (un `modDom`/`effectiveMalus` déjà calculés
   // avec la FOR du pilote puis simplement écrasés en surface resterait faux — trouvé en relisant ce
   // fichier, corrigé avant qu'un vrai combat n'en dépende). skillTotal n'est affecté que si
   // `limitingSkillId` est fourni (plafond de Compétence, sinon comportement RAW voulu, pas un oubli).
-  return resolveHumanoidTestContext(db, pilot, skillId, { forNAOverride: exoStats.exf, limitingSkillId, iemSurvivalMalus })
+  return resolveHumanoidTestContext(db, pilot, skillId, {
+    forNAOverride: exoStats.exf, limitingSkillId, iemSurvivalMalus,
+    zoneModifierMalusOverride: zoneModifierMalus,
+  })
 }
 
 // PLAN_COMBATANT_CONTEXT.md §3.2 (Lot G) — Point d'entrée unique : socketCombatHelpers.js ne doit
