@@ -29,6 +29,18 @@ padding: 0;
 3. DESIGN TOKENS
 ========================= */
 :root {
+/* Application 100% sombre, aucun thème clair (grep négatif sur prefers-color-scheme/data-theme) —
+   sans cette ligne, un `<select>` natif (menu déroulant Zones dangereuses, Wizard §"Formation" 20+
+   choix, etc.) ouvre sa liste d'options avec le thème CLAIR par défaut du navigateur quel que soit
+   le CSS de la page (Chromium/Firefox ne stylent pas le popup natif d'un <select> via
+   background-color d'un <option>/<optgroup> de façon fiable) : texte clair (--text-primary) sur
+   fond blanc natif = illisible. `color-scheme: dark` fait passer TOUT le chrome natif non stylé
+   (popups de <select>, ascenseurs, sélecteurs de date) en thème sombre du navigateur — root-cause,
+   pas un correctif par sélecteur (trouvé en creusant un rapport de menu illisible, 2026-09-28).
+   Aucune classe .wiz4-skillselect/.sidebar-tool-field appliquée à `select` n'avait ce problème
+   résolu — elles stylent la boîte fermée, jamais la liste ouverte.
+*/
+color-scheme: dark;
 /* === WIZ PRIMITIVES — Sci-Fi Premium (source unique, promues depuis .wiz-page/.wiz-shell) === */
 --wiz-bg-1: #061223;
 --wiz-bg-2: #0A1830;
