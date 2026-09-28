@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createSearchMatcher, foldAccents } from '../../../shared/textSearch.js'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { useWorldRuntimeStore } from '../stores/worldRuntimeStore.js'
 import api from '../lib/api.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
+import SurfaceEffectPanel from './SurfaceEffectPanel.jsx'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -336,6 +337,10 @@ export default function SurfaceEditorPanel({
   // qui synchronise déjà le store en continu.
   const worldEffects = useWorldRuntimeStore(s => s.worldEffects)
   const fetchWorldEffects = useWorldRuntimeStore(s => s.fetchWorldEffects)
+  // Inspecteur flottant d'une zone existante (§6.2 points 4/5) — { instanceId, x, y }, x/y = position
+  // du clic qui l'a ouvert (même patron que surfaceRoomPanel/surfaceWallPanel dans Editor3D.jsx, ici
+  // géré localement puisque worldEffects n'est pas routé via ses callbacks).
+  const [effectInspector, setEffectInspector] = useState(null)
 
   const createCustomEffect = async () => {
     if (!battlemapId || !customEffectDraft.key.trim() || !customEffectDraft.label.trim()) return
@@ -363,8 +368,22 @@ export default function SurfaceEditorPanel({
     try {
       await api.delete(`/battlemaps/${battlemapId}/world-effects/instances/${instanceId}`)
       await fetchWorldEffects(battlemapId)
+      if (effectInspector?.instanceId === instanceId) setEffectInspector(null)
     } catch (error) {
       console.error('[Sidebar] Suppression effet refusée :', error)
+    }
+  }
+
+  // updateRuntimeEffect — PLAN_ZONES_DANGER.md §6.2 point 5 : corrige intensité/puissance d'une zone
+  // déjà posée sans la supprimer/redessiner. La route PATCH (updateWorldEffectInstance) existe côté
+  // serveur depuis Z2, jamais appelée côté client jusqu'ici.
+  const updateRuntimeEffect = async (instanceId, patch) => {
+    if (!battlemapId) return
+    try {
+      await api.patch(`/battlemaps/${battlemapId}/world-effects/instances/${instanceId}`, patch)
+      await fetchWorldEffects(battlemapId)
+    } catch (error) {
+      console.error('[Sidebar] Mise à jour effet refusée :', error)
     }
   }
 
@@ -729,9 +748,19 @@ export default function SurfaceEditorPanel({
                             {definition?.label || instance.definitionKey} ×{instance.intensity}
                             {Number(instance.puissance) !== 0 && ` · ${t('surfaceEditor.effectPuissanceLabel')} ${instance.puissance > 0 ? '+' : ''}${instance.puissance}`}
                           </span>
-                          <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                            {t('common.delete')}
-                          </button>
+                          <span style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              type="button"
+                              onClick={event => setEffectInspector({ instanceId: instance.id, x: event.clientX, y: event.clientY })}
+                              className="btn btn-ghost"
+                              style={styles.roomToolSmallBtn}
+                            >
+                              {t('common.edit')}
+                            </button>
+                            <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
+                              {t('common.delete')}
+                            </button>
+                          </span>
                         </div>
                       )
                     })}
@@ -1240,6 +1269,22 @@ surfaceMaterialMode: 'texture',
               {t('sidebar.importCustomObject')}
             </button>
           </div>
+        )
+      })()}
+      {effectInspector && (() => {
+        const instance = (worldEffects.instances || []).find(item => item.id === effectInspector.instanceId)
+        if (!instance) return null
+        const definition = (worldEffects.definitions || []).find(item => item.key === instance.definitionKey)
+        return (
+          <SurfaceEffectPanel
+            instance={instance}
+            definition={definition}
+            x={effectInspector.x}
+            y={effectInspector.y}
+            onPatch={patch => updateRuntimeEffect(instance.id, patch)}
+            onDelete={() => deleteRuntimeEffect(instance.id)}
+            onClose={() => setEffectInspector(null)}
+          />
         )
       })()}
     </div>

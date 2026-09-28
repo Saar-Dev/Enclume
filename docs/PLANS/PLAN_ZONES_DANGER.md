@@ -986,6 +986,33 @@ consommateur du rework world builder, §12).
   chevauchement avec l'audit S1 (`PLAN_WORLD_BUILDER_REWORK.md` §6) à vérifier avant tout code.
   Toujours zéro ligne codée sur ce point — Saar mène sa propre revue d'ergonomie, cette session reste
   en stand-by.
+- **2026-09-28 — Mockup validé par Saar (« Parfait. go »), rework codé en deux lots.**
+  Chevauchement S1 levé avant code (réponse META EDITEUR, `a05c5cf`) : le patron de fenêtre flottante
+  (`useDraggablePanelPosition`/`FloatingPanelSection`) existe déjà, rien à réinventer.
+  **Lot 1 (`6338e40`) — points 1/2/3/6, additifs, sans risque** : i18n complet de l'écran (12 clés
+  neuves + réutilisation de `effectZone`, déjà présente mais jamais câblée, et de `common.close`/
+  `common.delete`) ; regroupement du `<select>` par catégorie (`<optgroup>`, table `category → clé
+  i18n` couvrant à la fois le vocabulaire RAW et celui, différent, des 5 légataires) ; couleur par
+  catégorie dans `SurfaceEditorScene.jsx` (remplace le double ternaire `gas`/`flooded`) ; champ
+  puissance ajouté au panneau + à la création d'instance + affiché dans la liste si non nul.
+  **Lot 2 — points 4/5 (fenêtre flottante + édition)** : trouvaille en creusant avant de coder — la
+  liste « Effets actifs » ne passe PAS par les callbacks Editor3D.jsx comme Salle/Mur/Connecteur
+  (elle lit `useWorldRuntimeStore` directement, appels REST locaux à `SurfaceEditorPanel.jsx`), donc
+  aucun changement dans `Editor3D.jsx` n'était nécessaire — tout tient dans un état local
+  (`effectInspector`) + un nouveau composant. `SurfaceEffectPanel.jsx` (neuf) : inspecteur flottant
+  d'une zone existante, patron exact de `SurfaceRoomPanel.jsx` (`FloatingPanelSection` +
+  `useDraggablePanelPosition`, position mémorisée) mais namespace i18n par défaut (fr.json, pas
+  `'builder'` — vérifié dans le code : Salle/Mur utilisent le namespace `builder.json` séparé,
+  jamais fusionné avec `surfaceEditor.*` ; s'en servir aurait cassé toutes les clés). Un bouton
+  « Modifier » (nouveau, à côté de « Supprimer ») ouvre l'inspecteur ; il corrige intensité/puissance
+  via `PATCH /world-effects/instances/:id` (`updateWorldEffectInstance`, route déjà existante côté
+  serveur depuis Z2, jamais appelée côté client jusqu'ici) sans toucher au volume déjà tracé.
+  **Limite assumée, pas oubliée** : redessiner le volume (déplacer/agrandir une zone) reste hors
+  périmètre — nécessiterait une détection de clic sur le maillage 3D existant
+  (`worldMovementService`/raycasting dans `SurfaceEditorScene.jsx`), un vrai incrément à part.
+  **Testé** : lint ciblé propre, build client vérifié aux deux lots. Aucun changement serveur (tout
+  le nécessaire existait déjà depuis Z2 étapes 2 et 4). **Non testé en jeu** — Saar teste l'UI
+  lui-même (`.claude/rules` : jamais le serveur/navigateur lancés par l'agent).
 
 ---
 
