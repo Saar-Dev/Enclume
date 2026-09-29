@@ -1222,6 +1222,12 @@ Chaque incrément 4b/5 reste un plan à part entière avant son propre code — 
 
 ## Historique
 
+- **2026-09-29** — Commit `c1eaeceb` (« World Builder v2 : cadrage UX + poignée de redimensionnement »,
+  12 fichiers) **entièrement validé en jeu par Saar**, les trois points restés en suspens après le commit
+  compris : persistance de mode + Échap (« vraiment plus agréable, bon choix »), confirmation avant
+  suppression de mur, retrait des contrôles de session du panneau Connecteur en édition. Plus rien de
+  non testé sur ce commit. Reste à décider avec Saar : pousser `dev/Saar`, puis lequel de 4b (colonne fixe
+  Connecteur/Effet) ou 5 (pile d'annulation fusionnable) reprendre.
 - **2026-09-29** — Incrément 6 (poignée de redimensionnement) codé, la fonctionnalité la plus attendue de ce
   chantier et la seule ayant déjà échoué deux fois (§8). Conception présentée et confirmée par Saar avant le
   code (« oui, en théorie cela me va »). Le geste ne s'active que sur un tronçon droit déjà sélectionné —
