@@ -220,6 +220,13 @@
             <option value="7">VII</option>
           </select>
         </div>
+        <div class="field">
+          <label>Source <span class="req">*</span></label>
+          <select id="sourceSelect" name="source_id" required>
+            <option value="">— chargement… —</option>
+          </select>
+          <span class="hint">Livre de Base par défaut. Guide Technique pour du contenu du supplément.</span>
+        </div>
         <div class="field span2">
           <label>Description</label>
           <textarea name="description" rows="3" placeholder="Description complète (optionnel)"></textarea>
@@ -754,6 +761,23 @@ async function loadSkills() {
   }
 }
 
+// ── Chargement sources ───────────────────────────────────────────────────────
+// PLAN_SUPPLEMENTS.md §2.5 (Lot B) — source requise pour créer/éditer un item. Une seule ligne 'ldb'
+// (is_core) existe presque toujours en pratique, mais la liste reste dynamique (patron Comp/Con :
+// une source = une ligne insérée, jamais une valeur figée dans ce fichier).
+async function loadSources() {
+  try {
+    const data = await apiFetch('/api/equipment/ref/sources')
+    const sel = document.getElementById('sourceSelect')
+    sel.innerHTML = data.sources.map(s =>
+      `<option value="${s.id}">${s.name}${s.is_core ? ' (base)' : ''}</option>`
+    ).join('')
+  } catch (e) {
+    console.warn('[Sources] Non chargées :', e.message)
+    document.getElementById('sourceSelect').innerHTML = '<option value="">Erreur chargement — êtes-vous connecté(e) ?</option>'
+  }
+}
+
 // ── Chargement liste items ───────────────────────────────────────────────────
 
 async function loadItems() {
@@ -939,6 +963,7 @@ document.getElementById('itemsBody').addEventListener('click', e => {
 })
 
 loadSkills()
+loadSources()
 loadItems()
 </script>
 </body>

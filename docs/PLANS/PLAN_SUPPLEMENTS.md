@@ -1,10 +1,10 @@
 # PLAN — Sources de contenu (catalogues de référence)
 
-> Statut : décisions de cadrage actées avec Saar (2026-09-29) — voir §0. **Lot A (exo-armures)**
-> prêt à passer en code. **Lot B (équipement)** planifié dans le détail mais **exécution
-> différée** — décision explicite de Saar : « OK pour exécuter la migration `ref_equipment` plus
-> tard, mais planification maintenant : on ne reporte pas par convenance, si c'est carré maintenant,
-> pas de risque d'erreur. »
+> Statut (2026-09-29) : **Lot A (exo-armures) codé et testé. Lot B (équipement) codé et testé** —
+> les deux exécutés le même jour, à la demande de Saar (« Go lot B »), après un audit complet des
+> points d'écriture (§2.5) qui a corrigé le backfill prévu (7 lignes déjà Guide Technique de fait,
+> voir §2.5) avant d'écrire la première migration. **Lot C (illustrations, §7) codé.** Reste
+> différé, par décision explicite : le filtrage en lecture de `GET /api/equipment` (§2.5).
 >
 > Origine : chantier de nettoyage RAW `docs/REGLES/GUIDE_TECHNIQUE_ARMURES.md`. En comparant les
 > fiches transcrites avec la base réelle (`ref_exo_templates`), on a trouvé que 15 modèles
@@ -153,39 +153,71 @@ ne peut jamais basculer. Dans `campaigns.js`, même patron que les routes GM exi
   `ref_equipment`, pas `ref_exo_templates` — leur vérification relève du Lot B (source_id sur
   `ref_equipment`, pas encore posée), pas de celui-ci. Voir §6.10 pour la correction complète.
 
-### 2.5 Lot B — `ref_equipment.source_id` : planifié maintenant, exécution différée
+### 2.5 Lot B — `ref_equipment.source_id` [EXÉCUTÉ 2026-09-29, audit complet avant code]
 
-Vérification faite **maintenant**, pas reportée (2026-09-29) : `ref_equipment` compte **797
-lignes**, et la requête `SELECT name, count(*) FROM ref_equipment GROUP BY name HAVING count(*) >
-1` renvoie **0 ligne** — aucun doublon de `name`. `UNIQUE (name, source_id)` peut donc être ajouté
-sans risque de collision sur les données actuelles ; ce point aurait pu faire échouer la migration
-si on l'avait découvert le jour de l'exécution plutôt que maintenant.
+Audit d'écriture complet réalisé (agent d'exploration + vérifications directes en base) avant
+d'écrire la première migration — plus de « non vérifié à ce jour ». Deux trouvailles ont changé le
+plan initial :
 
-Plan complet, même niveau de détail que le Lot A, exécution différée :
+**Trouvaille 1 — le backfill « tout vers ldb » était faux.** `347_ref_equipment_guidetech_programs_
+seed.js` a déjà inséré 7 lignes authentiquement Guide Technique (`Alerte, Bouclier, Darter, Masque,
+Phalanx, Recherche, SkyMarshall`, toutes `family='Logiciels', category='specialise'`, noms vérifiés
+uniques en base) **en les traitant comme du contenu de base**, avant même que ce chantier existe.
+Un backfill uniforme vers `'ldb'` aurait figé cette confusion. Le backfill matche donc par la clé
+naturelle `name` (jamais un `id`, cf. §6.5) : ces 7 noms exacts → nouvelle source
+`guide_technique` (ajoutée à `ref_sources`, `is_core=false`), les 790 lignes restantes → `ldb`.
+Vérifié : 797 lignes actuelles, 0 doublon de `name` (inchangé depuis la vérification du 2026-09-29
+initiale), les 7 noms GT sans collision avec une autre ligne de famille différente.
 
-- **Backfill** : les 797 lignes actuelles vers `source_id = 'ldb'` — le chantier Guide Technique
-  n'a pour l'instant produit que des fiches d'exo-armures, aucune fiche d'équipement générique n'a
-  été transcrite ni comparée, donc aucune ligne actuelle ne peut être du Guide Technique.
-- **Même séquence expand/contract** que le Lot A (nullable → backfill → `NOT NULL` +
-  `UNIQUE(name, source_id)`), même exigence de commit unique avec le code consommateur.
-- **Points d'écriture identifiés (2026-09-29, lecture directe de `char-sheet.js`)** — ce sont en
-  fait ceux d'abord attribués au Lot A par erreur (§6.4 avant correction, voir §6.10) : trois routes
-  référencent bien `ref_equipment`, une n'y référence rien du tout :
-  - `POST /:characterId/exo/systems` (`char-sheet.js:~2475`) — `ref_equipment_id`, family filter
-    `≠ 'Exo-arme'` ;
-  - `POST /:characterId/exo/weapons` (`char-sheet.js:~2597`) — `ref_equipment_id`, family filter
-    `≠ 'Exo-systeme'` ;
-  - `POST /:characterId/exo/programs` (`char-sheet.js:~2776`) — `equipment_id` (nom de champ
-    différent), family filter `= 'Logiciels'` ;
-  - `POST /:characterId/exo/computers` (`char-sheet.js:~2679`) — **aucune référence catalogue** :
-    champs scalaires (`role`, `gen`, `nt`, `blindage_iem`…), rien à vérifier ici, à ne pas compter
-    dans l'audit du Lot B.
-  Reste à auditer avant exécution du Lot B : le CRUD admin de `ref_equipment` (`equipment.js`,
-  protégé par `requireAdmin`) et tout point d'attache de `ref_equipment_id` hors exo-armure
-  (inventaire standard) — non vérifiés à ce jour.
-- **Pas de numéro de migration réservé maintenant** : le numéro se prend au prochain entier libre
-  constaté sur le système de fichiers *et* `knex_migrations` au moment de l'exécution, jamais
-  anticipé (`.claude/rules/migrations.md`).
+**Trouvaille 2 — l'audit d'écriture du Lot A ne portait que sur les routes exo.** Élargi à tout le
+dépôt (`server/src/routes/**`, `server/src/services/**`) : 8 points d'écriture posent réellement un
+`equipment_id`/`ref_equipment_id` **choisi librement par l'appelant** (candidats à la vérification
+de source active), tous dans `char-sheet.js` sauf le dernier :
+  - `POST /:characterId/inventory` (ajout d'objet, `inventoryService.addItem`) — garde de base
+    (owner/GM) ;
+  - `POST /:characterId/quick-equip` — GM uniquement ;
+  - `POST /:characterId/drone/programs` — `droneIsGmOrOwner` ;
+  - `POST /:characterId/drone/weapons` — `droneIsGmOrOwner` ;
+  - `POST /:characterId/exo/systems` — `exoIsGmOrOwnerOrPilot` ;
+  - `POST /:characterId/exo/weapons` — `exoIsGmOrOwnerOrPilot` ;
+  - `POST /:characterId/exo/programs` — `exoIsGmOrOwnerOrPilot` ;
+  - `POST /api/campaigns/:campaignId/merchants/:mid/buy` (`tradeService.buyFromMerchant`) — tout
+    membre de la campagne.
+
+  **Deux routes exclues à dessein**, pas oubliées : `POST /:characterId/inventory/:itemId/reload`
+  (`current_ammo`) et `POST /:characterId/moding/install` (`char_inventory_mods.equipment_id`)
+  n'acceptent pas un `ref_equipment_id` choisi librement — la valeur est dérivée d'une ligne
+  `char_inventory` **déjà possédée** par le personnage (donc déjà vérifiée à son ajout), jamais un
+  nouveau choix de catalogue. Vérifier la source à cette étape reviendrait à revalider une donnée
+  déjà validée.
+  `POST /:characterId/exo/computers` confirmé sans référence catalogue (champs scalaires) —
+  toujours hors périmètre.
+
+  Vérification faite : **une seule** fixture de test insère dans `ref_equipment` sans `source_id`
+  (`exoTemplateService.test.mjs:230-232`) — corrigée dans ce commit, contre 3 fichiers pour le Lot A.
+
+**Décisions de conception (2026-09-29) :**
+- **Fonction de vérification partagée** (`server/src/lib/sourceService.js`,
+  `assertSourceActive(db, campaignId, sourceId, sourceName)`) au lieu de dupliquer la logique 8 fois
+  — `applyExoTemplate` (Lot A) est refactorée pour l'utiliser aussi : même invariant, une seule
+  autorité (`.claude/rules/core.md`, « une propriété métier = une autorité unique »). Refactorer du
+  code déjà commité n'est pas « retoucher une migration » (interdit) — seules les migrations déjà
+  appliquées ne se retouchent jamais.
+- **Filtrage en lecture (`GET /api/equipment`) volontairement différé**, pas silencieusement
+  oublié : contrairement à `GET /api/exo-templates` (un seul appelant client), cette route est lue
+  par `InventoryPanel`, `MerchantsPage` et `DroneWindow` sans contexte de campagne/personnage
+  transmis aujourd'hui — l'ajouter demanderait de toucher les 3 composants. Le Lot B tel qu'exécuté
+  couvre l'écriture (personne ne peut ATTACHER un objet d'une source désactivée) ; le filtrage
+  d'affichage (ne pas MONTRER ces objets dans les sélecteurs) reste un fast-follow, sans risque de
+  sécurité en attendant puisque l'écriture est déjà gardée.
+- **`ref-equipment-tool.html`** (contrairement à l'outil exo-armures, celui-ci a un vrai formulaire
+  de création/édition, vérifié en le lisant) : ajout d'un `<select name="source_id">` peuplé par une
+  nouvelle route `GET /api/equipment/ref/sources`, et `source_id` ajouté à la validation "requis" de
+  `POST`/`PUT /api/equipment` — même commit que la migration (`.claude/rules/migrations.md`).
+- **`ref_exo_template_equipment.ref_equipment_id`** (loadout d'un template) reste hors périmètre :
+  pas de route d'écriture REST (seed/admin uniquement), et le loadout d'un template est un paquet
+  auteur lié à LA source du template lui-même (déjà gardée par le Lot A) — jamais un choix libre du
+  joueur à l'exécution.
 
 ---
 
@@ -198,8 +230,8 @@ Plan complet, même niveau de détail que le Lot A, exécution différée :
   campagne) — le déclencheur ici est binaire (actif/inactif), pas chronologique.
 - Migration rétroactive d'une exo-armure déjà possédée par un personnage si sa source est
   désactivée après coup — le filtre ne joue qu'à la sélection, jamais sur l'existant.
-- L'audit des points d'écriture du Lot B (§2.5) — listé comme travail à faire avant l'exécution du
-  Lot B, pas fait dans ce PLAN.
+- Le filtrage en lecture de `GET /api/equipment` (InventoryPanel/MerchantsPage/DroneWindow) —
+  différé par décision explicite (§2.5), pas oublié : l'écriture est gardée, l'affichage suivra.
 
 ## 4. Fichiers touchés
 
@@ -223,12 +255,23 @@ Plan complet, même niveau de détail que le Lot A, exécution différée :
   consommateur actuel de cette route.
 - `docs/VOCABULARY.md` : ajouter **Source (de contenu)**.
 
-### Lot B — équipement (planifié, exécution différée)
+### Lot B — équipement [EXÉCUTÉ 2026-09-29]
 
-- Migration `ref_equipment.source_id` + backfill (797 lignes → `ldb`, doublons de `name` déjà
-  vérifiés absents) + `UNIQUE(name, source_id)` — numéro et date d'exécution non fixés.
-- Audit préalable (non fait) des points d'écriture équivalents aux 5 du Lot A, avant de coder quoi
-  que ce soit sur ce lot.
+- Migration : `ref_sources` — ajout de la ligne `guide_technique` (`is_core=false`).
+- Migration : `ref_equipment.source_id` + backfill (7 lignes GT nommées → `guide_technique`, 790
+  restantes → `ldb`) + `UNIQUE(name, source_id)`.
+- Nouveau : `server/src/lib/sourceService.js` (`assertSourceActive`), partagé avec Lot A.
+- `server/src/lib/exoTemplateService.js` : refactor pour utiliser `assertSourceActive` au lieu de sa
+  vérification inline (aucun changement de comportement).
+- `server/src/routes/equipment.js` : `GET /ref/sources` (nouveau, pour le formulaire admin) ;
+  `source_id` requis sur `POST`/`PUT`.
+- `server/src/admin/ref-equipment-tool.html` : champ `source_id` dans le formulaire.
+- `server/src/routes/character/char-sheet.js` : `assertSourceActive` sur les 7 points d'écriture
+  identifiés (§2.5) — inventaire, quick-equip, drone programs/weapons, exo systems/weapons/programs.
+- `server/src/services/tradeService.js` : `assertSourceActive` sur `buyFromMerchant`.
+- `server/src/lib/exoTemplateService.test.mjs` : fixture `ref_equipment` corrigée (`source_id`).
+- `docs/VOCABULARY.md` : pas de nouvelle entrée (Source (de contenu) couvre déjà le concept,
+  ajoutée au Lot A).
 
 ---
 
@@ -341,13 +384,17 @@ comportement actuel préservé pour la gestion du catalogue complet.
 
 ---
 
-**Bilan final** : toutes les décisions de conception sont actées (§0). Le Lot A a son point
-d'écriture unique identifié et vérifié (§2.4/§6.10), sa route de bascule GM (§2.3/§6.10), un ordre
-de migration explicite (§6.6), et aucune question ouverte. Le Lot B est spécifié au même niveau de
-détail, doublons de `name` déjà exclus par vérification directe (797 lignes, 0 doublon), et son
-audit des points d'écriture est maintenant partiellement fait (3 points identifiés en §2.5, reste le
-CRUD admin `ref_equipment` et l'inventaire standard) — l'exécution elle-même reste différée, par
-choix explicite de Saar, pas par oubli.
+**Bilan final [mis à jour 2026-09-29, Lot B exécuté]** : toutes les décisions de conception sont
+actées (§0). Le Lot A et le Lot B sont tous deux codés, testés et vérifiés en base — plus de lot
+« planifié, exécution différée ». Le Lot A a son point d'écriture unique (`applyExoTemplate`) et sa
+route de bascule GM (`campaigns.js`). Le Lot B a ses 8 points d'écriture identifiés et gardés
+(§2.5), sa propre source `guide_technique` correctement rattachée aux 7 lignes qui l'étaient déjà de
+fait (`347_ref_equipment_guidetech_programs_seed.js`, trouvaille faite en auditant plutôt qu'en
+supposant), et une fonction de vérification (`assertSourceActive`, `sourceService.js`) partagée
+entre les deux lots — refactor de `applyExoTemplate` inclus, une seule autorité pour l'invariant.
+Seul reste différé, par décision explicite (pas un oubli) : le filtrage en lecture de
+`GET /api/equipment` (3 composants client à toucher, aucun risque de sécurité en attendant puisque
+l'écriture est déjà gardée).
 
 ---
 

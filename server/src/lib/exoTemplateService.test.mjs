@@ -227,8 +227,11 @@ test('applyExoTemplate — copie ref_equipment_id (catalogue unique depuis la fu
   const fx = await createFixture()
   try {
     const template = await fx.insertTemplate()
+    // source_id NOT NULL depuis la migration 378 (PLAN_SUPPLEMENTS.md §2.5, Lot B) — 'ldb' toujours
+    // présent (seed 371_ref_sources_seed.js).
+    const ldbSource = await db('ref_sources').where({ code: 'ldb' }).first()
     const [genEquipment] = await db('ref_equipment')
-      .insert({ family: 'Armes', category: 'Arme de contact', name: 'Dague test exoTemplateService fusion', tech_level: 1 })
+      .insert({ family: 'Armes', category: 'Arme de contact', name: 'Dague test exoTemplateService fusion', tech_level: 1, source_id: ldbSource.id })
       .returning('*')
     await db('ref_exo_template_equipment').insert({
       template_id: template.id, family: 'arme', ref_equipment_id: genEquipment.id, sort_order: 0,

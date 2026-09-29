@@ -4,6 +4,7 @@ import { canStack } from '../lib/inventoryRules.js'
 import { computeAcquisitionIntegrity } from './integrityService.js'
 import { removeItem } from './inventoryService.js'
 import { localizeRef } from '../lib/refI18n.js'
+import { assertSourceActive } from '../lib/sourceService.js'
 
 // ─── Marchands ────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     const equipmentIds = [...new Set(items.map(i => i.equipmentId))]
     const equipmentRows = await trx('ref_equipment')
       .whereIn('id', equipmentIds)
-      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity', 'quality')
+      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity', 'quality', 'source_id')
 
     const rules = Array.isArray(merchant.rules) ? merchant.rules : JSON.parse(merchant.rules || '[]')
     const modGlobal = merchant.mod_global ?? 0
@@ -176,6 +177,9 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     for (const eq of equipmentRows) {
       const { visible, modPct } = evaluateItem(eq, merchant, rules)
       if (!visible) throw new Error('ITEM_UNAVAILABLE')
+      // Source active (PLAN_SUPPLEMENTS.md §2.5, Lot B) : un marchand ne peut vendre un item d'une
+      // source désactivée pour cette campagne, même s'il n'a pas été filtré côté catalogue affiché.
+      await assertSourceActive(trx, campaignId, eq.source_id)
       priceMap[eq.id] = Math.round((eq.price ?? 0) * (1 + (modGlobal + modPct) / 100))
     }
 

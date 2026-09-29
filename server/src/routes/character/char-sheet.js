@@ -69,8 +69,10 @@ import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
+import { assertSourceActive } from '../../lib/sourceService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
 import { listInterceptionLinks, addInterceptionLink, removeInterceptionLink } from '../../services/droneInterceptionLinksService.js'
+import { INTERCEPTION_LIMIT_FIELDS, parseInterceptionLimit } from '../../../../shared/droneInterception.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
@@ -1118,6 +1120,10 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
 
     const characterId = req.params.characterId
     const { equipment_id, slot } = req.body
+    if (equipment_id) {
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('source_id').first()
+      if (ref) await assertSourceActive(db, req.character.campaign_id, ref.source_id)
+    }
     const item = await inventoryService.quickEquip(characterId, equipment_id, slot)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
@@ -1137,6 +1143,10 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     // aucun MJ ne peut jamais rejoindre pour valider — auto-validé, sinon l'objet resterait bloqué
     // en attente pour toujours (Saar, décision explicite : pas de validation MJ hors campagne).
     const autoValidate = req.isGm || req.character.campaign_id == null
+    if (req.body.equipment_id) {
+      const ref = await db('ref_equipment').where({ id: req.body.equipment_id }).select('source_id').first()
+      if (ref) await assertSourceActive(db, req.character.campaign_id, ref.source_id)
+    }
     const result = await inventoryService.addItem(characterId, req.body, autoValidate, req.isGm)
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
@@ -1848,8 +1858,9 @@ router.post('/:characterId/drone/programs', async (req, res, next) => {
     // Déterminer la catégorie
     let category
     if (equipment_id) {
-      const ref = await db('ref_equipment').where({ id: equipment_id }).select('category').first()
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('category', 'source_id').first()
       if (!ref) throw new AppError(404, 'Programme introuvable dans le catalogue')
+      await assertSourceActive(db, req.character.campaign_id, ref.source_id)
       category = ref.category
     } else {
       category = req.body.category
@@ -2043,6 +2054,7 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
         .where({ id: equipment_id, family: 'Armes' })
         .first()
       if (!refEquipment) throw new AppError(400, 'Equipment not found or not a weapon')
+      await assertSourceActive(db, req.character.campaign_id, refEquipment.source_id)
     }
 
     const autoAmmo = equipment_id ? await resolveDroneAmmoInit(equipment_id) : null
@@ -2511,6 +2523,7 @@ router.post('/:characterId/exo/systems', async (req, res, next) => {
       const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
       if (!ref) throw new AppError(400, 'Equipment not found')
       if (ref.family === 'Exo-arme') throw new AppError(400, 'Equipment not found or not a system')
+      await assertSourceActive(db, req.character.campaign_id, ref.source_id)
     }
 
     const [inserted] = await db('exo_systems')
@@ -2630,6 +2643,7 @@ router.post('/:characterId/exo/weapons', async (req, res, next) => {
       const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
       if (!ref) throw new AppError(400, 'Equipment not found')
       if (ref.family === 'Exo-systeme') throw new AppError(400, 'Equipment not found or not a weapon')
+      await assertSourceActive(db, req.character.campaign_id, ref.source_id)
     }
 
     const [inserted] = await db('exo_weapons')
@@ -2816,8 +2830,9 @@ router.post('/:characterId/exo/programs', async (req, res, next) => {
       // seulement d'assigner une arme/armure comme "programme" par erreur — pas de sous-filtre par
       // category (esquive/medical/...), laissé au jugement MJ comme RAW ne distingue pas non plus
       // quel type de programme convient à quelle plateforme.
-      const ref = await db('ref_equipment').where({ id: equipment_id, family: 'Logiciels' }).select('category').first()
+      const ref = await db('ref_equipment').where({ id: equipment_id, family: 'Logiciels' }).select('category', 'source_id').first()
       if (!ref) throw new AppError(404, 'Programme introuvable dans le catalogue')
+      await assertSourceActive(db, req.character.campaign_id, ref.source_id)
       category = ref.category
     } else {
       category = req.body.category

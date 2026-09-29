@@ -61,6 +61,14 @@ router.get('/ref/skills', requireAuth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── GET /api/equipment/ref/sources — pour le <select> de ref-equipment-tool.html (PLAN_SUPPLEMENTS.md §2.5, Lot B) ──
+router.get('/ref/sources', requireAuth, async (req, res, next) => {
+  try {
+    const sources = await db('ref_sources').select('id', 'code', 'name', 'is_core').orderBy('is_core', 'desc').orderBy('name')
+    res.json({ sources })
+  } catch (err) { next(err) }
+})
+
 // ─── GET /api/equipment ───────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res, next) => {
   try {
@@ -104,6 +112,10 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
     if (fields.tech_level === null) {
       return res.status(400).json({ error: { message: 'tech_level est requis (1–7)' } })
     }
+    // source_id NOT NULL depuis la migration 378 (PLAN_SUPPLEMENTS.md §2.5, Lot B).
+    if (!fields.source_id) {
+      return res.status(400).json({ error: { message: 'source_id est requis' } })
+    }
 
     const item = await db.transaction(async trx => {
       const [row] = await trx('ref_equipment').insert(fields).returning('*')
@@ -143,6 +155,9 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     }
     if (fields.tech_level === null) {
       return res.status(400).json({ error: { message: 'tech_level est requis (1–7)' } })
+    }
+    if (!fields.source_id) {
+      return res.status(400).json({ error: { message: 'source_id est requis' } })
     }
 
     const existing = await db('ref_equipment').where({ id }).first()

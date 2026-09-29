@@ -26,6 +26,7 @@
 import { AppError } from './AppError.js'
 import { parseDice } from './diceParser.js'
 import { resolveOrdinateurIntegrityFormula } from '../../../shared/computerStats.js'
+import { assertSourceActive } from './sourceService.js'
 
 // Matériel neuf (décision Saar 2026-08-21, §13.4.4) — jamais un jet pour exo_systems/exo_weapons
 // copiés depuis un loadout de modèle, contrairement à exo_computers ci-dessous.
@@ -81,20 +82,13 @@ export async function applyExoTemplate(db, characterId, templateId) {
     const template = await trx('ref_exo_templates').where({ id: templateId }).first()
     if (!template) return null
 
-    // Vérification de source active (PLAN_SUPPLEMENTS.md §2.4/§6.10) : le Livre de Base (is_core)
-    // reste toujours applicable ; toute autre source doit être explicitement activée pour la campagne
-    // du personnage — sinon un template désactivé resterait choisissable en devinant son UUID, alors
-    // que GET /api/exo-templates?characterId=... ne l'aurait jamais listé.
-    const source = await trx('ref_sources').where({ id: template.source_id }).first()
-    if (!source.is_core) {
-      const character = await trx('characters').where({ id: characterId }).first()
-      const enabled = character && await trx('campaign_enabled_sources')
-        .where({ campaign_id: character.campaign_id, source_id: source.id })
-        .first()
-      if (!enabled) {
-        throw new AppError(403, `La source « ${source.name} » n'est pas active dans cette campagne`)
-      }
-    }
+    // Vérification de source active (PLAN_SUPPLEMENTS.md §2.4/§6.10, autorité partagée avec le Lot B
+    // depuis sourceService.js) : le Livre de Base (is_core) reste toujours applicable ; toute autre
+    // source doit être explicitement activée pour la campagne du personnage — sinon un template
+    // désactivé resterait choisissable en devinant son UUID, alors que
+    // GET /api/exo-templates?characterId=... ne l'aurait jamais listé.
+    const character = await trx('characters').where({ id: characterId }).first()
+    await assertSourceActive(trx, character?.campaign_id ?? null, template.source_id)
 
     const copiedFields = Object.fromEntries(
       COPIED_FROM_TEMPLATE_COLUMNS.map(col => [col, template[col]])
