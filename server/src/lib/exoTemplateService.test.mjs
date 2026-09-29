@@ -12,6 +12,7 @@ const COPIED_COLUMNS = [
   'underwater_movement_mode', 'surface_movement_mode', 'speeds_extra',
   'malus_init_underwater', 'malus_init_surface',
   'manufacturer', 'price', 'rarity', 'tech_level', 'autonomy',
+  'illustration_url', // migration 376, PLAN_SUPPLEMENTS.md §7 Lot C
 ]
 
 async function createFixture() {
@@ -65,10 +66,10 @@ async function createFixture() {
   }
 }
 
-test('applyExoTemplate — copie les 19 champs de base + assigne template_id', { skip }, async () => {
+test('applyExoTemplate — copie les 20 champs de base + assigne template_id', { skip }, async () => {
   const fx = await createFixture()
   try {
-    const template = await fx.insertTemplate()
+    const template = await fx.insertTemplate({ illustration_url: 'exo_templates/test/illustration?v=1' })
     const updated = await applyExoTemplate(db, fx.exoCharacter.id, template.id)
     assert.equal(updated.template_id, template.id)
     for (const col of COPIED_COLUMNS) {

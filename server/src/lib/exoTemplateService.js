@@ -43,6 +43,10 @@ const COPIED_FROM_TEMPLATE_COLUMNS = [
   'underwater_movement_mode', 'surface_movement_mode', 'speeds_extra',
   'malus_init_underwater', 'malus_init_surface',
   'manufacturer', 'price', 'rarity', 'tech_level', 'autonomy',
+  // illustration_url (migration 376, PLAN_SUPPLEMENTS.md §7 Lot C) : image par défaut héritée du
+  // modèle, remplaçable ensuite par le joueur (POST /:characterId/exo/illustration, char-sheet.js) —
+  // un nouveau choix de modèle écrase ce champ comme les 19 autres (§13.3, aucune fusion).
+  'illustration_url',
 ]
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

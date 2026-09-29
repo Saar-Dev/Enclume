@@ -48,6 +48,8 @@ import { AppError } from '../../lib/AppError.js'
 import { resolveInventoryBroadcastRoom, emitInventoryEvent } from '../../lib/inventoryBroadcast.js'
 import { resolveRefField, localizeRefAliased } from '../../lib/refI18n.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { multerUpload } from '../../middleware/upload.js'
+import getMinioClient, { BUCKET } from '../../lib/minio.js'
 import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
 import { calcActiveMalus } from '../../lib/activeMalusRegistry.js'
 import { resolveFatigueTest, restFatigue } from '../../lib/fatigueService.js'
@@ -2186,6 +2188,39 @@ router.get('/:characterId/exo', async (req, res, next) => {
     if (!exo) return res.json({ exo: null })
 
     res.json({ exo })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/illustration — image par défaut héritée du template (applyExoTemplate,
+// COPIED_FROM_TEMPLATE_COLUMNS), remplaçable ensuite par le joueur (PLAN_SUPPLEMENTS.md §7 Lot C).
+// Même patron que POST /api/characters/:id/portrait (characters.js) : nom d'objet MinIO fixe (écrase
+// l'ancien), cache-bust par timestamp — mais exoIsGmOrOwnerOrPilot au lieu de isGm||isOwner, comme le
+// reste des routes d'écriture exo (un pilote sans lien de propriété doit pouvoir la changer aussi).
+router.post('/:characterId/exo/illustration', multerUpload.single('illustration'), async (req, res, next) => {
+  try {
+    const exoSheet = await db('exo_sheet').where({ character_id: req.params.characterId }).first()
+    if (!exoSheet) throw new AppError(404, 'Exo sheet not found')
+    if (!await exoIsGmOrOwnerOrPilot(req, exoSheet)) throw new AppError(403, 'GM, owner or pilot required')
+
+    if (!req.file) throw new AppError(400, 'No file uploaded')
+
+    const objectName = `exo_sheet/${req.params.characterId}/illustration`
+    const minio = getMinioClient()
+    await minio.putObject(
+      BUCKET(),
+      objectName,
+      req.file.buffer,
+      req.file.size,
+      { 'Content-Type': req.file.mimetype }
+    )
+
+    const illustrationUrl = `${objectName}?v=${Date.now()}`
+    const [updated] = await db('exo_sheet')
+      .where({ character_id: req.params.characterId })
+      .update({ illustration_url: illustrationUrl, updated_at: db.fn.now() })
+      .returning('*')
+
+    res.json({ exo: updated })
   } catch (err) { next(err) }
 })
 

@@ -351,7 +351,7 @@ choix explicite de Saar, pas par oubli.
 
 ---
 
-## 7. Lot C — Illustrations par défaut des exo-armures (chantier distinct, suivi ici)
+## 7. Lot C — Illustrations par défaut des exo-armures (chantier distinct, suivi ici) [CODÉ 2026-09-29]
 
 > **Cause racine différente de A et B — pas le même invariant, pas le même commit.** Le Lot A/B
 > répondent à « quelle source de contenu est active dans cette campagne ». Celui-ci répond à
