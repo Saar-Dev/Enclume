@@ -41,7 +41,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       .select(
         't.id', 't.name', 't.category', 't.environment', 't.base_exoforce', 't.base_blindage',
         't.manufacturer', 't.illustration_url',
-        's.id as source_id', 's.code as source_code', 's.name as source_name',
+        // source_is_core : le client n'affiche un tag de source que sur le contenu NON core, et
+        // seulement si au moins une ligne non-core est présente dans cette réponse (décision Saar
+        // 2026-09-29 — jamais de tag tant qu'aucun supplément n'est actif pour la campagne).
+        's.id as source_id', 's.code as source_code', 's.name as source_name', 's.is_core as source_is_core',
       )
       .orderBy('t.category')
       .orderBy('t.name')

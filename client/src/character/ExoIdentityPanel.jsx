@@ -15,11 +15,25 @@ import api from '../lib/api.js'
 const LABEL_STYLE = { fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }
 const SELECT_STYLE = { background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '6px', padding: '6px 10px', color: '#c0c0d0', fontSize: '12px', outline: 'none', cursor: 'pointer', width: '100%' }
 
+// Regroupe par source (PLAN_SUPPLEMENTS.md §2, décision Saar 2026-09-29 : tag/optgroup seulement
+// sur le contenu NON core, et seulement si au moins un supplément est actif — jamais de bruit
+// visuel pour le cas courant "uniquement Livre de Base"). Le libellé de groupe vient de la donnée
+// (`source_name`), jamais un "Livre de Base" codé en dur ici.
+function groupBySource(list) {
+  const groups = new Map()
+  for (const tpl of list) {
+    if (!groups.has(tpl.source_name)) groups.set(tpl.source_name, [])
+    groups.get(tpl.source_name).push(tpl)
+  }
+  return [...groups.entries()]
+}
+
 export default function ExoIdentityPanel({ characterId, exo, templates, pilotCandidates, canEdit, onExoUpdate }) {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
 
   const template = templates.find(tpl => tpl.id === exo.template_id) || null
+  const hasSupplement = templates.some(tpl => !tpl.source_is_core)
 
   const handlePilotChange = async (e) => {
     const pilot_character_id = e.target.value || null
@@ -74,13 +88,25 @@ export default function ExoIdentityPanel({ characterId, exo, templates, pilotCan
             {templates.length === 0 && (
               <option value="" disabled>{t('exo.templateNoneAvailable')}</option>
             )}
-            {templates.map(tpl => (
-              <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-            ))}
+            {hasSupplement
+              ? groupBySource(templates).map(([sourceName, tpls]) => (
+                  <optgroup key={sourceName} label={sourceName}>
+                    {tpls.map(tpl => (
+                      <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                    ))}
+                  </optgroup>
+                ))
+              : templates.map(tpl => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))
+            }
           </select>
         ) : (
-          <span style={{ fontSize: '13px', color: '#c0c0d0' }}>
+          <span style={{ fontSize: '13px', color: '#c0c0d0', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             {template?.name || t('exo.templateNone')}
+            {template && !template.source_is_core && (
+              <span className="badge badge-source badge-compact">{template.source_name}</span>
+            )}
           </span>
         )}
       </div>

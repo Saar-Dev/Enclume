@@ -1247,6 +1247,16 @@ Convention :
   gap: 3px;
 }
 
+/* ── .badge.badge-source — origine d'une entité de catalogue (PLAN_SUPPLEMENTS.md §2) ─────
+   Informationnel, pas un statut : jamais success/danger/warning. N'apparaît que sur du contenu
+   non-core (Livre de Base = pas de tag) et seulement si au moins un supplément est actif pour la
+   campagne — décidé côté composant, cette classe ne fait que porter la couleur. */
+.badge.badge-source {
+  color: var(--color-primary);
+  background: var(--color-primary-muted);
+  border: 1px solid var(--color-primary);
+}
+
 /* ── Vignettes de dégâts (arme) — chiffre sans gras (demande Saar 2026-08-05,
    override de .badge .num { font-weight:700 }, scopé à ces deux variantes) ── */
 .badge.badge-damage-normal .num,

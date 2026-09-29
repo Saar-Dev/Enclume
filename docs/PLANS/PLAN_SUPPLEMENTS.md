@@ -452,3 +452,39 @@ l'écriture est déjà gardée).
    générique, rien, autre ? Question UI, pas bloquante pour la migration.
 2. Séquencement : Lot C avant, après, ou indépendamment de A/B ? N'a aucune dépendance technique
    sur `ref_sources`/`campaign_enabled_sources` — peut se faire dans n'importe quel ordre.
+
+---
+
+## 8. Tag de source dans l'UI [CODÉ 2026-09-29]
+
+Demande Saar : un tag visible sur le contenu non-LdB, pour l'instant seulement le sélecteur
+« Modèle » de la fiche Exo-armure (`ExoIdentityPanel.jsx`, consommateur du Lot A). Contrainte posée
+par Saar : les tags n'apparaissent que si au moins un supplément est actif pour la campagne.
+
+**Décision UX** (question ouverte de Saar, tranchée) : taguer uniquement le contenu non-core, jamais
+le Livre de Base — le marquer aussi serait redondant (l'absence de tag signifie déjà « contenu de
+base ») et ajouterait du bruit visuel sur l'immense majorité des lignes. Le texte du tag est le nom
+réel de la source (`source_name`, ex. « Guide Technique »), jamais un « Supplément » générique — ça
+tient sans redesign si une 3ᵉ source apparaît un jour.
+
+**Contrainte technique trouvée avant de coder** : le sélecteur est un `<select>` HTML natif — un
+`<option>` ne peut porter aucune couleur/badge (limite du navigateur, pas du CSS). Un vrai tag coloré
+n'existe donc que dans l'affichage lecture seule (fiche non éditable) ; en mode édition, la
+différenciation passe par `<optgroup>` (regroupement par source, libellé = donnée réelle, jamais
+« Livre de Base » codé en dur).
+
+- `server/src/routes/exoTemplates.js` : expose `source_is_core` (déjà `source_name`/`source_id`).
+- `client/src/index.css` : `.badge.badge-source` (informationnel, couleur `--color-primary`, jamais
+  success/danger/warning).
+- `client/src/character/ExoIdentityPanel.jsx` : badge en lecture seule, `<optgroup>` en édition,
+  les deux conditionnés à `hasSupplement = templates.some(t => !t.source_is_core)`.
+
+Vérifié en base : le mécanisme est correct, mais aucun modèle `ref_exo_templates` n'est encore
+rattaché à une source non-core aujourd'hui (Lot A n'a fait que ré-étiqueter les 16 lignes LdB
+existantes) — le tag n'apparaîtra concrètement que le jour où une fiche Guide Technique sera
+ajoutée au catalogue `ref_exo_templates` ET sa source activée pour une campagne. Pas un bug : le
+mécanisme est prêt, la donnée pour l'exercer n'existe pas encore.
+
+Hors périmètre pour l'instant (pas demandé) : le même tag sur les sélecteurs d'équipement
+(systèmes/armes/programmes exo, inventaire) — même mécanisme (`source_is_core` déjà sur
+`ref_equipment` depuis le Lot B) mais pas câblé côté client, à faire si Saar le demande.
