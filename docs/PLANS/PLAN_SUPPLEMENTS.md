@@ -250,6 +250,12 @@ de source active), tous dans `char-sheet.js` sauf le dernier :
   active avant application (le seul point d'écriture concerné, §2.4/§6.10).
 - `server/src/routes/campaigns.js` : routes `GET/POST/DELETE /:id/sources` (§2.3) pour que le GM
   puisse effectivement activer/désactiver une source par campagne.
+- `client/src/components/campaignSettings/SectionSources.jsx` (nouveau) + `CampaignSettingsPage.jsx` :
+  onglet « Sources de contenu » dans la Configuration de campagne, seul endroit qui consomme
+  réellement ces routes — sans lui les routes ci-dessus n'étaient atteignables que par appel HTTP
+  manuel (trouvaille Saar 2026-09-29, « Tu n'as pas codé OPTION DE CAMPAGNE »). Section autonome
+  (patron `SectionPlayers.jsx`) : écrit immédiatement par bascule, jamais fondu dans le formulaire
+  batché `campaigns.settings`.
 - `client/src/character/ExoSheetWindow.jsx:162` : passer `characterId` à l'appel
   `api.get('/exo-templates')` pour que le filtre serveur s'applique réellement dans le seul
   consommateur actuel de cette route.

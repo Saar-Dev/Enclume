@@ -8,6 +8,7 @@ import SectionGameRules from './SectionGameRules'
 import SectionTokens from './SectionTokens'
 import SectionPlayers from './SectionPlayers'
 import SectionCharacterSheet from './SectionCharacterSheet'
+import SectionSources from './SectionSources'
 import SectionDanger from './SectionDanger'
 
 export default function CampaignSettingsPage() {
@@ -94,6 +95,7 @@ export default function CampaignSettingsPage() {
     { key: 'rules', label: t('settings.sectionRules'), enabled: true },
     { key: 'tokens', label: t('settings.sectionTokens'), enabled: true },
     { key: 'sheet', label: t('settings.sectionSheet'), enabled: true },
+    { key: 'sources', label: t('settings.sectionSources'), enabled: true },
     { key: 'danger', label: t('settings.dangerTitle'), enabled: true, danger: true },
   ]
 
@@ -140,6 +142,9 @@ export default function CampaignSettingsPage() {
           {activeSection === 'players' && <SectionPlayers campaignId={campaignId} />}
           {activeSection === 'sheet' && formData && (
             <SectionCharacterSheet initialData={formData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
+          )}
+          {activeSection === 'sources' && (
+            <SectionSources campaignId={campaignId} />
           )}
           {activeSection === 'danger' && formData && (
             <SectionDanger campaignId={campaignId} campaignName={formData.name} />
