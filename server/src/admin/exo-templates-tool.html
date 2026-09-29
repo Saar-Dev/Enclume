@@ -62,13 +62,14 @@
         <tr>
           <th>Illustration</th>
           <th>Modèle</th>
+          <th>Source</th>
           <th>Catégorie</th>
           <th>Fichier</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="rows">
-        <tr><td colspan="5" style="text-align:center; color:#999; padding:24px;">Chargement…</td></tr>
+        <tr><td colspan="6" style="text-align:center; color:#999; padding:24px;">Chargement…</td></tr>
       </tbody>
     </table>
   </div>
@@ -98,13 +99,14 @@ function thumbCell(template) {
 function renderRows(templates) {
   const tbody = document.getElementById('rows')
   if (!templates.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999; padding:24px;">Aucun modèle</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:24px;">Aucun modèle</td></tr>'
     return
   }
   tbody.innerHTML = templates.map(t => `
     <tr id="row-${t.id}">
       <td>${thumbCell(t)}</td>
       <td><strong>${t.name}</strong></td>
+      <td>${t.source_name || ''}</td>
       <td>${t.category || ''}</td>
       <td><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="file-${t.id}"></td>
       <td><button class="btn-upload" onclick="uploadIllustration('${t.id}')">Envoyer</button></td>

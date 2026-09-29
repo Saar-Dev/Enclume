@@ -729,4 +729,47 @@ router.get('/:id/roster', requireAuth, requireRole('gm'), async (req, res) => {
   res.json(await getCampaignRoster(req.params.id)) // { roster, campaignStats }
 })
 
+// ─── Sources de contenu (PLAN_SUPPLEMENTS.md §2.3/§6.10) ──────────────────────────────────────────
+// Le Livre de Base (`is_core`) est toujours actif et n'a jamais de ligne dans
+// `campaign_enabled_sources` (§0.1) : ces routes ne gèrent que la bascule des autres sources.
+
+// GET /api/campaigns/:id/sources — toutes les sources connues, avec leur état actif pour CETTE campagne.
+router.get('/:id/sources', requireAuth, requireRole('gm'), async (req, res) => {
+  const sources = await db('ref_sources as s')
+    .leftJoin('campaign_enabled_sources as ces', function () {
+      this.on('ces.source_id', 's.id').andOn('ces.campaign_id', db.raw('?', [req.params.id]))
+    })
+    .select('s.id', 's.code', 's.name', 's.description', 's.is_core')
+    .select(db.raw('(s.is_core OR ces.source_id IS NOT NULL) as enabled'))
+    .orderBy('s.is_core', 'desc')
+    .orderBy('s.name')
+  res.json({ sources })
+})
+
+// POST /api/campaigns/:id/sources/:sourceId — active une source pour cette campagne.
+router.post('/:id/sources/:sourceId', requireAuth, requireRole('gm'), async (req, res) => {
+  const source = await db('ref_sources').where({ id: req.params.sourceId }).first()
+  if (!source) throw new AppError(404, 'Source introuvable')
+  if (source.is_core) throw new AppError(400, 'Le Livre de Base est toujours actif, il ne se bascule pas')
+
+  await db('campaign_enabled_sources')
+    .insert({ campaign_id: req.params.id, source_id: source.id })
+    .onConflict(['campaign_id', 'source_id']).ignore()
+
+  res.status(201).json({ source: { ...source, enabled: true } })
+})
+
+// DELETE /api/campaigns/:id/sources/:sourceId — désactive une source pour cette campagne.
+router.delete('/:id/sources/:sourceId', requireAuth, requireRole('gm'), async (req, res) => {
+  const source = await db('ref_sources').where({ id: req.params.sourceId }).first()
+  if (!source) throw new AppError(404, 'Source introuvable')
+  if (source.is_core) throw new AppError(400, 'Le Livre de Base est toujours actif, il ne se bascule pas')
+
+  await db('campaign_enabled_sources')
+    .where({ campaign_id: req.params.id, source_id: source.id })
+    .delete()
+
+  res.json({ source: { ...source, enabled: false } })
+})
+
 export default router

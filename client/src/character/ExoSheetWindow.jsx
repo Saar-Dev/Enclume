@@ -159,7 +159,9 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
     setLoading(true)
     Promise.all([
       api.get(`/char-sheet/${charId}/exo`),
-      api.get('/exo-templates'),
+      // characterId résout la campagne côté serveur pour filtrer les modèles par source active
+      // (PLAN_SUPPLEMENTS.md §2.4/§6.10) — sans lui, la route renvoie tout le catalogue non filtré.
+      api.get(`/exo-templates?characterId=${charId}`),
     ])
       .then(([exoRes, templatesRes]) => {
         if (cancelled) return

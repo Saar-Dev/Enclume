@@ -31,12 +31,16 @@ async function createFixture() {
   // de modèle de l'UI réelle). Chaque template inséré par ce fixture est tracé ici et supprimé
   // explicitement au cleanup — un des tests en insère 2 (écrasement complet), pas seulement 1.
   const createdTemplateIds = []
+  // source_id NOT NULL depuis la migration 372 (PLAN_SUPPLEMENTS.md Lot A) — 'ldb' est seedé par
+  // 371_ref_sources_seed.js, toujours présent.
+  const ldbSource = await db('ref_sources').where({ code: 'ldb' }).first()
   return {
     gm, campaign, exoCharacter, exoSheet,
     async insertTemplate(overrides = {}) {
       const [template] = await db('ref_exo_templates')
         .insert({
           name: 'Modèle test exoTemplateService', category: 'exo-3', environment: 'hybrid',
+          source_id: ldbSource.id,
           depth_operational: 100, depth_limit: 150, depth_crush: 200,
           base_exoforce: 55, base_blindage: 28,
           base_speed_underwater: 12, base_speed_surface: 8,
@@ -144,6 +148,48 @@ test('applyExoTemplate — templateId mal formé : AppError 400, jamais une erre
     )
   } finally {
     await fx.cleanup()
+  }
+})
+
+// PLAN_SUPPLEMENTS.md §2.4/§6.10 (Lot A) — un template d'une source non-core reste refusé tant que
+// cette source n'est pas explicitement activée pour la campagne du personnage, même si son UUID est
+// connu (pas seulement filtré côté liste, GET /api/exo-templates).
+test('applyExoTemplate — source non-core non activée pour la campagne : AppError 403, exo_sheet inchangée', { skip }, async () => {
+  const fx = await createFixture()
+  const [source] = await db('ref_sources')
+    .insert({ code: `test-src-${Date.now()}`, name: 'Source test non activée', is_core: false })
+    .returning('*')
+  try {
+    const template = await fx.insertTemplate({ source_id: source.id })
+    await assert.rejects(
+      () => applyExoTemplate(db, fx.exoCharacter.id, template.id),
+      (err) => {
+        assert.equal(err.statusCode, 403)
+        return true
+      },
+    )
+    const reread = await db('exo_sheet').where({ character_id: fx.exoCharacter.id }).first()
+    assert.equal(reread.category, null)
+  } finally {
+    await fx.cleanup()
+    await db('ref_sources').where({ id: source.id }).delete()
+  }
+})
+
+test('applyExoTemplate — source non-core activée pour la campagne : appliqué normalement', { skip }, async () => {
+  const fx = await createFixture()
+  const [source] = await db('ref_sources')
+    .insert({ code: `test-src-${Date.now()}`, name: 'Source test activée', is_core: false })
+    .returning('*')
+  try {
+    await db('campaign_enabled_sources').insert({ campaign_id: fx.campaign.id, source_id: source.id })
+    const template = await fx.insertTemplate({ source_id: source.id, base_exoforce: 77 })
+    const updated = await applyExoTemplate(db, fx.exoCharacter.id, template.id)
+    assert.equal(updated.base_exoforce, 77)
+  } finally {
+    await fx.cleanup()
+    await db('campaign_enabled_sources').where({ source_id: source.id }).delete()
+    await db('ref_sources').where({ id: source.id }).delete()
   }
 })
 

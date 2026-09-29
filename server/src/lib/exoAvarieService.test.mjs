@@ -27,8 +27,11 @@ async function createExoFixture({ integrityOverrides = {}, withTemplate = false,
   const templateData = { category: 'exo-1', environment: 'surface', base_exoforce: 68, base_blindage: 34, ...templateFields }
   let template = null
   if (withTemplate) {
-    [template] = await db('ref_exo_templates')
-      .insert({ name: 'Modèle test avaries', ...templateData })
+    // source_id NOT NULL depuis la migration 372 (PLAN_SUPPLEMENTS.md Lot A) — 'ldb' toujours présent
+    // (seed 371_ref_sources_seed.js).
+    const ldbSource = await db('ref_sources').where({ code: 'ldb' }).first()
+    ;[template] = await db('ref_exo_templates')
+      .insert({ name: 'Modèle test avaries', source_id: ldbSource.id, ...templateData })
       .returning('*')
   }
   const [exoSheet] = await db('exo_sheet')

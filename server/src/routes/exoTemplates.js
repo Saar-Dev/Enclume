@@ -9,8 +9,16 @@
  * timestamp, mais gardé requireAdmin (catalogue partagé, pas une fiche de joueur — même garde que le
  * CRUD ref_equipment, equipment.js) plutôt que isGm/isOwner.
  *
+ * Filtrage par source (migration 369-375, PLAN_SUPPLEMENTS.md §2.4/§6.10) : `GET /` accepte un
+ * `?characterId=` optionnel. Fourni, la campagne du personnage est résolue CÔTÉ SERVEUR (jamais un
+ * `campaignId` transmis directement par le client — un utilisateur pourrait sinon prétendre
+ * appartenir à n'importe quelle campagne) et seuls les modèles `is_core` ou d'une source activée
+ * pour cette campagne sont renvoyés. Sans lui, comportement historique inchangé : liste complète, non
+ * filtrée — c'est le chemin emprunté par exo-templates-tool.html, qui gère tout le catalogue.
+ *
  * Routes :
- *   GET  /api/exo-templates             — liste tous les modèles (colonnes résumé, pour sélecteur)
+ *   GET  /api/exo-templates             — liste les modèles (colonnes résumé, pour sélecteur),
+ *                                          filtrée par source active si ?characterId= est fourni
  *   POST /api/exo-templates/:id/illustration — upload l'illustration d'un modèle (admin)
  */
 
@@ -26,10 +34,32 @@ const router = Router()
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const templates = await db('ref_exo_templates')
-      .select('id', 'name', 'category', 'environment', 'base_exoforce', 'base_blindage', 'manufacturer', 'illustration_url')
-      .orderBy('category')
-      .orderBy('name')
+    const { characterId } = req.query
+
+    const query = db('ref_exo_templates as t')
+      .join('ref_sources as s', 's.id', 't.source_id')
+      .select(
+        't.id', 't.name', 't.category', 't.environment', 't.base_exoforce', 't.base_blindage',
+        't.manufacturer', 't.illustration_url',
+        's.id as source_id', 's.code as source_code', 's.name as source_name',
+      )
+      .orderBy('t.category')
+      .orderBy('t.name')
+
+    if (characterId) {
+      const character = await db('characters').where({ id: characterId }).first()
+      if (!character) throw new AppError(404, 'Character not found')
+
+      query.where(function () {
+        this.where('s.is_core', true).orWhereExists(
+          db('campaign_enabled_sources')
+            .whereRaw('campaign_enabled_sources.source_id = s.id')
+            .andWhere('campaign_enabled_sources.campaign_id', character.campaign_id),
+        )
+      })
+    }
+
+    const templates = await query
     res.json({ templates })
   } catch (err) { next(err) }
 })
