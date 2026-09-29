@@ -1925,7 +1925,7 @@ function displayedWallFacades(walls, displayLevel, cameraVolumeRoomId = null) {
   return [...groups.values()]
 }
 
-function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
+function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null, enabled = true) {
   const { camera } = useThree()
   const facades = useMemo(
     () => displayedWallFacades(walls, displayLevel, cameraVolumeRoomId),
@@ -1937,6 +1937,7 @@ function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
   const inputsRef = useRef({ facades: null, cameraVolumeRoomId: null })
 
   useFrame((_, delta) => {
+    if (!enabled) return
     elapsedRef.current += delta
     if (elapsedRef.current < 0.08) return
     elapsedRef.current = 0
@@ -2018,6 +2019,7 @@ function SurfaceDungeonScene({
   runtimeFeatureStates = {},
   cameraControlsRef = null,
   onCameraRoomIdChange = null,
+  wallOcclusionEnabled = true,
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
@@ -2051,7 +2053,7 @@ function SurfaceDungeonScene({
     () => [...roomWallSegments, ...surfaceWallSegments],
     [roomWallSegments, surfaceWallSegments],
   )
-  const occludedWallIds = useOccludedWallIds(allWallSegments, displayLevel, cameraVolumeRoomId)
+  const occludedWallIds = useOccludedWallIds(allWallSegments, displayLevel, cameraVolumeRoomId, wallOcclusionEnabled)
   const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)

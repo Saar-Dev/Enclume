@@ -32,11 +32,12 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
   const selectedRuns = selectableRuns.filter(run => run.edgeKeys.every(key => selectedKeySet.has(String(key))))
   const elevationProfile = roomWallElevationProfileForEdges(room, selectedKeys)
   const storedAppearance = roomWallAppearanceForEdges(room, selectedKeys)
-  const interiorTex = storedAppearance?.interiorTex ?? room.wallInteriorTex ?? null
   const appearanceMaterial = normalizedSurfaceMaterial(
     storedAppearance?.interiorMaterial ?? room.wallInteriorMaterial,
   )
-  const patchAppearance = interiorMaterial => onAppearanceChange?.({ interiorTex, interiorMaterial })
+  // Jamais de interiorTex ici : applyRoomWallAppearance() force toujours null (Option 2, voir son commentaire
+  // dans surfaceRooms.js) — plus la peine de le lire/transmettre depuis ce panneau.
+  const patchAppearance = interiorMaterial => onAppearanceChange?.({ interiorMaterial })
   const depth = Math.max(0, Number(elevationProfile.depth) || 0)
   const profileFactor = elevationProfile.type === 'curved' ? Math.PI : 2
   const angle = Math.atan(profileFactor * depth / 2.5) * 180 / Math.PI

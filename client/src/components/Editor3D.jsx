@@ -753,6 +753,7 @@ function EntityEditorScene({
           displayLevel={displayLevel}
           cameraControlsRef={orbitRef}
           onCameraRoomIdChange={setCameraVolumeRoomId}
+          wallOcclusionEnabled={false}
         />
       ) : (
         <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />

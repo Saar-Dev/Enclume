@@ -3,7 +3,7 @@
 
 import { hashString, sameLevel } from './surfaceUtils.js'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from './proceduralMaterials.js'
-import { surfaceBlockingForTool, materialOrTextureForTool, toolForMaterialFace } from './materialDecision.js'
+import { surfaceBlockingForTool, materialOrTextureForTool, toolForMaterialFace, makeSurfaceMaterial } from './materialDecision.js'
 import { getToolWallThicknessFine } from './surfaceGeometry.js'
 import {
   buildMergedRoomVerticalProfile,
@@ -799,6 +799,170 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
 }
 
 // ===================================================================
+// API publique — geste de forme (peindre/effacer des cases), agrandir/rétrécir une salle
+// ===================================================================
+//
+// Choix d'architecture (2026-09-28, remplace une première version « poignée sur mur ») : la case
+// est la seule donnée à identité stable de ce module (`room.cells`) ; le mur n'en a aucune, il est
+// redérivé des cases à chaque compilation (`roomsWallSegments`). Faire porter le geste sur le mur
+// obligeait à retraduire une case en abstraction de mur puis en sens/magnitude implicites — source
+// du bug d'échelle qui a cassé la première version. Peindre/effacer directement des cases (comme
+// Dungeondraft ou RimWorld : la salle est un ensemble de cases, le mur n'est qu'un rendu du bord)
+// élimine cette traduction et réutilise le même repère que `getFloorCell`, déjà utilisé par le
+// glisser-déposer générique.
+
+function prunedByRetainedEdges(entries, edgeKeySet) {
+  return (entries || []).flatMap(entry => {
+    const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => edgeKeySet.has(key))
+    return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
+  })
+}
+
+function dedupeRoomCells(cells) {
+  const seen = new Set()
+  const result = []
+  for (const cell of cells || []) {
+    const x = Math.trunc(Number(cell?.x))
+    const z = Math.trunc(Number(cell?.z))
+    if (!Number.isFinite(x) || !Number.isFinite(z)) continue
+    const key = roomCellKey(x, z)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push({ x, z })
+  }
+  return result
+}
+
+// Arêtes de bord (une par côté extérieur) qui appartiennent précisément à la case (x,z) — dérivées
+// des mêmes coordonnées que `makeEdge` dans roomGeometry.js (le coin de départ de chaque côté),
+// jamais une clé persistée.
+function boundaryEdgesTouchingCell(boundaryEdges, x, z) {
+  return boundaryEdges.filter(edge => {
+    if (edge.side === 'north') return edge.from.x === x && edge.from.z === z
+    if (edge.side === 'east') return edge.from.x === x + 1 && edge.from.z === z
+    if (edge.side === 'south') return edge.from.x === x + 1 && edge.from.z === z + 1
+    if (edge.side === 'west') return edge.from.x === x && edge.from.z === z + 1
+    return false
+  })
+}
+
+// Classe chaque case candidate (acceptée ou refusée, avec la raison) sans muter les données —
+// utilisé à la fois pour l'aperçu pendant le geste (case par case, en direct) et pour l'application
+// finale : même calcul, un seul appel, jamais deux logiques divergentes.
+// `mode` vaut 'add' (peindre — étend la salle) ou 'remove' (effacer — la rétrécit).
+// `batchError` porte un refus global (salle vidée, salle coupée en deux) — les mêmes invariants
+// que l'ancienne extendRoomWallRun, jamais assouplis, juste réévalués sur l'empreinte finale
+// plutôt que sur un tronçon de mur.
+export function classifyRoomFootprintCells(surfaceData, roomId, cells, mode) {
+  const next = normalizeSurfaceData(surfaceData)
+  const room = next.rooms?.[roomId]
+  const candidates = dedupeRoomCells(cells)
+  if (!room) {
+    return { cells: candidates.map(cell => ({ ...cell, accepted: false, reason: 'room-missing' })), batchError: null }
+  }
+
+  const currentCells = getRoomFootprintCells(room)
+  const currentKeySet = new Set(currentCells.map(cell => roomCellKey(cell.x, cell.z)))
+
+  if (mode === 'remove') {
+    const boundaryEdges = roomBoundaryEdges(room)
+    const doors = Object.values(next.connectors || {})
+    const classified = candidates.map(cell => {
+      const key = roomCellKey(cell.x, cell.z)
+      if (!currentKeySet.has(key)) return { ...cell, accepted: false, reason: 'not-in-room' }
+      // Une case intérieure n'a aucune arête de bord actuelle (cellEdges vide) : rien à vérifier
+      // côté porte, elle est retirable comme n'importe quelle autre — un pilier au milieu d'une
+      // salle est une forme valide (roomBoundaryLoops classe toute boucle interne comme un trou,
+      // déjà utilisé ailleurs pour les découpes de salles ; vérifié en lisant l'algorithme, pas
+      // supposé).
+      const cellEdges = boundaryEdgesTouchingCell(boundaryEdges, cell.x, cell.z)
+      const doorOnCell = doors.some(connector => doorConnectorTouchesBoundaryEdges(connector, room, cellEdges))
+      if (doorOnCell) return { ...cell, accepted: false, reason: 'door' }
+      return { ...cell, accepted: true, reason: null }
+    })
+    const removedKeys = new Set(classified.filter(cell => cell.accepted).map(cell => roomCellKey(cell.x, cell.z)))
+    if (removedKeys.size === 0) return { cells: classified, batchError: null }
+    const finalCells = currentCells.filter(cell => !removedKeys.has(roomCellKey(cell.x, cell.z)))
+    if (finalCells.length === 0) {
+      return { cells: classified, batchError: 'Une salle ne peut pas rester sans aucune case.' }
+    }
+    if (connectedRoomFootprints(finalCells).length > 1) {
+      return { cells: classified, batchError: 'Ce retrait couperait la salle en deux morceaux séparés.' }
+    }
+    return { cells: classified, batchError: null }
+  }
+
+  // mode === 'add'
+  const occupiedElsewhere = new Set(
+    Object.entries(next.rooms)
+      .filter(([id, other]) => id !== roomId && sameRoomFloor(room, other))
+      .flatMap(([, other]) => getRoomFootprintCells(other).map(cell => roomCellKey(cell.x, cell.z))),
+  )
+  const provisional = candidates.map(cell => {
+    const key = roomCellKey(cell.x, cell.z)
+    if (currentKeySet.has(key)) return { ...cell, accepted: false, reason: 'already-in-room' }
+    if (occupiedElsewhere.has(key)) return { ...cell, accepted: false, reason: 'occupied' }
+    return { ...cell, accepted: true, reason: null }
+  })
+  const acceptedSoFar = provisional.filter(cell => cell.accepted)
+  if (acceptedSoFar.length === 0) return { cells: provisional, batchError: null }
+
+  // Une case ajoutée doit rejoindre la salle — seule ou via d'autres cases acceptées dans le même
+  // geste. Si en excluant les cases occupées le reste se scinde, on ne garde que le morceau
+  // toujours relié à la salle d'origine (jamais un îlot flottant créé en silence).
+  const finalCells = [...currentCells, ...acceptedSoFar]
+  const components = connectedRoomFootprints(finalCells)
+  const mainComponent = components.find(component => (
+    component.some(cell => currentKeySet.has(roomCellKey(cell.x, cell.z)))
+  )) || components[0] || []
+  const mainComponentKeys = new Set(mainComponent.map(cell => roomCellKey(cell.x, cell.z)))
+  const classified = provisional.map(cell => (
+    cell.accepted && !mainComponentKeys.has(roomCellKey(cell.x, cell.z))
+      ? { ...cell, accepted: false, reason: 'disconnected' }
+      : cell
+  ))
+  return { cells: classified, batchError: null }
+}
+
+// Applique le résultat de classifyRoomFootprintCells : n'écrit que les cases acceptées, en une
+// seule mise à jour d'empreinte (jamais case par case — la purge des arcs/profils de mur doit voir
+// l'état final, pas un état intermédiaire).
+export function paintRoomFootprintCells(surfaceData, roomId, cells, mode) {
+  const next = normalizeSurfaceData(surfaceData)
+  const room = next.rooms?.[roomId]
+  if (!room) return { surfaceData, error: 'La salle sélectionnée n’existe plus.', cells: [] }
+
+  const classification = classifyRoomFootprintCells(next, roomId, cells, mode)
+  if (classification.batchError) {
+    return { surfaceData, error: classification.batchError, cells: classification.cells }
+  }
+
+  const acceptedCells = classification.cells.filter(cell => cell.accepted)
+  if (acceptedCells.length === 0) return { surfaceData, error: null, roomId, cells: classification.cells }
+
+  const currentCells = getRoomFootprintCells(room)
+  const acceptedKeys = new Set(acceptedCells.map(cell => roomCellKey(cell.x, cell.z)))
+  const finalCells = mode === 'remove'
+    ? currentCells.filter(cell => !acceptedKeys.has(roomCellKey(cell.x, cell.z)))
+    : [...currentCells, ...acceptedCells]
+
+  const nextRoom = roomWithFootprint(room, roomId, finalCells, true)
+  const nextEdgeKeySet = new Set(roomBoundaryEdges(nextRoom).map(edge => edge.key))
+  const prunedRoom = {
+    ...nextRoom,
+    wallElevationProfiles: prunedByRetainedEdges(nextRoom.wallElevationProfiles, nextEdgeKeySet),
+    wallAppearanceProfiles: prunedByRetainedEdges(nextRoom.wallAppearanceProfiles, nextEdgeKeySet),
+  }
+
+  return {
+    surfaceData: { ...next, rooms: { ...next.rooms, [roomId]: prunedRoom } },
+    error: null,
+    roomId,
+    cells: classification.cells,
+  }
+}
+
+// ===================================================================
 // API publique — Arcs et profils de mur
 // ===================================================================
 
@@ -917,8 +1081,23 @@ export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearanc
   if (selected.length === 0) return { surfaceData, error: 'Sélectionne au moins un mur.' }
 
   const selectedSet = new Set(selected)
+  const selectedEdges = roomBoundaryEdges(selectedRoom).filter(edge => selectedSet.has(edge.key))
+  const doorOnSelection = Object.values(next.connectors || {})
+    .some(connector => doorConnectorTouchesBoundaryEdges(connector, selectedRoom, selectedEdges))
+  if (doorOnSelection) {
+    return { surfaceData, error: 'Déplace ou supprime la porte avant de peindre ce mur.' }
+  }
+
+  // interiorTex toujours null : Option 2 (2026-09-28, PLAN_WORLD_BUILDER_REWORK.md §8) a tranché qu'un mur
+  // n'a plus jamais de texture pré-faite, seulement le matériau procédural — décidée pour l'outil « Peindre
+  // un mur », mais aucun chemin d'interface actuel ne peut plus jamais écrire wallInteriorTexId (la palette
+  // de textures ne s'affiche qu'en mode room/wall, où materialFace ne devient jamais 'wallInterior') : la
+  // règle est donc la seule cohérente pour toute écriture de wallAppearanceProfiles, pas seulement celle du
+  // pinceau. Avant ce correctif, applyRoomWallAppearance() préservait encore un interiorTex hérité si
+  // l'appelant en passait un (cas du panneau flottant Mur) — autorité dupliquée avec paintRoomWallEdges qui,
+  // lui, le forçait déjà à null : un seul appelant appliquait Option 2, l'autre non.
   const normalized = {
-    interiorTex: appearance?.interiorTex || null,
+    interiorTex: null,
     interiorMaterial: profileOrDefault(appearance?.interiorMaterial),
   }
   const remaining = (selectedRoom.wallAppearanceProfiles || []).flatMap(entry => {
@@ -945,6 +1124,95 @@ export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearanc
     error: null,
     roomId,
     appearance: normalized,
+  }
+}
+
+// ===================================================================
+// API publique — peinture directe (case / tronçon / salle), outil « Peindre un mur »
+// ===================================================================
+
+// Distance (en cases) du point projeté sur l'axe du tronçon, depuis `run.from`.
+// `run` a la forme retournée par roomBoundaryWallRuns/roomSelectableWallRuns : {from, to, axis, edgeKeys}.
+export function roomWallRunOffsetAtPoint(run, point) {
+  const x0 = Number(run?.from?.x)
+  const z0 = Number(run?.from?.z)
+  const x1 = Number(run?.to?.x)
+  const z1 = Number(run?.to?.z)
+  const px = Number(point?.x)
+  const pz = Number(point?.z)
+  if (![x0, z0, x1, z1, px, pz].every(Number.isFinite)) return null
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const length = Math.hypot(dx, dz)
+  if (length <= 1e-7) return null
+  return ((px - x0) * dx + (pz - z0) * dz) / length
+}
+
+// Clé de l'arête unitaire (une case de mur) à un offset donné le long d'un tronçon droit.
+// Un arc n'a pas de case (courbe posée sur le tronçon d'origine) : renvoie null, l'appelant
+// traite alors tout l'arc comme une seule unité (déjà le cas pour sa sélection ailleurs).
+export function roomWallEdgeKeyAtOffset(run, offset) {
+  const edgeKeys = Array.isArray(run?.edgeKeys) ? run.edgeKeys : []
+  if (edgeKeys.length === 0 || run?.axis === 'arc' || !Number.isFinite(Number(offset))) return null
+  const index = Math.max(0, Math.min(edgeKeys.length - 1, Math.floor(Number(offset))))
+  return edgeKeys[index]
+}
+
+export function roomWallEdgeKeyAtPoint(run, point) {
+  const offset = roomWallRunOffsetAtPoint(run, point)
+  return offset === null ? null : roomWallEdgeKeyAtOffset(run, offset)
+}
+
+// Peint une ou plusieurs cases de mur (une case seule, ou tout un tronçon/arc) avec le matériau
+// procédural actif de l'outil. Décision de Saar (2026-09-28) : cet outil n'a AUCUNE notion de
+// texture pré-faite, jamais — contrairement à Salle/Mur qui offrent les deux. `surfaceMaterialMode`
+// est forcé à 'procedural' ici, quoi que porte `tool` : un id de texture laissé par un autre mode ne
+// doit jamais pouvoir influencer ce résultat (cause racine du bug précédent, pas un simple reset
+// ponctuel côté UI qui aurait pu être recontourné).
+export function paintRoomWallEdges(surfaceData, roomId, edgeKeys, tool) {
+  const next = normalizeSurfaceData(surfaceData)
+  const selected = [...new Set((edgeKeys || []).map(String))]
+  if (selected.length === 0) return { surfaceData, error: 'Sélectionne au moins une case de mur.' }
+  const material = makeSurfaceMaterial(
+    { ...toolForMaterialFace(tool, 'wallInterior'), surfaceMaterialMode: 'procedural' },
+    `${roomId}:wall-paint:${selected.slice().sort().join('|')}`,
+  )
+  return applyRoomWallAppearance(next, roomId, selected, {
+    interiorTex: null,
+    interiorMaterial: material,
+  })
+}
+
+// Peint tous les murs d'une salle avec le matériau procédural actif de l'outil (jamais de texture,
+// même principe que paintRoomWallEdges).
+// clearOverrides=false (1er appel) : pose le défaut de salle, laisse les cases déjà personnalisées
+// intactes (ne peint que ce qui n'a pas été touché à la main).
+// clearOverrides=true (rappel explicite) : efface aussi les personnalisations existantes, la salle
+// devient uniforme.
+export function paintRoomWallRoom(surfaceData, roomId, tool, { clearOverrides = false } = {}) {
+  const next = normalizeSurfaceData(surfaceData)
+  const selectedRoom = next.rooms?.[roomId]
+  if (!selectedRoom) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+  const material = makeSurfaceMaterial(
+    { ...toolForMaterialFace(tool, 'wallInterior'), surfaceMaterialMode: 'procedural' },
+    `${roomId}:wall-paint:room`,
+  )
+  return {
+    surfaceData: {
+      ...next,
+      rooms: {
+        ...next.rooms,
+        [roomId]: {
+          ...selectedRoom,
+          wallInteriorTex: null,
+          wallInteriorMaterial: material,
+          wallAppearanceProfiles: clearOverrides ? [] : (selectedRoom.wallAppearanceProfiles || []),
+        },
+      },
+    },
+    error: null,
+    roomId,
+    clearedOverrides: clearOverrides && (selectedRoom.wallAppearanceProfiles || []).length > 0,
   }
 }
 

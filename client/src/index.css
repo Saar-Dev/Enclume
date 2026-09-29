@@ -1387,6 +1387,10 @@ Convention :
   border-color: var(--color-primary);
   background: var(--color-primary-muted);
 }
+.sidebar-tool-mode-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .sidebar-tool-field {
   width: 100%;
   box-sizing: border-box;
@@ -1403,6 +1407,9 @@ Convention :
 }
 .sidebar-tool-hint {
   color: var(--text-muted);
+}
+.sidebar-tool-error {
+  color: #f87171;
 }
 .sidebar-tool-selection {
   border: 1px solid rgba(245,197,66,0.35);

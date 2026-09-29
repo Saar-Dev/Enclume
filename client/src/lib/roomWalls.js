@@ -372,15 +372,22 @@ export function roomsWallSegments(rooms) {
           tex: segment.wallAppearance.interiorTex ?? interior.tex,
           material: segment.wallAppearance.interiorMaterial ?? interior.material,
         } : interior
-        const segmentExterior = segmentInterior
+        // Une salle ne revendique QUE sa propre face intérieure — jamais l'autre (avant : un même
+        // objet `segmentExterior = segmentInterior` faisait porter la couleur de cette salle sur la
+        // face qui ne lui appartient pas, un mur mitoyen ne recevant sa vraie couleur que si l'ordre
+        // de traitement des salles et les priorités s'alignaient par hasard). L'autre face reste
+        // `null` (aucune revendication) : `setWallFace` l'ignore, et `completeRoomWallPanel` copie
+        // depuis le côté déjà rempli seulement si personne — aucune salle — ne l'a jamais réclamée,
+        // exactement le filet de secours déjà prévu pour un mur extérieur au bâtiment (une seule
+        // salle propriétaire).
         addPanel({
           axis: segment.axis,
           x0,
           x1,
           z0,
           z1,
-          frontSource: frontIsInterior ? segmentInterior : segmentExterior,
-          backSource: frontIsInterior ? segmentExterior : segmentInterior,
+          frontSource: frontIsInterior ? segmentInterior : null,
+          backSource: frontIsInterior ? null : segmentInterior,
           y,
           curveId: segment.curveId,
           curveArcId: segment.curveArcId,

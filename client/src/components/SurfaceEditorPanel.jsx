@@ -8,6 +8,7 @@ import api from '../lib/api.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import SurfaceEffectPanel from './SurfaceEffectPanel.jsx'
+import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import { groupEffectDefinitions } from '../lib/effectDefinitionGroups.js'
 import {
   clearMaterialSlotOverride,
@@ -70,10 +71,12 @@ const ICON_PAINT_WALL = (
     <path d="M4 17c1.2 0 1.8-1 1.2-2-.4-.7 0-1.6.9-1.8" strokeLinecap="round" />
   </svg>
 )
-const ICON_RESHAPE_WALL = (
+const ICON_RESHAPE_ROOM = (
   <svg {...ICON_PROPS}>
-    <rect x="2" y="8.5" width="16" height="3" rx="1" />
-    <path d="M15 6l3 4-3 4M5 6L2 10l3 4" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="2" y="2" width="6" height="6" rx="1" />
+    <rect x="10" y="2" width="6" height="6" rx="1" opacity="0.35" />
+    <rect x="2" y="10" width="6" height="6" rx="1" opacity="0.35" />
+    <rect x="10" y="10" width="6" height="6" rx="1" />
   </svg>
 )
 const TAB_ICON_BTN_STYLE = {
@@ -571,6 +574,7 @@ export default function SurfaceEditorPanel({
             <div style={styles.roomToolModes}>
               <button
                 type="button"
+                disabled={!surfaceToolState.selectedRoomId}
                 onClick={() => updateSurfaceTool({
                   mode: 'paint-wall',
                   materialFace: 'wallInterior',
@@ -586,13 +590,14 @@ export default function SurfaceEditorPanel({
               </button>
               <button
                 type="button"
-                onClick={() => updateSurfaceTool({ mode: 'reshape-wall', roomArcError: null })}
+                disabled={!surfaceToolState.selectedRoomId}
+                onClick={() => updateSurfaceTool({ mode: 'reshape-room', roomArcError: null })}
                 className="sidebar-tool-mode-btn"
-                data-active={surfaceToolState.mode === 'reshape-wall'}
+                data-active={surfaceToolState.mode === 'reshape-room'}
                 style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
               >
-                {ICON_RESHAPE_WALL}
-                <span>{t('surfaceEditor.reshapeWall')}</span>
+                {ICON_RESHAPE_ROOM}
+                <span>{t('surfaceEditor.reshapeRoom')}</span>
               </button>
               <button
                 type="button"
@@ -607,6 +612,9 @@ export default function SurfaceEditorPanel({
             </div>
             {surfaceToolState.mode === 'paint-wall' && (
               <div className="sidebar-glass" style={styles.roomToolGrid}>
+                <p className="sidebar-tool-hint" style={styles.roomToolHint}>
+                  {t('surfaceEditor.paintWallRoomHint', { name: surfaceToolState.roomName || '' })}
+                </p>
                 <div style={styles.roomToolModes}>
                   {[
                     { key: 'case', label: t('surfaceEditor.paintWallScopeCase') },
@@ -635,11 +643,13 @@ export default function SurfaceEditorPanel({
                     <span>{t('surfaceEditor.paintWallClearOverrides')}</span>
                   </label>
                 )}
+                <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.paintWallMaterialSection')}</div>
+                <SurfaceMaterialEditor profile={surfaceMaterialState} onChange={updateSurfaceMaterial} />
               </div>
             )}
-            {surfaceToolState.mode === 'reshape-wall' && (
+            {surfaceToolState.mode === 'reshape-room' && (
               <div className="sidebar-glass" style={styles.roomToolGrid}>
-                <p className="sidebar-tool-hint" style={styles.roomToolHint}>{t('surfaceEditor.reshapeWallHint')}</p>
+                <p className="sidebar-tool-hint" style={styles.roomToolHint}>{t('surfaceEditor.reshapeRoomHint')}</p>
                 {surfaceToolState.roomArcError && (
                   <p className="sidebar-tool-error">{surfaceToolState.roomArcError}</p>
                 )}

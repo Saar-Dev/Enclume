@@ -30,6 +30,11 @@ import {
   getToolCeilingHeight,
   getToolCeilingThickness,
   getToolRoomHeightLevels,
+  paintRoomWallEdges,
+  paintRoomWallRoom,
+  roomWallEdgeKeyAtPoint,
+  classifyRoomFootprintCells,
+  paintRoomFootprintCells,
 } from '../lib/surfaceData.js' // Fonctions restées dans surfaceData.js
 
 import {
@@ -37,6 +42,8 @@ import {
   levelToY,
   yToLevel,
   getRoomBaseY,
+  getRoomFootprintCells,
+  roomCellKey,
 } from '../lib/surfaceCore.js'
 
 import {
@@ -351,6 +358,117 @@ function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, 
       />
     )
   })
+}
+
+// Outil « Peindre un mur » — clic direct (pas de sélection préalable), portée choisie explicitement
+// par un sélecteur dans le panneau (case / tronçon / salle), jamais par un compteur de clics.
+function PaintableRoomWall({ wall, displayLevel, thickness, scope, onPaint }) {
+  const [hovered, setHovered] = useState(false)
+  const points = wall.axis === 'arc' ? wall.points : [wall.from, wall.to]
+  const y = levelToY(displayLevel)
+  const segments = points.slice(0, -1).map((from, index) => ({ from, to: points[index + 1] }))
+  const linePoints = points.map(point => [point.x, y + STORY_HEIGHT + 0.045, point.z])
+
+  return (
+    <group
+      onPointerDown={event => {
+        event.stopPropagation()
+        // event.point est déjà en unités brutes de scène (même repère que wall.from/wall.to) —
+        // le mesh cliquable est positionné en brut par getWallRenderBox malgré l'aller-retour par
+        // SURFACE_FINE en interne. Diviser ici une deuxième fois (bug d'origine, 2026-09-28)
+        // écrasait la position réelle du clic et clampait toujours sur la première case du mur.
+        const hitPoint = { x: event.point.x, z: event.point.z }
+        const caseKey = scope === 'case' ? roomWallEdgeKeyAtPoint(wall, hitPoint) : null
+        const edgeKeys = scope === 'case' && caseKey ? [caseKey] : wall.edgeKeys
+        onPaint?.(edgeKeys)
+      }}
+      onPointerOver={event => {
+        event.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
+      {segments.map((segment, index) => {
+        const box = getWallRenderBox({
+          axis: 'segment',
+          x0: segment.from.x * SURFACE_FINE,
+          x1: segment.to.x * SURFACE_FINE,
+          z0: segment.from.z * SURFACE_FINE,
+          z1: segment.to.z * SURFACE_FINE,
+          y,
+          height: STORY_HEIGHT,
+          thickness,
+        })
+        if (!box) return null
+        return (
+          <mesh
+            key={`${wall.id}:paint-hit:${index}`}
+            position={box.position}
+            rotation={[0, box.rotationY || 0, 0]}
+            renderOrder={42}
+          >
+            <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.6)]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+          </mesh>
+        )
+      })}
+      {hovered && (
+        <Line
+          points={linePoints}
+          color="#22c55e"
+          lineWidth={4}
+          transparent
+          opacity={0.95}
+          depthTest={false}
+          renderOrder={43}
+        />
+      )}
+    </group>
+  )
+}
+
+function PaintableRoomWalls({ room, displayLevel, scope, onPaint }) {
+  if (!room || room.wallEnabled === false) return null
+  const thickness = Math.max(2, Number(room.wallThickness) || 1)
+  return roomSelectableWallRuns(room).map(wallRun => (
+    <PaintableRoomWall
+      key={wallRun.id}
+      wall={wallRun}
+      displayLevel={displayLevel}
+      thickness={thickness}
+      scope={scope}
+      onPaint={edgeKeys => onPaint?.(room.id, edgeKeys)}
+    />
+  ))
+}
+
+// Aperçu du geste « peindre/effacer des cases » (Solution A, 2026-09-28 — remplace une première
+// version « poignée sur mur » : dans ce module, la case est la seule donnée à identité stable
+// (`room.cells`) ; le mur n'en a aucune, il est redérivé des cases à chaque compilation. Peindre
+// directement des cases, comme Dungeondraft/RimWorld, évite la traduction case → mur → sens/
+// magnitude qui avait produit un bug d'échelle silencieux dans la première version).
+// Classe chaque case du rectangle glissé en direct (vert = sera appliquée, rouge = refusée) —
+// jamais de résultat partiel découvert seulement après le relâchement.
+function RoomFootprintPaintPreview({ surfaceData, roomId, cellMode, cells, displayLevel }) {
+  const classification = useMemo(
+    () => classifyRoomFootprintCells(surfaceData, roomId, cells, cellMode),
+    [surfaceData, roomId, cellMode, cells],
+  )
+  const y = levelToY(displayLevel) + 0.06
+  return (
+    <group renderOrder={44}>
+      {classification.cells.map(cell => {
+        if (cell.reason === 'already-in-room' || cell.reason === 'not-in-room') return null
+        const color = cell.accepted ? '#22c55e' : '#ef4444'
+        return (
+          <mesh key={roomCellKey(cell.x, cell.z)} position={[cell.x + 0.5, y, cell.z + 0.5]}>
+            <boxGeometry args={[0.94, 0.04, 0.94]} />
+            <meshBasicMaterial color={color} transparent opacity={0.45} depthWrite={false} depthTest={false} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
 }
 
 function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMultiplier }) {
@@ -804,8 +922,18 @@ export default function SurfaceEditorScene({
   const handleRoomWallPointerSelect = useCallback((edgeKeys, event) => {
     if (!edgeKeys?.length || surfaceTool?.mode !== 'select' || !surfaceTool?.selectedRoomId) return
     skipNextCanvasMouseDownRef.current = true
-    const selected = new Set(surfaceTool?.selectedRoomWallKeys || [])
-    const remove = edgeKeys.every(key => selected.has(key))
+    // Un clic simple REMPLACE la sélection par ce seul mur — sinon la sélection s'accumulait
+    // silencieusement à chaque clic (jamais remise à zéro tant qu'on reste sur la même salle), et le
+    // panneau flottant Mur applique la couleur en direct sur TOUTE la sélection courante : cliquer sur
+    // plusieurs murs l'un après l'autre puis ajuster la couleur repeignait tout ce qui avait été touché
+    // depuis, sans qu'aucun clic de peinture n'ait eu lieu (2026-09-29, rapporté par Saar). Maj-clic
+    // (Shift) garde l'ancien comportement d'ajout/retrait pour une vraie sélection multiple délibérée —
+    // même convention que tout sélecteur (clic = un seul, Maj-clic = étend), déjà celle utilisée pour la
+    // sélection de salle (un clic remplace toujours `selectedRoomId`).
+    const additive = !!(event?.shiftKey ?? event?.nativeEvent?.shiftKey)
+    const previousSelected = additive ? new Set(surfaceTool?.selectedRoomWallKeys || []) : new Set()
+    const remove = additive && edgeKeys.every(key => previousSelected.has(key))
+    const selected = previousSelected
     for (const key of edgeKeys) {
       if (remove) selected.delete(key)
       else selected.add(key)
@@ -830,6 +958,29 @@ export default function SurfaceEditorScene({
     )
     event?.stopPropagation?.()
   }, [onSurfaceToolChange, onSurfaceWallSelect, surfaceData.rooms, surfaceTool])
+
+  const handlePaintWallClick = useCallback((roomId, edgeKeys) => {
+    if (!roomId) return
+    const scope = surfaceTool?.wallPaintScope || 'case'
+    const result = scope === 'room'
+      ? paintRoomWallRoom(surfaceData, roomId, surfaceTool, {
+        clearOverrides: !!surfaceTool?.wallPaintClearOverrides,
+      })
+      : paintRoomWallEdges(surfaceData, roomId, edgeKeys, surfaceTool)
+    if (result?.surfaceData && result.surfaceData !== surfaceData) onSurfaceDataChange(result.surfaceData)
+  }, [surfaceTool, surfaceData, onSurfaceDataChange])
+
+  const handleReshapeRoomCommit = useCallback((roomId, cells, cellMode) => {
+    const result = paintRoomFootprintCells(surfaceData, roomId, cells, cellMode)
+    if (result?.error) {
+      onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
+      return
+    }
+    if (result?.surfaceData && result.surfaceData !== surfaceData) {
+      onSurfaceDataChange(result.surfaceData)
+    }
+    if (surfaceTool?.roomArcError) onSurfaceToolChange?.({ ...surfaceTool, roomArcError: null })
+  }, [surfaceData, surfaceTool, onSurfaceToolChange, onSurfaceDataChange])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -876,6 +1027,10 @@ export default function SurfaceEditorScene({
         return
       }
       const mode = surfaceTool?.mode || 'select'
+      // Peinture de mur : entièrement gérée par ses propres meshes (PaintableRoomWalls) — jamais
+      // par le système générique de glisser-déposer, qui retomberait sinon sur applyFloorSelection
+      // (voxel) faute de branche dédiée en mouseup.
+      if (mode === 'paint-wall') return
       const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
       const start = placesDoor
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
@@ -890,7 +1045,15 @@ export default function SurfaceEditorScene({
         return
       }
 
-      const nextDrag = { mode, start, end: start }
+      let nextDrag = { mode, start, end: start }
+      if (mode === 'reshape-room') {
+        const selectedRoomId = surfaceTool?.selectedRoomId
+        const selectedRoom = selectedRoomId ? normalizeSurfaceData(surfaceData).rooms?.[selectedRoomId] : null
+        if (!selectedRoom) return
+        const footprintKeys = new Set(getRoomFootprintCells(selectedRoom).map(cell => roomCellKey(cell.x, cell.z)))
+        const cellMode = footprintKeys.has(roomCellKey(start.x, start.z)) ? 'remove' : 'add'
+        nextDrag = { ...nextDrag, cellMode, roomId: selectedRoomId }
+      }
       dragRef.current = nextDrag
       clearPendingDrag()
       setDrag(nextDrag)
@@ -1077,6 +1240,21 @@ export default function SurfaceEditorScene({
         return
       }
 
+      if (mode === 'reshape-room') {
+        const { roomId, cellMode } = currentDrag
+        const area = normalizeCellSelection(finalDrag)
+        if (roomId && cellMode && area) {
+          const cells = []
+          for (let x = area.minX; x <= area.maxX; x += 1) {
+            for (let z = area.minZ; z <= area.maxZ; z += 1) cells.push({ x, z })
+          }
+          handleReshapeRoomCommit(roomId, cells, cellMode)
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
       if (mode === 'effect') {
         const area = normalizeCellSelection(finalDrag)
         if (area) {
@@ -1141,6 +1319,7 @@ export default function SurfaceEditorScene({
     onSurfaceRoomSelect,
     onSurfaceDataChange,
     onSurfaceToolChange,
+    handleReshapeRoomCommit,
   ])
 
   useEffect(() => {
@@ -1174,6 +1353,16 @@ export default function SurfaceEditorScene({
       const baseLevel = Math.round(getRoomBaseY(room) / STORY_HEIGHT)
       return roomSliceContours(room, displayLevel - baseLevel, surfaceData.rooms, STORY_HEIGHT).length > 0
     })
+  const reshapeRoomPreviewCells = (() => {
+    if (drag?.mode !== 'reshape-room') return []
+    const area = normalizeCellSelection(drag)
+    if (!area) return []
+    const cells = []
+    for (let x = area.minX; x <= area.maxX; x += 1) {
+      for (let z = area.minZ; z <= area.maxZ; z += 1) cells.push({ x, z })
+    }
+    return cells
+  })()
   const connectorPreview = drag?.mode === 'connector'
     ? drag
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
@@ -1220,6 +1409,7 @@ export default function SurfaceEditorScene({
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
         runtimeFeatureStates={runtimeFeatureStates}
+        wallOcclusionEnabled={false}
       />
       <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
       {selectedRooms.map(room => (
@@ -1250,6 +1440,24 @@ export default function SurfaceEditorScene({
           )}
         </>
       )}
+      {surfaceTool?.mode === 'paint-wall' && selectedRooms.map(paintableRoom => (
+        <PaintableRoomWalls
+          key={paintableRoom.id}
+          room={paintableRoom}
+          displayLevel={displayLevel}
+          scope={surfaceTool?.wallPaintScope || 'case'}
+          onPaint={handlePaintWallClick}
+        />
+      ))}
+      {drag?.mode === 'reshape-room' && drag.roomId && (
+        <RoomFootprintPaintPreview
+          surfaceData={surfaceData}
+          roomId={drag.roomId}
+          cellMode={drag.cellMode}
+          cells={reshapeRoomPreviewCells}
+          displayLevel={displayLevel}
+        />
+      )}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'stair' ? (
@@ -1262,6 +1470,8 @@ export default function SurfaceEditorScene({
         <RoomPreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'select' ? (
         <SelectionPreview selection={drag} surfaceTool={surfaceTool} />
+      ) : drag?.mode === 'reshape-room' ? (
+        null
       ) : drag ? (
         <FloorPreview selection={drag} surfaceTool={surfaceTool} />
       ) : (

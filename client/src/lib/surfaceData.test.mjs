@@ -19,14 +19,21 @@ import {
   isWorldPointVisibleAtLevel,
   makeDoorConnectorFromWallPoint,
   makeWallsFromDrag,
+  classifyRoomFootprintCells,
+  paintRoomFootprintCells,
+  paintRoomWallEdges,
+  paintRoomWallRoom,
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
   roomToSurfaceToolPatch,
+  roomWallEdgeKeyAtOffset,
+  roomWallEdgeKeyAtPoint,
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
   multiPolygonGridCells,
+  roomBoundaryLoops,
   roomGeometryArea,
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
@@ -107,6 +114,342 @@ test('applyRoomWallAppearance retombe sur un preset complet (jamais null) sans i
   assert.notEqual(stored, null)
   assert.equal(stored.material, 'steel')
   assert.equal(stored.paint, '#6f7f8e')
+})
+
+test('une porte rigide bloque la peinture de son mur (applyRoomWallAppearance)', () => {
+  // Régression 2026-09-29 : seule des quatre opérations de mur (élévation, arc, peinture) à n'avoir
+  // aucun garde-fou porte — cf. 'une porte rigide bloque le changement de profil vertical de son mur'
+  // et 'une porte existante empêche de courber son mur porteur' pour le même patron sur les deux autres.
+  const guardedRoom = room('guarded-paint', 0)
+  const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')
+  const result = applyRoomWallAppearance(
+    emptySurface({
+      rooms: { 'guarded-paint': guardedRoom },
+      connectors: {
+        door: { type: 'door', axis: 'z', x0: 0, x1: 0, z0: 0, z1: 4, y: 0 },
+      },
+    }),
+    'guarded-paint',
+    west.edgeKeys,
+    {},
+  )
+
+  assert.match(result.error, /porte/i)
+  assert.equal(result.surfaceData.rooms['guarded-paint'].wallAppearanceProfiles, undefined)
+})
+
+test('une porte rigide bloque aussi l’outil « Peindre un mur » (paintRoomWallEdges)', () => {
+  const guardedRoom = room('guarded-paint-tool', 0)
+  const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')
+  const result = paintRoomWallEdges(
+    emptySurface({
+      rooms: { 'guarded-paint-tool': guardedRoom },
+      connectors: {
+        door: { type: 'door', axis: 'z', x0: 0, x1: 0, z0: 0, z1: 4, y: 0 },
+      },
+    }),
+    'guarded-paint-tool',
+    west.edgeKeys,
+    { surfaceMaterialMode: 'procedural', materialProfiles: { wallInterior: { material: 'steel', paint: '#ff0000' } } },
+  )
+
+  assert.match(result.error, /porte/i)
+})
+
+test('applyRoomWallAppearance ignore toute texture transmise par l’appelant (Option 2, autorité unique)', () => {
+  // Régression 2026-09-29 : avant ce correctif, seul paintRoomWallEdges forçait interiorTex à null ;
+  // applyRoomWallAppearance (appelée directement par le panneau flottant Mur, SurfaceWallPanel.jsx)
+  // préservait encore une texture transmise par l'appelant — deux appelants, deux règles sur la même
+  // donnée. Aucun chemin d'interface actuel ne peut plus écrire wallInteriorTexId (palette de textures
+  // absente en mode paint-wall), donc la règle est désormais la même pour les deux appelants.
+  const wideRoom = room('wall-panel-texture', 0)
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+
+  const result = applyRoomWallAppearance(
+    emptySurface({ rooms: { 'wall-panel-texture': wideRoom } }),
+    'wall-panel-texture',
+    west.edgeKeys,
+    { interiorTex: 'leftover-texture-id', interiorMaterial: { material: 'steel', paint: '#ff0000' } },
+  )
+
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.rooms['wall-panel-texture'].wallAppearanceProfiles[0].interiorTex, null)
+  assert.equal(result.surfaceData.rooms['wall-panel-texture'].wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
+})
+
+function wallInteriorTool(material) {
+  return {
+    surfaceMaterialMode: 'procedural',
+    autoVariants: false,
+    materialProfiles: { wallInterior: material },
+  }
+}
+
+test('roomWallEdgeKeyAtPoint résout la case précise le long d’un tronçon multi-cases', () => {
+  const wideRoom = room('wide-wall', 0) // room() -> 2x2 cases, un tronçon de 2 cases par côté
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+  assert.equal(west.edgeKeys.length, 2)
+
+  const lerp = t => ({
+    x: west.from.x + (west.to.x - west.from.x) * t,
+    z: west.from.z + (west.to.z - west.from.z) * t,
+  })
+  const firstCaseKey = roomWallEdgeKeyAtPoint(west, lerp(0.25))
+  const secondCaseKey = roomWallEdgeKeyAtPoint(west, lerp(0.75))
+
+  assert.ok(west.edgeKeys.includes(firstCaseKey))
+  assert.ok(west.edgeKeys.includes(secondCaseKey))
+  assert.notEqual(firstCaseKey, secondCaseKey)
+})
+
+test('roomWallEdgeKeyAtOffset traite un arc comme une seule unité (pas de case)', () => {
+  assert.equal(roomWallEdgeKeyAtOffset({ axis: 'arc', edgeKeys: ['edge:a', 'edge:b'] }, 0), null)
+})
+
+test('paintRoomWallEdges peint une seule case sans toucher le reste du tronçon', () => {
+  const wideRoom = room('wide-wall-edges', 0)
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+  const [firstKey, secondKey] = west.edgeKeys
+
+  const result = paintRoomWallEdges(
+    emptySurface({ rooms: { 'wide-wall-edges': wideRoom } }),
+    'wide-wall-edges',
+    [firstKey],
+    wallInteriorTool({ material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  assert.equal(result.error, null)
+  const profiles = result.surfaceData.rooms['wide-wall-edges'].wallAppearanceProfiles
+  assert.equal(profiles.length, 1)
+  assert.deepEqual(profiles[0].edgeKeys, [firstKey])
+  assert.equal(profiles[0].interiorMaterial.paint, '#ff0000')
+  assert.ok(!profiles.some(entry => entry.edgeKeys.includes(secondKey)))
+})
+
+test('paintRoomWallEdges ignore toute texture/mode résiduel et reste procédural (Option 2, 2026-09-28)', () => {
+  const wideRoom = room('wide-wall-no-texture', 0)
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+  const [firstKey] = west.edgeKeys
+  const contaminatedTool = {
+    ...wallInteriorTool({ material: 'steel', paint: '#123456', wear: 0, dirt: 0, relief: 0 }),
+    surfaceMaterialMode: 'texture',
+    wallInteriorTexId: 'some-texture-id-left-over-from-another-mode',
+    wallInteriorPackId: 'some-pack-id',
+  }
+
+  const result = paintRoomWallEdges(
+    emptySurface({ rooms: { 'wide-wall-no-texture': wideRoom } }),
+    'wide-wall-no-texture',
+    [firstKey],
+    contaminatedTool,
+  )
+
+  assert.equal(result.error, null)
+  const profile = result.surfaceData.rooms['wide-wall-no-texture'].wallAppearanceProfiles[0]
+  assert.equal(profile.interiorTex, null)
+  assert.equal(profile.interiorMaterial.paint, '#123456')
+})
+
+test('paintRoomWallRoom (défaut) laisse les cases déjà personnalisées intactes', () => {
+  const wideRoom = room('wide-wall-room-soft', 0)
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+  const [firstKey] = west.edgeKeys
+
+  const painted = paintRoomWallEdges(
+    emptySurface({ rooms: { 'wide-wall-room-soft': wideRoom } }),
+    'wide-wall-room-soft',
+    [firstKey],
+    wallInteriorTool({ material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  const result = paintRoomWallRoom(
+    painted.surfaceData,
+    'wide-wall-room-soft',
+    wallInteriorTool({ material: 'wood', paint: '#00ff00', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  assert.equal(result.error, null)
+  const finalRoom = result.surfaceData.rooms['wide-wall-room-soft']
+  assert.equal(finalRoom.wallInteriorMaterial.paint, '#00ff00')
+  assert.equal(finalRoom.wallAppearanceProfiles.length, 1)
+  assert.equal(finalRoom.wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
+})
+
+test('paintRoomWallRoom (clearOverrides) écrase aussi les cases déjà personnalisées', () => {
+  const wideRoom = room('wide-wall-room-hard', 0)
+  const west = getRoomBoundaryWallRuns(wideRoom).find(run => run.side === 'west')
+  const [firstKey] = west.edgeKeys
+
+  const painted = paintRoomWallEdges(
+    emptySurface({ rooms: { 'wide-wall-room-hard': wideRoom } }),
+    'wide-wall-room-hard',
+    [firstKey],
+    wallInteriorTool({ material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  const result = paintRoomWallRoom(
+    painted.surfaceData,
+    'wide-wall-room-hard',
+    wallInteriorTool({ material: 'wood', paint: '#00ff00', wear: 0, dirt: 0, relief: 0 }),
+    { clearOverrides: true },
+  )
+
+  assert.equal(result.error, null)
+  assert.equal(result.clearedOverrides, true)
+  const finalRoom = result.surfaceData.rooms['wide-wall-room-hard']
+  assert.equal(finalRoom.wallInteriorMaterial.paint, '#00ff00')
+  assert.deepEqual(finalRoom.wallAppearanceProfiles, [])
+})
+
+function cellKeysOf(cells) {
+  return new Set(cells.map(cell => `${cell.x}:${cell.z}`))
+}
+
+test('paintRoomFootprintCells (add) peint des cases vers l’extérieur et ignore les cases déjà dans la salle', () => {
+  const wideRoom = room('extend-out', 0) // 2x2 cases (x:0-1, z:0-1)
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { 'extend-out': wideRoom } }),
+    'extend-out',
+    [{ x: 0, z: -1 }, { x: 1, z: -1 }, { x: 0, z: 0 }],
+    'add',
+  )
+
+  assert.equal(result.error, null)
+  const cells = getRoomFootprintCells(result.surfaceData.rooms['extend-out'])
+  const keys = cellKeysOf(cells)
+  assert.equal(cells.length, 6) // 4 cases d'origine + 2 nouvelles (la 3e était déjà dans la salle)
+  assert.ok(keys.has('0:-1') && keys.has('1:-1'))
+  const noOp = result.cells.find(cell => cell.x === 0 && cell.z === 0)
+  assert.equal(noOp.accepted, false)
+  assert.equal(noOp.reason, 'already-in-room')
+})
+
+test('paintRoomFootprintCells (add) n’ajoute jamais une case déjà occupée par une autre salle', () => {
+  const wideRoom = room('extend-blocked', 0)
+  const neighbor = { ...room('neighbor', 0), minX: 0, maxX: 1, minZ: -1, maxZ: -1, cells: ['0:-1'] }
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { 'extend-blocked': wideRoom, neighbor } }),
+    'extend-blocked',
+    [{ x: 0, z: -1 }, { x: 1, z: -1 }],
+    'add',
+  )
+
+  assert.equal(result.error, null)
+  const keys = cellKeysOf(getRoomFootprintCells(result.surfaceData.rooms['extend-blocked']))
+  assert.ok(!keys.has('0:-1')) // occupée par la salle voisine
+  assert.ok(keys.has('1:-1')) // libre, ajoutée normalement
+  const refused = result.cells.find(cell => cell.x === 0 && cell.z === -1)
+  assert.equal(refused.reason, 'occupied')
+})
+
+test('classifyRoomFootprintCells (add) refuse une case qui resterait un îlot déconnecté', () => {
+  const wideRoom = room('add-island', 0) // 2x2 cases (x:0-1, z:0-1)
+
+  const result = classifyRoomFootprintCells(
+    emptySurface({ rooms: { 'add-island': wideRoom } }),
+    'add-island',
+    [{ x: 5, z: 5 }],
+    'add',
+  )
+
+  assert.equal(result.batchError, null)
+  assert.equal(result.cells[0].accepted, false)
+  assert.equal(result.cells[0].reason, 'disconnected')
+})
+
+test('paintRoomFootprintCells (remove) retire une case du contour', () => {
+  const wideRoom = room('shrink', 0)
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { shrink: wideRoom } }),
+    'shrink',
+    [{ x: 0, z: 0 }],
+    'remove',
+  )
+
+  assert.equal(result.error, null)
+  const keys = cellKeysOf(getRoomFootprintCells(result.surfaceData.rooms.shrink))
+  assert.equal(keys.size, 3)
+  assert.ok(!keys.has('0:0'))
+})
+
+test('paintRoomFootprintCells (remove) retire une case intérieure et forme un pilier (trou dans le contour)', () => {
+  const block = {
+    ...room('pillar', 0),
+    minX: 0,
+    maxX: 2,
+    minZ: 0,
+    maxZ: 2,
+    cells: ['0:0', '1:0', '2:0', '0:1', '1:1', '2:1', '0:2', '1:2', '2:2'],
+  }
+  assert.equal(roomBoundaryLoops(block).length, 1) // plein, un seul contour
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { pillar: block } }),
+    'pillar',
+    [{ x: 1, z: 1 }],
+    'remove',
+  )
+
+  assert.equal(result.error, null)
+  const keys = cellKeysOf(getRoomFootprintCells(result.surfaceData.rooms.pillar))
+  assert.equal(keys.size, 8)
+  assert.ok(!keys.has('1:1'))
+  const loops = roomBoundaryLoops(result.surfaceData.rooms.pillar)
+  assert.equal(loops.length, 2) // le contour extérieur + le pilier
+  assert.ok(loops.some(loop => loop.area < 0)) // le pilier est bien reconnu comme un trou
+})
+
+test('paintRoomFootprintCells (remove) refuse de laisser une salle sans aucune case', () => {
+  const tinyRoom = { ...room('tiny', 0), maxX: 0, maxZ: 0, cells: ['0:0'] }
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { tiny: tinyRoom } }),
+    'tiny',
+    [{ x: 0, z: 0 }],
+    'remove',
+  )
+
+  assert.match(result.error, /aucune case/i)
+})
+
+test('paintRoomFootprintCells (remove) refuse un retrait qui couperait la salle en deux morceaux', () => {
+  const uShape = {
+    ...room('u-shape', 0),
+    minX: 0,
+    maxX: 2,
+    minZ: 0,
+    maxZ: 2,
+    cells: ['0:0', '2:0', '0:1', '2:1', '0:2', '1:2', '2:2'],
+  }
+
+  const result = paintRoomFootprintCells(
+    emptySurface({ rooms: { 'u-shape': uShape } }),
+    'u-shape',
+    [{ x: 1, z: 2 }],
+    'remove',
+  )
+
+  assert.match(result.error, /morceaux séparés/i)
+})
+
+test('classifyRoomFootprintCells (remove) refuse une case qui porte une porte', () => {
+  const guardedRoom = room('guarded-shrink', 0)
+
+  const result = classifyRoomFootprintCells(
+    emptySurface({
+      rooms: { 'guarded-shrink': guardedRoom },
+      connectors: { door: { type: 'door', axis: 'z', x0: 0, x1: 0, z0: 0, z1: 4, y: 0 } },
+    }),
+    'guarded-shrink',
+    [{ x: 0, z: 0 }],
+    'remove',
+  )
+
+  assert.equal(result.cells[0].accepted, false)
+  assert.equal(result.cells[0].reason, 'door')
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
@@ -342,6 +685,49 @@ test('un profil vertical mitoyen ne modifie que la face de la salle sélectionn�
       assert.ok(neighborRoomIds.some(roomId => ownRoomIds.has(roomId)))
     }
   }
+})
+
+test('paintRoomWallEdges sur un mur mitoyen ne fait jamais fuiter la couleur d’une salle sur la face de l’autre', () => {
+  const left = { ...room('left', 0), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const right = { ...room('right', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const east = getRoomBoundaryWallRuns(left).find(run => run.side === 'east')
+  const west = getRoomBoundaryWallRuns(right).find(run => run.side === 'west')
+
+  const paintedLeft = paintRoomWallEdges(
+    emptySurface({ rooms: { left, right } }),
+    'left',
+    east.edgeKeys,
+    wallInteriorTool({ material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 }),
+  )
+  const paintedBoth = paintRoomWallEdges(
+    paintedLeft.surfaceData,
+    'right',
+    west.edgeKeys,
+    wallInteriorTool({ material: 'wood', paint: '#00ff00', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  assert.equal(paintedBoth.error, null)
+  const shared = roomsWallSegments(paintedBoth.surfaceData.rooms).find(wall => wall.roomIds.length === 2)
+  const paints = [shared.frontMaterial?.paint, shared.backMaterial?.paint]
+  assert.ok(paints.includes('#ff0000'), 'la couleur de la salle gauche doit survivre sur sa face')
+  assert.ok(paints.includes('#00ff00'), 'la couleur de la salle droite doit survivre sur sa face')
+})
+
+test('paintRoomWallEdges sur un mur mitoyen : la salle jamais peinte hérite de la couleur de sa voisine (filet de secours), sans écraser la salle peinte', () => {
+  const left = { ...room('left-only', 0), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const right = { ...room('right-unpainted', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const east = getRoomBoundaryWallRuns(left).find(run => run.side === 'east')
+
+  const paintedOnlyLeft = paintRoomWallEdges(
+    emptySurface({ rooms: { 'left-only': left, 'right-unpainted': right } }),
+    'left-only',
+    east.edgeKeys,
+    wallInteriorTool({ material: 'steel', paint: '#123456', wear: 0, dirt: 0, relief: 0 }),
+  )
+
+  const shared = roomsWallSegments(paintedOnlyLeft.surfaceData.rooms).find(wall => wall.roomIds.length === 2)
+  assert.equal(shared.frontMaterial?.paint, '#123456')
+  assert.equal(shared.backMaterial?.paint, '#123456')
 })
 
 test('une apparence de mur reste attachée aux arêtes sélectionnées sans modifier les autres murs', () => {

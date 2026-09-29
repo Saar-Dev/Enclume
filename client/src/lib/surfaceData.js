@@ -91,6 +91,13 @@ export {
   applyRoomWallElevationProfile,
   applyRoomWallAppearance,
   roomToSurfaceToolPatch,
+  roomWallRunOffsetAtPoint,
+  roomWallEdgeKeyAtOffset,
+  roomWallEdgeKeyAtPoint,
+  paintRoomWallEdges,
+  paintRoomWallRoom,
+  classifyRoomFootprintCells,
+  paintRoomFootprintCells,
 } from './surfaceRooms.js'
 export {
   makeStairFromSelection,
