@@ -1,0 +1,874 @@
+Guide
+des armures_
+(Guide technique)
+
+Nouvelle
+classification
+des armures_
+* poids en kg (à l’équilibre) des armures sous-marines. Pour les armures terrestres,
+il faut multiplier par 0,8.
+ÉQUILIBRAGE DES ARMURES» Toutes lesarmuresemportent unmini-ballast pour gérer les variations de poids. Elles peuvent aussi avoir un PIT additionnel
+(pour celles qui ont une source d’énergie conséquente) pour la gestion de l’équilibre Enfin, pour les armures plus lourdes que
+leur déplacement, elles embarquent des sortes de conteneurs en mousse syntactique (matériau expansé) qui permettent d’at￾teindrel’équilibre unefois dans l’eau. MODIFICATEUR D’INTÉGRITÉ DES ARMURES
+Le modificateur aux tests d’intégrité de l’armure. Une va￾leur positiveest un bonus, unevaleur négative, unmalus. AUTONOMIE DES ARMURES
+Il existe deux grandes familles de « moteurs ». Celle dont
+lesmoteurs fonctionnent presqueindéfiniment(RTG,générateur azuréen et généticien, réacteur micro-fusion azuréen et généti- cien) et celle dont les moteurs ne fonctionnent que durant une
+certaine période. Pour les moteurs de la seconde famille, on peut décider de
+réduiresavitesse de déplacement ou saconsommation électrique pouréconomiser del’énergieet par conséquent augmenter l’au￾tonomie: Vitesse. C’est le coefficient multiplicateur à appliquer à la vitesse maximale prévue pour le GP. Ainsi, x 0,6 signifie qu’une vitesse de 10 nœuds devient unevitesse de 6 nœuds. Autonomie. C’est le coefficient multiplicateur à appliquer à
+l’autonomie de base du GP. Ainsi un multiplicateur de 4 (vitesse divisée par deux) avec 1 heure d’autonomie initiale donne une nouvelleautonomie de 4 heures. Condition. Plus une armure peut se déplacer rapidement et plus il est possible d’économiser de l’énergie. Ainsi, à partir d’unevitesse maximale de 5,5 nœuds, on peut multiplier par 10
+l’autonomie en restant quasiment immobile. En revanche, si la vitessemaximale del’armure n’est par exemple que de 4 nœuds, alors legain en autonomie ne peutêtresupérieur à 6.
+
+AUTONOMIE DESARMURES
+VITESSE_ Autonomie Condition
+x 0,85 x 1,5 Vitesse maximale ≥ 1 nœud (1,8 km/h) x 0,75
+ x 2 Vitesse maximale ≥ 2 nœuds (3,6 km/h) x 0,60
+ x 3 Vitesse maximale ≥ 3 nœuds (5,6 km/h) x 0,50
+ x 4 Vitesse maximale ≥
+3,5 nœuds (6,5 km/h) x 0,45  x 5 x 0,40
+ x 6 Vitesse maximale ≥ 4 nœuds (7,4 km/h) x 0,35  x 7 x 0,30
+ x 8 Vitesse maximale ≥
+4,5 nœuds (8,3 km/h) x 0,20
+ x 9 Vitesse maximale ≥ 5 nœuds (9,3 km/h)
+ ~ Immobile
+(≤ ½ nœud) x 10
+Vitesse maximale ≥ 5,5 nœuds (10,2km/h)
+
+CONSOMMATION ÉLECTRIQUE
+CONSOMMATION_ Autonomie
+2/3 x 1,5
+1/2 x 2
+1/3 x 3
+1/4 x 4
+
+armures
+sous-marines_
+Note sur le coût des armures : le prix indiqué pour les ar- mures necomprend ni la propulsion, ni le GP, ni l’armement. FAUST
+Echelle :V- Catégorie : Exo-4
+Fabricant : Meklar industrie Nation : Hégémonie Coût indicatif : 8 833 000 sols Disponibilité (marché noir) : -5(1)
+NT estimé : IV
+Taille : 3m30
+Poids : 5 787 kg
+Profondeur: • Opérationnelle : -17 500 mètres • Limite : - 21 000 mètres • Écrasement : - 26 250 mètres Autonomie : RTGc(en années)
+Attributs : • Exo-Force : 91
+• Modificateur de dommages : +40 (H)/+4(V-) • Ossature : ArmaTi • Architecture : normale
+• Intégrité : +7
+• Résistance aux Dommages : -1
+• Armure : nano-composite fc/epoxy de 124 mm d’épais￾seur • Plaque d’armure supplémentaire : non
+• Blindage : 6
+• Visière : paroien nano-alon de 24 mm d’épaisseur • Volet de sécurité : 14mmde Nano-comp. 133-cRHA
+• Blindage visière (avec volet de sécurité) : 2 (5 ou 6
+contrelescontrelesarmesàénergieet leschargescreuses) • Catégorie GP : GP-C1
+• Vitesse/VIT (points de mouv.) : 4 nœuds/1 (1)
+(PIT)/ 3km/h/<1(1) (surface)
+Malus d’initiative : sous l’eau : -5/ à terre: -10
+Systèmes vitaux : • OrdinateurHector VI (NTIVGén. 5) • Sonscan Actif Dauphin II • Sonscan Passif Kilian
+• AnalyseurMk 18 Sea-Star • Calculateur NemrodVI • Commandesvocales • Système tactique Mc Clurr • Comlink
+• Communicateur Lénid II • Système d’analysetactique Cougar 60
+• Pressurisateur • Régulateur thermique 2
+• Contrôle Class A
+• Indicateur d’acquisition
+• Réserve d’oxygène 24h
+• Filtre 96h
+• Stabilisateur • Dispositif diagnostic
+• Système de navigation Armement : • 2 x lance-torpilles taille 2 (2x2 torpilles) • Lance-harpons (20 harpons) • Chalumeau
+• Faisceau anti moléculaireléger (munitions illimitées) • Lance-harponsA.V.(10 projectiles) • Canon Manta (24 obus)
+Note :c’est l’armurestandard des troupes d’intervention sous- marine hégémoniennes. Il en existe une identique pour des opéra￾tions de surface.
+
+MENTOR 
+Echelle : H
+Catégorie : Exo-2
+Fabricant : Meklar industrie Nation : Hégémonie Coût indicatif : 1 750 000 sols Disponibilité (marché noir) : 5(10)
+NT estimé : III
+Taille : 2m40
+Poids : 2 566 kg
+Profondeur: • Opérationnelle : - 12 000 mètres • Limite : - 14 400 mètres • Écrasement : - 18 000 mètres Autonomie : RTGcen années Attributs : • Exo-Force : 68
+• Modificateur de dommages : +29(H)/-1 (V-) • Ossature :Titanestructurel • Architecture : normale
+• Intégrité : +2
+• Résistance aux Dommages : -9
+• Armure : plastitane de 85 mm d’épaisseur • Plaque d’armure supplémentaire : non
+• Blindage : 37
+• Visière : Alon de 60 mm d’épaisseur • Volet de sécurité : non
+• Blindage visière (avec volet de sécurité) : 19
+• Catégorie GP : GP-C2
+• Vitesse/VIT (points de mouv.) : 6 nœuds/2(1) (PIT) ou 3 nœuds/1(1) (exo-palmes) ou 6km/h/1(1) (marche)
+Malus d’Initiative : sous l’eau : -3 ; à terre: -6
+Systèmes auxiliaires : • Interface decontrôleà commandesvocales (principale) • Panneau decontrôle manuel (secours, bras) • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan
+• Systèmerespiratoire(Réserve d’oxygène de 24 heures) • Régulateur thermique
+• Système hygiénique niv. 2
+• Système d’alimentation niv. 2
+• Communicateur Lénid
+• ComLink
+• Système d’assistanceet decontrôle
+• Système d’assistance et de contrôle (secours) • Contrôle de pression
+• Ordinateur NT III, Gén. IV
+• Générateur delumière Feu follet • Balise de détresse
+• Verrouillageantivol niv. 7 (1 systèmeau choix)
+Armement : • Canon à neutrons fantassin (épaule) • Dague moléculairerétractable(poing) • Générateur défensif électrique
+• Lance-harpon lourd, 10 charges (bras)
+Note : pour quitter le milieu liquide, l’armure doit éjecter ses ballasts et ses conteneurs pour ne pas être trop lourde.
+MOLOCH
+Echelle :V- Catégorie : Exo-4B
+Fabricant : Odin industrie Nation : Indépendante Coût indicatif : 9 200 000 sols Disponibilité (marché noir) : -5(1)
+NT estimé : III/IV
+Taille : 3m30
+Poids: 5 419 kg
+Profondeur : • Opérationnelle : - 19 000 mètres • Limite : - 22 800 mètres • Écrasement : - 28 500 mètres Autonomie : RTGcen années Attributs : • Exo-Force : 91
+• Modificateur de dommages : +40 (H)/+4 (V-) • Ossature : Fivaltine
+• Architecture : normale
+• Intégrité : +5
+• Résistance auxDommages : +1
+• Armure : nano-composite fc/epoxy de 136 mm d’épais￾seur • Plaque d’armure supplémentaire : non
+• Blindage : 6
+• Visière : Alon de 106 mm d’épaisseur • Volet de sécurité : nano-acier RHA de 10 mm
+• Blindage visière (avec volet de sécurité) : 3(4) • Catégorie GP : GP-B4
+• Vitesse/VIT (points de mouv.) : 0,3 nœuds/M(1/2)
+(marche) ou 3 nœuds/1(1) (PIT) ou 0,5km/h/M(1/2)
+(Marche)
+Malus d’Initiative : sous l’eau : -5 ; à terre: -10
+Systèmes auxiliaires : • Interface decontrôleà commandesvocales • Panneau decontrôle manuel desecours (bras) • Ordinateur NT IV, Gén. III • Ordinateur NT III, Gén. II (secours) • Sonscan actif directionnel • Sonscan passif • Analyseur sonscans • Calculateur detir • Communicateur Lénid
+• ComLink
+• Détecteur d’acquisition
+• Affichage tactique
+• Mémoire deciblesMémo
+• Régulateur thermique
+• Stabilisateur • Système d’assistanceet decontrôle
+• Système d’assistance et de contrôle (secours) • Contrôle de pression
+• Systèmerespiratoire(Réserve d’oxygène de 72 heures) • Dispositif de diagnostic
+• Dispositif deréparation : Centrale d’autoréparation niv.12
+
+• Modules annexes pour 10 systèmes • Dispositif d’assistance médical niv. 5
+• Système Dernièrechance(Injection de drogues) • Générateur delumière Feu follet • Atténuateur sonore niv. 4
+• Lance-leurres, 6 leurres niv. 3
+• Brouilleur sonscansactifset passifs niv. 3
+• Centre decommande de drones • Balise de détresse
+• Système hygiénique niv. 1
+• Système d’alimentation niv. 2
+• Système de navigation niv. 13
+Armement : • Dague moléculairerétractable(poing) • Canon à neutrons fantassin (épaule) • Lance-harpon AVmultiple, 3 charges (bras) • Lance-torpilles Taille 2, 2 torpilles Note :cettearmureest difficilement utilisablehors del’eau sans
+source d’énergiesupplémentaire. NOELID
+Note :c’est l’armure standard des commandos sous-marins hégémoniens. Echelle : H
+Catégorie : Exo-1
+Fabricant : Meklar industrie Nation : Hégémonie Coût indicatif : 2 860 000 sols Disponibilité (marché noir) : -5(1)
+NT estimé : IV
+Taille : 2m25
+Poids: 1 854 kg
+Profondeur: • Opérationnelle : -12 000 mètres • Limite : - 14 400 mètres • Écrasement : - 18 000 mètres Autonomie : RTGc NTIV (plusieurs années)
+Attributs : • Exo-Force: 62
+• Modificateur de dommages : +26 (H)/-2 (V-) • Ossature: nano-titanestructurel • Architecture : normale
+• Intégrité : +8
+• Résistanceaux Dommages : -14
+• Armure: nano-alliage detitane de 22 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 44
+• Visière:hyper-alon de 20 mm d’épaisseur • Volet de sécurité: non
+• Blindagevisière(avecvolet desécurité) : 13
+• Catégorie GP : GP-C2
+• Vitesse/VIT (points de mouv.) : 6 nœuds/2(1) (PIT) ou
+4 nœuds/1(1) (Exo-palmes) ou 12km/h/2(1)en surface Malus d’initiative : sous l’eau : -2 ; à terre: -4
+Systèmes vitaux :
+• Ordinateur Callios XMNTIV niveau 4
+• Sonscan Actif Dauphin II • Passif Kilian
+• AnalyseurMk 12 Sea-Star • Calculateur Nemrod
+• Commandesvocales • Système tactique Mc Clurr • Comlink
+• Communicateur Lénid II • Système d’analysetactique Cougar 60
+• Pressurisateur • Régulateur thermique 2
+• Contrôle Class A
+• Indicateur d’acquisition
+• Réserve d’oxygène 24h
+• Filtre 96h
+• Stabilisateur • Dispositif diagnostic
+• 2 porte-drone bêta (2 drone deréparation) • Dernièrechance Guillotine/Système de navigation Armement : • Lance-torpilles taille 1 (6 torpilles) • Lance-harpons (10 harpons) x 2
+• Dague moléculaire
+• Armeà supercavitation
+• Cougar 125 intégré
+Note :Tous les systèmes ont un blindage I.E.M. 6. NYMPH 1-A
+Echelle : H
+Catégorie : Exo-0
+Fabricant : Gladius Nation : Culte duTrident/Veilleurs Coût indicatif : 420 000 sols Disponibilité (marché noir) : 10(15)
+NT estimé : III
+Taille : 1m85
+Poids: 904 kg
+Profondeur : • Opérationnelle : - 8 000 mètres • Limite : - 9 600 mètres • Écrasement : - 12 000 mètres Autonomie : THCc (13 heures)
+Attributs : • Exo-Force: 51
+• Modificateur de dommages : +20 (H)/-6 (V-) • Ossature:TiCal • Architecture : normale
+• Intégrité: +0
+• Résistanceaux Dommages : -5
+• Armure: plastitane de 41 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 22
+• Visière* :alon en de 13 mm d’épaisseur (hublots de 5 cm
+de diamètre) • Volet desécurité: non
+• Blindagevisière(avecvolet desécurité) : 14
+• Catégorie GP : GP-B4
+• Vitesse/VIT (points de mouv.) : 4 nœuds/1(1) (PIT) ou 3
+nœuds/1(1) (exo-palmes) ou 11km/h/2(1) (marche)
+Malus d’initiative : sous l’eau : -2 ; à terre: -4
+* le casque est un modèle quasi-intégral. Utilisez les valeurs de la coque
+si l’adversairene vise pasundes deux petitshublots (test à –7). Systèmes auxiliaires : • Panneau decontrôle manuel (avant-bras) • Systèmerespiratoire(Réserve d’oxygène de 24 heures) • Régulateur thermique
+• Système d’assistanceet decontrôle(principal) • Système d’assistance et de contrôle (secours) • Contrôle de pression
+• OrdinateurNT III,Gén. V (principal) • Ordinateur NT II, Gén. II (secours) • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan niv. 12
+• Communicateur Lénid
+• ComLink
+• Verrouillageantivol niv. 5 (1 systèmeau choix) • Générateur delumière Feu Follet Armement : • Dague moléculairerétractable(poing) • Générateur défensif électrique
+• Lance-harpon lourd, 10 charges (bras)
+ODIN
+Echelle : V- Catégorie : Exo-3
+Fabricant : Odin industrie Nation : Indépendant Coût indicatif : 20 millions desols Disponibilité (marché noir) : 1(5)
+NT estimé : III
+Taille : 2m70
+Poids :environ 3 500 kg
+Profondeur: • Opérationnelle : - 18 000 mètres • Limite : - 21 600 mètres • Écrasement : - 27 000 mètres Autonomie :en années (RTGc)
+Attributs : • Exo-Force : 77
+• Modificateur de dommages : +33(H)/+1(V-) • Ossature : PlasTirAl • Architecture : Normale
+• Intégrité : +3
+• Résistance aux Dommages : +3
+• Armure :hyper-terranium de 13 mm d’épaisseur • Plaque d’armure supplémentaire : non
+• Blindage : 4
+• Visière :hyper-alon de 24 mm
+• Volet de sécurité : super acier de 6mm d’épaisseur • Blindage visière (avec volet de sécurité) : 2(3)
+• Catégorie GP : GP-C2
+• Vitesse/VIT (points de mouv.) : 0,3 nœuds/M(1/2)
+(Marche) ou 5 nœuds/1(1) (PIT) ou 5km/h 1(1) (marche Malus d’Initiative : sous l’eau : -4 ; à terre: -8
+Note : Cettearmureévoluetrès difficilementhors del’eau sans ajout d’une source d’énergie supplémentaire et si elle ne largue pas
+sesgueuzes. Systèmes auxiliaires : • Interface decontrôleà commandes optiques (principale) • Panneau decontrôle manuel (secours, bras) • Ordinateur NT IV Gén. II • Ordinateur NT II, Gén. I (secours) • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan
+• Calculateur detir • Régulateur thermique
+• Communicateur Lénid
+• ComLink
+• Systèmerespiratoire(Réserve d’oxygène de 72 heures) • Système d’assistanceet decontrôle
+• Système d’assistance et de contrôle (secours) • Contrôle de pression
+• Balise de détresse
+• Détecteur d’acquisition
+• Dispositif d’assistancemédicale niv. 4
+• Générateur delumière Feu follet • Affichage tactique
+• Champ IEManti-torpille niv. 3
+• Centre decommande de drones Armement : • Dague moléculairerétractable(poing) • Canon à neutrons fantassin (épaule) • Générateur défensif à micro-ondes • Lance-harpon AVmultiple, 3 charges (épaule)
+OMEGA
+Note : l’armure omégaest un prototype développé par l’Union Méditerranéenne. C’est une énorme armure massive ressemblant vaguement à une sorte de colosse à quatre pattes, deux repliées à
+l’arrièreet deux plusgrandes à l’avant. Echelle : V- Type : Exo-Oméga Catégorie :Véhiculeléger (V-)
+Fabricant : Millénium
+Nation : Union méditerranéenne Coût indicatif : 5 255 000 sols Disponibilité (marché noir) : Introuvable NT estimé : IV
+Taille : 4m75
+Poids:environ 19 tonnes Profondeur : • Opérationnelle : - 12 000 mètres • Limite : - 15 600 mètres • Écrasement : - 18 000 mètres Autonomie : 150 ans (micro-fusion pressuriséazuréen)
+Attributs :
+• Gabarit : 3
+• Exo-Force : 128
+• Modificateurdedommages: +59(H)/+11(V-)/+1(V+) • Ossature : Fivaltine
+• Architecture : Lourde
+• Intégrité : +8
+• Résistance aux Dommages : -4
+• Armure : nano-acier VHS de 28mmd’épaisseur • Plaque d’armure supplémentaire : non
+• Blindage : 7
+• Visière :hyper-alon de 27 mm d’épaisseur • Volet de sécurité : nano-acierRHAde 10mm d’épaisseur • Blindage visière (avec volet de sécurité) : 2 (3) • Catégorie GP : GP-C3
+• Vitesse/VIT (points de mouv.) : 4 nœuds/1(1) (PIT) ou 1km/h/M(1/2)(Marche)
+Malus d’initiative : sous l’eau : -6 ; à terre: -12
+Systèmes auxiliaires : • Réserve oxygène 48h
+• Stabilisateur • Régulateur thermique
+• Sonscan actif omnidirectionnel • Sonscan passif • Analyseur • Calculateur • Communicateur Lénid
+• Communication parcâblecomlink
+• Balise RescueII • Systèmehygiénique Hygéna 1
+• Alimentation
+• Navigation
+• Indicateur d’acquisition
+• Systèmeassistanceetcontrôleclasse A
+• Contrôle de pression
+• 2 x Générateurs delumière Feu Follet 4
+• Tactique visière
+• Auto-pilot Icare niveau 6 (réactif ; retouràla baseen cas de perte de conscience du pilote) • Ordinateur FiséanGén. VINT IV
+• Atténuateur sonore 4
+• Système de défense Echo+ 4
+• Modificateur d’écho 5
+• Lance-leurres Gardien
+• Leurres Astyx niveau 6 x10
+• Mini DCA Phalanx à supercavitation Armement: • Lanceurà barillet supercavitation taille 3 (6 Torpilles taille 3) • Lanceurà barillet taille 4 (6 Torpilles taille 4) • CanonMantaV(12 obus) • 2 x Cougar 125 (munitions : 30/30)
+ORKA (Tenue grande profondeur)
+Echelle :V- Catégorie : Exo-4C
+Fabricant : Odin industrie Nation : Coût indicatif : 30 millions desols (26 millions sans le RTGc)
+Disponibilité (marché noir) : -5(1)
+NT estimé : III
+Taille : 3m10
+Poids : 5 100 kg
+Profondeur: • Opérationnelle : - 20 000 mètres • Limite : - 28 000 mètres • Écrasement: - 30 000 mètres Autonomie :en années (RTGc) ou 13 heures (THCc)
+Attributs : • Exo-Force : 91
+• Modificateur de dommages : +40 (H)/+4 (V-) • Ossature : titane structurel • Architecture : Ultra lourde
+• Intégrité : +8
+• Résistance aux Dommages : -2
+• Armure :hyper-terranium de 17 mm d’épaisseur • Plaque d’armure supplémentaire : super-acier de 5 mm d’épaisseur • Blindage : 7
+• Visière :hyper-alon de 32 mm d’épaisseur • Volet de sécurité : super acier de 10 mm d’épaisseur • Blindage visière (avec volet de sécurité) : 2(4) • Catégorie GP : GP-C2
+• Vitesse/VIT (points de mouv.) : 0,3 nœuds/M(1/2)
+(marche) ou 2km/h/<1(1) (Marche)
+Malus d’Initiative : sous l’eau : -5 ; à terre: -10
+Systèmes auxiliaires : • Interface decontrôleà commandes optiques • Panneau decontrôle manuel desecours (bras) • Communicateur Lénid
+• ComLink
+• Sonscan actif directionnelSonscan passif • Analyseur sonscans • Calculateur detir • Ordinateur NT IV, Gén. IV
+• Régulateur thermique
+• Contrôle de pression
+• Système d’assistanceet decontrôle
+• Système d’assistance et de contrôle (secours) • Stabilisateur • Générateur delumière Feu follet • Systèmerespiratoire(Réserve d’oxygène de 72 heures) • Dispositif de diagnostic Dispositif de réparation : • Centrale d’autoréparation niv. 12
+• Modules annexes pour 5 systèmes • Systèmehygiénique niv. 1
+• Système d’alimentation niv. 2
+• Système de navigation niv. 13
+• Camera
+• Affichage tactique
+• Autopilote niveau 12 (réactif, retour à la base en cas de perte de conscience du pilote)
+Armement : • Pistolet lourd sous-marin à dards (main) • Daguethermiquerétractable(poing) • Générateur défensif à déchargesélectriques. • Lance-harpon AVmultiple, 5 charges (bras)
+Notes : cette armure est difficilement utilisable hors de l’eau
+sans source d’énergiesupplémentaire. SÉRIE A
+Echelle : H
+Catégorie : Exo-0
+Fabricant : Indus Conglomérat Nation : Royaume del’Indus Coût indicatif : 40 113 sols Disponibilité (marché noir) : 10(15)
+NT estimé : II
+Taille : 1m85
+Poids: 1 200 kg
+Profondeur : • Opérationnelle : - 2 000 mètres • Limite : - 2 400 mètres • Écrasement : - 3 000 mètres Autonomie : 12 heures(THCc)
+Attributs : • Exo-Force: 51
+• Modificateur de dommages : +20 (H)/-6 (V-) • Ossature: aluminium structurel • Architecture : normale
+• Intégrité: -2
+• Résistanceaux Dommages : -3
+• Armure: alliage d’aluminium de 27 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 16
+• Visière:verre blindé de 49 mm d’épaisseur • Volet desécurité: non
+• Blindagevisière(avecvolet desécurité) : 7
+• Catégorie GP : GP- B2
+• Vitesse/VIT(pointsde mouv.):0,5nœud/<1(1) (Marche) ou 2km/h/1(1) (Marche)
+Malus d’initiative : sous l’eau : -2 ; à terre: -4
+Systèmes auxiliaires : • Panneau decontrôle manuel (avant-bras) • Systèmerespiratoire(Réserve d’oxygène de 24 heures) • Régulateur thermique
+• Systèmehygiénique niv. 2
+• Système d’assistanceet decontrôle
+• Contrôle de pression
+• Système de navigation niv. 10
+• Ordinateur NT III, Gén. II • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan niv. 12
+• ComLink
+Armement : • Daguerétractable(poing) • Générateur défensif électrique
+• Lance-harpon moyen, 10 charges (bras)
+SIRYA IV
+C’est l’armure légère de plongée la plus répandue en Ligue
+rouge. Son coût n’est donc qu’indicatif car on peut en trouver pour dix fois moins cher. Elle est caractérisée par sa grosse bonbonne
+d’oxygènesituée dans le dos. L’armureest dotée detrès peu d’équi- pements car elle est prévue pour être facilement modulable en fonc￾tion des besoins. Echelle : H
+Catégorie : Exo-0
+Fabricant :Varan technologie Nation : Ligue Rouge Coût indicatif : 238 000 sols Disponibilité (marché noir) : 5 (10)
+NT estimé : III
+Taille : 1m85
+Poids : 1 200kg
+Profondeur: • Opérationnelle : -14 600 mètres • Limite : - 17 520 mètres • Écrasement: - 21 900 mètres Autonomie : THCc pour 8 heures Attributs : • Exo-Force: 51
+• Modificateur de dommages : +20 (H)/-6 (V-) • Ossature: PlasTirAl • Architecture : normale
+• Intégrité: +3
+• Résistanceaux Dommages : -8
+• Armure:hyperacier VHS de 17mmd’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 37
+• Visière: alon de 44mm d’épaisseur • Volet de sécurité: non
+• Blindage visière : 16
+• Catégorie GP : GP-B4
+• Vitesse/VIT (points de mouv.) : 4 nœuds/1 (1) (PIT) ou 3
+nœuds/1(1) (exo-palmes) ou 8km/h/1(1) (marche)
+Malus d’initiative : -2
+Systèmes auxiliaires: • Ordinateur Pristar III (NTIII/Gén. 2) • Sonscan Actif Dauphin II • Passif Kilian
+• AnalyseurMk 12 Sea-Star • Calculateur Nemrod
+• Commandesvocales • Comlink
+• Communicateur Lénid II • Pressurisateur • Régulateur thermique 2
+• Contrôle Class A
+• Réserve d’oxygène 48 h
+• Filtre 96 h
+• Stabilisateur • Système de navigation Note : tous les systèmes ont un blindageI.E.M. 4
+SYD
+Echelle : H
+Catégorie : Exo-2
+Fabricant :Varan technologie
+Nation : Ligue Rouge Coût indicatif : 2 435 000 sols Disponibilité (marché noir) : 1 (5)
+NT estimé : III
+Taille : 2m50
+Poids : 2 800kg
+Profondeur : • Opérationnelle : -14 000 mètres • Limite : - 16 800 mètres • Écrasement : - 21 000 mètre Autonomie : RTGcen années Attributs : • Exo-Force: 68
+• Modificateur de dommages : +29 (H)/-1 (V-) • Ossature: PlasTirAl • Architecture : normale
+• Intégrité: +3
+• Résistanceaux Dommages : -10
+• Armure : Hyper composite fc/epoxy de 87 mm d’épais￾seur • Plaque d’armuresupplémentaire: non
+• Blindage: 42
+• Visière:Alon de 57 mmd’épaisseur • Volet desécurité: non
+• Blindagevisière: 18
+• Catégorie GP : GP-B4
+• Vitesse/VIT (points de mouv.) : 3 nœuds/1 (1) (PIT) ou
+2km/h/<1(1) (marche) • Malus d’initiative: -3
+Systèmes auxiliaires: • Ordinateur Pristar III (NTIII/Gén. II) • Sonscan Actif Dauphin II • Passif Kilian
+• AnalyseurMk 12 Sea-Star • Calculateur Nemrod
+• Commandes optiques • Tactiquevisière Comlink
+• Communicateur Lénid II • Pressurisateur • Régulateur thermique 2
+• Contrôle Class A
+• Réserve d’oxygène 24h
+• Filtre 96h
+• Stabilisateur • Système de navigation
+• Générateur delumière
+• Commandes manuelles desecours Armement et système défensif : • Lance-harpons (10 harpons) • Faisceau anti moléculaireléger • Lance-leurres (6 leurres) • Générateur micro-onde niveau 4
+Note : tous les systèmes ont un blindageI.E.M. 4
+
+VULCAIN (Armure de forage
+grande profondeur)
+Echelle :V- Catégorie : Exo-3
+Fabricant : Odin industrie Nation : Indépendant Coût indicatif : 2 450 000sols Disponibilité (marché noir) : 5(10)
+NT estimé : III
+Taille : 2m60
+Poids : 4 314 kg
+Profondeur: • Opérationnelle : - 12 000 mètres • Limite : - 16 800 mètres • Écrasement: - 18 000 mètres Autonomie :en années (RTGc) ou 24 heures (THCc) ou câble Attributs : • Exo-Force: 77
+• Modificateur de dommages : +33 (H)/+1 (V-) • Ossature: Titanestructurel • Architecture : Ultra-lourde
+• Intégrité: +8
+• Résistanceaux Dommages : -2
+• Armure:hyper-alliage detitane de 33 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 6
+• Visière:hyper-alon de 16 mm d’épaisseur • Volet de sécurité: non
+• Blindagevisière(avecvolet desécurité) : 1
+• Catégorie GP : GP-B2
+• Vitesse/VIT (points de mouv.) : 1 nœud /M(1)
+Propulsion terrestre : impossible avec le moteur indiqué ci- dessus. Certaines peuvent donc être équipées de moteurs plus performants.
+Malus d’Initiative : sous l’eau : -5 ; à terre: -10
+Systèmes auxiliaires : • Interface decontrôleà commandes optiques • Panneau decontrôle manuel desecours (avant-bras) • Ordinateur NT III, Gén. III • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan
+• Contrôle de pression
+• Communicateur Lénid
+• Régulateur thermique
+• Stabilisateur • ComLink
+• Systèmerespiratoire(Réserve d’oxygène de 72 heures) • Système d’assistanceet decontrôle
+• Système d’assistance et de contrôle (secours) • Générateur delumière Feu follet • Caméra
+• Autopilote niv. 10 (si l’armure est reliée à une balise de
+communication, on peut lui ordonner dereveniràla basesi
+le piloteest inconscient) • Dispositif de diagnostic
+• Balise de détresse
+• Centrale d’autoréparation niv.12
+• Modules annexes pour 10 systèmes • Système d’alerte
+• Systèmehygiénique niv. 1
+• Système d’alimentation niv. 1
+• Système de navigation niv. 12
+Armement : Ces systèmes sont des outils,mais ils peuventêtre utilisés comme des armes si l’occasion se présente…
+• Excavateurmécanique(main etavant-bras droit) • Griffe mécanique, Force utile 80 (main et avant-bras gauche) • Torche de forage plasma Hydra
+
+armure
+terrestres_
+
+armure terrestres
+BULLDOG
+Cette étrange armure a été découverte par un groupe d’exploration hégémonien dans les ruines d’une ville fossilisée. Personne ne sait qui l’a construite et comment. Elle est des plus primitives mais elle nécessite cependant une certaine technolo- gie. Massive,elleest assezeffrayanteàvoir surtout avec ses deux
+pots d’échappements recourbés à l’arrière et remontant dans le dos jusqu’àhauteur detête. Echelle : H
+Catégorie : Exo-1
+Fabricant : Inconnu Nation : inconnue Coût indicatif : - Disponibilité (marché noir) : Introuvable NT estimé : II
+Taille : 2m15
+Poids :environ 3,8 tonnes Profondeur: NA
+Autonomie :Moteur diesel detypeinconnu pour 12 heures Attributs : • Exo-Force: 79
+• Modificateur de dommages : +34(H)/+1 (V-) • Ossature: difficileà déterminer • Architecture : normale
+• Intégrité: +0
+• Résistanceaux Dommages : -6
+• Armure: fonte de 39 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 23
+• Visière : paroi en Plexiglas de 42 mm d’épaisseur (es￾timation) • Volet de sécurité : volet strié en fer forgé de 20 mm
+d’épaisseur • Blindagevisière(avecvolet desécurité) : 4 (16) • Catégorie GP : inconnu (GP-C4 probablement) • Vitesse/VIT (points demouv.) : 20km/h/4(1)
+Malus d’initiative : -2
+Systèmes auxiliaires : inconnus. Armement : On sait que l’armure était dotée d’une sorte devieux canon chain gun de 20 mm et degriffes decombat. COBALT
+Note :certainshabitants dela surfaceracontent uneétrange histoire concernant la « Légion du Cobalt ». D’après cette lé- gende, il s’agirait de mercenaires liés à l’Enclave deferet qui ont
+la particularité d’êtreinsensibles aux radiations. Ils seraient dotés d’armures de haute technologie composées d’un alliage haute- ment radioactif incorporant du Cobalt 60. Les membres de la Légion, d’après les descriptions, sont de véritables fous furieux adorant massacrer et piller. Le statut de «
+chef » dans ce groupe serait lié à la quantité de Cobalt 60 incor- poréeà l’armureet à sa radioactivité. Echelle : H
+Catégorie : Exo-alpha Fabricant : Inconnu Nation : Légion du Cobalt
+Coût indicatif : - Disponibilité (marché noir) : Introuvable NT estimé : II-III
+Taille : 1m80
+Poids : 620 kg
+Profondeur: non Autonomie : Batterie THC (12h + Capteurs solaires)
+Attributs : • Exo-Force: 43
+• Modificateur de dommages : +16 (H) • Ossature: titanestructurel • Architecture: lourde
+• Intégrité: +5
+• Résistanceaux Dommages : -6
+• Armure: 24mm d’alliage decobalt/cobalt-60
+• Plaque d’armuresupplémentaire: non
+• Blindage: 25
+• Visière: alon de 24 mm d’épaisseur • Volet de sécurité : volet strié en super acier de 6mm
+d’épaisseur • Blindagevisière(avecvolet desécurité) : 10 (23) • Catégorie GP : GP-B3
+• Vitesse,VIT (points de mouv.) : 14km/h/3(1)
+Malus d’initiative : -4
+Systèmes auxiliaires : le plus souvent des systèmes de base. Armement et système défensif : variés. Presque toujours des armes de contact et plus rarement des armes à feu. Le plus sou- vent ces armures sont équipées de griffes de combat et d’un lance￾flammes. Les leaders ont souvent une électro-pince, un gant magma ou un système decegenre. Spécial : Irradiation L’irradiation dégagée par l’armure dépend de la quantité de Cobalt 60 qu’elle renferme. En général, elle sera de 1d6 par tour mais les armures des chefs peuvent atteindre un niveau d’irradiation
+de 2D6 par tour. Lerayonnement diminueavecla distance: à 2 m ilest divisé par 2 et à 3m par 4. De plus, tous les 5 ans, le rayonnement est divisé
+par 2. CONDOR
+Echelle : H
+Catégorie : Exo-1 Delta Fabricant : Gladius Nation : Culte duTrident/Veilleurs Coût indicatif : 725 000 sols Disponibilité (marché noir) : 1(5)
+NT estimé : III
+Taille : 2m10
+Poids : 829 kg
+• Profondeur : • Opérationnelle : - 100 mètres si lestée
+• Limite : - 120 mètres • Écrasement : - 150 mètres Autonomie : 100 ans (micromoteuràfusion pressuriséazuréen)
+Attributs : • Exo-Force: 47
+• Modificateur de dommages : +18(H) • Ossature: PlasTirAl
+• Architecture : normale
+• Intégrité: +3
+• Résistanceaux Dommages : -9
+• Armure: plastitane de 40 mm d’épaisseur • Plaque d’armure supplémentaire : 10 mm de composite 133-cVHS
+• Blindage : 40 (45 contre les armes à énergie et les charges creuses) • Visière* :hyper-alon de 36 mm d’épaisseur • Volet desécurité: non
+• Blindagevisière(avecvolet desécurité) : 40
+• Catégorie GP : GP-B3
+• Vitesse/VIT (points de mouv.) : 1 nœud/<1(1) (marche) ou 10km/h/2(1) (marche)
+Malus d’Initiative : à terre: -2
+* le casque est un modèle quasi-intégral. Utilisez les valeurs de la coque
+si l’adversairene vise pas (test à –7). Systèmes auxiliaires : • Interface decontrôleà commandevocale(principale) • Panneau decontrôle manuel (secours, avant-bras) • Ordinateur NT IV, Gén. III • Radar • Analyseur radar • Détecteur de mouvements niv. 13
+• Dispositif d’isolation amphibie
+• Système d’assistanceet decontrôle
+• Réserve oxygène(24 heures) • Senseursauditifs niv. 12 (+2 optionsau choix) • Senseursvisuels niv. 15 (+2 optionsau choix) • Haut-parleur • Affichage tactique
+• Analyseurenvironnemental • Systèmeantivol à reconnaissance neurale
+• Dispositif de diagnostic
+• Centrale d’autoréparation niv. 12
+• Modulesannexes pour 10 systèmes • Dispositif d’assistancemédicale niv. 5
+Note : tousces systèmes ont un Blindage IEMde niv.3. Armement : • Dague neurale(poing) • Dague moléculaire(poing) • Fusil soniqueincapaciteur • Mitrailleuselourde, 30 rafales longues (pivotépaule) • Lance-flammes, 12 tirs (pivotépaule)
+COUGAR
+Echelle : H
+Catégorie : Exo-2
+Fabricant : Melian OP
+Nation : Liguerouge Coût indicatif : 270 910 sols (640 678 avec RTG)
+Disponibilité (marché noir) : 5(10)
+NT estimé : III
+Taille : 2m40
+Poids: 485 kg (612kgavec RTG)
+Profondeur : Opérationnelle : - 100 mètres si lestée
+Limite : - 120 mètres Écrasement : - 150 mètres Autonomie : micro-réacteur à fusion azuréen pressurisé
+(95 ans) ou RTG NT III
+Attributs : • Exo-Force: 43
+• Modificateur de dommages : +16 (H) • Ossature: PlasTirAl • Architecture : normale
+• Intégrité: +3
+• Résistanceaux Dommages : -10
+• Armure: plastitane de 6 mm d’épaisseur • Plaque d’armure supplémentaire : 2 mm d’hyper-acier RHA
+• Blindage: 12
+• Visière:Alon de 6 mmd’épaisseur • Volet de sécurité: 2 mmd’hyper-acier RHA
+• Blindagevisière(avecvolet desécurité) : 4 (9) • Catégorie GP : GP-B4
+• Vitesse/VIT (points de mouv.) : 0,5 nœud/<1(1)
+(Marche)/11km/h/2(1) (Marche) ou réacteur dorsale pour sauts d’unecentaine de mètres Malus d’Initiative : 0
+Systèmes auxiliaires : • Interface decontrôleà commandevocale(principale) • Panneau decontrôle manuel (secours, avant-bras) • Réserve d’oxygène 24h
+• Filtre à air, x4 (48h) • Dispositif d’isolation amphibie
+• Stabilisateurs • Amortisseurs de sauts • Régulateur thermique
+• Système hygiénique niv. 2
+• Système d’alimentation niv. 4
+• Système d’assistanceet decontrôle
+• Ordinateur NT II, Gén. III • Communicateurexterne niv. 5
+• ComLink/• Radar/•Analyseur radar • Calculateur de tir Nemrod/• Indicateur d’acquisition
+• Analyseurenvironnemental • Revêtementanti-radiation niv. 13
+Armement : • Daguethermique(poing) • Canon de 20 mm, 10 tirs (épaule) • Deux tubes lance-missiles taille 2 (1 dechaquecôté du dos) • Mitrailleuse lourde réactive sur pivot, 20 rafales longues/
+(épaule)
+ÉCLIPSE
+Echelle : H
+Catégorie : Exo-0
+Fabricant : Gladius Nation :Culte du Trident Coût indicatif : 2 300 000 sols Disponibilité (marché noir) : -15(-10)
+NT estimé : IV
+Taille : 1m80
+Poids : 600 kg
+Profondeur : • Opérationnelle : - 200 mètres • Limite : - 240 mètres • Écrasement : - 300 mètres Autonomie : PACAR (32 heures)
+Attributs : • Exo-Force: 40
+• Modificateur de dommages : +15 (H) • Ossature: nano-titanestructurel • Architecture : normale
+• Intégrité: +8
+• Résistanceaux Dommages : -12
+• Armure:hyper-terranium de 5 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 21
+• Visière:hyper-alon de 12 mm d’épaisseur • Volet desécurité: non
+• Blindagevisière: 10
+• Catégorie GP : GP-C1
+• Vitesse,VIT(points de mouv.) : 26km/h/5(2) ouRéacteur dorsal (Autonomie: 1 heure)
+Malus d’initiative : -2
+Systèmes auxiliaires : • Bouclier anti-radiation 10
+• RadarVautour • AnalyseurMrk XII Air-Strike
+• Calculateur Nemrod
+• Ordinateur Hector III (NTII/MrkIII) • Indicateur d’acquisition Pycargue
+• Isolation (amphibie) • Commandesvocales • Panneau commande manuelle
+• Communicateur Hussard 2 (10km) • Comlink
+• Borne relais personnelle 5
+• Dispositif médicalembarqué Cortex I • Système de contrôle Hermès • Stabilisateurs HauteVitesse
+• Régulateur thermique Polar system 2
+• Analyseurenvironnemental • Balise de détresse
+• Réserve d’oxygène 36 h
+• Filtreà air x2 (36h) • Filtreàgaz (96h) • Systèmehygiénique niveau 1
+• Système d’alimentation Pieston 2000 niveau 1 (12h) • Senseursvisuelset auditifs • Illuminateur Armement et système défensif : • Rayon choc RE 254 (non intégré) • Oméga (non intégré) • Lance-leurres • Stockage leurres (6 leurres antimissiles)
+ENDOVAL MRK II
+Catégorie : H
+Catégorie : Exo-0
+Fabricant :Varan technologie Nation : Ligue Rouge Coût indicatif : 750 000 sols Disponibilité (marché noir) : 1(5)
+NT estimé : III
+Taille : 1m80
+Poids : 1 tonne Profondeur: 100m
+Autonomie : THC/9 heures (batterie rechargeable par cap￾teurs solaires)
+Attributs : • Exo-Force: 49
+• Modificateur de dommages : +19 (H) • Ossature: PlasTirAl • Architecture : normale
+• Intégrité: +3
+• Résistanceaux Dommages : -7
+Armure : • hyper-alliage Al+ (Ligue Rouge) de 4 mm d’épaisseur • Plaque d’armuresupplémentaire: 7mm en Hyper compo￾site 133-cVHS
+• Blindage : 32 (38 contre les armes à énergie et les charges creuses) • Visière:Alon de 7mm d’épaisseur • Volet desécurité: 7mm en Hypercomposite 133-cVHS
+• Blindagevisière(avecvolet desécurité): 5 (28 ou 34 contre
+les armes à énergie et les charges creuses) • Catégorie GP : GP-C2
+• Vitesse, VIT (points de mouv.): 27km/h/5(2)
+Malus d’initiative : -2
+Systèmes auxiliaires : • Capteurs solaires • Panneau de contrôle manuel de secours (détachable avant- brasgauche ou droit) • Commandesvocales • Réserve d’oxygène de 72 heures • Filtres àgaz carbonique 96h) • IsolationVangarm (Amphibie) • Stabilisateur Néo-tech piton
+• Régulateur thermique Polar system 3
+• Systèmehygiénique niveau 2
+• Filtres Hygéna
+• Système d’alimentation Pieston 2000 niveau 2
+• Systèmeassistanceet contrôle
+• Système navigationOpti 600V
+• OrdinateurMéléar Oxy(NTIII/Gén. III) • RadarVautour • Illuminateur • AnalyseurMk XII Air-strike
+• Calculateur Nemrod
+• Borne relais 5
+• Communication parcâblecomlinket parSatAraid niveau 3
+• Dispositif de diagnostic
+• Analyseurenvironnemental • Indicateur d’acquisition
+• Auto-pilot 6 (Réactif) • Filtres à air Armement et système défensif : • Lance-leurres antimissiles (6 leurres)
+• Bouclier anti-radiation12
+• Lance-grappin (30 mètres) • Faisceau antimoléculaireléger (48 charges) • Dague rétractable
+• Lance-flammes (12 charges)
+Note : tous les systèmes ont un blindageI.E.M. 4
+ENIGMA
+Note : on pense que cette armure, découverte à la surface, ap- partiendraità lamystérieuse Enclave defer. Echelle : H
+Catégorie : Armuresimple Oméga semi-mécanisée Fabricant : Inconnu Nation : Enclave defer Coût indicatif : - Disponibilité (marché noir) : Introuvable NT estimé : IV
+Taille : ajustéeau pilote Poids : 91kg
+Profondeur: NA
+Autonomie : PE azuréen/192 heures Attributs : • Exo-Force: Force du pilote +18
+• Modificateur de dommages :variable
+• Ossature:ArmaTi • Architecture: NA
+• Résistanceaux Dommages : -4
+• Intégrité: NA
+• Blindage: 27 (10 contreles chocs) • Catégorie GP : GP-B4
+• Vitesse,VIT (points de mouv.) : (Athlétisme/COO) +9
+Malus d’initiative : - Systèmes auxiliaires (tous les systèmes de cette armure
+sont des équivalents aux systèmes indiqués ci-dessous): • Ordinateur NTIV Gén. IV
+• Communicateur Lénid
+• Communication parcâblecomlink
+• CommandeVocale Harpie
+• Filtres àgazcarbonique Oxydynamic(autonomie: 196h) • Régulateur thermique Polar 2
+• Systèmehygiénique Hygéna 1
+• Filtre Hygéna
+• NavigationOpti 600V
+• Indicateur d’acquisition Pycargue
+• Systèmeassistanceet contrôleclasse A Hermès • Stabilisateur Piton
+• Systèmerespiratoire(Réserve d’oxygène de 98 heures) • Générateur delumière Feu Follet 1 (Artitech) • TactiqueMac Clurrvisière
+• Analyseurenvironnemental • Bouclier anti-radiation 10
+• RadarVautour • AnalyseurMrk XII Air-Strike
+• Illuminateur • Revêtement anticorrosion 6
+• Bottes desaut NTIV
+• Champ deforceréactif niveau 20
+EXO-SOL (COMBINAISON)
+Note : cette combinaison révolutionnaire n’est pas vérita- blement une armure de combat. Pourtant elle inclut de nombreux
+dispositifs que l’on ne trouve que dans les tenues plus lourdes. La combinaison est faite d’une matière dont la composition est un véri￾table secret d’état. L’Exo-sol offre une excellente protection malgré
+sa légèreté. En cas d’attaque, les tissus se contractent à l’endroit de
+l’impact. Elleest dotée d’un bouclier anti-radiation, d’un système de
+chauffage grâce à un réseau de fibres spéciales intégré dans la com- binaison. Il est rare que les soldats de la République porte un casque
+avec cette combinaison. Ils disposeraient d’un autre système leur permettant de rester pendant quelques heures en surface sans effets
+secondaires. Personne ne sait s’il s’agit d’un champ de protection, d’un médicament ou d’un appareil inconnu jusqu’à présent. Un appareil très léger se plaçant sur la tête est livré avec l’ar- mure et relié à des micro-batteries implantées dans la tenue. Cet appareil est un ordinateur régulant la température de la combinaison
+(régulation thermique +/- 1 ou 2 crans). Il est équipé d’une lunette
+infrarouge, d’un petit radar, d’un communicateuret d’un correcteur detir reliéàl’arme portée par lefantassin (généralement un Licaï IV ; bonus : +2). Les bottes sont des bottes desaut NTIV. Un exosqueletteextrêmement discret permet d’augmenter sen￾siblement les performances du fantassin. Echelle : H
+Catégorie : Exo-sol
+Fabricant :Solaris Nation : République du Corail
+Coût indicatif : - Disponibilité (marché noir) : Introuvable NT estimé : IV
+Taille : ajustéeau pilote Poids : 12kg
+Profondeur: NA
+Autonomie : PE azuréen (160 heures)
+Attributs : • Exo-Force: Force du personnage +4
+• Modificateur de dommages :variable
+• Ossature:ArmaTi • Architecture: NA
+• Résistanceaux Dommages : -4
+• Blinadge: 11 (3 contreles chocs) • Catégorie GP : GP-A1
+• Vitesse/VIT (points de mouv.) : vitesse personnage
+• Malus d’initiative: - • Bonus spécial : Coordination +2
+Systèmes auxiliaires : • OrdinateurSector II NT IV Gén. 4
+• Communicateur Lénid
+• Systèmeassistanceet contrôleexo
+• Régulateur thermique 2
+• Systèmeinfrarouge
+• Système d’assistanceau tir • Radar Hill (1 km)/AnalyseurMontro (1 cible)
+JAGUAR
+Note : c’est l’armure standard des soldats de surface d’Hégé- monie. Echelle : H
+Catégorie : Exo-0
+Fabricant : Meklar industrie Nation : Hégémonie Coût indicatif : 408 000 sols Disponibilité (marché noir) : -5(1)
+NT estimé : III
+Taille : 1m80
+Poids : 800kg
+Profondeur: • Opérationnelle : 500m mètres • Limite : 600 mètres • Écrasement : 750 mètres Autonomie : PEGénéticien/24 heures (capteurs solairesrégé- nèrent 1minuteen 10 minutes)
+Attributs : • Exo-Force: 47
+• Modificateur de dommages : +18 (H) • Ossature: Titanestructurel • Architecture : normale
+• Intégrité: +2
+• Résistanceaux Dommages : -6
+• Armure:hyper-alliage detitane de 2 mm d’épaisseur • Plaque d’armuresupplémentaire: 7mm en Hyper compo￾site 133-cRHA
+• Blindage : 24 (28 contre les armes à énergie et les charges creuses) • Visière:hyper-alon de 4 mm d’épaisseur • Volet desécurité: 7mm en Hypercomposite 133-cRHA
+• Blindagevisière(avecvolet desécurité): 5 (22 ou 26 contre
+les armes à énergie et les charges creuses) • Catégorie GP : GP-C2
+• Vitesse/VIT (points demouv.) : 1 nœuds/M(1/2)marche ou 32km/h/8(2) (surface)
+Malus d’initiative : - Systèmes auxiliaires : • Capteurs solaires • Panneau de contrôle manuel de secours (détachable avant- brasgauche ou droit) • Contrôle optique
+• Réserve d’oxygène de 48 heures • Filtres àgaz carbonique 96h) • IsolationVangarm (Amphibie
+• Stabilisateur Néo-tech piton
+• Régulateur thermique Polar system 2
+• Systèmehygiénique niveau 2
+• Filtres Hygéna
+• Système d’alimentation Pieston 2000 niveau 2
+• Système assistance et contrôle
+• Système navigationOpti 600V
+• Ordinateur Hector III (NTII/MrkIII) • RadarVautour • Illuminateur • AnalyseurMk XII Air-strike
+• Calculateur Nemrod
+• Borne relais 5
+• Communication parcâblecomlinket par SatAraid niveau 3
+• Dispositif de diagnostic
+• Analyseurenvironnemental • Indicateur d’acquisition/Bouclier anti-radiation 10
+• Lance-leurres anti-missiles (6 leurres)
+Armement : • Mitrailleuselourde F67 (intégréeau bras droit/munitions 80) • Lance-missiles anti-véhicules taille 4 (Dos /épaules/4 missiles) • Pulseur palmaire TMP I (Main Gauche) • Daguethermique(Main droite) • Tous les systèmes ont un blindageI.E.M. 6
+SOLAR 1
+Note : l’armure Solar 1 est utilisée pour de courtes missions en
+surface. Elle bénéficie d’un équipement moderne mais sa principale
+fonction est la reconnaissanceà faible distance. Echelle : H
+Catégorie : Exo-0
+Fabricant : Meklar industrie Nation : Hégémonie Coût indicatif : 3 800 000 sols Disponibilité (marché noir) : -10(1)
+NT estimé : III/IV
+Taille : 1m80
+Poids : 750kg
+Profondeur: 100 m si lestée Autonomie : PE Généticien (9 heures)
+Attributs : • Exo-Force: 46
+• Modificateur de dommages : +18 (H) • Ossature: nano-titanestructurel • Architecture : normale
+• Intégrité: +8
+• Résistanceaux Dommages : -12
+• Armure:hyper-terranium de 9 mm d’épaisseur • Plaque d’armure supplémentaire : nano-acier RHA de 2mm
+• Blindage: 36
+• Visière:hyper-alon de 8 mm d’épaisseur • Volet desécurité: non
+• Blindagevisière: 7
+• Catégorie GP : GP-C3
+• Vitesse/VIT (points demouv.): 50km/h/8(2)
+Malus d’initiative : - Systèmes auxiliaires : • Bouclier anti-radiation 10
+• Commandesvocales • Projecteur Light • Borne relais personnelle 5
+• Caméra
+• Dispositif médicalembarqué Cortex I • DiagnosticScopesystem IV
+• Balise de détresse
+• Centrale deréparation Omni-vat 2
+• Modules annexes Uni-vat 2 (10 systèmes) • Panneau commande manuelle
+• Réserve d’oxygène 24 h
+• Filtreà air x2 (24h) • Filtreàgaz (96h) • Régulateur thermique Polar system 2
+• Systèmehygiénique niveau 1
+• Système d’alimentation Pieston 2000 niveau 1 (12h) • Système de contrôle Hermès • Ordinateur Hector III (NTII/Gén. III) • RadarVautour • AnalyseurMrk XII Air-Strike
+• Calculateur Nemrod
+• Antichoc Hammerdale niv 2
+• Communicateur Hussard 2 (10km) • Comlink
+• Analyseurenvironnemental • Indicateur d’acquisition Pycargue
+• Isolation (amphibie) • Stabilisateurs HauteVitesse
+• Senseursvisuelset auditifs Armement et système défensif : • Champ deforce 10
+• Découpe-roche de poche (non intégré) • Daguethermique RE 254 (non intégrée)
+VARAN
+Echelle : H
+Catégorie : Exo-alpha Fabricant : Melian OP
+Nation : Liguerouge Coût indicatif : 267 410 sols Disponibilité (marché noir) : -10(5)
+NT estimé : III
+Taille : 1m78
+Poids : 219kg
+Profondeur: Opérationnelle : - 500 mètres • Limite : - 550 mètres • Écrasement : - 750 mètres Autonomie : PACAR(6hà 41 km/h ou 16 heuresà 26 km/h))
+Attributs : • Exo-Force: 34
+• Modificateur de dommages : +12 (H) • Ossature: PlasTirAl • Architecture: légère
+• Intégrité: +0
+• Résistanceaux Dommages : -1
+• Armure:hyper-alliage detitane de 6 mm d’épaisseur • Plaque d’armure supplémentaire : hyper-acier RHA de 2mm d’épaisseur • Blindage: 17
+• Visière: alon de 12 mm d’épaisseur • Volet de sécurité : strié en Hyper-acier RHA de 6mm
+d’épaisseur • Blindagevisière(avecvolet desécurité) : 7 (17) • Catégorie GP : GP-B4
+• Vitesse, VIT (points de mouv.): 41km/h/7(2) • Modificateur d’initiative: +1
+Systèmes auxiliaires : • Bouclier anti-radiation 10
+• RadarVautour • AnalyseurMrk XII Air-Strike
+• Calculateur Nemrod
+• OrdinateurMéléar Oxy(NTII/Gén. III) • Indicateur d’acquisition Pycargue
+• Isolation (amphibie) • Commandesvocales • Panneau commande manuelle
+• Communicateur Hussard 2 (10km) • Comlink
+• Borne relais personnelle 5
+• Dispositif médicalembarqué Cortex I • Lance-grappin (30 mètres) • Auto-pilot 6 (réactif) • Système de contrôle Hermès • Stabilisateurs HauteVitesse
+• Régulateur thermique Polar system 2
+• Antichoc Hammerdale niv 2
+• Analyseurenvironnemental • Néo-Tech, Piton stab
+• Balise de détresse
+• Réserve d’oxygène 24 h
+• Filtreà air x2 (24h) • Filtreàgaz (96h) • Systèmehygiénique niveau 1
+• Système d’alimentation Pieston 2000 niveau 1 (12h) • Senseursvisuelset auditifs • Illuminateur Armement et système défensif : • Canon sonique, Griffes decombat • ModuleVéga(non intégré) • Générateurélectrique AnguilleIV
+VAUBAN
+Echelle : H
+Catégorie : Exo-1
+Fabricant : Empire desgénéticiens Nation : Empire desgénéticiens Coût indicatif : 750 000sols Disponibilité (marché noir) : 10 (15)
+NT estimé : IV
+Taille : 2m10
+Poids: 530 kg
+Profondeur : • Opérationnelle : - 100 mètres si lestée
+• Limite : - 120 mètres • Écrasement: - 150 mètres Autonomie : 30ans(micro-réacteurà fusionpressuriségénéticien)
+Attributs : • Exo-Force: 41
+• Modificateur de dommages : +15 (H) • Ossature: PlasTirAl • Architecture : Normale
+• Intégrité: +3
+• Résistanceaux Dommages : -9
+• Armure: Nano-acier VHS de 3,8mmd’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 17
+• Visière: alon de 24 mm d’épaisseur • Volet desécurité: Hyper-acier RHA de 2mm d’épaisseur • Blindagevisière(avecvolet desécurité) : 10 (16) • Catégorie GP : GP-D4
+• Vitesse/VIT(points demouv.): 0,5 nœud/<1(1)(marche) ou 220km/h/36(8) (marche)
+Malus d’initiative : à terre : -2
+Systèmes auxiliaires : • Interface decontrôleàvisière optique(principal) • Panneau decontrôle manuel (secours, avant-bras) • Systèmerespiratoire(Réserve d’oxygène de 24 heures) • Régulateur thermique
+• Système hygiénique niv. 2
+• Système d’assistanceet decontrôle
+• Contrôle de pression
+• Système de navigation niv. 13
+• Ordinateur NT IV, Gén. III • Dispositif d’isolation amphibie
+• Radar • Analyseur radar • Communicateurexterne niv. 3
+• ComLink
+• Système d’alimentation niv. 2
+• Verrouillageantivol niv. 7 (2 systèmesau choix) • Dispositif de diagnostic
+• Analyseurenvironnemental • Indicateur d’acquisition
+• Revêtementanti-radiation niv.15
+• Stabilisateurhautevitesse Armement : • Daguerétractable(poing) • Générateur défensif électrique
+• Pistolet lourd (main) • lance-harpon (bras droit) • Canon à neutron (épaulegauche)
+
+armures hybrides_
+
+armure Hybrides ASSASSIN Note :ces armures sont utilisées par les Assassins au service des Patriarches. Echelle : H Catégorie : Exo-Alpha Fabricant : Inconnu Nation : Hégémonie Coût indicatif : 3 100 000 sols Disponibilité (marché noir) : -10(-1) NT estimé :VI Taille : ajustéeau pilote Poids : 200kg Profondeur: • Opérationnelle : -17 000 mètres • Limite : - 17 000 mètres • Écrasement : - 25 500 mètres Autonomie : PE Généticien (13,5 heures avec PIT) Attributs : • Exo-Force: 29 • Modificateur de dommages : +9 (H) • Ossature: Fusion B • Architecture: ultra-légère • Intégrité: +4 • Résistanceaux Dommages : -5 • Armure: ACS de 3 mmd’épaisseur • Plaque d’armuresupplémentaire: non • Blindage: 17 • Visière: ACS de 3mm d’épaisseur • Volet desécurité: non • Blindagevisière: 6 • Catégorie GP : GP-B3 • Vitesse,VIT (points de mouv.) : 6 nœuds/2 (1) (PIT) ou 6 nœud/1(1) (Exo-palmes) ou 53km/h/9 (2) (surface) Malus d’initiative : - Systèmes auxiliaires : • Revêtements anéchoïques • Réseau à pulsion électrique • Capteur d’énergieambiantegénéticien • Commandes télépathiques • Membranerespiratoire • Réserve oxygène de secours • Filtres Dioxy • Stabilisateur • Régulateur thermique • Contrôles • Pressurisateur • Ordinateur(GenVI NTVI) • Communicateur (portée 4 000m/5 km) • Système d’analysetactique • Analyseurenvironnemental • Indicateur d’acquisition • Système de navigation
+100 ans (micro-réacteur à fusion pressurisé azu-
+133
+   A    R
+   M    U    R
+   E
+   S
+   H    Y    B
+   R
+   I    D    E
+   S
+réen) ou RTGc Attributs : • Exo-Force: 30
+• Modificateur de dommages : +10 (H) • Ossature: PlasTirAl • Architecture : normale
+• Intégrité : +3
+• Résistanceaux Dommages : -4
+• Armure:hypercompositefibre decarboneetepoxy de 18 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 15
+• Visière: Alon de 12mmd’épaisseur • Volet de sécurité: 4 mmd’hyper-acier RHA
+• Blindagevisière(avecvolet desécurité) : 7 (15) • Catégorie GP : GP-B2
+• Vitesse/VIT (points de mouv.) : 3 nœuds/1(1) (Exo- palmes) ou 3 nœuds/1(1) (PIT dorsal) ou 16km/h/3(1)
+(surface)
+Malus d’Initiative : sous l’eau : +0 ; à terre: +0
+Systèmes auxiliaires : • Interface decontrôleàvisière optique(principal) • Panneau decontrôle manuel (secours, avant-bras) • Systèmerespiratoire(Réserve d’oxygène de 48 heures) • Régulateur thermique
+• Système hygiénique niv. 2
+• Système d’assistanceet decontrôle
+• Contrôle de pression
+• Système navigation niv. 10
+• Ordinateur NT III, Gén. III • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan niv. 12
+• Radar • Analyseur radar niv. 12
+• ComLink
+• Communicateur Comdiv 200
+• Communicateurexterne niv. 1
+• Système d’alimentation niv. 2
+• Verrouillageantivol niv. 7 (1 systèmeau choix) • Dispositif de diagnostic
+• Affichage tactique
+• Dispositif deréparation
+• Centrale d’autoréparation niv 12
+• Modules annexes pour 5 systèmes Armement : • Daguerétractable(poing) • Daguethermique(poing) • Générateur défensif à champ micro-ondes • Lance-harpon moyen, 10 charges (bras)
+VANGUARD
+Catégorie : Exo-1
+Fabricant : AllianceAzur Nation : AllianceAzur
+Coût indicatif : 3 400 000sols Disponibilité (marché noir) : 10(15)
+NT estimé : III-IV
+Taille : 2m25
+Poids: 1 700 kg
+Profondeur : • Opérationnelle : - 4 000 mètres • Limite : - 4 800 mètres • Écrasement : - 6 000 mètres Autonomie : 150 ans (micro-réacteur à fusion pressurisé azu- réen)
+Attributs : • Exo-Force: 62
+• Modificateur de dommages : +26 (H)/-2 (V-) • Ossature: PlasTirAl • Architecture : Normale
+• Intégrité: +3
+• Résistanceaux Dommages : -9
+• Armure: plastitane de 24 mm d’épaisseur • Plaque d’armuresupplémentaire: non
+• Blindage: 16
+• Visière: alon de 24 mm d’épaisseur • Volet desécurité: Hyper-acier RHA de 2mm d’épaisseur • Blindagevisière(avecvolet desécurité) : 10 (16) • Catégorie GP : GP-D4
+• Vitesse/VIT (points de mouv.) : 4 Nœuds/1(1)(Exo- palmes) ou 20 Nœuds/7(2) (PIT) ou 150km/h/27(6)
+(surface)
+Malus d’initiative : sous l’eau : -2 ; à terre: -4
+Systèmes auxiliaires : • Interface decontrôleàvisière optique(principal) • Panneau decontrôle manuel (secours, avant-bras) • Systèmerespiratoire(Réserve d’oxygène de 24 heures) • Régulateur thermique
+• Systèmehygiénique niv. 2
+• Système d’assistanceet decontrôle
+• Contrôle de pression
+• Système de navigation niv. 13
+• Ordinateur NT IV, Gén. III • Sonscan actif directionnel • Sonscan passif • Analyseur sonscan
+• Communicateur Comdiv 200
+• ComLink
+• Système d’alimentation niv. 2
+• Verrouillage antivol niv. 7
+• Dispositif de diagnostic Armement : • Pistolet lourd sous-marin à dards (main) • Daguerétractable(poing) • Générateur défensif électrique
+• Lance-harpon lourd, 10 charges (bras) • Pistolet lourd sous-marin à dards (main)
