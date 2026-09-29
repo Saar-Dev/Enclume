@@ -261,7 +261,10 @@ export default function SurfaceConnectorPanel({
           </label>
         )}
 
-        {connector.type === 'elevator' && (
+        {/* Contrôle en session (ouvrir/fermer/verrouiller/appeler un étage) — jamais dans l'éditeur :
+            piloter un connecteur en direct est le rôle exclusif du mode Jeu (`Canvas3D.jsx`, canEdit=false).
+            L'éditeur (canEdit=true) n'affiche que les réglages d'autorité ci-dessus. */}
+        {!canEdit && connector.type === 'elevator' && (
           <ElevatorRuntimeControls
             connector={connector}
             runtimeState={runtimeState}
@@ -270,7 +273,7 @@ export default function SurfaceConnectorPanel({
           />
         )}
 
-        {connector.type === 'door' && (
+        {!canEdit && connector.type === 'door' && (
           <DoorRuntimeControls
             connector={connector}
             runtimeState={runtimeState}

@@ -1171,27 +1171,33 @@ export default function SurfaceEditorPanel({
               </>
             )}
             <div className="sidebar-tool-hint" style={styles.roomToolHint}>
-              {surfaceToolState.mode === 'connector'
-                ? (surfaceToolState.connectorType === 'door'
+              {(() => {
+                const mode = surfaceToolState.mode
+                // Tous les outils de pose/dessin restent actifs après un geste réussi (§12.9,
+                // PLAN_WORLD_BUILDER_REWORK.md) — seul « Sélection » n'a pas besoin d'Échap pour en sortir.
+                const escapeSuffix = mode === 'select' ? '' : ` ${t('surfaceEditor.hintEscapeSuffix')}`
+                if (mode === 'connector') {
+                  const base = surfaceToolState.connectorType === 'door'
                     ? t('surfaceEditor.hintDoorConnector')
                     : surfaceToolState.connectorType === 'ladder'
-                      ? 'Cliquez une case pour relier verticalement les deux étages. Le token pourra finir son tour entre les barreaux.'
-                      : t('surfaceEditor.hintElevatorConnector'))
-                : surfaceToolState.mode === 'select'
-                  ? t('surfaceEditor.hintSelect')
-                : surfaceToolState.mode === 'wall'
-                ? t('surfaceEditor.hintWall')
-                : surfaceToolState.mode === 'room'
-                  ? t('surfaceEditor.hintRoom')
-                : surfaceToolState.mode === 'stair'
-                  ? t('surfaceEditor.hintStairs')
-                : surfaceToolState.mode === 'bridge'
-                  ? 'Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.'
-                : surfaceToolState.mode === 'effect'
-                  ? 'Tracez le volume touché. L’effet reste un état de partie séparé de la surface éditée.'
-                : surfaceToolState.mode === 'erase'
-                  ? t('surfaceEditor.hintErase')
-                  : t('surfaceEditor.hintSlab')}
+                      ? t('surfaceEditor.hintLadder')
+                      : t('surfaceEditor.hintElevatorConnector')
+                  return base + escapeSuffix
+                }
+                if (mode === 'select') return t('surfaceEditor.hintSelect')
+                if (mode === 'wall') return t('surfaceEditor.hintWall') + escapeSuffix
+                if (mode === 'room') return t('surfaceEditor.hintRoom') + escapeSuffix
+                if (mode === 'stair') return t('surfaceEditor.hintStairs') + escapeSuffix
+                if (mode === 'bridge') return t('surfaceEditor.hintBridge') + escapeSuffix
+                if (mode === 'effect') return t('surfaceEditor.hintEffect') + escapeSuffix
+                if (mode === 'erase') return t('surfaceEditor.hintErase') + escapeSuffix
+                if (mode === 'ceiling') return t('surfaceEditor.hintSlab') + escapeSuffix
+                if (mode === 'paint-wall') {
+                  return t('surfaceEditor.paintWallRoomHint', { name: surfaceToolState.roomName || '' }) + escapeSuffix
+                }
+                if (mode === 'reshape-room') return t('surfaceEditor.reshapeRoomHint') + escapeSuffix
+                return t('surfaceEditor.hintSlab') + escapeSuffix
+              })()}
             </div>
           </div>
           {showTexturePalette && (

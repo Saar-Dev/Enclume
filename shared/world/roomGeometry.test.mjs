@@ -20,6 +20,8 @@ import {
   selectedRoomBoundaryChain,
   wallCornerIntersectionPoint,
   wallMiterOffsetVector,
+  wallRunReshapeCells,
+  wallRunRowCountForCell,
   withWallCornerJoins,
   withWallMiterJoins,
 } from './roomGeometry.js'
@@ -339,4 +341,69 @@ test('un arrondi reste une primitive canonique unique malgré sa tessellation ph
     pathProbe(curved[0], curved[0].interiorNormalSign),
   ), true)
   assert.ok(roomBoundarySegments({ id: 'rounded', ...square, boundaryArcs: [arc] }).filter(segment => segment.curveId).length > 4)
+})
+
+// Poignée de redimensionnement (§10c/§12.9, PLAN_WORLD_BUILDER_REWORK.md) — wallRunReshapeCells.
+// square = cases (0,0)/(1,0)/(0,1)/(1,1). Chaque cas vérifié à la main contre la construction
+// réelle des arêtes (roomBoundaryEdges : north/west = face basse, south/east = face haute),
+// pas supposé — c'est exactement l'espace de coordonnées qui avait produit le bug du 2026-09-28.
+function sortCells(cells) {
+  return [...cells].sort((left, right) => left.z - right.z || left.x - right.x)
+}
+
+function wallRunBySide(room, side) {
+  const run = roomBoundaryWallRuns(room).find(candidate => candidate.side === side)
+  assert.ok(run, `tronçon ${side} introuvable`)
+  return run
+}
+
+test('poignée — agrandir un mur nord ajoute la rangée juste au nord, jamais celle déjà dans la salle', () => {
+  const run = wallRunBySide(square, 'north')
+  assert.deepEqual(sortCells(wallRunReshapeCells(run, 1)), sortCells([{ x: 0, z: -1 }, { x: 1, z: -1 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(run, 2)), sortCells([
+    { x: 0, z: -1 }, { x: 1, z: -1 }, { x: 0, z: -2 }, { x: 1, z: -2 },
+  ]))
+})
+
+test('poignée — rétrécir un mur nord retire la rangée nord déjà dans la salle, pas une case hors salle', () => {
+  const run = wallRunBySide(square, 'north')
+  assert.deepEqual(sortCells(wallRunReshapeCells(run, -1)), sortCells([{ x: 0, z: 0 }, { x: 1, z: 0 }]))
+})
+
+test('poignée — sud, est, ouest : extérieur/intérieur corrects dans les quatre directions', () => {
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'south'), 1)), sortCells([{ x: 0, z: 2 }, { x: 1, z: 2 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'south'), -1)), sortCells([{ x: 0, z: 1 }, { x: 1, z: 1 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'east'), 1)), sortCells([{ x: 2, z: 0 }, { x: 2, z: 1 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'east'), -1)), sortCells([{ x: 1, z: 0 }, { x: 1, z: 1 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'west'), 1)), sortCells([{ x: -1, z: 0 }, { x: -1, z: 1 }]))
+  assert.deepEqual(sortCells(wallRunReshapeCells(wallRunBySide(square, 'west'), -1)), sortCells([{ x: 0, z: 0 }, { x: 0, z: 1 }]))
+})
+
+test('poignée — jamais de rangée neutre, jamais un arc, jamais un tronçon manquant', () => {
+  assert.deepEqual(wallRunReshapeCells(wallRunBySide(square, 'north'), 0), [])
+  assert.deepEqual(wallRunReshapeCells(null, 2), [])
+  assert.deepEqual(wallRunReshapeCells({ from: { x: 0, z: 0 }, to: { x: 1, z: 1 }, axis: 'arc', side: 'north' }, 2), [])
+})
+
+test('poignée — wallRunRowCountForCell retrouve, pour la case la plus lointaine d’un lot, le rowCount qui l’a produite', () => {
+  // wallRunRowCountForCell répond « rowCount minimal pour AU MOINS atteindre cette case » — une
+  // case proche d’un lot rowCount=2 peut donc répondre 1 (déjà atteinte dès la 1ʳᵉ rangée). Seule la
+  // case la plus lointaine du lot doit exactement retrouver le rowCount d’origine ; le test vérifie
+  // cette relation précise plutôt que de supposer (à tort) que toutes les cases du lot y répondent.
+  for (const side of ['north', 'south', 'east', 'west']) {
+    const run = wallRunBySide(square, side)
+    for (const rowCount of [1, 2, -1, -2]) {
+      const cells = wallRunReshapeCells(run, rowCount)
+      assert.ok(cells.length > 0, `${side} ${rowCount} ne produit aucune case`)
+      const counts = cells.map(cell => wallRunRowCountForCell(run, cell))
+      assert.ok(counts.includes(rowCount), `${side} rowCount=${rowCount} : aucune case du lot n'y retourne, obtenu ${JSON.stringify(counts)}`)
+      assert.ok(counts.every(value => Math.sign(value) === Math.sign(rowCount) && Math.abs(value) <= Math.abs(rowCount)), `${side} rowCount=${rowCount} : une case dépasse le lot, obtenu ${JSON.stringify(counts)}`)
+    }
+  }
+})
+
+test('poignée — wallRunRowCountForCell refuse un arc ou une case absente', () => {
+  assert.equal(wallRunRowCountForCell(null, { x: 0, z: 0 }), 0)
+  assert.equal(wallRunRowCountForCell(wallRunBySide(square, 'north'), null), 0)
+  assert.equal(wallRunRowCountForCell({ from: { x: 0, z: 0 }, to: { x: 1, z: 1 }, axis: 'arc', side: 'north' }, { x: 0, z: -1 }), 0)
 })

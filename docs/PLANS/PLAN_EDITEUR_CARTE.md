@@ -22,8 +22,11 @@ saisie, matériaux de surface, décorations murales, apparence des connecteurs (
 Les fichiers concernés : `Editor3D.jsx`, `SurfaceEditorScene.jsx`, `SurfaceEditorPanel.jsx`, `SurfaceRoomPanel.jsx`,
 `SurfaceWallPanel.jsx`, `SurfaceConnectorPanel.jsx`, `SurfaceMaterialEditor.jsx`, `proceduralMaterials.js`,
 `client/src/lib/floatingPanel.js`, `client/src/lib/surfaceRooms.js`, `shared/world/roomGeometry.js`.
+**Le rework « World Builder v2 » (coquille d'interaction, strangler fig) est bien dans ce périmètre** — mêmes
+fichiers, même domaine — mais son détail vit dans `PLAN_WORLD_BUILDER_REWORK.md` §11 pour continuité avec le
+chantier déjà en cours là-bas (Règle 2), pas parce que ce serait un domaine différent : voir §1 phase 6.
 
-**N'est pas l'éditeur, chacun son document, pas recopié ici** :
+**N'est pas l'éditeur, domaine différent, chacun son document, pas recopié ici** :
 - **Export/import de carte** — `PLAN_EXPORT_CARTE.md` (segment S0, en pause, pas urgent).
 - **Purge du voxel** — `PLAN_PURGE_VOXEL.md` (stub, garde-fous stricts).
 - **Zones dangereuses** (résolution en jeu : feu, gaz, dégâts, propagation) — `PLAN_ZONES_DANGER.md`, chantier séparé,
@@ -114,6 +117,20 @@ sélection déformé : **codés, testés, validés en jeu** sur les 8 types de p
 combat) est un sujet moteur monde/collision, pas un sujet d'éditeur — suivi dans `PLAN_PORTES.md` §9, hors de ce
 document désormais (§0).
 
+### Phase 6 — World Builder v2, rework de la coquille d'interaction (`PLAN_WORLD_BUILDER_REWORK.md` §11) — STUB, cadrage à peine commencé
+
+Proposition de Saar (2026-09-29, strangler fig — reconstruire à côté, garder l'ancien jusqu'à ce qu'il gêne ou que le
+v2 soit validé) recadrée après recherche (risque de sur-conception, « second-system effect ») : périmètre borné à la
+**coquille d'interaction** (`Editor3D.jsx`, `SurfaceEditorScene.jsx`, `SurfaceEditorPanel.jsx`, panneaux flottants) —
+absorbe de fait la dette de la Phase 2 ci-dessus (refactor), mais en reconstruction plutôt qu'en refactor sur place.
+Modèle de données, compilateur, autorité géométrique et rendu 3D partagé (`surfaceRooms.js`, `roomGeometry.js`,
+`worldCompiler.js`, `SurfaceDungeonScene.jsx`) **repris tels quels**, pas réécrits. **Pas un document séparé** :
+nouvelle phase du chantier déjà en cours sur ce même périmètre (Règle 2), pas un second plan (correction du
+2026-09-29 après une première tentative erronée de fichier à part). Détail complet, garde-fous et prochaines
+étapes : `PLAN_WORLD_BUILDER_REWORK.md` §11. Rien codé, rien tranché au-delà du périmètre. La poignée de
+redimensionnement (§10c du même document) reste une exigence confirmée de Saar, pas une option écartée par ce
+rework.
+
 ## 2. Ordre recommandé et pourquoi
 
 **2, puis 1c, en parallèle avec 4a et 3 (aucune dépendance entre eux) :**
@@ -131,6 +148,12 @@ document désormais (§0).
 monolithe, c'est un choix légitime (priorité personnelle, voir l'ancien §2 de ce document, conservé en esprit même si
 la table axe 1/axe 2 n'est plus recopiée ici faute d'objet — elle ne s'appliquait qu'au choix entre chantiers
 différents, plus pertinent maintenant que le périmètre est un seul chantier).
+
+**Note 2026-09-29, pas retranché pour préserver l'historique** : ce classement date du 2026-09-27 et recommandait
+la Phase 2 (refactor) comme point de départ. Depuis, Saar l'a explicitement reportée (`PLAN_WORLD_BUILDER_REWORK.md`
+§8, « quand on saura ce dont on a besoin réellement »), et la Phase 6 (§1 ci-dessus) absorbe maintenant cette dette
+dans une reconstruction plutôt qu'un refactor sur place. Cet ordre 1-5 n'est donc plus la recommandation active pour
+la Phase 2 spécifiquement ; à retrier une fois le cadrage de la Phase 6 avancé.
 
 ## 3. Portes de décision (points de non-retour, propres à l'éditeur)
 
@@ -191,11 +214,21 @@ différents, plus pertinent maintenant que le périmètre est un seul chantier).
 | Phase | Session | Dernier signal |
 |---|---|---|
 | 1 (forme des salles) + 3 (R1) | `enclume-cb` — Saar directement, session non lancée par cette orchestration | Rapport de fin de session (2026-09-27), 3 commits poussés (`165be2b`, `8962c8c`, `78159ea`) : Tier A, Plan A codé et validé, R1 avancé. |
-| 1c (Plan B) | agent « forme des salles » (META EDITEUR) | 2026-09-29 : peindre/effacer des cases validé en jeu par Saar (clos) ; peinture de mur (Lot A) **EN PAUSE** après 3 cycles de correctifs — Saar constate l'échec de la méthode itérative sur cet outil, interdit toute nouvelle correction, ses constatations consignées `PLAN_WORLD_BUILDER_REWORK.md` §9 pour un futur cadrage ; rien commité. Même jour, nouvelle conversation : contre-diagnostic indépendant (`PLAN_WORLD_BUILDER_REWORK.md` §10) — deux bugs trouvés et corrigés, testés 49/49 + build propres, pas commités (garde-fou porte manquant ; duplication d'autorité `interiorTex` entre sidebar et panneau flottant Mur, tranchée), hypothèse de fusion de tronçon réfutée par script empirique, cause de « la couleur écrase tout » toujours `[INCONNU]`. |
+| 1c (Plan B) | agent « forme des salles » (META EDITEUR) | 2026-09-29 : peindre/effacer des cases validé en jeu par Saar (clos). Peinture de mur (Lot A), nouvelle conversation le même jour, contre-diagnostic indépendant (`PLAN_WORLD_BUILDER_REWORK.md` §10/10e) : garde-fou porte, autorité unique `interiorTex`, sélection de mur qui s'accumulait + occlusion caméra en édition — trouvés et corrigés. **Validé en jeu par Saar** (« Résolution du problème des murs non modifiables. Bien joué »), **commité** (`72e15ab`, 13 fichiers). Restent ouverts : flux Sélection→salle→Peindre, « Ajouter une salle » qui ne reste pas actif. |
 | 5 (connecteurs) | `PORTES` | Clos pour ce périmètre (`1ea1150`, `ec5ef82`) — voir §0 pour ce qui reste hors de ce document. |
+| 6 (World Builder v2) | Cette conversation (2026-09-29) | Intégré comme §11 de `PLAN_WORLD_BUILDER_REWORK.md` (pas un fichier séparé — corrigé après une première erreur de fragmentation le même jour), proposition de Saar acceptée avec recadrage de périmètre (coquille d'interaction seulement). Cadrage réel (recherche pro, audit des duplications d'autorité, patron d'interaction unique) pas commencé. |
 
 ## Historique
 
+- **2026-09-29** — Phase 6 ajoutée : Saar propose un rework « World Builder v2 » (strangler fig, coexiste avec
+  l'éditeur actuel) pendant un run à vide de bilan. Recadré après recherche (risque de sur-conception) au
+  périmètre de la coquille d'interaction seule, modèle de données/compilateur/rendu repris tels quels. **Erreur
+  corrigée le même jour** : un premier stub avait été créé comme document séparé (`PLAN_WORLD_BUILDER_V2.md`) —
+  Saar a repris sur la rigueur (Règle 2, une information = un seul endroit ; le chantier était déjà en cours dans
+  `PLAN_WORLD_BUILDER_REWORK.md`) ; fichier supprimé, contenu intégré comme §11 de ce document existant. Saar a
+  aussi confirmé en clair, dans la foulée, que la poignée de redimensionnement (§10c) reste une exigence, pas une
+  option écartée par ce rework. Même jour : peinture de mur (Lot A) validée en jeu et commitée (`72e15ab`) —
+  ligne de suivi live mise à jour en conséquence.
 - **2026-09-29** — Peinture de mur (Lot A, 1c) mise **EN PAUSE** : après un 3ᵉ cycle de correctifs (bug de palette,
   bug de priorité texture/procédural, bug d'échelle case, sélection de salle absente, fuite de couleur mitoyenne),
   Saar constate l'échec de la méthode de correctifs itératifs sur cet outil et interdit toute nouvelle correction

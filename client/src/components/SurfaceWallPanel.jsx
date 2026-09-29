@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   roomSelectableWallRuns,
@@ -6,21 +7,15 @@ import {
 } from '../../../shared/world/roomGeometry.js'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
-import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 
 const PANEL_W = 310
-const PANEL_H_EST = 680
 
-export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearanceChange, onClose }) {
+// Position fixe, colonne de droite — voir le commentaire équivalent dans SurfaceRoomPanel.jsx
+// (§12.9/§12.10, PLAN_WORLD_BUILDER_REWORK.md).
+export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChange, onClose }) {
   const { t } = useTranslation('builder')
-  const { position, beginDrag, panelRef } = useDraggablePanelPosition({
-    x,
-    y,
-    width: PANEL_W,
-    height: PANEL_H_EST,
-    storageKey: 'enclume.surfaceWallPanel.position',
-  })
+  const [confirmDeleteWalls, setConfirmDeleteWalls] = useState(false)
   if (!room || !tool?.selectedRoomWallCount) return null
 
   const count = Number(tool.selectedRoomWallCount) || 0
@@ -62,12 +57,11 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
 
   return (
     <div
-      ref={panelRef}
-      style={{ ...S.panel, left: position.left, top: position.top }}
+      style={S.panel}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-wall-panel"
     >
-      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-wall-panel-handle">
+      <div style={S.header} data-testid="surface-wall-panel-handle">
         <div>
           <p style={S.kicker}>{t('surfaceWallPanel.kicker')}</p>
           <p style={S.title}>{t('surfaceWallPanel.wallsSelectedCount', { count })}</p>
@@ -183,68 +177,85 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           {selectedRuns.length !== 1 && <p style={S.hint}>{t('surfaceWallPanel.addDoorHint')}</p>}
         </FloatingPanelSection>
 
-        {count >= 2 && (
-          <label style={S.field}>
-            <span style={S.label}>{t('common.angleValue', { value: Number(tool.roomArcAngle || 90).toFixed(0) })}</span>
-            <input
-              type="range"
-              min="5"
-              max="175"
-              step="5"
-              value={tool.roomArcAngle || 90}
-              onChange={event => onPatch?.({ roomArcAngle: Number(event.target.value), roomArcError: null })}
-              style={{ width: '100%' }}
-            />
-          </label>
-        )}
+        <FloatingPanelSection title={t('surfaceWallPanel.shapeSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.shape">
+          {count >= 2 && (
+            <label style={S.field}>
+              <span style={S.label}>{t('common.angleValue', { value: Number(tool.roomArcAngle || 90).toFixed(0) })}</span>
+              <input
+                type="range"
+                min="5"
+                max="175"
+                step="5"
+                value={tool.roomArcAngle || 90}
+                onChange={event => onPatch?.({ roomArcAngle: Number(event.target.value), roomArcError: null })}
+                style={{ width: '100%' }}
+              />
+            </label>
+          )}
 
-        <div style={S.actions}>
+          <div style={S.actions}>
+            <button
+              type="button"
+              disabled={count < 2}
+              onClick={() => onPatch?.({ roomArcSide: Number(tool.roomArcSide) < 0 ? 1 : -1, roomArcError: null })}
+              style={{ ...S.button, ...(count < 2 ? S.disabled : {}) }}
+            >
+              {t('surfaceWallPanel.invertInPlane')}
+            </button>
+            <button
+              type="button"
+              disabled={count < 2}
+              onClick={() => triggerAction('apply')}
+              style={{ ...S.button, ...S.primary, ...(count < 2 ? S.disabled : {}) }}
+            >
+              {t('surfaceWallPanel.applyArc')}
+            </button>
+            <button
+              type="button"
+              disabled={selectedKeys.length === 0}
+              onClick={() => triggerAction('remove')}
+              style={{ ...S.button, ...(selectedKeys.length === 0 ? S.disabled : {}) }}
+            >
+              {t('surfaceWallPanel.straightenButton')}
+            </button>
+          </div>
+
+          <p style={S.hint}>
+            {t('surfaceWallPanel.mergeHint')}
+          </p>
+          {tool.roomArcError && <p style={S.error}>{tool.roomArcError}</p>}
+        </FloatingPanelSection>
+
+        {!confirmDeleteWalls ? (
           <button
             type="button"
-            disabled={count < 2}
-            onClick={() => onPatch?.({ roomArcSide: Number(tool.roomArcSide) < 0 ? 1 : -1, roomArcError: null })}
-            style={{ ...S.button, ...(count < 2 ? S.disabled : {}) }}
-          >
-            {t('surfaceWallPanel.invertInPlane')}
-          </button>
-          <button
-            type="button"
-            disabled={count < 2}
-            onClick={() => triggerAction('apply')}
-            style={{ ...S.button, ...S.primary, ...(count < 2 ? S.disabled : {}) }}
-          >
-            {t('surfaceWallPanel.applyArc')}
-          </button>
-          <button
-            type="button"
-            disabled={selectedKeys.length === 0}
-            onClick={() => triggerAction('remove')}
-            style={{ ...S.button, ...(selectedKeys.length === 0 ? S.disabled : {}) }}
-          >
-            {t('surfaceWallPanel.straightenButton')}
-          </button>
-          <button
-            type="button"
-            disabled={count < 1}
-            onClick={() => triggerAction('delete')}
-            style={{ ...S.button, ...S.danger, ...(count < 1 ? S.disabled : {}) }}
+            onClick={() => setConfirmDeleteWalls(true)}
+            style={{ ...S.button, ...S.danger }}
           >
             {count > 1 ? t('surfaceWallPanel.deleteWallsButton') : t('surfaceWallPanel.deleteWallButton')}
           </button>
-        </div>
-
-        <p style={S.hint}>
-          {t('surfaceWallPanel.mergeHint')}
-        </p>
-        {tool.roomArcError && <p style={S.error}>{tool.roomArcError}</p>}
+        ) : (
+          <div style={S.deleteActions}>
+            <button
+              type="button"
+              onClick={() => { setConfirmDeleteWalls(false); triggerAction('delete') }}
+              style={{ ...S.button, ...S.danger }}
+            >
+              {t('surfaceRoomPanel.confirmDeleteButton')}
+            </button>
+            <button type="button" onClick={() => setConfirmDeleteWalls(false)} style={S.button}>
+              {t('common.cancelButton')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 const S = {
-  panel: { position: 'fixed', width: PANEL_W, maxHeight: 'calc(100vh - 16px)', zIndex: 10003, background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.72)', overflow: 'hidden', userSelect: 'none' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14', cursor: 'grab', touchAction: 'none' },
+  panel: { position: 'fixed', top: 16, right: 16, width: PANEL_W, maxHeight: 'calc(100vh - 32px)', zIndex: 10003, background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.72)', overflow: 'hidden', userSelect: 'none' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14' },
   kicker: { margin: 0, fontSize: '11px', color: '#fb923c', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' },
   title: { margin: '2px 0 0', fontSize: '12px', color: '#dbeafe', fontWeight: 600 },
   closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '4px' },
@@ -253,7 +264,8 @@ const S = {
   hint: { margin: 0, color: '#7f8eaa', fontSize: '11px', lineHeight: 1.4 },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' },
-  actions: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px' },
+  actions: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px' },
+  deleteActions: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 82px', gap: '6px' },
   profileButtons: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '5px' },
   directionButtons: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
   profileButton: { minHeight: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', border: '1px solid #35354e', borderRadius: '5px', background: '#151525', color: '#7f8eaa', fontSize: '9px', cursor: 'pointer' },

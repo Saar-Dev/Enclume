@@ -2,26 +2,23 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
-import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 import { getRoomBaseY, yToLevel } from '../lib/surfaceData.js'
 
 const PANEL_W = 330
-const PANEL_H_EST = 720
 const MATERIAL_FACES = [
   ['floor', 'surfaceRoomPanel.faceFloor'],
   ['ceiling', 'surfaceRoomPanel.faceCeiling'],
 ]
 
-export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
+// Position fixe, colonne de droite — plus de fenêtre déplaçable (§12.9/§12.10,
+// PLAN_WORLD_BUILDER_REWORK.md : Saar navigue par la caméra, pas en déplaçant les panneaux ;
+// un seul emplacement referme aussi la question d'où le panneau apparaît selon le chemin de
+// sélection, §10b/§11.6.2). Salle/Mur sont ici les deux panneaux à usage unique éditeur — les
+// deux repris tels quels n'apparaissent jamais en même temps (mutuellement exclusifs,
+// `Editor3D.jsx`), donc une seule position statique suffit pour les deux.
+export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClose }) {
   const { t } = useTranslation('builder')
-  const { position, beginDrag, panelRef } = useDraggablePanelPosition({
-    x,
-    y,
-    width: PANEL_W,
-    height: PANEL_H_EST,
-    storageKey: 'enclume.surfaceRoomPanel.position',
-  })
   const [materialFace, setMaterialFace] = useState(
     tool?.materialFace === 'ceiling' ? 'ceiling' : 'floor',
   )
@@ -58,12 +55,11 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
 
   return (
     <div
-      ref={panelRef}
-      style={{ ...S.panel, left: position.left, top: position.top }}
+      style={S.panel}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-room-panel"
     >
-      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-room-panel-handle">
+      <div style={S.header} data-testid="surface-room-panel-handle">
         <div>
           <p style={S.kicker}>{t('surfaceRoomPanel.kicker')}</p>
           <p style={S.title}>{room.label || room.name || room.id}</p>
@@ -232,8 +228,10 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
 const S = {
   panel: {
     position: 'fixed',
+    top: 16,
+    right: 16,
     width: PANEL_W,
-    maxHeight: 'calc(100vh - 16px)',
+    maxHeight: 'calc(100vh - 32px)',
     zIndex: 10002,
     background: '#0e0e1a',
     border: '1px solid #2a2a3e',
@@ -245,7 +243,6 @@ const S = {
   header: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
     padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14',
-    cursor: 'grab', touchAction: 'none',
   },
   kicker: { margin: 0, fontSize: '11px', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' },
   title: { margin: '2px 0 0', fontSize: '12px', color: '#dbeafe', fontWeight: 600, maxWidth: '255px', overflow: 'hidden', textOverflow: 'ellipsis' },

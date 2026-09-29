@@ -226,6 +226,59 @@ export function roomSelectableWallRuns(room) {
   return [...straight, ...arcs]
 }
 
+// Poignée de redimensionnement (§10c, PLAN_WORLD_BUILDER_REWORK.md) — traduit un tronçon de mur
+// DROIT (roomBoundaryWallRuns/roomSelectableWallRuns, axis 'x'|'z' — jamais un arc, `axis: 'arc'`
+// ignoré volontairement, pas de poignée dessus en v1) et un nombre de rangées signé en un lot de
+// cases pour classifyRoomFootprintCells/paintRoomFootprintCells (client/src/lib/surfaceRooms.js).
+// Jamais une position de mur manipulée directement — cause du bug d'échelle du 2026-09-28 (§8,
+// SURFACE_FINE mélangé à l'espace de coordonnées brut d'un mur) : ce module reste entièrement en
+// coordonnées de case entières, la seule donnée réellement écrite.
+// rowCount > 0 = agrandir vers l'extérieur (rangées ajoutées, mode 'add') ; < 0 = rétrécir en
+// retirant les rangées déjà dans l'empreinte, en partant de la plus proche du mur (mode 'remove').
+// Jamais 0 en pratique : la limite est une arête entre deux cases, jamais une case elle-même — il
+// n'existe pas de « rangée neutre ».
+export function wallRunReshapeCells(run, rowCount) {
+  const count = Math.trunc(Number(rowCount) || 0)
+  if (!run || count === 0 || (run.axis !== 'x' && run.axis !== 'z')) return []
+  // side vient de makeEdge : 'north'/'west' sont la face basse (x ou z minimal) de la case
+  // adjacente, donc l'extérieur y est dans le sens décroissant ; 'south'/'east' l'inverse.
+  const outward = (run.side === 'north' || run.side === 'west') ? -1 : 1
+  const alongAxisKey = run.axis === 'x' ? 'x' : 'z'
+  const alongMin = Math.min(run.from[alongAxisKey], run.to[alongAxisKey])
+  const alongMax = Math.max(run.from[alongAxisKey], run.to[alongAxisKey]) - 1
+  const boundary = run.axis === 'x' ? run.from.z : run.from.x
+  const magnitude = Math.abs(count)
+  const rows = []
+  for (let i = 0; i < magnitude; i += 1) {
+    rows.push(count > 0
+      ? (outward > 0 ? boundary + i : boundary - 1 - i)
+      : (outward > 0 ? boundary - 1 - i : boundary + i))
+  }
+  const cells = []
+  for (let along = alongMin; along <= alongMax; along += 1) {
+    for (const perp of rows) {
+      cells.push(run.axis === 'x' ? { x: along, z: perp } : { x: perp, z: along })
+    }
+  }
+  return cells
+}
+
+// Inverse de wallRunReshapeCells côté saisie : à partir de la case survolée pendant le glissé de
+// la poignée, quel rowCount signé faut-il lui donner pour que cette case soit la plus lointaine du
+// lot qu'elle produirait ? Les deux fonctions sont dérivées indépendamment (pas l'une de l'autre)
+// puis vérifiées l'une contre l'autre par test — une erreur symétrique dans les deux ne se verrait
+// pas sinon.
+export function wallRunRowCountForCell(run, cell) {
+  if (!run || !cell || (run.axis !== 'x' && run.axis !== 'z')) return 0
+  const perp = run.axis === 'x' ? cell.z : cell.x
+  const boundary = run.axis === 'x' ? run.from.z : run.from.x
+  const outward = (run.side === 'north' || run.side === 'west') ? -1 : 1
+  if (outward > 0) {
+    return perp >= boundary ? (perp - boundary + 1) : (perp - boundary)
+  }
+  return perp <= boundary - 1 ? (boundary - perp) : (boundary - perp - 1)
+}
+
 function locateSelectedRun(loop, selectedKeys) {
   const selected = new Set(selectedKeys)
   const count = loop.edges.filter(edge => selected.has(edge.key)).length

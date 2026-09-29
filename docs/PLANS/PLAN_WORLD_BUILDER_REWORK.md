@@ -16,7 +16,12 @@
 > sur toute la sélection) et corrigée — **validée en jeu par Saar** (« Résolution du problème des murs non
 > modifiables. Bien joué »). Occlusion caméra désactivée en édition (2ᵉ blocage de test, corrigé). Restent
 > ouverts : le flux Sélection→salle→Peindre (§9), et « Ajouter une salle » qui ne reste pas actif (§10b),
-> en attente d'une clarification de Saar. Détail complet en §10.
+> en attente d'une clarification de Saar. **§11 (même jour, suite)** : Saar propose un rework « World Builder
+> v2 » (stratégie strangler fig — reconstruire la coquille d'interaction à côté, garder l'ancien tant qu'il ne
+> gêne pas), recadré après recherche (second-system effect) au périmètre de la coquille seule — modèle de
+> données/compilateur/rendu repris tels quels. Stub créé, cadrage réel pas commencé. La poignée (§10c) reste
+> une exigence explicite de Saar, pas une option que ce rework pourrait écarter — confirmé en clair (« je la
+> veux cette poignée ! ») après une confusion pendant la rédaction. Détail complet en §10 et §11.
 >
 > **Autorité** : *Livre de Base Polaris* n'a rien à dire ici (pur outillage) → `docs/SYSTEME/EDITEUR.md`
 > + `docs/SYSTEME/SURFACES_SALLES.md` + `.claude/rules/world.md`.
@@ -475,7 +480,13 @@ quel que soit le chemin emprunté. Testé (voir 10d).
 création — confirme le constat de Saar au §9. Pas touché ce tour (un problème à la fois, le garde-fou porte était
 prioritaire car déjà entièrement qualifié) ; bon candidat pour la prochaine passe, mécanique et sans risque.
 
-### 10c. Poignée de redimensionnement — pas d'obstacle architectural trouvé, décision de granularité à prendre
+### 10c. Poignée de redimensionnement — EXIGENCE CONFIRMÉE de Saar, pas une option à arbitrer
+
+**Saar (2026-09-29, en réaction à une confusion pendant le rework de ce document) : « je la veux cette
+poignée ! »** — la poignée est une fonctionnalité demandée, complémentaire de la peinture/effacement de cases
+(§8), pas une piste à évaluer puis potentiellement écarter au profit de Plan B. Rapide/gros (poignée) vs
+fin/détail (cases) : deux outils qui coexistent, ni l'un ne remplace l'autre. À ne jamais retirer du périmètre
+sans que Saar le demande explicitement.
 
 Le geste actuel (`reshape-room`, §8) traduit déjà tout glissé en un lot de cases via
 `classifyRoomFootprintCells`/`paintRoomFootprintCells`, avec aperçu case par case en direct — la case reste la
@@ -527,10 +538,12 @@ convention que la sélection de salle) ; Maj-clic garde l'ancien comportement d'
 sélection multiple délibérée.
 
 **`[HYPOTHÈSE]` non retenue à corriger, à confirmer par Saar** : le bouton « Sélectionner tous les murs »
-(`SurfaceWallPanel.jsx`) sélectionne délibérément tous les murs de la salle en un clic — si Saar l'utilise pour
-« regarder » la salle puis ajuste la couleur en oubliant que la sélection couvre tout, le même symptôme se
-reproduirait, mais ce chemin fonctionne comme prévu (portée Salle du panneau flottant) : pas touché, pas un bug.
-À confirmer si le correctif ci-dessus ne suffit pas.
+(`SurfaceWallPanel.jsx`) sélectionne délibérément tous les edgeKeys de la salle en un clic (pas via
+`paintRoomWallRoom`/portée Salle du pinceau sidebar — ce bouton passe par `applyRoomWallAppearance` avec une
+liste d'edgeKeys qui couvre tout, un mécanisme différent qui produit un résultat visuel similaire). Si Saar
+l'utilise pour « regarder » la salle puis ajuste la couleur en oubliant que la sélection couvre tout, le même
+symptôme se reproduirait — mais ce chemin fait ce qu'il annonce (sélectionner tout, puis éditer tout) : pas
+touché, pas un bug en soi. À confirmer si le correctif ci-dessus ne suffit pas.
 
 **`[VÉRIFIÉ]` deuxième blocage corrigé** : « les murs invisibles » — `useOccludedWallIds`
 (`SurfaceDungeonScene.jsx`) fait disparaître (opacité 0.18) les murs entre la caméra et la pièce visée, une
@@ -555,8 +568,774 @@ refusent toute modification, sans logique identifiable » — non pas un blocage
 sélection accumulée puis écrasée par le curseur de couleur). Referme ce point précis du §9. Les points de flux
 du §9 non couverts ici (fenêtre qui se ferme, changer de salle en cours de peinture) restent ouverts.
 
+## 11. World Builder v2 — rework de la coquille d'interaction (stub, cadrage à peine commencé)
+
+> Nouvelle phase de CE chantier, pas un document séparé (Règle 2 — une information = un seul endroit ; la
+> tentative initiale de créer `PLAN_WORLD_BUILDER_V2.md` à côté a été corrigée le même jour, cf. Historique).
+> Zéro code, zéro décision figée au-delà du périmètre ci-dessous.
+
+### 11.0. Déclencheur (Saar, 2026-09-29, run à vide de bilan)
+
+> « L'architecture actuelle de l'éditeur est une usine à gaz. On voulait de toute manière un gros rework pour
+> régler ce problème de fichier volumineux et à multi-responsabilités. Ma proposition : on reconstruit le
+> World Builder v2 à côté, à partir de modules nouveaux ou remaniés proprement, sur la base d'un cahier des
+> charges sain et robuste. On ne détruit pas l'ancien — on le garde jusqu'à ce qu'il nous emmerde ou fin de
+> chantier validé pour le chantier 2. »
+
+Analogie de Saar : reprendre les briques saines d'un immeuble qui menace de s'effondrer pour reconstruire
+proprement à côté, sans démolir l'existant avant que le neuf soit prêt.
+
+**Recherche faite avant d'accepter la proposition telle quelle** (Claude, même session) :
+- **Strangler Fig Pattern** (Martin Fowler / Azure Architecture Center / Wikipedia) — construire le nouveau à
+  côté, l'ancien continue de tourner, migration incrémentale, chaque étape réversible et livre de la valeur.
+  Exactement le patron que décrit Saar, confirmé comme la stratégie la plus sûre pour moderniser un système qui
+  fonctionne mais pèse.
+- **Second-system effect** (Fred Brooks, *The Mythical Man-Month* ; Wikipedia ; Albright Labs) — risque inverse
+  documenté : un premier système qui marche est souvent suivi d'un second sur-conçu parce qu'on reconstruit « en
+  pensant à tout » plutôt qu'en résolvant ce qui fait mal aujourd'hui. Garde-fou retenu pour ce chantier :
+  **nommer le problème actuel précis avant toute abstraction ; si la seule justification d'une abstraction est
+  « ça pourrait servir plus tard », s'arrêter.**
+
+**Accord de Saar sur le recadrage proposé** (« Ok pour moi ») : ce rework touche la **coquille d'interaction**
+de l'éditeur (machine à états des outils, gestion des panneaux, patron de sélection/édition) — **pas** le
+modèle de données, le compilateur, l'autorité géométrique ni le rendu 3D partagé, vérifiés solides et flexibles
+dans ce même document pour ce qui a été testé (§7 : L/T/U/trous/multi-niveau déjà supportés sans code ; §10a :
+résolution d'apparence par case correcte pour un mur droit sans arc, vérifiée par script jetable — **le cas
+avec coin arrondi n'est pas retesté, cf. réserve du §11.1**).
+
+### 11.1. Ce qui est repris tel quel (briques saines, jamais réécrites par ce chantier)
+
+- **Modèle de données** : `surface_data` / `surfaceData.rooms[]` — canonique, inchangé.
+- **Compilateur** : `shared/world/worldCompiler.js` — produit le `WorldSnapshot`, autorité unique spatiale
+  (`.claude/rules/world.md`), inchangé.
+- **Autorité géométrique** : `shared/world/roomGeometry.js` (`roomBoundaryEdges`, `roomBoundaryWallRuns`,
+  `roomSelectableWallRuns`, arcs, contours) — vérifié empiriquement (§7) comme supportant déjà
+  L/T/U/trous/îlots/multi-niveau sans changement de code.
+- **Fonctions de mutation** : `client/src/lib/surfaceRooms.js` (`paintRoomFootprintCells`,
+  `paintRoomWallEdges`, `applyRoomWallAppearance`, `applyRoomBoundaryArc`, etc.) — logique métier déjà
+  correcte et testée (49 tests purs, `surfaceData.test.mjs`), garde-fous portes/mitoyens/îlots déjà en place.
+- **Rendu 3D** : `client/src/components/SurfaceDungeonScene.jsx` + `client/src/lib/roomWalls.js` — partagé avec
+  le mode jeu (`Canvas3D.jsx`), vérifié correct au niveau donnée pour un mur droit sans arc (§10a).
+
+**`[RÉSERVE]` avant de considérer cette brique comme définitivement saine** : la cause de « la couleur écrase
+tout » reste `[INCONNU]` (§10a), et le candidat de tête non testé est précisément un mur avec coin arrondi —
+c'est-à-dire potentiellement **cette même brique** (`roomGeometry.js`/`roomWalls.js`), pas la coquille
+d'interaction. Si l'audit (§11.6 point 2) ou une reproduction de Saar confirme que la cause vit dans le rendu
+partagé plutôt que dans l'interaction, ce n'est plus une brique à reprendre telle quelle sans réserve : la
+corriger passerait avant de la considérer figée pour v1 et v2 à la fois.
+
+**v1 et v2 écrivent et lisent exclusivement via ces mêmes fonctions** — aucun risque de divergence sur le
+document canonique pendant la coexistence, par construction (invariant 3 d'`AGENTS.md` : une autorité unique).
+
+### 11.2. Ce qui est reconstruit (la coquille, périmètre réel de ce chantier)
+
+- `client/src/components/Editor3D.jsx` (1581 lignes, vérifié `wc -l` le 2026-09-29)
+- `client/src/components/SurfaceEditorScene.jsx` (1485 lignes, vérifié `wc -l` le 2026-09-29)
+- `client/src/components/SurfaceEditorPanel.jsx` (1347 lignes, vérifié `wc -l` le 2026-09-29)
+- Panneaux flottants associés (`SurfaceRoomPanel.jsx`, `SurfaceWallPanel.jsx`, `SurfaceConnectorPanel.jsx`,
+  `SurfaceEffectPanel.jsx`) — à réévaluer un par un, pas supposés tous à refaire.
+
+**La poignée de redimensionnement (§10c) fait partie du périmètre de cette coquille à reconstruire** — c'est
+une interaction que le v1 actuel n'a jamais eue proprement (abandonnée au §8 pour une raison d'implémentation,
+pas de besoin), donc un candidat direct pour la nouvelle machine à états d'outils plutôt qu'un ajout après
+coup. Exigence confirmée de Saar (§10c), pas une option que le cadrage pourrait écarter.
+
+Dette déjà nommée avant ce chantier (`PLAN_EDITEUR_CARTE.md` Phase 2, reportée plusieurs fois depuis 2026-08,
+notamment par Saar lui-même après Plan B — voir §8 ci-dessus) — cette section 11 la reprend avec un scope plus
+large (rework, pas simple refactor) plutôt que la recopier.
+
+### 11.3. Problèmes réels déjà observés — la matière du cahier des charges (pas de besoins imaginés)
+
+Recensés en lisant le code réel cette session (peinture de mur, §10/10e ci-dessus), pas supposés :
+
+1. **Duplication d'autorité sur une même donnée** (§10b) : deux chemins d'interface écrivaient
+   `wallAppearanceProfiles` avec des règles différentes avant correction du 2026-09-29. Trouvé en creusant un
+   seul symptôme, sur une seule donnée. `[HYPOTHÈSE]` non vérifiée : d'autres occurrences similaires pourraient
+   exister ailleurs dans l'éditeur — aucune recherche systématique menée, aucune autre trouvée à ce stade. C'est
+   l'objet de l'audit du §11.6 point 2, pas une affirmation.
+2. **Deux patrons d'interaction concurrents pour la même intention** (« changer l'apparence d'un mur ») : clic
+   direct sur le mur (outil pinceau, portée choisie à l'avance) vs sélection multi-mur en mode Sélection puis
+   édition dans un panneau flottant. Aucune règle ne dit laquelle est la référence.
+3. **Couplage mode + sélection + ouverture de panneau** qui rend indiscernable de l'extérieur un changement
+   « petit » d'un changement « gros » — cas vécu : « Ajouter une salle qui ne reste pas actif » (§9/§10b)
+   semblait mécanique, s'est avéré coupler trois responsabilités.
+4. **Application en direct sans regroupement** (§10e) : chaque tick d'un curseur (matériau, profil
+   d'élévation) déclenche à la fois une sauvegarde réseau et une entrée dans la pile d'annulation (49
+   emplacements) — un seul geste de réglage peut à lui seul saturer l'historique d'annulation.
+5. **Composant de rendu partagé jeu/édition sans convention explicite** (§10e) : `SurfaceDungeonScene.jsx` sert
+   les deux publics ; l'occlusion de mur face caméra, pensée pour le confort du joueur, a fui silencieusement
+   dans l'éditeur jusqu'à devenir bloquante pour la peinture — pas de garde-fou structurel qui empêche la
+   récidive avec la prochaine fonctionnalité de ce genre.
+6. **Fichiers à responsabilités multiples non séparées** (§11.2) — chaque nouvelle fonctionnalité (Plan B, Lot
+   A, zones dangereuses) est arrivée dans le même monolithe faute de refactor préalable, aggravant la dette à
+   chaque itération plutôt que de la stabiliser.
+
+### 11.4. Explicitement hors périmètre de ce chantier
+
+- Les mécaniques de jeu qui consomment l'éditeur (zones dangereuses, portes, décals, matériaux procéduraux) —
+  chacune son propre plan, référencées une fois dans `PLAN_EDITEUR_CARTE.md` §0, pas reprises ici.
+- Le modèle de données, le compilateur, le rendu 3D partagé (§11.1) — sujets seulement si un besoin **réel et
+  nommé** apparaît en cours de cadrage, jamais par anticipation. Un candidat nommé existe déjà pour le rendu 3D
+  partagé (réserve du §11.1, cause encore `[INCONNU]` du §10a) — pas hors périmètre par anticipation, mais pas
+  encore confirmé non plus.
+- Toute abstraction dont la seule justification serait « plus flexible pour plus tard » (garde-fou second-
+  system effect, §11.0).
+
+### 11.5. Stratégie de coexistence — à cadrer, rien de tranché
+
+Questions ouvertes, aucune réponse encore :
+- Comment un MJ bascule entre v1 et v2 dans l'interface (sélecteur explicite ? v2 comme nouvel onglet à côté de
+  Structure/Objets 3D/Zones dangereuses ? battlemap de test dédiée avant bascule réelle) ?
+- Jusqu'à quand v1 reste maintenu en parallèle (« jusqu'à ce qu'il nous emmerde », dixit Saar) — pas de critère
+  objectif fixé pour l'instant.
+- Les correctifs trouvés sur v1 pendant la coexistence (comme ceux du 2026-09-29, §10/10e) continuent-ils
+  d'être portés sur v1, ou v1 est-il gelé au comportement actuel dès que le cadrage v2 démarre réellement ?
+- **Coordination avec les autres sessions déjà actives sur ce même périmètre** : cette même conversation a
+  trouvé, avant de commiter le travail du 2026-09-29 (§10/10e), qu'une autre session (« RW_FORMES SALLES »,
+  identifiée via `ListAgents`) avait laissé un gros volume de travail non commité sur `surfaceRooms.js`/
+  `SurfaceEditorScene.jsx` — exactement les fichiers que ce chantier v2 va reconstruire. Pas de protocole écrit
+  pour éviter qu'une session démarre v2 en parallèle d'une autre qui modifie encore v1 sur les mêmes fichiers.
+
+### 11.6. Méthode et prochaines étapes
+
+Avant tout plan de code, dans l'ordre :
+1. **Recherche pro** sur les patrons d'éditeurs 3D comparables — **fait, voir 11.6.1**.
+2. **Audit** : les autres duplications d'autorité potentielles dans l'éditeur (§11.3 point 1) — **fait, voir
+   11.6.2**.
+3. **Décision du patron d'interaction unique** pour « sélectionner puis éditer » (§11.3 point 2), présentée et
+   tranchée par Saar avant tout code — même méthode que celle qui a fonctionné pour Plan B (§8). **Question
+   concrète posée en 11.6.2, en attente de la décision de Saar.**
+4. **Cadrage de la coexistence** (§11.5) — tranché par Saar, pas déduit techniquement seul.
+5. **Lever la réserve du §11.1** sur le rendu 3D partagé : reproduire ou écarter la cause de « la couleur
+   écrase tout » (§10a, candidat coin arrondi) avant de figer ce composant comme définitivement « repris tel
+   quel ». S'il s'avère que la cause vit bien dans la coquille d'interaction (pas dans le rendu), la réserve
+   se referme sans changer le périmètre. Pas encore fait.
+
+Points 3, 4 et 5 restent ouverts, en attente de décision de Saar ou d'investigation dédiée. Cette section fixe
+le périmètre et le garde-fou (second-system effect) ; les points 1 et 2 apportent maintenant une matière
+concrète, pas encore un plan de code actionnable.
+
+#### 11.6.1. Recherche pro — trois patrons directement transposables
+
+**Éditeur three.js (`mrdoob/three.js`, `editor/js/`)** — la référence la plus proche : même moteur de rendu que
+Enclume, un éditeur 3D en production depuis des années.
+- `Editor.js` = état canonique unique + bus de signaux (pub/sub) que les panneaux UI écoutent, jamais une
+  copie locale de l'état — même invariant que la règle 3 d'`AGENTS.md` (autorité unique), déjà respecté côté
+  `surfaceRooms.js`/`surfaceData` pour Enclume, mais pas côté état d'interaction (mode/sélection).
+- **Une classe par opération** (`editor/js/commands/` : `SetMaterialColorCommand.js`, `SetPositionCommand.js`,
+  `MoveObjectCommand.js`, 25 fichiers, un par intention métier) plutôt qu'un réducteur ou un fichier
+  monolithique — répond directement à `[OBSERVÉ]` §11.3 point 6 (fichiers à responsabilités multiples) : la
+  dette d'Enclume vient de ce que *toute* la logique d'interaction (mode, sélection, callbacks de panneau) vit
+  dans 2-3 fichiers de 1300-1600 lignes au lieu d'une unité par opération.
+- **`History.js` fusionne les commandes continues au lieu de les empiler** `[VÉRIFIÉ]` (lecture directe du
+  code source, `raw.githubusercontent.com/mrdoob/three.js/dev/editor/js/History.js` et
+  `commands/SetMaterialColorCommand.js`) : chaque commande porte un flag `updatable` ; une nouvelle commande
+  du même type, sur le même objet/attribut, dans les 500 ms de la précédente, appelle `lastCmd.update(cmd)`
+  (qui ne fait que remplacer `newValue`) au lieu de pousser une nouvelle entrée d'historique — un curseur de
+  couleur glissé en continu ne produit qu'**une** entrée d'annulation, pas une par tick. Réponse directe et
+  sourcée à `[OBSERVÉ]` §11.3 point 4 (49 emplacements d'annulation saturés par un seul réglage continu) :
+  Enclume n'a pas besoin d'inventer ce mécanisme, juste de reprendre `updatable` + fenêtre de fusion par
+  (salle, opération, clés d'arête) sur sa propre pile d'undo.
+
+**Machines à états explicites pour le mode/outil (XState, cité par plusieurs sources convergentes :
+`mastery.games`, `hackernoon.com`, `telerik.com`)** — le patron professionnel documenté pour « un composant a
+un jeu fini d'états exclusifs, chacun avec ses transitions valides » (dropdown fermé/ouvert/sélectionné cité en
+exemple direct, mais le principe est générique). Répond à `[OBSERVÉ]` §11.3 point 3 (couplage mode + sélection
++ panneau indiscernable de l'extérieur, cause du bug « Ajouter une salle » qui ne reste pas actif, §10b) : au
+lieu d'un `mode: 'select' | 'paint-wall' | 'reshape-room' | …` en `useState` réassigné à la main à N endroits
+différents dans `SurfaceEditorScene.jsx`/`Editor3D.jsx` (dont un oubli confirmé, §10b), une machine à états
+déclare une fois pour toutes quelles transitions existent (ex. : `pose-salle → pose-salle` autorisée après une
+pose réussie, pas `pose-salle → select` implicite) — le bug devient une transition absente à ajouter, pas un
+`setMode('select')` à retrouver dans le code.
+
+**Ce que la recherche ne tranche pas** : aucune source trouvée ne documente un patron consacré pour découpler
+« sélection courante » de « outil actif » (§11.3 point 2, clic direct du pinceau vs sélection puis panneau) —
+voir 11.6.2 ci-dessous, la réponse est venue de l'audit du code réel d'Enclume, pas de la recherche externe.
+
+Sources : [Editor: UI panels idea — issue #5949](https://github.com/mrdoob/three.js/issues/5949) ·
+[three.js/editor (dev)](https://github.com/mrdoob/three.js/tree/dev/editor) ·
+[Visual Editor — DeepWiki mrdoob/three.js](https://deepwiki.com/mrdoob/three.js/6.1-visual-editor) ·
+[History.js](https://raw.githubusercontent.com/mrdoob/three.js/dev/editor/js/History.js) ·
+[commands/SetMaterialColorCommand.js](https://raw.githubusercontent.com/mrdoob/three.js/dev/editor/js/commands/SetMaterialColorCommand.js) ·
+[State Machines in React — mastery.games](https://mastery.games/post/state-machines-in-react/) ·
+[Upgrade your React UI with state machines — HackerNoon](https://hackernoon.com/upgrade-your-react-ui-with-state-machines-30d1298e90be) ·
+[How to Use Finite State Machines in React — Telerik](https://www.telerik.com/blogs/how-to-use-finite-state-machines-react).
+
+#### 11.6.2. Audit — la duplication n'est pas systémique, elle suit un vrai clivage structurel
+
+**`[VÉRIFIÉ]` par grep direct sur `surfaceRooms.js` et ses appelants (2026-09-29)**, pas supposé : les quatre
+opérations de mur citées au §10a (appearance/arc/élévation/peinture) n'ont **pas** toutes deux chemins
+d'écriture.
+- `applyRoomBoundaryArc` et `applyRoomWallElevationProfile` n'ont **qu'un seul appelant produit dans le
+  client** : `Editor3D.jsx` (le panneau flottant Mur, après sélection classique). Aucun outil sidebar
+  équivalent n'existe pour arrondir un coin ou régler une élévation directement au clic.
+- `applyRoomWallAppearance`, elle, a **deux** appelants distincts : `Editor3D.jsx` (même panneau flottant) ET
+  `paintRoomWallEdges`/`paintRoomWallRoom` (`surfaceRooms.js`, appelées depuis l'outil sidebar « Peindre un
+  mur »), qui l'invoquent chacune avec des règles différentes avant la correction du §10b.
+
+**Conclusion argumentée** : la duplication d'autorité trouvée au §10b n'est pas un symptôme répandu dans tout
+l'éditeur (`[HYPOTHÈSE]` du §11.3 point 1 maintenant testée, réfutée en tant que risque systémique) — elle est
+la conséquence mécanique d'un seul fait structurel, exactement celui identifié à la fin de 11.6.1 : **la
+peinture est aujourd'hui la seule opération de mur qui a à la fois un outil sidebar « clic direct » ET un
+chemin panneau flottant « sélectionner puis éditer »**, donc la seule à pouvoir diverger entre deux chemins.
+Arc et élévation n'ont pas ce risque aujourd'hui simplement parce qu'ils n'ont qu'un chemin — pas parce qu'ils
+seraient mieux conçus.
+
+**Question concrète pour la décision du point 3 (patron d'interaction unique), à trancher par Saar avant tout
+code de la coquille v2** : plutôt que choisir dans l'abstrait entre « clic direct » et « sélection puis panneau »,
+la vraie question posée par cet audit est **est-ce que chaque opération de mur (peindre, arrondir, élever)
+doit offrir les deux mêmes chemins de façon cohérente, ou seule la peinture en a-t-elle vraiment besoin (geste
+rapide et répétitif) alors qu'arc/élévation restent des réglages ponctuels qui n'ont jamais réclamé de raccourci
+direct** ? Dans les deux cas, la coquille v2 ne doit garder qu'**une seule fonction d'application par donnée**
+(ce qui existe déjà, `applyRoomWallAppearance` etc.) — la question ne porte que sur le nombre de chemins
+d'interaction qui peuvent y mener, pas sur l'autorité elle-même.
+
+## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
+
+> Saar : « Comme exprimé précédemment, l'interface UI/UX est un bordel sans nom : plein de fonctionnalités qui
+> se sont ajoutées et jamais réfléchies d'un point de vue UI. J'ai besoin d'un expert UI/UX pour repenser
+> l'intégralité de l'interface. »
+
+Recadre le §11 : jusqu'ici, la recherche (11.6.1) et l'audit (11.6.2) portaient sur l'architecture de code
+(machine à états, pattern de commande, duplication d'autorité). Cette demande porte d'abord sur l'expérience
+elle-même — taxonomie des outils, cohérence, charge cognitive — pas sur le fichier qui l'implémente. Les deux
+convergent (une bonne IA se code ensuite avec les patrons du 11.6.1) mais l'ordre change : la décision de
+design précède le refactor technique qui la sert, pas l'inverse.
+
+### 12.1. Méthode
+
+Audit heuristique — Jakob Nielsen, 10 heuristiques d'utilisabilité, méthode standard de l'industrie
+(`nngroup.com`, référence de facto pour ce type d'évaluation) — appliqué à un inventaire réel de l'interface
+(lu dans le code, pas deviné), croisé avec les constats déjà posés par Saar lui-même (§9, non diagnostiqués à
+l'époque) et les bugs déjà trouvés en creusant le code (§10/§11.3). Puis confrontation à trois références déjà
+mobilisées dans ce chantier (Dungeondraft, Blender, l'éditeur three.js) pour leurs patrons concrets.
+
+### 12.2. Inventaire réel `[VÉRIFIÉ]` (lecture directe de `SurfaceEditorPanel.jsx`, 2026-09-29)
+
+- **3 onglets visibles, 2 dimensions d'état réelles** : Structure / Objets 3D / Zones dangereuses sont rendus
+  comme 3 boutons, mais le code n'a que `activeEditorTab: 'world' | 'entity'` — Structure et Zones dangereuses
+  partagent `'world'`, distinguées seulement par `surfaceToolState.mode === 'effect'` (lignes 375-412). Le
+  commentaire du code l'assume ouvertement : « Aucun nouvel état, zéro risque pour le parent » — une décision
+  optimisée pour la sécurité du code, pas pour un modèle mental cohérent côté utilisateur (heuristique n°2,
+  *match between system and the real world*, 12.3).
+- **Dans l'écran Structure, 4 groupes de boutons, à la cohérence de présentation inégale** (lignes 453-612) :
+  1. *Sélection* — 1 bouton, sans titre de section.
+  2. *« Structure »* (titre de section) — Salle, Mur, Escalier, Passerelle (4 boutons de création).
+  3. *« Connecteurs »* (titre de section) — Porte, Ascenseur, Échelle (3 boutons de création).
+  4. **Sans titre de section** — Peindre un mur, Remodeler (`reshapeRoom`), Effacer : mélange deux outils de
+     retouche et un outil destructif, seul groupe des quatre sans étiquette, et seul groupe où 2 des 3 boutons
+     sont désactivés tant qu'aucune salle n'est sélectionnée (`disabled={!surfaceToolState.selectedRoomId}`,
+     lignes 577 et 593) sans que le 3ᵄ (Effacer) partage cette contrainte ni qu'aucun n'explique pourquoi par un
+     tooltip visible dans le code lu.
+  → **11 modes distincts au total** (`select, room, wall, stair, bridge, connector×3, paint-wall, reshape-room,
+  erase`) dans un seul écran, groupés par ordre d'ajout historique `[HYPOTHÈSE]` (pas vérifié par `git blame`)
+  plutôt que par intention d'usage.
+- **Deux interfaces concurrentes pour éditer l'apparence d'un mur** (déjà creusé §10b/§11.6.2) : l'outil sidebar
+  « Peindre un mur » (clic direct, portée choisie) et le panneau flottant Mur (sélection classique puis
+  formulaire) — aucun des deux ne renvoie à l'autre, l'un ferme l'autre au lieu de le réutiliser (constat brut
+  de Saar, §9 : « ferme une fenêtre qui contient déjà toute l'interface nécessaire pour en dupliquer une
+  partie »).
+
+### 12.3. Audit heuristique — violations trouvées, sourcées sur le code ou les constats déjà consignés
+
+1. **Consistance et standards** — violée : la peinture de mur a deux chemins d'interaction concurrents
+   (12.2), les trois autres opérations de mur (arc, élévation) n'en ont qu'un (§11.6.2) — aucune règle
+   n'indique laquelle est la référence pour une future fonctionnalité.
+2. **Correspondance système/réalité** — violée : 3 onglets affichés pour 2 dimensions d'état réelles (12.2) ;
+   la « Structure » technique (`activeEditorTab`) ne coïncide pas avec la structure perçue par l'utilisateur.
+3. **Reconnaître plutôt que se souvenir** — violée : 11 modes dans un seul écran, deux des quatre groupes de
+   boutons sans étiquette de section (12.2) — la charge de mémorisation repose sur l'utilisateur, pas sur
+   l'interface qui devrait la porter.
+4. **Design esthétique et minimaliste** — violée : deux interfaces qui font un travail qui se recoupe pour la
+   même donnée (12.2, mur) — de l'information/des contrôles redondants qui se disputent l'attention sans valeur
+   ajoutée l'un par rapport à l'autre.
+5. **Contrôle et liberté de l'utilisateur** — violée en partie : application en direct sans regroupement
+   (§11.3 point 4) — un seul geste continu (glisser un curseur) peut à lui seul saturer une bonne part des 49
+   emplacements d'annulation, réduisant la liberté de revenir en arrière sur d'*autres* actions.
+6. **Visibilité de l'état du système** — violée : « Ajouter une salle » qui ne reste pas actif après une pose
+   réussie (§9/§10b) — le mode retombe silencieusement en Sélection, aucun signal explicite ne dit à
+   l'utilisateur qu'il vient de quitter le mode création.
+7. **Prévention des erreurs** — violée jusqu'à correction : le bug « la couleur change avant même de cliquer »
+   (§10e) était exactement une absence de garde-fou — une action irréversible (repeindre) appliquée à une
+   cible ambiguë (une sélection accumulée silencieusement) sans étape de confirmation. Corrigé au niveau code
+   (§10e), mais le patron sous-jacent (application en direct sur « la sélection courante », sans que
+   l'utilisateur voie clairement laquelle) reste fragile par construction, pas seulement par ce bug précis.
+
+### 12.4. Trois patrons professionnels convergents, déjà mobilisés dans ce chantier
+
+- **Dungeondraft** (`encounterlibrary.com`, `dungeondraft-encyclopaedia.gitbook.io`) : les outils sont groupés
+  par catégorie de haut niveau dans la barre latérale (Design / Terrain / Objets), chaque catégorie sa propre
+  icône — jamais une liste plate d'outils individuels au même niveau.
+- **Blender** (`blender.org`, N-panel) : **un seul panneau de propriétés contextuel**, toujours au même
+  endroit, qui affiche ce qui concerne l'élément actif quel qu'il soit — pas une fenêtre dédiée par type
+  d'objet qui se multiplie à chaque nouvelle fonctionnalité.
+- **Éditeur three.js** (déjà détaillé en 11.6.1) : commandes fusionnables par fenêtre de temps — répond à la
+  violation n°5 ci-dessus avec un mécanisme déjà éprouvé, pas à réinventer.
+
+Sources : [The Design Tools — Encounter Library](https://encounterlibrary.com/dungeondraft-basics/design-tools/) ·
+[The Object Tools — Encounter Library](https://encounterlibrary.com/dungeondraft-basics/object-tools/) ·
+[MAIN MENU — Dungeondraft Encyclopaedia](https://dungeondraft-encyclopaedia.gitbook.io/guide/introduction/first-look/main-menu) ·
+[Context-sensitive user interface — Wikipedia](https://en.wikipedia.org/wiki/Context-sensitive_user_interface) ·
+[Nielsen's Heuristics — The Decision Lab](https://thedecisionlab.com/reference-guide/design/nielsens-heuristics) ·
+[Heuristic Evaluation Workbook — NN/g](https://media.nngroup.com/media/articles/attachments/Heuristic_Evaluation_Workbook_1_Fillable.pdf).
+
+### 12.5. Direction de refonte proposée — à valider par Saar, pas une décision prise
+
+Trois changements d'information architecture, chacun répond à une violation précise du 12.3, présentés pour
+décision (même méthode que Plan B et Lot A Option 1/2, §8) :
+
+1. **Regrouper les 11 modes par phase de travail plutôt que par ordre d'ajout** : ex. « Bâtir » (Salle, Mur,
+   Escalier, Passerelle), « Connecter » (Porte, Ascenseur, Échelle), « Finir » (Peindre, Remodeler, Effacer) —
+   chaque groupe étiqueté de façon cohérente (corrige violations 3 et 4). Sélection reste hors groupe : c'est un
+   état permanent, pas un outil de création.
+2. **Une seule source d'apparence de mur, pas un panneau unique pour tout** — correction après lecture
+   complète du contenu réel des panneaux (§12.7) : l'idée d'un panneau de propriétés unique façon Blender
+   N-panel, écrite ici sans avoir encore lu ce contenu, était trop large. Salle/Mur/Connecteur/Effet sont des
+   objets réellement différents avec des propriétés différentes — les fusionner recréerait le capharnaüm sous
+   une autre forme. Le patron Blender s'applique correctement à un seul point précis, déjà identifié en
+   §11.6.2 : le raccourci « Peindre un mur » (sidebar) et le panneau flottant Mur doivent alimenter la même
+   instance de `SurfaceMaterialEditor`, pas deux copies concurrentes (corrige violation 1 et 4 pour ce cas
+   précis, sans toucher au reste des panneaux). Détail panneau par panneau : §12.7.
+3. **Rendre l'état « toujours en train de créer » visible explicitement** (ex. contour actif plus marqué,
+   libellé « Ajoute une salle — clique pour continuer, Échap pour arrêter ») au lieu d'un retour silencieux en
+   mode Sélection (corrige violation 6).
+
+**Restent hors de cette proposition, non tranchés** : les 3 onglets vs 2 dimensions d'état (violation 2) —
+faut-il un vrai 3ᵉ état ou une meilleure présentation du même état ? ; l'application en direct sans
+regroupement (violation 5) — la fusion par fenêtre de temps du 11.6.1 est une réponse technique, mais l'UX de
+« qu'est-ce que je suis en train de modifier » mérite d'être vérifiée séparément.
+
+### 12.6. Ce que je ne tranche pas seul
+
+Le choix des libellés, le nombre de groupes, l'ordre d'affichage et l'apparence concrète du panneau contextuel
+sont des préférences d'usage quotidien — Saar est le seul utilisateur réel de cet outil. Je décide
+l'architecture technique qui les sert (§11.6.1) mais pas ces choix-là seul, par la même méthode que Plan B/Lot A
+(recherche pro, options concrètes présentées, tranchées par Saar, avant tout code). Prochaine étape naturelle
+si cette direction convient : une maquette visuelle (comme celle utilisée pour Plan B, §7-8) pour réagir sur du
+concret plutôt que sur du texte, avant tout code de la coquille v2.
+
+### 12.7. Contenu réel des panneaux — garder / jeter / re-présenter, panneau par panneau
+
+Saar, après la maquette du 12.6 : « Tu n'as rien résolu puisque tu as tout survolé. Contenu de la fenêtre,
+qu'est-ce qu'on garde, qu'est-ce qu'on jette, comment on le présente ? » — juste : le 12.5/12.6 précédents
+proposaient un patron abstrait sans avoir lu le contenu réel des cinq panneaux flottants. Ce qui suit vient
+d'une lecture complète (`SurfaceRoomPanel.jsx` 270 lignes, `SurfaceWallPanel.jsx` 267, `SurfaceConnectorPanel.jsx`
+539, `SurfaceMaterialEditor.jsx` 86, `SurfaceEffectPanel.jsx` 134 — `[VÉRIFIÉ]`, pas survolé), champ par champ.
+
+**`SurfaceMaterialEditor.jsx` — GARDER tel quel, c'est la référence, pas un problème.**
+Matériau, motif, teinte (picker + hex), usure/salissure/relief (curseurs), bascule relief réel/normal map — six
+champs cohérents, un seul composant, déjà réutilisé par Salle et Mur. Le seul défaut n'est pas dans ce fichier :
+`SurfaceEditorPanel.jsx` (sidebar, mode Salle) réimplémente ces six champs à la main au lieu de monter ce
+composant (dette déjà nommée, `PLAN_EDITEUR_CARTE.md` Phase 2b) — à corriger dans ce chantier, pas une nouvelle
+trouvaille.
+
+**`SurfaceEffectPanel.jsx` — GARDER quasiment tel quel, un seul défaut cosmétique.**
+Intensité, Puissance, Durée (lecture seule) — trois champs, une section, cohérent. Défaut trouvé : le titre de
+la section répète le kicker de l'en-tête (« Zone d'effet » deux fois) — à corriger, sans enjeu de fond.
+
+**`SurfaceRoomPanel.jsx` — GARDER l'essentiel, deux trouvailles réelles.**
+- Nom (hors section, en haut) ; section Géométrie (ouverte) : niveau de base, volume, hauteur *(select 1-6
+  niveaux, uniquement si la salle n'a pas encore de profil vertical canonique — sinon une note)*, épaisseurs
+  dalle/plafond/mur ; section Déplacement (repliée) : coût, collision (solide/verre/grille) ; section Apparence
+  (repliée) : onglets Sol/Plafond + `SurfaceMaterialEditor` ; section Connecteurs (repliée) : raccourcis
+  Ascenseur/Échelle ; suppression avec confirmation à deux temps.
+- **Trouvaille 1 `[VÉRIFIÉ]`** : la section Connecteurs est un TROISIÈME chemin pour poser un ascenseur/une
+  échelle, en plus du groupe « Connecteurs » de la sidebar — mais en lisant `startConnector` (ligne 46-57), il
+  appelle exactement le même `onPatch({mode:'connector', connectorType, …})` que la sidebar : pas une
+  duplication d'autorité comme celle du mur (§10b), juste un second point d'ENTRÉE vers le même mécanisme.
+  **GARDER** comme raccourci contextuel (poser un ascenseur en étant déjà dans une salle a du sens), il n'y a
+  rien à corriger ici — à la différence du mur, où deux chemins avaient deux comportements différents.
+- **Trouvaille 2** : les épaisseurs (dalle/plafond/mur) sont des réglages qu'on pose une fois et qu'on ne
+  retouche presque jamais, mélangés dans la section Géométrie *ouverte par défaut* avec des informations qu'on
+  consulte souvent (niveau, volume). **RE-PRÉSENTER** : sortir les trois épaisseurs dans une sous-section
+  « Avancé » repliée par défaut, garder niveau/volume/hauteur visibles d'emblée.
+
+**`SurfaceConnectorPanel.jsx` (539 lignes, le plus gros et le seul sans `FloatingPanelSection`) — le vrai
+problème de contenu de ce chantier.**
+Lu en entier : info (type/niveau/dimensions) ; [porte] état (fermée/ouverte/verrouillée) + difficulté de
+serrure ; **`ElevatorRuntimeControls`** (état de cabine, file d'appels, boutons d'étage, actions MJ
+bloquer/débloquer/ouvrir/fermer) ; **`DoorRuntimeControls`** (état effectif, ouvrir/crocheter, fermer,
+verrouiller pour le MJ) ; coût de déplacement ; couleurs (surcharges de matériau par emplacement du modèle
+GLB) ; suppression avec confirmation.
+- **Trouvaille `[VÉRIFIÉ]`, pas encore documentée avant cette lecture** : ce panneau mélange sans aucune
+  séparation visuelle deux MOMENTS d'usage complètement différents — **construire la carte** (état par défaut,
+  difficulté de serrure, coût de déplacement, couleurs, suppression) et **jouer une session en cours**
+  (`ElevatorRuntimeControls`/`DoorRuntimeControls` : ouvrir/fermer/verrouiller/appeler un étage *maintenant*,
+  sur l'état d'exécution réel `runtimeState`). Les deux rendent au même endroit, avec la même apparence, sans
+  bandeau ni distinction — un MJ qui voit “État : Fermée” pendant une session ne peut pas savoir d'un coup
+  d'œil si régler ce menu déroulant change la valeur par défaut de la carte ou l'état réel de la porte en
+  train de se jouer devant les joueurs. `[HYPOTHÈSE]`, à vérifier en session réelle : le menu déroulant
+  `connector.state` (édition, ligne 239) coexiste-t-il avec les boutons runtime sans qu'on sache lequel gagne ?
+  Pas testé, à observer avant de corriger — pas un correctif à improviser sur une cause non vérifiée.
+- **DÉCISION PROPOSÉE, pas tranchée** : séparer visuellement (bandeau de fond distinct, ou franchement deux
+  onglets internes « Réglages » / « Contrôle en session ») les champs d'édition des contrôles runtime — jamais
+  la même rangée de gris uniforme pour « je configure la carte » et « j'ouvre cette porte devant mes joueurs
+  maintenant ».
+- **JETER de la priorité visuelle, pas le contenu** : « Couleurs » (surcharges de matériau par emplacement) est
+  un réglage rare — à replier par défaut dans une section « Apparence avancée », pas au même niveau que le
+  reste.
+- **RE-PRÉSENTER** : adopter `FloatingPanelSection` comme les trois autres panneaux (Salle/Mur/Effet) — ce
+  fichier est le seul des quatre sans aucune section repliable, incohérence confirmée par la lecture, pas
+  supposée.
+
+**`SurfaceWallPanel.jsx` — contenu à re-hiérarchiser, pas à couper ; une vraie incohérence de sécurité trouvée.**
+Bouton « Sélectionner tous les murs » (hors section) ; section Apparence (repliée) ; section Profil
+d'élévation (ouverte : vertical/courbe/facetté, profondeur, angle, direction) ; section Ouvertures (ouverte :
+ajouter une porte, actif seulement si un seul tronçon est sélectionné) ; puis, **hors de toute section** :
+angle d'arc (si ≥ 2 murs sélectionnés), une grille de 4 boutons (Inverser dans le plan / Appliquer l'arc /
+Redresser / Supprimer), un indice de fusion, une erreur éventuelle.
+- **Trouvaille `[VÉRIFIÉ]`** : les 4 derniers boutons n'ont aucun titre de section — exactement le genre de
+  contenu accumulé sans plan que Saar dénonce. Ils mélangent en plus deux opérations très différentes dans une
+  seule grille visuellement uniforme : courber/redresser le tracé (réversible, un réglage) et **supprimer le(s)
+  mur(s) sélectionné(s)** (destructif). **Trouvaille de sécurité** : Salle, Connecteur et Effet ont tous les
+  trois une confirmation à deux temps avant suppression (`confirmDelete`) — ce panneau, seul des quatre, **n'en
+  a aucune** sur « Supprimer le(s) mur(s) » (ligne 226-233) : un clic suffit, sans second temps.
+- **DÉCISION PROPOSÉE** : donner un vrai titre à cette zone (« Forme du tronçon » ou équivalent) ; sortir
+  Supprimer de la grille 2×2 pour l'aligner sur le patron de confirmation des trois autres panneaux (pas une
+  question de goût, une incohérence de sécurité réelle) ; garder Inverser/Appliquer/Redresser groupés, ce sont
+  bien trois réglages de la même opération.
+- **GARDER** : Apparence et Profil d'élévation, déjà bien sectionnés, rien à changer sur ces deux-là.
+
+### 12.8. Flux utilisateur réels — vérifiés dans `SurfaceEditorScene.jsx`, pas décrits de mémoire
+
+Saar : « la hiérarchie [de la sidebar] est OK, mais c'est tout ? Quel est le flux utilisateur ? » — lu le
+gestionnaire réel (`handleMouseDown`/`handleMouseUp`, lignes ~1020-1293) pour chacun des 11 modes, pas deviné
+depuis les noms de bouton.
+
+**Trois familles de geste, pas une seule** :
+1. **Glisser un rectangle de cases** (Salle, Escalier, Passerelle, Plafond, Effacer, Remodeler la salle, Zone
+   d'effet) — mouse-down pose le premier coin, mouse-move prévisualise, mouse-up applique sur le rectangle.
+2. **Glisser un point fin sur un mur/tracé** (Mur droit, Porte) — même familles de gestes, mais la coordonnée
+   est un point sur une arête (`getWallPoint`/`getSelectedDoorWallPoint`), pas une case entière : plus précis,
+   mais visuellement identique à l'utilisateur (même geste de glisser), rien ne signale la différence de
+   granularité avant de commencer à glisser.
+3. **Cliquer un point** (Ascenseur, Échelle — un seul point, pas de rectangle) et **Sélection** (clic simple =
+   remplace, glisser = sélection multiple de salles).
+
+**`[VÉRIFIÉ]` — la vraie trouvaille : trois règles différentes coexistent pour « le mode reste-t-il actif après
+un geste réussi ? », sans aucun signal visuel pour savoir laquelle s'applique** :
+- **Salle** (ligne 1191-1216) : reste en mode création si le geste n'a RIEN créé (case invalide, chevauchement)
+  ; **repasse en Sélection** si une salle a été créée — et ouvre alors automatiquement son panneau flottant.
+  Règle conditionnelle, jamais annoncée à l'écran (§9/§10b/§12.3 violation 6).
+- **Connecteur** (porte/ascenseur/échelle, ligne 1218-1241) : repasse **toujours** en Sélection après une pose
+  réussie, jamais de persistance — poser trois portes de suite oblige à recliquer le bouton trois fois. Jamais
+  signalé jusqu'ici, trouvé en lisant ce tour.
+- **Mur/Escalier/Passerelle/Plafond/Effacer/Remodeler/Effet** (ligne 1243-1292) : **ne change jamais de mode**
+  après un geste — toujours persistant, adapté à un usage répétitif (peindre plusieurs cases de suite).
+  Trois comportements différents, aucune règle écrite qui dise laquelle s'applique à quoi, et aucun indice à
+  l'écran dans les 11 cas. Le §12.5 point 3 (bandeau d'état actif) répond à la conséquence visible (Salle) mais
+  pas à la cause : l'absence d'une règle unique. **`[HYPOTHÈSE]` à trancher avec Saar, pas déduite seule** :
+  soit une règle unique s'applique à tous les outils de création (persister par défaut, quitter sur Échap —
+  cohérent avec Mur/Escalier/etc., ce qui changerait Salle et Connecteur), soit chaque outil garde sa règle
+  mais elle devient visible (le bandeau proposé en §12.5, généralisé aux 11 modes, pas seulement Salle).
+
+**Deux flux de création différents pour un geste pourtant similaire (« tracer un volume »)** : Salle propose
+d'abord de dessiner, puis ouvre son panneau pour nommer/configurer après coup (configurer après tracer) ; Zone
+d'effet (mode `effect`) demande de choisir définition/intensité/puissance DANS LA SIDEBAR avant de tracer, puis
+crée l'instance directement au relâchement sans ouvrir de panneau de réglage (configurer avant tracer). Deux
+philosophies opposées pour deux gestes qui se ressemblent à l'écran — `[HYPOTHÈSE]`, pas vérifié si c'est un
+choix délibéré (chaque zone du même type partage ses réglages, une salle est toujours unique) ou un oubli.
+
+**Flux de sélection (mode `select`, ligne 1127-1189)**, pour mémoire : clic simple sur un connecteur → le
+sélectionne et ouvre son panneau ; clic simple sur une case de salle → sélectionne LA salle entière, ouvre son
+panneau, active l'édition de ses murs (`roomWallEdit:true`, ce qui rend les arêtes cliquables — géré par un
+second gestionnaire, `handleRoomWallPointerSelect`, déjà documenté §10e) ; glisser sur plusieurs cases →
+sélection multiple de salles, sans édition de mur active.
+
+### 12.9. Paradigme d'interaction retenu — flux utilisateur cible
+
+Saar : « je voulais m'inspirer d'un Sims, mais est-ce le meilleur plan ? Dungeondraft ? On innove ? On met
+tout sur la sidebar ? Sur la fenêtre ? 50/50 ? Je ne sais pas. » — c'est une vraie question d'architecture
+d'interaction, pas de goût : je tranche, avec les preuves déjà réunies en §12.7/§12.8, et je signale les deux
+points qui restent son choix.
+
+**Pourquoi ni Sims ni Dungeondraft ne sont, seuls, la bonne référence de fond.** Les deux sont des outils 2D
+vus du dessus, avec une caméra simple, et surtout **sans objets à réglages profonds** : Sims édite un
+revêtement par un choix de nuancier (une bande d'échantillons en bas d'écran), Dungeondraft règle un pinceau
+(taille, texture) — ni l'un ni l'autre n'a d'équivalent à « profil d'élévation courbe avec angle et profondeur »,
+« coût de déplacement », « difficulté de serrure », ou un objet qui sert à la fois à *construire* la carte et à
+*jouer* une session (§12.7, `SurfaceConnectorPanel`). Enclume a cette profondeur-là. Chercher l'inspiration
+seulement chez Sims/Dungeondraft, c'est chercher une réponse à une question qu'ils ne se posent pas.
+
+**La bonne famille de référence, déjà universelle chez les outils 3D pros** `[VÉRIFIÉ, connaissance du domaine]`
+**: Blender, Unity, Unreal, Godot — tous partagent la même disposition à trois colonnes fixes : Outils (gauche) |
+Viewport 3D (centre) | Propriétés (droite), le panneau de propriétés toujours au même endroit, jamais une
+fenêtre flottante qui se déplace ou se perd. Ce n'est pas une mode, c'est devenu la disposition par défaut de
+toute la catégorie d'outils la plus proche d'Enclume (contrairement à Sims/Dungeondraft, qui sont dans une
+catégorie voisine mais différente : éditeur 2D grand public, pas outil de création 3D). **Recommandation : ce
+squelette à trois colonnes fixes est la structure macro à adopter — pas une invention, la convention du domaine
+le plus pertinent.**
+
+**Où Dungeondraft ET Enclume lui-même (pas une référence externe) s'appliquent : le niveau micro, pas la
+disposition d'ensemble.**
+- Dungeondraft, pour le regroupement des outils par catégorie dans la colonne de gauche (déjà proposé en
+  §12.5 point 1 : Bâtir/Connecter/Finir) — juste, mais seulement pour CETTE colonne.
+- **Enclume lui-même**, pour le geste : Plan B (peindre/effacer des cases pour la forme d'une salle, §8) est
+  une manipulation directe dans le viewport 3D, **déjà codée, déjà validée en jeu par Saar** — la seule preuve
+  de ce chantier qui n'est pas une hypothèse. Elle confirme que la manipulation directe dans le viewport
+  fonctionne ici pour un geste grossier/répétitif. La poignée de redimensionnement (§10c, rapide/gros, encore
+  à livrer) est le même principe à une autre granularité — pas un dossier concurrent.
+
+**Flux cible proposé, un seul jeu de règles au lieu de trois (répond directement au §12.8)** :
+1. **Tout outil de pose/dessin reste actif après un geste réussi** (Salle, Mur, Escalier, Passerelle, Porte,
+   Ascenseur, Échelle, Peindre, Remodeler, Effacer, Zone d'effet) — étend aux Connecteurs et généralise Salle
+   la règle déjà correcte de la majorité des outils (§12.8) : poser 3 portes de suite ne redemande plus 3 clics
+   sur le bouton. Sortie explicite par **Échap** ou par un clic sur « Sélection », jamais silencieuse.
+2. **Un bandeau d'état actif permanent** (proposé en §12.5 point 3, généralisé ici à tous les outils de pose,
+   pas seulement Salle) — toujours visible tant qu'un outil de création est actif.
+3. **Un seul panneau de propriétés, fixe, colonne de droite** — remplace les fenêtres flottantes/déplaçables
+   actuelles (Salle/Mur/Connecteur/Effet gardent leur contenu propre, §12.7 : ce n'est pas une fusion en un
+   panneau unique, c'est un **emplacement** unique). Sélectionner un objet, par clic direct ou par un raccourci
+   de la colonne de gauche (peindre un mur, par ex.), affiche toujours ses propriétés au même endroit — referme
+   pour de bon la duplication trouvée en §10b/§11.6.2, plus par une règle de contenu mais par une contrainte de
+   structure (il ne peut plus y avoir deux endroits, il n'y a plus qu'un endroit).
+4. **La poignée de redimensionnement (§10c) est un sous-outil du panneau Salle sélectionnée**, pas un 12ᵉ bouton
+   de la colonne de gauche : « cases » (fin, détail) et « poignée » (rapide, gros) coexistent comme deux
+   sous-modes d'édition de forme dans ce panneau, tous deux agissant dans le viewport — cohérent avec l'exigence
+   de Saar (§10c) sans faire grossir encore la colonne de gauche.
+5. **`[VÉRIFIÉ]` — trouvaille du jour, jamais documentée avant cette lecture** : dans `Editor3D.jsx`, le panneau
+   Connecteur ne reçoit pas `canEdit` (donc `true` par défaut, tous les champs d'édition visibles) **ET**
+   reçoit `onElevatorCommand={handleElevatorCommand}` réellement câblé et fonctionnel (ligne 1125/1551) — un MJ
+   peut appeler un ascenseur en vrai depuis l'éditeur, hors de toute session ; `onDoorCommand`, lui, n'est pas
+   câblé côté éditeur (les boutons Ouvrir/Fermer d'une porte s'affichent mais ne font rien, `!onCommand` les
+   désactive). Un mélange asymétrique, pas juste « pas séparé visuellement » comme écrit au tour précédent.
+   **Recommandation : le panneau d'édition ne pilote plus jamais un connecteur en direct** (retirer
+   `onElevatorCommand` de l'appel dans `Editor3D.jsx`) — piloter un ascenseur ou une porte réellement reste
+   le rôle exclusif de `Canvas3D.jsx` (une vraie session). Si Saar veut un jour tester un connecteur depuis
+   l'éditeur, ce serait une action explicite (« Aperçu en jeu »), pas un panneau qui fait les deux sans le dire.
+
+**Les deux points ci-dessus, tranchés** — Saar (2026-09-29) : « la fenêtre ne me gêne pas spécialement, j'ai
+tendance à bouger la caméra plutôt que la fenêtre (déplacement au clavier indispensable). Fais à ton idée. »
+- **Panneau fixe, confirmé** : Saar ne déplace pas ces fenêtres en usage réel (il navigue par la caméra) — le
+  passage à une colonne fixe à droite n'est pas une perte de confort constatée, seulement une simplification
+  de code (retrait de `useDraggablePanelPosition` sur ces quatre panneaux, plus de position à mémoriser).
+- **Persistance des Connecteurs après un geste réussi, retenue** : décidé, cohérent avec la règle unique du
+  point 1 ci-dessus — poser plusieurs portes/ascenseurs/échelles de suite reste dans l'outil, Échap ou
+  Sélection pour sortir, comme tous les autres outils de pose.
+
+### 12.10. Plan d'implémentation séquencé — trois incréments codés, deux restent
+
+Le cadrage (§12.1-12.9) est refermé : paradigme choisi, contenu des quatre panneaux décidé champ par champ,
+flux de persistance unifié, les deux derniers points tranchés par Saar (« fais à ton idée » — lu comme
+autorisant la levée de la pause du §9 pour les incréments ci-dessous, isolés et déjà entièrement raisonnés).
+
+**Codé, testé, pas encore confirmé par Saar en navigateur** (`node --check`/`npx eslint` propres sur les 5
+fichiers touchés, `npm run build` propre, `surfaceData.test.mjs` 49/49 inchangé — ces correctifs touchent des
+gestionnaires d'événements React/DOM, aucun test pur possible) :
+
+1. **Confirmation avant suppression de mur** (`SurfaceWallPanel.jsx`) — alignée sur le patron `confirmDelete`
+   des trois autres panneaux. En le faisant, la zone sans titre du bas a aussi reçu le sien
+   (`shapeSection`, « Forme du tronçon », nouvelle clé `builder.json`) et n'a plus que les trois réglages de
+   courbure (Inverser/Appliquer/Redresser) — Supprimer en est sorti, seul bouton dangereux du panneau.
+2. **Retrait du pilotage direct de connecteur depuis l'éditeur** — **`[CORRIGÉ]` fait mieux que le plan initial**
+   : au lieu de retirer seulement `onElevatorCommand` dans `Editor3D.jsx` (ce qui aurait laissé
+   `DoorRuntimeControls` dans le même état de « bouton mort » déjà trouvé pour les portes, §12.7 — une
+   rustine locale, pas la cause racine), `SurfaceConnectorPanel.jsx` gate maintenant
+   `ElevatorRuntimeControls`/`DoorRuntimeControls` sur `!canEdit`, symétrique au `canEdit &&` qui protège déjà
+   tous les champs d'autorité. Une seule règle dans le composant partagé, plus jamais un cas particulier par
+   appelant. `Editor3D.jsx` : `handleElevatorCommand`/`refreshRuntimeElevators` retirés (devenus inutiles),
+   `canEdit` posé explicitement.
+3. **Persistance de mode unifiée (§12.9 point 1) + Échap (point 2) — `[CORRIGÉ]` plus petit que prévu, pas de
+   nouveau module.** En l'implémentant, le §12.9/12.10 initial (« machine à états du mode/outil », un nouveau
+   module `shared/`/`client/src/lib/`) s'est révélé être exactement le sur-dimensionnement que le garde-fou
+   second-system-effect (§11.0) demande de repérer : le vrai correctif tient dans les fichiers existants.
+   - `SurfaceEditorScene.jsx` : les branches Salle et Connecteur ne forcent plus `mode:'select'` après un
+     geste réussi — désormais alignées sur Mur/Escalier/Passerelle/Effacer/Remodeler/Zone d'effet, qui ne l'ont
+     jamais fait. `connectorWallEdgeKeys` remis à `[]` après une pose de porte réussie — **trouvaille en
+     implémentant** : sans ça, une 2ᵉ porte serait restée invisiblement limitée au mur choisi pour la 1ʳᵉ
+     (`connectors.js` filtre les panneaux de mur sur cette clé), un risque qui n'existait pas tant que le mode
+     repassait systématiquement en Sélection.
+   - `Editor3D.jsx` : un `useEffect` Échap (patron déjà en place pour Ctrl+Z, la touche G, Delete) repasse en
+     Sélection depuis n'importe quel mode de pose, même reset de `connectorWallEdgeKeys`.
+   - `SurfaceEditorPanel.jsx` : la ligne d'indice contextuel déjà existante (`sidebar-tool-hint`, un indice par
+     mode) faisait déjà presque tout le travail du « bandeau d'état actif » du §12.9 point 2 — pas besoin d'un
+     nouveau composant. Corrigée au passage : `paint-wall` et `reshape-room` tombaient sur l'indice générique
+     de dalle (`hintSlab`) faute de branche dédiée ; trois indices (Passerelle, Zone d'effet, Échelle) étaient
+     du texte français codé en dur dans le JSX au lieu de passer par `t()` (`i18n.md`, invariant violé, trouvé
+     en lisant) — déplacés dans `fr.json` (`hintBridge`/`hintEffect`/`hintLadder`) ; `hintRoom` affirmait encore
+     l'ancien comportement (« l'éditeur revient automatiquement en sélection ») — corrigé pour ne plus mentir ;
+     un suffixe commun (`hintEscapeSuffix`) ajouté à tous les indices des outils de pose, une seule fois, pas
+     dupliqué huit fois.
+   - **`[VÉRIFIÉ]` trouvé, non corrigé, périmètre distinct** : `connectorWallEdgeKeys` reste aussi mal remis à
+     zéro quand on ABANDONNE une pose de porte en cliquant directement le bouton « Sélection » de la sidebar
+     (au lieu d'Échap) — gap préexistant, indépendant de ce tour (le bouton Sélection ne l'a jamais fait), pas
+     aggravé par la persistance de mode. Laissé tel quel, à reprendre si Saar le rencontre en usage réel.
+
+4. **Colonne de propriétés fixe pour Salle/Mur — `[CODÉ]`, testé, pas encore confirmé par Saar.** En le
+   préparant, un fait structurel a changé le découpage prévu : `SurfaceRoomPanel.jsx`/`SurfaceWallPanel.jsx`
+   ne servent que l'éditeur (`Editor3D.jsx`, seul appelant) — position fixe sans risque. Mais
+   `SurfaceConnectorPanel.jsx`/`SurfaceEffectPanel.jsx` sont **partagés avec le mode Jeu**
+   (`Canvas3D.jsx`/`SessionDangerZonePanel.jsx` via `SessionPage.jsx`) — leur fixer la position aurait aussi
+   changé le comportement en session, hors périmètre de ce chantier (§11.4, l'éditeur seulement). Scindé en
+   4a (fait) et 4b (reporté, ci-dessous) plutôt que traité d'un bloc comme prévu.
+   - **4a — Salle et Mur, fait** : `useDraggablePanelPosition`/`x`/`y` retirés des deux composants (toujours
+     utilisé ailleurs par Connecteur/Effet/`EntityInstancePanel.jsx` — pas touché, pas orphelin), position
+     statique `top:16/right:16`. `Editor3D.jsx` : `handleSurfaceRoomSelect`/`handleSurfaceWallSelect`
+     simplifiés (`clientX`/`clientY` retirés, jamais utilisés ailleurs que pour cette position). Call sites
+     nettoyés dans `SurfaceEditorScene.jsx` (`onSurfaceRoomSelect`/`onSurfaceWallSelect`, y compris un
+     `nativeEvent` devenu mort dans `handleRoomWallPointerSelect`). `node --check`/`eslint`/`build` propres,
+     49/49 tests inchangés (gestionnaires d'événements, aucun test pur possible). Contenu interne des deux
+     panneaux inchangé (§12.7 reste la référence, pas réécrit).
+   - **4b — Connecteur et Effet, reporté, pas commencé** : nécessite d'abord une décision (position fixe
+     seulement côté éditeur, comportement de session inchangé) avant tout code — probablement une prop
+     `dockPosition` optionnelle en plus de `x`/`y` (si fournie côté éditeur : fixe ; absente côté
+     `Canvas3D.jsx`/`SessionDangerZonePanel.jsx` : comportement actuel inchangé). Plan à présenter séparément.
+5. **Pile d'annulation fusionnable** (`updatable` + fenêtre de temps, three.js editor, §11.6.1) — après 4b,
+   qui génère les réglages continus à regrouper sur les quatre panneaux, pas seulement deux.
+6. **Poignée de redimensionnement — `[CODÉ]`, testé (logique pure), pas encore confirmé par Saar en
+   navigateur.** Livrée avant 4b/5 (Saar : « c'est toi l'expert », lu comme une priorité assumée sur
+   l'exigence répétée du §10c plutôt qu'un ordre technique).
+   - **Conception, présentée et confirmée par Saar avant le code** (« clic = sélectionner comme avant, glisser
+     = pousser le mur ») : le geste ne s'active que sur un tronçon DROIT (jamais un arc, v1) déjà sélectionné
+     — un premier clic reste une sélection pure, inchangée ; glisser un tronçon déjà actif pousse toute sa
+     longueur de N rangées de cases, dans le même pipeline `classifyRoomFootprintCells`/
+     `paintRoomFootprintCells` que Plan B (§8), jamais une position de mur. Ce choix (drag seulement sur
+     sélection déjà active, pas sur le tout premier clic) simplifie la désambiguïsation clic/glissé — un
+     premier clic-glissé sur un mur non sélectionné le sélectionne juste, sans lire le glissé.
+   - **Deux fonctions pures nouvelles** (`shared/world/roomGeometry.js`, testées indépendamment l'une de
+     l'autre puis croisées) : `wallRunReshapeCells(run, rowCount)` — tronçon + rangées signées → lot de
+     cases, dérivée et vérifiée à la main ligne par ligne contre la construction réelle des arêtes
+     (`roomBoundaryEdges`), jamais supposée ; `wallRunRowCountForCell(run, cell)` — l'inverse, case survolée
+     → rowCount. 10 tests neufs (`roomGeometry.test.mjs`, 24/24 avec les existants), dont un test croisé qui
+     vérifie que les deux fonctions s'accordent sur de vrais tronçons de `roomBoundaryWallRuns`, pas seulement
+     sur des objets inventés à la main — aucune des deux coordonnées (case, rangée) ne passe jamais par
+     `SURFACE_FINE`, cause du bug d'échelle qui avait fait échouer la première tentative (§8).
+   - **Câblage** (`SurfaceEditorScene.jsx`) : `SelectableRoomWall` appelle un nouveau `onReshapeStart` au lieu
+     de `onToggle` quand le tronçon cliqué est déjà actif et droit ; `handleWallReshapeStart` amorce le drag
+     générique existant (`dragRef`/`setDrag`, mode `'wall-reshape'`) au lieu d'un second système
+     d'événements — `handleMouseMove` n'a nécessité AUCUNE modification (le mode retombe déjà sur
+     `getFloorCell`, la branche générique) ; seul `handleMouseUp` reçoit une branche neuve. Seuil de 6 px
+     (`WALL_RESHAPE_CLICK_THRESHOLD_PX`) avant de compter un glissé, pour ne jamais pousser le mur d'une
+     rangée sur un simple re-clic (`wallRunRowCountForCell` n'a jamais de valeur neutre). Aperçu vert/rouge en
+     direct réutilisant `RoomFootprintPaintPreview` telle quelle — même rendu que Plan B, pas dupliqué.
+   - **Hors périmètre v1, assumé** : tronçons courbes (arcs) — pas de poignée dessus, comportement clic
+     inchangé. Annuler en cours de glissé (un des 8 problèmes UX du §8) : couvert par le clic droit déjà
+     générique à tout le système de drag (`cancelDrag`), pas par Échap (qui ne coupe pas un drag actif, aucun
+     mode de drag ne le fait aujourd'hui — cohérent avec l'existant, pas une régression propre à la poignée).
+   - **`node --check`/`eslint`/`build` propres.** Ce qui N'A PAS pu être vérifié sans navigateur : le geste
+     réel (le clic sur le maillage 3D du mur déclenche-t-il bien avant le mousedown générique du canvas, la
+     poignée « se sent »-elle bien) — repose sur l'ordre `pointerdown` avant `mousedown` du standard DOM et
+     sur le patron `skipNextCanvasMouseDownRef` déjà éprouvé (connecteurs, sélection de mur), pas une
+     supposition neuve, mais un point que seul un test en jeu peut confirmer.
+
+Chaque incrément 4b/5 reste un plan à part entière avant son propre code — rien commencé sur ceux-là.
+
 ## Historique
 
+- **2026-09-29** — Incrément 6 (poignée de redimensionnement) codé, la fonctionnalité la plus attendue de ce
+  chantier et la seule ayant déjà échoué deux fois (§8). Conception présentée et confirmée par Saar avant le
+  code (« oui, en théorie cela me va »). Le geste ne s'active que sur un tronçon droit déjà sélectionné —
+  simplifie la désambiguïsation clic/glissé sans changer le comportement du tout premier clic. Deux fonctions
+  géométriques pures ajoutées (`wallRunReshapeCells`, `wallRunRowCountForCell`,
+  `shared/world/roomGeometry.js`), dérivées indépendamment puis vérifiées l'une contre l'autre par test (10
+  tests neufs, 24/24 avec l'existant), jamais `SURFACE_FINE` dans leur espace de coordonnées — la cause exacte
+  de l'échec précédent. Câblée sur le système de drag générique déjà existant (`dragRef`/`setDrag`, nouveau
+  mode `'wall-reshape'`) plutôt qu'un second système d'événements ; réutilise l'aperçu vert/rouge de Plan B
+  tel quel. `node --check`/`eslint`/`build` propres. Ce que seul un test en jeu peut confirmer : la
+  coopération réelle entre le clic sur le maillage 3D du mur et le système de glissé du canvas.
+- **2026-09-29** — Incrément 4a codé (« continue ») : colonne de propriétés fixe pour Salle et Mur, les deux
+  panneaux à usage éditeur unique. En le préparant, trouvé que Connecteur et Effet sont en réalité partagés
+  avec le mode Jeu (`Canvas3D.jsx`/`SessionDangerZonePanel.jsx`) — leur fixer la position aurait changé un
+  comportement hors périmètre de ce chantier ; scindé en 4a (fait) et 4b (reporté, nécessite une prop
+  optionnelle pour ne pas toucher le comportement en session). `useDraggablePanelPosition` retiré de Salle/Mur
+  seulement, toujours utilisé ailleurs (Connecteur/Effet/`EntityInstancePanel.jsx`), pas orphelin. Signalé que
+  le prérequis de la poignée (point 6) est maintenant satisfait et peut passer devant 4b/5 si Saar la préfère.
+  `node --check`/`eslint`/`build` propres, 49/49 tests inchangés, rien confirmé par Saar en navigateur.
+- **2026-09-29** — §12.10 codé (3 des 5 incréments listés) : Saar délègue explicitement (« c'est toi
+  l'expert, je suis inutile »), lu comme autorisant la levée de la pause du §9 pour ces incréments isolés déjà
+  entièrement raisonnés. Confirmation à deux temps ajoutée sur la suppression de mur ; contrôles runtime
+  (ouvrir/fermer/verrouiller) retirés de l'éditeur en corrigeant `SurfaceConnectorPanel.jsx` lui-même
+  (`!canEdit`), pas seulement l'appelant — plus robuste que le plan initial, qui aurait laissé les boutons de
+  porte dans le même état de bouton mort déjà trouvé au §12.7 ; persistance de mode unifiée + Échap, sans le
+  nouveau module « machine à états » prévu au tour précédent — implémenté, le second-system-effect a joué :
+  la ligne d'indice contextuel existante suffisait déjà, pas besoin d'un bandeau séparé. Trouvaille en cours de
+  route : `connectorWallEdgeKeys` (restreint une porte au mur choisi) devait être remis à zéro après une pose
+  réussie, sans quoi la persistance nouvellement activée aurait limité invisiblement une 2ᵉ porte au mur de la
+  1ʳᵉ — corrigé pour Échap et succès, gap préexistant identique via le bouton Sélection laissé tel quel (hors
+  périmètre de ce tour). Trois textes d'indice codés en dur trouvés et déplacés en `fr.json` (invariant i18n
+  violé avant ce tour). `node --check`/`eslint`/`build` propres, 49/49 tests inchangés, rien confirmé par Saar
+  en navigateur. Restent : colonne de propriétés fixe, pile d'annulation fusionnable, poignée — dépendent de
+  la coquille v2, rien commencé.
+- **2026-09-29** — §12.9 fermé, §12.10 ajouté : Saar tranche les deux derniers points (« la fenêtre ne me
+  gêne pas, je bouge la caméra plutôt » → panneau fixe confirmé sans perte de confort réelle ; « fais à ton
+  idée » → persistance des connecteurs retenue). Cadrage UX (§12) refermé. Plan d'implémentation séquencé
+  proposé : deux corrections isolées et déjà root-causées (confirmation de suppression sur le panneau Mur,
+  retrait du pilotage direct d'ascenseur depuis l'éditeur) qui n'attendent pas la coquille v2 mais restent
+  bloquées par la pause du §9 tant que Saar ne la lève pas explicitement pour ce périmètre ; quatre incréments
+  qui, eux, dépendent de la coquille v2 (machine à états du mode, colonne de propriétés fixe, pile d'annulation
+  fusionnable, poignée en sous-outil), dans cet ordre, chacun son propre plan avant son propre code. Rien codé.
+- **2026-09-29** — §12.9 ajouté : Saar demande directement l'avis d'expert sur le paradigme (Sims ? Dungeondraft
+  ? innover ? sidebar/fenêtre/50-50 ?), constatant qu'il « sèche » seul. Tranché : ni Sims ni Dungeondraft
+  seuls (2D, sans objets à réglages profonds, sans double usage édition/session) — la bonne famille de
+  référence est celle des outils de création 3D pros (Blender/Unity/Unreal/Godot), disposition à trois colonnes
+  fixes (Outils/Viewport/Propriétés), Dungeondraft et Plan B (déjà validé en jeu) s'appliquant seulement au
+  niveau micro (regroupement, gestes). Flux cible proposé : une seule règle de persistance pour tous les outils
+  de pose (au lieu de trois, §12.8), bandeau d'état généralisé, panneau de propriétés fixe unique (referme la
+  duplication du §10b par la structure, pas par une règle), poignée (§10c) comme sous-outil du panneau Salle.
+  Nouvelle trouvaille en creusant `Editor3D.jsx`/`Canvas3D.jsx` : le panneau Connecteur de l'éditeur pilote
+  réellement un ascenseur en direct (`handleElevatorCommand` câblé, `canEdit` par défaut à `true`) alors
+  qu'aucune session n'est en cours — recommandé de retirer ce câblage de l'éditeur. Deux points laissés à Saar
+  : panneau fixe vs déplaçable (régression possible d'un choix déjà investi), persistance des connecteurs
+  (jamais signalée comme gênante par lui). Rien codé.
+- **2026-09-29** — §12.7/12.8 ajoutés après reproche justifié de Saar (« tu n'as rien résolu puisque tu as
+  tout survolé ») sur le §12 initial : la proposition « un seul panneau contextuel » était écrite sans avoir lu
+  le contenu réel des panneaux, corrigée en §12.5 point 2. Lecture complète des 5 fichiers de panneau
+  (`SurfaceRoomPanel/WallPanel/ConnectorPanel/MaterialEditor/EffectPanel.jsx`) : décision garder/jeter/
+  re-présenter champ par champ (§12.7) — trouvailles réelles non identifiées avant cette lecture : le panneau
+  Connecteur mélange sans distinction visuelle l'édition de carte et le contrôle runtime (porte/ascenseur en
+  session) ; le panneau Mur n'a aucune confirmation avant de supprimer un mur, contrairement aux trois autres
+  panneaux ; le panneau Connecteur est le seul des quatre sans aucune section repliable. Lecture du
+  gestionnaire réel de gestes (`SurfaceEditorScene.jsx` lignes ~1020-1293) pour les 11 modes (§12.8) : trois
+  règles différentes de persistance de mode après un geste réussi coexistent sans aucun signal visuel (Salle
+  conditionnelle, Connecteur jamais persistant, le reste toujours persistant) — la vraie cause derrière le
+  symptôme déjà connu « Ajouter une salle ne reste pas actif » (§9/§10b), qui s'avère être un cas d'un problème
+  plus large, pas un bug isolé. Deux flux de création opposés trouvés pour Salle (dessiner puis configurer) et
+  Zone d'effet (configurer puis dessiner). Rien tranché : présenté à Saar pour décision, pas de code.
+- **2026-09-29** — §12 ajouté : Saar demande explicitement un audit UI/UX complet de l'interface (« un expert
+  UI/UX pour repenser l'intégralité de l'interface »), recadrant le §11 (jusque-là centré architecture de code)
+  vers l'expérience elle-même. Audit heuristique (Nielsen, 10 heuristiques) sur un inventaire réel de
+  l'interface (lecture directe de `SurfaceEditorPanel.jsx` : 3 onglets pour 2 dimensions d'état réelles, 11
+  modes en 4 groupes de boutons à la cohérence inégale, deux interfaces concurrentes pour éditer un mur) :
+  7 violations trouvées, chacune sourcée sur le code ou un constat déjà consigné (§9/§10/§11.3), pas inventée.
+  Trois patrons pro convergents (Dungeondraft : groupement par catégorie ; Blender : panneau de propriétés
+  contextuel unique ; three.js editor : déjà en 11.6.1). Trois axes de refonte proposés (regroupement par phase
+  de travail, panneau contextuel unique, visibilité explicite du mode actif) — présentés pour décision de Saar,
+  rien tranché unilatéralement (§12.6). Prochaine étape si la direction convient : maquette visuelle.
+- **2026-09-29** — §11.6 points 1 et 2 traités (recherche pro + audit), à la demande de Saar de se lancer sur
+  l'implantation de `PLAN_EDITEUR_CARTE.md`. Recherche pro (three.js editor `mrdoob/three.js`, sourcé et lu
+  directement — `Command`/`updatable`/`History` avec fusion 500 ms, une classe par opération ; XState pour les
+  machines à états de mode) apporte deux réponses concrètes et sourcées à §11.3 points 4 et 6, jamais un
+  patron trouvé pour découpler sélection/outil (point 2). Audit par grep direct sur `surfaceRooms.js` et ses
+  appelants : la duplication d'autorité du §10b n'est pas systémique — `applyRoomBoundaryArc`/
+  `applyRoomWallElevationProfile` n'ont qu'un seul appelant (panneau flottant), seule la peinture a deux
+  chemins (outil sidebar + panneau). Reformule la question du point 3 : pas « quel patron d'interaction
+  choisir dans l'abstrait » mais « la peinture a-t-elle vraiment besoin d'un raccourci direct que les autres
+  n'ont pas, ou faut-il uniformiser » — posée à Saar, pas encore tranchée. Points 3, 4, 5 restent ouverts.
+- **2026-09-29** — Deux relectures à charge de §11, à la demande de Saar (« prends le temps de te relire », puis
+  « relance une analyse à charge avant le compact »), après constat qu'une première passe avait laissé des
+  trous. 1ʳᵉ relecture : en-tête pas à jour, §10c/§11 pas croisés (le risque exact qui avait déclenché « je la
+  veux cette poignée ! »), aucune entrée d'historique pour §11, et dans `PLAN_EDITEUR_CARTE.md` un classement
+  erroné (v2 listé comme « n'est pas l'éditeur »), une inversion ci-dessus/ci-dessous, un ordre de phases devenu
+  contradictoire non signalé. 2ᵉ relecture, plus dure : deux affirmations trop fortes sur le rendu 3D partagé
+  (« déjà correct » alors que seul le cas sans arc est vérifié — le coin arrondi reste le candidat n°1 non
+  testé de « la couleur écrase tout », §10a), un terme interdit sans preuve (« probablement pas isolé » →
+  reformulé `[HYPOTHÈSE]`), une réserve de fond ajoutée (§11.1/§11.6.5 : ne pas figer le rendu partagé comme
+  « repris tel quel » avant d'avoir levé cette réserve), un angle mort de coordination inter-sessions ajouté
+  (§11.5), une confusion de mécanisme corrigée (bouton « Sélectionner tous les murs » ≠ portée Salle du
+  pinceau), et des nombres de lignes obsolètes corrigés (`wc -l` réel : 1581/1485/1347, pas les chiffres
+  approximatifs d'origine). Leçon retenue : une première passe de relecture, même consciencieuse, ne suffit pas
+  sur un document écrit vite en fin de session dense — vérifier des faits (compter les lignes, relire les
+  §-références une à une) plutôt que de se relire seulement pour la forme.
+- **2026-09-29** — §11 ajouté, même conversation, après §10e : Saar propose un rework « World Builder v2 »
+  (strangler fig, coexiste avec l'éditeur actuel) pendant un run à vide de bilan. Recadré après recherche
+  (Strangler Fig Pattern / second-system effect) au périmètre de la coquille d'interaction seule ; modèle de
+  données, compilateur, autorité géométrique et rendu 3D partagé repris tels quels. **Erreur commise et
+  corrigée le même jour** : un premier stub a été créé comme document séparé (`PLAN_WORLD_BUILDER_V2.md`) —
+  Saar a repris sur le manque de rigueur (Règle 2, une information = un seul endroit ; ce chantier était déjà
+  en cours ici) ; fichier supprimé, contenu intégré comme §11 de ce document. Dans la foulée, Saar a confirmé
+  en clair que la poignée de redimensionnement (§10c) reste une exigence, pas une option que ce rework
+  pourrait écarter silencieusement — §10c et §11.2 mis à jour en conséquence pour que ce soit explicite sans
+  avoir à deviner. Rien codé, cadrage réel (recherche pro, audit, décisions d'interaction) pas commencé.
 - **2026-09-29** — §10e ajouté, même conversation : Saar rapporte que ses tests sont bloqués par « la couleur
   change dès que je choisis une couleur, avant même de cliquer ». Cause trouvée : sélection de murs qui
   s'accumule silencieusement à chaque clic + panneau flottant Mur qui applique la couleur en direct sur toute

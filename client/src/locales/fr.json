@@ -575,13 +575,17 @@
     "wallInteriorFace": "Mur intérieur",
     "wallExteriorFace": "Mur extérieur",
     "hintSelect": "Clique pour sélectionner une salle. Trace un rectangle pour sélectionner les salles entièrement entourées.",
-    "hintRoom": "Trace un rectangle pour créer une salle. Après création, l’éditeur revient automatiquement en sélection.",
+    "hintRoom": "Trace un rectangle pour créer une salle. Reste actif pour en créer plusieurs à la suite.",
     "hintDoorConnector": "Clique sur un mur de la salle sélectionnée pour y ajouter une porte-connecteur.",
     "hintElevatorConnector": "Clique dans la salle sélectionnée pour y ajouter un ascenseur-connecteur.",
+    "hintLadder": "Cliquez une case pour relier verticalement les deux étages. Le token pourra finir son tour entre les barreaux.",
     "hintWall": "Maintiens le clic gauche et tire pour poser un mur sur l’étage choisi.",
     "hintStairs": "Dessine l’escalier depuis son entrée vers sa sortie.",
+    "hintBridge": "Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.",
+    "hintEffect": "Tracez le volume touché. L’effet reste un état de partie séparé de la surface éditée.",
     "hintErase": "Dessine une zone pour supprimer les éléments de l’étage choisi.",
-    "hintSlab": "Maintiens le clic gauche et tire pour dessiner une dalle recto-verso."
+    "hintSlab": "Maintiens le clic gauche et tire pour dessiner une dalle recto-verso.",
+    "hintEscapeSuffix": "Échap pour revenir en sélection."
   },
   "character": {
     "tabSheet": "Fiche",

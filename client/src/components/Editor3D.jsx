@@ -885,7 +885,6 @@ export default function Editor3D({
     worldEffects,
     runtimeElevatorStates,
     refreshWorldEffects: refreshRuntimeEffects,
-    refreshRuntimeElevators,
   } = useWorldRuntimeSync(battlemap?.id, socket)
 
   useEffect(() => {
@@ -1122,12 +1121,6 @@ export default function Editor3D({
     }
   }, [battlemap?.id, refreshRuntimeEffects])
 
-  const handleElevatorCommand = useCallback(async (elevatorId, command) => {
-    if (!battlemap?.id || !elevatorId) return
-    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
-    await refreshRuntimeElevators()
-  }, [battlemap?.id, refreshRuntimeElevators])
-
   const selectedSurfaceConnector = useMemo(() => {
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return null
@@ -1149,16 +1142,16 @@ export default function Editor3D({
     setSurfaceConnectorPanel({ connectorId, x: clientX, y: clientY })
   }, [])
 
-  const handleSurfaceRoomSelect = useCallback((roomId, clientX, clientY) => {
+  const handleSurfaceRoomSelect = useCallback((roomId) => {
     setSurfaceConnectorPanel(null)
     setSurfaceWallPanel(null)
-    setSurfaceRoomPanel(roomId ? { roomId, x: clientX, y: clientY } : null)
+    setSurfaceRoomPanel(roomId ? { roomId } : null)
   }, [])
 
-  const handleSurfaceWallSelect = useCallback((roomId, clientX, clientY, count) => {
+  const handleSurfaceWallSelect = useCallback((roomId, count) => {
     setSurfaceConnectorPanel(null)
     setSurfaceRoomPanel(null)
-    setSurfaceWallPanel(roomId && count > 0 ? { roomId, x: clientX, y: clientY } : null)
+    setSurfaceWallPanel(roomId && count > 0 ? { roomId } : null)
   }, [])
 
   const handleSurfaceSelectionToolPatch = useCallback(patch => {
@@ -1446,6 +1439,22 @@ export default function Editor3D({
     return () => document.removeEventListener('keydown', handleUndoKeyDown)
   }, [activeEditorTab, handleSurfaceRedo, handleSurfaceUndo])
 
+  // ─── Échap — sortir d'un outil de pose/dessin ────────────────────────────
+  // Tous les outils de pose (Salle, Mur, Connecteurs, Peindre, Remodeler, Zone d'effet…) restent
+  // désormais actifs après un geste réussi (§12.9, PLAN_WORLD_BUILDER_REWORK.md) au lieu de repasser
+  // silencieusement en Sélection selon des règles différentes par outil — Échap est l'unique sortie
+  // explicite, commune à tous.
+  useEffect(() => {
+    const handleEscapeKeyDown = (e) => {
+      if (e.key !== 'Escape') return
+      if (activeEditorTab !== 'world') return
+      if (!surfaceTool?.mode || surfaceTool.mode === 'select') return
+      onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null, connectorWallEdgeKeys: [] })
+    }
+    document.addEventListener('keydown', handleEscapeKeyDown)
+    return () => document.removeEventListener('keydown', handleEscapeKeyDown)
+  }, [activeEditorTab, onSurfaceToolChange, surfaceTool])
+
   // ─── Raccourcis Digit1-5 — sélection géométrie ──────────────────────────
   // Digit1=cube, Digit2=slab_bottom, Digit3=slab_top, Digit4=slope, Digit5=wedge.
   // Modifient geo dans activeMaterial sans changer texId ni r.
@@ -1547,8 +1556,7 @@ export default function Editor3D({
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}
           onDelete={handleSurfaceConnectorDelete}
-          runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
-          onElevatorCommand={handleElevatorCommand}
+          canEdit
           onClose={closeSurfaceConnectorPanel}
         />
       )}
@@ -1557,8 +1565,6 @@ export default function Editor3D({
           key={surfaceRoomPanel.roomId}
           room={selectedSurfaceRoom}
           tool={surfaceTool}
-          x={surfaceRoomPanel.x}
-          y={surfaceRoomPanel.y}
           onPatch={handleSurfaceSelectionToolPatch}
           onDelete={handleSurfaceRoomDelete}
           onClose={closeSurfaceRoomPanel}
@@ -1569,8 +1575,6 @@ export default function Editor3D({
           key={surfaceWallPanel.roomId}
           room={selectedSurfaceRoom}
           tool={surfaceTool}
-          x={surfaceWallPanel.x}
-          y={surfaceWallPanel.y}
           onPatch={handleSurfaceSelectionToolPatch}
           onAppearanceChange={handleSurfaceWallAppearanceChange}
           onClose={closeSurfaceWallPanel}

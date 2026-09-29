@@ -69,6 +69,7 @@
     "openingsSection": "Ouvertures",
     "addDoorButton": "Ajouter une porte",
     "addDoorHint": "Sélectionne un seul mur pour y ajouter une porte.",
+    "shapeSection": "Forme du tronçon",
     "invertInPlane": "Inverser dans le plan",
     "applyArc": "Appliquer l’arrondi",
     "straightenButton": "Remettre droit",

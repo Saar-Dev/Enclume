@@ -74,10 +74,17 @@ import {
   roomSelectableWallRuns,
   roomSliceContours,
   sampleRoomBoundaryArc,
+  wallRunReshapeCells,
+  wallRunRowCountForCell,
 } from '../../../shared/world/roomGeometry.js'
 
 const GRID_SIZE = 50
 const WALL_STICKY_THRESHOLD = 0.18
+// Poignée de redimensionnement (§10c/§12.9) : distance minimale en pixels écran entre le clic et le
+// relâchement pour compter comme un glissé plutôt qu'un simple re-clic sur un mur déjà sélectionné —
+// sans ce seuil, un clic immobile pourrait pousser le mur d'une rangée par accident (aucune position
+// « neutre » n'existe dans wallRunReshapeCells, la limite est toujours une arête entre deux cases).
+const WALL_RESHAPE_CLICK_THRESHOLD_PX = 6
 
 function sameLevel(a, b) {
   return Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.001
@@ -256,7 +263,7 @@ function RoomSelectionContour({ room, roomLookup, y, displayLevel = null }) {
   })
 }
 
-function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, interactive = true }) {
+function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, onReshapeStart, interactive = true }) {
   const [hovered, setHovered] = useState(false)
   const points = wall.axis === 'arc' ? wall.points : [wall.from, wall.to]
   const y = levelToY(displayLevel)
@@ -269,6 +276,13 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, i
       onPointerDown={event => {
         if (!interactive) return
         event.stopPropagation()
+        // Poignée de redimensionnement (§10c/§12.9) : un tronçon DROIT déjà sélectionné se saisit
+        // et se glisse pour pousser tout le mur d'un coup — un premier clic (pas encore actif) ne
+        // fait toujours que sélectionner, comportement inchangé. Jamais sur un arc (v1, non traité).
+        if (active && wall.axis !== 'arc' && onReshapeStart) {
+          onReshapeStart(wall, event)
+          return
+        }
         onToggle?.(wall.edgeKeys, event)
       }}
       onPointerOver={event => {
@@ -340,7 +354,7 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, i
   )
 }
 
-function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, interactive = true }) {
+function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, onReshapeStart, interactive = true }) {
   if (!room || room.wallEnabled === false) return null
   const selected = new Set(selectedKeys || [])
   const thickness = Math.max(2, Number(room.wallThickness) || 1)
@@ -354,6 +368,7 @@ function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, 
         thickness={thickness}
         active={active}
         onToggle={onToggle}
+        onReshapeStart={onReshapeStart}
         interactive={interactive}
       />
     )
@@ -949,15 +964,36 @@ export default function SurfaceEditorScene({
       selectedRoomWallCount,
       roomArcError: null,
     })
-    const nativeEvent = event?.nativeEvent || event || {}
-    onSurfaceWallSelect?.(
-      surfaceTool.selectedRoomId,
-      Number(nativeEvent.clientX) || 24,
-      Number(nativeEvent.clientY) || 24,
-      selectedRoomWallCount,
-    )
+    onSurfaceWallSelect?.(surfaceTool.selectedRoomId, selectedRoomWallCount)
     event?.stopPropagation?.()
   }, [onSurfaceToolChange, onSurfaceWallSelect, surfaceData.rooms, surfaceTool])
+
+  // Poignée de redimensionnement (§10c/§12.9, PLAN_WORLD_BUILDER_REWORK.md) — ne se déclenche que
+  // sur un tronçon DÉJÀ sélectionné (SelectableRoomWall ne l'appelle que si `active`), jamais sur le
+  // tout premier clic : ça élimine toute ambiguïté clic/glissé pour la sélection elle-même, qui reste
+  // intégralement gérée par handleRoomWallPointerSelect ci-dessus, inchangée. Suit exactement le
+  // patron générique dragRef/setDrag déjà utilisé pour les cases (mode 'reshape-room') plutôt qu'un
+  // second système d'événements — seul un nouveau mode ('wall-reshape') est ajouté à handleMouseMove/
+  // handleMouseUp ci-dessous, aucune branche existante modifiée.
+  const handleWallReshapeStart = useCallback((wallRun, event) => {
+    if (surfaceTool?.mode !== 'select' || !surfaceTool?.selectedRoomId) return
+    skipNextCanvasMouseDownRef.current = true
+    const nativeEvent = event?.nativeEvent || event || {}
+    const clientX = Number(nativeEvent.clientX) || 0
+    const clientY = Number(nativeEvent.clientY) || 0
+    const cell = getFloorCell(clientX, clientY)
+    const nextDrag = {
+      mode: 'wall-reshape',
+      roomId: surfaceTool.selectedRoomId,
+      wallRun,
+      startClientX: clientX,
+      startClientY: clientY,
+      end: cell || { x: 0, z: 0 },
+    }
+    dragRef.current = nextDrag
+    setDrag(nextDrag)
+    event?.stopPropagation?.()
+  }, [surfaceTool, getFloorCell])
 
   const handlePaintWallClick = useCallback((roomId, edgeKeys) => {
     if (!roomId) return
@@ -1167,7 +1203,7 @@ export default function SurfaceEditorScene({
               selectedRoomWallCount: 0,
               roomArcError: null,
             })
-            onSurfaceRoomSelect?.(hits[0].id, e.clientX, e.clientY)
+            onSurfaceRoomSelect?.(hits[0].id)
           }
         } else {
           onSurfaceToolChange?.({
@@ -1189,27 +1225,11 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'room') {
+        // Reste en mode « Salle » après une pose réussie, comme tous les autres outils de pose
+        // (§12.9, PLAN_WORLD_BUILDER_REWORK.md) — poser plusieurs salles à la suite ne rouvre plus
+        // le panneau de la précédente à chaque fois ; passer en mode Sélection pour l'éditer ensuite.
         const result = applyRoomSelectionWithResult(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
-        if (result.surfaceData !== surfaceData && result.roomId) {
-          const room = { id: result.roomId, ...result.surfaceData.rooms[result.roomId] }
-          const roomPatch = roomToSurfaceToolPatch(room)
-          onSurfaceDataChange(result.surfaceData)
-          onSurfaceToolChange?.({
-            ...surfaceTool,
-            ...roomPatch,
-            mode: 'select',
-            selectedRoomId: result.roomId,
-            selectedRoomIds: [result.roomId],
-            selectedConnectorId: null,
-            roomWallEdit: true,
-            selectedRoomWallKeys: [],
-            selectedRoomWallCount: 0,
-            roomArcError: null,
-          })
-          onSurfaceRoomSelect?.(result.roomId, e.clientX, e.clientY)
-        } else {
-          onSurfaceToolChange?.({ ...surfaceTool, mode: 'room', selectedConnectorId: null })
-        }
+        if (result.surfaceData !== surfaceData) onSurfaceDataChange(result.surfaceData)
         e.preventDefault()
         e.stopPropagation()
         return
@@ -1232,8 +1252,14 @@ export default function SurfaceEditorScene({
           e.stopPropagation()
           return
         }
+        // Reste en mode « Connecteur » après une pose réussie, même règle que Salle ci-dessus
+        // (§12.9) — poser plusieurs portes/ascenseurs/échelles à la suite ne redemande plus de
+        // recliquer l'outil à chaque fois. `connectorWallEdgeKeys` (restreint la porte au mur
+        // sélectionné via le panneau Mur, cf. connectors.js) est remis à vide après la pose : sans
+        // ça, une 2e porte resterait invisiblement limitée au mur de la 1re alors que le geste
+        // persiste maintenant — un risque qui n'existait pas quand le mode repassait en Sélection.
         onSurfaceDataChange(nextData)
-        onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null })
+        onSurfaceToolChange?.({ ...surfaceTool, roomArcError: null, connectorWallEdgeKeys: [] })
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
@@ -1249,6 +1275,25 @@ export default function SurfaceEditorScene({
             for (let z = area.minZ; z <= area.maxZ; z += 1) cells.push({ x, z })
           }
           handleReshapeRoomCommit(roomId, cells, cellMode)
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
+      if (mode === 'wall-reshape') {
+        // Seuil clic/glissé (§10c/§12.9) : sous le seuil, ne rien faire — pas de rangée fantôme sur
+        // un simple re-clic du mur déjà sélectionné (wallRunRowCountForCell n'a jamais de valeur 0).
+        const movedPx = Math.hypot(
+          e.clientX - (currentDrag.startClientX || 0),
+          e.clientY - (currentDrag.startClientY || 0),
+        )
+        if (movedPx >= WALL_RESHAPE_CLICK_THRESHOLD_PX && currentDrag.roomId && finalDrag.end) {
+          const rowCount = wallRunRowCountForCell(currentDrag.wallRun, finalDrag.end)
+          if (rowCount !== 0) {
+            const cells = wallRunReshapeCells(currentDrag.wallRun, rowCount)
+            handleReshapeRoomCommit(currentDrag.roomId, cells, rowCount > 0 ? 'add' : 'remove')
+          }
         }
         e.preventDefault()
         e.stopPropagation()
@@ -1363,6 +1408,14 @@ export default function SurfaceEditorScene({
     }
     return cells
   })()
+  // Poignée (§10c/§12.9) : même aperçu vert/rouge en direct que le geste « cases », construit à
+  // partir du même rowCount qui sera commité au relâchement (aucun calcul dupliqué).
+  const wallReshapePreviewMode = drag?.mode === 'wall-reshape' && drag.wallRun && drag.end
+    ? wallRunRowCountForCell(drag.wallRun, drag.end)
+    : 0
+  const wallReshapePreviewCells = wallReshapePreviewMode !== 0
+    ? wallRunReshapeCells(drag.wallRun, wallReshapePreviewMode)
+    : []
   const connectorPreview = drag?.mode === 'connector'
     ? drag
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
@@ -1427,6 +1480,7 @@ export default function SurfaceEditorScene({
             displayLevel={displayLevel}
             selectedKeys={surfaceTool?.selectedRoomWallKeys}
             onToggle={handleRoomWallPointerSelect}
+            onReshapeStart={handleWallReshapeStart}
             interactive={surfaceTool?.mode === 'select'}
           />
           {surfaceTool?.mode === 'select' && (surfaceTool?.selectedRoomWallCount || 0) >= 2 && (
@@ -1458,6 +1512,15 @@ export default function SurfaceEditorScene({
           displayLevel={displayLevel}
         />
       )}
+      {drag?.mode === 'wall-reshape' && drag.roomId && wallReshapePreviewCells.length > 0 && (
+        <RoomFootprintPaintPreview
+          surfaceData={surfaceData}
+          roomId={drag.roomId}
+          cellMode={wallReshapePreviewMode > 0 ? 'add' : 'remove'}
+          cells={wallReshapePreviewCells}
+          displayLevel={displayLevel}
+        />
+      )}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'stair' ? (
@@ -1471,6 +1534,8 @@ export default function SurfaceEditorScene({
       ) : drag?.mode === 'select' ? (
         <SelectionPreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'reshape-room' ? (
+        null
+      ) : drag?.mode === 'wall-reshape' ? (
         null
       ) : drag ? (
         <FloorPreview selection={drag} surfaceTool={surfaceTool} />
