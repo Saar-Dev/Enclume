@@ -4,7 +4,12 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
-import { generateProceduralMaterialTexture, PROCEDURAL_MATERIAL_PRESETS } from '../lib/proceduralMaterials.js'
+import {
+  generateProceduralMaterialTexture,
+  PROCEDURAL_MATERIAL_PRESETS,
+  isImportedPatternReady,
+  onImportedPatternReady,
+} from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
@@ -177,11 +182,24 @@ function pbrForProcedural(materialId) {
   return { roughness: 0.72, metalness: 0.08 }
 }
 
+// Un motif importé (§14, proceduralMaterials.js) peut ne pas encore être décodé au moment où ce
+// matériau est généré — la texture est alors bakée avec un relief neutre (plat), correcte mais
+// provisoire. `sceneRefreshListeners` : écouteurs génériques « quelque chose a changé, refaites le
+// rendu » abonnés par le composant racine (voir SurfaceDungeonScene ci-dessous) ; ce module garde
+// la responsabilité de savoir QUAND une entrée du cache devient invalide (son motif importé vient
+// de charger), le composant garde celle de déclencher un nouveau rendu React — pas de dépendance
+// dans l'autre sens.
+const sceneRefreshListeners = new Set()
+function notifySceneRefresh() {
+  sceneRefreshListeners.forEach(cb => { try { cb() } catch { /* écouteur défaillant, ignoré */ } })
+}
+
 function proceduralMaterialAt(descriptor) {
   const key = proceduralMaterialKey(descriptor)
   if (!key) return null
   if (proceduralSurfaceMaterialCache.has(key)) return proceduralSurfaceMaterialCache.get(key)
 
+  const patternReady = isImportedPatternReady(descriptor?.pattern)
   const generated = generateProceduralMaterialTexture({ ...descriptor, size: 128 })
   const map = makeDataTexture(generated.albedoDataUrl, true)
   const normalMap = makeDataTexture(generated.normalDataUrl, false)
@@ -204,6 +222,18 @@ function proceduralMaterialAt(descriptor) {
     relief: generated.procedural,
   }
   proceduralSurfaceMaterialCache.set(key, entry)
+
+  if (!patternReady) {
+    // Le relief était encore neutre au moment du bake : dès que le vrai fichier est prêt, cette
+    // entrée est perimée — on la retire pour forcer une régénération au prochain rendu, plutôt que
+    // de la corriger en place (le material/texture Three.js déjà créés ne sont jamais mutés après
+    // coup ailleurs dans ce fichier, cohérent avec le reste du patron de cache).
+    onImportedPatternReady(descriptor.pattern, () => {
+      proceduralSurfaceMaterialCache.delete(key)
+      notifySceneRefresh()
+    })
+  }
+
   return entry
 }
 
@@ -2021,6 +2051,16 @@ function SurfaceDungeonScene({
   onCameraRoomIdChange = null,
   wallOcclusionEnabled = true,
 }) {
+  // Un motif importé (§14, proceduralMaterials.js) chargé après le premier rendu invalide une
+  // entrée du cache de matériaux (proceduralMaterialAt, plus haut dans ce fichier) — ce compteur
+  // force un nouveau rendu de tout l'arbre quand ça arrive, seul moyen de le déclencher depuis un
+  // cache tenu hors React (Map de module, partagée par toutes les surfaces de la scène).
+  const [, forceProceduralRefresh] = useState(0)
+  useEffect(() => {
+    const listener = () => forceProceduralRefresh(v => v + 1)
+    sceneRefreshListeners.add(listener)
+    return () => sceneRefreshListeners.delete(listener)
+  }, [])
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
   useEffect(() => {

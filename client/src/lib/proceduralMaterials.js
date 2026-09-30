@@ -1,6 +1,7 @@
 // roughness/metalness = base PBR (0=miroir/non-metal .. 1=diffus/metal), avant modulation par pixel
 // (usure, rouille, saleté — voir generateProceduralMaterialTexture). Seule source de verite pour le
 // rendu Three.js : SurfaceDungeonScene.jsx lit ces champs, aucune valeur dupliquee ailleurs.
+import { sampleDisplacementMap, isDisplacementMapReady, onDisplacementMapReady } from './displacementMaps.js'
 const MATERIAL_PRESETS = [
   {
     id: 'steel',
@@ -86,26 +87,95 @@ const MATERIAL_PRESETS = [
 ]
 
 const PATTERN_PRESETS = [
-  { id: 'none', label: 'Aucun motif' },
-  { id: 'metal_panels', label: 'Plaques rivetees' },
-  { id: 'tile_grid', label: 'Dalles jointes' },
-  { id: 'planks', label: 'Planches' },
-  { id: 'diamond_plate', label: 'Tole striee' },
-  { id: 'rough_surface', label: 'Surface rugueuse' },
-  { id: 'ribbed_panels', label: 'Panneaux nervures' },
-  { id: 'corrugated', label: 'Tole ondulee' },
-  { id: 'longitudinal_stripes', label: 'Bandes longitudinales' },
-  { id: 'rivet_rings', label: 'Anneaux boulonnes' },
-  { id: 'hex_grid', label: 'Trame hexagonale' },
-  { id: 'offset_plates', label: 'Plaques superposees' },
-  { id: 'concrete_formwork', label: 'Beton coffre' },
-  { id: 'concrete_segments', label: 'Beton segmente' },
-  { id: 'weld_seams', label: 'Plaques soudees' },
-  { id: 'paint_blisters', label: 'Peinture cloquee' },
+  // Les motifs procéduraux dessinés à la main (lignes/cercles) ont été retirés (§14.2, 2026-09-30,
+  // Saar : « on peut les dégager ») — les motifs importés ci-dessous (vrai relief) les remplacent
+  // tous. 'none' reste : c'est un état (pas de relief), pas un motif à comparer aux autres.
+  { id: 'none', label: 'Aucun motif', group: 'Procédural' },
+
+  // ─── Motifs importés (relief réel, PLAN_WORLD_BUILDER_REWORK.md §13) ───
+  // Height maps fournies par Saar (ambientCG et équivalents, licence CC0), recadrées 512px, hors
+  // dossier SOURCE/ (originaux 1K/4K, jamais servis par le client). `src` = seule différence
+  // structurelle avec un motif procédural — voir IMPORTED_PATTERN_SRC plus bas.
+  { id: 'img_metal_box_profile', label: 'Tôle profilée (relief réel)', group: 'Métal', src: '/textures/displacement/metal/box_profile_metal_sheet_512.png' },
+  { id: 'img_metal_chainmail', label: 'Cotte de mailles (relief réel)', group: 'Métal', src: '/textures/displacement/metal/chainmail_512.png' },
+  { id: 'img_metal_corrugated', label: 'Tôle ondulée (relief réel)', group: 'Métal', src: '/textures/displacement/metal/corrugated_iron_512.png' },
+  { id: 'img_metal_fence', label: 'Grillage (relief réel)', group: 'Métal', src: '/textures/displacement/metal/fence_512.png' },
+  { id: 'img_metal_rust', label: 'Métal rouillé (relief réel)', group: 'Métal', src: '/textures/displacement/metal/metal_rust_512.png' },
+  { id: 'img_metal_rusty', label: 'Tôle rouillée 1 (relief réel)', group: 'Métal', src: '/textures/displacement/metal/rusty_metal_512.png' },
+  { id: 'img_metal_rusty_02', label: 'Tôle rouillée 2 (relief réel)', group: 'Métal', src: '/textures/displacement/metal/rusty_metal_02_512.png' },
+  { id: 'img_metal_rusty_shutter', label: 'Rideau métallique rouillé (relief réel)', group: 'Métal', src: '/textures/displacement/metal/rusty_metal_shutter_512.png' },
+  { id: 'img_metal_worn_shutter', label: 'Rideau métallique usé (relief réel)', group: 'Métal', src: '/textures/displacement/metal/worn_shutter_512.png' },
+
+  { id: 'img_tiles_black_metal_2', label: 'Tôle noire 1 (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/black_metal_2_512.png' },
+  { id: 'img_tiles_black_metal_3', label: 'Tôle noire 2 (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/black_metal_3_512.png' },
+  { id: 'img_tiles_metal_6', label: 'Tôle 6 (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/metal_6_512.png' },
+  { id: 'img_tiles_grate_rusty', label: 'Grille rouillée (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/metal_grate_rusty_512.png' },
+  { id: 'img_tiles_plate_02', label: 'Plaque métallique 2 (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/metal_plate_02_512.png' },
+  { id: 'img_tiles_plate', label: 'Plaque métallique 1 (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/metal_plate_512.png' },
+  { id: 'img_tiles_rusty_grid', label: 'Grille rouillée fine (relief réel)', group: 'Tôles et grilles', src: '/textures/displacement/metal-tiles/rusty_metal_grid_512.png' },
+
+  { id: 'img_concrete_asphalt', label: 'Asphalte (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/asphalt_512.png' },
+  { id: 'img_concrete_asphalt_clean', label: 'Asphalte propre (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/clean_asphalt_512.png' },
+  { id: 'img_concrete_brushed', label: 'Béton brossé (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/brushed_concrete_512.png' },
+  { id: 'img_concrete_floor_damaged', label: 'Sol béton endommagé (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/concrete_floor_damaged_512.png' },
+  { id: 'img_concrete_floor_worn', label: 'Sol béton usé (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/concrete_floor_worn_512.png' },
+  { id: 'img_concrete_slab_wall', label: 'Mur en dalles de béton (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/concrete_slab_wall_512.png' },
+  { id: 'img_concrete_wall', label: 'Mur béton (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/concrete_wall_512.png' },
+  { id: 'img_concrete_painted', label: 'Béton peint (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/painted_concrete_512.png' },
+  { id: 'img_concrete_plastered_wall', label: 'Mur enduit (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/plastered_wall_512.png' },
+  { id: 'img_concrete_worn_floor', label: 'Sol béton usé 2 (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/worn_concrete_floor_512.png' },
+  { id: 'img_concrete_mossy_plaster', label: 'Mur enduit moussu (relief réel)', group: 'Béton', src: '/textures/displacement/concrete/worn_mossy_plasterwall_512.png' },
+
+  { id: 'img_plaster_1', label: 'Plâtre 1 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_1_512.png' },
+  { id: 'img_plaster_2', label: 'Plâtre 2 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_2_512.png' },
+  { id: 'img_plaster_3', label: 'Plâtre 3 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_3_512.png' },
+  { id: 'img_plaster_3b', label: 'Plâtre 3 — variante (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_3_height-1K.png' },
+  { id: 'img_plaster_4', label: 'Plâtre 4 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_4_512.png' },
+  { id: 'img_plaster_5', label: 'Plâtre 5 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_5_512.png' },
+  { id: 'img_plaster_6', label: 'Plâtre 6 (relief réel)', group: 'Plâtre', src: '/textures/displacement/plaster/plaster_6_512.png' },
+
+  { id: 'img_plastic_rubber_tiles', label: 'Dalles caoutchouc (relief réel)', group: 'Plastique/caoutchouc', src: '/textures/displacement/plastic/rubber_tiles_512.png' },
+  { id: 'img_plastic_running_track', label: 'Revêtement piste (relief réel)', group: 'Plastique/caoutchouc', src: '/textures/displacement/plastic/running_track_512.png' },
 ]
+
+const IMPORTED_PATTERN_SRC = Object.fromEntries(
+  PATTERN_PRESETS.filter(preset => preset.src).map(preset => [preset.id, preset.src]),
+)
+
+// Pas de préchargement massif ici (36 fichiers à chaque chargement de l'app, coûteux et inutile
+// pour des motifs non utilisés) — chargement paresseux, déclenché par sampleDisplacementMap() au
+// premier échantillonnage réel. Ces deux fonctions permettent à un appelant (SurfaceDungeonScene.jsx)
+// de savoir si un motif est prêt et de réagir quand il le devient, sans connaître le mécanisme de
+// cache interne à displacementMaps.js.
+export function isImportedPatternReady(patternId) {
+  const src = IMPORTED_PATTERN_SRC[patternId]
+  return !src || isDisplacementMapReady(src)
+}
+
+export function onImportedPatternReady(patternId, callback) {
+  const src = IMPORTED_PATTERN_SRC[patternId]
+  if (!src) return () => {}
+  return onDisplacementMapReady(src, callback)
+}
 
 export const PROCEDURAL_MATERIAL_PRESETS = MATERIAL_PRESETS
 export const PROCEDURAL_PATTERN_PRESETS = PATTERN_PRESETS
+
+// Regroupe les motifs par `group` (ordre de première apparition) pour un <select> en <optgroup> —
+// calculé une fois ici plutôt que dans chaque composant qui affiche la liste.
+export const PROCEDURAL_PATTERN_GROUPS = (() => {
+  const order = []
+  const byGroup = new Map()
+  for (const preset of PATTERN_PRESETS) {
+    const group = preset.group || 'Procédural'
+    if (!byGroup.has(group)) {
+      byGroup.set(group, [])
+      order.push(group)
+    }
+    byGroup.get(group).push(preset)
+  }
+  return order.map(group => ({ group, patterns: byGroup.get(group) }))
+})()
 
 export const DEFAULT_PROCEDURAL_MATERIAL = {
   label: 'Acier peint - plaques',
@@ -149,15 +219,6 @@ function mixColor(a, b, t) {
 
 function rgbToCss(rgb, alpha = 1) {
   return `rgba(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])}, ${alpha})`
-}
-
-// Les traits de motif (soudures, rivets, aretes...) doivent lire comme "ce materiau creuse/brille",
-// jamais une couleur universelle : sinon le motif remplace le materiau au lieu de s'y adapter.
-function patternGrooveColor(material, alpha) {
-  return rgbToCss(mixColor(material.dark, [0, 0, 0], 0.35), alpha)
-}
-function patternHighlightColor(material, alpha) {
-  return rgbToCss(mixColor(material.light, [255, 255, 255], 0.35), alpha)
 }
 
 function paintCoverageFor(material) {
@@ -307,575 +368,33 @@ function drawCircleHeight(height, size, cx, cy, radius, delta) {
   }
 }
 
-function lowerRect(height, size, x0, y0, w, h, delta) {
-  const minX = Math.max(0, Math.floor(x0))
-  const maxX = Math.min(size - 1, Math.ceil(x0 + w))
-  const minY = Math.max(0, Math.floor(y0))
-  const maxY = Math.min(size - 1, Math.ceil(y0 + h))
-  for (let y = minY; y <= maxY; y += 1) {
-    for (let x = minX; x <= maxX; x += 1) {
-      height[y * size + x] += delta
-    }
-  }
+// Motif importé (§14) : échantillonne une vraie height map au lieu de dessiner des lignes/cercles
+// à la main — la valeur brute (0..1) est recentrée autour de 0 pour rester compatible avec le
+// même buffer `height` que tous les motifs procéduraux (un delta, pas une hauteur absolue).
+function sampleImportedPatternHeight(src, x, y, size, relief) {
+  const raw = sampleDisplacementMap(src, x / size, y / size)
+  return (raw - 0.5) * 0.5 * relief
 }
 
-function strokeInsetRect(ctx, size, width, color) {
-  ctx.save()
-  ctx.strokeStyle = color
-  ctx.lineWidth = width
-  ctx.strokeRect(width / 2, width / 2, size - width, size - width)
-  ctx.restore()
-}
-
-const METAL_PANEL_EDGE_WIDTH_FACTOR = 0.8
-
-function metalPanelLineWidths(size, snapToPixels = false) {
-  const rawDetailLine = Math.max(1, size * 0.028 * 0.55)
-  const detailLine = snapToPixels ? Math.max(1, Math.round(rawDetailLine)) : rawDetailLine
-  return {
-    // Deux bords de tuiles se rejoignent : chacun porte moins d'un demi-trait.
-    edgeLine: detailLine * METAL_PANEL_EDGE_WIDTH_FACTOR / 2,
-    detailLine,
-  }
-}
-
-function applyMetalPanels(ctx, height, size, relief, material) {
-  const { edgeLine, detailLine } = metalPanelLineWidths(size, true)
-  strokeInsetRect(ctx, size, edgeLine, patternGrooveColor(material, 0.78))
-  lowerRect(height, size, 0, 0, size, edgeLine, -0.28 * relief)
-  lowerRect(height, size, 0, size - edgeLine, size, edgeLine, -0.28 * relief)
-  lowerRect(height, size, 0, 0, edgeLine, size, -0.28 * relief)
-  lowerRect(height, size, size - edgeLine, 0, edgeLine, size, -0.28 * relief)
-
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.42)
-  ctx.lineWidth = detailLine
-  ctx.beginPath()
-  ctx.moveTo(size / 2, edgeLine)
-  ctx.lineTo(size / 2, size - edgeLine)
-  ctx.moveTo(edgeLine, size / 2)
-  ctx.lineTo(size - edgeLine, size / 2)
-  ctx.stroke()
-  ctx.restore()
-  lowerRect(height, size, size / 2 - detailLine / 2, edgeLine, detailLine, size - edgeLine * 2, -0.12 * relief)
-  lowerRect(height, size, edgeLine, size / 2 - detailLine / 2, size - edgeLine * 2, detailLine, -0.12 * relief)
-}
-
-function applyTileGrid(ctx, height, size, relief, material) {
-  const seam = Math.max(2, Math.round(size * 0.035))
-  const lines = [0, size / 2, size]
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.72)
-  ctx.lineWidth = seam
-  for (const x of lines) {
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, size)
-    ctx.stroke()
-    lowerRect(height, size, x - seam / 2, 0, seam, size, -0.22 * relief)
-  }
-  for (const y of lines) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(size, y)
-    ctx.stroke()
-    lowerRect(height, size, 0, y - seam / 2, size, seam, -0.22 * relief)
-  }
-  ctx.restore()
-}
-
-function applyPlanks(ctx, height, size, relief, seed, material) {
-  const seam = Math.max(2, Math.round(size * 0.02))
-  const boards = 4
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.62)
-  ctx.lineWidth = seam
-  for (let i = 1; i < boards; i += 1) {
-    const x = (size / boards) * i + (valueNoise(i, 0, 1, seed) - 0.5) * seam
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, size)
-    ctx.stroke()
-    lowerRect(height, size, x - seam / 2, 0, seam, size, -0.2 * relief)
-  }
-  ctx.restore()
-}
-
-function applyDiamondPlate(ctx, height, size, relief, material) {
-  const step = Math.max(16, Math.round(size / 5))
-  const line = Math.max(1, Math.round(size * 0.01))
-  ctx.save()
-  ctx.strokeStyle = patternHighlightColor(material, 0.38)
-  ctx.lineWidth = line
-  for (let y = -size; y <= size * 2; y += step) {
-    for (let x = -size; x <= size * 2; x += step) {
-      const x0 = x
-      const y0 = y
-      const x1 = x + step * 0.6
-      const y1 = y + step * 0.45
-      ctx.beginPath()
-      ctx.moveTo(x0, y0)
-      ctx.lineTo(x1, y1)
-      ctx.stroke()
-      drawLineHeight(height, size, x0, y0, x1, y1, line * 2, 0.12 * relief)
-    }
-  }
-  ctx.restore()
-}
-
-// ─── Lot 1 (2026-09-27) — motifs bon marche / cout modere, validés par Saar ───
-
-function applyRoughSurface(ctx, height, size, relief, seed) {
+function applyImportedPattern(height, size, src, relief) {
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
-      const n = fractalNoise(x, y, Math.max(2, size / 3), `${seed}:rough`)
-      height[y * size + x] += (n - 0.5) * 0.09 * relief
+      height[y * size + x] += sampleImportedPatternHeight(src, x, y, size, relief)
     }
   }
 }
-function sampleRoughSurfaceHeight(x, y, size, relief, seed) {
-  const n = fractalNoise(x, y, Math.max(2, size / 3), `${seed}:rough`)
-  return (n - 0.5) * 0.09 * relief
-}
 
-function applyRibbedPanels(ctx, height, size, relief, material) {
-  const ribCount = 5
-  const ribWidth = Math.max(2, size * 0.03)
-  ctx.save()
-  ctx.strokeStyle = patternHighlightColor(material, 0.05)
-  ctx.lineWidth = ribWidth
-  for (let i = 0; i < ribCount; i += 1) {
-    const x = (size / ribCount) * (i + 0.5)
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, size)
-    ctx.stroke()
-    lowerRect(height, size, x - ribWidth / 2, 0, ribWidth, size, 0.16 * relief)
-  }
-  ctx.restore()
-}
-function sampleRibbedPanelsHeight(x, size, relief) {
-  const ribCount = 5
-  const ribWidth = Math.max(2, size * 0.03)
-  let h = 0
-  for (let i = 0; i < ribCount; i += 1) {
-    const lineX = (size / ribCount) * (i + 0.5)
-    h += 0.16 * relief * lineFalloff(Math.abs(x - lineX), ribWidth / 2)
-  }
-  return h
-}
-
-function applyCorrugated(ctx, height, size, relief, material) {
-  const waveCount = 10
-  const amp = 0.14 * relief
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      height[y * size + x] += Math.sin((x / size) * Math.PI * 2 * waveCount) * amp
-    }
-  }
-  ctx.save()
-  ctx.globalAlpha = 0.06
-  ctx.fillStyle = patternGrooveColor(material, 1)
-  for (let i = 0; i < waveCount; i += 1) {
-    const x = (size / waveCount) * (i + 0.5)
-    ctx.fillRect(x - (size / waveCount) * 0.2, 0, (size / waveCount) * 0.4, size)
-  }
-  ctx.restore()
-}
-function sampleCorrugatedHeight(x, size, relief) {
-  const waveCount = 10
-  return Math.sin((x / size) * Math.PI * 2 * waveCount) * 0.14 * relief
-}
-
-function applyLongitudinalStripes(ctx, height, size, relief, material) {
-  const stripeCount = 8
-  const stripeWidth = Math.max(1, size * 0.01)
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.18)
-  ctx.lineWidth = stripeWidth
-  for (let i = 1; i < stripeCount; i += 1) {
-    const x = (size / stripeCount) * i
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, size)
-    ctx.stroke()
-    lowerRect(height, size, x - stripeWidth / 2, 0, stripeWidth, size, -0.1 * relief)
-  }
-  ctx.restore()
-}
-function sampleLongitudinalStripesHeight(x, size, relief) {
-  const stripeCount = 8
-  const stripeWidth = Math.max(1, size * 0.01)
-  let h = 0
-  for (let i = 1; i < stripeCount; i += 1) {
-    const lineX = (size / stripeCount) * i
-    h -= 0.1 * relief * lineFalloff(Math.abs(x - lineX), stripeWidth / 2)
-  }
-  return h
-}
-
-function applyRivetRings(ctx, height, size, relief, material) {
-  const spacing = size / 5
-  const r = Math.max(3, size * 0.018)
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.55)
-  ctx.lineWidth = Math.max(1, r * 0.35)
-  for (let gy = spacing / 2; gy < size; gy += spacing) {
-    for (let gx = spacing / 2; gx < size; gx += spacing) {
-      ctx.beginPath()
-      ctx.arc(gx, gy, r, 0, Math.PI * 2)
-      ctx.stroke()
-      drawCircleHeight(height, size, gx, gy, r * 1.3, 0.1 * relief)
-      drawCircleHeight(height, size, gx, gy, r * 0.7, -0.05 * relief)
-    }
-  }
-  ctx.restore()
-}
-function sampleRivetRingsHeight(x, y, size, relief) {
-  const spacing = size / 5
-  const r = Math.max(3, size * 0.018)
-  let h = 0
-  for (let gy = spacing / 2; gy < size; gy += spacing) {
-    for (let gx = spacing / 2; gx < size; gx += spacing) {
-      const dist = Math.hypot(x - gx, y - gy)
-      h += 0.1 * relief * lineFalloff(Math.abs(dist - r * 1.3), r * 0.5)
-      h -= 0.05 * relief * lineFalloff(dist, r * 0.7)
-    }
-  }
-  return h
-}
-
-// Approximation bon marche d'une trame hexagonale : 3 familles de droites a 60 degres
-// (les aretes d'un pavage hexagonal sont exactement ces 3 directions) — pas de vraie
-// geometrie de cellule, mais visuellement correct pour une texture tuilee.
-function hexGridHeightAt(x, y, size, relief) {
-  const step = size / 6
-  const lineWidth = Math.max(1, size * 0.008)
-  let h = 0
-  const angles = [0, Math.PI / 3, (2 * Math.PI) / 3]
-  for (const angle of angles) {
-    const dx = Math.cos(angle)
-    const dz = Math.sin(angle)
-    const normalX = -dz
-    const normalZ = dx
-    const proj = x * normalX + y * normalZ
-    const nearest = Math.round(proj / step) * step
-    h -= 0.14 * relief * lineFalloff(Math.abs(proj - nearest), lineWidth * 0.8)
-  }
-  return h
-}
-function applyHexGrid(ctx, height, size, relief, material) {
-  const step = size / 6
-  const lineWidth = Math.max(1, size * 0.008)
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.55)
-  ctx.lineWidth = lineWidth
-  const angles = [0, Math.PI / 3, (2 * Math.PI) / 3]
-  for (const angle of angles) {
-    const dx = Math.cos(angle)
-    const dz = Math.sin(angle)
-    const normalX = -dz
-    const normalZ = dx
-    for (let k = -size; k <= size * 2; k += step) {
-      const cx = size / 2 + normalX * k
-      const cz = size / 2 + normalZ * k
-      const x0 = cx - dx * size * 1.5
-      const z0 = cz - dz * size * 1.5
-      const x1 = cx + dx * size * 1.5
-      const z1 = cz + dz * size * 1.5
-      ctx.beginPath()
-      ctx.moveTo(x0, z0)
-      ctx.lineTo(x1, z1)
-      ctx.stroke()
-      drawLineHeight(height, size, x0, z0, x1, z1, lineWidth * 1.6, -0.14 * relief)
-    }
-  }
-  ctx.restore()
-}
-function sampleHexGridHeight(x, y, size, relief) {
-  return hexGridHeightAt(x, y, size, relief)
-}
-
-function applyOffsetPlates(ctx, height, size, relief, material) {
-  const cols = 4
-  const rows = 3
-  const cw = size / cols
-  const rh = size / rows
-  const seam = Math.max(2, size * 0.012)
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.6)
-  ctx.lineWidth = seam
-  for (let row = 0; row <= rows; row += 1) {
-    const y = row * rh
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(size, y)
-    ctx.stroke()
-    lowerRect(height, size, 0, y - seam / 2, size, seam, -0.13 * relief)
-  }
-  for (let row = 0; row < rows; row += 1) {
-    const offset = (row % 2) * (cw / 2)
-    for (let col = -1; col <= cols; col += 1) {
-      const x = col * cw + offset
-      ctx.beginPath()
-      ctx.moveTo(x, row * rh)
-      ctx.lineTo(x, (row + 1) * rh)
-      ctx.stroke()
-      lowerRect(height, size, x - seam / 2, row * rh, seam, rh, -0.13 * relief)
-    }
-  }
-  ctx.restore()
-}
-function sampleOffsetPlatesHeight(x, y, size, relief) {
-  const cols = 4
-  const rows = 3
-  const cw = size / cols
-  const rh = size / rows
-  const seam = Math.max(2, size * 0.012)
-  let h = 0
-  for (let row = 0; row <= rows; row += 1) {
-    h -= 0.13 * relief * lineFalloff(Math.abs(y - row * rh), seam / 2)
-  }
-  const rowIndex = Math.min(rows - 1, Math.max(0, Math.floor(y / rh)))
-  const offset = (rowIndex % 2) * (cw / 2)
-  const localX = (((x - offset) % cw) + cw) % cw
-  const distToEdge = Math.min(localX, cw - localX)
-  h -= 0.13 * relief * lineFalloff(distToEdge, seam / 2)
-  return h
-}
-
-function applyConcreteFormwork(ctx, height, size, relief, seed, material) {
-  const boards = 6
-  const seam = Math.max(1, size * 0.008)
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.32)
-  ctx.lineWidth = seam
-  for (let i = 1; i < boards; i += 1) {
-    const x = (size / boards) * i + (valueNoise(i, 10, 1, seed) - 0.5) * seam * 2
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, size)
-    ctx.stroke()
-    lowerRect(height, size, x - seam / 2, 0, seam, size, -0.07 * relief)
-  }
-  ctx.restore()
-}
-function sampleConcreteFormworkHeight(x, size, relief, seed) {
-  const boards = 6
-  const seam = Math.max(1, size * 0.008)
-  let h = 0
-  for (let i = 1; i < boards; i += 1) {
-    const lineX = (size / boards) * i + (valueNoise(i, 10, 1, seed) - 0.5) * seam * 2
-    h -= 0.07 * relief * lineFalloff(Math.abs(x - lineX), seam / 2)
-  }
-  return h
-}
-
-function concreteSegmentsRingHeightAt(x, y, size, relief) {
-  const ringCount = 4
-  const seam = Math.max(1, size * 0.01)
-  const cx = size / 2
-  const cy = size * 1.4
-  const dist = Math.hypot(x - cx, y - cy)
-  let h = 0
-  for (let i = 1; i <= ringCount; i += 1) {
-    const r = ((size * 1.6) / ringCount) * i
-    h -= 0.09 * relief * lineFalloff(Math.abs(dist - r), seam)
-  }
-  return h
-}
-function applyConcreteSegments(ctx, height, size, relief, material) {
-  const ringCount = 4
-  const seam = Math.max(1, size * 0.01)
-  const cx = size / 2
-  const cy = size * 1.4
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.35)
-  ctx.lineWidth = seam
-  for (let i = 1; i <= ringCount; i += 1) {
-    const r = ((size * 1.6) / ringCount) * i
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-  ctx.restore()
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      height[y * size + x] += concreteSegmentsRingHeightAt(x, y, size, relief)
-    }
-  }
-}
-function sampleConcreteSegmentsHeight(x, y, size, relief) {
-  return concreteSegmentsRingHeightAt(x, y, size, relief)
-}
-
-function applyWeldSeams(ctx, height, size, relief, seed, material) {
-  const seamCount = 3
-  const segments = 24
-  ctx.save()
-  ctx.strokeStyle = patternGrooveColor(material, 0.5)
-  ctx.lineCap = 'round'
-  ctx.lineWidth = size * 0.02
-  for (let i = 0; i < seamCount; i += 1) {
-    const y = (size / (seamCount + 1)) * (i + 1)
-    ctx.beginPath()
-    for (let s = 0; s <= segments; s += 1) {
-      const x = (size / segments) * s
-      const wobble = (valueNoise(s, i * 10, 1.5, `${seed}:weld`) - 0.5) * size * 0.01
-      if (s === 0) ctx.moveTo(x, y + wobble)
-      else ctx.lineTo(x, y + wobble)
-    }
-    ctx.stroke()
-    for (let s = 0; s <= segments; s += 1) {
-      const x = (size / segments) * s
-      const wobble = (valueNoise(s, i * 10, 1.5, `${seed}:weld`) - 0.5) * size * 0.01
-      drawCircleHeight(height, size, x, y + wobble, size * 0.014, 0.09 * relief)
-    }
-  }
-  ctx.restore()
-}
-function sampleWeldSeamsHeight(x, y, size, relief, seed) {
-  const seamCount = 3
-  const segments = 24
-  let h = 0
-  for (let i = 0; i < seamCount; i += 1) {
-    const seamY = (size / (seamCount + 1)) * (i + 1)
-    const s = clamp((x / size) * segments, 0, segments)
-    const wobble = (valueNoise(Math.round(s), i * 10, 1.5, `${seed}:weld`) - 0.5) * size * 0.01
-    h += 0.09 * relief * lineFalloff(Math.abs(y - (seamY + wobble)), size * 0.014)
-  }
-  return h
-}
-
-// Bulles de peinture cloquee : placement aleatoire sequentiel (meme famille que l'ecaillage
-// de applyWear) — pas d'echantillonnage ponctuel possible sans rejouer la sequence, comme
-// applyWear/applyDirt deja dans ce fichier n'en ont pas non plus. Coherent avec l'existant.
-function applyPaintBlisters(ctx, height, size, relief, seed, material) {
-  const rng = makeRng(`${seed}:blisters`)
-  const count = Math.round(size * size * 0.0009)
-  for (let i = 0; i < count; i += 1) {
-    const x = rng() * size
-    const y = rng() * size
-    const r = size * (0.008 + rng() * 0.02)
-    ctx.save()
-    ctx.fillStyle = patternHighlightColor(material, 0.05)
-    ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-    drawCircleHeight(height, size, x, y, r, 0.12 * relief)
-  }
-}
-
-function applyPattern(ctx, height, options, size, seed, material) {
+function applyPattern(height, options, size) {
   const relief = clamp(options.relief / 100)
-  switch (options.pattern) {
-    case 'metal_panels':
-      applyMetalPanels(ctx, height, size, relief, material)
-      break
-    case 'tile_grid':
-      applyTileGrid(ctx, height, size, relief, material)
-      break
-    case 'planks':
-      applyPlanks(ctx, height, size, relief, seed, material)
-      break
-    case 'diamond_plate':
-      applyDiamondPlate(ctx, height, size, relief, material)
-      break
-    case 'rough_surface':
-      applyRoughSurface(ctx, height, size, relief, seed)
-      break
-    case 'ribbed_panels':
-      applyRibbedPanels(ctx, height, size, relief, material)
-      break
-    case 'corrugated':
-      applyCorrugated(ctx, height, size, relief, material)
-      break
-    case 'longitudinal_stripes':
-      applyLongitudinalStripes(ctx, height, size, relief, material)
-      break
-    case 'rivet_rings':
-      applyRivetRings(ctx, height, size, relief, material)
-      break
-    case 'hex_grid':
-      applyHexGrid(ctx, height, size, relief, material)
-      break
-    case 'offset_plates':
-      applyOffsetPlates(ctx, height, size, relief, material)
-      break
-    case 'concrete_formwork':
-      applyConcreteFormwork(ctx, height, size, relief, seed, material)
-      break
-    case 'concrete_segments':
-      applyConcreteSegments(ctx, height, size, relief, material)
-      break
-    case 'weld_seams':
-      applyWeldSeams(ctx, height, size, relief, seed, material)
-      break
-    case 'paint_blisters':
-      applyPaintBlisters(ctx, height, size, relief, seed, material)
-      break
-    default:
-      break
+  const importedSrc = IMPORTED_PATTERN_SRC[options.pattern]
+  if (importedSrc) {
+    applyImportedPattern(height, size, importedSrc, relief)
   }
-}
-
-function distanceToSegment(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const lenSq = Math.max(0.0001, dx * dx + dy * dy)
-  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lenSq)
-  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t))
 }
 
 function lineFalloff(distance, halfWidth) {
   if (distance >= halfWidth) return 0
   return 1 - smoothstep(distance / halfWidth)
-}
-
-function patternAccumulationMask(pattern, x, y, size, seed) {
-  let mask = 0
-
-  if (pattern === 'metal_panels') {
-    const { detailLine } = metalPanelLineWidths(size)
-    const margin = Math.max(12, size * 0.13)
-    const edgeDistance = Math.min(x, y, size - x, size - y)
-    mask = Math.max(mask, lineFalloff(edgeDistance, detailLine * 2.2 * METAL_PANEL_EDGE_WIDTH_FACTOR) * 0.85)
-    mask = Math.max(mask, lineFalloff(Math.abs(x - size / 2), detailLine * 2.2) * 0.45)
-    mask = Math.max(mask, lineFalloff(Math.abs(y - size / 2), detailLine * 2.2) * 0.45)
-
-    const r = Math.max(9, size * 0.095)
-    const rivets = [
-      [margin, margin],
-      [size - margin, margin],
-      [margin, size - margin],
-      [size - margin, size - margin],
-    ]
-    for (const [cx, cy] of rivets) {
-      const dist = Math.hypot(x - cx, y - cy)
-      mask = Math.max(mask, lineFalloff(Math.abs(dist - r * 1.05), r * 1.8) * 0.65)
-    }
-  }
-
-  if (pattern === 'tile_grid') {
-    const seam = Math.max(2, size * 0.035)
-    const lines = [0, size / 2, size]
-    for (const line of lines) {
-      mask = Math.max(mask, lineFalloff(Math.abs(x - line), seam * 2) * 0.7)
-      mask = Math.max(mask, lineFalloff(Math.abs(y - line), seam * 2) * 0.7)
-    }
-  }
-
-  if (pattern === 'planks') {
-    const seam = Math.max(2, size * 0.02)
-    const boards = 4
-    for (let i = 1; i < boards; i += 1) {
-      const lineX = (size / boards) * i + (valueNoise(i, 0, 1, seed) - 0.5) * seam
-      mask = Math.max(mask, lineFalloff(Math.abs(x - lineX), seam * 2.2) * 0.62)
-    }
-  }
-
-  return clamp(mask)
 }
 
 function mixPixel(data, index, color, amount) {
@@ -885,88 +404,10 @@ function mixPixel(data, index, color, amount) {
   data[index + 2] = lerp(data[index + 2], color[2], t)
 }
 
-function sampleMetalPanelHeight(x, y, size, relief) {
-  const { edgeLine, detailLine } = metalPanelLineWidths(size)
-  let height = 0
-
-  const edgeDistance = Math.min(x, y, size - x, size - y)
-  height -= 0.28 * relief * lineFalloff(edgeDistance, edgeLine)
-  height -= 0.12 * relief * lineFalloff(Math.abs(x - size / 2), detailLine / 2)
-  height -= 0.12 * relief * lineFalloff(Math.abs(y - size / 2), detailLine / 2)
-
-  return height
-}
-
-function sampleTileGridHeight(x, y, size, relief) {
-  const seam = Math.max(2, size * 0.035)
-  const lines = [0, size / 2, size]
-  let height = 0
-  for (const line of lines) {
-    height -= 0.22 * relief * lineFalloff(Math.abs(x - line), seam / 2)
-    height -= 0.22 * relief * lineFalloff(Math.abs(y - line), seam / 2)
-  }
-  return height
-}
-
-function samplePlankHeight(x, y, size, relief, seed) {
-  const seam = Math.max(2, size * 0.02)
-  const boards = 4
-  let height = 0
-  for (let i = 1; i < boards; i += 1) {
-    const lineX = (size / boards) * i + (valueNoise(i, 0, 1, seed) - 0.5) * seam
-    height -= 0.2 * relief * lineFalloff(Math.abs(x - lineX), seam / 2)
-  }
-  return height
-}
-
-function sampleDiamondPlateHeight(x, y, size, relief) {
-  const step = Math.max(16, size / 5)
-  const line = Math.max(1, size * 0.01)
-  let height = 0
-
-  for (let gy = -size; gy <= size * 2; gy += step) {
-    for (let gx = -size; gx <= size * 2; gx += step) {
-      const dist = distanceToSegment(x, y, gx, gy, gx + step * 0.6, gy + step * 0.45)
-      height += 0.12 * relief * lineFalloff(dist, line * 2)
-    }
-  }
-
-  return height
-}
-
-function samplePatternHeight(pattern, x, y, size, relief, seed) {
-  switch (pattern) {
-    case 'metal_panels':
-      return sampleMetalPanelHeight(x, y, size, relief)
-    case 'tile_grid':
-      return sampleTileGridHeight(x, y, size, relief)
-    case 'planks':
-      return samplePlankHeight(x, y, size, relief, seed)
-    case 'diamond_plate':
-      return sampleDiamondPlateHeight(x, y, size, relief)
-    case 'rough_surface':
-      return sampleRoughSurfaceHeight(x, y, size, relief, seed)
-    case 'ribbed_panels':
-      return sampleRibbedPanelsHeight(x, size, relief)
-    case 'corrugated':
-      return sampleCorrugatedHeight(x, size, relief)
-    case 'longitudinal_stripes':
-      return sampleLongitudinalStripesHeight(x, size, relief)
-    case 'rivet_rings':
-      return sampleRivetRingsHeight(x, y, size, relief)
-    case 'hex_grid':
-      return sampleHexGridHeight(x, y, size, relief)
-    case 'offset_plates':
-      return sampleOffsetPlatesHeight(x, y, size, relief)
-    case 'concrete_formwork':
-      return sampleConcreteFormworkHeight(x, size, relief, seed)
-    case 'concrete_segments':
-      return sampleConcreteSegmentsHeight(x, y, size, relief)
-    case 'weld_seams':
-      return sampleWeldSeamsHeight(x, y, size, relief, seed)
-    default:
-      return 0
-  }
+function samplePatternHeight(pattern, x, y, size, relief) {
+  const importedSrc = IMPORTED_PATTERN_SRC[pattern]
+  if (!importedSrc) return 0
+  return sampleImportedPatternHeight(importedSrc, x, y, size, relief)
 }
 
 export function makeProceduralMaterialDescriptor(options) {
@@ -1005,7 +446,7 @@ export function sampleProceduralMaterialHeight(u, v, options) {
 
   let height = 0.5 + (base.height - 0.5) * relief
   height -= reveal * 0.035 * relief
-  height += samplePatternHeight(descriptor.pattern, x, y, size, relief, seed)
+  height += samplePatternHeight(descriptor.pattern, x, y, size, relief)
   height += (fractalNoise(x, y, size, `${seed}:real-dirt`) - 0.5) * dirt * relief * 0.035
 
   return height
@@ -1071,9 +512,8 @@ function applyWear(ctx, height, roughness, material, options, size, seed) {
         const i = (y * size + x) * 4
         const n = fractalNoise(x, y, size, `${seed}:rust-field`)
         const pores = hash2(x, y, `${seed}:rust-pores`)
-        const feature = patternAccumulationMask(options.pattern, x, y, size, seed)
         const openPaint = clamp((n - (0.7 - wear * 0.28)) / Math.max(0.08, wear * 0.55))
-        const rust = clamp((feature * 0.58 + openPaint * 0.72 + pores * 0.08 - 0.18) * wear)
+        const rust = clamp((openPaint * 0.72 + pores * 0.08 - 0.18) * wear)
         if (rust <= 0.01) continue
         mixPixel(data, i, mixColor([72, 28, 12], [185, 88, 30], pores), rust * 0.72)
         height[y * size + x] += rust * 0.03
@@ -1099,9 +539,8 @@ function applyDirt(ctx, height, roughness, options, size, seed) {
       const edge = lineFalloff(edgeDistance, size * 0.18)
       const field = fractalNoise(x, y, size, `${seed}:grime-field`)
       const patches = clamp((field - 0.36) / 0.48)
-      const feature = patternAccumulationMask(options.pattern, x, y, size, seed)
       const fine = hash2(x, y, `${seed}:dust-fine`)
-      const grime = clamp(dirt * (patches * 0.28 + edge * 0.2 + feature * 0.18 + (fine - 0.5) * 0.07))
+      const grime = clamp(dirt * (patches * 0.28 + edge * 0.2 + (fine - 0.5) * 0.07))
       if (grime <= 0.002) continue
       const dust = fine > 0.78
         ? [134, 124, 98]
@@ -1275,7 +714,7 @@ export function generateProceduralMaterialTexture(options) {
   }
 
   ctx.putImageData(image, 0, 0)
-  applyPattern(ctx, height, options, size, seed, material)
+  applyPattern(height, options, size)
   applyWear(ctx, height, roughness, material, options, size, seed)
   applyDirt(ctx, height, roughness, options, size, seed)
   applyEdgeRoughness(height, roughness, size)

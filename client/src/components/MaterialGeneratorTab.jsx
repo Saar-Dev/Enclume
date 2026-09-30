@@ -7,7 +7,7 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import {
   DEFAULT_PROCEDURAL_MATERIAL,
   PROCEDURAL_MATERIAL_PRESETS,
-  PROCEDURAL_PATTERN_PRESETS,
+  PROCEDURAL_PATTERN_GROUPS,
   generateProceduralMaterialTexture,
 } from '../lib/proceduralMaterials'
 
@@ -268,11 +268,18 @@ export default function MaterialGeneratorTab({
             <span style={S.fieldLabel}>{t('surfaceMaterialEditor.patternLabel')}</span>
             <select
               value={form.pattern}
-              onChange={e => updateForm({ pattern: e.target.value })}
+              onChange={e => {
+                const nextPattern = e.target.value
+                updateForm(nextPattern === 'none' ? { pattern: nextPattern } : { pattern: nextPattern, relief: 50 })
+              }}
               style={S.input}
             >
-              {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
-                <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+              {PROCEDURAL_PATTERN_GROUPS.map(({ group, patterns }) => (
+                <optgroup key={group} label={group}>
+                  {patterns.map(pattern => (
+                    <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>

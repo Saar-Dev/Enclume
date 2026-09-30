@@ -1403,6 +1403,111 @@ Saar a ouvert le panneau et listé 7 points concrets, panneau sous les yeux. Tra
 
 `npx eslint` (0 problème), JSON, `npm run build` propres. **Non testé : rien en navigateur.**
 
+## 14. Motifs importés — height maps réelles au lieu de motifs dessinés à la main (2026-09-30)
+
+Saar fournit 36 height maps (CC0, ambientCG et équivalents) réparties en 5 familles
+(metal/metal-tiles/concrete/plaster/plastic), 512px, dans `docs/PLANS/Motifs/` — dossier `SOURCE/`
+(source4k + source1k, 530 Mo) explicitement exclu, seules les versions 512px retenues (14 Mo).
+
+**`[CODÉ]`, `⚠️ clos partiel` — rien vu en navigateur.**
+
+- Fichiers copiés dans `client/public/textures/displacement/<metal|metal-tiles|concrete|plaster|
+  plastic>/` (assets statiques servis avec l'app, aucun passage par la base/MinIO — vérifié que
+  `texture-packs.js`/`voxel_textures` sert un système différent, textures de voxels, pas réutilisable
+  ici sans le dénaturer).
+- Nouveau module `client/src/lib/displacementMaps.js` : décode chaque PNG une fois (canvas → canal
+  rouge → `Float32Array` 0..1), cache mémoire par `src`, `sampleDisplacementMap(src, u, v)` tuilé
+  (wrap). Renvoie 0.5 (neutre) tant qu'un fichier n'est pas encore décodé.
+- **Chargement** : tous les motifs importés sont préchargés au chargement du module
+  `proceduralMaterials.js` (36 petits fichiers, même origine) plutôt que chargés à la demande avec un
+  mécanisme de rafraîchissement — plus simple, aucune modification de `SurfaceDungeonScene.jsx`
+  (2000+ lignes, cache de matériaux par descriptor jamais invalidé sans ça) nécessaire. Le cas
+  « relief plat parce que pas encore chargé » reste possible en théorie mais improbable en pratique.
+- 36 nouvelles entrées dans `PATTERN_PRESETS` (`proceduralMaterials.js`), chacune `{id, label, group,
+  src}` — préfixe `img_`, groupées par famille. Les 16 motifs procéduraux existants reçoivent
+  `group: 'Procédural'` pour la cohérence.
+- `samplePatternHeight`/`applyPattern` : nouveau branchement en tête (`IMPORTED_PATTERN_SRC[pattern]`)
+  qui échantillonne la vraie image au lieu du calcul procédural — recentré autour de 0 (`(brut - 0.5) *
+  0.5 * relief`) pour rester compatible avec le buffer de hauteur partagé (peinture/usure/crasse
+  continuent de s'appliquer par-dessus sans changement).
+- Liste « Motif » regroupée en `<optgroup>` (nouveau `PROCEDURAL_PATTERN_GROUPS`, calculé une fois) —
+  nécessaire dès qu'elle passe de 16 à 52 options. Appliqué aux deux consommateurs existants
+  (`SurfaceMaterialEditor.jsx`, `MaterialGeneratorTab.jsx`), pas seulement celui visé au départ.
+- `npx eslint` (0 problème), `node --test client/src/lib/surfaceData.test.mjs` (49/49, aucune
+  régression), `npm run build` propres.
+
+**Point réglé** : Saar a supprimé lui-même `docs/PLANS/Motifs/` (dont `SOURCE/`, 530 Mo) une fois les
+36 fichiers utiles vérifiés en place dans `client/public/`. Rien à commiter côté doc/plan pour ce
+dossier — il n'existe plus.
+
+### 14.1. Correctif de performance — chargement paresseux, décodage réduit (2026-09-30)
+
+Saar signale 3-4 secondes d'écran noir au chargement, après §14. **`[HYPOTHÈSE]` raisonnée, jamais
+mesurée avec un profileur** : le préchargement de §14 décodait les 36 fichiers d'un coup au chargement
+du module (`new Image()` + `ctx.getImageData()` en pleine résolution 512px) — une lecture de pixels
+pleine résolution bloque le fil principal, 36 fois d'affilée pouvant suffire à l'geler. Saar : « SI ET
+SEULEMENT SI ce n'est pas du bricolage » — refonte, pas un correctif local :
+
+- **Chargement paresseux** : plus de préchargement au chargement de l'app. `sampleDisplacementMap`
+  (`displacementMaps.js`) déclenche lui-même le chargement d'une source à son premier échantillonnage
+  réel, jamais avant — le coût devient proportionnel à ce qui est réellement affiché, pas au nombre
+  total de motifs au catalogue (36 aujourd'hui, autant demain si la liste grossit).
+- **Décodage réduit** : `createImageBitmap({resizeWidth/Height: 256, resizeQuality:'high'})` remplace
+  `new Image()` + lecture pleine résolution — le redimensionnement est déporté au navigateur (hors fil
+  principal sur la plupart des implémentations), et la lecture de pixels finale porte sur 256px, pas
+  512px (4× moins de données). 256 choisi avec marge sur les deux appelants réels de
+  `generateProceduralMaterialTexture` (128px fixe côté `SurfaceDungeonScene.jsx`, `tile_size` par
+  défaut 128 côté `MaterialGeneratorTab.jsx`) — pas un cache par taille demandée, aucun appelant
+  actuel n'en a besoin (`feedback_quality_architecture_first` : ne pas résoudre un besoin que
+  personne n'a exprimé).
+- **Problème réintroduit par le chargement paresseux, résolu proprement cette fois** : un motif
+  importé pas encore chargé au moment du bake produit un relief neutre (plat) — correct dans
+  l'instant, mais l'ancien design (préchargement massif) évitait d'avoir à corriger ça une fois le
+  fichier chargé. `proceduralMaterials.js` expose `isImportedPatternReady`/`onImportedPatternReady`
+  (le mapping motif → fichier reste encapsulé, `SurfaceDungeonScene.jsx` ne connaît que l'id du
+  motif) ; `SurfaceDungeonScene.jsx` : `proceduralMaterialAt` enregistre un callback quand un motif
+  n'était pas prêt au bake — au chargement réel, il retire l'entrée périmée du cache
+  (`proceduralSurfaceMaterialCache`) et prévient un registre d'écouteurs (`sceneRefreshListeners`,
+  module local à ce fichier) ; le composant racine `SurfaceDungeonScene` s'y abonne une fois
+  (`useState`/`useEffect`) et force un nouveau rendu de tout l'arbre à la notification — aucun des
+  composants enfants (`RoomFloorSurface` etc., 11 points d'appel, aucun `React.memo`, vérifié) n'a
+  besoin d'être touché individuellement.
+- `npx eslint` (0 problème), `node --test client/src/lib/surfaceData.test.mjs` (49/49), `npm run
+  build` propres. **Non mesuré : la durée réelle du gel avant/après** — seul Saar peut confirmer que
+  le délai a effectivement disparu ou nettement diminué.
+
+### 14.2. Retrait des motifs procéduraux, Relief à 50 % au choix d'un motif (2026-09-30)
+
+Saar, en testant §14.1 : « Mieux sur le point du préchargement... RELIEF devrait passer à 50 % dès
+qu'un motif est sélectionné. Les motifs procéduraux, on peut les dégager. »
+
+**`[CODÉ]`, `⚠️ clos partiel` — rien vu en navigateur.**
+
+- **Relief auto à 50 %** : `SurfaceMaterialEditor.jsx`/`MaterialGeneratorTab.jsx`, le `onChange` du
+  sélecteur Motif force `relief: 50` dès qu'un motif réel est choisi (pas au retour à « Aucun
+  motif », relief laissé tel quel dans ce sens) — sans ça, choisir un motif avec Relief à 0 (valeur
+  par défaut) ne montrait strictement rien, aucun signal que le motif s'était bien appliqué.
+- **Retrait des 15 motifs procéduraux** (Plaques rivetées, Dalles jointes, Planches, Tôle striée,
+  Surface rugueuse, Panneaux nervurés, Tôle ondulée, Bandes longitudinales, Anneaux boulonnés, Trame
+  hexagonale, Plaques superposées, Béton coffré, Béton segmenté, Plaques soudées, Peinture cloquée) —
+  les motifs importés (§14) les rendent obsolètes, c'était exactement leur défaut d'origine (dessinés
+  à la main, approximatifs). `none` reste (état « pas de relief », pas un motif à comparer).
+  Suppression complète, pas un simple retrait de la liste : les 15 fonctions `apply*`/`sample*`
+  dédiées (~440 lignes), `patternAccumulationMask` (n'avait plus de motif à reconnaître une fois les
+  3 patterns qu'elle ciblait retirés — ses deux appels dans `applyWear`/`applyDirt` simplifiés en
+  retirant le seul terme `feature` de leurs formules, pas de rustine de compat), et les helpers
+  devenus orphelins (`metalPanelLineWidths`, `lowerRect`, `strokeInsetRect`, `patternGrooveColor`,
+  `patternHighlightColor`, `METAL_PANEL_EDGE_WIDTH_FACTOR`) — trouvés via `eslint` (`no-unused-vars`),
+  pas par relecture manuelle exhaustive. `applyPattern`/`samplePatternHeight` réduites à leur seule
+  logique restante (juste la branche motif importé).
+- **Compatibilité arrière, non vérifiée** : une salle/mur déjà sauvegardé avec un de ces 15 ids de
+  motif retombera sur `PATTERN_PRESETS[0]` (`'none'`) au prochain rendu — relief silencieusement
+  perdu pour ce mur, pas de crash. Acceptable ici (fonctionnalité livrée dans cette même session,
+  aucune carte de Saar n'a eu le temps de s'appuyer dessus), mais **jamais vérifié en base** — si un
+  test en navigateur révèle un mur avec ce problème, ce sera la cause.
+- `npx eslint` (0 problème), `node --test client/src/lib/surfaceData.test.mjs` (49/49, aucune
+  régression), `npm run build` propre (taille du bundle en légère baisse, cohérent avec le retrait).
+
 ## Historique
 
 - **2026-09-30** — Après une relecture critique demandée par Saar sur l'ensemble du chantier : trouvé que le

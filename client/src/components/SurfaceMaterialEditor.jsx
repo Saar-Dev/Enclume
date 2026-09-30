@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_SURFACE_MATERIAL_PRESET,
   PROCEDURAL_MATERIAL_PRESETS,
-  PROCEDURAL_PATTERN_PRESETS,
+  PROCEDURAL_PATTERN_GROUPS,
 } from '../lib/proceduralMaterials.js'
 import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 
@@ -27,9 +27,22 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
         </label>
         <label style={S.field}>
           <span style={S.label}>{t('surfaceMaterialEditor.patternLabel')}</span>
-          <select value={material.pattern} onChange={event => patch({ pattern: event.target.value })} style={S.input}>
-            {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
-              <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+          <select
+            value={material.pattern}
+            onChange={event => {
+              const nextPattern = event.target.value
+              // Sélectionner un motif sans relief ne montre rien (Saar, 2026-09-30) — 50 % au choix
+              // d'un motif rend l'effet visible tout de suite, pas de réglage caché à deviner.
+              patch(nextPattern === 'none' ? { pattern: nextPattern } : { pattern: nextPattern, relief: 50 })
+            }}
+            style={S.input}
+          >
+            {PROCEDURAL_PATTERN_GROUPS.map(({ group, patterns }) => (
+              <optgroup key={group} label={group}>
+                {patterns.map(pattern => (
+                  <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
