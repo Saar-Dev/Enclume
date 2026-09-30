@@ -51,15 +51,25 @@ export function normalizedSurfaceMaterial(profile) {
 
 // ----- Fabrication de matériau procédural -----
 
+// Un round-trip salle -> outil -> salle (`roomToSurfaceToolPatch` puis réappel de cette fonction, ex.
+// à la simple sélection d'une salle dans Editor3D.jsx) refournit en `tool` le matériau déjà stocké de
+// la salle, sa seed déjà suffixée comprise. Sans cette garde, le suffixe se réempile à chaque appel
+// (`"seed:variant-2"` -> `"seed:variant-2:variant-2"` -> ...), jamais idempotent : nouveau bake à
+// chaque sélection (jamais de cache), et `applyRoomToolUpdate` voit un matériau "différent" alors que
+// rien n'a été édité — pousse une entrée d'annulation et une sauvegarde juste en sélectionnant une
+// salle. Bug vérifié le 2026-09-30, PLAN_WORLD_BUILDER_REWORK.md §16.13.
+const SEED_ALREADY_DERIVED_RE = /:(?:variant-[0-3]|fixed)$/
+
 export function makeSurfaceMaterial(tool, seed) {
   if (tool?.surfaceMaterialMode === 'texture') return null
   const preset = normalizeSurfaceMaterialPreset(tool)
-  const variantSeed = tool?.autoVariants === false
-    ? 'fixed'
-    : `variant-${hashString(seed) % 4}`
+  const baseSeed = preset.seed || DEFAULT_SURFACE_MATERIAL_PRESET.seed
+  const finalSeed = SEED_ALREADY_DERIVED_RE.test(baseSeed)
+    ? baseSeed
+    : `${baseSeed}:${tool?.autoVariants === false ? 'fixed' : `variant-${hashString(seed) % 4}`}`
   return makeProceduralMaterialDescriptor({
     ...preset,
-    seed: `${preset.seed || DEFAULT_SURFACE_MATERIAL_PRESET.seed}:${variantSeed}`,
+    seed: finalSeed,
   })
 }
 

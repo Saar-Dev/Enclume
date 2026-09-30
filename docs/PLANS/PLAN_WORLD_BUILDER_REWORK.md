@@ -2157,11 +2157,30 @@ cause du lag observé par Saar, qui touche toutes les salles). Script jetable, p
 (`slice(-49)`), de vraies modifications antérieures peuvent se faire éjecter de l'historique simplement
 en cliquant sur des salles pour les regarder. Pas seulement un problème de performance.
 
-**Pas corrigé** — cause racine claire (idempotence manquante de `makeSurfaceMaterial`/
-`materialOrTextureForTool` face à un round-trip salle → outil → salle), mais touche un fichier partagé
-par de nombreux appelants (création de salle, peinture de mur, murs, plafond…) ; mérite son propre plan
-avant code, pas un correctif improvisé en fin de chantier de décomposition. Décision de Saar à prendre :
-corriger maintenant (chantier séparé, ciblé) ou consigner pour plus tard.
+**Corrigé (2026-09-30)** — Saar délègue la décision technique (« relis les instructions » : pas de
+niveau technique pour trancher entre options, c'est à moi de décider l'architecture/le périmètre).
+Décision : corriger maintenant — cause confirmée par reproduction, pas une hypothèse ; conséquence
+réelle sur l'intégrité de l'historique, pas juste une lenteur ; correctif ciblé, une seule fonction.
+
+**Fix** : `makeSurfaceMaterial` (`client/src/lib/materialDecision.js`) rendu idempotent — si
+`preset.seed` porte déjà un suffixe `:variant-N`/`:fixed` (round-trip salle → outil → salle), il est
+réutilisé tel quel au lieu d'en recevoir un deuxième. Un seul point de correction couvre les 3 chemins
+d'appel (`materialOrTextureForTool` → création de salle ET mise à jour vivante ; `paintRoomWallEdges`/
+`paintRoomWallRoom` → peinture de mur), vérifiés un par un avant de conclure que le correctif était
+suffisant.
+
+**Vérifié** : reproduction Node avant/après (5 sélections consécutives) — seed stable
+(`"default-seed:variant-3"` à chaque fois, ne grossit plus), aucun rebake, aucune entrée d'annulation
+après la première sélection. Point résiduel identifié et écarté : la première sélection d'une salle
+neuve fixe encore son `label` (jamais initialisé à la création, `makeRoomFromSelection` ne le pose pas)
+— comportement préexistant, sans lien avec le bug signalé, ne rebake pas de matériau, se stabilise
+immédiatement (une seule fois par salle, jamais plus). 2 tests neufs dans `materialDecision.test.mjs`
+(idempotence avec/sans `autoVariants`) ; suite complète 83/83 (`surfaceData`, `surfaceTools/*`,
+`materialDecision`) ; `eslint`/`build` propres.
+
+**Hors périmètre, pas touché** : l'asymétrie de clamp `heightLevels` (6 vs 12, mentionnée plus haut) —
+distincte, jamais confirmée comme cause de lag réel (pas de salle >6 niveaux rencontrée), reste `[VÉRIFIÉ
+comme asymétrie]` mais `[INCONNU]` comme problème pratique — pas cadrée, pas corrigée.
 
 ## Historique
 

@@ -98,6 +98,23 @@ test('makeSurfaceMaterial — retourne un descripteur procedural-material', () =
   assert.strictEqual(result?.version, 1)
 })
 
+test('makeSurfaceMaterial — idempotent quand la seed porte déjà un suffixe de variante (round-trip salle -> outil -> salle, §16.13 PLAN_WORLD_BUILDER_REWORK.md)', () => {
+  const first = makeSurfaceMaterial({}, 'seed1')
+  // Round-trip : la seed déjà suffixée du premier résultat revient comme preset.seed (simule
+  // roomToSurfaceToolPatch réinjectant le matériau déjà stocké de la salle).
+  const second = makeSurfaceMaterial({ materialPreset: { seed: first.seed } }, 'seed1')
+  assert.strictEqual(second.seed, first.seed)
+  // Un deuxième round-trip (deuxième sélection consécutive) ne doit pas non plus rallonger la seed.
+  const third = makeSurfaceMaterial({ materialPreset: { seed: second.seed } }, 'seed1')
+  assert.strictEqual(third.seed, first.seed)
+})
+
+test('makeSurfaceMaterial — idempotent en mode autoVariants=false (suffixe "fixed")', () => {
+  const first = makeSurfaceMaterial({ autoVariants: false }, 'seed1')
+  const second = makeSurfaceMaterial({ autoVariants: false, materialPreset: { seed: first.seed } }, 'seed1')
+  assert.strictEqual(second.seed, first.seed)
+})
+
 test('materialOrTextureForTool — retourne un matériau procédural par défaut', () => {
   const result = materialOrTextureForTool({
     tool: {},
