@@ -2082,6 +2082,48 @@ passer aux 4 mini-chantiers du §15.2.
 `docs/PLANS/PLAN_PURGE_VOXEL.md` §7 (isolement du code voxel mort, pas une suppression) — pas ici, pour
 ne pas mélanger un lot de purge avec ce chantier de décomposition (règle explicite du §0 de ce plan).
 
+### 16.12. Dernier hook transverse — `useSurfaceDocument`, correction de l'hypothèse « 2-3 hooks séparés » du §16.2 (2026-09-30)
+
+Une fois le point 2 du §16.11 réglé ailleurs (`PLAN_PURGE_VOXEL.md` §7), lecture complète du reste
+avant de coder — même discipline qu'au §16.7. Le §16.2 proposait `useSurfaceUndoRedo` et une file de
+sauvegarde séparées ; en cartographiant précisément qui lit/écrit quoi, ce découpage ne tient pas :
+
+- `handleSurfaceDataChange` (annulation) appelle **directement** `saveSurfaceFireAndForget` (sauvegarde)
+  à chaque commit, et les deux partagent `surfaceDataRef`, `surfaceQueuedBaseRef` (base de résolution de
+  conflit) et `isSurfaceDirty`.
+- L'effet de rechargement du document (`battlemap.id`/`battlemap.surface_data` → `surfaceData`) touche
+  à la fois l'état d'annulation (`surfaceDataRef`) ET la base de conflit de la sauvegarde
+  (`surfaceQueuedBaseRef`) — un troisième point de couplage, pas seulement les deux prévus.
+
+Les séparer aurait exigé une interface artificielle entre deux hooks (qui appelle qui, qui possède quel
+ref) pour un gain nul — pas une vraie réduction de couplage, juste un déplacement de la complexité.
+**Correction retenue** : un seul hook, `client/src/lib/useSurfaceDocument.js` — nommage justifié par la
+doc React citée au §16.4 (« cas d'usage concret et nommable », ici : *le document Surface, avec son
+annulation et sa persistance*, pas trois abstractions génériques).
+
+- Contenu : `surfaceData`/`surfaceDataRef`, `surfaceSaveError`, la pile d'annulation/rétablissement
+  fusionnable (§12.10 pt 5) avec ses raccourcis clavier et la synchronisation des requêtes externes
+  (`surfaceUndoRequest`/`surfaceRedoRequest`, `onSurfaceUndoStateChange`/`onSurfaceRedoStateChange`), la
+  file de sauvegarde fire-and-forget avec suivi de révision et base de conflit, le rechargement du
+  document au changement de battlemap. Relocalisation strictement à l'identique — chaque bloc relu et
+  comparé ligne à ligne avant/après.
+- `handleSurfaceUndo`/`handleSurfaceRedo` sont retournés par le hook mais plus destructurés dans
+  `Editor3D.jsx` (leurs seuls appelants — clavier, requêtes externes — sont maintenant dans le hook
+  lui-même) ; `handleSurfaceDataChange` et `saveSurfaceFireAndForget` restent consommés par
+  `Editor3D.jsx` (effets d'arc de salle, profil d'élévation de mur, apparence de mur, mise à jour live
+  de l'outil Salle, timer d'auto-save, sauvegarde au démontage).
+- Même trouvaille d'outillage qu'au §16.10 (`react-hooks/set-state-in-effect`, désactivé ligne à ligne
+  avec justification) et qu'au §16.10 pour les refs (ajout de `surfaceDataRef` aux dépendances de
+  plusieurs `useEffect`/`useCallback` dans `Editor3D.jsx` — une ref est stable, ajout sans effet de
+  bord, juste pour qu'`eslint` ne signale plus une dépendance devenue « externe » au composant).
+- `Editor3D.jsx` : 1348 → 1178 lignes (`wc -l`). `useSurfaceDocument.js` : 227 lignes neuves.
+  `eslint`/`build` propres, `node --test` (67/67) inchangé (fichiers non touchés).
+
+**Le plus haut risque de tout ce chantier** — persistance de données, pas juste de l'UI. Tout ce qui
+touche `surfaceData` en session (poser/modifier une salle, un mur, un connecteur, une zone, peindre,
+annuler/rétablir, l'auto-save, la sauvegarde en quittant le mode édition) passe maintenant par ce hook.
+**Test navigateur explicitement demandé avant toute suite** — pas une formalité cette fois.
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux

@@ -7,10 +7,10 @@ import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
-import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import { useSurfacePanels } from '../lib/useSurfacePanels.js'
 import { useLegacyVoxelState } from '../legacyVoxel/useLegacyVoxelState.js'
+import { useSurfaceDocument } from '../lib/useSurfaceDocument.js'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import SurfaceRoomPanel from './SurfaceRoomPanel.jsx'
@@ -49,7 +49,6 @@ import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 // ─── Constantes — identiques à Canvas3D ──────────────────────────────────────
 const GRID_SIZE = 50
 
-const cloneSurfaceData = (data) => JSON.parse(JSON.stringify(data))
 const blueprintPlacementMode = (blueprint) => (
   blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
 )
@@ -771,61 +770,40 @@ export default function Editor3D({
   const { entities } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
-  const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
-  const [surfaceSaveError, setSurfaceSaveError] = useState(null)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
-  const isSurfaceDirty = useRef(false)
   const saveTimer = useRef(null)
-  const surfaceUndoStackRef = useRef([])
-  const surfaceRedoStackRef = useRef([])
-  const surfaceUndoMergeRef = useRef(null)
-  const surfaceSaveQueueRef = useRef(Promise.resolve())
-  const surfaceSaveRevisionRef = useRef(0)
-  const [surfaceUndoDepth, setSurfaceUndoDepth] = useState(0)
-  const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
-  const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
-  const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
-  const surfaceDataRef = useRef(surfaceData)
-  const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
   const processedWallElevationProfileActionRef = useRef(null)
-  useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
   const { voxels, voxelsRef, saveVoxelsFireAndForget } = useLegacyVoxelState(battlemap, battlemapRef, setBattlemap)
 
-  useEffect(() => {
-    const normalized = normalizeSurfaceData(battlemap?.surface_data)
-    surfaceQueuedBaseRef.current = cloneSurfaceData(normalized)
-    surfaceDataRef.current = normalized
-    setSurfaceData(normalized)
-    setSurfaceSaveError(null)
-  }, [battlemap?.id, battlemap?.surface_data])
+  const {
+    surfaceData,
+    surfaceDataRef,
+    surfaceSaveError,
+    handleSurfaceDataChange,
+    saveSurfaceFireAndForget,
+  } = useSurfaceDocument({
+    battlemap,
+    battlemapRef,
+    setBattlemap,
+    activeEditorTab,
+    surfaceUndoRequest,
+    surfaceRedoRequest,
+    onSurfaceUndoStateChange,
+    onSurfaceRedoStateChange,
+  })
 
   const {
     worldEffects,
     runtimeElevatorStates,
     refreshWorldEffects: refreshRuntimeEffects,
   } = useWorldRuntimeSync(battlemap?.id, socket)
-
-  useEffect(() => {
-    surfaceUndoStackRef.current = []
-    surfaceRedoStackRef.current = []
-    setSurfaceUndoDepth(0)
-    setSurfaceRedoDepth(0)
-  }, [battlemap?.id])
-
-  useEffect(() => {
-    onSurfaceUndoStateChange?.(surfaceUndoDepth > 0)
-  }, [onSurfaceUndoStateChange, surfaceUndoDepth])
-
-  useEffect(() => {
-    onSurfaceRedoStateChange?.(surfaceRedoDepth > 0)
-  }, [onSurfaceRedoStateChange, surfaceRedoDepth])
 
   // ─── Chargement voxel_textures — TOUTES les textures (palette complète) ──
   // Editor3D charge toutes les textures non-deprecated pour la palette,
@@ -895,57 +873,6 @@ export default function Editor3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blueprintIds])
 
-  const saveSurfaceFireAndForget = useCallback((currentSurfaceData) => {
-    const bm = battlemapRef.current
-    if (!isSurfaceDirty.current || !bm?.id) return
-    const battlemapId = bm.id
-    const revision = surfaceSaveRevisionRef.current + 1
-    surfaceSaveRevisionRef.current = revision
-
-    const baseSurfaceData = cloneSurfaceData(surfaceQueuedBaseRef.current)
-    surfaceQueuedBaseRef.current = cloneSurfaceData(currentSurfaceData)
-    surfaceSaveQueueRef.current = surfaceSaveQueueRef.current
-      .catch(() => {})
-      .then(async () => {
-        const currentBattlemap = battlemapRef.current
-        return persistSurfaceDocument({
-          apiBaseUrl: import.meta.env.VITE_API_URL,
-          battlemapId,
-          surfaceData: currentSurfaceData,
-          expectedRevision: currentBattlemap?.surface_revision,
-          baseSurfaceData,
-        })
-      })
-      .then(({ data, remoteBattlemap }) => {
-        if (remoteBattlemap) {
-          battlemapRef.current = {
-            ...battlemapRef.current,
-            world_revision: remoteBattlemap.world_revision,
-            surface_revision: remoteBattlemap.surface_revision,
-          }
-        }
-        const isLatest = revision === surfaceSaveRevisionRef.current
-        if (isLatest) surfaceQueuedBaseRef.current = cloneSurfaceData(data.surface_data)
-        const nextBattlemap = {
-          ...battlemapRef.current,
-          world_revision: Math.max(
-            Number(battlemapRef.current?.world_revision || 0),
-            Number(data.world_revision || 0),
-          ),
-          surface_revision: data.surface_revision,
-          ...(isLatest ? { surface_data: data.surface_data } : {}),
-        }
-        battlemapRef.current = nextBattlemap
-        setBattlemap(nextBattlemap)
-        setSurfaceSaveError(null)
-        if (isLatest) isSurfaceDirty.current = false
-      })
-      .catch(err => {
-        setSurfaceSaveError(err.message || 'La sauvegarde Surface a échoué.')
-        console.error('[Editor3D] Sauvegarde surfaces échouée :', err)
-      })
-  }, [setBattlemap])
-
   // ─── save() async — pour les saves explicites futures (undo/redo) ────────
   // Payload format : { "x:y:z": { tex, geo, r } } — P_voxel_save_payload
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
@@ -955,7 +882,7 @@ export default function Editor3D({
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }, 60000)
     return () => clearInterval(saveTimer.current)
-  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef])
+  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef, surfaceDataRef])
 
   // ─── Save au démontage (toggle retour mode jeu) ──────────────────────────
   // Utilise saveVoxelsFireAndForget — le cleanup useEffect ne peut pas await une Promise.
@@ -966,35 +893,7 @@ export default function Editor3D({
       saveVoxelsFireAndForget(voxelsRef.current)
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }
-  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef])
-
-  // `mergeKey` optionnel (§12.10 point 5, PLAN_WORLD_BUILDER_REWORK.md) : reprend `updatable` +
-  // fenêtre de fusion de `History.js` (three.js editor) — un curseur glissé en continu (matériau,
-  // profil d'élévation) ne doit produire qu'UNE entrée d'annulation, pas une par tick. Même
-  // `mergeKey` dans les 500 ms du push précédent → pas de nouvelle entrée (l'état d'avant-geste
-  // reste en haut de pile) ; sans `mergeKey`, comportement inchangé pour tous les autres appelants.
-  const handleSurfaceDataChange = useCallback((nextSurfaceData, mergeKey = null) => {
-    if (nextSurfaceData === surfaceDataRef.current) return
-    const now = Date.now()
-    const previousMerge = surfaceUndoMergeRef.current
-    const canMerge = mergeKey != null
-      && previousMerge?.key === mergeKey
-      && now - previousMerge.timestamp < 500
-    if (!canMerge) {
-      surfaceUndoStackRef.current = [
-        ...surfaceUndoStackRef.current.slice(-49),
-        cloneSurfaceData(surfaceDataRef.current),
-      ]
-      surfaceRedoStackRef.current = []
-      setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
-      setSurfaceRedoDepth(0)
-    }
-    surfaceUndoMergeRef.current = mergeKey != null ? { key: mergeKey, timestamp: now } : null
-    surfaceDataRef.current = nextSurfaceData
-    setSurfaceData(nextSurfaceData)
-    isSurfaceDirty.current = true
-    saveSurfaceFireAndForget(nextSurfaceData)
-  }, [saveSurfaceFireAndForget])
+  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef, surfaceDataRef])
 
   const handleRuntimeEffectCreate = useCallback(async input => {
     if (!battlemap?.id) return
@@ -1071,7 +970,7 @@ export default function Editor3D({
       roomArcAction: null,
       roomArcError: null,
     })
-  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
 
   useEffect(() => {
     const actionId = surfaceTool?.wallElevationProfileActionId
@@ -1094,7 +993,7 @@ export default function Editor3D({
       wallElevationProfileActionId: null,
       roomArcError: result.error || null,
     })
-  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
 
   const handleSurfaceWallAppearanceChange = useCallback(appearance => {
     const result = applyRoomWallAppearance(
@@ -1112,7 +1011,7 @@ export default function Editor3D({
     if (result.error) {
       onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
     }
-  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
 
   useEffect(() => {
     const roomId = surfaceTool?.selectedRoomId
@@ -1128,76 +1027,7 @@ export default function Editor3D({
     )
     if (nextSurfaceData === surfaceDataRef.current) return
     handleSurfaceDataChange(nextSurfaceData)
-  }, [surfaceTool, activeMaterial, availableBlocks, handleSurfaceDataChange])
-
-  const handleSurfaceUndo = useCallback(() => {
-    const previousSurfaceData = surfaceUndoStackRef.current.pop()
-    if (!previousSurfaceData) return false
-    surfaceRedoStackRef.current = [
-      ...surfaceRedoStackRef.current.slice(-49),
-      cloneSurfaceData(surfaceDataRef.current),
-    ]
-    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
-    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
-    surfaceDataRef.current = previousSurfaceData
-    setSurfaceData(previousSurfaceData)
-    isSurfaceDirty.current = true
-    saveSurfaceFireAndForget(previousSurfaceData)
-    return true
-  }, [saveSurfaceFireAndForget])
-
-  const handleSurfaceRedo = useCallback(() => {
-    const nextSurfaceData = surfaceRedoStackRef.current.pop()
-    if (!nextSurfaceData) return false
-    surfaceUndoStackRef.current = [
-      ...surfaceUndoStackRef.current.slice(-49),
-      cloneSurfaceData(surfaceDataRef.current),
-    ]
-    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
-    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
-    surfaceDataRef.current = nextSurfaceData
-    setSurfaceData(nextSurfaceData)
-    isSurfaceDirty.current = true
-    saveSurfaceFireAndForget(nextSurfaceData)
-    return true
-  }, [saveSurfaceFireAndForget])
-
-  useEffect(() => {
-    if (surfaceUndoRequest === surfaceUndoRequestRef.current) return
-    surfaceUndoRequestRef.current = surfaceUndoRequest
-    handleSurfaceUndo()
-  }, [surfaceUndoRequest, handleSurfaceUndo])
-
-  useEffect(() => {
-    if (surfaceRedoRequest === surfaceRedoRequestRef.current) return
-    surfaceRedoRequestRef.current = surfaceRedoRequest
-    handleSurfaceRedo()
-  }, [surfaceRedoRequest, handleSurfaceRedo])
-
-  useEffect(() => {
-    const handleUndoKeyDown = (e) => {
-      if (activeEditorTab === 'entity') return
-      const target = e.target
-      const isTextInput = target?.tagName === 'INPUT'
-        || target?.tagName === 'TEXTAREA'
-        || target?.tagName === 'SELECT'
-        || target?.isContentEditable
-      if (isTextInput) return
-
-      const key = e.key.toLowerCase()
-      const isModifier = e.ctrlKey || e.metaKey
-      const isUndo = isModifier && !e.shiftKey && key === 'z'
-      const isRedo = isModifier && (key === 'y' || (e.shiftKey && key === 'z'))
-      if (!isUndo && !isRedo) return
-
-      const didChange = isRedo ? handleSurfaceRedo() : handleSurfaceUndo()
-      if (!didChange) return
-      e.preventDefault()
-    }
-
-    document.addEventListener('keydown', handleUndoKeyDown)
-    return () => document.removeEventListener('keydown', handleUndoKeyDown)
-  }, [activeEditorTab, handleSurfaceRedo, handleSurfaceUndo])
+  }, [surfaceTool, activeMaterial, availableBlocks, handleSurfaceDataChange, surfaceDataRef])
 
   // ─── Échap — sortir d'un outil de pose/dessin ────────────────────────────
   // Tous les outils de pose (Salle, Mur, Connecteurs, Peindre, Remodeler, Zone d'effet…) restent
