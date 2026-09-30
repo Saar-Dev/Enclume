@@ -224,6 +224,28 @@ test('la v12 valide l apparence interieure persistante par mur', () => {
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 
+test('la v12 valide patternScale (outil ÉCHELLE des motifs importés, §18 PLAN_WORLD_BUILDER_REWORK.md)', () => {
+  const surface = surfaceFixture()
+  surface.version = 12
+  surface.rooms['room:legacy'].wallAppearanceProfiles = [{
+    id: 'wall-appearance:test',
+    edgeKeys: ['edge:0:0|1:0'],
+    interiorTex: 'wall-inside',
+    interiorMaterial: {
+      material: 'steel', paint: '#aabbcc', pattern: 'metal_panels',
+      wear: 0, dirt: 12, relief: 35, realRelief: true, seed: 'test',
+      patternScale: 2,
+    },
+  }]
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.rooms['room:legacy'].wallAppearanceProfiles[0].interiorMaterial.patternScale = 12
+  assert.equal(validateSurfaceData(surface).valid, false)
+
+  surface.rooms['room:legacy'].wallAppearanceProfiles[0].interiorMaterial.patternScale = 0
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
 test('la v12 refuse les anciennes faces d apparence des salles', () => {
   const surface = surfaceFixture()
   surface.version = 12

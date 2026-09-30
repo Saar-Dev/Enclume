@@ -5,6 +5,8 @@ MATERIAUX.md — Système de matériaux de surface (état actuel, v2)
     OBSOLETE_ROOM_APPEARANCE_FIELDS, table pbrForProcedural (§4.3) et absence réelle d'invalidation du
     cache procédural (§4.4) reconfirmés ligne à ligne contre le code. Doc d'une fiabilité remarquable —
     aucune correction de fond nécessaire au-delà du chaînon déjà réparé le même jour (§2.1/§5.2).
+    Mis à jour 2026-09-30 (PLAN_WORLD_BUILDER_REWORK.md §18-19) : champ patternScale, correction de la
+    clé de cache procédural, correction de l'autorité sur wallInteriorTex/wallInteriorMaterial (§2).
 
     Statut : Document de référence décrivant l'existant.
     Lire pour : tout travail sur l'apparence des murs, sols, plafonds et le générateur procédural.
@@ -37,13 +39,23 @@ SurfaceEditorScene / applyRoomSelection / applyFloorSelection
         ↓
 materialOrTextureForTool (décision procédural vs texture)
         ↓
-room.floorTex / room.floorMaterial / room.wallInteriorTex / room.wallInteriorMaterial
+room.floorTex / room.floorMaterial / room.ceilingTex / room.ceilingMaterial
         ↓
 SurfaceDungeonScene.jsx (WallSegment, RoomSlab, FloorTile, CeilingTile)
         ↓
 surfaceMaterialAt (procédural) ou materialAt (texture)
         ↓
 THREE.MeshStandardMaterial
+
+**Corrigé (2026-09-30, `PLAN_WORLD_BUILDER_REWORK.md` §19)** : `room.wallInteriorTex`/
+`wallInteriorMaterial` NE PASSENT PLUS par `applyRoomToolUpdate` (qui ne recalcule plus que sol/
+plafond, en continu tant qu'une salle reste sélectionnée). Le mur a deux autres autorités exclusives :
+`makeRoomFromSelection` fixe le défaut à la création de la salle ; `applyRoomWallAppearance`
+(panneau flottant Mur, § « Interface utilisateur » ci-dessous) et `paintRoomWallRoom`/
+`paintRoomWallEdges` (outil Peindre) l'édite ensuite — les deux appellent en réalité la même fonction.
+`applyRoomToolUpdate` recalculait autrefois aussi un wallInterior depuis un champ que plus aucune
+interface n'écrivait (`tool.materialProfiles.wallInterior`) et l'écrasait en permanence avec la
+valeur par défaut, par-dessus toute vraie couleur posée — deux autorités sur la même donnée, corrigé.
 
 [VÉRIFIÉ] — Editor3D.jsx (passage d'activeMaterial aux scènes), surfaceData.js (fonctions applyRoomSelection, applyRoomToolUpdate, materialOrTextureForTool), SurfaceDungeonScene.jsx (rendu).
 2.1 Propagation de la palette aux outils de surface
@@ -86,6 +98,8 @@ Les panneaux d'édition (SurfaceRoomPanel.jsx, SurfaceWallPanel.jsx) exposent un
 
     Relief réel (realRelief) : booléen, détermine si le relief est géométrique (displacement) ou via une normal map
 
+    Échelle du motif (patternScale, §18 PLAN_WORLD_BUILDER_REWORK.md, 2026-09-30) : 0,25× à 8×, indépendante de la résolution du fichier source. Divise u,v avant l'échantillonnage de la height map importée (`sampleDisplacementMap` tuile déjà en modulo) — ×N plus grand fait apparaître le motif plus grand (moins de répétitions visibles sur la tuile), ×N plus petit le fait paraître plus dense.
+
 Les valeurs par défaut pour une nouvelle salle sont définies dans DEFAULT_SURFACE_MATERIAL_PRESET :
 Champ	Valeur par défaut
 material	'steel'
@@ -96,6 +110,7 @@ dirt	0
 relief	0
 realRelief	true
 seed	'enclume'
+patternScale	1
 
 [VÉRIFIÉ] — proceduralMaterials.js, constante DEFAULT_SURFACE_MATERIAL_PRESET.
 
@@ -116,6 +131,7 @@ relief	number	0	Intensité du relief (0-100)
 realRelief	boolean	true	Relief géométrique ou normal map
 seed	string	'enclume'	Graine aléatoire pour la variation
 size	number	128	Taille du canvas en pixels
+patternScale	number	1	Échelle du motif importé (0,25-8), §18 PLAN_WORLD_BUILDER_REWORK.md
 
 [VÉRIFIÉ] — proceduralMaterials.js, fonction makeProceduralMaterialDescriptor.
 4.2 Pipeline
@@ -157,7 +173,12 @@ default	0.72	0.08
 [VÉRIFIÉ] — SurfaceDungeonScene.jsx, fonctions pbrForProcedural et proceduralMaterialAt.
 4.4 Cache
 
-Les matériaux générés sont mis en cache dans proceduralSurfaceMaterialCache, indexés par une clé JSON contenant tous les paramètres du descripteur. Un cache séparé proceduralPreviewMaterialCache existe pour les aperçus (sans relief ni détails).
+Les matériaux générés sont mis en cache dans proceduralSurfaceMaterialCache, indexés par une clé JSON
+contenant tous les paramètres du descripteur — **corrigé 2026-09-30 (§18 PLAN_WORLD_BUILDER_REWORK.md)** :
+la clé sérialise désormais l'objet descripteur entier (`JSON.stringify(descriptor)`) plutôt qu'une
+liste de champs recopiée à la main, pour qu'un champ ajouté au descripteur à l'avenir (comme
+`patternScale` l'a été ce jour-là) ne reste jamais invisible à cette clé — même famille de bug que
+§16.13 (seed non idempotente). Un cache séparé proceduralPreviewMaterialCache existe pour les aperçus (sans relief ni détails) et garde sa propre liste de champs (matière/peinture/motif seulement, l'aperçu n'a pas de relief).
 
 Caractéristiques importantes du cache :
 
@@ -211,7 +232,7 @@ wallInteriorMaterial	object	Matériau procédural des murs
 wallAppearanceProfiles[].interiorTex	string	Texture par groupe de murs
 wallAppearanceProfiles[].interiorMaterial	object	Matériau par groupe de murs
 
-Les matériaux procéduraux contiennent les champs : material, paint, pattern, wear, dirt, relief, realRelief, seed.
+Les matériaux procéduraux contiennent les champs : material, paint, pattern, wear, dirt, relief, realRelief, seed, patternScale.
 
 [VÉRIFIÉ] — surfaceDocument.js, fonction validateFeature (collection rooms).
 6.2 Validation serveur

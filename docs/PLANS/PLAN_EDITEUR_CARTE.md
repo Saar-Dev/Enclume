@@ -118,7 +118,18 @@ sélection déformé : **codés, testés, validés en jeu** sur les 8 types de p
 combat) est un sujet moteur monde/collision, pas un sujet d'éditeur — suivi dans `PLAN_PORTES.md` §9, hors de ce
 document désormais (§0).
 
-### Phase 6 — Décomposition de la coquille d'interaction en un fichier par responsabilité (`PLAN_WORLD_BUILDER_REWORK.md` §11) — cadrage fait, code pas commencé
+### Phase 6 — Décomposition de la coquille d'interaction en un fichier par responsabilité (`PLAN_WORLD_BUILDER_REWORK.md` §11) — CLOS (2026-09-30)
+
+**Exécuté et poussé après le cadrage ci-dessous, même journée** : `SurfaceEditorScene.jsx` (1550→958
+lignes, §11.7-11.14), `SurfaceEditorPanel.jsx` (1341→791 lignes, §16.5-16.6) et `Editor3D.jsx`
+(1616→1178 lignes, §16.7-16.12) décomposés en un fichier par responsabilité, comportement vérifié
+identique à chaque étape (tests croisés, `eslint`/`build` propres). Un bug réel trouvé et corrigé en
+route (§16.13, seed de matériau non idempotente). **Puis, dans la foulée, mini-chantiers du §15.2 —
+échelle-sur-échelle (§17), outil ÉCHELLE des motifs importés (§18), panneau flottant Mur réparé — deux
+causes racines (§19/§21)** : tous confirmés fonctionnels en jeu par Saar. Détail complet :
+`PLAN_WORLD_BUILDER_REWORK.md` §16-21. Reste ouvert, hors de cette phase : §20 (compileSurfaceWorld
+bloquant, son propre cadrage), 2 mini-chantiers jamais cadrés (miniatures, nuancier), Lot 2 de la
+purge voxel (`PLAN_PURGE_VOXEL.md`).
 
 **`[TRANCHÉ PAR SAAR]` (2026-09-30) : la stratégie strangler fig proposée le 2026-09-29 (reconstruire à côté,
 garder l'ancien) est abandonnée** (« Je confirme, pas de strangler fig »). Constat qui a motivé l'abandon :
@@ -175,6 +186,12 @@ la Phase 2 (refactor) comme point de départ. Depuis, Saar l'a explicitement rep
 §8, « quand on saura ce dont on a besoin réellement »), et la Phase 6 (§1 ci-dessus) absorbe maintenant cette dette
 dans une reconstruction plutôt qu'un refactor sur place. Cet ordre 1-5 n'est donc plus la recommandation active pour
 la Phase 2 spécifiquement ; à retrier une fois le cadrage de la Phase 6 avancé.
+
+**Note 2026-09-30** : la Phase 6 est désormais CLOSE (§1 ci-dessus), pas seulement cadrée — cet ordre 1-5 est donc
+entièrement dépassé (Phases 2/6 traitées, 1c/Plan B livré puis mis en pause, §9). Ce qui reste réellement ouvert
+côté éditeur : Phase 1 (peinture de mur, EN PAUSE, interdiction de correctif ponctuel), Phase 3 (matériaux, non
+urgent), Phase 4 (décals, bloqué en partie), plus le §20 (perf serveur) et les 2 mini-chantiers non cadrés du §15.2
+— aucun ordre de reprise tranché entre eux, à faire si ce document est repris.
 
 ## 3. Portes de décision (points de non-retour, propres à l'éditeur)
 
@@ -237,10 +254,22 @@ la Phase 2 spécifiquement ; à retrier une fois le cadrage de la Phase 6 avanc�
 | 1 (forme des salles) + 3 (R1) | `enclume-cb` — Saar directement, session non lancée par cette orchestration | Rapport de fin de session (2026-09-27), 3 commits poussés (`165be2b`, `8962c8c`, `78159ea`) : Tier A, Plan A codé et validé, R1 avancé. |
 | 1c (Plan B) | agent « forme des salles » (META EDITEUR) | 2026-09-29 : peindre/effacer des cases validé en jeu par Saar (clos). Peinture de mur (Lot A), nouvelle conversation le même jour, contre-diagnostic indépendant (`PLAN_WORLD_BUILDER_REWORK.md` §10/10e) : garde-fou porte, autorité unique `interiorTex`, sélection de mur qui s'accumulait + occlusion caméra en édition — trouvés et corrigés. **Validé en jeu par Saar** (« Résolution du problème des murs non modifiables. Bien joué »), **commité** (`72e15ab`, 13 fichiers). Restent ouverts : flux Sélection→salle→Peindre, « Ajouter une salle » qui ne reste pas actif. |
 | 5 (connecteurs) | `PORTES` | Clos pour ce périmètre (`1ea1150`, `ec5ef82`) — voir §0 pour ce qui reste hors de ce document. |
-| 6 (décomposition coquille d'interaction) | Cette conversation (2026-09-30) | Strangler fig abandonné, confirmé par Saar. Cadrage réel fait : inventaire factuel complet des 12 modes (agent dédié, vérifié à la main sur 2 points forts), moteur commun + outils identifiés (patron tldraw `StateNode`), 3 bugs trouvés (mode `ceiling` mort, double-aperçu connecteur, erreurs FR codées en dur), ordre de migration retenu. Rien codé. |
+| 6 (décomposition coquille d'interaction) | Conversation suivante, même journée (2026-09-30) | **CLOS et poussé.** Décomposition exécutée (`SurfaceEditorScene.jsx`/`SurfaceEditorPanel.jsx`/`Editor3D.jsx`, §11-16), bug seed non idempotente corrigé (§16.13), puis mini-chantiers §15.2 : échelle-sur-échelle (§17), outil ÉCHELLE motif (§18), panneau flottant Mur — deux causes racines (§19/§21). Tout validé en jeu par Saar. Reste ouvert : §20 (perf serveur, pas cadré), 2 mini-chantiers non cadrés (miniatures, nuancier). |
 
 ## Historique
 
+- **2026-09-30** — Phase 6 CLOSE : la décomposition cadrée le même jour (paragraphe suivant) a été exécutée et
+  poussée (`SurfaceEditorScene.jsx`/`SurfaceEditorPanel.jsx`/`Editor3D.jsx`), comportement vérifié identique à
+  chaque étape. Un bug réel trouvé et corrigé en route (§16.13, seed de matériau non idempotente — sélectionner
+  une salle rebakait son matériau et polluait la pile d'annulation). **Puis, mini-chantiers du §15.2 repris et
+  clos dans la foulée** : échelle-sur-échelle (§17, `connectorToLevel` ne suivait pas l'étage affiché), outil
+  ÉCHELLE des motifs importés (§18, `patternScale`, clé de cache durcie au passage), panneau flottant Mur
+  totalement bloqué — deux causes racines trouvées par script de reproduction puis trace console, pas par
+  hypothèse (§19 : `applyRoomToolUpdate` écrasait la couleur des murs en permanence, deux autorités sur la même
+  donnée ; §21 : un garde-fou porte copié depuis l'élévation/l'arc bloquait à tort toute apparence de mur).
+  Tout confirmé fonctionnel en jeu par Saar. Reste ouvert, hors de cette phase : §20 (`compileSurfaceWorld`
+  bloque le serveur ~600-700ms par sauvegarde, mesuré, son propre cadrage avant correctif), 2 mini-chantiers du
+  §15.2 jamais cadrés (miniatures Matière/Motif, nuancier custom), Lot 2 de la purge voxel.
 - **2026-09-30** — Phase 6 : strangler fig abandonné, confirmé par Saar (« Je confirme, pas de strangler fig »).
   Constat déclencheur : aucune coquille séparée n'a jamais existé, tout a été codé en place depuis le 2026-09-29 —
   donc plus rien à « garder à côté ». Phase 6 fusionne de fait avec la Phase 2 (2a) ci-dessus. Cadrage réel fait

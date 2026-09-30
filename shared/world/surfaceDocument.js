@@ -127,6 +127,15 @@ function validateWallAppearanceMaterial(material, path, errors) {
   if (material.realRelief != null && typeof material.realRelief !== 'boolean') {
     errors.push(`${path}.realRelief doit être un booléen`)
   }
+  // Échelle du motif importé (§18, PLAN_WORLD_BUILDER_REWORK.md) — même plage que le curseur de
+  // SurfaceMaterialEditor.jsx (0,25× à 8×) ; une valeur absente reste tolérée (repli côté client à 1×,
+  // makeProceduralMaterialDescriptor).
+  if (material.patternScale != null) {
+    const value = Number(material.patternScale)
+    if (!Number.isFinite(value) || value < 0.25 || value > 8) {
+      errors.push(`${path}.patternScale doit être compris entre 0,25 et 8`)
+    }
+  }
 }
 
 function validateRoomVerticalProfile(profile, room, path, errors) {

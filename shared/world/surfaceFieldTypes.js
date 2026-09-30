@@ -27,6 +27,7 @@ export const STRICT_TYPE_CODES = Object.freeze(['wrong_type', 'not_object'])
 
 const MATERIAL = Object.freeze({
   material: S, paint: S, pattern: S, seed: S, wear: N, dirt: N, relief: N, realRelief: B,
+  patternScale: N,
 })
 
 const ROOM = Object.freeze({

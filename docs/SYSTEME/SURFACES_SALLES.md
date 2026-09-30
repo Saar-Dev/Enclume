@@ -247,8 +247,13 @@ propriétaires d'affichage et de collision du morceau qu'elles traversent.
   toutes les hauteurs, y compris entre le bas et le haut du profil ;
 - arrondir horizontalement un mur déjà profilé conserve ses `sourceEdgeKeys`, son profil vertical et
   ses raccords. Les deux transformations peuvent donc être appliquées dans n'importe quel ordre ;
-- une porte rigide déjà ancrée bloque la modification du profil vertical de son mur. Elle doit être
-  déplacée ou supprimée ; le moteur ne décale jamais silencieusement l'ouverture et son collider.
+- une porte rigide déjà ancrée bloque la modification du profil vertical de son mur (élévation, arc),
+  jamais sa seule apparence (couleur/matière/motif). Élévation et arc déplacent réellement le mur et
+  peuvent désaligner une porte posée dessus ; peindre ne touche que `wallAppearanceProfiles`/
+  `interiorMaterial`, jamais la géométrie — aucune raison de bloquer là (corrigé le 2026-09-30, un
+  garde-fou copié par cohérence de façade bloquait toute apparence sur une salle ayant une porte,
+  quel que soit le mur peint, `PLAN_WORLD_BUILDER_REWORK.md` §21). Le moteur ne décale jamais
+  silencieusement l'ouverture et son collider quand la géométrie change réellement.
 
 ## Salles qui se chevauchent ou se touchent
 
