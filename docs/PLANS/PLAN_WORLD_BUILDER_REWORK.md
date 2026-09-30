@@ -2124,6 +2124,45 @@ touche `surfaceData` en session (poser/modifier une salle, un mur, un connecteur
 annuler/rétablir, l'auto-save, la sauvegarde en quittant le mode édition) passe maintenant par ce hook.
 **Test navigateur explicitement demandé avant toute suite** — pas une formalité cette fois.
 
+### 16.13. Bug réel trouvé et VÉRIFIÉ (reproduction Node, pas une hypothèse) — sélectionner une salle la fait rebaker et pollue l'annulation (2026-09-30)
+
+Saar signale le même lag connu (bake de matériau) mais cette fois **à la simple sélection d'une salle**,
+pas seulement en la peignant. Vérifié par un script Node isolé (`makeRoomFromSelection` →
+`roomToSurfaceToolPatch` → `applyRoomToolUpdate`, round-trip complet, aucune UI/navigateur nécessaire) :
+**ce n'est pas juste le même mécanisme de lag, c'est un vrai bug, plus grave qu'une lenteur.**
+
+**Mécanisme confirmé** : `roomToSurfaceToolPatch(room)` copie le matériau déjà stocké de la salle
+(`profileOrDefault(room.floorMaterial)`), seed déjà présente et déjà suffixée (ex. `"default-seed:
+variant-3"`) comprise, dans `tool.materialProfiles.floor.seed`. Quand la sélection déclenche l'effet de
+mise à jour vivante de l'outil Salle dans `Editor3D.jsx` (mode reste `'select'`, pas exclu de cet effet),
+`applyRoomToolUpdate` rappelle `makeSurfaceMaterial(tool, seed)`, qui **rajoute un suffixe** :
+`variant-${hash(...)%4}` par-dessus une seed déjà suffixée → `"default-seed:variant-3:variant-3"`. Le
+descriptor change donc à CHAQUE sélection (jamais idempotent), ce qui :
+1. force un nouveau bake de texture procédurale (le lag observé) — le cache 4-panier n'aide en rien, la
+   clé grossit et change à chaque fois, jamais de réutilisation ;
+2. rend `JSON.stringify(updated) !== JSON.stringify(room)` → `handleSurfaceDataChange` commite pour de
+   vrai : **pousse une entrée d'annulation et déclenche une sauvegarde réseau, uniquement en sélectionnant
+   une salle, sans qu'aucune édition n'ait eu lieu** ;
+3. la seed grossit sans fin (`:variant-3:variant-3:variant-3…`) à chaque sélection successive de la même
+   salle — reproduit avec 5 sélections d'affilée dans le script de test, jamais stable.
+
+`[VÉRIFIÉ]` reproduit sur `heightLevels` 1/2/6/8/12 (le mécanisme est indépendant de la taille de la
+salle, contrairement à une première hypothèse envisagée puis écartée sur l'asymétrie de clamp
+`getRoomHeightLevels` (max 12) vs `getToolRoomHeightLevels` (max 6) — cette asymétrie existe aussi
+`[VÉRIFIÉ]` et écrase silencieusement `heightLevels` à 6 pour une salle plus haute, mais n'est pas la
+cause du lag observé par Saar, qui touche toutes les salles). Script jetable, pas conservé dans le dépôt.
+
+**Conséquence au-delà de la lenteur** : la pile d'annulation se remplit d'entrées « fantômes »
+(identiques visuellement, juste la seed qui change) à chaque sélection — sur la limite de 50 entrées
+(`slice(-49)`), de vraies modifications antérieures peuvent se faire éjecter de l'historique simplement
+en cliquant sur des salles pour les regarder. Pas seulement un problème de performance.
+
+**Pas corrigé** — cause racine claire (idempotence manquante de `makeSurfaceMaterial`/
+`materialOrTextureForTool` face à un round-trip salle → outil → salle), mais touche un fichier partagé
+par de nombreux appelants (création de salle, peinture de mur, murs, plafond…) ; mérite son propre plan
+avant code, pas un correctif improvisé en fin de chantier de décomposition. Décision de Saar à prendre :
+corriger maintenant (chantier séparé, ciblé) ou consigner pour plus tard.
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
