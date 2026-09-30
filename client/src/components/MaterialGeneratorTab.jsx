@@ -88,7 +88,7 @@ function Preview3D({ preview }) {
   )
 }
 
-function SliderField({ label, value, onChange, min = 0, max = 100, suffix = '%' }) {
+function SliderField({ label, value, onChange, min = 0, max = 100, step = 1, suffix = '%' }) {
   return (
     <label style={S.sliderField}>
       <span style={S.fieldLabel}>{label}</span>
@@ -97,6 +97,7 @@ function SliderField({ label, value, onChange, min = 0, max = 100, suffix = '%' 
           type="range"
           min={min}
           max={max}
+          step={step}
           value={value}
           onChange={e => onChange(Number(e.target.value))}
           style={S.range}
@@ -314,6 +315,15 @@ export default function MaterialGeneratorTab({
           <SliderField label={t('surfaceMaterialEditor.wearLabel')} value={form.wear} onChange={wear => updateForm({ wear })} />
           <SliderField label={t('materialGeneratorTab.dirtLabel')} value={form.dirt} onChange={dirt => updateForm({ dirt })} />
           <SliderField label={t('surfaceMaterialEditor.reliefLabel')} value={form.relief} onChange={relief => updateForm({ relief })} />
+          <SliderField
+            label={t('surfaceMaterialEditor.patternScaleLabel')}
+            value={Number(form.patternScale) || 1}
+            onChange={patternScale => updateForm({ patternScale })}
+            min={0.25}
+            max={8}
+            step={0.25}
+            suffix="×"
+          />
           <label style={S.checkRow}>
             <input
               type="checkbox"

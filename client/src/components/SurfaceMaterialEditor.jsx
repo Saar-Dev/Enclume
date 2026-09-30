@@ -71,6 +71,22 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
           />
         </label>
       ))}
+      <label style={S.field}>
+        <span style={S.rangeLabel}>
+          <span>{t('surfaceMaterialEditor.patternScaleLabel')}</span>
+          <strong>×{Number(material.patternScale) || 1}</strong>
+        </span>
+        <input
+          aria-label={t('surfaceMaterialEditor.patternScaleLabel')}
+          type="range"
+          min="0.25"
+          max="8"
+          step="0.25"
+          value={Number(material.patternScale) || 1}
+          onChange={event => patch({ patternScale: Number(event.target.value) })}
+          style={S.range}
+        />
+      </label>
       <button
         type="button"
         onClick={() => patch({ realRelief: material.realRelief === false })}

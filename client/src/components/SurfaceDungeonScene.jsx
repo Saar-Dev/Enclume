@@ -147,20 +147,14 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
   return roomId
 }
 
+// `descriptor` est toujours la sortie de `makeProceduralMaterialDescriptor` (proceduralMaterials.js)
+// — une forme fermée, jamais du JSON pris ailleurs. Sérialiser l'objet entier plutôt qu'une liste de
+// champs recopiée à la main évite qu'un champ ajouté au descripteur (ex. `patternScale`, §18
+// PLAN_WORLD_BUILDER_REWORK.md) reste invisible à cette clé et serve indéfiniment une texture perimée
+// depuis le cache — même famille de bug que §16.13 (une seule autorité pour une même donnée).
 function proceduralMaterialKey(descriptor) {
   if (!descriptor || typeof descriptor !== 'object') return null
-  return JSON.stringify({
-    type: descriptor.type,
-    version: descriptor.version,
-    material: descriptor.material,
-    paint: descriptor.paint,
-    pattern: descriptor.pattern,
-    wear: descriptor.wear,
-    dirt: descriptor.dirt,
-    relief: descriptor.relief,
-    realRelief: descriptor.realRelief,
-    seed: descriptor.seed,
-  })
+  return JSON.stringify(descriptor)
 }
 
 function makeDataTexture(dataUrl, color = true) {

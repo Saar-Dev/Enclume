@@ -9,6 +9,7 @@
     "wearLabel": "Usure",
     "dirtLabel": "Saleté",
     "reliefLabel": "Relief",
+    "patternScaleLabel": "Échelle du motif",
     "realReliefToggle": "Relief réel : {{state}}",
     "realReliefActive": "actif",
     "realReliefNormalMap": "normal map"

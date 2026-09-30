@@ -188,6 +188,7 @@ export const DEFAULT_PROCEDURAL_MATERIAL = {
   realRelief: true,
   categoryLabel: 'Sol',
   seed: 'enclume',
+  patternScale: 1,
 }
 
 export const DEFAULT_SURFACE_MATERIAL_PRESET = {
@@ -199,6 +200,7 @@ export const DEFAULT_SURFACE_MATERIAL_PRESET = {
   relief: 0,
   realRelief: true,
   seed: DEFAULT_PROCEDURAL_MATERIAL.seed,
+  patternScale: 1,
 }
 
 function clamp(value, min = 0, max = 1) {
@@ -371,24 +373,33 @@ function drawCircleHeight(height, size, cx, cy, radius, delta) {
 // Motif importé (§14) : échantillonne une vraie height map au lieu de dessiner des lignes/cercles
 // à la main — la valeur brute (0..1) est recentrée autour de 0 pour rester compatible avec le
 // même buffer `height` que tous les motifs procéduraux (un delta, pas une hauteur absolue).
-function sampleImportedPatternHeight(src, x, y, size, relief) {
-  const raw = sampleDisplacementMap(src, x / size, y / size)
+// `scale` (§18) DIVISE u,v avant l'appel (`sampleDisplacementMap` tuile déjà en modulo) : un facteur
+// >1 fait apparaître le motif plus grand (on n'en voit qu'une fraction sur la tuile), <1 le fait
+// paraître plus petit/dense (plusieurs répétitions) — sens choisi pour matcher la lecture naturelle
+// de « Échelle ×N » (plus grand nombre = motif plus grand), trouvé inversé en testant (Saar, 2026-09-30).
+function sampleImportedPatternHeight(src, x, y, size, relief, scale = 1) {
+  const raw = sampleDisplacementMap(src, (x / size) / scale, (y / size) / scale)
   return (raw - 0.5) * 0.5 * relief
 }
 
-function applyImportedPattern(height, size, src, relief) {
+function applyImportedPattern(height, size, src, relief, scale) {
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
-      height[y * size + x] += sampleImportedPatternHeight(src, x, y, size, relief)
+      height[y * size + x] += sampleImportedPatternHeight(src, x, y, size, relief, scale)
     }
   }
+}
+
+function patternScaleOf(options) {
+  const scale = Number(options?.patternScale)
+  return scale > 0 ? scale : 1
 }
 
 function applyPattern(height, options, size) {
   const relief = clamp(options.relief / 100)
   const importedSrc = IMPORTED_PATTERN_SRC[options.pattern]
   if (importedSrc) {
-    applyImportedPattern(height, size, importedSrc, relief)
+    applyImportedPattern(height, size, importedSrc, relief, patternScaleOf(options))
   }
 }
 
@@ -404,10 +415,10 @@ function mixPixel(data, index, color, amount) {
   data[index + 2] = lerp(data[index + 2], color[2], t)
 }
 
-function samplePatternHeight(pattern, x, y, size, relief) {
+function samplePatternHeight(pattern, x, y, size, relief, scale) {
   const importedSrc = IMPORTED_PATTERN_SRC[pattern]
   if (!importedSrc) return 0
-  return sampleImportedPatternHeight(importedSrc, x, y, size, relief)
+  return sampleImportedPatternHeight(importedSrc, x, y, size, relief, scale)
 }
 
 export function makeProceduralMaterialDescriptor(options) {
@@ -422,6 +433,7 @@ export function makeProceduralMaterialDescriptor(options) {
     relief: Number(options.relief) || 0,
     realRelief: options.realRelief !== false,
     seed: options.seed || DEFAULT_PROCEDURAL_MATERIAL.seed,
+    patternScale: patternScaleOf(options),
   }
 }
 
@@ -446,7 +458,7 @@ export function sampleProceduralMaterialHeight(u, v, options) {
 
   let height = 0.5 + (base.height - 0.5) * relief
   height -= reveal * 0.035 * relief
-  height += samplePatternHeight(descriptor.pattern, x, y, size, relief)
+  height += samplePatternHeight(descriptor.pattern, x, y, size, relief, descriptor.patternScale)
   height += (fractalNoise(x, y, size, `${seed}:real-dirt`) - 0.5) * dirt * relief * 0.035
 
   return height
