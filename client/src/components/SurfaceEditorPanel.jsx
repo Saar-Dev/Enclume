@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createSearchMatcher, foldAccents } from '../../../shared/textSearch.js'
-import { useNavigate } from 'react-router-dom'
+import { foldAccents } from '../../../shared/textSearch.js'
 import { useTranslation } from 'react-i18next'
 import { useEntityStore } from '../stores/entityStore'
 import { useWorldRuntimeStore } from '../stores/worldRuntimeStore.js'
@@ -8,7 +7,9 @@ import api from '../lib/api.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import SurfaceEffectPanel from './SurfaceEffectPanel.jsx'
-import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
+import EntityPalettePanelSection from './surfaceTools/EntityPalettePanelSection.jsx'
+import PaintWallPanelSection from './surfaceTools/PaintWallPanelSection.jsx'
+import { CHIP_BTN_STYLE, PAINT_WALL_SCOPE_LABEL_KEYS } from './surfaceTools/panelSharedConstants.js'
 import { groupEffectDefinitions } from '../lib/effectDefinitionGroups.js'
 import {
   clearMaterialSlotOverride,
@@ -74,17 +75,6 @@ const ICON_PAINT_WALL = (
 const TAB_ICON_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '7px 0',
 }
-const CHIP_BTN_STYLE = {
-  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', minHeight: '48px',
-}
-// Portée active de la peinture de mur, rappelée dans le bandeau d'indice persistant (§13, Saar en
-// test 2026-09-30 : « le mode de peinture est oublié » — rien ne la rappelait hors des boutons
-// eux-mêmes, qui défilent hors champ pendant qu'on travaille).
-const PAINT_WALL_SCOPE_LABEL_KEYS = {
-  case: 'surfaceEditor.paintWallScopeCase',
-  run: 'surfaceEditor.paintWallScopeRun',
-  room: 'surfaceEditor.paintWallScopeRoom',
-}
 
 // ─── Palette surface/entités (mode édition) ───────────────────────────────────
 // Extrait de Sidebar.jsx (PLAN_REFACTOR_SIDEBAR.md Lot 5) — comportement inchangé.
@@ -108,9 +98,8 @@ export default function SurfaceEditorPanel({
   customEffectDraft, setCustomEffectDraft,
   sidebarWidth = 0,
 }) {
-  const navigate = useNavigate()
   const { t } = useTranslation()
-  const { blueprints, refreshBuiltinModels } = useEntityStore()
+  const { blueprints } = useEntityStore()
   const surfaceToolState = {
     mode: 'select',
     level: 0,
@@ -221,7 +210,6 @@ export default function SurfaceEditorPanel({
     blueprint?.builtin_key,
     blueprint?.glb_url,
   ].filter(Boolean).join(' '))
-  const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
@@ -601,44 +589,12 @@ export default function SurfaceEditorPanel({
               </button>
             </div>
             {surfaceToolState.mode === 'paint-wall' && (
-              <div className="sidebar-glass" style={styles.roomToolGrid}>
-                <p className="sidebar-tool-hint" style={styles.roomToolHint}>
-                  {t('surfaceEditor.paintWallRoomHint', {
-                    name: surfaceToolState.roomName || '',
-                    scope: t(PAINT_WALL_SCOPE_LABEL_KEYS[surfaceToolState.wallPaintScope || 'case']),
-                  })}
-                </p>
-                <div style={styles.roomToolModes}>
-                  {[
-                    { key: 'case', label: t('surfaceEditor.paintWallScopeCase') },
-                    { key: 'run', label: t('surfaceEditor.paintWallScopeRun') },
-                    { key: 'room', label: t('surfaceEditor.paintWallScopeRoom') },
-                  ].map(scope => (
-                    <button
-                      key={scope.key}
-                      type="button"
-                      onClick={() => updateSurfaceTool({ wallPaintScope: scope.key })}
-                      className="sidebar-tool-mode-btn"
-                      data-active={(surfaceToolState.wallPaintScope || 'case') === scope.key}
-                      style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
-                    >
-                      <span>{scope.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {(surfaceToolState.wallPaintScope || 'case') === 'room' && (
-                  <label style={styles.roomToolLabel}>
-                    <input
-                      type="checkbox"
-                      checked={!!surfaceToolState.wallPaintClearOverrides}
-                      onChange={e => updateSurfaceTool({ wallPaintClearOverrides: e.target.checked })}
-                    />
-                    <span>{t('surfaceEditor.paintWallClearOverrides')}</span>
-                  </label>
-                )}
-                <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.paintWallMaterialSection')}</div>
-                <SurfaceMaterialEditor profile={surfaceMaterialState} onChange={updateSurfaceMaterial} />
-              </div>
+              <PaintWallPanelSection
+                surfaceToolState={surfaceToolState}
+                updateSurfaceTool={updateSurfaceTool}
+                surfaceMaterialState={surfaceMaterialState}
+                updateSurfaceMaterial={updateSurfaceMaterial}
+              />
             )}
             </>
             )}
@@ -1244,81 +1200,16 @@ surfaceMaterialMode: 'texture',
       )}
 
       {/* ── Onglet Entités — palette blueprints ── */}
-      {activeEditorTab === 'entity' && (() => {
-        const matchesObjectQuery = createSearchMatcher(objectSearch)
-        const bpList = Object.values(blueprints)
-          .filter(bp => !bp.deprecated)
-          .filter(bp => blueprintPlacementMode(bp) !== 'connector')
-          .filter(bp => matchesObjectQuery(bp.label, bp.category))
-        const grouped = bpList.reduce((groups, bp) => {
-          const category = bp.category || t('sidebar.customObjects')
-          if (!groups[category]) groups[category] = []
-          groups[category].push(bp)
-          return groups
-        }, {})
-        return (
-          <div style={{ marginTop: '6px' }}>
-            <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <span>{t('sidebar.paletteEntities')}</span>
-              <button
-                type="button"
-                className="btn"
-                disabled={refreshingObjects}
-                onClick={async () => {
-                  setRefreshingObjects(true)
-                  try {
-                    await refreshBuiltinModels()
-                  } catch (err) {
-                    console.error('[Bibliothèque 3D] Échec du rafraîchissement :', err)
-                  } finally {
-                    setRefreshingObjects(false)
-                  }
-                }}
-                title={t('sidebar.refreshObjectsHint')}
-                style={{ padding: '3px 7px', fontSize: '10px' }}
-              >
-                {refreshingObjects ? '…' : t('sidebar.refreshObjects')}
-              </button>
-            </div>
-            <input
-              value={objectSearch}
-              onChange={event => setObjectSearch(event.target.value)}
-              placeholder={t('sidebar.searchObjects')}
-              className="sidebar-tool-field"
-              style={{ margin: '7px 0 9px' }}
-            />
-            {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
-            {bpList.length === 0 && (
-              <p style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '8px' }}>
-                {t('sidebar.noBlueprints')}
-              </p>
-            )}
-            {Object.entries(grouped).map(([category, items]) => (
-              <div key={category} style={{ marginBottom: '10px' }}>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 8px 3px' }}>
-                  {category} <span style={{ opacity: 0.55 }}>({items.length})</span>
-                </div>
-                {items.sort((a, b) => a.label.localeCompare(b.label)).map(bp => {
-                  const isActive = activeBlueprint?.id === bp.id
-                  return (
-                    <button
-                      key={bp.id}
-                      onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
-                      title={t('sidebar.clickThenPlace')}
-                      style={{ display: 'block', width: '100%', padding: '7px 10px', background: isActive ? 'var(--color-primary-muted)' : 'none', border: 'none', borderBottom: '1px solid var(--wiz-glass-border)', borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent', color: isActive ? 'var(--color-primary)' : 'var(--text-secondary)', fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.1s' }}
-                    >
-                      {blueprintPlacementMode(bp) === 'wall' ? '▥ ' : ''}{bp.label}
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
-            <button className="btn" style={{ width: '100%', marginTop: '4px' }} onClick={() => navigate('/workshop')}>
-              {t('sidebar.importCustomObject')}
-            </button>
-          </div>
-        )
-      })()}
+      {activeEditorTab === 'entity' && (
+        <EntityPalettePanelSection
+          activeBlueprint={activeBlueprint}
+          onBlueprintSelect={onBlueprintSelect}
+          objectSearch={objectSearch}
+          setObjectSearch={setObjectSearch}
+          refreshingObjects={refreshingObjects}
+          setRefreshingObjects={setRefreshingObjects}
+        />
+      )}
       {effectInspector && (() => {
         const instance = (worldEffects.instances || []).find(item => item.id === effectInspector.instanceId)
         if (!instance) return null

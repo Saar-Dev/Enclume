@@ -1923,6 +1923,28 @@ mini-chantiers (nuancier custom, outil ÉCHELLE motif) touchent directement `Sur
 les faire atterrir dans des sections déjà séparées plutôt que dans le fichier monolithique évite d'ajouter
 de la matière neuve à un fichier qu'on sait devoir démonter ensuite.
 
+### 16.5. Décomposition de `SurfaceEditorPanel.jsx` — premier incrément (2026-09-30)
+
+Deux sections extraites, `eslint`/`build` propres, non testées en navigateur (checkpoint demandé avant de
+poursuivre sur les blocs plus gros — Connecteur/Salle/Mur/Zone d'effet touchent chacun plusieurs dizaines
+de handlers, risque de mauvais câblage de prop plus élevé que ces deux premiers) :
+
+- **`EntityPalettePanelSection.jsx`** (nouveau) — palette de l'onglet Objets 3D, bloc totalement autonome
+  (son propre `activeEditorTab === 'entity'`), aucun couplage avec les outils du monde. Lit
+  `useEntityStore()` directement (patron déjà utilisé ailleurs, ex. `Editor3D.jsx`) plutôt que de recevoir
+  `blueprints`/`refreshBuiltinModels` en props — évite un simple relais. `blueprintPlacementMode` dupliqué
+  tel qu'il l'était déjà dans 4 fichiers avant ce tour (`Editor3D.jsx`, `EntityInstancePanel.jsx`,
+  `EntityBuilderTab.jsx`) — dette préexistante, pas corrigée ici (hors périmètre de cet incrément).
+- **`PaintWallPanelSection.jsx`** (nouveau) — réglages du mode Peindre un mur (portée case/tronçon/salle +
+  éditeur de matériau). A révélé que `CHIP_BTN_STYLE` et `PAINT_WALL_SCOPE_LABEL_KEYS` sont utilisés à la
+  fois par ce bloc et par le bandeau d'indice resté dans le fichier principal — extraits dans
+  `surfaceTools/panelSharedConstants.js` plutôt que dupliqués (la duplication aurait été un vrai risque :
+  deux listes de clés qui divergent silencieusement).
+- Les icônes SVG et `TAB_ICON_BTN_STYLE` restent dans `SurfaceEditorPanel.jsx` — utilisés uniquement par le
+  sélecteur d'outil (le bandeau de boutons lui-même), qui reste le menu central, pas une section par outil.
+- `SurfaceMaterialEditor` n'était importé que pour ce bloc — import retiré du fichier principal.
+- 1341 → 1232 lignes (`wc -l`, pas `Measure-Object`).
+
 ## Historique
 
 - **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
