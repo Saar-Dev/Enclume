@@ -1794,6 +1794,59 @@ qu'un motif est sélectionné. Les motifs procéduraux, on peut les dégager. »
   `displacementMaps.js` et le sixième champ (`relief`) de `SurfaceMaterialEditor.jsx`/
   `MaterialGeneratorTab.jsx` — son propre plan avant tout code, pas mélangé à un autre tour.
 
+## 15. Bilan et plan d'action — demande explicite de Saar avant compactage (2026-09-30)
+
+Analyse sérieuse de ce qui reste, faite avant compactage pour que ce document seul suffise à reprendre —
+pas la mémoire de session, qui disparaît. Statuts vérifiés à l'instant (git/wc -l), pas recopiés d'ailleurs.
+
+### 15.1. Ce qui est fait, poussé, testé — ne pas retoucher sans raison neuve
+
+- Constitution sidebar/dock (§13), motifs importés + chargement paresseux (§14/§14.1), retrait des motifs
+  procéduraux + Relief auto (§14.2), pile d'annulation fusionnable (§12.10 pt 5), décomposition complète de
+  `SurfaceEditorScene.jsx` en un fichier par responsabilité (§11.7→§11.14, 1550→958 lignes, -38 %, 13
+  fichiers neufs sous `surfaceTools/`). **`[VÉRIFIÉ]` pas encore poussé au moment d'écrire ceci** (6
+  commits d'avance sur `origin/dev/Saar`, jusqu'à `e6d32a19` inclus) — à pousser avant tout compactage pour
+  que l'état durable ne vive pas que dans une conversation qui va être résumée.
+- **Peinture de mur (Lot A)** : le statut « EN PAUSE » du §9 est **périmé**, pas corrigé sur place pour
+  préserver l'historique. Depuis, l'outil a été retesté en jeu à plusieurs reprises dans cette même session
+  (§11.13, portée case/tronçon/salle) et confirmé fonctionnel — traité comme un chantier clos en pratique,
+  bien que le §9 lui-même ne porte aucune mention de clôture. À corriger si un doute resurgit dessus.
+
+### 15.2. Ce qui reste réellement — 5 chantiers indépendants, chacun son propre plan
+
+1. **Décomposition de `Editor3D.jsx` (1616 lignes) et `SurfaceEditorPanel.jsx` (1341 lignes)** — même dette
+   que `SurfaceEditorScene.jsx` avant ce tour (`[OBSERVÉ]` §11.3 point 6), **jamais commencée**. `[HYPOTHÈSE]`
+   non vérifiée : leur contenu n'est pas de la même nature que `Scene.jsx` (qui était surtout de la gestion
+   d'événements pointeur + rendu d'aperçu — un bon candidat pour « un outil, un fichier »). `Editor3D.jsx`
+   orchestre l'état (panneaux, pile d'annulation, sauvegarde réseau) ; `SurfaceEditorPanel.jsx` est
+   presque entièrement du JSX (boutons, sections par mode). Le même patron pourrait s'appliquer côté panneau
+   (une section de sidebar par outil = un fichier), mais ça n'a jamais été vérifié ligne par ligne comme
+   `Scene.jsx` l'a été — **à auditer avant de supposer que la même méthode s'applique tel quel**.
+2. **Outil ÉCHELLE (scale/tuilage) pour les motifs importés** (§14.2, note ci-dessus) — demande de Saar,
+   jamais cadré.
+3. **Aperçu visuel (miniatures) pour Matière/Motif** (§13.6 point 5) — demande une vraie conception
+   (nombre de miniatures, quand les générer, coût de rendu), jamais cadré.
+4. **Nuancier custom pour la Peinture** (remplacer les 9 `<input type="color">` natifs du projet) — mini-
+   chantier identifié tôt dans le chantier, jamais cadré.
+5. **Pose d'une échelle-connecteur sur une autre échelle** (continuité verticale multi-étages, demande de
+   Saar au §11.7) — cause exacte non vérifiée (`makeLadderConnectorFromCell`/`applyLadderConnector`,
+   `client/src/lib/connectors.js`, jamais relus pour ce point précis), jamais cadré.
+
+### 15.3. Plan d'action proposé — ordre et pourquoi
+
+**Un chantier à la fois, plan → analyse à charge → code, comme toujours.** Ordre suggéré, pas imposé :
+
+1. **Auditer `Editor3D.jsx`/`SurfaceEditorPanel.jsx` avant de décider s'ils se décomposent pareil** —
+   lecture complète d'abord (comme pour `Scene.jsx`), pas une extraction mécanique par optimisme. S'ils
+   s'y prêtent, même méthode (un outil à la fois, test croisé, commit par lot). S'ils ne s'y prêtent pas,
+   le dire clairement plutôt que de forcer le patron.
+2. **Puis les 4 mini-chantiers (2-5 ci-dessus), un par un**, du plus petit au plus gros : échelle-sur-
+   échelle (bug ciblé, cause à vérifier d'abord) → outil ÉCHELLE motif (petit, 2 fichiers touchés) →
+   miniatures Matière/Motif (demande une conception, pas juste du code) → nuancier custom (9 emplacements,
+   le plus transverse).
+
+Rien de ceci n'est engagé — présenté pour décision de Saar avant tout code, comme le reste de ce chantier.
+
 ## Historique
 
 - **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
