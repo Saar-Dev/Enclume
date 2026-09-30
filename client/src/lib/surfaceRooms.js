@@ -536,10 +536,22 @@ function roomMaterialProfilesForTool(tool) {
   return {
     floor: profiles.floor || tool?.materialPreset,
     ceiling: profiles.ceiling || tool?.materialPreset,
-    wallInterior: profiles.wallInterior || tool?.materialPreset,
   }
 }
 
+// Synchronise en continu une salle déjà SÉLECTIONNÉE avec le panneau Salle (`SurfaceRoomPanel.jsx`,
+// onglet Sol — seul `materialProfiles.floor`/`ceiling` y sont exposés). Ne touche PLUS jamais
+// `wallInteriorTex`/`wallInteriorMaterial` : ce champ a deux autres autorités, exclusives et déjà
+// suffisantes — `makeRoomFromSelection` à la création de la salle, et `applyRoomWallAppearance`/
+// `paintRoomWallRoom` (panneau flottant Mur, outil Peindre) en édition. Avant ce correctif, cette
+// fonction recalculait quand même un wallInterior à partir de `tool.materialProfiles.wallInterior`
+// — un champ qu'AUCUNE interface actuelle n'écrit plus (`wallInteriorTexId` : mort depuis l'Option 2
+// du §8, PLAN_WORLD_BUILDER_REWORK.md ; `materialProfiles.wallInterior` : jamais exposé par un onglet)
+// — donc toujours retombait sur le même défaut figé. Comme cette fonction se redéclenche à chaque
+// churn de `surfaceTool` tant qu'une salle reste sélectionnée (Editor3D.jsx), elle écrasait la
+// vraie couleur des murs juste posée via le panneau flottant Mur l'instant suivant : deux autorités
+// sur la même donnée (invariant AGENTS.md violé), pas un bug de timing. Reproduit par script Node
+// (PLAN_WORLD_BUILDER_REWORK.md §19) avant correction, jamais deviné.
 export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, availableBlocks) {
   if (!roomId) return surfaceData
   const next = normalizeSurfaceData(surfaceData)
@@ -571,14 +583,6 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
     availableBlocks,
     seed: `${id}:ceiling`,
   })
-  const wallInterior = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'wallInterior'),
-    packId: tool?.wallInteriorPackId,
-    textureId: tool?.wallInteriorTexId || roomWallInteriorTex(room),
-    fallbackTexId: roomWallInteriorTex(room) || activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:wall:interior`,
-  })
 
   const heightLevels = getToolRoomHeightLevels(tool)
   const blocking = surfaceBlockingForTool(tool)
@@ -594,10 +598,8 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
     ...blocking,
     floorTex: floorAppearance.tex,
     ceilingTex: ceilingAppearance.tex,
-    wallInteriorTex: wallInterior.tex,
     floorMaterial: floorAppearance.material,
     ceilingMaterial: ceilingAppearance.material,
-    wallInteriorMaterial: wallInterior.material,
   }
 
   if (JSON.stringify(updated) === JSON.stringify(room)) return surfaceData
@@ -1081,12 +1083,18 @@ export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearanc
   if (selected.length === 0) return { surfaceData, error: 'Sélectionne au moins un mur.' }
 
   const selectedSet = new Set(selected)
-  const selectedEdges = roomBoundaryEdges(selectedRoom).filter(edge => selectedSet.has(edge.key))
-  const doorOnSelection = Object.values(next.connectors || {})
-    .some(connector => doorConnectorTouchesBoundaryEdges(connector, selectedRoom, selectedEdges))
-  if (doorOnSelection) {
-    return { surfaceData, error: 'Déplace ou supprime la porte avant de peindre ce mur.' }
-  }
+
+  // Aucun garde-fou porte ici (§21, PLAN_WORLD_BUILDER_REWORK.md, 2026-09-30) — corrigé après l'avoir
+  // ajouté par erreur le 2026-09-29 (commentaire ci-dessous conservé pour la trace). Contrairement à
+  // `applyRoomWallElevationProfile`/`applyRoomBoundaryArc`, qui déplacent/courbent le mur et peuvent
+  // désaligner une porte montée dessus, peindre ne touche QUE `wallAppearanceProfiles`/
+  // `interiorMaterial` — aucune géométrie, aucune position. `.claude/rules/world.md` : « une apparence
+  // 3D n'implique jamais une collision » — bloquer ici n'avait donc aucune raison physique, seulement
+  // une cohérence de façade avec les deux autres opérations copiée sans revérifier si elle s'appliquait.
+  // Trouvé en production (Saar, 2026-09-30) : toute salle avec au moins une porte refusait TOUT
+  // changement d'apparence sur `wallAppearanceProfiles` couvrant ses murs (ex. « tout sélectionner »
+  // dans le panneau flottant Mur), silencieusement — l'erreur existait (`roomArcError`) mais n'était pas
+  // le signal qu'un correctif « ne marche pas » aurait suggéré.
 
   // interiorTex toujours null : Option 2 (2026-09-28, PLAN_WORLD_BUILDER_REWORK.md §8) a tranché qu'un mur
   // n'a plus jamais de texture pré-faite, seulement le matériau procédural — décidée pour l'outil « Peindre

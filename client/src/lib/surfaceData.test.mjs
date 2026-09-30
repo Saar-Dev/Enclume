@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   applyRoomBoundaryArc,
   applyBridgeSelection,
+  applyRoomToolUpdate,
   applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomSelection,
@@ -116,10 +117,13 @@ test('applyRoomWallAppearance retombe sur un preset complet (jamais null) sans i
   assert.equal(stored.paint, '#6f7f8e')
 })
 
-test('une porte rigide bloque la peinture de son mur (applyRoomWallAppearance)', () => {
-  // Régression 2026-09-29 : seule des quatre opérations de mur (élévation, arc, peinture) à n'avoir
-  // aucun garde-fou porte — cf. 'une porte rigide bloque le changement de profil vertical de son mur'
-  // et 'une porte existante empêche de courber son mur porteur' pour le même patron sur les deux autres.
+test('une porte sur le mur n’empêche plus de peindre ce mur (applyRoomWallAppearance, §21 PLAN_WORLD_BUILDER_REWORK.md)', () => {
+  // Corrigé 2026-09-30 — le garde-fou porte ajouté le 2026-09-29 (par cohérence avec l'élévation/l'arc,
+  // sans revérifier s'il avait une raison géométrique ici) bloquait TOUTE salle ayant une porte, quel
+  // que soit le mur peint : peindre ne touche que wallAppearanceProfiles/interiorMaterial, jamais la
+  // géométrie ni la position de la porte — rien à protéger. Trouvé en production (Saar) : « tout
+  // sélectionner » dans le panneau flottant Mur d'une salle avec porte refusait tout changement
+  // d'apparence, sans que l'erreur silencieuse n'évoque la vraie cause.
   const guardedRoom = room('guarded-paint', 0)
   const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')
   const result = applyRoomWallAppearance(
@@ -131,14 +135,14 @@ test('une porte rigide bloque la peinture de son mur (applyRoomWallAppearance)',
     }),
     'guarded-paint',
     west.edgeKeys,
-    {},
+    { interiorMaterial: { material: 'steel', paint: '#ff0000', pattern: 'none', wear: 0, dirt: 0, relief: 0 } },
   )
 
-  assert.match(result.error, /porte/i)
-  assert.equal(result.surfaceData.rooms['guarded-paint'].wallAppearanceProfiles, undefined)
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.rooms['guarded-paint'].wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
 })
 
-test('une porte rigide bloque aussi l’outil « Peindre un mur » (paintRoomWallEdges)', () => {
+test('une porte sur le mur n’empêche plus l’outil « Peindre un mur » (paintRoomWallEdges, §21)', () => {
   const guardedRoom = room('guarded-paint-tool', 0)
   const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')
   const result = paintRoomWallEdges(
@@ -153,7 +157,8 @@ test('une porte rigide bloque aussi l’outil « Peindre un mur » (paintRoomWal
     { surfaceMaterialMode: 'procedural', materialProfiles: { wallInterior: { material: 'steel', paint: '#ff0000' } } },
   )
 
-  assert.match(result.error, /porte/i)
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.rooms['guarded-paint-tool'].wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
 })
 
 test('applyRoomWallAppearance ignore toute texture transmise par l’appelant (Option 2, autorité unique)', () => {
@@ -175,6 +180,41 @@ test('applyRoomWallAppearance ignore toute texture transmise par l’appelant (O
   assert.equal(result.error, null)
   assert.equal(result.surfaceData.rooms['wall-panel-texture'].wallAppearanceProfiles[0].interiorTex, null)
   assert.equal(result.surfaceData.rooms['wall-panel-texture'].wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
+})
+
+test('applyRoomToolUpdate ne revient plus sur une couleur de mur posée par le panneau flottant Mur (§19, PLAN_WORLD_BUILDER_REWORK.md)', () => {
+  // Régression : tant qu'une salle reste sélectionnée, Editor3D.jsx redéclenche applyRoomToolUpdate à
+  // chaque churn de surfaceTool (synchronise le panneau Salle, onglet Sol). Avant ce correctif, elle
+  // recalculait AUSSI wallInteriorMaterial depuis tool.materialProfiles.wallInterior — un champ
+  // qu'aucune interface n'écrit — et écrasait la vraie couleur posée l'instant d'avant via le panneau
+  // flottant Mur (applyRoomWallAppearance), quelle que soit la salle. Reproduit par script Node avant
+  // ce correctif (seed:variant non pertinent ici, juste la couleur).
+  const paintedRoom = { ...room('wall-tool-sync', 0), wallInteriorMaterial: { material: 'steel', paint: '#111111', pattern: 'none', wear: 0, dirt: 0, relief: 0 } }
+  const west = getRoomBoundaryWallRuns(paintedRoom).find(run => run.side === 'west')
+  const painted = applyRoomWallAppearance(
+    emptySurface({ rooms: { 'wall-tool-sync': paintedRoom } }),
+    'wall-tool-sync',
+    west.edgeKeys,
+    { interiorMaterial: { material: 'steel', paint: '#ff0000', pattern: 'none', wear: 0, dirt: 0, relief: 0 } },
+  )
+  assert.equal(painted.error, null)
+
+  // Simule le churn de surfaceTool que produit Editor3D.jsx tant que la salle reste sélectionnée
+  // (mode 'select', murs sélectionnés) — materialProfiles.wallInterior au défaut du state initial,
+  // jamais écrit par le panneau flottant Mur.
+  const surfaceToolLikeEditor = {
+    mode: 'select',
+    selectedRoomId: 'wall-tool-sync',
+    selectedRoomWallKeys: west.edgeKeys,
+    materialProfiles: {
+      floor: { material: 'steel', paint: '#6f7f8e', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
+      wallInterior: { material: 'steel', paint: '#6f7f8e', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
+    },
+  }
+  const afterSync = applyRoomToolUpdate(painted.surfaceData, 'wall-tool-sync', surfaceToolLikeEditor, null, [])
+
+  assert.equal(afterSync.rooms['wall-tool-sync'].wallInteriorMaterial.paint, '#111111')
+  assert.equal(afterSync.rooms['wall-tool-sync'].wallAppearanceProfiles[0].interiorMaterial.paint, '#ff0000')
 })
 
 function wallInteriorTool(material) {
