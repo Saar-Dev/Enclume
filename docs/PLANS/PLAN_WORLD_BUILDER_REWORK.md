@@ -884,10 +884,14 @@ Sources : [The Design Tools — Encounter Library](https://encounterlibrary.com/
 Trois changements d'information architecture, chacun répond à une violation précise du 12.3, présentés pour
 décision (même méthode que Plan B et Lot A Option 1/2, §8) :
 
-1. **Regrouper les 11 modes par phase de travail plutôt que par ordre d'ajout** : ex. « Bâtir » (Salle, Mur,
-   Escalier, Passerelle), « Connecter » (Porte, Ascenseur, Échelle), « Finir » (Peindre, Remodeler, Effacer) —
-   chaque groupe étiqueté de façon cohérente (corrige violations 3 et 4). Sélection reste hors groupe : c'est un
-   état permanent, pas un outil de création.
+1. **`[CODÉ]` Regrouper les 11 modes par phase de travail plutôt que par ordre d'ajout** : « Bâtir » (Salle, Mur,
+   Escalier, Passerelle), « Connecteurs » (Porte, Ascenseur, Échelle, déjà titré), « Finir » (Peindre, Remodeler,
+   Effacer) — chaque groupe étiqueté de façon cohérente (corrige violations 3 et 4). Sélection reste hors groupe :
+   c'est un état permanent, pas un outil de création. **Trouvé non fait lors d'une relecture critique demandée par
+   Saar (2026-09-30) — validé en principe dès ce tour-ci (§12.5) mais jamais codé** malgré tout le reste livré ;
+   corrigé : deux nouvelles clés i18n (`surfaceEditor.buildSection`/`finishSection`, `fr.json`), deux titres de
+   section ajoutés dans `SurfaceEditorPanel.jsx` (`structureSection` réservé à l'onglet, ne pouvait pas être
+   réutilisé pour le groupe — partagé avec le nom de l'onglet Structure). Aucune logique touchée.
 2. **Une seule source d'apparence de mur, pas un panneau unique pour tout** — correction après lecture
    complète du contenu réel des panneaux (§12.7) : l'idée d'un panneau de propriétés unique façon Blender
    N-panel, écrite ici sans avoir encore lu ce contenu, était trop large. Salle/Mur/Connecteur/Effet sont des
@@ -1222,6 +1226,12 @@ Chaque incrément 4b/5 reste un plan à part entière avant son propre code — 
 
 ## Historique
 
+- **2026-09-30** — Après une relecture critique demandée par Saar sur l'ensemble du chantier : trouvé que le
+  regroupement de la sidebar (§12.5 point 1, « Bâtir/Connecteurs/Finir »), présenté et validé en principe dès
+  le premier tour, n'avait jamais été codé — tout le reste livré (poignée, dock fixe, correctifs isolés) avait
+  laissé intact l'écran le plus visible, celui qui avait déclenché le reproche initial de Saar (« bordel »).
+  Corrigé dans la foulée : deux titres de section ajoutés (`SurfaceEditorPanel.jsx`), deux clés i18n neuves
+  (`fr.json`), aucune logique touchée. `eslint`/`build` propres.
 - **2026-09-29** — Commit `c1eaeceb` (« World Builder v2 : cadrage UX + poignée de redimensionnement »,
   12 fichiers) **entièrement validé en jeu par Saar**, les trois points restés en suspens après le commit
   compris : persistance de mode + Échap (« vraiment plus agréable, bon choix »), confirmation avant

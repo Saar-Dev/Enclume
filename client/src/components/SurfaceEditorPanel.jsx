@@ -463,7 +463,7 @@ export default function SurfaceEditorPanel({
               </button>
             </div>
 
-            <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.structureSection')}</div>
+            <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.buildSection')}</div>
             <div style={styles.roomToolModes}>
               <button
                 type="button"
@@ -571,6 +571,7 @@ export default function SurfaceEditorPanel({
               </button>
             </div>
 
+            <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.finishSection')}</div>
             <div style={styles.roomToolModes}>
               <button
                 type="button"

@@ -518,6 +518,8 @@
     "reshapeRoom": "Modifier la forme",
     "reshapeRoomHint": "Clique ou glisse sur les cases de la salle sélectionnée : à l’extérieur du contour pour l’agrandir, sur le contour pour la rétrécir. Vert = sera appliqué, rouge = refusé.",
     "structureSection": "Structure",
+    "buildSection": "Bâtir",
+    "finishSection": "Finir",
     "effectsSection": "Zones dangereuses",
     "effectZone": "Zone dangereuse",
     "effectTypeLabel": "Effet",
