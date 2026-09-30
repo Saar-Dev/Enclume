@@ -1896,6 +1896,33 @@ Décision pour Saar : poursuivre ici (probablement `SurfaceEditorPanel.jsx` d'ab
 moins risqué des trois) ou basculer sur les 4 mini-chantiers du §15.2 dans l'ordre déjà proposé. Rien
 d'engagé, aucun code écrit pour ce point.
 
+### 16.4. Décision tranchée (Saar délègue le choix technique, 2026-09-30) — recherche faite avant de coder
+
+Saar délègue explicitement le choix technique, avec pour seule contrainte le respect des priorités du
+projet (architecture saine, robuste/pérenne, adaptative — jamais de bricolage). Recherche faite avant de
+trancher (Règle « recherche avant de coder ») :
+
+- **tldraw** (`HistoryManager`) : pile d'annulation par « marks » (points d'arrêt explicites) plutôt qu'un
+  snapshot à chaque tick — c'est très exactement le principe déjà en place dans `Editor3D.jsx` depuis le
+  `mergeKey` du §12.10 pt 5. Confirmation, aucun changement nécessaire sur ce point.
+  Source : https://tldraw.dev/sdk-features/history
+- **React (doc officielle)** : un hook personnalisé se justifie pour un cas d'usage concret et nommable
+  (`useSurfaceUndoRedo`, pas un wrapper générique type `useMount`/`useEffectOnce`). Les trois blocs
+  transverses identifiés en §16.2 (pile d'annulation, files de sauvegarde, état des panneaux) correspondent
+  chacun à un cas concret et nommable — le patron s'applique légitimement, ce n'est pas une abstraction
+  gratuite. Source : https://react.dev/learn/reusing-logic-with-custom-hooks
+- **Excalidraw** : a fait la même bascule sur son propre panneau (sidebar monolithique → sections/onglets
+  séparés) — confirme que « une section de panneau, un fichier » est un patron pro reconnu pour ce genre
+  de fichier, pas une invention de ce chantier. Source : https://github.com/excalidraw/excalidraw/issues/6124
+
+**Ordre retenu** : `SurfaceEditorPanel.jsx` (patron déjà prouvé sur `Scene.jsx`, le plus mécanique) →
+`EntityEditorScene` dans `Editor3D.jsx` (même méthode, deuxième preuve avant de la généraliser) → hooks
+transverses d'`Editor3D.jsx` (patron neuf pour ce chantier, en dernier) → **puis** les 4 mini-chantiers du
+§15.2. Raison de cet ordre, pas seulement « le plus facile d'abord » : au moins deux des quatre
+mini-chantiers (nuancier custom, outil ÉCHELLE motif) touchent directement `SurfaceEditorPanel.jsx` —
+les faire atterrir dans des sections déjà séparées plutôt que dans le fichier monolithique évite d'ajouter
+de la matière neuve à un fichier qu'on sait devoir démonter ensuite.
+
 ## Historique
 
 - **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
