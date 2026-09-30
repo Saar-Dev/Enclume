@@ -1562,6 +1562,7 @@ export default function Editor3D({
           onDelete={handleSurfaceConnectorDelete}
           canEdit
           onClose={closeSurfaceConnectorPanel}
+          dockRight={sidebarWidth + 16}
         />
       )}
       {surfaceRoomPanel && selectedSurfaceRoom && (

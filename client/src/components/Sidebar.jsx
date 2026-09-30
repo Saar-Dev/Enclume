@@ -238,6 +238,7 @@ export default function Sidebar({
           setCustomEffectOpen={setCustomEffectOpen}
           customEffectDraft={customEffectDraft}
           setCustomEffectDraft={setCustomEffectDraft}
+          sidebarWidth={width}
         />
       )}
 

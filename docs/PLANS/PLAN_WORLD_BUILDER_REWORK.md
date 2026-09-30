@@ -1180,10 +1180,17 @@ gestionnaires d'événements React/DOM, aucun test pur possible) :
      `nativeEvent` devenu mort dans `handleRoomWallPointerSelect`). `node --check`/`eslint`/`build` propres,
      49/49 tests inchangés (gestionnaires d'événements, aucun test pur possible). Contenu interne des deux
      panneaux inchangé (§12.7 reste la référence, pas réécrit).
-   - **4b — Connecteur et Effet, reporté, pas commencé** : nécessite d'abord une décision (position fixe
-     seulement côté éditeur, comportement de session inchangé) avant tout code — probablement une prop
-     `dockPosition` optionnelle en plus de `x`/`y` (si fournie côté éditeur : fixe ; absente côté
-     `Canvas3D.jsx`/`SessionDangerZonePanel.jsx` : comportement actuel inchangé). Plan à présenter séparément.
+   - **4b — Connecteur et Effet, `[CODÉ]` (2026-09-30), `⚠️ non testé en navigateur`** : nouvelle prop
+     `dockRight` (nom retenu, pas `dockPosition`) sur `SurfaceConnectorPanel.jsx`/`SurfaceEffectPanel.jsx` —
+     fournie côté éditeur (`Editor3D.jsx` pour Connecteur, `SurfaceEditorPanel.jsx` pour Effet, via
+     `sidebarWidth` déjà branché pour 4a) : position fixe `top:16/right:dockRight`, en-tête non
+     déplaçable. Absente côté session (`Canvas3D.jsx`/`SessionDangerZonePanel.jsx`, non touchés) :
+     `useDraggablePanelPosition` reste le seul chemin, comportement strictement inchangé —
+     `docked = dockRight != null` bascule entre les deux dans le même composant, le hook reste toujours
+     appelé (règle des hooks) mais son résultat est ignoré en mode docké. `sidebarWidth` propagé
+     `Sidebar.jsx` (son propre prop `width`) → `SurfaceEditorPanel.jsx` → `SurfaceEffectPanel`, séparément
+     de la chaîne `SessionPage.jsx` → `Editor3D.jsx` déjà en place pour Connecteur/Salle/Mur. `npx eslint`
+     (0 problème)/`npm run build` propres.
 5. **Pile d'annulation fusionnable** (`updatable` + fenêtre de temps, three.js editor, §11.6.1) — après 4b,
    qui génère les réglages continus à regrouper sur les quatre panneaux, pas seulement deux.
 6. **Poignée de redimensionnement — `[CODÉ]`, testé (logique pure), pas encore confirmé par Saar en

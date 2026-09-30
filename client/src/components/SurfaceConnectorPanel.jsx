@@ -162,6 +162,9 @@ function DoorRuntimeControls({ connector, runtimeState, onCommand, canAdmin }) {
   )
 }
 
+// `dockRight` (§13/increment 4b, PLAN_WORLD_BUILDER_REWORK.md) : fourni côté éditeur (position fixe,
+// même patron que SurfaceRoomPanel.jsx/SurfaceWallPanel.jsx) ; absent côté session (Canvas3D.jsx) — le
+// comportement déplaçable existant (useDraggablePanelPosition) reste alors strictement inchangé.
 export default function SurfaceConnectorPanel({
   connector,
   x,
@@ -175,6 +178,7 @@ export default function SurfaceConnectorPanel({
   canEdit = true,
   canAdminElevator = canEdit,
   canAdminDoor = canEdit,
+  dockRight = null,
 }) {
   const { t } = useTranslation('builder')
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
@@ -188,6 +192,10 @@ export default function SurfaceConnectorPanel({
   const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
   const materialOverrides = connector?.modelMaterialOverrides || {}
   if (!connector) return null
+  const docked = dockRight != null
+  const panelStyle = docked
+    ? { ...S.panel, top: 16, right: dockRight }
+    : { ...S.panel, left: position.left, top: position.top }
 
   const patchMaterialSlot = (slot, patch) => {
     onPatch?.(connector.id, {
@@ -211,11 +219,15 @@ export default function SurfaceConnectorPanel({
   return (
     <div
       ref={panelRef}
-      style={{ ...S.panel, left: position.left, top: position.top }}
+      style={panelStyle}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-connector-panel"
     >
-      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-connector-panel-handle">
+      <div
+        style={{ ...S.header, ...(docked ? { cursor: 'default' } : {}) }}
+        onPointerDown={docked ? undefined : beginDrag}
+        data-testid="surface-connector-panel-handle"
+      >
         <div>
           <p style={S.kicker}>{t('surfaceConnectorPanel.kicker')}</p>
           <p style={S.title}>{connector.modelLabel || connector.type || t('surfaceConnectorPanel.defaultObjectLabel')}</p>

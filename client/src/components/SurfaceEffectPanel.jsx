@@ -15,7 +15,10 @@ const PANEL_H_EST = 360
 // Namespace par défaut (fr.json), pas 'builder' : ce panneau rejoint SurfaceEditorPanel.jsx (les
 // clés surfaceEditor.*/common.* de cet écran vivent déjà là), pas SurfaceRoomPanel.jsx/
 // SurfaceWallPanel.jsx (qui utilisent le namespace 'builder' séparé, historique, jamais fusionné).
-export default function SurfaceEffectPanel({ instance, definition, x, y, onPatch, onDelete, onClose }) {
+// `dockRight` (§13/increment 4b, PLAN_WORLD_BUILDER_REWORK.md) : fourni côté éditeur (position fixe,
+// même patron que SurfaceRoomPanel.jsx/SurfaceWallPanel.jsx) ; absent côté session
+// (SessionDangerZonePanel.jsx) — le comportement déplaçable existant reste alors strictement inchangé.
+export default function SurfaceEffectPanel({ instance, definition, x, y, onPatch, onDelete, onClose, dockRight = null }) {
   const { t } = useTranslation()
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x, y, width: PANEL_W, height: PANEL_H_EST,
@@ -26,15 +29,23 @@ export default function SurfaceEffectPanel({ instance, definition, x, y, onPatch
 
   const label = definition?.label || instance.definitionKey
   const isCustom = definition && definition.builtin === false
+  const docked = dockRight != null
+  const panelStyle = docked
+    ? { ...S.panel, top: 16, right: dockRight }
+    : { ...S.panel, left: position.left, top: position.top }
 
   return (
     <div
       ref={panelRef}
-      style={{ ...S.panel, left: position.left, top: position.top }}
+      style={panelStyle}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-effect-panel"
     >
-      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-effect-panel-handle">
+      <div
+        style={{ ...S.header, ...(docked ? { cursor: 'default' } : {}) }}
+        onPointerDown={docked ? undefined : beginDrag}
+        data-testid="surface-effect-panel-handle"
+      >
         <div>
           <p style={S.kicker}>{t('surfaceEditor.effectZone')}</p>
           <p style={S.title}>{label}{isCustom ? ` (${t('surfaceEditor.customEffectSuffix')})` : ''}</p>

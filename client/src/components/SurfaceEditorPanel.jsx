@@ -106,6 +106,7 @@ export default function SurfaceEditorPanel({
   refreshingObjects, setRefreshingObjects,
   customEffectOpen, setCustomEffectOpen,
   customEffectDraft, setCustomEffectDraft,
+  sidebarWidth = 0,
 }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -1333,6 +1334,7 @@ surfaceMaterialMode: 'texture',
             onPatch={patch => updateRuntimeEffect(instance.id, patch)}
             onDelete={() => deleteRuntimeEffect(instance.id)}
             onClose={() => setEffectInspector(null)}
+            dockRight={sidebarWidth + 16}
           />
         )
       })()}
