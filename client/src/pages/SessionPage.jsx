@@ -244,7 +244,20 @@ function SessionContent({ campaignId }) {
   const handleDisplayLevelChange = useCallback((value) => {
     const nextLevel = Math.max(-8, Math.min(16, Number.parseInt(value, 10) || 0))
     setDisplayLevel(nextLevel)
-    setSurfaceTool(prev => ({ ...prev, level: nextLevel, elevation: nextLevel * 2.5 }))
+    setSurfaceTool(prev => {
+      // `connectorToLevel` (« Étage d'arrivée » du panneau Échelle/Ascenseur) n'est recalculé qu'à
+      // l'activation de l'outil (SurfaceEditorPanel.jsx) — sans ce décalage, changer d'étage en cours
+      // de pose (échelle-sur-échelle) laisse ce champ figé sur l'ancien étage et bloque la pose suivante
+      // (`toLevel === fromLevel`, connectors.js). Décaler du même delta préserve l'écart choisi par
+      // l'utilisateur plutôt que de le réinitialiser à +1 (PLAN_WORLD_BUILDER_REWORK.md §17).
+      const delta = nextLevel - (Number(prev.level) || 0)
+      return {
+        ...prev,
+        level: nextLevel,
+        elevation: nextLevel * 2.5,
+        connectorToLevel: Number(prev.connectorToLevel || 0) + delta,
+      }
+    })
   }, [])
 
   useEffect(() => {

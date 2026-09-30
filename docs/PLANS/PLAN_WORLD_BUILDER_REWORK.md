@@ -2195,6 +2195,58 @@ faire ce deuxième pas maintenant : aucune preuve qu'il reste un cas cassé par 
 et le faire sans un deuxième cas réel qui le justifie serait de la sur-ingénierie — même principe que
 « le moteur grossit par la preuve » (§16.4). À reconsidérer seulement si un cas concret le justifie.
 
+## 17. Mini-chantier 1/4 (§15.2 point 5) — échelle-sur-échelle : cause trouvée `[VÉRIFIÉ]`, rien codé
+
+Premier des 4 mini-chantiers repris après la pause. Cause cherchée par lecture directe du code (pas
+d'exécution nécessaire : la logique en cause est un calcul JS pur sur l'état de l'outil, entièrement
+déterministe) — trois fichiers relus en séquence pour reconstituer le flux réel : `connectors.js`
+(fabrication du connecteur), `SurfaceEditorPanel.jsx` (panneau Échelle), `SessionPage.jsx` (sélecteur
+d'étage affiché).
+
+**Cause `[VÉRIFIÉ]`** : `makeLadderConnectorFromCell` (`client/src/lib/connectors.js:351-358`) refuse
+de créer le connecteur dès que `toLevel === fromLevel` (`return null`, seul autre cas de refus étant
+une cellule absente). `fromLevel` vient de l'étage actuellement affiché (`getToolLevel(tool)`,
+alimenté par `surfaceTool.level`) ; `toLevel` vient d'un champ du panneau, `connectorToLevel`
+(« Étage d'arrivée »), qui n'est recalculé qu'à UN seul moment : au clic sur le bouton sidebar
+« Échelle » (`SurfaceEditorPanel.jsx:539`, `connectorToLevel: Number(surfaceToolState.level || 0) + 1`).
+Le sélecteur d'étage affiché (`SessionPage.jsx:244-248`, `handleDisplayLevelChange`, les flèches
+haut/bas du panneau) met à jour `surfaceTool.level` à chaque changement d'étage, **mais ne touche jamais
+`connectorToLevel`**, et l'outil Échelle reste actif après une pose réussie (persistance voulue,
+§12.9). Séquence concrète qui reproduit le refus : poser une échelle étage 0→1 (`level:0`,
+`connectorToLevel:1`) ; monter à l'étage 1 pour continuer (`level` passe à 1, `connectorToLevel` reste
+à 1, inchangé) ; cliquer pour poser la suite → `fromLevel=1`, `toLevel=1` → refus silencieux (message
+`connectorPlacementError`). Correspond exactement à la plainte de Saar (§11.7) : la pose EST refusée,
+pas un problème de rendu ni de moteur de monde — `[VÉRIFIÉ]` que le modèle de données lui-même
+(`connectors.js`, `worldCompiler.js` lignes 1025-1041) n'empêche pas d'empiler deux tronçons d'échelle
+à la même cellule (id distinct par tranche de niveaux, deux entrées `traversal:ladder:*` indépendantes) —
+seul le champ figé du panneau bloque.
+
+Le même défaut existe à l'identique pour l'Ascenseur (`SurfaceEditorPanel.jsx:524`, même formule) mais
+n'a jamais été signalé : un ascenseur se pose en général d'un coup avec sa plage complète de niveaux,
+alors qu'une échelle se construit étage par étage — le terrain où le défaut se voit est différent, la
+cause est la même ligne de raisonnement.
+
+**Piste de correctif, pas encore codée** : une seule autorité déjà responsable de synchroniser les
+champs dérivés de l'étage affiché existe — `handleDisplayLevelChange` (`SessionPage.jsx`), qui met déjà
+`level`/`elevation` en cohérence à chaque changement d'étage. Lui faire décaler `connectorToLevel` du
+même delta que `level` (préserver l'écart choisi par l'utilisateur — utile si un jour une échelle
+descend, ou couvre 2 étages d'un coup — plutôt que le réinitialiser à `+1` systématiquement) garde la
+règle « une propriété, une autorité » plutôt que de dupliquer une correction dans le panneau. Rien codé :
+plan présenté avant tout code, comme convenu.
+
+**Corrigé (2026-09-30)** : `handleDisplayLevelChange` (`SessionPage.jsx`) décale désormais
+`connectorToLevel` du même delta que `level` à chaque changement d'étage — poser une échelle, monter
+d'étage, continuer l'échelle ne tombe plus sur `toLevel === fromLevel`. `eslint` (0 erreur, avertissements
+pré-existants sans rapport), `npm run build` propres. **Non testé en navigateur** (aucun test automatisé
+ne couvre `SessionPage.jsx`, composant de page — nécessite le geste réel : poser, monter, continuer).
+
+**Trouvaille distincte en corrigeant, non traitée `[NOTÉ]`** : le sélecteur « Étage d'arrivée »
+(`SurfaceEditorPanel.jsx:599`) n'offre que les valeurs -2 à 6, alors que `level` couvre -8 à 16
+(`handleDisplayLevelChange`) — un défaut préexistant, indépendant de ce correctif, qui affecterait déjà
+sans lui toute pose d'échelle/ascenseur dont l'étage de départ est ≥6 ou ≤-3 (`<select>` sans option
+correspondante). Pas dans le périmètre de ce plan (un bug à la fois) — à cadrer séparément si Saar
+rencontre ce cas en pratique.
+
 ## Historique
 
 - **2026-09-30** — Chantier §16 (décomposition en un fichier par responsabilité) clos pour
