@@ -1191,8 +1191,29 @@ gestionnaires d'événements React/DOM, aucun test pur possible) :
      `Sidebar.jsx` (son propre prop `width`) → `SurfaceEditorPanel.jsx` → `SurfaceEffectPanel`, séparément
      de la chaîne `SessionPage.jsx` → `Editor3D.jsx` déjà en place pour Connecteur/Salle/Mur. `npx eslint`
      (0 problème)/`npm run build` propres.
-5. **Pile d'annulation fusionnable** (`updatable` + fenêtre de temps, three.js editor, §11.6.1) — après 4b,
-   qui génère les réglages continus à regrouper sur les quatre panneaux, pas seulement deux.
+5. **Pile d'annulation fusionnable — `[CODÉ]`, testé et confirmé fonctionnel par Saar en navigateur
+   (2026-09-30).** Audit réel (pas
+   supposé) des quatre panneaux avant de coder : seul le panneau Mur écrit en continu dans `surfaceData` à
+   chaque tick d'un `<input type="range">` — Apparence (`handleSurfaceWallAppearanceChange`) et profil
+   d'élévation (effet `wallElevationProfileActionId`, un id neuf par tick via `event.timeStamp`). Le panneau
+   Salle ne patch que `surfaceTool` (réglage du pinceau, pas la donnée) ; Connecteur/Effet n'ont que des
+   `<input type="number">`, un cas distinct et non confirmé comme un vrai problème — laissés tels quels,
+   extensibles avec le même mécanisme si Saar en fait le constat.
+   - `handleSurfaceDataChange(nextSurfaceData, mergeKey)` (`Editor3D.jsx`) : nouveau second paramètre
+     optionnel, reprend `updatable` + fenêtre de fusion de `History.js` (three.js editor, déjà sourcé en
+     §11.6.1). Un nouveau `surfaceUndoMergeRef` retient `{ key, timestamp }` du dernier push. Même `mergeKey`
+     dans les 500 ms du push précédent → aucune nouvelle entrée d'annulation (l'état d'avant-geste reste en
+     haut de pile, seul l'état courant/la sauvegarde réseau avancent) ; sinon comportement strictement
+     identique à avant. `mergeKey` absent (tous les autres appelants, non touchés) → comportement inchangé.
+   - Clé de fusion = `` `wall-appearance:${roomId}:${selectedRoomWallKeys.join(',')}` `` / `` `wall-elevation:
+     ${roomId}:${selectedRoomWallKeys.join(',')}` `` — même salle + même sélection d'arêtes = même geste,
+     calculée dans `Editor3D.jsx` (déjà en possession de `surfaceTool`), aucune prop à faire remonter depuis
+     `SurfaceWallPanel.jsx`.
+   - Fichier unique touché (`Editor3D.jsx`), aucun autre appelant modifié — un seul invariant (fusion des
+     commandes continues), pas mélangé à autre chose. `npx eslint` (0 problème)/`npm run build` propres ; pas
+     de test pur possible (logique de composant, pas une fonction `shared/`). Seul un test en navigateur peut
+     confirmer : glisser un curseur (usure/relief/motif ou profondeur d'élévation) en continu puis un seul
+     Ctrl+Z doit annuler tout le geste, pas un tick.
 6. **Poignée de redimensionnement — `[CODÉ]`, testé (logique pure), pas encore confirmé par Saar en
    navigateur.** Livrée avant 4b/5 (Saar : « c'est toi l'expert », lu comme une priorité assumée sur
    l'exigence répétée du §10c plutôt qu'un ordre technique).

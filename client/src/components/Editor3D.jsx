@@ -841,6 +841,7 @@ export default function Editor3D({
   const saveTimer = useRef(null)
   const surfaceUndoStackRef = useRef([])
   const surfaceRedoStackRef = useRef([])
+  const surfaceUndoMergeRef = useRef(null)
   const voxelSaveQueueRef = useRef(Promise.resolve())
   const voxelSaveRevisionRef = useRef(0)
   const surfaceSaveQueueRef = useRef(Promise.resolve())
@@ -1097,15 +1098,28 @@ export default function Editor3D({
     }
   }, [saveFireAndForget, saveSurfaceFireAndForget])
 
-  const handleSurfaceDataChange = useCallback((nextSurfaceData) => {
+  // `mergeKey` optionnel (§12.10 point 5, PLAN_WORLD_BUILDER_REWORK.md) : reprend `updatable` +
+  // fenêtre de fusion de `History.js` (three.js editor) — un curseur glissé en continu (matériau,
+  // profil d'élévation) ne doit produire qu'UNE entrée d'annulation, pas une par tick. Même
+  // `mergeKey` dans les 500 ms du push précédent → pas de nouvelle entrée (l'état d'avant-geste
+  // reste en haut de pile) ; sans `mergeKey`, comportement inchangé pour tous les autres appelants.
+  const handleSurfaceDataChange = useCallback((nextSurfaceData, mergeKey = null) => {
     if (nextSurfaceData === surfaceDataRef.current) return
-    surfaceUndoStackRef.current = [
-      ...surfaceUndoStackRef.current.slice(-49),
-      cloneSurfaceData(surfaceDataRef.current),
-    ]
-    surfaceRedoStackRef.current = []
-    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
-    setSurfaceRedoDepth(0)
+    const now = Date.now()
+    const previousMerge = surfaceUndoMergeRef.current
+    const canMerge = mergeKey != null
+      && previousMerge?.key === mergeKey
+      && now - previousMerge.timestamp < 500
+    if (!canMerge) {
+      surfaceUndoStackRef.current = [
+        ...surfaceUndoStackRef.current.slice(-49),
+        cloneSurfaceData(surfaceDataRef.current),
+      ]
+      surfaceRedoStackRef.current = []
+      setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+      setSurfaceRedoDepth(0)
+    }
+    surfaceUndoMergeRef.current = mergeKey != null ? { key: mergeKey, timestamp: now } : null
     surfaceDataRef.current = nextSurfaceData
     setSurfaceData(nextSurfaceData)
     isSurfaceDirty.current = true
@@ -1337,7 +1351,12 @@ export default function Editor3D({
       surfaceTool?.selectedRoomWallKeys || [],
       surfaceTool?.wallElevationProfile,
     )
-    if (result.surfaceData !== surfaceDataRef.current) handleSurfaceDataChange(result.surfaceData)
+    if (result.surfaceData !== surfaceDataRef.current) {
+      handleSurfaceDataChange(
+        result.surfaceData,
+        `wall-elevation:${surfaceTool?.selectedRoomId}:${(surfaceTool?.selectedRoomWallKeys || []).join(',')}`,
+      )
+    }
     onSurfaceToolChange?.({
       ...surfaceTool,
       wallElevationProfileActionId: null,
@@ -1352,7 +1371,12 @@ export default function Editor3D({
       surfaceTool?.selectedRoomWallKeys || [],
       appearance,
     )
-    if (result.surfaceData !== surfaceDataRef.current) handleSurfaceDataChange(result.surfaceData)
+    if (result.surfaceData !== surfaceDataRef.current) {
+      handleSurfaceDataChange(
+        result.surfaceData,
+        `wall-appearance:${surfaceTool?.selectedRoomId}:${(surfaceTool?.selectedRoomWallKeys || []).join(',')}`,
+      )
+    }
     if (result.error) {
       onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
     }
