@@ -22,16 +22,11 @@ import {
   roomToSurfaceToolPatch,
   isWorldPointVisibleAtLevel,
   parseFloorKey,
-  makeStairFromSelection,
-  stairStepBoxes,
   SURFACE_FINE,
   getToolElevation,
-  getToolFloorThickness,
-  getToolRoomHeightLevels,
   paintRoomWallEdges,
   paintRoomWallRoom,
   roomWallEdgeKeyAtPoint,
-  classifyRoomFootprintCells,
   paintRoomFootprintCells,
 } from '../lib/surfaceData.js' // Fonctions restées dans surfaceData.js
 
@@ -44,27 +39,29 @@ import {
   roomCellKey,
 } from '../lib/surfaceCore.js'
 
-import {
-  roomsWallSegments,
-  roomsWallRenderPaths,
-} from '../lib/roomWalls.js'
+import { roomsWallSegments } from '../lib/roomWalls.js'
 
 import {
   applyDoorConnector,
   applyElevatorConnector,
   applyLadderConnector,
-  makeDoorConnectorFromWallPoint,
-  makeElevatorConnectorFromCell,
-  makeLadderConnectorFromCell,
 } from '../lib/connectors.js'
 
 import {
   getWallRenderBox,
-  makeWallsFromDrag,
   applyWallDrag,
   getToolWallThicknessFine,
 } from '../lib/surfaceGeometry.js'
 import { getEffectRegionColor } from '../lib/effectRegionColors.js'
+
+import FloorPreview from './surfaceTools/FloorPreview.jsx'
+import RoomPreview from './surfaceTools/RoomPreview.jsx'
+import SelectionPreview from './surfaceTools/SelectionPreview.jsx'
+import WallPreview from './surfaceTools/WallPreview.jsx'
+import StairPreview from './surfaceTools/StairPreview.jsx'
+import EffectVolumePreview from './surfaceTools/EffectVolumePreview.jsx'
+import RoomFootprintPaintPreview from './surfaceTools/RoomFootprintPaintPreview.jsx'
+import ConnectorPreview from './surfaceTools/ConnectorPreview.jsx'
 
 import {
   makeRoomBoundaryArc,
@@ -100,81 +97,9 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
 
-function FloorPreview({ selection, surfaceTool }) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-
-  const y = getToolElevation(surfaceTool)
-  const isErase = selection?.mode === 'erase'
-  const thickness = isErase ? 0.03 : getToolFloorThickness(surfaceTool)
-  const editPlaneY = getEditPlaneY(surfaceTool)
-  const color = isErase ? '#ff5c7a' : '#5b8dee'
-  const opacity = isErase ? 0.28 : 0.35
-
-  return (
-    <mesh
-      position={[area.minX + area.width / 2, isErase ? editPlaneY + 0.08 : y, area.minZ + area.depth / 2]}
-    >
-      <boxGeometry args={[area.width, thickness, area.depth]} />
-      <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} />
-    </mesh>
-  )
-}
-
-function RoomPreviewMaterial() {
-  return <meshBasicMaterial color="#5b8dee" transparent opacity={0.2} depthWrite={false} />
-}
-
-function RoomPreview({ selection, surfaceTool }) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-
-  const baseY = getToolElevation(surfaceTool)
-  const height = getToolRoomHeightLevels(surfaceTool) * STORY_HEIGHT
-  const centerX = area.minX + area.width / 2
-  const centerZ = area.minZ + area.depth / 2
-  const wallY = baseY + height / 2
-  return (
-    <group>
-      <mesh position={[centerX, baseY, centerZ]}>
-        <boxGeometry args={[area.width, 0.08, area.depth]} />
-        <RoomPreviewMaterial />
-      </mesh>
-      <mesh position={[centerX, baseY + height, centerZ]}>
-        <boxGeometry args={[area.width, 0.08, area.depth]} />
-        <RoomPreviewMaterial />
-      </mesh>
-      <mesh position={[centerX, wallY, area.minZ]}>
-        <boxGeometry args={[area.width, height, 0.08]} />
-        <RoomPreviewMaterial />
-      </mesh>
-      <mesh position={[centerX, wallY, area.maxZ + 1]}>
-        <boxGeometry args={[area.width, height, 0.08]} />
-        <RoomPreviewMaterial />
-      </mesh>
-      <mesh position={[area.minX, wallY, centerZ]}>
-        <boxGeometry args={[0.08, height, area.depth]} />
-        <RoomPreviewMaterial />
-      </mesh>
-      <mesh position={[area.maxX + 1, wallY, centerZ]}>
-        <boxGeometry args={[0.08, height, area.depth]} />
-        <RoomPreviewMaterial />
-      </mesh>
-    </group>
-  )
-}
-
-function SelectionPreview({ selection, surfaceTool }) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-
-  return (
-    <mesh position={[area.minX + area.width / 2, getToolElevation(surfaceTool) + 0.08, area.minZ + area.depth / 2]}>
-      <boxGeometry args={[area.width, 0.04, area.depth]} />
-      <meshBasicMaterial color="#fbbf24" transparent opacity={0.22} depthWrite={false} />
-    </mesh>
-  )
-}
+// FloorPreview, RoomPreview, SelectionPreview, WallPreview, StairPreview, EffectVolumePreview :
+// extraits dans components/surfaceTools/ (§11.7, PLAN_WORLD_BUILDER_REWORK.md — décomposition en un
+// fichier par responsabilité, composants purs pilotés uniquement par leurs props).
 
 function SelectedRoomOverlay({ room, roomLookup, displayLevel }) {
   if (!room) return null
@@ -460,29 +385,6 @@ function PaintableRoomWalls({ room, displayLevel, scope, onPaint }) {
 // (`room.cells`) ; le mur n'en a aucune, il est redérivé des cases à chaque compilation. Peindre
 // directement des cases, comme Dungeondraft/RimWorld, évite la traduction case → mur → sens/
 // magnitude qui avait produit un bug d'échelle silencieux dans la première version).
-// Classe chaque case du rectangle glissé en direct (vert = sera appliquée, rouge = refusée) —
-// jamais de résultat partiel découvert seulement après le relâchement.
-function RoomFootprintPaintPreview({ surfaceData, roomId, cellMode, cells, displayLevel }) {
-  const classification = useMemo(
-    () => classifyRoomFootprintCells(surfaceData, roomId, cells, cellMode),
-    [surfaceData, roomId, cellMode, cells],
-  )
-  const y = levelToY(displayLevel) + 0.06
-  return (
-    <group renderOrder={44}>
-      {classification.cells.map(cell => {
-        if (cell.reason === 'already-in-room' || cell.reason === 'not-in-room') return null
-        const color = cell.accepted ? '#22c55e' : '#ef4444'
-        return (
-          <mesh key={roomCellKey(cell.x, cell.z)} position={[cell.x + 0.5, y, cell.z + 0.5]}>
-            <boxGeometry args={[0.94, 0.04, 0.94]} />
-            <meshBasicMaterial color={color} transparent opacity={0.45} depthWrite={false} depthTest={false} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
 
 function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMultiplier }) {
   const preview = useMemo(() => {
@@ -524,19 +426,6 @@ function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMu
   })
 }
 
-function EffectVolumePreview({ selection, surfaceTool }) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-  const baseY = getToolElevation(surfaceTool)
-  const height = Math.max(0.1, Number(surfaceTool?.effectHeight) || STORY_HEIGHT)
-  return (
-    <mesh position={[area.minX + area.width / 2, baseY + height / 2, area.minZ + area.depth / 2]} renderOrder={36}>
-      <boxGeometry args={[area.width, height, area.depth]} />
-      <meshBasicMaterial color="#fb7185" transparent opacity={0.2} depthWrite={false} />
-    </mesh>
-  )
-}
-
 function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
   return regions.map(region => {
     const bounds = region?.bounds
@@ -563,79 +452,6 @@ function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
       </mesh>
     )
   })
-}
-
-function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
-  const walls = makeWallsFromDrag(drag?.start, drag?.end, surfaceTool, activeMaterial, availableBlocks)
-  if (!walls?.length) return null
-
-  return (
-    <>
-      {walls.map(wall => {
-        const box = getWallRenderBox(wall)
-        if (!box) return null
-        return (
-          <mesh key={wall.id} position={box.position} rotation={[0, box.rotationY || 0, 0]}>
-            <boxGeometry args={box.args} />
-            <meshBasicMaterial color="#5b8dee" transparent opacity={0.28} depthWrite={false} />
-          </mesh>
-        )
-      })}
-    </>
-  )
-}
-
-function StairPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
-  const stair = makeStairFromSelection(drag, surfaceTool, activeMaterial, availableBlocks)
-  if (!stair) return null
-
-  return (
-    <>
-      {stairStepBoxes(stair).map((step, index) => (
-        <mesh key={index} position={step.position}>
-          <boxGeometry args={step.args} />
-          <meshBasicMaterial color="#7dd3fc" transparent opacity={0.3} depthWrite={false} />
-        </mesh>
-      ))}
-    </>
-  )
-}
-
-function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
-  const curveWallsById = useMemo(() => {
-    const rooms = normalizeSurfaceData(surfaceData).rooms
-    return new Map(
-      roomsWallRenderPaths(rooms)
-        .filter(wall => wall.axis === 'arc' && wall.curveId)
-        .map(wall => [wall.curveId, wall]),
-    )
-  }, [surfaceData])
-  if (!drag) return null
-  const connector = surfaceTool?.connectorType === 'door'
-    ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
-    : surfaceTool?.connectorType === 'ladder'
-      ? makeLadderConnectorFromCell(surfaceData, drag.end, surfaceTool)
-      : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
-  if (!connector) return null
-
-  if (connector.type === 'door') {
-    return (
-      <ConnectorSegment
-        connector={{ id: 'connector-preview', ...connector }}
-        curveWall={connector.curveId ? curveWallsById.get(connector.curveId) || null : null}
-        opacity={0.68}
-        displayLevel={Number(connector.level) || 0}
-      />
-    )
-  }
-
-  const height = Math.max(0.2, (Number(connector.topY) || connector.y + STORY_HEIGHT) - (Number(connector.y) || 0))
-  return (
-    <mesh position={[connector.x + 0.5, connector.y + height / 2, connector.z + 0.5]} renderOrder={35}>
-      <boxGeometry args={[1, height, 1]} />
-      <meshBasicMaterial color="#a78bfa" transparent opacity={0.34} depthWrite={false} />
-    </mesh>
-  )
 }
 
 export default function SurfaceEditorScene({

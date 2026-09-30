@@ -843,7 +843,50 @@ l'extraction du moteur commun) :
 à l'effet de pose, corrigé en l'ajoutant aux dépendances), `npm run build` propre, `node --test
 client/src/lib/surfaceData.test.mjs` 49/49 inchangé. **Non testé : le double-aperçu connecteur en navigateur**
 (le seul des trois avec un effet visuel — poser une porte/ascenseur/échelle en glissant devrait maintenant
-n'afficher qu'un seul aperçu).
+n'afficher qu'un seul aperçu). **`Fonctionnel` (Saar, 2026-09-30, testé en navigateur).**
+
+### 11.8. Décomposition en un fichier par responsabilité — étape 2, début (2026-09-30)
+
+**Ajustement de méthode présenté et validé par Saar avant de coder** : plutôt que dessiner le moteur commun
+complet puis migrer les 11 outils dessus (risque de deviner une forme fausse pour des outils pas encore
+vraiment touchés — le garde-fou second-system effect du §11.0), le moteur grossit **par la preuve** : un
+outil à la fois, une règle commune n'est généralisée qu'une fois confirmée par un 2ᵉ/3ᵉ cas réel.
+
+**`[CODÉ]`, comportement préservé, `⚠️ non testé en navigateur`.** Premier geste, mécanique et à faible
+risque (déplacer du code déjà correct, pas le réécrire) : les 6 composants d'aperçu 3D purs de
+`SurfaceEditorScene.jsx` (pilotés uniquement par leurs props, aucune fermeture sur l'état interne du
+composant) extraits dans `client/src/components/surfaceTools/` — un fichier chacun (`FloorPreview.jsx`,
+`RoomPreview.jsx`, `SelectionPreview.jsx`, `WallPreview.jsx`, `StairPreview.jsx`,
+`EffectVolumePreview.jsx`). Comportement identique vérifié : seule différence de forme, l'alias local
+`getEditPlaneY` (littéralement `getToolElevation` sans rien ajouter) inliné dans le nouveau `FloorPreview.jsx`
+plutôt que réimporté depuis `SurfaceEditorScene.jsx` pour ce seul appelant — pas une simplification hors
+périmètre, une conséquence directe du déplacement. Imports nettoyés en conséquence dans
+`SurfaceEditorScene.jsx` (`getToolFloorThickness`, `getToolRoomHeightLevels`, `makeStairFromSelection`,
+`stairStepBoxes`, `makeWallsFromDrag` : plus utilisés que par ces composants, retirés ; `getWallRenderBox`,
+`STORY_HEIGHT`, `normalizeCellSelection`, `getToolElevation` : vérifiés encore utilisés ailleurs dans le
+fichier, conservés). `SurfaceEditorScene.jsx` : 1550 → 1417 lignes. Laissés en place pour un tour ultérieur
+(plus couplés : `ConnectorPreview` a son propre `useMemo`/état dérivé de `surfaceData`,
+`RoomFootprintPaintPreview` est partagée par `reshape-room`/`wall-reshape`, deux « sous-outils » traités à
+part par ce chantier, pas des outils sidebar comme les 6 extraits ici).
+
+`npx eslint` (0 problème), `npm run build` propre, `node --test client/src/lib/surfaceData.test.mjs` 49/49
+inchangé. **Testé, `Fonctionnel` (Saar, 2026-09-30).**
+
+**Suite immédiate, même tour** : les deux composants laissés en attente ci-dessus extraits à leur tour, même
+recette mécanique — `ConnectorPreview.jsx` (son `useMemo` déplacé avec lui, aucune fermeture sur l'état de
+`SurfaceEditorScene.jsx`) et `RoomFootprintPaintPreview.jsx`. Imports nettoyés pareillement
+(`classifyRoomFootprintCells`, `makeDoorConnectorFromWallPoint`, `makeElevatorConnectorFromCell`,
+`makeLadderConnectorFromCell`, `roomsWallRenderPaths` : plus utilisés que par ces deux composants, retirés ;
+`roomCellKey`, `normalizeSurfaceData`, `levelToY`, `STORY_HEIGHT` : encore utilisés ailleurs, conservés).
+`SurfaceEditorScene.jsx` : 1417 → 1352 lignes (1550 lignes au départ de cette étape — 198 lignes, 8
+composants d'aperçu, tous déplacés). `npx eslint` (0 problème), `npm run build` propre, 49/49 inchangé.
+**Non testé en navigateur** : le sous-outil Remodeler/poignée de mur (aperçu vert/rouge) et le geste de pose
+de connecteur (aperçu réel du modèle) — aucune régression attendue, code déplacé à l'identique.
+
+Reste dans `SurfaceEditorScene.jsx` après cette étape : la logique de glisser-déposer générique
+(`dragRef`/`setDrag`), le dispatch pointerDown/pointerMove/pointerUp par mode, et les overlays de sélection
+(`RoomArcPreview`, `RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — pas des aperçus de pose, une
+familles différente, pas encore auditée pour extraction.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 
