@@ -2049,6 +2049,35 @@ premier essai du patron « hook » pour `Editor3D.jsx` — jamais pratiqué avan
   globaux — la partie la plus risquée à découper (persistance, pas juste de l'UI), volontairement pas
   attaquée dans le même tour que ce premier essai du patron hook.
 
+### 16.11. Pourquoi la pile d'annulation + les files de sauvegarde restent non découpées ce tour — et une trouvaille en cours de route (2026-09-30)
+
+En préparant l'extraction de `useVoxelSaveQueue`/`useSurfaceSaveQueue`/`useSurfaceUndoRedo` (dernier tiers
+du §16.4), lecture complète du bloc restant. Deux raisons de stopper ici plutôt que de forcer la fin de la
+décomposition dans le même tour :
+
+1. **Couplage réel, pas juste apparent** : `handleSurfaceDataChange` (la pile d'annulation) appelle
+   directement `saveSurfaceFireAndForget` (la file de sauvegarde) à chaque commit — les deux partagent
+   aussi `battlemapRef`, le timer d'auto-save (60s) et l'effet de sauvegarde au démontage. Les séparer
+   proprement demande de décider quel hook appelle quel autre (interface, pas juste un copier-coller) —
+   contrairement à `useSurfacePanels` (§16.10) qui ne connaissait `handleSurfaceDataChange` que comme
+   callback opaque.
+2. **Trouvaille `[VÉRIFIÉ]` en cours de lecture, pas liée à la décomposition** : `isDirty` (dirtiness des
+   voxels, distinct de `isSurfaceDirty`) n'est JAMAIS mis à `true` dans tout `Editor3D.jsx` — seulement
+   remis à `false` après une sauvegarde réussie (ligne ~963). `saveFireAndForget` (voxels) fait donc
+   toujours un early-return et ne sauvegarde jamais rien. `setVoxels` n'est appelé qu'une fois, au
+   chargement initial (ligne ~815) — aucune pose de voxel ne semble passer par ce composant. `[HYPOTHÈSE]`
+   probable : reliquat de l'ancien système de pose voxel, remplacé par Salle/Mur (`SurfaceDungeonScene`),
+   `CulledVoxelScene` gardé seulement comme rendu de repli quand `!hasSurfaceContent(surfaceData)`. Pas
+   vérifié plus loin (pas cherché si un autre composant met `isDirty` à jour via une réf exposée), pas
+   touché — hors périmètre de cette décomposition, à vérifier séparément avant toute suppression.
+
+**Décision** : ne pas extraire ces hooks dans ce tour. Risque réel (persistance de données, pas juste de
+l'UI) contre un gain incertain tant que le point 2 n'est pas tranché — cohérent avec l'invariant STOP
+d'`AGENTS.md` (ne pas coder sur une zone dont une partie du fonctionnement réel est encore `[HYPOTHÈSE]`).
+Présenté à Saar pour décision : soit cadrer une vérification du point 2 en premier, soit accepter de
+laisser cette dernière partie d'`Editor3D.jsx` en l'état (elle n'empêche pas le reste du chantier) et
+passer aux 4 mini-chantiers du §15.2.
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
