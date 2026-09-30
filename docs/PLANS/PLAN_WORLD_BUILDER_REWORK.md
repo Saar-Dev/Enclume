@@ -990,9 +990,34 @@ test croisé, cross-check contre le comportement d'origine).
   sélection), un rectangle sur plusieurs salles ; et le premier clic du sous-outil Remodeler
   (ajouter/retirer une case).
 
-Reste : `paint-wall` (sort déjà du système générique de glisser-déposer, pas encore audité en détail) et le
-moteur de glisser-déposer générique lui-même (`dragRef`/`setDrag`/`skipNextCanvasMouseDownRef`) — pas
-encore touché.
+### 11.13. Décomposition — Peindre un mur, composants visuels déplacés (2026-09-30)
+
+**`[CODÉ]`, comportement préservé une fois une erreur trouvée EN ÉCRIVANT corrigée, `⚠️ non testé en
+navigateur`.** `handlePaintWallClick` (glue, appelle déjà des fonctions pures de `surfaceRooms.js`) : rien à
+faire, même verdict que Salle/wall-reshape. Les deux composants visuels (`PaintableRoomWall`/
+`PaintableRoomWalls` — meshes cliquables + surlignage au survol, seul mécanisme d'interaction de cet outil
+qui sort exprès du glisser-déposer générique depuis §11.9) déplacés dans
+`client/src/components/surfaceTools/PaintableRoomWalls.jsx`, même patron que les 8 aperçus du §11.8
+(composants React purs pilotés par leurs props, un `useState` local pour le survol n'y change rien).
+
+**Erreur trouvée avant qu'elle ne touche le vrai fichier, pas après** : en recopiant `PaintableRoomWalls`,
+j'ai d'abord écrit `onPaint={() => onPaint?.(room.id, wallRun.edgeKeys)}` — j'avais mal recopié le
+branchement d'origine, qui passe `edgeKeys => onPaint?.(room.id, edgeKeys)` (les clés RÉELLEMENT calculées
+au clic par `PaintableRoomWall`, selon la portée `case`/`tronçon`/`salle` et le point cliqué précis via
+`roomWallEdgeKeyAtPoint`). Ma version aurait toujours peint le tronçon entier, portée `case` cassée sans
+qu'aucun test ne le révèle. Trouvé en relisant le fichier source ligne à ligne avant de considérer
+l'extraction terminée, pas après un rapport de bug — corrigé avant tout commit.
+
+- `SurfaceEditorScene.jsx` : 1226 → 1149 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
+  inchangé (comportement de rendu, pas de logique pure nouvelle à tester par cross-check ici — la
+  vérification est la relecture qui a trouvé l'erreur ci-dessus, pas un test automatisé).
+- **Non testé en navigateur** : peindre un mur en portée case/tronçon/salle (surtout `case`, le cas que
+  l'erreur aurait cassé), survol (surlignage vert).
+
+Reste : le moteur de glisser-déposer générique lui-même (`dragRef`/`setDrag`/`skipNextCanvasMouseDownRef`,
+les 3 handlers `handleMouseDown`/`handleMouseMove`/`handleMouseUp`) — la dernière pièce, celle qui reste
+justement parce qu'elle est transverse à tous les outils plutôt que propre à un seul. Pas encore touché ;
+`SurfaceEditorScene.jsx` est passé de 1550 à 1149 lignes sur cette décomposition (401 lignes, 26 %).
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 

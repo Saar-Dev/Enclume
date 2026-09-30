@@ -19,7 +19,6 @@ import {
   getToolElevation,
   paintRoomWallEdges,
   paintRoomWallRoom,
-  roomWallEdgeKeyAtPoint,
   paintRoomFootprintCells,
 } from '../lib/surfaceData.js' // Fonctions restées dans surfaceData.js
 
@@ -42,6 +41,7 @@ import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumeP
 import { computeConnectorPlacement } from '../lib/surfaceTools/computeConnectorPlacement.js'
 import { resolveSelectHit } from '../lib/surfaceTools/resolveSelectHit.js'
 import { resolveReshapeRoomCellMode } from '../lib/surfaceTools/resolveReshapeRoomCellMode.js'
+import PaintableRoomWalls from './surfaceTools/PaintableRoomWalls.jsx'
 
 import FloorPreview from './surfaceTools/FloorPreview.jsx'
 import RoomPreview from './surfaceTools/RoomPreview.jsx'
@@ -289,86 +289,6 @@ function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, 
 
 // Outil « Peindre un mur » — clic direct (pas de sélection préalable), portée choisie explicitement
 // par un sélecteur dans le panneau (case / tronçon / salle), jamais par un compteur de clics.
-function PaintableRoomWall({ wall, displayLevel, thickness, scope, onPaint }) {
-  const [hovered, setHovered] = useState(false)
-  const points = wall.axis === 'arc' ? wall.points : [wall.from, wall.to]
-  const y = levelToY(displayLevel)
-  const segments = points.slice(0, -1).map((from, index) => ({ from, to: points[index + 1] }))
-  const linePoints = points.map(point => [point.x, y + STORY_HEIGHT + 0.045, point.z])
-
-  return (
-    <group
-      onPointerDown={event => {
-        event.stopPropagation()
-        // event.point est déjà en unités brutes de scène (même repère que wall.from/wall.to) —
-        // le mesh cliquable est positionné en brut par getWallRenderBox malgré l'aller-retour par
-        // SURFACE_FINE en interne. Diviser ici une deuxième fois (bug d'origine, 2026-09-28)
-        // écrasait la position réelle du clic et clampait toujours sur la première case du mur.
-        const hitPoint = { x: event.point.x, z: event.point.z }
-        const caseKey = scope === 'case' ? roomWallEdgeKeyAtPoint(wall, hitPoint) : null
-        const edgeKeys = scope === 'case' && caseKey ? [caseKey] : wall.edgeKeys
-        onPaint?.(edgeKeys)
-      }}
-      onPointerOver={event => {
-        event.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      {segments.map((segment, index) => {
-        const box = getWallRenderBox({
-          axis: 'segment',
-          x0: segment.from.x * SURFACE_FINE,
-          x1: segment.to.x * SURFACE_FINE,
-          z0: segment.from.z * SURFACE_FINE,
-          z1: segment.to.z * SURFACE_FINE,
-          y,
-          height: STORY_HEIGHT,
-          thickness,
-        })
-        if (!box) return null
-        return (
-          <mesh
-            key={`${wall.id}:paint-hit:${index}`}
-            position={box.position}
-            rotation={[0, box.rotationY || 0, 0]}
-            renderOrder={42}
-          >
-            <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.6)]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-          </mesh>
-        )
-      })}
-      {hovered && (
-        <Line
-          points={linePoints}
-          color="#22c55e"
-          lineWidth={4}
-          transparent
-          opacity={0.95}
-          depthTest={false}
-          renderOrder={43}
-        />
-      )}
-    </group>
-  )
-}
-
-function PaintableRoomWalls({ room, displayLevel, scope, onPaint }) {
-  if (!room || room.wallEnabled === false) return null
-  const thickness = Math.max(2, Number(room.wallThickness) || 1)
-  return roomSelectableWallRuns(room).map(wallRun => (
-    <PaintableRoomWall
-      key={wallRun.id}
-      wall={wallRun}
-      displayLevel={displayLevel}
-      thickness={thickness}
-      scope={scope}
-      onPaint={edgeKeys => onPaint?.(room.id, edgeKeys)}
-    />
-  ))
-}
-
 // Aperçu du geste « peindre/effacer des cases » (Solution A, 2026-09-28 — remplace une première
 // version « poignée sur mur » : dans ce module, la case est la seule donnée à identité stable
 // (`room.cells`) ; le mur n'en a aucune, il est redérivé des cases à chaque compilation. Peindre
