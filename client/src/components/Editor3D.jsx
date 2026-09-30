@@ -10,6 +10,7 @@ import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import { useSurfacePanels } from '../lib/useSurfacePanels.js'
+import { useLegacyVoxelState } from '../legacyVoxel/useLegacyVoxelState.js'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import SurfaceRoomPanel from './SurfaceRoomPanel.jsx'
@@ -770,29 +771,22 @@ export default function Editor3D({
   const { entities } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
-  const [voxels, setVoxels] = useState({})
   const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
   const [surfaceSaveError, setSurfaceSaveError] = useState(null)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
-  const isDirty = useRef(false)
   const isSurfaceDirty = useRef(false)
   const saveTimer = useRef(null)
   const surfaceUndoStackRef = useRef([])
   const surfaceRedoStackRef = useRef([])
   const surfaceUndoMergeRef = useRef(null)
-  const voxelSaveQueueRef = useRef(Promise.resolve())
-  const voxelSaveRevisionRef = useRef(0)
   const surfaceSaveQueueRef = useRef(Promise.resolve())
   const surfaceSaveRevisionRef = useRef(0)
   const [surfaceUndoDepth, setSurfaceUndoDepth] = useState(0)
   const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
   const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
   const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
-  // voxelsRef — miroir de voxels pour accès dans le cleanup useEffect (évite le stale closure)
-  const voxelsRef = useRef(voxels)
-  useEffect(() => { voxelsRef.current = voxels }, [voxels])
   const surfaceDataRef = useRef(surfaceData)
   const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
@@ -802,18 +796,7 @@ export default function Editor3D({
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
-  // ─── Initialisation voxels depuis battlemap.voxel_data ──────────────────
-  // Format base après migration 30 : { "x:y:z": { tex, geo, r } }
-  // Format mémoire React : { "x:y:z": { x, y, z, tex, geo, r } }
-  useEffect(() => {
-    if (!battlemap?.voxel_data) return
-    const map = {}
-    for (const [key, val] of Object.entries(battlemap.voxel_data)) {
-      const [x, y, z] = key.split(':').map(Number)
-      map[key] = { x, y, z, tex: val.tex, geo: val.geo, r: val.r }
-    }
-    setVoxels(map)
-  }, [battlemap?.id])
+  const { voxels, voxelsRef, saveVoxelsFireAndForget } = useLegacyVoxelState(battlemap, battlemapRef, setBattlemap)
 
   useEffect(() => {
     const normalized = normalizeSurfaceData(battlemap?.surface_data)
@@ -912,59 +895,6 @@ export default function Editor3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blueprintIds])
 
-  // ─── Helper save synchrone — fire-and-forget ────────────────────────────
-  // Utilisé dans les contextes où async ne peut pas être attendu
-  // (cleanup useEffect, setInterval).
-  // Construit le payload et lance fetch sans await — le navigateur complète
-  // la requête en arrière-plan même après le démontage React.
-  const saveFireAndForget = useCallback((currentVoxels) => {
-    const bm = battlemapRef.current
-    if (!isDirty.current || !bm?.id) return
-    const battlemapId = bm.id
-    const revision = voxelSaveRevisionRef.current + 1
-    voxelSaveRevisionRef.current = revision
-    const payload = {}
-    for (const [key, v] of Object.entries(currentVoxels)) {
-      payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
-    }
-
-    voxelSaveQueueRef.current = voxelSaveQueueRef.current
-      .catch(() => {})
-      .then(() => {
-        const currentBattlemap = battlemapRef.current
-        return fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/voxels`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            voxel_data: payload,
-            voxel_revision: currentBattlemap?.voxel_revision ?? 0,
-          }),
-        })
-      })
-      .then(async response => {
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data.error || `Sauvegarde voxels HTTP ${response.status}`)
-        return data
-      })
-      .then(data => {
-        const isLatest = revision === voxelSaveRevisionRef.current
-        const nextBattlemap = {
-          ...battlemapRef.current,
-          world_revision: Math.max(
-            Number(battlemapRef.current?.world_revision || 0),
-            Number(data.world_revision || 0),
-          ),
-          voxel_revision: data.voxel_revision,
-          ...(isLatest ? { voxel_data: payload } : {}),
-        }
-        battlemapRef.current = nextBattlemap
-        setBattlemap(nextBattlemap)
-        if (isLatest) isDirty.current = false
-      })
-      .catch(err => console.error('[Editor3D] Sauvegarde échouée :', err))
-  }, [setBattlemap])
-
   const saveSurfaceFireAndForget = useCallback((currentSurfaceData) => {
     const bm = battlemapRef.current
     if (!isSurfaceDirty.current || !bm?.id) return
@@ -1021,22 +951,22 @@ export default function Editor3D({
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
   useEffect(() => {
     saveTimer.current = setInterval(() => {
-      saveFireAndForget(voxelsRef.current)
+      saveVoxelsFireAndForget(voxelsRef.current)
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }, 60000)
     return () => clearInterval(saveTimer.current)
-  }, [saveFireAndForget, saveSurfaceFireAndForget])
+  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef])
 
   // ─── Save au démontage (toggle retour mode jeu) ──────────────────────────
-  // Utilise saveFireAndForget — le cleanup useEffect ne peut pas await une Promise.
-  // battlemap.id en dépendance (pas saveFireAndForget) pour éviter une re-exécution
+  // Utilise saveVoxelsFireAndForget — le cleanup useEffect ne peut pas await une Promise.
+  // battlemap.id en dépendance (pas saveVoxelsFireAndForget) pour éviter une re-exécution
   // au changement de battlemap qui démonterait/remonterait inutilement.
   useEffect(() => {
     return () => {
-      saveFireAndForget(voxelsRef.current)
+      saveVoxelsFireAndForget(voxelsRef.current)
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }
-  }, [saveFireAndForget, saveSurfaceFireAndForget])
+  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef])
 
   // `mergeKey` optionnel (§12.10 point 5, PLAN_WORLD_BUILDER_REWORK.md) : reprend `updatable` +
   // fenêtre de fusion de `History.js` (three.js editor) — un curseur glissé en continu (matériau,

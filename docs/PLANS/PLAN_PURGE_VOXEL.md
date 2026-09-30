@@ -114,8 +114,45 @@ indépendant du matériau de base — les deux systèmes coexistent sur le même
 (ambiguïté déjà tranchée dans `docs/VOCABULARY.md`, citée en tête de ce plan). Sa section « Documentation
 dont j'ai besoin » liste le système de matériaux comme prérequis non lu — ce §6 y répond désormais.
 
+## 7. Lot 1 — isolement (pas suppression) du code voxel côté client, `Editor3D.jsx` uniquement (2026-09-30)
+
+Premier code écrit sur ce plan depuis sa création. Déclenché par la surprise de Saar en apprenant, en
+plein chantier `PLAN_WORLD_BUILDER_REWORK.md` §16 (décomposition d'`Editor3D.jsx`), qu'il restait du
+voxel dans l'éditeur — recherche faite avant toute décision (`Agent` en lecture seule, rapport complet
+transmis à Saar), confirmant le constat du §1 sans rien de nouveau. Stratégie explicite de Saar : **isoler
+avant de supprimer** — « au pire si erreur, il n'est pas supprimé ; au mieux, tout fonctionne et il ne
+reste qu'à supprimer le dossier ». Conforme à la méthode du §5 (« code mort d'abord, côté client ») et au
+garde-fou du §0 (« d'abord ce qui est déjà inerte et prouvé »).
+
+**Fait** : nouveau dossier `client/src/legacyVoxel/`, nommé explicitement pour signaler un candidat à
+suppression (pas une convention d'architecture à garder). `useLegacyVoxelState.js` — état `voxels`,
+chargement depuis `battlemap.voxel_data`, `voxelsRef`, et la sauvegarde `isDirty`/`voxelSaveQueueRef`/
+`voxelSaveRevisionRef`/la fonction fire-and-forget — confirmée morte au §1 (ticket `VOXEL-SAVE-INERT1`,
+`isDirty` jamais mis à `true`). Relocalisation strictement à l'identique, aucune ligne de logique changée
+(vérifié par lecture avant/après) ; seuls deux points corrigés pour l'outillage : un `eslint-disable`
+justifié (`react-hooks/set-state-in-effect`, règle qui cible spécifiquement les fichiers `useXxx.js`,
+déjà rencontrée au §16.10 de `PLAN_WORLD_BUILDER_REWORK.md`) et l'ajout de `voxelsRef` aux dépendances de
+2 `useEffect` dans `Editor3D.jsx` (une ref est stable par nature, ajout sans effet de bord, juste pour
+que `eslint` ne signale plus une dépendance manquante apparue en sortant la ref de son hook).
+`Editor3D.jsx` : 1418 → 1348 lignes (`wc -l`). `eslint`/`build` propres.
+
+**Explicitement PAS fait, hors périmètre de ce lot** (cohérent avec « lots séparés, chacun petit ») :
+- `Canvas3D.jsx` (rendu joueur, ~32 occurrences recensées au §2) — zone différente, plus sensible
+  (visible par les joueurs, pas seulement le MJ en édition), son propre lot le jour venu.
+- La logique de repli voxel dans `EntityEditorScene` (`calcEntityPos`/`columnTops`/`raycastVoxels`,
+  toujours dans `Editor3D.jsx`) — celle-ci reste **fonctionnellement active** (pose d'entité sur un
+  battlemap sans `surface_data`), pas confirmée morte comme la sauvegarde ; l'isoler mélangerait du code
+  mort et du code vivant dans le même lot. Toujours lue depuis `Editor3D.jsx`, comportement inchangé.
+- `Voxel.jsx`/`VoxelBuilderTab.jsx` (ateliers), routes serveur, colonnes base — questions ouvertes du §4,
+  pas concernées par un lot purement client.
+
+**Reste à tester par Saar** : édition Salle/Mur/Connecteur/Zones dangereuses en session (ce lot ne
+change que l'endroit où vit du code déjà mort ou déjà lu à l'identique — aucun comportement visible
+attendu, mais un test reste dû comme pour tout le reste de ce chantier).
+
 ## Historique
 
+- **2026-09-30** — §7 ajouté : premier code de ce plan (isolement, pas suppression, voir §7).
 - **2026-09-27** — §6 ajouté : système de matériau procédural répertorié en détail (capacités réelles,
   pipeline moteur→catalogue via l'atelier, lien avec `PLAN_DECALS.md`) sur demande de Saar, qui
   découvrait mal l'étendue de « Matière + Motif ». Documentation seule, aucun code touché.

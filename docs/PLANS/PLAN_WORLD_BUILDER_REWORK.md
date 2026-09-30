@@ -2078,6 +2078,10 @@ Présenté à Saar pour décision : soit cadrer une vérification du point 2 en 
 laisser cette dernière partie d'`Editor3D.jsx` en l'état (elle n'empêche pas le reste du chantier) et
 passer aux 4 mini-chantiers du §15.2.
 
+**Suite** : le point 2 (`isDirty` voxel) a déclenché son propre chantier, désormais suivi dans
+`docs/PLANS/PLAN_PURGE_VOXEL.md` §7 (isolement du code voxel mort, pas une suppression) — pas ici, pour
+ne pas mélanger un lot de purge avec ce chantier de décomposition (règle explicite du §0 de ce plan).
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
