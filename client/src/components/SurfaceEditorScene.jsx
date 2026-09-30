@@ -38,18 +38,13 @@ import {
 import { roomsWallSegments } from '../lib/roomWalls.js'
 
 import {
-  applyDoorConnector,
-  applyElevatorConnector,
-  applyLadderConnector,
-} from '../lib/connectors.js'
-
-import {
   getWallRenderBox,
   getToolWallThicknessFine,
 } from '../lib/surfaceGeometry.js'
 import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
 import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumePayload.js'
+import { computeConnectorPlacement } from '../lib/surfaceTools/computeConnectorPlacement.js'
 
 import FloorPreview from './surfaceTools/FloorPreview.jsx'
 import RoomPreview from './surfaceTools/RoomPreview.jsx'
@@ -1033,11 +1028,7 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'connector') {
-        const nextData = surfaceTool?.connectorType === 'door'
-          ? applyDoorConnector(surfaceData, finalDrag.end, surfaceTool)
-          : surfaceTool?.connectorType === 'ladder'
-            ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
-            : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
+        const nextData = computeConnectorPlacement(surfaceData, finalDrag.end, surfaceTool)
         if (nextData === surfaceData) {
           onSurfaceToolChange?.({
             ...surfaceTool,

@@ -926,11 +926,38 @@ problème), `npm run build` propre, `node --test client/src/lib/surfaceData.test
 client/src/lib/surfaceTools/applyToolMode.test.mjs client/src/lib/surfaceTools/buildEffectVolumePayload.test.mjs`
 57/57. **Testé, `Fonctionnel` (Saar, 2026-09-30).**
 
-Reste dans `SurfaceEditorScene.jsx` après cette étape : la logique de glisser-déposer générique
-(`dragRef`/`setDrag`), les branches `if (mode === X) {...}` de `select`/`room`/`connector`/`reshape-room`/
-`wall-reshape`/`paint-wall` (pointerDown/pointerMove/pointerUp — pas encore lues en entier pour ces 6, à
-faire un outil à la fois avant tout code), et les overlays de sélection (`RoomArcPreview`,
-`RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — familles différentes, pas encore auditées.
+### 11.11. Décomposition — Salle (rien à faire) et dispatch pur du Connecteur (2026-09-30)
+
+Lecture complète (pointerDown/pointerMove/pointerUp) faite avant tout code pour Salle, Connecteur,
+Remodeler et la poignée de mur, comme annoncé.
+
+- **Salle : rien à extraire, constat pas un correctif.** `pointerDown`/`pointerMove` suivent le chemin par
+  défaut (aucun cas spécial) ; `pointerUp` n'a que 4 lignes de glue (appel à `applyRoomSelectionWithResult`,
+  déjà une fonction pure de `surfaceRooms.js` — donc déjà « un fichier, une responsabilité » à ce niveau —
+  puis sauvegarde + `preventDefault`/`stopPropagation`). Créer un fichier ici aurait été de l'abstraction
+  sans besoin réel (garde-fou §11.0).
+- **Connecteur : `[CODÉ]`, comportement préservé (test croisé), `⚠️ non testé en navigateur`.** Seul le
+  dispatch pur (porte/ascenseur/échelle → quelle fonction `apply*Connector` appeler) extrait —
+  `computeConnectorPlacement(surfaceData, dragEnd, tool)`
+  (`client/src/lib/surfaceTools/computeConnectorPlacement.js`). Tout le reste reste dans
+  `SurfaceEditorScene.jsx`, propre au composant et pas mécaniquement séparable sans y toucher : le message
+  d'erreur traduit, la remise à zéro de `connectorWallEdgeKeys`, et surtout les deux points de
+  `preventDefault`/`stopPropagation` différents selon succès/échec (trouvés en lisant, pas supposés
+  identiques). Le clic sans point valide en `pointerDown` (garde une porte de démarrer un glissé fantôme) et
+  l'aperçu au survol en `pointerMove` (`hoverPreview`) sont, eux, intégrés au moteur générique de
+  glisser-déposer partagé par plusieurs modes — pas extraits, un sujet à part.
+  - Test croisé neuf (3 tests) : chaque `connectorType` (et le repli implicite sur ascenseur) produit un
+    résultat `deepEqual` à l'appel direct de la fonction d'origine.
+  - `SurfaceEditorScene.jsx` : 1244 → 1236 lignes. `npx eslint` (0 problème), `npm run build` propre, `node
+    --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/applyToolMode.test.mjs
+    client/src/lib/surfaceTools/buildEffectVolumePayload.test.mjs
+    client/src/lib/surfaceTools/computeConnectorPlacement.test.mjs` 60/60. **Testé, `Fonctionnel` (Saar,
+    2026-09-30).**
+
+Reste : `select` (plusieurs sous-comportements : clic connecteur, clic mur, début de poignée — pas encore lu
+en entier), `reshape-room`/`wall-reshape` (déjà lus une fois plus haut dans ce même tour, pas encore
+extraits), `paint-wall` (sort déjà du système générique), et le moteur de glisser-déposer lui-même
+(`dragRef`/`setDrag`) — pas encore touché.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 
