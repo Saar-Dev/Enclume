@@ -84,7 +84,7 @@ router.post('/register', async (req, res) => {
 
   const [user] = await db('users')
     .insert({ email, password_hash, username, color })
-    .returning(['id', 'email', 'username', 'color'])
+    .returning(['id', 'email', 'username', 'color', 'role'])
 
   const token = jwt.sign(
     { id: user.id, email: user.email, username: user.username },
@@ -132,7 +132,7 @@ router.post('/login', async (req, res) => {
   )
 
   res.cookie('token', token, COOKIE_OPTIONS)
-  res.json({ user: { id: user.id, email: user.email, username: user.username, color: user.color } })
+  res.json({ user: { id: user.id, email: user.email, username: user.username, color: user.color, role: user.role } })
 })
 
 // POST /api/auth/logout

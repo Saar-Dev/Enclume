@@ -73,7 +73,7 @@ router.put('/me', requireAuth, async (req, res) => {
   const [updated] = await db('users')
     .where({ id: req.user.id })
     .update(updates)
-    .returning(['id', 'email', 'username', 'color', 'updated_at'])
+    .returning(['id', 'email', 'username', 'color', 'role', 'updated_at'])
 
   // Régénérer le cookie JWT si username ou email a changé
   // — le socket.user vient du JWT, sans ça le nouveau username n'apparaît pas dans le chat
