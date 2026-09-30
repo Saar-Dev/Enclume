@@ -8868,3 +8868,47 @@ et 2 de la vue ; 17 tests des gestes client ; 882 tests purs de `shared` ; build
 **Décision de Saar (2026-09-27)** : « On va laisser ce chantier à ce stade dans l'immédiat. » Les Lots A, B1 et B2 sont clos, poussés et validés en jeu (`79f5557`, `e24da4c`, `5554b30`) : la règle des cases, l'infection par personnage et par localisation, et la réponse de soins par localisation
 sont conformes au livre. Rien n'est repris sans nouvelle demande de Saar. Restent en attente (voir `docs/ROADMAP.md`) : le Lot 2b de l'écran de revue (silhouette, choix des kits, `care` réellement envoyé), la reprise de l'ordre des bugs mis en pause pour ce chantier, et le ticket
 `EXO-AVARIE-LINE-CONVENTION` (décision de Saar en attente).
+
+## Session (Dev) — 2026-09-30 — Kiwi : crash serveur + bascule définitive `vtt` → `enclumeBD`
+
+**Contexte** : un `git pull` sur Kiwi (migrations 369-380, chantier Sources de contenu) a révélé un
+import mort dans `char-sheet.js` (`INTERCEPTION_LIMIT_FIELDS`/`parseInterceptionLimit`, référence à une
+fonctionnalité du Lot 3 CRD jamais committée) — `enclume-server` plantait en boucle dès le démarrage
+(`SyntaxError` ESM). Un conseil de redémarrage donné sans relire `docs/SERVEURDISTANTKIWI.md` ni
+`docs/SYSTEME/CORE.md` P57 a précipité le crash réel, alors que ces documents avertissaient précisément
+contre un redémarrage non diagnostiqué (risque de collision `migrate.latest()` entre `vtt` et les 310+
+migrations de la refonte du 22/08, jamais basculée sur Kiwi).
+
+**Diagnostic fait avant toute action** : sauvegarde (`pg_dump` de `vtt`, filet de sécurité) ; lecture de
+`knex_migrations` sur `vtt` (357/378 migrations déjà appliquées sans collision — la crainte d'une
+collision totale ne s'est pas vérifiée, cause exacte non élucidée et sans importance vu la décision
+prise) ; cause du crash trouvée par comparaison directe `git show HEAD` vs dossier de travail local
+(pas supposée) : l'import était poussé sans son export, qui n'existait que dans le Lot 3 non commité.
+
+**Décision (Saar, 2026-09-30)** : abandon complet de `vtt` plutôt que rattrapage — environnement encore
+en dev, perte de données acceptée explicitement (confirmé après vérification que les comptes/la
+campagne réels attendus étaient bien dans `enclumeBD`, pas perdus).
+
+**Livré** : retrait de l'import mort (`char-sheet.js`, commit isolé, Lot 3 local intact et non commité) ;
+découverte qu'`enclumeBD` existait déjà sur Kiwi (jamais documenté) avec 357/378 migrations déjà
+appliquées — les 21 manquantes appliquées proprement ; compte admin existant
+(`d.lebosse@protonmail.com`) promu via `ADMIN_BOOTSTRAP_EMAIL` (`server/src/lib/bootstrapAdmin.js`) ;
+`.env` repointé sur `enclumeBD` ; redémarrage réel, validé en usage (login, campagne « La Beta-Test
+Compagnie », panneau admin) ; `vtt` supprimée. `docs/SERVEURDISTANTKIWI.md` et `docs/SYSTEME/CORE.md`
+(P57, P-SRV-12) mis à jour pour refléter l'état résolu ; `PLAN_KIWI_BASCULE.md` clos (Règle 10).
+
+**Effet de bord trouvé, pas causé par ce chantier** : après connexion, le client affichait le rôle
+utilisateur ('user') au lieu du rôle réel en base — `POST /auth/login` ne renvoie pas `role` dans sa
+réponse (contrairement à `GET /auth/me`), et le store d'authentification n'est resynchronisé qu'au
+montage initial de l'app. Contournement immédiat : rechargement complet de la page après connexion.
+Correction du bug lui-même non faite (hors périmètre de ce chantier, à traiter séparément).
+
+**Testé** : démarrage réel du serveur sur Kiwi (logs propres, `Migrations à jour`, `BOOTSTRAP-ADMIN`
+effectif) ; connexion réelle par Saar, accès aux données de la campagne, accès au panneau admin (après
+rechargement de page) confirmés.
+**Non testé** : le reste du chantier Sources de contenu (Lots A/B/C) en usage réel sur Kiwi au-delà du
+démarrage ; le bug de rôle après login sur les autres comptes.
+**Données** : base `enclumeBD` de Kiwi passée de 357 à 378 migrations appliquées ; `vtt` supprimée
+définitivement (sauvegarde `pg_dump` conservée sur Kiwi, `~/backups/vtt_backup_20260930_204634.dump`).
+**Retour arrière** : aucun pour la suppression de `vtt` au-delà de la sauvegarde `pg_dump` (restauration
+manuelle, non triviale) — décision assumée par Saar, environnement de dev.

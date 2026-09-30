@@ -281,26 +281,24 @@ confinés à `migrations_archive/` — vérifier explicitement le chemin de chaq
 conclure à une régression réelle. Exclusion de configuration à écrire (scope de test), pas une
 suppression de fichiers archivés.
 
-### P57 — ⚠ Kiwi (serveur distant) n'a jamais reçu la bascule `vtt` → `enclumeBD` du 22/08
+### P57 — Kiwi (serveur distant) n'a longtemps pas reçu la bascule `vtt` → `enclumeBD` du 22/08 — RÉSOLU 2026-09-30
 `PLAN_MIGRATIONS_REFONTE.md` Phase 2 (2026-08-22) a créé une base **neuve**, `enclumeBD`, rejouée depuis
 les 310 fichiers de migration consolidés (P55) — `.env` **local** repointé dessus, `vtt` locale
-conservée intacte comme filet. Ce repointage n'a **jamais été fait sur Kiwi** (confirmé 2026-09-05,
-session BETA-40) : `docker exec enclume-postgres-1 psql -U vtt -d vtt -c "\l"` ne montre même pas
-`enclumeBD` dans la liste des bases — elle n'existe pas sur ce serveur. Le `.env` distant pointe encore
-sur `vtt`, l'ancienne base, jamais migrée.
+conservée intacte comme filet. Ce repointage n'a **pas été fait sur Kiwi avant le 2026-09-30** (confirmé
+2026-09-05, session BETA-40) — le `.env` distant est resté sur `vtt` plusieurs semaines après la refonte.
 
-**Danger concret** : le dossier `server/src/db/migrations/` du dépôt (que Kiwi récupère à chaque
-`git pull`) contient désormais les 310 fichiers **nouveaux** de la refonte (noms différents des ~260
-anciens fichiers, dont l'historique reste dans `knex_migrations` sur `vtt` distant). Un redémarrage du
-process sur Kiwi (`systemctl restart enclume-server`, ou un simple crash suivi du `Restart=on-failure`
-du service, `docs/SERVEURDISTANTKIWI.md`) appelle `db.migrate.latest()` sans garde — Knex verrait les
-310 fichiers comme jamais appliqués (noms inconnus de `knex_migrations`) et tenterait de les rejouer
-sur une base qui a déjà tout le schéma sous les anciens noms : collision quasi certaine dès la première
-migration de création de table, sur des **données de production réelles** (comptes, campagnes,
-personnages de joueurs actifs), pas une base jetable.
+**L'incident réel, pas seulement le risque théorique** : le 2026-09-30, un import mort poussé par erreur
+(`char-sheet.js` référençait un export d'une fonctionnalité en pause jamais committée) a fait planter
+`enclume-server` en boucle. Une suggestion de redémarrage donnée sans relire ce pitfall ni
+`docs/SERVEURDISTANTKIWI.md` au préalable a précipité un vrai crash au lieu de l'éviter — leçon
+retenue : un raisonnement juste en général sur Knex peut être faux sur cette instance précise, avec un
+vrai serveur en jeu à la clé. Ne jamais improviser une suggestion sur Kiwi sans relire la doc dédiée
+d'abord, même pour un symptôme qui semble sans rapport avec les migrations.
 
-**Avant toute manipulation sur Kiwi (migration, redémarrage après un pull, ou même un simple
-diagnostic)** : lire `docs/SERVEURDISTANTKIWI.md` §Migrations en entier, ne jamais lancer
-`migrate.latest()` ni redémarrer le service sans avoir d'abord confirmé l'état réel de
-`knex_migrations` sur `vtt` distant. Stratégie de rattrapage encore à trancher avec Saar au moment
-d'écrire ceci — ne pas improviser une bascule ou un rejeu en solo.
+**Bascule finalement exécutée le 2026-09-30** (diagnostic lecture-seule avant toute action, jamais
+deviné) : `enclumeBD` existait déjà sur Kiwi de façon inattendue — une copie antérieure de `vtt`, jamais
+documentée, avec 357/378 migrations déjà appliquées sans collision. Les 21 manquantes ont été appliquées
+proprement, le compte admin promu via `ADMIN_BOOTSTRAP_EMAIL` (`server/src/lib/bootstrapAdmin.js`),
+`.env` repointé, service redémarré, puis `vtt` supprimée (perte de données acceptée explicitement par
+Saar — environnement encore en dev à ce stade, `pg_dump` de sauvegarde conservé). Détail complet :
+`docs/SERVEURDISTANTKIWI.md`, `docs/JOURNAL8.md` (session 2026-09-30).

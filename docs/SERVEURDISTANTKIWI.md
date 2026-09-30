@@ -1,41 +1,20 @@
 # SERVEUR DISTANT — Documentation déploiement Enclume
 > Créé : 2026-06-01 — Session 68/69
-> Mis à jour : 2026-09-05 (⚠ P-SRV-12 — Kiwi jamais basculé sur `enclumeBD`, voir en tête de section
-> Migrations). Entrée précédente : 2026-08-21 (session dépannage post-pull, 67 commits de retard :
-> récidive skip-worktree sur client/package.json + nouveau sur client/package-lock.json (P-SRV-10),
-> journal Knex désynchronisé du schéma réel (P-SRV-11) — script de diagnostic pré-migration ajouté).
-> Entrée précédente : 2026-08-08 (DNS cassé + node_modules serveur désynchro, P-SRV-9 et section
-> Procédure git pull)
+> Mis à jour : 2026-09-30 — P-SRV-12 résolu : bascule `vtt` → `enclumeBD` exécutée, `vtt` supprimée
+> (voir entrée ci-dessous). `DATABASE_URL` de ce serveur pointe désormais sur `enclumeBD`.
+> Entrée précédente : 2026-09-05 (P-SRV-12 découvert, Kiwi encore sur `vtt`). Entrée précédente :
+> 2026-08-21 (session dépannage post-pull, 67 commits de retard : récidive skip-worktree sur
+> client/package.json + nouveau sur client/package-lock.json (P-SRV-10), journal Knex désynchronisé
+> du schéma réel (P-SRV-11) — script de diagnostic pré-migration ajouté). Entrée précédente :
+> 2026-08-08 (DNS cassé + node_modules serveur désynchro, P-SRV-9 et section Procédure git pull)
 
-## ⚠ P-SRV-12 — Ce serveur tourne encore sur `vtt`, jamais basculé sur `enclumeBD` (2026-09-05)
+## État actuel de la base (2026-09-30)
 
-`PLAN_MIGRATIONS_REFONTE.md` Phase 2 (2026-08-22, voir `docs/SYSTEME/CORE.md` P55/P57) a remplacé
-~260 fichiers de migration par 310 nouveaux (un par table + un par seed) et créé une base **neuve**,
-`enclumeBD`, pour les faire tourner proprement — `vtt` gardée intacte comme filet, jamais touchée.
-Ce repointage **n'a jamais été fait sur Kiwi**. Confirmé en session (BETA-40, roster Config campagne
-en échec) :
-
-```
-$ grep DATABASE_URL /home/didier/Enclume/.env
-DATABASE_URL=postgresql://vtt:...@localhost:5432/vtt
-$ docker exec enclume-postgres-1 psql -U vtt -d vtt -c "\l"
- postgres | vtt | ...
- template0 | vtt | ...
- template1 | vtt | ...
- vtt        | vtt | ...
- vtt_codex  | vtt | ...
- vtt_fusion | vtt | ...
-```
-
-`enclumeBD` n'existe même pas dans ce conteneur. Le dossier `server/src/db/migrations/` récupéré par
-`git pull` contient pourtant les 310 fichiers de la refonte (noms inconnus de `knex_migrations` sur
-`vtt`, qui garde l'historique des ~260 anciens noms). **Ne jamais lancer `migrate.latest()` ni
-redémarrer `enclume-server` sur ce serveur sans avoir d'abord vérifié l'état réel de
-`knex_migrations`** (section Migrations ci-dessous) — un redémarrage non contrôlé tenterait de rejouer
-les 310 fichiers sur une base qui a déjà tout le schéma, avec collision quasi certaine dès la première
-création de table, sur des données de production réelles (comptes, campagnes, personnages de joueurs
-actifs). Stratégie de rattrapage encore à trancher avec Saar — pas de bascule/rejeu en solo tant que ce
-n'est pas explicitement décidé.
+`DATABASE_URL` pointe sur `enclumeBD` (310+ fichiers de migration consolidés, `docs/SYSTEME/CORE.md`
+P55/P57). `vtt` (l'ancienne base) a été supprimée le 2026-09-30 avec l'accord explicite de Saar — un
+`pg_dump` (`~/backups/vtt_backup_20260930_204634.dump` sur Kiwi) reste comme filet si jamais besoin.
+Promotion admin gérée par `ADMIN_BOOTSTRAP_EMAIL` dans `.env` (`server/src/lib/bootstrapAdmin.js`) —
+idempotent, ne recrée pas de compte, promeut seulement un compte existant au démarrage.
 
 ---
 
@@ -225,7 +204,7 @@ const redis = new Redis({ host: 'localhost', port: 6379, password: process.env.R
 
 **Fix** : changer le mot de passe depuis l'intérieur du container :
 ```bash
-docker exec enclume-postgres-1 psql -U vtt -d vtt -c "ALTER USER vtt WITH PASSWORD 'nouveau_mdp';"
+docker exec enclume-postgres-1 psql -U vtt -d postgres -c "ALTER USER vtt WITH PASSWORD 'nouveau_mdp';"
 ```
 
 ### P-SRV-4 — Vite non accessible de l'extérieur
@@ -349,6 +328,34 @@ elles avaient réellement tourné (rien en base, rien dans MinIO, aucun code ne 
 **Prévention** : voir le script de diagnostic ajouté en tête de la section Migrations ci-dessus — à
 lancer systématiquement avant `migrate.latest()` sur ce serveur.
 
+### P-SRV-12 — Bascule `vtt` → `enclumeBD` jamais faite sur Kiwi, résolu au prix d'un crash réel (2026-09-05 → 2026-09-30)
+
+Symptôme initial (2026-09-05, BETA-40) : `.env` distant pointait encore sur `vtt` alors que la refonte
+locale du 22/08 (`docs/SYSTEME/CORE.md` P55/P57) avait créé `enclumeBD` en local trois semaines plus
+tôt — jamais répercuté sur Kiwi. Resté en l'état, documenté comme danger (voir P57), sans bascule
+exécutée.
+
+**L'incident du 2026-09-30** : un `git pull` a apporté un import mort dans `char-sheet.js` (référence à
+`INTERCEPTION_LIMIT_FIELDS`/`parseInterceptionLimit`, fonctionnalité en pause jamais committée avec son
+export) — `enclume-server` plantait en boucle dès le démarrage (`SyntaxError` ESM, avant même
+`migrate.latest()`). Un conseil de redémarrage donné sans relire ce document a précipité le crash réel
+plutôt que de l'éviter — leçon retenue en tête de ce fichier et dans `docs/SYSTEME/CORE.md` P57.
+
+**Diagnostic réel fait avant toute action** : `pg_dump` de `vtt` en premier (filet de sécurité,
+`~/backups/`) ; `knex_migrations` de `vtt` lu directement (357/378 migrations déjà appliquées sans
+collision — la crainte d'une collision totale ne s'est pas vérifiée) ; découverte que `enclumeBD`
+existait déjà sur Kiwi (copie antérieure de `vtt`, jamais documentée) avec le même état d'avancement.
+
+**Fix** : retrait de l'import mort (`char-sheet.js`, commit isolé) ; les 21 migrations manquantes
+appliquées sur `enclumeBD` (aucune collision) ; compte admin existant promu via `ADMIN_BOOTSTRAP_EMAIL`
+(`server/src/lib/bootstrapAdmin.js`) ; `.env` repointé sur `enclumeBD` ; redémarrage réel, validé en
+usage (login, campagne, onglet admin) ; `vtt` supprimée avec l'accord explicite de Saar (environnement
+encore en dev à ce stade — perte de données acceptée, dump conservé).
+
+**Prévention** : ne jamais conseiller une action sur Kiwi (redémarrage compris) à partir d'un
+raisonnement général sur Knex — toujours relire ce document en entier d'abord, même pour un symptôme
+qui semble sans rapport avec les migrations.
+
 ## Fichiers qui divergent entre local et serveur
 
 **Un seul fichier a une vraie raison durable de diverger.** Tous les autres sont pilotés par `.env`.
@@ -374,29 +381,17 @@ lancer systématiquement avant `migrate.latest()` sur ce serveur.
 **⚠ Piège session 82 — `client/package.json` en skip-worktree**
 La version serveur avait `quill`/`motion` mais pas `socket.io-client` → crash après `rm -rf node_modules`. Fix appliqué : `socket.io-client@^4.8.3` ajouté au repo (commit e4f80ef), skip-worktree retiré.
 
-## Seeds (première install uniquement)
+## Seeds
 
-`ref_equipment` doit être peuplé via le seed après les migrations :
+**Depuis `enclumeBD` (refonte du 2026-08-22, `docs/SYSTEME/CORE.md` P55)** : le seed est intégré aux
+migrations elles-mêmes (`NNN_table_seed.js`, une par table de référence) — `migrate.latest()` seul
+peuple tout, confirmé sur une base neuve locale (22/08) et sur Kiwi (30/09, 378/378 migrations, aucun
+script séparé nécessaire). La section ci-dessous (script `2_seed_equipment.js`) est l'ancienne procédure
+pré-refonte, conservée pour mémoire historique — ne plus l'utiliser sur `enclumeBD`.
 
-```bash
-cd /home/didier/Enclume/server/src/db/seeds
-
-# Dry run d'abord — attendu : ~715 "À insérer", 2 rejections non bloquantes
-node 2_seed_equipment.js
-
-# Si rapport cohérent → insert réel
-node 2_seed_equipment.js --insert
-```
-
-Le script charge lui-même le `.env` via dotenv — pas besoin de `--env-file`.
-
-**✅ Appliqué session 70 (2026-06-01) :** 715 items insérés, 2 rejections non bloquantes (`Oxyma` + `Poing Kryss` — `init_mod` invalide dans la source). `client/src/lib/api.js` ajouté au skip-worktree.
-
-**⚠ [INCONNU] 2026-08-08 :** migration `209_fix_ref_equipment_ammo_sap_iem.js` échoue au démarrage sur cette instance (`ref_equipment introuvable : 30985a34-876d-4c0e-89d0-5f49cab10809`). Piste à vérifier en premier (non confirmée) : le seed ci-dessus n'aurait jamais tourné sur cette instance PostgreSQL, ou une purge de volume Docker l'a effacé (P-SRV-3 montre que les volumes ne sont pas supprimés par défaut, mais rien n'exclut une purge manuelle antérieure). Vérification prévue :
-```bash
-docker exec enclume-postgres-1 psql -U vtt -d vtt -c "SELECT count(*) FROM ref_equipment;"
-```
-Si `0` : rejouer le seed (section ci-dessus) avant de relancer les migrations. Ne pas conclure avant d'avoir ce chiffre.
+**✅ Appliqué session 70 (2026-06-01), sur l'ancienne base `vtt`, aujourd'hui supprimée :** 715 items
+insérés via `cd server/src/db/seeds && node 2_seed_equipment.js --insert`, 2 rejections non bloquantes
+(`Oxyma` + `Poing Kryss` — `init_mod` invalide dans la source).
 
 ## Procédure git pull (mise à jour du serveur)
 
