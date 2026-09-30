@@ -1847,6 +1847,55 @@ pas la mémoire de session, qui disparaît. Statuts vérifiés à l'instant (git
 
 Rien de ceci n'est engagé — présenté pour décision de Saar avant tout code, comme le reste de ce chantier.
 
+## 16. Audit `Editor3D.jsx` / `SurfaceEditorPanel.jsx` — §15.3 point 1, lecture complète faite (2026-09-30)
+
+Lecture intégrale des deux fichiers (1616 + 1341 lignes), comme `Scene.jsx` l'avait été avant sa
+décomposition. `[VÉRIFIÉ]` l'hypothèse `[HYPOTHÈSE]` du §15.2 point 1 : **ils ne se découpent pas de la
+même façon l'un que l'autre, ni de la même façon que `Scene.jsx`** — trois formes différentes, pas une.
+
+### 16.1. `SurfaceEditorPanel.jsx` (1341 lignes) — le bon candidat « un outil, un fichier »
+
+Presque entièrement du JSX conditionnel sur `surfaceToolState.mode` (lignes 373-1340) : un bloc par mode
+(Salle, Mur, Escalier/Passerelle, Connecteur avec sous-cas porte/ascenseur/échelle, Peindre un mur avec sa
+portée case/tronçon/salle, Zone d'effet avec formulaire d'effet personnalisé + liste des zones posées),
+chaque bloc lisant surtout `surfaceToolState`/`updateSurfaceTool` et peu de dérivés locaux. Même patron que
+`Scene.jsx` avant ce tour : blocs déjà délimités par `if (surfaceToolState.mode === '...')`, faible
+couplage entre blocs. **Le même chantier « un fichier par responsabilité » s'applique tel quel** — extraire
+chaque bloc vers `surfaceTools/<Mode>PanelSection.jsx`, props = `surfaceToolState`, `updateSurfaceTool`,
+et les quelques callbacks/dérivés spécifiques (ex. `connectorChoices`, `worldEffects` pour le bloc Effet).
+
+### 16.2. `Editor3D.jsx` (1616 lignes) — deux parties de nature différente
+
+- **`EntityEditorScene` (lignes 114-795, ~680 lignes)** : scène de l'onglet Entités — mêmes ingrédients que
+  `Scene.jsx` avant décomposition : handlers pointerdown/pointerup/pointermove/keydown (rotation R, snap
+  grille G, suppression Delete) + fonctions de calcul pur (`calcEntityPos`, `calcPreciseEntityPos` — pose
+  au sol/sur mur avec supports voxels/sol/entités empilées —, `entityTopSupportAt`, `getEntityUnderCursor`).
+  **Même méthode que ce tour applicable telle quelle** : extraire les fonctions de calcul pur vers
+  `lib/entityTools/` (ou `surfaceTools/` si on juge le regroupement plus simple), test croisé par fonction,
+  glue (état React, appels API, émissions socket) laissée en place dans `EntityEditorScene`.
+- **Le composant `Editor3D` principal (lignes 806-1616, ~810 lignes)** : PAS un dispatch par mode d'outil —
+  de l'orchestration transverse : chargement voxels/surface depuis `battlemap`, deux files de sauvegarde
+  fire-and-forget avec suivi de révision (voxels + surface), pile d'annulation/rétablissement fusionnable
+  (§12.10 pt 5) avec ses raccourcis clavier, état d'ouverture des 3 panneaux flottants (connecteur/salle/mur)
+  et leurs effets de fermeture automatique, raccourcis clavier globaux (Échap, chiffres 1-5 géométrie), et
+  le rendu final (Canvas + 2 scènes + 3 panneaux). **Le patron « un outil, un fichier » ne s'applique pas ici
+  — la matière n'est pas un dispatch d'outil mais des préoccupations transverses.** Un découpage cohérent
+  serait par préoccupation, extraite en hook dédié : `useSurfaceUndoRedo` (pile + fusion + raccourcis),
+  `useBattlemapPersistence` ou deux hooks distincts pour les files voxels/surface (save queue + revision +
+  auto-save 60s + save au démontage), `useSurfacePanels` (état des 3 panneaux + fermetures croisées). Pas
+  vérifié plus finement que cette lecture (pas de découpage fichier par fichier proposé ici, juste la forme
+  du problème) — à cadrer comme son propre lot si Saar veut poursuivre ce chantier plutôt que les 4
+  mini-chantiers du §15.2.
+
+### 16.3. Ce que ça change pour l'ordre proposé au §15.3
+
+L'audit demandé est fait ; la réponse n'est pas « oui, même méthode partout » ni « non, rien ne s'applique »
+mais **trois découpages différents pour trois matières différentes**, dont un (les hooks d'`Editor3D`) n'a
+jamais été pratiqué dans ce chantier — pas la simple continuation mécanique du patron déjà validé.
+Décision pour Saar : poursuivre ici (probablement `SurfaceEditorPanel.jsx` d'abord, le plus mécanique et le
+moins risqué des trois) ou basculer sur les 4 mini-chantiers du §15.2 dans l'ordre déjà proposé. Rien
+d'engagé, aucun code écrit pour ce point.
+
 ## Historique
 
 - **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
