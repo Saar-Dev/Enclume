@@ -1947,6 +1947,25 @@ de handlers, risque de mauvais câblage de prop plus élevé que ces deux premie
 
 ## Historique
 
+- **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
+  retours à consigner, aucun des deux dans le périmètre de ce chantier (décomposition de fichiers) :
+  1. **Idée pour plus tard, non cadrée** : outil pipette pour Peindre un mur/sol — copier la configuration
+     d'un mur ou d'un sol déjà posé pour la réutiliser (mémoriser un matériau existant plutôt que de le
+     recomposer). Rien codé, rien cadré.
+  2. **Lag réel signalé par Saar (2-4s) à chaque changement de mur ciblé en mode Peindre un mur** — cause
+     racine trouvée `[VÉRIFIÉ]`, pas de ma décomposition de ce tour (aucune logique de matériau touchée,
+     seulement du JSX de panneau) : en portée « case », `paintRoomWallEdges` dérive le seed du matériau des
+     clés d'arête du mur cliqué (`surfaceRooms.js:1176-1179`) → `makeSurfaceMaterial` le réduit à un panier
+     `variant-${hash % 4}` (`materialDecision.js:57-63`) → le cache de matériaux procéduraux de
+     `SurfaceDungeonScene.jsx` est indexé sur ce panier (4 seulement, et changer de matériau/motif les
+     invalide tous). Peindre un mur jamais vu dans ce panier déclenche une régénération synchrone complète
+     de la texture (albédo/normal/rugosité, canvas 128×128 avec plusieurs passes par carte,
+     `proceduralMaterials.js`) + upload GPU ; repeindre le MÊME mur est instantané (cache atteint) —
+     cohérent avec l'observation de Saar. `[HYPOTHÈSE non instrumentée]` : le clonage JSON du document
+     entier pour la pile d'annulation et le recalcul de toute la géométrie de scène (`useMemo` clés sur
+     `surfaceData`, `SurfaceDungeonScene.jsx` lignes ~2064-2092) pourraient s'ajouter à ce coût, jamais
+     mesurés séparément de la bake elle-même. Pas corrigé — mérite son propre cadrage (chantier perf séparé),
+     décision de Saar à prendre séparément du reste de ce chantier.
 - **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
   document, à faire remonter dans `docs/EN_COURS.md` (pas fait ici pour éviter de committer les changements
   non liés d'une autre session en cours sur ce même fichier) :** Saar demande de revoir la logique de pose
