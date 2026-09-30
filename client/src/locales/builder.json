@@ -21,7 +21,6 @@
     "resetButton": "Reset"
   },
   "surfaceRoomPanel": {
-    "faceFloor": "Sol",
     "faceCeiling": "Plafond",
     "kicker": "Salle",
     "roomNameLabel": "Nom de la salle",
@@ -41,10 +40,8 @@
     "collisionSolid": "Plein",
     "collisionGlass": "Verre",
     "collisionGrate": "Grille",
-    "roomAppearanceLabel": "Apparence de la salle",
-    "connectorsSection": "Connecteurs verticaux",
-    "elevatorButton": "Ascenseur",
-    "ladderButton": "Échelle",
+    "reshapeButton": "Remodeler",
+    "reshapeHint": "Peins ou efface des cases pour changer le contour de la salle. Astuce : glisse directement un mur déjà sélectionné dans la vue 3D pour le pousser d'une rangée, sans changer d'outil.",
     "deleteRoomButton": "Supprimer la salle",
     "confirmDeleteButton": "Confirmer la suppression"
   },

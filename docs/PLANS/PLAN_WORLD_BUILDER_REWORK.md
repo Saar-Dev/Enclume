@@ -1224,6 +1224,178 @@ gestionnaires d'événements React/DOM, aucun test pur possible) :
 
 Chaque incrément 4b/5 reste un plan à part entière avant son propre code — rien commencé sur ceux-là.
 
+## 13. Constitution de l'interface — la règle explicitée, la faille qu'elle révèle, résolution
+
+Déclencheur (Saar, 2026-09-30) : « j'ai du mal à comprendre ce choix... est-ce qu'il y a une logique ? Ou
+c'est du random ? » à propos du partage sidebar/fenêtre, après avoir repéré que la poignée de
+redimensionnement (§10c/12.10 point 6) et le mode sidebar « Remodeler » (Plan B, §8) font manifestement la
+même famille de choses par deux chemins différents. La règle existait déjà par fragments (§12.9), jamais
+énoncée comme une règle unique ni vérifiée mode par mode. Fait ici, avant tout nouveau code — Saar : « on
+bloque tout le reste », priorité absolue à ce cadrage.
+
+### 13.1. La règle
+
+**Sidebar = quel outil est actif** (un verbe : « que fait mon prochain geste dans le viewport »).
+**Fenêtre/dock = les attributs de l'objet sélectionné** (un nom : « qu'est-ce qu'EST cet objet »), prolongée
+dans le viewport par des poignées de manipulation directe quand elles modifient un attribut de la sélection
+— ces poignées appartiennent au dock, pas à la sidebar, même si le geste a lieu dans la vue 3D.
+
+Sources externes qui confirment que ce n'est pas une invention : la distinction Toolbar/Properties editor de
+Blender (le Toolbar détermine ce que fait un clic dans la vue, le N-panel affiche les attributs de l'objet
+actif, indépendamment de l'outil) ; le code réel de l'éditeur three.js (`editor/js/Sidebar.js`, lu ce tour —
+`UITabbedPanel` fixe qui empile arbre de scène et propriétés de la sélection, jamais un outil de création).
+
+**Nuance nécessaire, pas une exception qui casse la règle** : un outil de peinture (Peindre un mur) reste
+légitimement dans la sidebar même s'il cible une salle déjà choisie, parce que son geste est un parcours
+libre du viewport (clics/glissés sur des cibles non prédéterminées à l'avance, un mur parmi N) — c'est
+l'identité de pinceau qui est active, pas un attribut fixe qu'on consulte. La forme d'une salle (cases,
+poignée), à l'inverse, N'A PAS de cible à choisir librement : elle porte toujours sur LA salle sélectionnée,
+dans son ensemble — un attribut au même titre que sa couleur ou son épaisseur de dalle. C'est ce qui la
+distingue de Peindre et la classe avec les attributs du panneau, pas avec les outils de la sidebar.
+
+### 13.2. La faille — pas une nouvelle décision, un écart entre un plan déjà écrit et le code livré
+
+`[VÉRIFIÉ, relecture du doc]` §12.9 point 4 (2026-09-29) le disait déjà : « La poignée de redimensionnement
+est un sous-outil du panneau Salle sélectionnée, pas un 12ᵉ bouton de la colonne de gauche : "cases" et
+"poignée" coexistent comme deux sous-modes d'édition de forme dans ce panneau. » L'incrément 6 (la poignée)
+a été livré conforme à cette règle — elle ne s'active qu'en mode Sélection, sur un mur déjà actif, jamais
+comme un bouton de sidebar. Mais **« Remodeler » (mode `reshape-room`, le pinceau de cases de Plan B) n'a
+jamais été sorti de la sidebar** — il est resté un bouton du groupe « Finir » (`SurfaceEditorPanel.jsx` ligne
+595), contredisant la règle que ce même chantier avait déjà tranchée. Ce que Saar a senti n'est pas un défaut
+de la logique sidebar/fenêtre — c'est une migration commencée (la poignée) et jamais terminée (le pinceau de
+cases est resté à l'ancien endroit).
+
+### 13.3. Audit complet contre la règle du 13.1 — chaque mode, chaque panneau `[VÉRIFIÉ, code lu ce tour]`
+
+**Sidebar — tous verbes, portée non prédéterminée, confirmés sains :**
+- Sélection : état neutre, base à partir de laquelle les sous-outils du dock s'activent.
+- Salle, Mur, Escalier, Passerelle, Porte/Ascenseur/Échelle : tracent/posent un NOUVEL objet — jamais un
+  attribut d'un objet existant. Sains.
+- Peindre (`paint-wall`) : cible une salle déjà choisie mais reste un parcours libre de murs non prédéterminés
+  (nuance du 13.1) — sain, déjà unifié avec le panneau Mur au niveau donnée (§10b, même instance de
+  `SurfaceMaterialEditor`), pas au niveau de son point d'entrée, et ce n'est pas nécessaire.
+- Effacer (`erase`) : « Dessine une zone pour supprimer les éléments de l'étage choisi » — portée libre, tout
+  l'étage, aucune salle présélectionnée requise. Sain.
+- **Remodeler (`reshape-room`) : seul écart trouvé** — son propre indice le dit lui-même (« sur les cases de
+  la salle SÉLECTIONNÉE ») : portée fixe (LA salle active dans son ensemble), pas un parcours libre. Un
+  attribut, pas un outil. À sortir de la sidebar (13.4).
+
+**Fenêtre/dock — tous attributs de la sélection, confirmés sains :**
+- `SurfaceRoomPanel` : libellé, dalle/plafond, épaisseur de mur, connecteurs, suppression — tous des
+  attributs de la salle. Recevra la forme (13.4).
+- `SurfaceWallPanel` : matériau (`SurfaceMaterialEditor`), courbure (Inverser/Appliquer/Redresser — un
+  attribut de forme du tronçon sélectionné, même famille que la forme d'une salle), suppression. Sain.
+- `SurfaceConnectorPanel`/`SurfaceEffectPanel` : attributs du connecteur/de la zone sélectionnée, contrôles
+  runtime maintenant correctement masqués en édition (§12.10 point 2). Sains.
+
+**Conclusion de l'audit : la règle est bonne, un seul mode l'enfreint, un seul correctif à faire.** Pas de
+refonte plus large nécessaire.
+
+### 13.4. Résolution concrète — migration de « Remodeler » vers le panneau Salle
+
+- Retirer le bouton « Remodeler » du groupe « Finir » dans `SurfaceEditorPanel.jsx` (passe de 3 boutons à 2 :
+  Peindre/Effacer).
+- Ajouter dans `SurfaceRoomPanel.jsx` une section « Forme » qui expose les deux sous-outils déjà prévus par
+  §12.9 point 4, l'un à côté de l'autre : le pinceau de cases (mécanique interne `reshape-room` inchangée,
+  seul le point d'entrée change) et la poignée (déjà fonctionnelle dans le viewport dès qu'un tronçon droit
+  de la salle sélectionnée est actif, §12.10 point 6).
+- **Faille de découvrabilité trouvée en creusant cette question, à corriger dans le même geste** `[VÉRIFIÉ]` :
+  la poignée n'est mentionnée dans AUCUN texte d'indice (`hintSelect` ne parle que de la sélection de salle,
+  pas de la poignée) et ne porte aucun signal visuel distinct au survol d'un mur déjà sélectionné (le
+  survol/actif produit le même `showLine`, qu'on soit sur le point « ça va (re)sélectionner » ou « ça va
+  glisser »). Sans la mention explicite dans la nouvelle section « Forme » du panneau, la poignée reste une
+  fonctionnalité invisible découverte par accident. Corriger : mention explicite dans la section « Forme »,
+  et si simple à faire dans le même geste, un curseur distinct (`grab`) au survol d'un tronçon déjà actif.
+- Le hint `reshapeRoomHint` reste valide tel quel (déjà écrit pour « la salle sélectionnée », pas pour un
+  bouton de sidebar). Le state `surfaceTool.mode === 'reshape-room'` reste identique en interne — seul son
+  déclenchement change d'endroit.
+
+**`[CODÉ]`** — Saar délègue (« tu es l'expert UX/UI... je te laisse faire »). Fait, dans l'ordre du 13.4 :
+- `SurfaceEditorPanel.jsx` : bouton et icône « Remodeler » retirés du groupe « Finir » (2 boutons restants :
+  Peindre/Effacer) ; son bloc d'indice/erreur dédié retiré aussi (devenu orphelin, plus aucun bouton ne
+  l'ouvre depuis la sidebar).
+- **`[VÉRIFIÉ en lisant, pas supposé]` obstacle réel trouvé en préparant ce déplacement** : `Editor3D.jsx`
+  ferme `SurfaceRoomPanel`/`SurfaceWallPanel` dès que `surfaceTool.mode !== 'select'` (sauf une exception déjà
+  câblée pour la pose de porte sur un mur sélectionné) — sans correction, le panneau Salle aurait disparu à
+  l'instant même où son propre bouton « Remodeler » est cliqué, avant même de pouvoir peindre une case.
+  Corrigé en étendant l'exception déjà existante (`mode === 'reshape-room'` ajouté à la liste, même
+  raisonnement que l'exception porte : toujours la même salle sélectionnée).
+- `SurfaceRoomPanel.jsx` : nouvelle section « Forme » (`FloatingPanelSection`), entre Géométrie et
+  Déplacement/collision — un bouton qui bascule `reshape-room`/`select` (mécanique interne `reshape-room`
+  inchangée), un rappel textuel explicite de la poignée (§13.1's faille de découvrabilité) affiché tant que
+  le mode est actif, et l'erreur d'arc (`roomArcError`) déplacée ici avec son déclencheur.
+- **Hors périmètre, assumé** : pas de curseur distinct au survol d'un mur déjà sélectionné (§13.4 l'envisageait
+  « si simple ») — aucun mécanisme de changement de curseur n'existe encore dans `SurfaceEditorScene.jsx`
+  (`[VÉRIFIÉ]`, recherché), l'introduire aurait été une nouvelle plomberie, pas une extension simple. Le
+  rappel textuel dans la section « Forme » reste le correctif de découvrabilité livré ce tour.
+- `builder.json`/`fr.json` : trois clés neuves (`surfaceRoomPanel.shapeSection/reshapeButton/reshapeHint`),
+  une clé morte retirée (`surfaceEditor.reshapeRoom`, plus aucun appelant). `npx eslint`/`node --check`
+  JSON/`npm run build` propres (0 erreur, avertissements React Hooks préexistants dans `Editor3D.jsx`, sans
+  rapport avec ce correctif). Pas encore testé par Saar en navigateur.
+
+### 13.5. Correctifs après le premier test navigateur de Saar (2026-09-30) — livré non testé, 5 défauts réels
+
+Le §13.4 livré sans jamais avoir été vu tourner. Saar, en le testant : « Tu es vraiment en mode expert
+UI/UX ?! ... Tu n'es PAS au niveau du tout. » Cinq défauts concrets, tous corrigés dans la foulée, avant
+pause forcée demandée par Saar.
+
+1. **`[CORRIGÉ]` Chevauchement fenêtre/sidebar** — `[VÉRIFIÉ, jamais vérifié avant]` la sidebar occupe déjà
+   le bord droit de l'écran (poignée de redimensionnement à gauche de la sidebar, largeur variable
+   220-500px, `Sidebar.styles.js`/`SessionPage.jsx`) — le panneau Salle/Mur fixé en `right:16` (increment
+   4a) recouvrait la sidebar dès que sa largeur dépassait ce décalage minimal, jamais testé en navigateur
+   avant ce tour. Un patron déjà établi pour exactement ce problème existait (`sidebarWidth` passé en prop,
+   utilisé par `DicePanel`/`EncyclopediaWindow`/`CombatOverlay`) mais n'était pas branché sur `Editor3D`.
+   Branché : `SessionPage.jsx` → `Editor3D.jsx` (nouvelle prop `sidebarWidth`) → `SurfaceRoomPanel.jsx`/
+   `SurfaceWallPanel.jsx` (nouvelle prop `dockRight = sidebarWidth + 16`, remplace le `right:16` figé).
+2. **`[CORRIGÉ]` Section « Forme » stupide** — Saar : « Géométrie sert à ça. » Fusionnée dans la section
+   Géométrie existante (plus de section dédiée) — la classification verbe/nom du §13.1 restait juste, mais
+   je l'ai traduite en une nouvelle section plutôt que de vérifier si une section existante du même panneau
+   couvrait déjà la forme (elle le fait : dalle/plafond/épaisseur de mur y sont déjà). Erreur de jugement,
+   pas d'invalidation de la règle.
+3. **`[CORRIGÉ]` Libellé du bouton** — « Remodeler (peindre les cases) » → « Remodeler » (`builder.json`).
+4. **`[CORRIGÉ]` Peinture du plafond inutile** — `[VÉRIFIÉ, code de rendu lu]` `SurfaceDungeonScene.jsx`
+   (`ceilingIsVisible`) conditionne l'affichage du plafond à `displayLevel`/au volume caméra ; en édition
+   (un seul étage affiché), le plafond de la salle éditée ne remplit quasiment jamais ces conditions —
+   cohérent avec l'observation de Saar. Onglet Plafond retiré de la section Apparence de
+   `SurfaceRoomPanel.jsx` (ne montre plus que Sol, sans sélecteur d'onglet devenu inutile à une seule
+   option) ; **la donnée `materialProfiles.ceiling` n'est pas supprimée**, seule cette UI ne l'expose plus —
+   au cas où un autre contexte de vue la rendrait un jour pertinente.
+5. **`[CORRIGÉ]` Portée de peinture de mur « oubliée »** — le sélecteur case/tronçon/salle existait bien
+   dans le code (`[VÉRIFIÉ]`, pas une régression de ce chantier), mais rien ne la rappelait dans le bandeau
+   d'indice persistant (§12.9 point 2) une fois qu'on peint et que les boutons défilent hors champ — même
+   famille de défaut que la poignée non découvrable (§13.4). `paintWallRoomHint` affiche maintenant la
+   portée active (`{{scope}}`), aux deux endroits où cet indice s'affiche.
+
+`npx eslint`/JSON/`npm run build` propres (0 erreur) sur les 7 fichiers touchés. Pas encore re-testé par
+Saar. **Leçon retenue, pas encore appliquée à un correctif futur** : le §13.4 a été livré et documenté
+comme fait sans jamais avoir tourné dans un navigateur — le mot « codé » dans ce document a couvert du code
+qui compile, pas du code vu fonctionner. Distinction à tenir explicitement à partir de maintenant.
+
+### 13.6. Revue détaillée du panneau Salle par Saar (2026-09-30, en testant §13.5) — `⚠️ clos partiel`
+
+Saar a ouvert le panneau et listé 7 points concrets, panneau sous les yeux. Traités :
+1. **`[CORRIGÉ]`** Titre + champ « Nom de la salle » redondants (les deux affichaient le même id brut
+   type `room:-24:...` tant qu'aucun nom n'est donné) → titre du header rendu éditable inline (icône
+   crayon `IconEdit`, déjà existante dans `SidebarIcons.jsx`, réutilisée), champ séparé retiré.
+2. **`[CORRIGÉ]`** « Étage de base » / « Volume » : deux lignes → une seule ligne compacte.
+3. **`[CORRIGÉ]`** « Déplacement et collision » (section peu utilisée) déplacée en dernier, après
+   Apparence — devient la dernière section utile puisque Connecteurs verticaux disparaît (point 7).
+4. **`[CORRIGÉ]`** Doublon « Apparence » (titre de section) / « Apparence de la salle » (libellé
+   dessous) → libellé retiré, un seul intitulé.
+5. **`[NOTÉ, pas fait]`** Aperçu visuel pour Matière/Motif au lieu de listes texte — techniquement
+   possible (`generateProceduralMaterialTexture` existe déjà, produit de vraies textures) mais demande
+   une vraie conception (combien de miniatures, quand les générer, coût de rendu) — pas bricolé dans le
+   même geste que les 4 corrections ci-dessus. Reste ouvert, chantier propre à cadrer.
+6. **`[NOTÉ]`** Nuancier custom pour la Peinture — déjà identifié comme mini-chantier séparé plus tôt
+   dans cette conversation, pas répété ici.
+7. **`[CORRIGÉ]`** Section « Connecteurs verticaux » retirée du panneau Salle (doublon avec le groupe
+   Connecteurs de la sidebar — cohérent avec la règle §13.1 : poser un ascenseur/une échelle est un
+   verbe, sa place est la sidebar, pas le panneau de propriétés). `startConnector` et les clés i18n
+   associées (`connectorsSection`/`elevatorButton`/`ladderButton`/`roomAppearanceLabel`) retirés,
+   devenus morts.
+
+`npx eslint` (0 problème), JSON, `npm run build` propres. **Non testé : rien en navigateur.**
+
 ## Historique
 
 - **2026-09-30** — Après une relecture critique demandée par Saar sur l'ensemble du chantier : trouvé que le

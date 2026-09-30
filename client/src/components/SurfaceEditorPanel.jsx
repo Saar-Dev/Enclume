@@ -71,19 +71,19 @@ const ICON_PAINT_WALL = (
     <path d="M4 17c1.2 0 1.8-1 1.2-2-.4-.7 0-1.6.9-1.8" strokeLinecap="round" />
   </svg>
 )
-const ICON_RESHAPE_ROOM = (
-  <svg {...ICON_PROPS}>
-    <rect x="2" y="2" width="6" height="6" rx="1" />
-    <rect x="10" y="2" width="6" height="6" rx="1" opacity="0.35" />
-    <rect x="2" y="10" width="6" height="6" rx="1" opacity="0.35" />
-    <rect x="10" y="10" width="6" height="6" rx="1" />
-  </svg>
-)
 const TAB_ICON_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '7px 0',
 }
 const CHIP_BTN_STYLE = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', minHeight: '48px',
+}
+// Portée active de la peinture de mur, rappelée dans le bandeau d'indice persistant (§13, Saar en
+// test 2026-09-30 : « le mode de peinture est oublié » — rien ne la rappelait hors des boutons
+// eux-mêmes, qui défilent hors champ pendant qu'on travaille).
+const PAINT_WALL_SCOPE_LABEL_KEYS = {
+  case: 'surfaceEditor.paintWallScopeCase',
+  run: 'surfaceEditor.paintWallScopeRun',
+  room: 'surfaceEditor.paintWallScopeRoom',
 }
 
 // ─── Palette surface/entités (mode édition) ───────────────────────────────────
@@ -591,17 +591,6 @@ export default function SurfaceEditorPanel({
               </button>
               <button
                 type="button"
-                disabled={!surfaceToolState.selectedRoomId}
-                onClick={() => updateSurfaceTool({ mode: 'reshape-room', roomArcError: null })}
-                className="sidebar-tool-mode-btn"
-                data-active={surfaceToolState.mode === 'reshape-room'}
-                style={{ ...styles.roomToolModeBtn, ...CHIP_BTN_STYLE }}
-              >
-                {ICON_RESHAPE_ROOM}
-                <span>{t('surfaceEditor.reshapeRoom')}</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => updateSurfaceTool({ mode: 'erase' })}
                 className="sidebar-tool-mode-btn"
                 data-active={surfaceToolState.mode === 'erase'}
@@ -614,7 +603,10 @@ export default function SurfaceEditorPanel({
             {surfaceToolState.mode === 'paint-wall' && (
               <div className="sidebar-glass" style={styles.roomToolGrid}>
                 <p className="sidebar-tool-hint" style={styles.roomToolHint}>
-                  {t('surfaceEditor.paintWallRoomHint', { name: surfaceToolState.roomName || '' })}
+                  {t('surfaceEditor.paintWallRoomHint', {
+                    name: surfaceToolState.roomName || '',
+                    scope: t(PAINT_WALL_SCOPE_LABEL_KEYS[surfaceToolState.wallPaintScope || 'case']),
+                  })}
                 </p>
                 <div style={styles.roomToolModes}>
                   {[
@@ -646,14 +638,6 @@ export default function SurfaceEditorPanel({
                 )}
                 <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.paintWallMaterialSection')}</div>
                 <SurfaceMaterialEditor profile={surfaceMaterialState} onChange={updateSurfaceMaterial} />
-              </div>
-            )}
-            {surfaceToolState.mode === 'reshape-room' && (
-              <div className="sidebar-glass" style={styles.roomToolGrid}>
-                <p className="sidebar-tool-hint" style={styles.roomToolHint}>{t('surfaceEditor.reshapeRoomHint')}</p>
-                {surfaceToolState.roomArcError && (
-                  <p className="sidebar-tool-error">{surfaceToolState.roomArcError}</p>
-                )}
               </div>
             )}
             </>
@@ -1194,7 +1178,10 @@ export default function SurfaceEditorPanel({
                 if (mode === 'erase') return t('surfaceEditor.hintErase') + escapeSuffix
                 if (mode === 'ceiling') return t('surfaceEditor.hintSlab') + escapeSuffix
                 if (mode === 'paint-wall') {
-                  return t('surfaceEditor.paintWallRoomHint', { name: surfaceToolState.roomName || '' }) + escapeSuffix
+                  return t('surfaceEditor.paintWallRoomHint', {
+                    name: surfaceToolState.roomName || '',
+                    scope: t(PAINT_WALL_SCOPE_LABEL_KEYS[surfaceToolState.wallPaintScope || 'case']),
+                  }) + escapeSuffix
                 }
                 if (mode === 'reshape-room') return t('surfaceEditor.reshapeRoomHint') + escapeSuffix
                 return t('surfaceEditor.hintSlab') + escapeSuffix

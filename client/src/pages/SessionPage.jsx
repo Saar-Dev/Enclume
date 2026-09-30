@@ -721,6 +721,7 @@ function SessionContent({ campaignId }) {
               displayLevel={displayLevel}
               selectedEntityId={instancePanel?.entityId || null}
               onEntitySelect={handleEditorEntitySelect}
+              sidebarWidth={sidebarVisible ? sidebarWidth : 0}
             />
           : <Canvas3D
               mode={mode}

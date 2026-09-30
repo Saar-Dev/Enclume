@@ -12,8 +12,8 @@ import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 const PANEL_W = 310
 
 // Position fixe, colonne de droite — voir le commentaire équivalent dans SurfaceRoomPanel.jsx
-// (§12.9/§12.10, PLAN_WORLD_BUILDER_REWORK.md).
-export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChange, onClose }) {
+// (§12.9/§12.10, PLAN_WORLD_BUILDER_REWORK.md). `dockRight` : idem, largeur de sidebar + marge (§13).
+export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChange, onClose, dockRight = 16 }) {
   const { t } = useTranslation('builder')
   const [confirmDeleteWalls, setConfirmDeleteWalls] = useState(false)
   if (!room || !tool?.selectedRoomWallCount) return null
@@ -57,7 +57,7 @@ export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChan
 
   return (
     <div
-      style={S.panel}
+      style={{ ...S.panel, right: dockRight }}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-wall-panel"
     >

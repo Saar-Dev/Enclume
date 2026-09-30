@@ -821,6 +821,7 @@ export default function Editor3D({
   selectedEntityId = null,
   onEntitySelect,
   onBlueprintPlaced,
+  sidebarWidth = 0,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1261,7 +1262,10 @@ export default function Editor3D({
     const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
       && surfaceTool?.connectorType === 'door'
       && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
-    if (surfaceTool?.mode === 'select' || placingDoorOnSelectedWall) return
+    // Remodeler (§13.4, PLAN_WORLD_BUILDER_REWORK.md) est un sous-outil du panneau Salle, pas un
+    // mode de sidebar indépendant : le panneau doit rester ouvert pendant qu'on peint les cases,
+    // même principe que l'exception porte ci-dessus (toujours la même salle sélectionnée).
+    if (surfaceTool?.mode === 'select' || surfaceTool?.mode === 'reshape-room' || placingDoorOnSelectedWall) return
     setSurfaceRoomPanel(null)
     setSurfaceWallPanel(null)
   }, [surfaceTool?.connectorType, surfaceTool?.connectorWallEdgeKeys, surfaceTool?.mode])
@@ -1568,6 +1572,7 @@ export default function Editor3D({
           onPatch={handleSurfaceSelectionToolPatch}
           onDelete={handleSurfaceRoomDelete}
           onClose={closeSurfaceRoomPanel}
+          dockRight={sidebarWidth + 16}
         />
       )}
       {surfaceWallPanel && selectedSurfaceRoom && (
@@ -1578,6 +1583,7 @@ export default function Editor3D({
           onPatch={handleSurfaceSelectionToolPatch}
           onAppearanceChange={handleSurfaceWallAppearanceChange}
           onClose={closeSurfaceWallPanel}
+          dockRight={sidebarWidth + 16}
         />
       )}
     </div>

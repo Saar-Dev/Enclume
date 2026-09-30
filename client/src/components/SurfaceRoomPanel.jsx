@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
+import { IconEdit } from './SidebarIcons.jsx'
 import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 import { getRoomBaseY, yToLevel } from '../lib/surfaceData.js'
 
 const PANEL_W = 330
-const MATERIAL_FACES = [
-  ['floor', 'surfaceRoomPanel.faceFloor'],
-  ['ceiling', 'surfaceRoomPanel.faceCeiling'],
-]
+// Le plafond n'a pas d'onglet ici (§13, Saar en test 2026-09-30) : en édition (un seul étage
+// affiché), le plafond de la salle éditée ne remplit quasiment jamais les conditions de rendu
+// de `SurfaceDungeonScene.jsx` (`ceilingIsVisible`) — peindre un plafond qu'on ne voit jamais
+// n'a pas sa place dans ce panneau. `materialProfiles.ceiling` reste lisible/écrivable par le
+// reste du pipeline, seule cette UI ne l'expose plus.
+const MATERIAL_FACE = 'floor'
 
 // Position fixe, colonne de droite — plus de fenêtre déplaçable (§12.9/§12.10,
 // PLAN_WORLD_BUILDER_REWORK.md : Saar navigue par la caméra, pas en déplaçant les panneaux ;
@@ -17,12 +20,14 @@ const MATERIAL_FACES = [
 // sélection, §10b/§11.6.2). Salle/Mur sont ici les deux panneaux à usage unique éditeur — les
 // deux repris tels quels n'apparaissent jamais en même temps (mutuellement exclusifs,
 // `Editor3D.jsx`), donc une seule position statique suffit pour les deux.
-export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClose }) {
+// `dockRight` (§13, trouvé en testant) : la sidebar occupe déjà le bord droit de l'écran et sa
+// largeur varie (redimensionnable) — un `right` fixe recouvrait la sidebar selon sa largeur du
+// moment. `dockRight` = largeur réelle de la sidebar + marge, même patron que `DicePanel`/
+// `EncyclopediaWindow` (`sidebarWidth`), pas une nouvelle mécanique.
+export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClose, dockRight = 16 }) {
   const { t } = useTranslation('builder')
-  const [materialFace, setMaterialFace] = useState(
-    tool?.materialFace === 'ceiling' ? 'ceiling' : 'floor',
-  )
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editingName, setEditingName] = useState(false)
   if (!room) return null
 
   const canonicalSlices = Array.isArray(room.verticalProfile?.slices)
@@ -31,60 +36,57 @@ export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClos
   const hasCanonicalProfile = canonicalSlices.length > 0
   const heightLevels = Math.max(1, Number(room.heightLevels) || Number(tool?.roomHeightLevels) || 1)
   const material = normalizedSurfaceMaterial(
-    tool?.materialProfiles?.[materialFace],
+    tool?.materialProfiles?.[MATERIAL_FACE],
   )
   const patchMaterial = nextMaterial => onPatch?.({
-    materialFace,
+    materialFace: MATERIAL_FACE,
     materialProfiles: {
       ...(tool?.materialProfiles || {}),
-      [materialFace]: nextMaterial,
+      [MATERIAL_FACE]: nextMaterial,
     },
   })
-  const startConnector = type => onPatch?.({
-    mode: 'connector',
-    connectorType: type,
-    ...(type === 'door' ? {} : { connectorToLevel: (Number(tool?.level) || 0) + 1 }),
-    connectorBlueprintId: null,
-    connectorModelLabel: null,
-    connectorModelCategory: null,
-    connectorModelGlbUrl: null,
-    connectorModelBuiltinKey: null,
-    connectorModelGeometry: null,
-    connectorMaterialOverrides: {},
-  })
-
   return (
     <div
-      style={S.panel}
+      style={{ ...S.panel, right: dockRight }}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-room-panel"
     >
       <div style={S.header} data-testid="surface-room-panel-handle">
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p style={S.kicker}>{t('surfaceRoomPanel.kicker')}</p>
-          <p style={S.title}>{room.label || room.name || room.id}</p>
+          {editingName ? (
+            <input
+              type="text"
+              autoFocus
+              value={tool?.roomName ?? room.label ?? room.name ?? room.id}
+              onChange={event => onPatch?.({ roomName: event.target.value })}
+              onPointerDown={event => event.stopPropagation()}
+              onBlur={() => setEditingName(false)}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === 'Escape') setEditingName(false) }}
+              style={{ ...S.input, ...S.titleInput }}
+              maxLength={96}
+            />
+          ) : (
+            <button
+              type="button"
+              onPointerDown={event => event.stopPropagation()}
+              onClick={() => setEditingName(true)}
+              style={S.titleEditBtn}
+              title={t('surfaceRoomPanel.roomNameLabel')}
+            >
+              <span style={S.title}>{room.label || room.name || room.id}</span>
+              <IconEdit />
+            </button>
+          )}
         </div>
         <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
-        <label style={{ ...S.field, padding: '0 2px' }}>
-          <span style={S.label}>{t('surfaceRoomPanel.roomNameLabel')}</span>
-          <input
-            type="text"
-            value={tool?.roomName ?? room.label ?? room.name ?? room.id}
-            onChange={event => onPatch?.({ roomName: event.target.value })}
-            onPointerDown={event => event.stopPropagation()}
-            style={{ ...S.input, userSelect: 'text' }}
-            maxLength={96}
-          />
-        </label>
         <FloatingPanelSection title={t('surfaceRoomPanel.geometrySection')} defaultOpen storageKey="enclume.surfaceRoomPanel.section.geometry">
-        <div style={S.infoGrid}>
-          <span>{t('surfaceRoomPanel.baseFloorLabel')}</span>
-          <strong>{yToLevel(getRoomBaseY(room))}</strong>
-          <span>{t('surfaceRoomPanel.volumeLabel')}</span>
-          <strong>{hasCanonicalProfile ? t('surfaceRoomPanel.verticalProfileVolume', { count: heightLevels }) : t('surfaceRoomPanel.levelsCount', { count: heightLevels })}</strong>
+        <div style={S.infoLine}>
+          <span>{t('surfaceRoomPanel.baseFloorLabel')} <strong>{yToLevel(getRoomBaseY(room))}</strong></span>
+          <span>{t('surfaceRoomPanel.volumeLabel')} <strong>{hasCanonicalProfile ? t('surfaceRoomPanel.verticalProfileVolume', { count: heightLevels }) : t('surfaceRoomPanel.levelsCount', { count: heightLevels })}</strong></span>
         </div>
 
         <div style={S.grid}>
@@ -146,6 +148,23 @@ export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClos
             />
           </label>
         </div>
+        <button
+          type="button"
+          onClick={() => onPatch?.({ mode: tool?.mode === 'reshape-room' ? 'select' : 'reshape-room', roomArcError: null })}
+          style={{ ...S.action, ...(tool?.mode === 'reshape-room' ? S.actionActive : {}) }}
+        >
+          {t('surfaceRoomPanel.reshapeButton')}
+        </button>
+        {tool?.mode === 'reshape-room' && (
+          <p style={S.hint}>{t('surfaceRoomPanel.reshapeHint')}</p>
+        )}
+        {tool?.roomArcError && (
+          <p style={S.error}>{tool.roomArcError}</p>
+        )}
+        </FloatingPanelSection>
+
+        <FloatingPanelSection title={t('common.appearanceSection')} storageKey="enclume.surfaceRoomPanel.section.appearance">
+          <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
         </FloatingPanelSection>
 
         <FloatingPanelSection title={t('surfaceRoomPanel.movementSection')} storageKey="enclume.surfaceRoomPanel.section.movement">
@@ -177,33 +196,6 @@ export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClos
             </select>
           </label>
         </div>
-        </FloatingPanelSection>
-
-        <FloatingPanelSection title={t('common.appearanceSection')} storageKey="enclume.surfaceRoomPanel.section.appearance">
-          <span style={S.label}>{t('surfaceRoomPanel.roomAppearanceLabel')}</span>
-          <div style={S.faceTabs}>
-            {MATERIAL_FACES.map(([face, labelKey]) => (
-              <button
-                key={face}
-                type="button"
-                onClick={() => {
-                  setMaterialFace(face)
-                  onPatch?.({ materialFace: face })
-                }}
-                style={{ ...S.tab, ...(materialFace === face ? S.tabActive : {}) }}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
-          </div>
-          <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
-        </FloatingPanelSection>
-
-        <FloatingPanelSection title={t('surfaceRoomPanel.connectorsSection')} storageKey="enclume.surfaceRoomPanel.section.connectors">
-          <div style={S.actionRow}>
-            <button type="button" onClick={() => startConnector('elevator')} style={S.action}>{t('surfaceRoomPanel.elevatorButton')}</button>
-            <button type="button" onClick={() => startConnector('ladder')} style={S.action}>{t('surfaceRoomPanel.ladderButton')}</button>
-          </div>
         </FloatingPanelSection>
 
         {onDelete && (!confirmDelete ? (
@@ -245,10 +237,12 @@ const S = {
     padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14',
   },
   kicker: { margin: 0, fontSize: '11px', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' },
-  title: { margin: '2px 0 0', fontSize: '12px', color: '#dbeafe', fontWeight: 600, maxWidth: '255px', overflow: 'hidden', textOverflow: 'ellipsis' },
+  title: { margin: 0, fontSize: '12px', color: '#dbeafe', fontWeight: 600, maxWidth: '215px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  titleEditBtn: { display: 'flex', alignItems: 'center', gap: '6px', margin: '2px 0 0', padding: 0, background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', maxWidth: '100%' },
+  titleInput: { margin: '2px 0 0', fontSize: '12px', fontWeight: 600, padding: '3px 6px' },
   closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '4px' },
   body: { padding: '13px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', maxHeight: 'calc(100vh - 65px)' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '86px minmax(0, 1fr)', gap: '5px 8px', color: '#64748b', fontSize: '11px' },
+  infoLine: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', color: '#64748b', fontSize: '11px' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' },
   field: { display: 'flex', flexDirection: 'column', gap: '5px' },
   colorField: { display: 'grid', gridTemplateColumns: '1fr 36px 105px', alignItems: 'center', gap: '7px' },
@@ -257,11 +251,10 @@ const S = {
   colorInput: { width: '34px', height: '30px', padding: '2px', background: '#0a0a14', border: '1px solid #1e1e2e', borderRadius: '4px' },
   profileNote: { gridColumn: '1 / -1', padding: '8px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.28)', background: 'rgba(120, 53, 15, 0.16)', color: '#d6b56f', fontSize: '11px', lineHeight: 1.4 },
   section: { display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '2px' },
-  faceTabs: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
-  tab: { minHeight: '27px', border: '1px solid #27273a', borderRadius: '5px', background: '#11111f', color: '#7f8eaa', fontSize: '10px', cursor: 'pointer' },
-  tabActive: { borderColor: '#d97706', background: 'rgba(217, 119, 6, 0.18)', color: '#fde68a' },
-  actionRow: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
   action: { minHeight: '30px', border: '1px solid #3f3f5e', borderRadius: '5px', background: '#17172a', color: '#cbd5e1', fontSize: '10px', cursor: 'pointer' },
+  actionActive: { borderColor: '#d97706', background: 'rgba(217, 119, 6, 0.18)', color: '#fde68a' },
+  hint: { margin: 0, fontSize: '11px', color: '#64748b', lineHeight: 1.4 },
+  error: { margin: 0, fontSize: '11px', color: '#f87171', lineHeight: 1.4 },
   deleteActions: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 82px', gap: '6px' },
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
 }
