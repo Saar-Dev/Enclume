@@ -1980,6 +1980,46 @@ propres, pas encore testé en navigateur au moment d'écrire ceci :
   `surfaceTools/` (1331 lignes cumulées, dont une bonne part de style/props JSX répété, pas de la logique
   neuve).
 
+### 16.7. Correction d'une hypothèse du §16.2 — `calcEntityPos`/`calcPreciseEntityPos` ne sont pas extractibles en fonctions pures (2026-09-30)
+
+En commençant l'étape 2 de l'ordre retenu (§16.4, `EntityEditorScene` dans `Editor3D.jsx`), relecture plus
+attentive de ce que §16.2 avait proposé trop vite : « extraire les fonctions de calcul pur vers
+`lib/entityTools/` ». Faux à l'exécution — `calcEntityPos`, `calcPreciseEntityPos` et
+`getEntityUnderCursor` lisent directement `camera`, `gl`, `scene`, `raycaster` (objets Three.js vivants,
+pas des données), exactement comme `getFloorCell`/`getWallPoint` dans `SurfaceEditorScene.jsx` — qui,
+eux, n'ont JAMAIS été extraits pendant tout le §11, restés comme glue délibérément. Généraliser le patron
+« extraire la décision pure » à des fonctions de raycasting aurait été la même erreur que la
+généralisation évitée au §11.11 (preventDefault/stopPropagation) — repérée cette fois avant d'écrire du
+code, pas après. **Correction** : ces trois fonctions restent dans `EntityEditorScene`. Ce qui est
+réellement extractible, par analogie avec les aperçus déjà sortis de `Scene.jsx` au §11.8, ce sont les
+petits composants de rendu pur déjà présents juste au-dessus d'`EntityEditorScene` dans `Editor3D.jsx` :
+`GhostEntityBounds`, `TileSnapHighlight`, `GhostEntity` — voir §16.8.
+
+### 16.8. Fantômes de pose d'entité extraits (2026-09-30)
+
+- **`entityTools/GhostEntityBounds.jsx`**, **`entityTools/TileSnapHighlight.jsx`**,
+  **`entityTools/GhostEntity.jsx`** (nouveaux, dossier neuf — ces composants concernent la pose d'entités,
+  pas les outils de surface, `surfaceTools/` aurait été un nom trompeur). Aucune logique changée, purs
+  composants de rendu déjà autonomes (props uniquement), même patron que les aperçus du §11.8.
+  `eslint`/`build` propres.
+- Reste dans `Editor3D.jsx` / `EntityEditorScene` : tout le reste — raycasting, drag, raccourcis clavier,
+  appels API, émissions socket. Pas un dispatch par mode d'outil comme `Scene.jsx` l'était ; peu de matière
+  supplémentaire extractible sans forcer le patron sur du code qui ne s'y prête pas (§16.7).
+- 1616 → 1560 lignes (`wc -l`) — réduction modeste et attendue : la majorité du fichier est légitimement de
+  l'orchestration/glue (§16.2), pas des composants de rendu purs comme ceux qui viennent d'en sortir.
+
+### 16.9. Retour de Saar sur le sélecteur de portée de peinture de mur — à revoir plus tard, pas perdu (2026-09-30)
+
+Saar signale que le module « peindre une CASE, une SECTION ou un mur complet » (portée
+case/tronçon/salle) lui semble avoir disparu de la sidebar depuis la refonte UI/UX (§12/§13). **Vérifié
+`[VÉRIFIÉ]` : le code existe toujours et fonctionne** — `PaintWallPanelSection.jsx` (§16.5) affiche les 3
+boutons de portée, câblés sur `paintRoomWallEdges`/`paintRoomWallRoom`
+(`client/src/lib/surfaceRooms.js:1172-1217`), accessible via l'outil « Peindre un mur » de la sidebar —
+Saar l'a lui-même testé fonctionnel dans cette session (retour après §16.5). Rien de supprimé. Le
+malentendu porte probablement sur l'emplacement/la visibilité de cet outil depuis la refonte §12-13 (plus
+difficile à retrouver qu'avant), pas sur une perte de fonctionnalité — à revoir avec Saar plus tard, pas
+cadré, rien changé ici.
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux

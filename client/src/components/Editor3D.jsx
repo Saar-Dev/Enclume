@@ -1,7 +1,7 @@
-import { Suspense, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Edges, MapControls, Grid } from '@react-three/drei'
+import { MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
@@ -17,6 +17,9 @@ import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import Skydome from './Skydome.jsx'
+import GhostEntityBounds from './entityTools/GhostEntityBounds.jsx'
+import TileSnapHighlight from './entityTools/TileSnapHighlight.jsx'
+import GhostEntity from './entityTools/GhostEntity.jsx'
 import {
   applyRoomBoundaryArc,
   applyRoomWallAppearance,
@@ -50,65 +53,6 @@ const cloneSurfaceData = (data) => JSON.parse(JSON.stringify(data))
 const blueprintPlacementMode = (blueprint) => (
   blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
 )
-
-// ─── Ghost entité — preview avant pose ───────────────────────────────────────
-function GhostEntityBounds({ position, blueprint, r }) {
-  if (!position || !blueprint) return null
-  const { x, y, z } = position
-  const rot = r * (Math.PI / 2)
-  const width = blueprint.geometry?.width ?? 1
-  const height = blueprint.geometry?.height ?? 1
-  const depth = blueprint.geometry?.depth ?? 1
-  const authoredOrigin = blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center'
-  return (
-    <group position={[authoredOrigin ? x : x + width / 2, y, authoredOrigin ? z : z + depth / 2]} rotation={[0, rot, 0]}>
-      <mesh position={[0, height / 2, 0]}>
-        <boxGeometry args={[width, height, depth]} />
-        <meshBasicMaterial color="#5b8dee" transparent opacity={0.18} depthWrite={false} />
-        <Edges color="#7fb0ff" transparent opacity={0.9} />
-      </mesh>
-    </group>
-  )
-}
-
-// ─── Highlight case pleine — pose au sol avec le snap grille (touche G) ─────────
-// Genre déjà standard des VTT (Roll20/Foundry) : la case ciblée se surligne, pas l'empreinte de
-// l'objet — indépendant de la taille du modèle posé.
-function TileSnapHighlight({ position }) {
-  if (!position || position.placement?.mode !== 'free') return null
-  return (
-    <mesh position={[position.x, position.y + 0.01, position.z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[0.92, 0.92]} />
-      <meshBasicMaterial color="#3ddc84" transparent opacity={0.35} depthWrite={false} />
-    </mesh>
-  )
-}
-
-function GhostEntity({ position, blueprint, r }) {
-  if (!position || !blueprint) return null
-  const entity = {
-    id: `preview:${blueprint.id}`,
-    blueprint_id: blueprint.id,
-    pos_x: position.x,
-    pos_y: position.z,
-    pos_z: position.y,
-    r,
-    state: {},
-    current_state_id: 0,
-  }
-  return (
-    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} />}>
-      <EntityMesh
-        entity={entity}
-        blueprint={blueprint}
-        entityTextureMaterials={null}
-        sceneOpacity={1}
-        isPreview
-        isSelected
-      />
-    </Suspense>
-  )
-}
 
 // ─── Scène éditeur entités ────────────────────────────────────────────────────
 function EntityEditorScene({
