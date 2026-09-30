@@ -5,32 +5,21 @@ import { useEntityStore } from '../stores/entityStore'
 import { useWorldRuntimeStore } from '../stores/worldRuntimeStore.js'
 import api from '../lib/api.js'
 import GeometryIcon from './GeometryIcon.jsx'
-import Object3DPreview from './Object3DPreview.jsx'
 import SurfaceEffectPanel from './SurfaceEffectPanel.jsx'
 import EntityPalettePanelSection from './surfaceTools/EntityPalettePanelSection.jsx'
 import PaintWallPanelSection from './surfaceTools/PaintWallPanelSection.jsx'
+import ConnectorPanelSection from './surfaceTools/ConnectorPanelSection.jsx'
+import EffectZonePanelSection from './surfaceTools/EffectZonePanelSection.jsx'
+import RoomPanelSection from './surfaceTools/RoomPanelSection.jsx'
+import WallPanelSection from './surfaceTools/WallPanelSection.jsx'
 import { CHIP_BTN_STYLE, PAINT_WALL_SCOPE_LABEL_KEYS } from './surfaceTools/panelSharedConstants.js'
-import { groupEffectDefinitions } from '../lib/effectDefinitionGroups.js'
 import {
   clearMaterialSlotOverride,
-  materialSlotDisplayValue,
   normalizeModelMaterialSlots,
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
-import {
-  DEFAULT_SURFACE_MATERIAL_PRESET,
-  PROCEDURAL_MATERIAL_PRESETS,
-  PROCEDURAL_PATTERN_PRESETS,
-} from '../lib/proceduralMaterials.js'
+import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { styles } from './Sidebar.styles.js'
-
-const MODEL_SLOT_LABELS = {
-  SLOT_01: 'Métal principal',
-  SLOT_02: 'Panneaux secondaires',
-  SLOT_03: 'Cadre / hardware',
-  SLOT_04: 'Accent',
-  SLOT_05: 'Verre',
-}
 
 // ─── Icônes placeholder (SVG simples, à remplacer — Saar fournit les icônes définitives) ───
 const ICON_PROPS = { width: 16, height: 16, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6 }
@@ -626,143 +615,18 @@ export default function SurfaceEditorPanel({
               </div>
             )}
             {surfaceToolState.mode === 'effect' && (
-              <div className="sidebar-glass" style={styles.connectorPicker}>
-                <div style={styles.connectorPickerTitle}>{t('surfaceEditor.effectZone')}</div>
-                <div style={styles.roomToolGrid}>
-                  <label style={styles.roomToolLabel}>
-                    <span>{t('surfaceEditor.effectTypeLabel')}</span>
-                    <select
-                      value={surfaceToolState.effectDefinitionKey || 'fire'}
-                      onChange={e => updateSurfaceTool({ effectDefinitionKey: e.target.value })}
-                      className="sidebar-tool-field"
-                    >
-                      {groupEffectDefinitions(worldEffects.definitions || [], t).map(group => (
-                        <optgroup key={group.groupKey} label={group.label}>
-                          {group.definitions.map(definition => (
-                            <option key={definition.key} value={definition.key}>
-                              {definition.label}{definition.builtin ? '' : ` (${t('surfaceEditor.customEffectSuffix')})`}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>{t('surfaceEditor.effectIntensityLabel')}</span>
-                    <input
-                      type="number"
-                      min="0.01"
-                      max="100"
-                      step="0.25"
-                      value={surfaceToolState.effectIntensity}
-                      onChange={e => updateSurfaceTool({ effectIntensity: Math.max(0.01, Number(e.target.value) || 1) })}
-                      className="sidebar-tool-field"
-                    />
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>{t('surfaceEditor.effectVolumeHeightLabel')}</span>
-                    <input
-                      type="number"
-                      min="0.1"
-                      max="100"
-                      step="0.25"
-                      value={surfaceToolState.effectHeight}
-                      onChange={e => updateSurfaceTool({ effectHeight: Math.max(0.1, Number(e.target.value) || 2.5) })}
-                      className="sidebar-tool-field"
-                    />
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>{t('surfaceEditor.effectPuissanceLabel')}</span>
-                    <input
-                      type="number"
-                      min="-1000"
-                      max="1000"
-                      step="1"
-                      value={surfaceToolState.effectPuissance ?? 0}
-                      onChange={e => updateSurfaceTool({ effectPuissance: Math.round(Number(e.target.value) || 0) })}
-                      className="sidebar-tool-field"
-                    />
-                  </label>
-                </div>
-                <button type="button" onClick={() => setCustomEffectOpen(open => !open)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                  {customEffectOpen ? t('common.close') : t('surfaceEditor.newCustomEffect')}
-                </button>
-                {customEffectOpen && (
-                  <div className="sidebar-glass" style={styles.connectorColorList}>
-                    <label style={styles.roomToolLabel}>
-                      <span>{t('surfaceEditor.customEffectKeyLabel')}</span>
-                      <input
-                        value={customEffectDraft.key}
-                        onChange={e => setCustomEffectDraft(draft => ({ ...draft, key: e.target.value }))}
-                        placeholder={t('surfaceEditor.customEffectKeyPlaceholder')}
-                        className="sidebar-tool-field"
-                      />
-                    </label>
-                    <label style={styles.roomToolLabel}>
-                      <span>{t('surfaceEditor.customEffectLabelField')}</span>
-                      <input
-                        value={customEffectDraft.label}
-                        onChange={e => setCustomEffectDraft(draft => ({ ...draft, label: e.target.value }))}
-                        placeholder={t('surfaceEditor.customEffectLabelPlaceholder')}
-                        className="sidebar-tool-field"
-                      />
-                    </label>
-                    <label style={styles.roomToolLabel}>
-                      <span>{t('surfaceEditor.customEffectMovementMultiplier')}</span>
-                      <input
-                        type="number"
-                        min="0.05"
-                        max="100"
-                        step="0.25"
-                        value={customEffectDraft.movementMultiplier}
-                        onChange={e => setCustomEffectDraft(draft => ({ ...draft, movementMultiplier: Number(e.target.value) || 1 }))}
-                        className="sidebar-tool-field"
-                      />
-                    </label>
-                    <label style={styles.roomToolLabel}>
-                      <span>{t('surfaceEditor.customEffectNoteLabel')}</span>
-                      <textarea
-                        value={customEffectDraft.note}
-                        onChange={e => setCustomEffectDraft(draft => ({ ...draft, note: e.target.value }))}
-                        rows={3}
-                        className="sidebar-tool-field"
-                      />
-                    </label>
-                    <button type="button" onClick={createCustomEffect} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                      {t('surfaceEditor.createCustomEffect')}
-                    </button>
-                  </div>
-                )}
-                {(worldEffects.instances || []).length > 0 && (
-                  <div className="sidebar-glass" style={styles.connectorColorList}>
-                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.activeEffectsTitle')}</div>
-                    {worldEffects.instances.map(instance => {
-                      const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
-                      return (
-                        <div key={instance.id} className="sidebar-tool-selection" style={styles.roomToolSelection}>
-                          <span>
-                            {definition?.label || instance.definitionKey} ×{instance.intensity}
-                            {Number(instance.puissance) !== 0 && ` · ${t('surfaceEditor.effectPuissanceLabel')} ${instance.puissance > 0 ? '+' : ''}${instance.puissance}`}
-                          </span>
-                          <span style={{ display: 'flex', gap: '4px' }}>
-                            <button
-                              type="button"
-                              onClick={event => setEffectInspector({ instanceId: instance.id, x: event.clientX, y: event.clientY })}
-                              className="btn btn-ghost"
-                              style={styles.roomToolSmallBtn}
-                            >
-                              {t('common.edit')}
-                            </button>
-                            <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
-                              {t('common.delete')}
-                            </button>
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+              <EffectZonePanelSection
+                surfaceToolState={surfaceToolState}
+                updateSurfaceTool={updateSurfaceTool}
+                worldEffects={worldEffects}
+                customEffectOpen={customEffectOpen}
+                setCustomEffectOpen={setCustomEffectOpen}
+                customEffectDraft={customEffectDraft}
+                setCustomEffectDraft={setCustomEffectDraft}
+                createCustomEffect={createCustomEffect}
+                deleteRuntimeEffect={deleteRuntimeEffect}
+                setEffectInspector={setEffectInspector}
+              />
             )}
             {['room', 'floor', 'wall', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode) && (
               <label style={styles.roomToolLabel}>
@@ -781,335 +645,30 @@ export default function SurfaceEditorPanel({
               </label>
             )}
             {surfaceToolState.mode === 'connector' && (
-              <>
-                {surfaceToolState.connectorType === 'elevator' && (
-                  <div className="sidebar-glass" style={styles.connectorPicker}>
-                  <label style={styles.roomToolLabel}>
-                    <span>{t('surfaceEditor.elevatorToLevel')}</span>
-                    <select
-                      value={surfaceToolState.connectorToLevel}
-                      onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
-                      className="sidebar-tool-field"
-                    >
-                      {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
-                        <option key={level} value={level}>{level}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>Axe de la porte</span>
-                    <select
-                      value={surfaceToolState.elevatorDoorAxis || 'z'}
-                      onChange={e => updateSurfaceTool({ elevatorDoorAxis: e.target.value })}
-                      className="sidebar-tool-field"
-                    >
-                      <option value="z">Nord / sud</option>
-                      <option value="x">Est / ouest</option>
-                    </select>
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>Côté de la porte</span>
-                    <select
-                      value={Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}
-                      onChange={e => updateSurfaceTool({ elevatorDoorSide: Number(e.target.value) })}
-                      className="sidebar-tool-field"
-                    >
-                      <option value={1}>Positif</option>
-                      <option value={-1}>Négatif</option>
-                    </select>
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>Trajet par étage (s)</span>
-                    <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      value={surfaceToolState.elevatorTravelSecondsPerLevel || 2}
-                      onChange={e => updateSurfaceTool({ elevatorTravelSecondsPerLevel: Math.max(0.1, Number(e.target.value) || 2) })}
-                      className="sidebar-tool-field"
-                    />
-                  </label>
-                  </div>
-                )}
-                {surfaceToolState.mode === 'connector' && (
-                  <div className="sidebar-glass" style={styles.connectorPicker}>
-                    <div style={styles.connectorPickerTitle}>
-                      {surfaceToolState.connectorType === 'door'
-                        ? t('surfaceEditor.doorModel')
-                        : surfaceToolState.connectorType === 'ladder'
-                          ? 'Modèle d’échelle'
-                          : t('surfaceEditor.elevatorModel')}
-                    </div>
-                    {connectorChoices.length === 0 ? (
-                      <div style={styles.connectorPickerEmpty}>{t('surfaceEditor.noConnectorModels')}</div>
-                    ) : (
-                      <>
-                        {connectorChoices.map(choice => {
-                          const isSelected = String(surfaceToolState.connectorBlueprintId) === String(choice.id)
-                            || (!surfaceToolState.connectorBlueprintId && selectedConnectorChoice?.id === choice.id)
-                          return (
-                            <button
-                              key={choice.id}
-                              type="button"
-                              onClick={() => selectConnectorModel(choice)}
-                              className="sidebar-connector-model-btn"
-                              data-active={isSelected}
-                              style={styles.connectorModelBtn}
-                            >
-                              <span>{isSelected ? '✓ ' : ''}{choice.label}</span>
-                              <small>{choice.category || t('surfaceEditor.connectorModel')}</small>
-                            </button>
-                          )
-                        })}
-                        {selectedConnectorChoice && (
-                          <div className="sidebar-connector-selected" style={styles.connectorSelectedModel}>
-                            <span>✓ {t('surfaceEditor.selectedConnectorModel')}</span>
-                            <strong>{selectedConnectorChoice.label}</strong>
-                          </div>
-                        )}
-                        {selectedConnectorChoice?.glb_url && (
-                          <Object3DPreview
-                            blueprint={selectedConnectorChoice}
-                            materialOverrides={connectorMaterialOverrides}
-                          />
-                        )}
-                        {connectorMaterialSlots.length > 0 && (
-                          <div className="sidebar-glass" style={styles.connectorColorPanel}>
-                            <div style={styles.connectorPickerTitle}>Couleurs du modèle</div>
-                            {connectorMaterialSlots.map(slot => {
-                              const slotValue = materialSlotDisplayValue(connectorMaterialOverrides, slot)
-                              return (
-                                <label key={slot.code} style={styles.connectorColorRow}>
-                                  <span style={styles.connectorColorLabel}>
-                                    {MODEL_SLOT_LABELS[slot.code] || slot.label}
-                                    <small>{slot.code}</small>
-                                  </span>
-                                  <input
-                                    type="color"
-                                    value={slotValue.color}
-                                    onChange={e => updateConnectorMaterialSlot(slot, { color: e.target.value })}
-                                    className="sidebar-tool-color-input" style={styles.roomToolColorInput}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => clearConnectorMaterialSlot(slot)}
-                                    className="btn btn-ghost"
-                                    style={styles.connectorColorReset}
-                                  >
-                                    Reset
-                                  </button>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-            <div style={styles.roomToolGrid}>
-              {surfaceToolState.mode === 'room' && (
-                <label style={styles.roomToolLabel}>
-                  <span>{t('surfaceEditor.roomHeight')}</span>
-                  <select
-                    value={surfaceToolState.roomHeightLevels}
-                    onChange={e => updateSurfaceTool({ roomHeightLevels: Number(e.target.value) })}
-                    className="sidebar-tool-field"
-                  >
-                    {[1, 2, 3, 4, 5, 6].map(levels => (
-                      <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {surfaceToolState.mode === 'room' && (
-                <label style={styles.roomToolLabel}>
-                  <span>{t('surfaceEditor.slabThickness')}</span>
-                  <input
-                    type="number"
-                    min="0.05"
-                    max="4"
-                    step="0.05"
-                    value={surfaceToolState.floorThickness}
-                    onChange={e => updateSurfaceTool({ floorThickness: Number(e.target.value) })}
-                    className="sidebar-tool-field"
-                  />
-                </label>
-              )}
-              {surfaceToolState.mode === 'room' && (
-                <label style={styles.roomToolLabel}>
-                  <span>Epaisseur mur</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="8"
-                    value={surfaceToolState.wallThickness}
-                    onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
-                    className="sidebar-tool-field"
-                  />
-                </label>
-              )}
-            </div>
-            {surfaceToolState.mode === 'wall' && (
-              <div style={styles.roomToolGrid}>
-                <label style={styles.roomToolLabel}>
-                  <span>Epaisseur</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="8"
-                    value={surfaceToolState.wallThickness}
-                    onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
-                    className="sidebar-tool-field"
-                  />
-                </label>
-                <label style={styles.roomToolLabel}>
-                  <span>{t('surfaceEditor.wallHeight')}</span>
-                  <select
-                    value={surfaceToolState.wallHeightLevels}
-                    onChange={e => updateSurfaceTool({ wallHeightLevels: Number(e.target.value) })}
-                    className="sidebar-tool-field"
-                  >
-                    {[1, 2, 3, 4, 5, 6].map(levels => (
-                      <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <ConnectorPanelSection
+                surfaceToolState={surfaceToolState}
+                updateSurfaceTool={updateSurfaceTool}
+                connectorChoices={connectorChoices}
+                selectedConnectorChoice={selectedConnectorChoice}
+                connectorMaterialSlots={connectorMaterialSlots}
+                connectorMaterialOverrides={connectorMaterialOverrides}
+                updateConnectorMaterialSlot={updateConnectorMaterialSlot}
+                clearConnectorMaterialSlot={clearConnectorMaterialSlot}
+                selectConnectorModel={selectConnectorModel}
+              />
             )}
             {surfaceToolState.mode === 'room' && (
-              <>
-                <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
-                <div style={styles.roomToolModes}>
-                  {[
-                    ['floor', 'Sol'],
-                    ['ceiling', 'Plafond'],
-                    ['wallInterior', 'Murs côté salle'],
-                  ].map(([face, label]) => (
-                    <button
-                      key={face}
-                      type="button"
-                      onClick={() => updateSurfaceTool({ materialFace: face })}
-                      className="sidebar-tool-mode-btn"
-                      data-active={surfaceMaterialFace === face}
-                      style={styles.roomToolModeBtn}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div style={styles.roomToolGrid}>
-                  <label style={styles.roomToolLabel}>
-                    <span>Materiau</span>
-                    <select
-                      value={surfaceMaterialState.material}
-                      onChange={e => updateSurfaceMaterial({ material: e.target.value })}
-                      className="sidebar-tool-field"
-                    >
-                      {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
-                        <option key={preset.id} value={preset.id}>{preset.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={styles.roomToolLabel}>
-                    <span>Motif</span>
-                    <select
-                      value={surfaceMaterialState.pattern}
-                      onChange={e => updateSurfaceMaterial({ pattern: e.target.value })}
-                      className="sidebar-tool-field"
-                    >
-                      {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
-                        <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label style={styles.roomToolLabel}>
-                  <span>Peinture</span>
-                  <div style={styles.roomToolColorRow}>
-                    <input
-                      type="color"
-                      value={surfacePaintValue}
-                      onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
-                      className="sidebar-tool-color-input" style={styles.roomToolColorInput}
-                    />
-                    <input
-                      type="text"
-                      value={surfaceMaterialState.paint || surfacePaintValue}
-                      onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
-                      className="sidebar-tool-field"
-                    />
-                  </div>
-                </label>
-                {[
-                  ['wear', 'Usure'],
-                  ['dirt', 'Salete'],
-                  ['relief', 'Relief'],
-                ].map(([key, label]) => (
-                  <label key={key} style={styles.roomToolLabel}>
-                    <span>{label}</span>
-                    <div style={styles.roomToolRangeRow}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={Number(surfaceMaterialState[key]) || 0}
-                        onChange={e => updateSurfaceMaterial({ [key]: Number(e.target.value) })}
-                        style={styles.roomToolRange}
-                      />
-                      <span style={styles.roomToolRangeValue}>{Number(surfaceMaterialState[key]) || 0}</span>
-                    </div>
-                  </label>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => updateSurfaceMaterial({ realRelief: surfaceMaterialState.realRelief === false })}
-                  className="sidebar-tool-toggle"
-                  data-active={surfaceMaterialState.realRelief !== false}
-                  style={styles.roomToolToggle}
-                >
-                  <span>Relief reel</span>
-                  <span style={styles.roomToolToggleState}>
-                    {surfaceMaterialState.realRelief !== false ? 'Actif' : 'Normal map'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSurfaceTool({ autoVariants: !surfaceToolState.autoVariants })}
-                  className="sidebar-tool-toggle"
-                  data-active={surfaceToolState.autoVariants}
-                  style={styles.roomToolToggle}
-                >
-                  <span>Variations par surface</span>
-                  <span style={styles.roomToolToggleState}>
-                    {surfaceToolState.autoVariants ? 'Actif' : 'Fixe'}
-                  </span>
-                </button>
-                <div style={styles.roomToolGrid}>
-                  <label style={styles.roomToolLabel}>
-                    <span>Collision</span>
-                    <select
-                      value={surfaceToolState.surfaceBlocking || surfaceToolState.wallBlocking || 'solid'}
-                      onChange={e => updateSurfaceTool({ surfaceBlocking: e.target.value })}
-                      className="sidebar-tool-field"
-                    >
-                      <option value="solid">Plein</option>
-                      <option value="glass">Verre</option>
-                      <option value="grate">Grille</option>
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => updateSurfaceMaterial({ seed: `mat-${Date.now().toString(36)}` })}
-                    className="btn btn-ghost" style={styles.roomToolSmallBtn}
-                  >
-                    Nouvelle variation
-                  </button>
-                </div>
-              </>
+              <RoomPanelSection
+                surfaceToolState={surfaceToolState}
+                updateSurfaceTool={updateSurfaceTool}
+                surfaceMaterialFace={surfaceMaterialFace}
+                surfaceMaterialState={surfaceMaterialState}
+                surfacePaintValue={surfacePaintValue}
+                updateSurfaceMaterial={updateSurfaceMaterial}
+              />
+            )}
+            {surfaceToolState.mode === 'wall' && (
+              <WallPanelSection surfaceToolState={surfaceToolState} updateSurfaceTool={updateSurfaceTool} />
             )}
             <div className="sidebar-tool-hint" style={styles.roomToolHint}>
               {(() => {

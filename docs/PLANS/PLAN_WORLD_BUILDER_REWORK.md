@@ -1945,6 +1945,41 @@ de handlers, risque de mauvais câblage de prop plus élevé que ces deux premie
 - `SurfaceMaterialEditor` n'était importé que pour ce bloc — import retiré du fichier principal.
 - 1341 → 1232 lignes (`wc -l`, pas `Measure-Object`).
 
+### 16.6. Décomposition de `SurfaceEditorPanel.jsx` — deuxième incrément, les 4 blocs restants (2026-09-30)
+
+Testé fonctionnel par Saar entre les deux incréments (§16.5). Quatre sections extraites, `eslint`/`build`
+propres, pas encore testé en navigateur au moment d'écrire ceci :
+
+- **`ConnectorPanelSection.jsx`** (nouveau) — champs Ascenseur + choix du modèle 3D + couleurs de matériau.
+  **Ne couvre pas tout le mode Connecteur** : le petit bloc Échelle (étage d'arrivée + orientation, 2
+  champs) reste inline dans `SurfaceEditorPanel.jsx`, à un autre endroit du JSX (avant le champ transverse
+  « coût de déplacement », alors que ce composant est rendu après) — les fusionner aurait changé l'ordre
+  d'affichage réel pour le mode Échelle sans raison technique. Choix délibéré de ne pas forcer une pureté
+  « un mode = un fichier unique » au prix d'un changement visuel, consigné ici plutôt que corrigé en
+  silence. Contient aussi une condition redondante héritée de l'original
+  (`surfaceToolState.mode === 'connector'` vérifiée une deuxième fois alors que le fragment parent le
+  garantit déjà) — gardée telle quelle, pas nettoyée pendant l'extraction pour limiter le risque.
+- **`EffectZonePanelSection.jsx`** (nouveau) — mode Zone d'effet complet : sélection du type d'effet,
+  intensité/hauteur/puissance, formulaire de création d'effet personnalisé, liste des zones déjà posées.
+- **`RoomPanelSection.jsx`** (nouveau) — mode Salle complet : dimensions (hauteur/épaisseur sol/épaisseur
+  mur) ET matériau appliqué (face/matériau/motif/peinture/usure/saleté/relief/variations/collision),
+  regroupés dans un seul composant bien qu'ils étaient séparés par le bloc Mur dans le DOM d'origine — sans
+  effet visible puisque Salle et Mur ne sont jamais actifs simultanément (un seul `mode` à la fois).
+- **`WallPanelSection.jsx`** (nouveau) — mode Mur droit : épaisseur + hauteur, seul reste un tout petit
+  composant (36 lignes).
+- Imports devenus morts dans le fichier principal retirés : `Object3DPreview`, `groupEffectDefinitions`,
+  `materialSlotDisplayValue`, `MODEL_SLOT_LABELS`, `PROCEDURAL_MATERIAL_PRESETS`,
+  `PROCEDURAL_PATTERN_PRESETS`. Le `<div style={roomToolGrid}>` vide qui entourait les 3 champs Salle
+  disparaît pour les autres modes (aucun enfant, `display:grid` sans padding/hauteur déclarés dans
+  `Sidebar.styles.js:101-105` — vérifié, aucun effet visuel).
+- Reste dans `SurfaceEditorPanel.jsx` : le bandeau d'onglets haut niveau, la ligne annuler/refaire, le
+  sélecteur d'outil (boutons + icônes SVG), le bloc Échelle (2 champs), le champ transverse « coût de
+  déplacement », la palette de textures pré-faites (partagée Salle/Mur) et le bandeau d'indice — tout ce
+  qui est soit menu, soit vraiment partagé entre plusieurs modes, cohérent avec §16.1.
+- 1232 → 791 lignes (`wc -l`). Total du chantier §16.5+16.6 : 1341 → 791 (-41 %), 7 fichiers neufs sous
+  `surfaceTools/` (1331 lignes cumulées, dont une bonne part de style/props JSX répété, pas de la logique
+  neuve).
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
