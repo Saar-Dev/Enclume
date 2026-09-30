@@ -882,11 +882,37 @@ recette mécanique — `ConnectorPreview.jsx` (son `useMemo` déplacé avec lui,
 composants d'aperçu, tous déplacés). `npx eslint` (0 problème), `npm run build` propre, 49/49 inchangé.
 **Non testé en navigateur** : le sous-outil Remodeler/poignée de mur (aperçu vert/rouge) et le geste de pose
 de connecteur (aperçu réel du modèle) — aucune régression attendue, code déplacé à l'identique.
+**Testé, `Fonctionnel` (Saar, 2026-09-30).**
+
+### 11.9. Décomposition — premier morceau du dispatch (registre d'application par mode, 2026-09-30)
+
+**`[CODÉ]`, comportement préservé (test croisé), `⚠️ non testé en navigateur`.** Après les aperçus (§11.8),
+premier geste sur le vrai « moteur commun » : le chaînage `mode === 'wall' ? applyWallDrag(...) : mode ===
+'stair' ? ... : applyFloorSelection(...)` (fin du pointerUp générique) remplacé par un registre mode→fonction,
+`client/src/lib/surfaceTools/applyToolMode.js` : `applyToolMode(mode, surfaceData, drag, tool, activeMaterial,
+availableBlocks)`. Couvre seulement `wall`/`stair`/`bridge`/`erase` + le repli `applyFloorSelection` — les
+seuls modes qui partageaient déjà ce chaînage sans effet de bord annexe. `select`/`room`/`connector`/`effect`/
+`reshape-room`/`wall-reshape`/`paint-wall` gèrent chacun panneaux/hover/clés d'arête en plus d'un simple calcul
+de `nextData` (branches `if (mode === X) { ...; return }` plus haut dans le même handler) — pas dans ce
+registre, laissés tels quels pour un tour ultérieur, un outil à la fois.
+- Petite adaptation de signature actée dans le registre, pas cachée : `applyWallDrag` prend `(start, end)`
+  séparément (pas un objet `drag`) — enveloppé dans une fonction d'un ligne qui déballe `drag.start`/
+  `drag.end`, comportement identique. `eraseSurfaceSelection` ignore `activeMaterial`/`availableBlocks` —
+  la signature commune du registre les lui passe quand même, sans effet (elle ne les lit jamais).
+- **Test croisé neuf** (`applyToolMode.test.mjs`, 5 tests) : pour chaque mode, vérifie que passer par le
+  registre produit un résultat `deepEqual` à l'appel direct de la fonction d'origine avec les mêmes
+  arguments — preuve que l'adaptation de signature ne change rien, pas seulement supposée.
+- `SurfaceEditorScene.jsx` : 1352 → 1340 lignes. `npx eslint` (0 problème), `npm run build` propre, `node
+  --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/applyToolMode.test.mjs` 54/54.
+  **Non testé en navigateur** : poser un mur, un escalier, une passerelle, effacer — les 4 seuls chemins
+  réellement atteignables par ce registre (le repli `applyFloorSelection` semble `[HYPOTHÈSE]` inatteignable
+  par les 12 modes actuels, comme c'était déjà le cas avant ce tour — pas une régression introduite ici).
 
 Reste dans `SurfaceEditorScene.jsx` après cette étape : la logique de glisser-déposer générique
-(`dragRef`/`setDrag`), le dispatch pointerDown/pointerMove/pointerUp par mode, et les overlays de sélection
-(`RoomArcPreview`, `RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — pas des aperçus de pose, une
-familles différente, pas encore auditée pour extraction.
+(`dragRef`/`setDrag`), les branches `if (mode === X) {...}` de `select`/`room`/`connector`/`effect`/
+`reshape-room`/`wall-reshape`/`paint-wall` (pointerDown/pointerMove/pointerUp), et les overlays de sélection
+(`RoomArcPreview`, `RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — familles différentes, pas encore
+auditées pour extraction.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 

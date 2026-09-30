@@ -12,11 +12,7 @@ import {
   normalizeSurfaceData,
   normalizeCellSelection,
   computeSurfaceGridExtent,
-  applyFloorSelection,
-  applyBridgeSelection,
-  applyStairSelection,
   applyRoomSelectionWithResult,
-  eraseSurfaceSelection,
   findRoomAtCell,
   findRoomsInSelection,
   roomToSurfaceToolPatch,
@@ -49,10 +45,10 @@ import {
 
 import {
   getWallRenderBox,
-  applyWallDrag,
   getToolWallThicknessFine,
 } from '../lib/surfaceGeometry.js'
 import { getEffectRegionColor } from '../lib/effectRegionColors.js'
+import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
 
 import FloorPreview from './surfaceTools/FloorPreview.jsx'
 import RoomPreview from './surfaceTools/RoomPreview.jsx'
@@ -1123,15 +1119,7 @@ export default function SurfaceEditorScene({
         return
       }
 
-      const nextData = mode === 'wall'
-        ? applyWallDrag(surfaceData, finalDrag.start, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
-        : mode === 'stair'
-          ? applyStairSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
-        : mode === 'bridge'
-          ? applyBridgeSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
-        : mode === 'erase'
-          ? eraseSurfaceSelection(surfaceData, finalDrag, surfaceTool)
-          : applyFloorSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
+      const nextData = applyToolMode(mode, surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
       if (nextData !== surfaceData) onSurfaceDataChange(nextData)
     }
 
