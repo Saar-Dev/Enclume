@@ -904,15 +904,33 @@ registre, laissés tels quels pour un tour ultérieur, un outil à la fois.
   arguments — preuve que l'adaptation de signature ne change rien, pas seulement supposée.
 - `SurfaceEditorScene.jsx` : 1352 → 1340 lignes. `npx eslint` (0 problème), `npm run build` propre, `node
   --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/applyToolMode.test.mjs` 54/54.
-  **Non testé en navigateur** : poser un mur, un escalier, une passerelle, effacer — les 4 seuls chemins
-  réellement atteignables par ce registre (le repli `applyFloorSelection` semble `[HYPOTHÈSE]` inatteignable
-  par les 12 modes actuels, comme c'était déjà le cas avant ce tour — pas une régression introduite ici).
+  **Testé, `Fonctionnel` (Saar, 2026-09-30).**
+
+### 11.10. Décomposition — pause de réflexion demandée par Saar, puis lecture complète avant code (2026-09-30)
+
+Saar, après §11.9 : « pause de réflexion avant de continuer. Tu ne peux coder que si et seulement si tu es
+sûr à 100 % » — pas une simple formule, prise au sens littéral. Plutôt que proposer un découpage pour les 7
+branches restantes (`select`/`room`/`connector`/`effect`/`reshape-room`/`wall-reshape`/`paint-wall`) à partir
+de ce qui avait déjà été lu (seulement leurs `pointerUp`), lecture complète de `pointerDown`/`pointerMove`/
+`pointerUp` faite avant tout code, un outil à la fois — confirmé par lecture, pas supposé : **Zone d'effet**
+n'a aucun cas spécial ni en `pointerDown` ni en `pointerMove` (chemin par défaut, `getFloorCell`, comme la
+plupart des modes) ; seul `pointerUp` a une branche propre. Aucune interdépendance cachée avec un autre mode.
+
+**`[CODÉ]`, comportement préservé (test unitaire), `⚠️ non testé en navigateur`.** Même patron que §11.9
+(garder les effets de bord en place, extraire seulement le calcul pur) : `buildEffectVolumePayload(drag,
+tool)` (`client/src/lib/surfaceTools/buildEffectVolumePayload.js`) construit le payload ; `onRuntimeEffect
+Create`/`setHoverPreview(null)`/`preventDefault`/`stopPropagation` restent dans `SurfaceEditorScene.jsx`
+(callbacks/refs du composant, n'ont pas leur place dans une fonction pure). 3 tests neufs (valeurs
+explicites, défauts, sélection nulle). `SurfaceEditorScene.jsx` : 1340 → 1244 lignes. `npx eslint` (0
+problème), `npm run build` propre, `node --test client/src/lib/surfaceData.test.mjs
+client/src/lib/surfaceTools/applyToolMode.test.mjs client/src/lib/surfaceTools/buildEffectVolumePayload.test.mjs`
+57/57. **Testé, `Fonctionnel` (Saar, 2026-09-30).**
 
 Reste dans `SurfaceEditorScene.jsx` après cette étape : la logique de glisser-déposer générique
-(`dragRef`/`setDrag`), les branches `if (mode === X) {...}` de `select`/`room`/`connector`/`effect`/
-`reshape-room`/`wall-reshape`/`paint-wall` (pointerDown/pointerMove/pointerUp), et les overlays de sélection
-(`RoomArcPreview`, `RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — familles différentes, pas encore
-auditées pour extraction.
+(`dragRef`/`setDrag`), les branches `if (mode === X) {...}` de `select`/`room`/`connector`/`reshape-room`/
+`wall-reshape`/`paint-wall` (pointerDown/pointerMove/pointerUp — pas encore lues en entier pour ces 6, à
+faire un outil à la fois avant tout code), et les overlays de sélection (`RoomArcPreview`,
+`RoomSelectionShape`/`Contour`, `RuntimeEffectRegions`) — familles différentes, pas encore auditées.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 

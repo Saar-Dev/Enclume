@@ -49,6 +49,7 @@ import {
 } from '../lib/surfaceGeometry.js'
 import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
+import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumePayload.js'
 
 import FloorPreview from './surfaceTools/FloorPreview.jsx'
 import RoomPreview from './surfaceTools/RoomPreview.jsx'
@@ -1097,22 +1098,8 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'effect') {
-        const area = normalizeCellSelection(finalDrag)
-        if (area) {
-          const baseY = getToolElevation(surfaceTool)
-          const height = Math.max(0.1, Number(surfaceTool?.effectHeight) || STORY_HEIGHT)
-          onRuntimeEffectCreate?.({
-            definitionKey: surfaceTool?.effectDefinitionKey || 'fire',
-            targetKind: 'volume',
-            volume: {
-              min: { x: area.minX, y: baseY, z: area.minZ },
-              max: { x: area.maxX + 1, y: baseY + height, z: area.maxZ + 1 },
-            },
-            intensity: Math.max(0.01, Number(surfaceTool?.effectIntensity) || 1),
-            puissance: Math.round(Number(surfaceTool?.effectPuissance) || 0),
-            source: { kind: 'editor' },
-          })
-        }
+        const payload = buildEffectVolumePayload(finalDrag, surfaceTool)
+        if (payload) onRuntimeEffectCreate?.(payload)
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
