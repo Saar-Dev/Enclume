@@ -985,10 +985,8 @@ test croisé, cross-check contre le comportement d'origine).
   déjà minimal.
 - `SurfaceEditorScene.jsx` : 1236 → 1226 lignes (1550 lignes au tout début de la décomposition, §11.7 —
   324 lignes sorties du monolithe à ce stade). `npx eslint` (0 problème), `npm run build` propre, `node
-  --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/*.test.mjs` 67/67. **Non testé en
-  navigateur** : cliquer pour sélectionner une salle, un connecteur, cliquer dans le vide (efface la
-  sélection), un rectangle sur plusieurs salles ; et le premier clic du sous-outil Remodeler
-  (ajouter/retirer une case).
+  --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/*.test.mjs` 67/67. **Testé,
+  `Fonctionnel` (Saar, 2026-09-30).**
 
 ### 11.13. Décomposition — Peindre un mur, composants visuels déplacés (2026-09-30)
 
@@ -1011,13 +1009,38 @@ l'extraction terminée, pas après un rapport de bug — corrigé avant tout com
 - `SurfaceEditorScene.jsx` : 1226 → 1149 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
   inchangé (comportement de rendu, pas de logique pure nouvelle à tester par cross-check ici — la
   vérification est la relecture qui a trouvé l'erreur ci-dessus, pas un test automatisé).
-- **Non testé en navigateur** : peindre un mur en portée case/tronçon/salle (surtout `case`, le cas que
-  l'erreur aurait cassé), survol (surlignage vert).
+- **Testé, `Fonctionnel` (Saar, 2026-09-30).**
 
-Reste : le moteur de glisser-déposer générique lui-même (`dragRef`/`setDrag`/`skipNextCanvasMouseDownRef`,
-les 3 handlers `handleMouseDown`/`handleMouseMove`/`handleMouseUp`) — la dernière pièce, celle qui reste
-justement parce qu'elle est transverse à tous les outils plutôt que propre à un seul. Pas encore touché ;
-`SurfaceEditorScene.jsx` est passé de 1550 à 1149 lignes sur cette décomposition (401 lignes, 26 %).
+### 11.14. Décomposition — overlays de sélection (salle, murs, poignée, arc, zones déjà posées) (2026-09-30)
+
+En terminant l'audit annoncé au tour précédent (« pas encore auditées »), 4 composants purs supplémentaires
+trouvés — même famille que les 8 aperçus du §11.8, juste plus loin dans le fichier, ratés lors de ce premier
+passage. **`[CODÉ]`, comportement préservé (code déplacé à l'identique), `⚠️ non testé en navigateur`.**
+
+- `RoomSelectionOverlay.jsx` : contour + remplissage jaune de la salle sélectionnée
+  (`SelectedRoomOverlay` + son helper `roomSelectionShapes` + `RoomSelectionShape`/`RoomSelectionContour`,
+  gestion de la mémoire Three.js — `geometry.dispose()` — déplacée avec eux).
+- `RoomWallSelectionOverlay.jsx` : murs sélectionnables d'une salle + **la poignée de redimensionnement**
+  elle-même (`SelectableRoomWall`, `onReshapeStart`) — la fonctionnalité la plus attendue de tout ce
+  chantier (§10c) ; déplacée à l'identique, pas retouchée, sans changer une ligne de son comportement.
+- `RoomArcPreview.jsx` : aperçu de l'arrondi de coin sur les murs sélectionnés.
+- `RuntimeEffectRegions.jsx` : zones dangereuses déjà posées (visibles indépendamment du mode courant).
+- Imports nettoyés en conséquence (`isWorldPointVisibleAtLevel`, `yToLevel` du barrel `surfaceData.js`/
+  `surfaceCore.js`, `makeRoomBoundaryArc`/`roomBoundaryContours`/`sampleRoomBoundaryArc` de
+  `roomGeometry.js`, `getEffectRegionColor`, et enfin `getWallRenderBox` — plus aucun appelant dans
+  `Scene.jsx` une fois ces 4 composants partis).
+
+`SurfaceEditorScene.jsx` : 1149 → 890 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
+inchangé. **Non testé en navigateur** — celui qui compte le plus : sélectionner une salle (contour jaune),
+sélectionner un mur puis **glisser la poignée** (le geste §10c), arrondir un coin, et qu'une zone dangereuse
+déjà posée reste visible en dehors du mode Zone d'effet.
+
+**Bilan de toute la décomposition (§11.7→§11.14)** : `SurfaceEditorScene.jsx` 1550 → 890 lignes (-42,6 %),
+13 fichiers neufs dans `client/src/components/surfaceTools/` et `client/src/lib/surfaceTools/`, chacun une
+seule responsabilité, la plupart testés par comparaison croisée contre le comportement d'origine. Ce qui
+reste dans `Scene.jsx` : le moteur de glisser-déposer générique (`dragRef`/`setDrag`/
+`skipNextCanvasMouseDownRef`, les 3 handlers souris) — légitimement la seule pièce qui n'est PAS « un
+outil » mais le socle partagé par tous, pas encore auditée pour une extraction propre.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 

@@ -13,7 +13,6 @@ import {
   normalizeCellSelection,
   computeSurfaceGridExtent,
   applyRoomSelectionWithResult,
-  isWorldPointVisibleAtLevel,
   parseFloorKey,
   SURFACE_FINE,
   getToolElevation,
@@ -25,17 +24,12 @@ import {
 import {
   STORY_HEIGHT,
   levelToY,
-  yToLevel,
   getRoomBaseY,
 } from '../lib/surfaceCore.js'
 
 import { roomsWallSegments } from '../lib/roomWalls.js'
 
-import {
-  getWallRenderBox,
-  getToolWallThicknessFine,
-} from '../lib/surfaceGeometry.js'
-import { getEffectRegionColor } from '../lib/effectRegionColors.js'
+import { getToolWallThicknessFine } from '../lib/surfaceGeometry.js'
 import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
 import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumePayload.js'
 import { computeConnectorPlacement } from '../lib/surfaceTools/computeConnectorPlacement.js'
@@ -51,13 +45,14 @@ import StairPreview from './surfaceTools/StairPreview.jsx'
 import EffectVolumePreview from './surfaceTools/EffectVolumePreview.jsx'
 import RoomFootprintPaintPreview from './surfaceTools/RoomFootprintPaintPreview.jsx'
 import ConnectorPreview from './surfaceTools/ConnectorPreview.jsx'
+import SelectedRoomOverlay from './surfaceTools/RoomSelectionOverlay.jsx'
+import RoomWallSelectionOverlay from './surfaceTools/RoomWallSelectionOverlay.jsx'
+import RoomArcPreview from './surfaceTools/RoomArcPreview.jsx'
+import RuntimeEffectRegions from './surfaceTools/RuntimeEffectRegions.jsx'
 
 import {
-  makeRoomBoundaryArc,
-  roomBoundaryContours,
   roomSelectableWallRuns,
   roomSliceContours,
-  sampleRoomBoundaryArc,
   wallRunReshapeCells,
   wallRunRowCountForCell,
 } from '../../../shared/world/roomGeometry.js'
@@ -90,203 +85,6 @@ function clamp(value, min, max) {
 // extraits dans components/surfaceTools/ (§11.7, PLAN_WORLD_BUILDER_REWORK.md — décomposition en un
 // fichier par responsabilité, composants purs pilotés uniquement par leurs props).
 
-function SelectedRoomOverlay({ room, roomLookup, displayLevel }) {
-  if (!room) return null
-  const y = levelToY(displayLevel) + 0.08
-
-  return (
-    <group renderOrder={30}>
-      <RoomSelectionShape room={room} roomLookup={roomLookup} y={y} displayLevel={displayLevel} />
-      <RoomSelectionContour room={room} roomLookup={roomLookup} y={y + 0.025} displayLevel={displayLevel} />
-    </group>
-  )
-}
-
-function roomSelectionShapes(room, roomLookup, displayLevel = null) {
-  const baseLevel = yToLevel(getRoomBaseY(room))
-  const sliceContours = displayLevel === null
-    ? []
-    : roomSliceContours(room, displayLevel - baseLevel, roomLookup, STORY_HEIGHT)
-  const contours = sliceContours.length > 0 ? sliceContours : roomBoundaryContours(room, roomLookup)
-  const polygons = new Map()
-  for (const contour of contours) {
-    if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
-    const polygon = polygons.get(contour.polygonIndex)
-    if (contour.isHole) polygon.holes.push(contour)
-    else polygon.outer = contour
-  }
-  return [...polygons.values()].flatMap(polygon => {
-    if (!polygon.outer || polygon.outer.points.length < 3) return []
-    const outerPoints = polygon.outer.points.map(value => new THREE.Vector2(value.x, -value.z))
-    if (!THREE.ShapeUtils.isClockWise(outerPoints)) outerPoints.reverse()
-    const shape = new THREE.Shape(outerPoints)
-    for (const contour of polygon.holes) {
-      if (contour.points.length < 3) continue
-      const holePoints = contour.points.map(value => new THREE.Vector2(value.x, -value.z))
-      if (THREE.ShapeUtils.isClockWise(holePoints)) holePoints.reverse()
-      shape.holes.push(new THREE.Path(holePoints))
-    }
-    return [shape]
-  })
-}
-
-function RoomSelectionShape({ room, roomLookup, y, displayLevel = null }) {
-  const geometries = useMemo(() => roomSelectionShapes(room, roomLookup, displayLevel).map(shape => {
-    const geometry = new THREE.ShapeGeometry(shape)
-    geometry.rotateX(-Math.PI / 2)
-    return geometry
-  }), [displayLevel, room, roomLookup])
-  useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
-  if (geometries.length === 0) return null
-  return (
-    <>
-      {geometries.map((geometry, index) => (
-        <mesh key={`selection:${index}`} geometry={geometry} position={[0, y, 0]}>
-          <meshBasicMaterial color="#fbbf24" transparent opacity={0.14} depthWrite={false} side={THREE.DoubleSide} />
-        </mesh>
-      ))}
-    </>
-  )
-}
-
-function RoomSelectionContour({ room, roomLookup, y, displayLevel = null }) {
-  const contours = useMemo(() => {
-    const baseLevel = yToLevel(getRoomBaseY(room))
-    const sliced = displayLevel === null
-      ? []
-      : roomSliceContours(room, displayLevel - baseLevel, roomLookup, STORY_HEIGHT)
-    return sliced.length > 0 ? sliced : roomBoundaryContours(room, roomLookup)
-  }, [displayLevel, room, roomLookup])
-  return contours.map((contour, index) => {
-    if (contour.points.length < 2) return null
-    const points = [...contour.points, contour.points[0]].map(point => [point.x, y, point.z])
-    return (
-      <Line
-        key={`selection-contour:${contour.polygonIndex}:${contour.isHole ? 'hole' : 'outer'}:${index}`}
-        points={points}
-        color="#fbbf24"
-        lineWidth={2}
-        transparent
-        opacity={0.9}
-        depthTest={false}
-        renderOrder={31}
-      />
-    )
-  })
-}
-
-function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, onReshapeStart, interactive = true }) {
-  const [hovered, setHovered] = useState(false)
-  const points = wall.axis === 'arc' ? wall.points : [wall.from, wall.to]
-  const y = levelToY(displayLevel)
-  const segments = points.slice(0, -1).map((from, index) => ({ from, to: points[index + 1] }))
-  const linePoints = points.map(point => [point.x, y + STORY_HEIGHT + 0.045, point.z])
-  const showLine = active || hovered
-
-  return (
-    <group
-      onPointerDown={event => {
-        if (!interactive) return
-        event.stopPropagation()
-        // Poignée de redimensionnement (§10c/§12.9) : un tronçon DROIT déjà sélectionné se saisit
-        // et se glisse pour pousser tout le mur d'un coup — un premier clic (pas encore actif) ne
-        // fait toujours que sélectionner, comportement inchangé. Jamais sur un arc (v1, non traité).
-        if (active && wall.axis !== 'arc' && onReshapeStart) {
-          onReshapeStart(wall, event)
-          return
-        }
-        onToggle?.(wall.edgeKeys, event)
-      }}
-      onPointerOver={event => {
-        if (!interactive) return
-        event.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      {segments.map((segment, index) => {
-        const box = getWallRenderBox({
-          axis: 'segment',
-          x0: segment.from.x * SURFACE_FINE,
-          x1: segment.to.x * SURFACE_FINE,
-          z0: segment.from.z * SURFACE_FINE,
-          z1: segment.to.z * SURFACE_FINE,
-          y,
-          height: STORY_HEIGHT,
-          thickness,
-        })
-        if (!box) return null
-        return (
-          <group key={`${wall.id}:hit:${index}`}>
-            <mesh
-              raycast={interactive ? undefined : () => null}
-              position={box.position}
-              rotation={[0, box.rotationY || 0, 0]}
-              renderOrder={42}
-            >
-              <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.12)]} />
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-            </mesh>
-            {active && (
-              <mesh
-                position={box.position}
-                rotation={[0, box.rotationY || 0, 0]}
-                scale={[1.025, 1.025, 1.12]}
-                renderOrder={41}
-                raycast={() => null}
-              >
-                <boxGeometry args={box.args} />
-                <meshBasicMaterial
-                  color="#ffd34d"
-                  side={THREE.BackSide}
-                  transparent
-                  opacity={0.36}
-                  blending={THREE.AdditiveBlending}
-                  depthTest={false}
-                  depthWrite={false}
-                  toneMapped={false}
-                />
-              </mesh>
-            )}
-          </group>
-        )
-      })}
-      {showLine && (
-        <Line
-          points={linePoints}
-          color={active ? '#fb923c' : '#22d3ee'}
-          lineWidth={active ? 4 : 3}
-          transparent
-          opacity={active ? 1 : 0.9}
-          depthTest={false}
-          renderOrder={43}
-        />
-      )}
-    </group>
-  )
-}
-
-function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, onReshapeStart, interactive = true }) {
-  if (!room || room.wallEnabled === false) return null
-  const selected = new Set(selectedKeys || [])
-  const thickness = Math.max(2, Number(room.wallThickness) || 1)
-  return roomSelectableWallRuns(room).map(wallRun => {
-    const active = wallRun.edgeKeys.every(key => selected.has(key))
-    return (
-      <SelectableRoomWall
-        key={wallRun.id}
-        wall={wallRun}
-        displayLevel={displayLevel}
-        thickness={thickness}
-        active={active}
-        onToggle={onToggle}
-        onReshapeStart={onReshapeStart}
-        interactive={interactive}
-      />
-    )
-  })
-}
-
 // Outil « Peindre un mur » — clic direct (pas de sélection préalable), portée choisie explicitement
 // par un sélecteur dans le panneau (case / tronçon / salle), jamais par un compteur de clics.
 // Aperçu du geste « peindre/effacer des cases » (Solution A, 2026-09-28 — remplace une première
@@ -295,73 +93,6 @@ function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, 
 // directement des cases, comme Dungeondraft/RimWorld, évite la traduction case → mur → sens/
 // magnitude qui avait produit un bug d'échelle silencieux dans la première version).
 
-function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMultiplier }) {
-  const preview = useMemo(() => {
-    const built = makeRoomBoundaryArc(room, selectedKeys, angleDegrees, sideMultiplier)
-    if (built.error) return null
-    const points = sampleRoomBoundaryArc(built.arc)
-    return points.slice(0, -1).map((from, index) => ({
-      from,
-      to: points[index + 1],
-    }))
-  }, [angleDegrees, room, selectedKeys, sideMultiplier])
-  if (!preview) return null
-
-  const y = levelToY(displayLevel)
-  const thickness = Math.max(2, Number(room.wallThickness) || 1)
-  return preview.map((segment, index) => {
-    const box = getWallRenderBox({
-      axis: 'segment',
-      x0: segment.from.x * SURFACE_FINE,
-      x1: segment.to.x * SURFACE_FINE,
-      z0: segment.from.z * SURFACE_FINE,
-      z1: segment.to.z * SURFACE_FINE,
-      y,
-      height: STORY_HEIGHT,
-      thickness,
-    })
-    if (!box) return null
-    return (
-      <mesh
-        key={`room-arc-preview:${index}`}
-        position={box.position}
-        rotation={[0, box.rotationY || 0, 0]}
-        renderOrder={44}
-      >
-        <boxGeometry args={box.args} />
-        <meshBasicMaterial color="#fb923c" transparent opacity={0.58} depthWrite={false} />
-      </mesh>
-    )
-  })
-}
-
-function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
-  return regions.map(region => {
-    const bounds = region?.bounds
-    const sliceBottom = levelToY(displayLevel)
-    const sliceTop = levelToY(displayLevel + 1)
-    if (!bounds) return null
-    const centerX = (bounds.min.x + bounds.max.x) / 2
-    const centerZ = (bounds.min.z + bounds.max.z) / 2
-    const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-    const visibleInOpenRoom = bounds.max.y <= sliceBottom
-      && yToLevel(bounds.min.y) < displayLevel
-      && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
-    if (!intersectsSlice && !visibleInOpenRoom) return null
-    const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
-    const center = [
-      centerX,
-      (bounds.min.y + bounds.max.y) / 2,
-      centerZ,
-    ]
-    return (
-      <mesh key={region.id} position={center} renderOrder={20}>
-        <boxGeometry args={size} />
-        <meshBasicMaterial color={getEffectRegionColor(region)} transparent opacity={0.13} depthWrite={false} />
-      </mesh>
-    )
-  })
-}
 
 export default function SurfaceEditorScene({
   surfaceData,
