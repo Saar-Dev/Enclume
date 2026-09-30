@@ -79,14 +79,15 @@ chantier déjà en cours là-bas (Règle 2), pas parce que ce serait un domaine 
   consignées telles quelles, non diagnostiquées, dans `PLAN_WORLD_BUILDER_REWORK.md` §9. Ne pas reprendre par
   correctif ponctuel.
 
-### Phase 2 — Dette d'infrastructure de l'éditeur (`PLAN_RW_MATERIAUX.md` Lot 0) — À FAIRE, reporté après Plan B
+### Phase 2 — Dette d'infrastructure de l'éditeur (`PLAN_RW_MATERIAUX.md` Lot 0) — 2a repris par la Phase 6 (2026-09-30)
 
 - **2a. Refactor `Editor3D.jsx` (1580 lignes) / `SurfaceEditorScene.jsx` (1479 lignes, en hausse)** en hooks et
   composants spécialisés (plan déjà détaillé depuis 2026-08-02, jamais rejoué). Sans risque par construction (critère
   de succès = comportement et tests inchangés). **Décision de Saar (2026-09-28) : reporté après Plan B**, une fois
   qu'on sait réellement de quoi l'éditeur a besoin, plutôt que de refactorer à l'aveugle avant — Plan B a été codé
   directement dans le monolithe (voir 1c). La dette est donc plus grosse qu'avant, pas résolue, juste consciemment
-  reportée.
+  reportée. **2026-09-30 : ce refactor est maintenant celui décrit en Phase 6** (cadrage réel fait, pas à
+  l'aveugle) — ne plus le traiter comme un chantier distinct.
 - **2b. Dette de duplication trouvée en route** : `SurfaceEditorPanel.jsx` (mode Salle) réimplémente à la main les 6
   champs de matériau déjà factorisés dans `SurfaceMaterialEditor.jsx` — à corriger, indépendant du reste, bas risque.
 
@@ -117,19 +118,39 @@ sélection déformé : **codés, testés, validés en jeu** sur les 8 types de p
 combat) est un sujet moteur monde/collision, pas un sujet d'éditeur — suivi dans `PLAN_PORTES.md` §9, hors de ce
 document désormais (§0).
 
-### Phase 6 — World Builder v2, rework de la coquille d'interaction (`PLAN_WORLD_BUILDER_REWORK.md` §11) — STUB, cadrage à peine commencé
+### Phase 6 — Décomposition de la coquille d'interaction en un fichier par responsabilité (`PLAN_WORLD_BUILDER_REWORK.md` §11) — cadrage fait, code pas commencé
 
-Proposition de Saar (2026-09-29, strangler fig — reconstruire à côté, garder l'ancien jusqu'à ce qu'il gêne ou que le
-v2 soit validé) recadrée après recherche (risque de sur-conception, « second-system effect ») : périmètre borné à la
-**coquille d'interaction** (`Editor3D.jsx`, `SurfaceEditorScene.jsx`, `SurfaceEditorPanel.jsx`, panneaux flottants) —
-absorbe de fait la dette de la Phase 2 ci-dessus (refactor), mais en reconstruction plutôt qu'en refactor sur place.
+**`[TRANCHÉ PAR SAAR]` (2026-09-30) : la stratégie strangler fig proposée le 2026-09-29 (reconstruire à côté,
+garder l'ancien) est abandonnée** (« Je confirme, pas de strangler fig »). Constat qui a motivé l'abandon :
+aucune coquille séparée n'a jamais existé dans les faits — tout ce qui a été livré sous le nom « World Builder
+v2 » depuis le 2026-09-29 (poignée, dock fixe, motifs importés, pile d'annulation, refonte du panneau Salle) a
+été codé directement dans les fichiers existants. **Cette phase 6 redevient donc, de fait, la Phase 2
+ci-dessus** (refactor `Editor3D.jsx`/`SurfaceEditorScene.jsx`/`SurfaceEditorPanel.jsx`) — même périmètre, même
+fichiers, un seul nom désormais — mais informée par un inventaire réel plutôt qu'un refactor à l'aveugle.
+
+**Cadrage fait (2026-09-30)**, via recherche pro + inventaire factuel complet (numéro de ligne par mode, dans
+`PLAN_WORLD_BUILDER_REWORK.md` §11 pour le détail) des 12 « modes » de l'outil (`select`, `room`, `wall`,
+`stair`, `bridge`, `connector`, `paint-wall`, `erase`, `effect`, `ceiling`, `reshape-room`, `wall-reshape`) :
+- Pas 12 fichiers plats — un **moteur commun** (cycle de glisser-déposer, règle « reste actif après une pose
+  réussie », aperçu 3D de repli, ouverture/fermeture de panneau, application en direct au panneau Salle) que
+  presque tous partagent aujourd'hui de façon ad hoc (dupliquée/implicite), plus des **outils spécifiques**
+  branchés dessus — patron `StateNode` de tldraw (éditeur canvas React open source, 45k+ étoiles), pas de
+  nouvelle dépendance.
+- `select` (+ son état enfant `wall-reshape`, la poignée) et `reshape-room` (sous-outil du panneau Salle,
+  cohérent avec §13) sont traités à part des outils de construction, pas dans le même lot.
+- **Trois bugs réels trouvés gratuitement pendant l'inventaire, à corriger en même temps que le nettoyage
+  préparatoire** : mode `ceiling` entièrement mort (aucun bouton ne l'a jamais déclenché, vérifié sur tout
+  l'historique git de `SurfaceEditorPanel.jsx` — jamais retiré, jamais branché depuis l'origine) ; aperçu de
+  pose d'un connecteur qui superpose deux rendus (générique + réel) ; deux messages d'erreur de connecteur
+  codés en dur en français (`SurfaceEditorScene.jsx:1248-1249`, hors du système i18n du projet).
+- **Ordre retenu** : 1) nettoyage (mode mort + 2 bugs) ; 2) extraction du moteur commun, tous les outils
+  actuels rebranchés dessus, comportement vérifié identique à chaque étape ; 3) migration des outils un par
+  un sur ce moteur, du plus simple au plus complexe ; 4) sélection + poignée + Remodeler en dernier.
+
 Modèle de données, compilateur, autorité géométrique et rendu 3D partagé (`surfaceRooms.js`, `roomGeometry.js`,
-`worldCompiler.js`, `SurfaceDungeonScene.jsx`) **repris tels quels**, pas réécrits. **Pas un document séparé** :
-nouvelle phase du chantier déjà en cours sur ce même périmètre (Règle 2), pas un second plan (correction du
-2026-09-29 après une première tentative erronée de fichier à part). Détail complet, garde-fous et prochaines
-étapes : `PLAN_WORLD_BUILDER_REWORK.md` §11. Rien codé, rien tranché au-delà du périmètre. La poignée de
-redimensionnement (§10c du même document) reste une exigence confirmée de Saar, pas une option écartée par ce
-rework.
+`worldCompiler.js`, `SurfaceDungeonScene.jsx`) **repris tels quels**, pas réécrits — inchangé par ce pivot.
+Détail complet : `PLAN_WORLD_BUILDER_REWORK.md` §11. Rien codé encore. La poignée de redimensionnement (§10c
+du même document) reste une exigence confirmée de Saar, pas une option écartée par cette phase.
 
 ## 2. Ordre recommandé et pourquoi
 
@@ -216,10 +237,24 @@ la Phase 2 spécifiquement ; à retrier une fois le cadrage de la Phase 6 avanc�
 | 1 (forme des salles) + 3 (R1) | `enclume-cb` — Saar directement, session non lancée par cette orchestration | Rapport de fin de session (2026-09-27), 3 commits poussés (`165be2b`, `8962c8c`, `78159ea`) : Tier A, Plan A codé et validé, R1 avancé. |
 | 1c (Plan B) | agent « forme des salles » (META EDITEUR) | 2026-09-29 : peindre/effacer des cases validé en jeu par Saar (clos). Peinture de mur (Lot A), nouvelle conversation le même jour, contre-diagnostic indépendant (`PLAN_WORLD_BUILDER_REWORK.md` §10/10e) : garde-fou porte, autorité unique `interiorTex`, sélection de mur qui s'accumulait + occlusion caméra en édition — trouvés et corrigés. **Validé en jeu par Saar** (« Résolution du problème des murs non modifiables. Bien joué »), **commité** (`72e15ab`, 13 fichiers). Restent ouverts : flux Sélection→salle→Peindre, « Ajouter une salle » qui ne reste pas actif. |
 | 5 (connecteurs) | `PORTES` | Clos pour ce périmètre (`1ea1150`, `ec5ef82`) — voir §0 pour ce qui reste hors de ce document. |
-| 6 (World Builder v2) | Cette conversation (2026-09-29) | Intégré comme §11 de `PLAN_WORLD_BUILDER_REWORK.md` (pas un fichier séparé — corrigé après une première erreur de fragmentation le même jour), proposition de Saar acceptée avec recadrage de périmètre (coquille d'interaction seulement). Cadrage réel (recherche pro, audit des duplications d'autorité, patron d'interaction unique) pas commencé. |
+| 6 (décomposition coquille d'interaction) | Cette conversation (2026-09-30) | Strangler fig abandonné, confirmé par Saar. Cadrage réel fait : inventaire factuel complet des 12 modes (agent dédié, vérifié à la main sur 2 points forts), moteur commun + outils identifiés (patron tldraw `StateNode`), 3 bugs trouvés (mode `ceiling` mort, double-aperçu connecteur, erreurs FR codées en dur), ordre de migration retenu. Rien codé. |
 
 ## Historique
 
+- **2026-09-30** — Phase 6 : strangler fig abandonné, confirmé par Saar (« Je confirme, pas de strangler fig »).
+  Constat déclencheur : aucune coquille séparée n'a jamais existé, tout a été codé en place depuis le 2026-09-29 —
+  donc plus rien à « garder à côté ». Phase 6 fusionne de fait avec la Phase 2 (2a) ci-dessus. Cadrage réel fait
+  avant tout code (demande explicite de Saar de prendre le temps, recherche pro incluse) : inventaire factuel
+  complet des 12 modes de l'outil par un agent dédié (numéros de ligne, état lu/écrit, dépendances croisées),
+  dont deux affirmations fortes vérifiées à la main (mode `ceiling` jamais déclenché par aucun bouton — confirmé
+  sur tout l'historique git du fichier ; `wall-reshape` qui ne touche jamais `surfaceTool.mode`, confirmé par
+  grep). Recherche pro : patron `StateNode` de tldraw (dépôt réel lu, `SelectTool.ts` + `childStates/`) — un
+  moteur commun (glisser-déposer, persistance de mode, aperçu de repli, panneaux) partagé par les outils de
+  construction, plutôt que 12 fichiers plats qui recopieraient le désordre actuel. Trois bugs réels trouvés en
+  chemin (mode `ceiling` mort, double-aperçu de pose d'un connecteur, erreurs de connecteur codées en dur en
+  français) — à corriger dans le nettoyage préparatoire, pas ticketés séparément. Ordre retenu : nettoyage →
+  extraction du moteur commun → migration des outils un par un (simple → complexe) → sélection/poignée/Remodeler
+  en dernier. Détail complet `PLAN_WORLD_BUILDER_REWORK.md` §11.
 - **2026-09-29** — Phase 6 ajoutée : Saar propose un rework « World Builder v2 » (strangler fig, coexiste avec
   l'éditeur actuel) pendant un run à vide de bilan. Recadré après recherche (risque de sur-conception) au
   périmètre de la coquille d'interaction seule, modèle de données/compilateur/rendu repris tels quels. **Erreur

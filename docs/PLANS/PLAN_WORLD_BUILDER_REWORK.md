@@ -573,6 +573,20 @@ du §9 non couverts ici (fenêtre qui se ferme, changer de salle en cours de pei
 > Nouvelle phase de CE chantier, pas un document séparé (Règle 2 — une information = un seul endroit ; la
 > tentative initiale de créer `PLAN_WORLD_BUILDER_V2.md` à côté a été corrigée le même jour, cf. Historique).
 > Zéro code, zéro décision figée au-delà du périmètre ci-dessous.
+>
+> **`[TRANCHÉ PAR SAAR]` (2026-09-30) : stratégie strangler fig (§11.0) abandonnée, confirmée par Saar
+> (« Je confirme, pas de strangler fig »).** Constat qui a motivé la question : aucune coquille « v2 »
+> séparée n'a jamais existé dans les faits — tout ce qui a été livré depuis ce §11 (poignée §10c, dock fixe
+> §12.10 point 4, motifs importés §14, pile d'annulation §12.10 point 5, refonte du panneau Salle §13.6) a
+> été codé **directement dans les fichiers existants**, jamais dans une coquille neuve à côté ; l'ambition
+> initiale de reconstruire à côté n'a en réalité jamais été suivie. §11.5 (stratégie de coexistence v1/v2)
+> devient sans objet pour la même raison — il n'y a qu'un seul éditeur, toujours en fonctionnement. Nouvelle
+> direction : décomposition en place, un fichier par responsabilité, un mode à la fois, au même rythme
+> incrémental déjà validé six fois par Saar en navigateur — inspirée du pattern `StateNode` de tldraw
+> (éditeur canvas React open source, 45k+ étoiles : chaque outil est son propre dossier, chaque état de cet
+> outil son propre fichier — voir `SelectTool.ts`/`childStates/` sur `github.com/tldraw/tldraw`), pas de
+> nouvelle dépendance (pas XState). Le reste de ce §11 (recherche §11.6.1, audit §11.6.2) reste valide et
+> sert de matière à la suite ; seule la stratégie de coexistence change.
 
 ### 11.0. Déclencheur (Saar, 2026-09-29, run à vide de bilan)
 
@@ -623,6 +637,11 @@ c'est-à-dire potentiellement **cette même brique** (`roomGeometry.js`/`roomWal
 d'interaction. Si l'audit (§11.6 point 2) ou une reproduction de Saar confirme que la cause vit dans le rendu
 partagé plutôt que dans l'interaction, ce n'est plus une brique à reprendre telle quelle sans réserve : la
 corriger passerait avant de la considérer figée pour v1 et v2 à la fois.
+
+**`[TRANCHÉ PAR SAAR]` (2026-09-30) : réserve levée, n'est plus d'actualité.** Pas une preuve technique que
+la cause vit bien dans l'interaction plutôt que dans le rendu partagé — la cause reste `[INCONNU]` au sens
+strict, jamais reproduite ni écartée par script. C'est une décision de Saar de ne plus la traiter comme un
+préalable bloquant à la refonte (§11.6 point 5 retiré de la méthode, ne fait plus partie du plan de cadrage).
 
 **v1 et v2 écrivent et lisent exclusivement via ces mêmes fonctions** — aucun risque de divergence sur le
 document canonique pendant la coexistence, par construction (invariant 3 d'`AGENTS.md` : une autorité unique).
@@ -706,14 +725,15 @@ Avant tout plan de code, dans l'ordre :
    tranchée par Saar avant tout code — même méthode que celle qui a fonctionné pour Plan B (§8). **Question
    concrète posée en 11.6.2, en attente de la décision de Saar.**
 4. **Cadrage de la coexistence** (§11.5) — tranché par Saar, pas déduit techniquement seul.
-5. **Lever la réserve du §11.1** sur le rendu 3D partagé : reproduire ou écarter la cause de « la couleur
-   écrase tout » (§10a, candidat coin arrondi) avant de figer ce composant comme définitivement « repris tel
-   quel ». S'il s'avère que la cause vit bien dans la coquille d'interaction (pas dans le rendu), la réserve
-   se referme sans changer le périmètre. Pas encore fait.
+5. ~~Lever la réserve du §11.1 sur le rendu 3D partagé.~~ **`[TRANCHÉ PAR SAAR]` (2026-09-30) : retiré de la
+   méthode, n'est plus d'actualité — voir la note de fermeture au §11.1.**
 
-Points 3, 4 et 5 restent ouverts, en attente de décision de Saar ou d'investigation dédiée. Cette section fixe
-le périmètre et le garde-fou (second-system effect) ; les points 1 et 2 apportent maintenant une matière
-concrète, pas encore un plan de code actionnable.
+Points 3 et 4 restent ouverts, en attente de décision de Saar ou d'investigation dédiée (le point 3 a peut-être
+été répondu de fait par la règle verbe/nom du §13.1 — peindre un mur garde ses deux chemins, sidebar « geste
+rapide » et panneau « réglage précis », tant que les deux écrivent via la même fonction d'autorité ; jamais
+recroisé explicitement avec cette question, à confirmer avant de le rayer pour de bon). Cette section fixe le
+périmètre et le garde-fou (second-system effect) ; les points 1 et 2 apportent maintenant une matière concrète,
+pas encore un plan de code actionnable.
 
 #### 11.6.1. Recherche pro — trois patrons directement transposables
 
@@ -789,6 +809,41 @@ rapide et répétitif) alors qu'arc/élévation restent des réglages ponctuels 
 direct** ? Dans les deux cas, la coquille v2 ne doit garder qu'**une seule fonction d'application par donnée**
 (ce qui existe déjà, `applyRoomWallAppearance` etc.) — la question ne porte que sur le nombre de chemins
 d'interaction qui peuvent y mener, pas sur l'autorité elle-même.
+
+### 11.7. Décomposition en un fichier par responsabilité — étape 1, nettoyage préparatoire (2026-09-30)
+
+Inventaire factuel complet des 12 modes fait par un agent dédié (rapport intégral non recopié ici, deux
+affirmations fortes vérifiées à la main avant d'agir : mode `ceiling` jamais déclenché par aucun bouton —
+confirmé sur tout l'historique git de `SurfaceEditorPanel.jsx` — et `wall-reshape` qui ne touche jamais
+`surfaceTool.mode`, confirmé par grep). Trois trouvailles, corrigées ici (étape 1 de l'ordre retenu, avant
+l'extraction du moteur commun) :
+
+- **Mode `ceiling` : question posée à Saar avant de coder** (« c'est un reliquat de Kiwi v1, je ne sais pas à
+  quoi ça sert, on l'a remplacé/fait mieux ? »). Vérifié avant de répondre : `surface.ceilings` (la donnée que ce
+  mode aurait écrite) est réelle et utilisée — `worldCompiler.js` (`roomCeilingEntries`) la lit comme couche
+  manuelle qui prime sur le plafond auto-généré de chaque salle ; équivalent, pour un plafond, de ce que
+  « Passerelle » fait déjà pour un sol (poser une dalle hors de toute salle). Seul le bouton éditeur n'a jamais
+  été branché, depuis l'origine — **`[TRANCHÉ PAR SAAR]` : abandon, aucun intérêt.** Retiré : la branche
+  `applyCeilingSelection` du switch de pose (`SurfaceEditorScene.jsx`), le composant `CeilingPreview` et son
+  rendu, la branche de hint morte (`SurfaceEditorPanel.jsx`), la fonction `applyCeilingSelection`
+  (`surfaceData.js`) et `getToolCeilingHeight` (`surfaceCore.js`, plus son import/ré-export devenus inutiles),
+  le défaut `ceilingHeight` (`SurfaceEditorPanel.jsx`/`SessionPage.jsx`, dupliqué dans les deux). **Non touché** :
+  `surface.ceilings`/`worldCompiler.js`/le plafond auto-généré des salles — aucun rapport avec l'abandon, risque
+  disproportionné pour un nettoyage sans impact utilisateur.
+- **Double aperçu à la pose d'un connecteur** (porte/ascenseur/échelle) : le switch d'aperçu générique n'avait
+  pas de branche pour `mode === 'connector'`, retombait donc sur `FloorPreview` (boîte bleue générique) qui se
+  superposait au vrai `ConnectorPreview` rendu séparément. Corrigé par une branche explicite (`null`), même
+  patron que `reshape-room`/`wall-reshape` qui ont déjà chacun leur aperçu rendu ailleurs.
+- **Deux messages d'erreur de connecteur codés en dur en français** (`SurfaceEditorScene.jsx`, refus de pose)
+  — violaient `.claude/rules/i18n.md`. `SurfaceEditorScene.jsx` n'avait d'ailleurs jamais `useTranslation`
+  importé du tout. Ajouté ; deux clés neuves `surfaceEditor.connectorDoorWallError`/`connectorPlacementError`
+  (`fr.json`), même texte, juste plus la source.
+
+`npx eslint` (0 erreur, 0 avertissement neuf — un avertissement `exhaustive-deps` introduit par l'ajout de `t`
+à l'effet de pose, corrigé en l'ajoutant aux dépendances), `npm run build` propre, `node --test
+client/src/lib/surfaceData.test.mjs` 49/49 inchangé. **Non testé : le double-aperçu connecteur en navigateur**
+(le seul des trois avec un effet visuel — poser une porte/ascenseur/échelle en glissant devrait maintenant
+n'afficher qu'un seul aperçu).
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 
@@ -1528,9 +1583,22 @@ qu'un motif est sélectionné. Les motifs procéduraux, on peut les dégager. »
   test en navigateur révèle un mur avec ce problème, ce sera la cause.
 - `npx eslint` (0 problème), `node --test client/src/lib/surfaceData.test.mjs` (49/49, aucune
   régression), `npm run build` propre (taille du bundle en légère baisse, cohérent avec le retrait).
+- **`[NOTÉ]` Reste ouvert, jamais cadré** : outil ÉCHELLE (scale) pour redimensionner/tuiler un motif importé
+  indépendamment de sa résolution source (demande de Saar en testant §14.1, jusqu'ici seulement discutée en
+  conversation, pas consignée — corrigé ici pour ne pas la perdre). Aujourd'hui `sampleDisplacementMap`
+  mappe `u,v` directement sur le motif complet sans facteur de répétition ; ajouter l'échelle touchera
+  `displacementMaps.js` et le sixième champ (`relief`) de `SurfaceMaterialEditor.jsx`/
+  `MaterialGeneratorTab.jsx` — son propre plan avant tout code, pas mélangé à un autre tour.
 
 ## Historique
 
+- **2026-09-30** — §11.7 (nettoyage) validé fonctionnel par Saar en navigateur. **Note hors périmètre de ce
+  document, à faire remonter dans `docs/EN_COURS.md` (pas fait ici pour éviter de committer les changements
+  non liés d'une autre session en cours sur ce même fichier) :** Saar demande de revoir la logique de pose
+  d'une échelle pour permettre de poser une échelle sur une autre échelle (continuité verticale sur plusieurs
+  étages) — actuellement non permis, cause exacte non vérifiée (`makeLadderConnectorFromCell`/
+  `applyLadderConnector`, `client/src/lib/connectors.js`, jamais lu pour ce point précis). Rien codé, rien
+  cadré.
 - **2026-09-30** — Après une relecture critique demandée par Saar sur l'ensemble du chantier : trouvé que le
   regroupement de la sidebar (§12.5 point 1, « Bâtir/Connecteurs/Finir »), présenté et validé en principe dès
   le premier tour, n'avait jamais été codé — tout le reste livré (poignée, dock fixe, correctifs isolés) avait

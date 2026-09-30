@@ -40,8 +40,6 @@ import {
   normalizeCellSelection,
   getToolElevation,
   getToolFloorThickness,
-  getToolCeilingThickness,
-  getToolCeilingHeight,
   getToolMovementMultiplier,
   floorKey,
   parseFloorKey,
@@ -132,8 +130,6 @@ export {
   getToolRoomHeightLevels,
   getToolWallHeightLevels,
   getToolFloorThickness,
-  getToolCeilingThickness,
-  getToolCeilingHeight,
   getToolStairRise,
   getToolMovementMultiplier,
   getFloorThickness,
@@ -432,42 +428,6 @@ export function applyBridgeSelection(surfaceData, selection, tool, activeMateria
     }
   }
   return { ...next, floors }
-}
-
-export function applyCeilingSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return surfaceData
-  const next = normalizeSurfaceData(surfaceData)
-  const ceilings = { ...next.ceilings }
-  const baseY = getToolElevation(tool)
-  const y = baseY + getToolCeilingHeight(tool)
-  const thickness = getToolCeilingThickness(tool)
-  let changed = false
-  for (let x = area.minX; x <= area.maxX; x += 1) {
-    for (let z = area.minZ; z <= area.maxZ; z += 1) {
-      const id = ceilingKey(x, z, baseY, y)
-      const { tex, material } = materialOrTextureForTool({
-        tool,
-        packId: tool?.ceilingPackId || tool?.floorPackId,
-        textureId: tool?.ceilingTexId || tool?.floorTexId,
-        fallbackTexId: activeMaterial?.texId,
-        availableBlocks,
-        seed: `ceiling:${x}:${z}:${formatLevel(baseY)}:${formatLevel(y)}`,
-      })
-      if (!tex && !material) continue
-      ceilings[id] = {
-        ...(tex ? { tex } : {}),
-        ...(material ? { material } : {}),
-        baseY,
-        y,
-        thickness,
-        walkable: false,
-        ...surfaceBlockingForTool(tool),
-      }
-      changed = true
-    }
-  }
-  return changed ? { ...next, ceilings } : surfaceData
 }
 
 // ===================================================================

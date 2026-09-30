@@ -1,6 +1,7 @@
 // SurfaceEditorScene.jsx — imports corrigés pour le plan de refactor
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Grid, Line, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -12,7 +13,6 @@ import {
   normalizeCellSelection,
   computeSurfaceGridExtent,
   applyFloorSelection,
-  applyCeilingSelection,
   applyBridgeSelection,
   applyStairSelection,
   applyRoomSelectionWithResult,
@@ -27,8 +27,6 @@ import {
   SURFACE_FINE,
   getToolElevation,
   getToolFloorThickness,
-  getToolCeilingHeight,
-  getToolCeilingThickness,
   getToolRoomHeightLevels,
   paintRoomWallEdges,
   paintRoomWallRoom,
@@ -526,21 +524,6 @@ function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMu
   })
 }
 
-function CeilingPreview({ selection, surfaceTool }) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-
-  const y = getToolElevation(surfaceTool) + getToolCeilingHeight(surfaceTool)
-  const thickness = getToolCeilingThickness(surfaceTool)
-
-  return (
-    <mesh position={[area.minX + area.width / 2, y, area.minZ + area.depth / 2]}>
-      <boxGeometry args={[area.width, thickness, area.depth]} />
-      <meshBasicMaterial color="#22d3ee" transparent opacity={0.28} depthWrite={false} />
-    </mesh>
-  )
-}
-
 function EffectVolumePreview({ selection, surfaceTool }) {
   const area = normalizeCellSelection(selection)
   if (!area) return null
@@ -672,6 +655,7 @@ export default function SurfaceEditorScene({
   runtimeFeatureStates = {},
   onRuntimeEffectCreate,
 }) {
+  const { t } = useTranslation()
   const { camera, gl } = useThree()
   const orbitRef = useRef()
   const previousDisplayLevelRef = useRef(displayLevel)
@@ -1245,8 +1229,8 @@ export default function SurfaceEditorScene({
           onSurfaceToolChange?.({
             ...surfaceTool,
             roomArcError: surfaceTool?.connectorType === 'door'
-              ? 'La porte doit être posée sur le mur sélectionné.'
-              : 'Ce connecteur ne peut pas être posé ici.',
+              ? t('surfaceEditor.connectorDoorWallError')
+              : t('surfaceEditor.connectorPlacementError'),
           })
           e.preventDefault()
           e.stopPropagation()
@@ -1329,8 +1313,6 @@ export default function SurfaceEditorScene({
           ? applyStairSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'bridge'
           ? applyBridgeSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
-        : mode === 'ceiling'
-          ? applyCeilingSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'erase'
           ? eraseSurfaceSelection(surfaceData, finalDrag, surfaceTool)
           : applyFloorSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
@@ -1365,6 +1347,7 @@ export default function SurfaceEditorScene({
     onSurfaceDataChange,
     onSurfaceToolChange,
     handleReshapeRoomCommit,
+    t,
   ])
 
   useEffect(() => {
@@ -1525,8 +1508,6 @@ export default function SurfaceEditorScene({
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'stair' ? (
         <StairPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
-      ) : drag?.mode === 'ceiling' ? (
-        <CeilingPreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'effect' ? (
         <EffectVolumePreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'room' ? (
@@ -1536,6 +1517,11 @@ export default function SurfaceEditorScene({
       ) : drag?.mode === 'reshape-room' ? (
         null
       ) : drag?.mode === 'wall-reshape' ? (
+        null
+      ) : drag?.mode === 'connector' ? (
+        // Aperçu propre à ConnectorPreview (ci-dessous) — éviter que le repli générique
+        // FloorPreview se superpose au vrai modèle pendant un glissé de connecteur (bug trouvé
+        // au §11 de PLAN_WORLD_BUILDER_REWORK.md).
         null
       ) : drag ? (
         <FloorPreview selection={drag} surfaceTool={surfaceTool} />

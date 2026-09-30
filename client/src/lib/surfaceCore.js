@@ -118,10 +118,6 @@ export function getToolCeilingThickness(tool) {
   return clampNumber(tool?.ceilingThickness ?? tool?.floorThickness, 0.05, 4, DEFAULT_FLOOR_THICKNESS)
 }
 
-export function getToolCeilingHeight(tool) {
-  return clampNumber(tool?.ceilingHeight ?? tool?.wallHeight, 0.25, 16, DEFAULT_CEILING_HEIGHT)
-}
-
 export function getToolStairRise(tool) {
   return clampNumber(tool?.stairRise, 0.25, 12, 2.5)
 }

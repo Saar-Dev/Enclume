@@ -580,6 +580,8 @@
     "hintDoorConnector": "Clique sur un mur de la salle sélectionnée pour y ajouter une porte-connecteur.",
     "hintElevatorConnector": "Clique dans la salle sélectionnée pour y ajouter un ascenseur-connecteur.",
     "hintLadder": "Cliquez une case pour relier verticalement les deux étages. Le token pourra finir son tour entre les barreaux.",
+    "connectorDoorWallError": "La porte doit être posée sur le mur sélectionné.",
+    "connectorPlacementError": "Ce connecteur ne peut pas être posé ici.",
     "hintWall": "Maintiens le clic gauche et tire pour poser un mur sur l’étage choisi.",
     "hintStairs": "Dessine l’escalier depuis son entrée vers sa sortie.",
     "hintBridge": "Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.",

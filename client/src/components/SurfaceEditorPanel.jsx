@@ -138,7 +138,6 @@ export default function SurfaceEditorPanel({
     wallHeightLevels: 1,
     floorThickness: 0.25,
     ceilingThickness: 0.25,
-    ceilingHeight: 2.5,
     wallThickness: 1,
     wallHeight: 2.5,
     wallShape: 'straight',
@@ -1177,7 +1176,6 @@ export default function SurfaceEditorPanel({
                 if (mode === 'bridge') return t('surfaceEditor.hintBridge') + escapeSuffix
                 if (mode === 'effect') return t('surfaceEditor.hintEffect') + escapeSuffix
                 if (mode === 'erase') return t('surfaceEditor.hintErase') + escapeSuffix
-                if (mode === 'ceiling') return t('surfaceEditor.hintSlab') + escapeSuffix
                 if (mode === 'paint-wall') {
                   return t('surfaceEditor.paintWallRoomHint', {
                     name: surfaceToolState.roomName || '',

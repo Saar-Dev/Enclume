@@ -199,7 +199,6 @@ function SessionContent({ campaignId }) {
     wallHeightLevels: 1,
     floorThickness: 0.25,
     ceilingThickness: 0.25,
-    ceilingHeight: 2.5,
     wallThickness: 1,
     wallHeight: 2.5,
     wallShape: 'straight',
