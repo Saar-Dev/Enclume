@@ -2020,6 +2020,35 @@ malentendu porte probablement sur l'emplacement/la visibilité de cet outil depu
 difficile à retrouver qu'avant), pas sur une perte de fonctionnalité — à revoir avec Saar plus tard, pas
 cadré, rien changé ici.
 
+### 16.10. Premier hook transverse extrait — `useSurfacePanels` (2026-09-30)
+
+Suite de l'ordre retenu (§16.4) : après `SurfaceEditorPanel.jsx` et les fantômes d'`EntityEditorScene`,
+premier essai du patron « hook » pour `Editor3D.jsx` — jamais pratiqué avant dans ce chantier.
+
+- **`client/src/lib/useSurfacePanels.js`** (nouveau, convention du dépôt : hooks sous `lib/useXxx.js`,
+  pas sous `components/`) — état et logique des 3 panneaux flottants (connecteur/salle/mur) : les 3
+  `useState`, les 2 `useMemo` (connecteur/salle sélectionnés), les 9 handlers (select/patch/delete/close),
+  les 4 `useEffect` de synchronisation. Reçoit `surfaceData`, `surfaceDataRef` (les deux — le ref pour les
+  lectures « valeur la plus récente » dans patch/delete, `surfaceData` réactif pour les `useMemo`/`useEffect`,
+  exactement la convention déjà en place dans `Editor3D.jsx`, pas une nouveauté), `surfaceTool`,
+  `onSurfaceToolChange`, et `onSurfaceDataChange` (= `handleSurfaceDataChange`, qui reste dans
+  `Editor3D.jsx` — le hook ne sait rien de la pile d'annulation ni des files de sauvegarde, juste
+  « committer un nouveau surfaceData »).
+- **Trouvaille réelle de l'outillage** : déplacer ce code tel quel dans un fichier `useXxx.js` a fait
+  apparaître 4 erreurs `react-hooks/set-state-in-effect` qui n'existaient PAS quand ce code vivait dans
+  `Editor3D.jsx` (vérifié : `eslint` sur la version d'avant extraction, 0 erreur, mêmes lignes) — la règle
+  cible spécifiquement les fonctions reconnues comme hooks (`use[A-Z]…`), pas les composants React
+  classiques. Signal réel du outil officiel React sur le design de ce hook (une pile d'effets qui
+  s'auto-corrigent est un signe qu'ils devraient être une dérivation au rendu, pas un effet) — mais
+  corriger ça aurait changé le comportement, pas juste déplacé du code, donc **désactivé ligne à ligne
+  avec justification** plutôt que corrigé dans la même passe (un problème à la fois). Noté ici comme piste
+  de vraie amélioration pour une passe séparée, pas oubliée.
+- 1560 → 1418 lignes sur `Editor3D.jsx` (`wc -l`), 202 lignes neuves dans `useSurfacePanels.js`.
+  `eslint`/`build` propres. Reste dans `Editor3D.jsx` : chargement voxels/surface, les deux files de
+  sauvegarde fire-and-forget, la pile d'annulation/rétablissement fusionnable, les raccourcis clavier
+  globaux — la partie la plus risquée à découper (persistance, pas juste de l'UI), volontairement pas
+  attaquée dans le même tour que ce premier essai du patron hook.
+
 ## Historique
 
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
