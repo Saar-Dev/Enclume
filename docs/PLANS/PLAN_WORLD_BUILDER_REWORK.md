@@ -2247,8 +2247,224 @@ sans lui toute pose d'échelle/ascenseur dont l'étage de départ est ≥6 ou �
 correspondante). Pas dans le périmètre de ce plan (un bug à la fois) — à cadrer séparément si Saar
 rencontre ce cas en pratique.
 
+## 18. Mini-chantier 2/4 (§15.2 point 2) — outil ÉCHELLE (scale/tuilage) pour les motifs importés : plan
+
+**Ce qui existe aujourd'hui `[VÉRIFIÉ, lecture]`** : un motif importé (§14) est une height map PNG
+décodée dans `displacementMaps.js`, échantillonnée par `sampleDisplacementMap(src, u, v)`. Les deux
+seuls appelants (`sampleImportedPatternHeight` dans `proceduralMaterials.js`, un pour le canevas 2D
+baké — albédo/normal/roughness —, un pour le vrai déplacement de géométrie 3D quand `realRelief` est
+actif) passent toujours `u = x/size, v = y/size` : **une seule répétition du motif source couvre
+exactement une tuile générée (128 px)**, quelle que soit la résolution du PNG d'origine — c'est très
+exactement la limite que Saar a signalée en testant §14.1.
+
+**Cause du besoin, pas un bug** : rien à corriger, une donnée manque. Le mécanisme de génération n'a
+aucune notion de facteur de répétition indépendant de la taille de la tuile.
+
+**Plan** :
+1. Nouveau champ `patternScale` (défaut `1`, la valeur actuelle reste inchangée pour tout matériau
+   existant — pas de migration de données). Ajouté à `DEFAULT_SURFACE_MATERIAL_PRESET` et
+   `makeProceduralMaterialDescriptor` (`proceduralMaterials.js`), même chemin que `relief`/`wear`/`dirt`.
+2. `sampleImportedPatternHeight`/`applyImportedPattern`/`samplePatternHeight`/`applyPattern` reçoivent
+   `scale` et multiplient `u,v` par ce facteur avant l'appel à `sampleDisplacementMap` (qui tuile déjà en
+   modulo — aucun changement côté `displacementMaps.js`, contrairement à ce que §14.2 supposait en
+   écrivant la note). `sampleProceduralMaterialHeight` (relief 3D réel, `reliefGeometry.js`) lit
+   `descriptor.patternScale` au même endroit que `descriptor.relief`.
+3. **Piège trouvé en lisant, à corriger dans le même lot** : `proceduralMaterialKey`
+   (`SurfaceDungeonScene.jsx:150-164`) est une liste EXPLICITE de champs qui forme la clé de cache des
+   textures générées — exactement la même famille de bug que §16.13 (une propriété qui change sans que
+   la clé de cache le voie = texture jamais régénérée, ici silencieusement, pas de rebake permanent
+   comme §16.13 mais l'inverse : le curseur bougerait sans aucun effet visible). `patternScale` DOIT
+   être ajouté à cette liste, sinon le champ 4 ci-dessous ne changerait jamais rien à l'écran.
+4. UI : un champ dans les deux formulaires qui exposent déjà `relief`/le choix de motif
+   (`SurfaceMaterialEditor.jsx`, panneaux Salle/Mur ; `MaterialGeneratorTab.jsx`, Atelier/texture packs) —
+   même patron que le slider `relief` existant, plage proposée 0,25× à 8× (pas de justification RAW,
+   choix d'ergonomie : sous 0,25 le motif devient illisible, au-delà de 8 aucune différence visible à la
+   résolution de décodage actuelle de 256 px). Nouvelle clé i18n `surfaceMaterialEditor.patternScaleLabel`
+   (`builder.json`, namespace déjà utilisé par les deux formulaires).
+5. Rétrocompatibilité : une salle/mur existant sans `patternScale` en base retombe sur le défaut `1` via
+   `normalizeSurfaceMaterialPreset`/`normalizedSurfaceMaterial` (même mécanisme que tout champ optionnel
+   du preset) — aucune migration, aucun changement visuel pour les cartes existantes.
+
+**Hors périmètre** : les miniatures Matière/Motif (mini-chantier 3/4) et le nuancier custom
+(mini-chantier 4/4) restent des chantiers séparés, non touchés ici.
+
+**Codé (2026-09-30)**, les 5 points du plan + le point 3 (cache) traité en profondeur plutôt qu'en
+patch : `proceduralMaterialKey` (`SurfaceDungeonScene.jsx`) ne recopie plus la liste de champs à la
+main — sérialise le descripteur entier, source unique avec `makeProceduralMaterialDescriptor`, élimine
+la classe de bug (pas seulement ce champ) pour tout champ ajouté au descripteur à l'avenir. 4 tests
+neufs (`proceduralMaterials.test.mjs` : défaut, rétrocompatibilité valeur absente/invalide, valeur
+valide conservée) ; suite `proceduralMaterials`/`materialDecision`/`surfaceData` 75/75 ; `eslint`
+(0 erreur) ; `npm run build` propre. **Non testé en navigateur** (nécessite de voir le rendu réel d'un
+motif tuilé à l'écran — aucun test automatisé ne couvre le canevas/Three.js).
+
+**Testé par Saar (2026-09-30), sens inversé** : « plus le chiffre augmente plus la taille du motif
+diminue ». Corrigé : `sampleImportedPatternHeight` DIVISE désormais `u,v` par `scale` (au lieu de les
+multiplier) — `×N` plus grand fait apparaître le motif plus grand (on n'en voit qu'une fraction sur la
+tuile), lecture naturelle de « Échelle ». Tests/`eslint` propres après correction.
+
+## 19. Bug trouvé en testant §18 — le panneau flottant Mur n'acceptait plus aucun changement, quelle que soit la salle (2026-09-30)
+
+**Signalé par Saar** : « impossible d'appliquer la moindre modification au moindre mur, quelque soit la
+salle » (couleur, motif, matière — tous les champs du panneau flottant Mur, `SurfaceWallPanel.jsx`).
+Aucun rapport avec §18 (le mini-chantier Échelle du motif) — confirmé en excluant d'abord toute cause
+côté serveur (aucune requête lente/en erreur pendant la reproduction, voir §20 pour la vraie découverte
+faite à ce moment-là), puis en localisant la cause par un script Node qui rejoue le flux réel plutôt que
+par lecture seule (méthode déjà validée deux fois plus tôt dans ce chantier, §16.13).
+
+**Cause `[VÉRIFIÉ]`** : `applyRoomToolUpdate` (`client/src/lib/surfaceRooms.js`) — la fonction qui
+synchronise en continu une salle SÉLECTIONNÉE avec le panneau Salle (ré-invoquée par `Editor3D.jsx` à
+chaque changement de `surfaceTool` tant que la salle reste sélectionnée, mode `'select'`) recalculait
+*aussi* `wallInteriorMaterial`/`wallInteriorTex` à partir de `tool.materialProfiles.wallInterior` — un
+champ qu'AUCUNE interface actuelle n'écrit plus (`wallInteriorTexId` confirmé mort depuis l'Option 2 du
+§8 ; `materialProfiles.wallInterior` jamais exposé par un onglet). Résultat : cette valeur retombait
+toujours sur le même défaut figé, et comme la fonction se redéclenche en permanence pendant que la salle
+reste ouverte, elle écrasait la vraie couleur qu'`applyRoomWallAppearance` (panneau flottant Mur) venait
+de poser l'instant d'avant — deux autorités indépendantes sur la même donnée (`room.wallInteriorMaterial`),
+invariant AGENTS.md §3 violé. Reproduit par script Node (peindre → simuler le re-déclenchement de l'effet
+→ la couleur revient à la valeur par défaut) avant toute correction, confirmé qu'il ne s'agit pas d'un
+problème de timing mais d'un vrai conflit d'écriture structurel.
+
+**Corrigé (2026-09-30)** : `applyRoomToolUpdate` ne touche plus `wallInteriorMaterial`/`wallInteriorTex`
+— ce champ reste à la seule charge de `makeRoomFromSelection` (défaut à la création de la salle) et
+`applyRoomWallAppearance`/`paintRoomWallRoom` (édition, panneau flottant Mur et outil Peindre), déjà
+suffisants et vérifiés indépendants. `roomMaterialProfilesForTool`/le calcul `wallInterior` (devenus
+sans consommateur) retirés avec. Un test de régression ajouté (`surfaceData.test.mjs`) reproduit
+exactement le scénario signalé et échoue sans le correctif (vérifié : `git stash` du fix seul → le test
+échoue avec la valeur figée attendue, `#6f7f8e` au lieu de la couleur posée) ; suite complète 72/72,
+`eslint` (0 erreur), `npm run build` propre. **Non testé en navigateur.**
+
+## 20. Découverte en cours de route — `compileSurfaceWorld` bloque le serveur ~1,5-2s à chaque sauvegarde de surface (2026-09-30), PAS corrigé
+
+**Origine** : Saar signale « des temps de chargement de dingue » en testant §19, demande de
+« rendre le serveur bavard ». Une instrumentation temporaire (middleware de log des requêtes >300ms,
+retirée une fois la mesure faite, jamais committée) a donné des chiffres concrets plutôt qu'une
+impression :
+
+```
+PUT .../surface                 1431-1744ms (chaque sauvegarde)
+GET .../world-effects            1482-1914ms
+GET .../world-elevators           1724-1983ms
+GET /api/voxel-textures                1822ms
+GET /api/char-ref/skills          1535-1557ms
+```
+
+Toutes ces routes n'ont rien en commun fonctionnellement (textures, effets, ascenseurs, compétences de
+personnage) mais partagent un temps très proche — signal d'un goulot PARTAGÉ, pas d'un défaut par route.
+Écarté en premier (`[VÉRIFIÉ]`, mesuré) : le réseau/la base — un aller-retour Postgres nu (`select 1`,
+Docker Desktop/WSL2) prend 0-2ms, la connexion 32ms. Le round-trip DB n'est pas en cause.
+
+**Cause `[VÉRIFIÉ]`** : `PUT /api/battlemaps/:id/surface` (`server/src/routes/battlemaps.js:974`) appelle
+`compileSurfaceWorld(...)` de façon SYNCHRONE, à l'intérieur de la transaction d'écriture, à CHAQUE
+sauvegarde — pas seulement au premier accès froid (le cache par `world_revision`,
+`server/src/services/worldService.js`, existe bien mais n'aide pas ici puisque la compilation a lieu
+avant même d'alimenter ce cache). Node étant mono-thread pour le JS, cette compilation bloque la boucle
+d'événements pendant sa durée : toute AUTRE requête arrivée pendant ce laps de temps — même sans aucun
+rapport avec la carte en cours d'édition — attend derrière, ce qui explique à la fois le temps uniforme
+sur des routes sans rapport et les paires de requêtes GET quasi simultanées observées dans le journal
+(probablement un refresh déclenché après chaque sauvegarde). `world.md` confirme que cette compilation
+est bien l'autorité obligatoire du moteur — la question n'est pas de la contourner mais de ne plus la
+faire bloquer la boucle d'événements à chaque frappe de curseur pendant une édition active.
+
+**Pas corrigé, hors périmètre de ce tour** : une vraie cause racine confirmée, mais dont le correctif
+(décharger la compilation — worker thread, débouncer la sauvegarde, ou optimiser `compileSurfaceWorld`
+lui-même selon ce qui domine réellement son coût, jamais mesuré séparément) touche le cœur du moteur
+monde (`.claude/rules/world.md`) et mérite son propre cadrage complet, pas un correctif improvisé à la
+suite d'autre chose le même jour — même principe que §9 (peinture de mur) : une méthode de correctifs
+ponctuels sur un sujet de cette ampleur a déjà été explicitement interdite par Saar une fois. Prochaine
+étape suggérée : mesurer où `compileSurfaceWorld` passe réellement son temps sur la carte de Saar
+(profiling ciblé, pas une nouvelle supposition) avant de proposer un plan.
+
+**Mesure directe (2026-09-30), pas une extrapolation** : script Node qui charge la VRAIE
+`surface_data` de la carte de Saar depuis la base et rappelle `compileSurfaceWorld` à l'identique
+(3 fois de suite, même process) :
+
+```
+surface_data = 76 403 octets, 7 salles, 10 connecteurs, 0 mur legacy
+compileSurfaceWorld : 726 ms / 597 ms / 618 ms (aucun effet d'échauffement JIT notable)
+```
+
+Une carte MODESTE (7 salles) coûte déjà ~600-700ms par compilation, sans aucune amortie sur des
+appels répétés au sein du même process — cohérent avec le ~1,5-2s observé en §20 une fois ajoutés le
+reste de la requête (JSON, DB, réseau). **`[HYPOTHÈSE], pas encore vérifié en navigateur`** : le
+chargement du mode Jeu signalé séparément par Saar (« le chat apparaît après 15 secondes, puis la carte
+après 5-10 sec de plus ») pourrait s'expliquer par PLUSIEURS de ces compilations synchrones
+enchaînées ou concurrentes au chargement d'une session (effets, ascenseurs, mouvement, chacun avec son
+propre appel à `getBattlemap(Structural)*Snapshot`) qui, faute de parallélisme réel sur un seul thread
+JS, s'additionnent ou se mettent en file au lieu de se chevaucher — cohérent dans l'ordre de grandeur
+(plusieurs centaines de ms × plusieurs appels) mais jamais confirmé sur une VRAIE session de jeu, à
+vérifier avant tout correctif. Piste écartée `[VÉRIFIÉ]` pour ce chargement mode Jeu : la résolution
+`localhost` vs `127.0.0.1` (déjà responsable d'un ralentissement similaire une fois côté Vite,
+2026-09-24) — mesuré à nouveau ce tour sur le port serveur (3001) : 1-3ms dans les deux cas, aucun
+délai de connexion.
+
+## 21. Le vrai bug de la fenêtre Apparence — un garde-fou porte mal ciblé, trouvé par trace console (2026-09-30)
+
+**Diagnostic final, par instrumentation plutôt que par relecture** : §19 (corrigé, réel, mais pas la
+cause du symptôme rapporté) laissait le doute. Saar a confirmé utiliser exclusivement la fenêtre
+« Apparence » (panneau flottant Mur) — jamais l'outil « Peindre un mur » de la sidebar, qui, lui,
+fonctionne (hors bug mur mitoyen déjà connu, §16 de `PLAN_EDITEUR_CARTE.md`). Deux traces console
+temporaires (`handleSurfaceWallAppearanceChange`, l'effet de synchronisation battlemap→surfaceData)
+ont donné la vraie cause en un seul essai :
+
+```
+[TRACE wall-appearance] appel { changed: false, error: "Déplace ou supprime la porte avant de peindre ce mur.", … }
+```
+
+**Cause `[VÉRIFIÉ]`** : `applyRoomWallAppearance` (`client/src/lib/surfaceRooms.js`) refusait TOUTE
+apparence dès qu'UNE porte touchait N'IMPORTE LEQUEL des murs sélectionnés — garde-fou ajouté le
+2026-09-29 par cohérence avec `applyRoomWallElevationProfile`/`applyRoomBoundaryArc` (qui, eux,
+déplacent/courbent réellement le mur et peuvent désaligner une porte — garde-fou légitime là).
+Peindre ne touche jamais la géométrie (`wallAppearanceProfiles`/`interiorMaterial` seulement) —
+`.claude/rules/world.md` : « une apparence 3D n'implique jamais une collision ». Le garde-fou avait
+été recopié sans revérifier s'il avait une raison géométrique pour CETTE opération précise. Explique
+« quelle que soit la salle » : la fenêtre Apparence n'a pas de sélecteur de portée (case/tronçon,
+contrairement à la sidebar — trouvaille de Saar, notée plus bas) — « tout sélectionner » y couvre
+TOUJOURS l'arête touchée par une porte dès que la salle en a une, donc le refus est systématique ;
+la sidebar, utilisée par segments plus fins, esquive l'arête concernée par hasard, jamais par une
+règle différente (même fonction `applyRoomWallAppearance` au bout des deux chemins, vérifié :
+`paintRoomWallEdges` l'appelle directement).
+
+**Corrigé (2026-09-30)** : garde-fou retiré de `applyRoomWallAppearance` (donc aussi de
+`paintRoomWallEdges`/`paintRoomWallRoom`, mêmes appelants) ; conservé intact sur l'élévation et l'arc,
+où il protège une vraie géométrie. Les deux tests qui figeaient l'ancien comportement (« une porte
+rigide bloque la peinture ») réécrits pour attendre le succès désormais correct. Traces console
+retirées après diagnostic. Suite complète 72/72, `eslint` (0 erreur), `npm run build` propre.
+**Non testé en navigateur.**
+
+**Trouvailles de Saar en testant, notées, pas traitées ici** :
+1. Deux chemins d'interface pour peindre un mur (fenêtre Apparence du panneau flottant Mur, outil
+   sidebar « Peindre un mur ») — duplication déjà connue (§16.1, `SurfaceMaterialEditor.jsx` partagé
+   mais dupliqué en usage), jamais résolue.
+2. La fenêtre Apparence n'offre aucun sélecteur de portée (case/tronçon/salle) alors que la sidebar
+   en a un — incohérence d'interface, cause directe de la fréquence du bug ci-dessus (sans supprimer
+   le vrai problème, le garde-fou lui-même).
+Les deux renvoient au même chantier non cadré : fusionner ou clarifier les deux chemins de peinture de
+mur (mini-chantier candidat, à cadrer séparément, pas mélangé à ce correctif).
+
+**Testé par Saar (2026-09-30)** : « Fonctionnel. » — confirmation en jeu, panneau Apparence.
+
 ## Historique
 
+- **2026-09-30** — Mini-chantiers §15.2 repris après §16, trois bugs réels trouvés et corrigés (aucun
+  lié à la décomposition en fichiers, tous pré-existants ou nouvellement introduits par du code neuf
+  ce jour-là), confirmés en jeu par Saar (« Fonctionnel. Bien joué. ») :
+  - **§17** échelle-sur-échelle : `connectorToLevel` ne suivait pas l'étage affiché après un
+    changement d'étage — corrigé (`SessionPage.jsx`).
+  - **§18** outil ÉCHELLE (scale) pour les motifs importés — codé (`patternScale`), sens inversé
+    trouvé en testant et corrigé, clé de cache de `SurfaceDungeonScene.jsx` durcie au passage (même
+    famille que §16.13, source unique plutôt qu'une liste recopiée).
+  - **§19/§21** panneau flottant Mur (section Apparence) totalement bloqué, deux causes racines
+    indépendantes trouvées par script de reproduction puis trace console (pas par hypothèse) :
+    `applyRoomToolUpdate` écrasait en permanence la couleur des murs (deux autorités sur la même
+    donnée) ; `applyRoomWallAppearance` refusait toute apparence dès qu'une porte touchait un mur
+    sélectionné (garde-fou copié depuis l'élévation/l'arc sans raison géométrique pour la peinture).
+  - **§20** découverte non corrigée, reportée à son propre cadrage : `compileSurfaceWorld` bloque le
+    serveur ~600-700ms par sauvegarde (mesuré sur la carte réelle de Saar, 7 salles), synchrone dans
+    la transaction d'écriture — cause plausible mais non confirmée du chargement lent en mode Jeu.
+  - Deux trouvailles UI/UX de Saar notées en §21 (deux chemins de peinture de mur, portée absente sur
+    la fenêtre Apparence) : pas cadrées, pas traitées.
+  Vérification finale : `eslint` (0 erreur), `build`, `node --test` (72/72) tous propres à chaque
+  étape, rien en attente non poussé (`236f0e64`, `dd0094db`).
 - **2026-09-30** — Chantier §16 (décomposition en un fichier par responsabilité) clos pour
   `SurfaceEditorPanel.jsx` et `Editor3D.jsx` : testé, poussé, un bug réel trouvé et corrigé en cours de
   route (§16.13). Vérification finale avant pause : `eslint` (0 erreur, avertissements pré-existants
