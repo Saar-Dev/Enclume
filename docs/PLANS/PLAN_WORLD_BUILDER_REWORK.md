@@ -954,10 +954,45 @@ Remodeler et la poignée de mur, comme annoncé.
     client/src/lib/surfaceTools/computeConnectorPlacement.test.mjs` 60/60. **Testé, `Fonctionnel` (Saar,
     2026-09-30).**
 
-Reste : `select` (plusieurs sous-comportements : clic connecteur, clic mur, début de poignée — pas encore lu
-en entier), `reshape-room`/`wall-reshape` (déjà lus une fois plus haut dans ce même tour, pas encore
-extraits), `paint-wall` (sort déjà du système générique), et le moteur de glisser-déposer lui-même
-(`dragRef`/`setDrag`) — pas encore touché.
+### 11.12. Décomposition — Sélection et Remodeler, Mur/wall-reshape confirmés déjà factorisés (2026-09-30)
+
+Saar : « arrête de bloquer juste pour que je te dise ok toutes les deux actions... tu avances à ton rythme,
+prends des pauses dès que tu estimes cela pertinent » — enchaîné sans repasser par une validation à chaque
+fichier, la méthode elle-même restant celle déjà validée (lecture complète avant code, un outil à la fois,
+test croisé, cross-check contre le comportement d'origine).
+
+- **`wall-reshape` (la poignée) : rien à faire, déjà bien factorisé depuis l'incrément 6** — sa logique
+  vit déjà dans des fonctions pures partagées (`wallRunRowCountForCell`/`wallRunReshapeCells`,
+  `shared/world/roomGeometry.js`), la branche `Scene.jsx` n'est que de la glue (seuil clic/glissé, appel
+  à `handleReshapeRoomCommit`, événements). Même verdict que Salle au tour précédent.
+- **Sélection : `[CODÉ]`, comportement préservé (test croisé, 4 cas), `⚠️ non testé en navigateur`.** La
+  branche la plus exercée de tout l'éditeur (chaque clic en mode Sélection) — traitée avec la même rigueur,
+  pas plus vite parce qu'elle est fréquente. Décision pure extraite : `resolveSelectHit(...)`
+  (`client/src/lib/surfaceTools/resolveSelectHit.js`) détermine QUOI a été touché (connecteur / une salle
+  avec son patch / plusieurs salles / rien) ; `Scene.jsx` garde tous les appels `onSurfaceToolChange`/
+  `onSurfaceConnectorSelect`/`onSurfaceRoomSelect`/`preventDefault`/`stopPropagation` inchangés. Un cas
+  limite trouvé en lisant (pas en supposant) : si `roomToSurfaceToolPatch` renvoyait un jour `null` pour une
+  salle trouvée, le code d'origine ne fait STRICTEMENT rien (pas de sélection, pas d'effacement) — préservé
+  à l'identique (`{ kind: 'none' }`), bien que ce cas soit aujourd'hui inatteignable en pratique
+  (`roomToSurfaceToolPatch` ne renvoie `null` que si la salle est absente, déjà exclu par la garde
+  précédente) — documenté, pas supprimé silencieusement.
+- **Remodeler (reshape-room), premier clic : `[CODÉ]`, comportement préservé (test croisé, 3 cas), `⚠️ non
+  testé en navigateur`.** Seule la décision « ajouter ou retirer » extraite :
+  `resolveReshapeRoomCellMode(surfaceData, roomId, start)`
+  (`client/src/lib/surfaceTools/resolveReshapeRoomCellMode.js`) — `null` si aucune salle sélectionnée (le
+  composant garde alors son comportement d'origine, ne pas démarrer de glissé). Le reste de son
+  `pointerUp` (seuil, construction de la liste de cases, appel à `handleReshapeRoomCommit`) reste en place,
+  déjà minimal.
+- `SurfaceEditorScene.jsx` : 1236 → 1226 lignes (1550 lignes au tout début de la décomposition, §11.7 —
+  324 lignes sorties du monolithe à ce stade). `npx eslint` (0 problème), `npm run build` propre, `node
+  --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/*.test.mjs` 67/67. **Non testé en
+  navigateur** : cliquer pour sélectionner une salle, un connecteur, cliquer dans le vide (efface la
+  sélection), un rectangle sur plusieurs salles ; et le premier clic du sous-outil Remodeler
+  (ajouter/retirer une case).
+
+Reste : `paint-wall` (sort déjà du système générique de glisser-déposer, pas encore audité en détail) et le
+moteur de glisser-déposer générique lui-même (`dragRef`/`setDrag`/`skipNextCanvasMouseDownRef`) — pas
+encore touché.
 
 ## 12. Audit UX complet de l'interface actuelle — demande explicite de Saar (2026-09-29)
 

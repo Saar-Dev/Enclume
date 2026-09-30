@@ -13,9 +13,6 @@ import {
   normalizeCellSelection,
   computeSurfaceGridExtent,
   applyRoomSelectionWithResult,
-  findRoomAtCell,
-  findRoomsInSelection,
-  roomToSurfaceToolPatch,
   isWorldPointVisibleAtLevel,
   parseFloorKey,
   SURFACE_FINE,
@@ -31,8 +28,6 @@ import {
   levelToY,
   yToLevel,
   getRoomBaseY,
-  getRoomFootprintCells,
-  roomCellKey,
 } from '../lib/surfaceCore.js'
 
 import { roomsWallSegments } from '../lib/roomWalls.js'
@@ -45,6 +40,8 @@ import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
 import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumePayload.js'
 import { computeConnectorPlacement } from '../lib/surfaceTools/computeConnectorPlacement.js'
+import { resolveSelectHit } from '../lib/surfaceTools/resolveSelectHit.js'
+import { resolveReshapeRoomCellMode } from '../lib/surfaceTools/resolveReshapeRoomCellMode.js'
 
 import FloorPreview from './surfaceTools/FloorPreview.jsx'
 import RoomPreview from './surfaceTools/RoomPreview.jsx'
@@ -876,10 +873,8 @@ export default function SurfaceEditorScene({
       let nextDrag = { mode, start, end: start }
       if (mode === 'reshape-room') {
         const selectedRoomId = surfaceTool?.selectedRoomId
-        const selectedRoom = selectedRoomId ? normalizeSurfaceData(surfaceData).rooms?.[selectedRoomId] : null
-        if (!selectedRoom) return
-        const footprintKeys = new Set(getRoomFootprintCells(selectedRoom).map(cell => roomCellKey(cell.x, cell.z)))
-        const cellMode = footprintKeys.has(roomCellKey(start.x, start.z)) ? 'remove' : 'add'
+        const cellMode = resolveReshapeRoomCellMode(surfaceData, selectedRoomId, start)
+        if (cellMode === null) return
         nextDrag = { ...nextDrag, cellMode, roomId: selectedRoomId }
       }
       dragRef.current = nextDrag
@@ -953,56 +948,50 @@ export default function SurfaceEditorScene({
         && finalDrag.start?.z === finalDrag.end?.z
 
       if (mode === 'select') {
-        if (isSingleCell) {
-          const clickPoint = getWorldPoint(e.clientX, e.clientY)
-          const connectorHit = findConnectorAtWorldPoint(clickPoint, editLevel)
-          if (connectorHit) {
-            onSurfaceToolChange?.({
-              ...surfaceTool,
-              mode: 'select',
-              selectedRoomId: null,
-              selectedRoomIds: [],
-              selectedConnectorId: connectorHit.id,
-              roomWallEdit: false,
-              selectedRoomWallKeys: [],
-              selectedRoomWallCount: 0,
-              roomArcError: null,
-            })
-            onSurfaceConnectorSelect?.(connectorHit.id, e.clientX, e.clientY)
-            onSurfaceRoomSelect?.(null)
-            e.preventDefault()
-            e.stopPropagation()
-            return
-          }
-        }
+        const clickPoint = isSingleCell ? getWorldPoint(e.clientX, e.clientY) : null
+        const hit = resolveSelectHit({
+          surfaceData,
+          finalDrag,
+          editLevel,
+          isSingleCell,
+          clickPoint,
+          findConnectorAtWorldPoint,
+        })
 
-        const hits = isSingleCell
-          ? [findRoomAtCell(surfaceData, finalDrag.end, editLevel)].filter(Boolean)
-          : findRoomsInSelection(surfaceData, finalDrag, editLevel)
-
-        if (hits.length === 1 && hits[0]?.room) {
-          const patch = roomToSurfaceToolPatch(hits[0].room)
-          if (patch) {
-            onSurfaceToolChange?.({
-              ...surfaceTool,
-              ...patch,
-              mode: 'select',
-              selectedRoomId: hits[0].id,
-              selectedRoomIds: [hits[0].id],
-              selectedConnectorId: null,
-              roomWallEdit: true,
-              selectedRoomWallKeys: [],
-              selectedRoomWallCount: 0,
-              roomArcError: null,
-            })
-            onSurfaceRoomSelect?.(hits[0].id)
-          }
-        } else {
+        if (hit.kind === 'connector') {
           onSurfaceToolChange?.({
             ...surfaceTool,
             mode: 'select',
             selectedRoomId: null,
-            selectedRoomIds: hits.map(hit => hit.id),
+            selectedRoomIds: [],
+            selectedConnectorId: hit.connectorId,
+            roomWallEdit: false,
+            selectedRoomWallKeys: [],
+            selectedRoomWallCount: 0,
+            roomArcError: null,
+          })
+          onSurfaceConnectorSelect?.(hit.connectorId, e.clientX, e.clientY)
+          onSurfaceRoomSelect?.(null)
+        } else if (hit.kind === 'room') {
+          onSurfaceToolChange?.({
+            ...surfaceTool,
+            ...hit.patch,
+            mode: 'select',
+            selectedRoomId: hit.roomId,
+            selectedRoomIds: [hit.roomId],
+            selectedConnectorId: null,
+            roomWallEdit: true,
+            selectedRoomWallKeys: [],
+            selectedRoomWallCount: 0,
+            roomArcError: null,
+          })
+          onSurfaceRoomSelect?.(hit.roomId)
+        } else if (hit.kind === 'rooms') {
+          onSurfaceToolChange?.({
+            ...surfaceTool,
+            mode: 'select',
+            selectedRoomId: null,
+            selectedRoomIds: hit.roomIds,
             selectedConnectorId: null,
             roomWallEdit: false,
             selectedRoomWallKeys: [],
