@@ -2182,8 +2182,27 @@ immédiatement (une seule fois par salle, jamais plus). 2 tests neufs dans `mate
 distincte, jamais confirmée comme cause de lag réel (pas de salle >6 niveaux rencontrée), reste `[VÉRIFIÉ
 comme asymétrie]` mais `[INCONNU]` comme problème pratique — pas cadrée, pas corrigée.
 
+**Testé par Saar (2026-09-30)** : « Effectivement, plus aucun ralentissement » — confirmation en jeu,
+sélection de salles successives.
+
+**Auto-évaluation demandée par Saar (« correctif sérieux ou bricolage ? »)** : le correctif détecte
+« cette seed a déjà été calculée » en reconnaissant la FORME du texte (suffixe `:variant-N`/`:fixed`),
+pas une distinction explicite dans les données. C'est fiable aujourd'hui (couvre les 3 chemins d'appel
+connus, testé), mais la version la plus rigoureuse séparerait dans la structure même de la salle une
+seed de base (choisie par l'utilisateur) d'une seed finale calculée, pour que l'ambiguïté n'existe plus
+du tout — au prix de toucher la forme des données de toutes les salles. Décision explicite de ne pas
+faire ce deuxième pas maintenant : aucune preuve qu'il reste un cas cassé par la version actuelle,
+et le faire sans un deuxième cas réel qui le justifie serait de la sur-ingénierie — même principe que
+« le moteur grossit par la preuve » (§16.4). À reconsidérer seulement si un cas concret le justifie.
+
 ## Historique
 
+- **2026-09-30** — Chantier §16 (décomposition en un fichier par responsabilité) clos pour
+  `SurfaceEditorPanel.jsx` et `Editor3D.jsx` : testé, poussé, un bug réel trouvé et corrigé en cours de
+  route (§16.13). Vérification finale avant pause : `eslint` (0 erreur, avertissements pré-existants
+  seulement), `build`, `node --test` (85/85) tous propres, rien en attente non poussé. Reste ouvert pour
+  la suite : les 4 mini-chantiers du §15.2 (échelle-sur-échelle en premier, non cadré), le Lot 2 du
+  voxel (`PLAN_PURGE_VOXEL.md`, logique de repli dans `EntityEditorScene`, non commencé).
 - **2026-09-30** — §16.5 (palette Objets 3D + réglages Peindre un mur) testé par Saar : fonctionnel, deux
   retours à consigner, aucun des deux dans le périmètre de ce chantier (décomposition de fichiers) :
   1. **Idée pour plus tard, non cadrée** : outil pipette pour Peindre un mur/sol — copier la configuration
