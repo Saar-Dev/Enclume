@@ -72,7 +72,6 @@ import { applyExoTemplate } from '../../lib/exoTemplateService.js'
 import { assertSourceActive } from '../../lib/sourceService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
 import { listInterceptionLinks, addInterceptionLink, removeInterceptionLink } from '../../services/droneInterceptionLinksService.js'
-import { INTERCEPTION_LIMIT_FIELDS, parseInterceptionLimit } from '../../../../shared/droneInterception.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
