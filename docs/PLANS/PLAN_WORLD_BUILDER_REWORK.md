@@ -921,7 +921,9 @@ plupart des modes) ; seul `pointerUp` a une branche propre. Aucune interdépenda
 tool)` (`client/src/lib/surfaceTools/buildEffectVolumePayload.js`) construit le payload ; `onRuntimeEffect
 Create`/`setHoverPreview(null)`/`preventDefault`/`stopPropagation` restent dans `SurfaceEditorScene.jsx`
 (callbacks/refs du composant, n'ont pas leur place dans une fonction pure). 3 tests neufs (valeurs
-explicites, défauts, sélection nulle). `SurfaceEditorScene.jsx` : 1340 → 1244 lignes. `npx eslint` (0
+explicites, défauts, sélection nulle). `SurfaceEditorScene.jsx` : 1340 → 1327 lignes `[CORRIGÉ]` — voir la
+note de fin de §11.14, le chiffre d'origine (1244) était faux, mesuré avec un outil PowerShell peu fiable.
+`npx eslint` (0
 problème), `npm run build` propre, `node --test client/src/lib/surfaceData.test.mjs
 client/src/lib/surfaceTools/applyToolMode.test.mjs client/src/lib/surfaceTools/buildEffectVolumePayload.test.mjs`
 57/57. **Testé, `Fonctionnel` (Saar, 2026-09-30).**
@@ -948,7 +950,7 @@ Remodeler et la poignée de mur, comme annoncé.
   glisser-déposer partagé par plusieurs modes — pas extraits, un sujet à part.
   - Test croisé neuf (3 tests) : chaque `connectorType` (et le repli implicite sur ascenseur) produit un
     résultat `deepEqual` à l'appel direct de la fonction d'origine.
-  - `SurfaceEditorScene.jsx` : 1244 → 1236 lignes. `npx eslint` (0 problème), `npm run build` propre, `node
+  - `SurfaceEditorScene.jsx` : 1327 → 1318 lignes `[CORRIGÉ]` (idem, voir §11.14). `npx eslint` (0 problème), `npm run build` propre, `node
     --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/applyToolMode.test.mjs
     client/src/lib/surfaceTools/buildEffectVolumePayload.test.mjs
     client/src/lib/surfaceTools/computeConnectorPlacement.test.mjs` 60/60. **Testé, `Fonctionnel` (Saar,
@@ -983,8 +985,7 @@ test croisé, cross-check contre le comportement d'origine).
   composant garde alors son comportement d'origine, ne pas démarrer de glissé). Le reste de son
   `pointerUp` (seuil, construction de la liste de cases, appel à `handleReshapeRoomCommit`) reste en place,
   déjà minimal.
-- `SurfaceEditorScene.jsx` : 1236 → 1226 lignes (1550 lignes au tout début de la décomposition, §11.7 —
-  324 lignes sorties du monolithe à ce stade). `npx eslint` (0 problème), `npm run build` propre, `node
+- `SurfaceEditorScene.jsx` : 1318 → 1307 lignes `[CORRIGÉ]` (idem, voir §11.14). `npx eslint` (0 problème), `npm run build` propre, `node
   --test client/src/lib/surfaceData.test.mjs client/src/lib/surfaceTools/*.test.mjs` 67/67. **Testé,
   `Fonctionnel` (Saar, 2026-09-30).**
 
@@ -1006,7 +1007,7 @@ au clic par `PaintableRoomWall`, selon la portée `case`/`tronçon`/`salle` et l
 qu'aucun test ne le révèle. Trouvé en relisant le fichier source ligne à ligne avant de considérer
 l'extraction terminée, pas après un rapport de bug — corrigé avant tout commit.
 
-- `SurfaceEditorScene.jsx` : 1226 → 1149 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
+- `SurfaceEditorScene.jsx` : 1307 → 1227 lignes `[CORRIGÉ]` (idem, voir §11.14). `npx eslint` (0 problème), `npm run build` propre, 67/67
   inchangé (comportement de rendu, pas de logique pure nouvelle à tester par cross-check ici — la
   vérification est la relecture qui a trouvé l'erreur ci-dessus, pas un test automatisé).
 - **Testé, `Fonctionnel` (Saar, 2026-09-30).**
@@ -1030,14 +1031,20 @@ passage. **`[CODÉ]`, comportement préservé (code déplacé à l'identique), `
   `roomGeometry.js`, `getEffectRegionColor`, et enfin `getWallRenderBox` — plus aucun appelant dans
   `Scene.jsx` une fois ces 4 composants partis).
 
-`SurfaceEditorScene.jsx` : 1149 → 890 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
-inchangé. **Non testé en navigateur** — celui qui compte le plus : sélectionner une salle (contour jaune),
-sélectionner un mur puis **glisser la poignée** (le geste §10c), arrondir un coin, et qu'une zone dangereuse
-déjà posée reste visible en dehors du mode Zone d'effet.
+`SurfaceEditorScene.jsx` : 1227 → 958 lignes. `npx eslint` (0 problème), `npm run build` propre, 67/67
+inchangé. **Testé, `Fonctionnel` (Saar, 2026-09-30), poignée comprise.**
 
-**Bilan de toute la décomposition (§11.7→§11.14)** : `SurfaceEditorScene.jsx` 1550 → 890 lignes (-42,6 %),
-13 fichiers neufs dans `client/src/components/surfaceTools/` et `client/src/lib/surfaceTools/`, chacun une
-seule responsabilité, la plupart testés par comparaison croisée contre le comportement d'origine. Ce qui
+**`[CORRIGÉ]` 2026-09-30, en préparant le bilan ci-dessous** : tous les comptages de lignes de §11.10 à
+§11.13 ci-dessus étaient faux — mesurés via PowerShell (`Get-Content ... | Measure-Object -Line`), qui
+sous-compte silencieusement (aucune erreur, juste un nombre plus petit que la réalité, écart constaté
+jusqu'à 269 lignes). Revérifié via `git show <commit>:... | wc -l` (Bash) pour chaque commit réel — les
+chiffres ci-dessus sont maintenant les vrais. Aucun code n'était faux, seule la mesure rapportée dans ce
+document l'était — `.claude`/mémoire mis à jour pour ne plus utiliser cet outil pour compter des lignes.
+
+**Bilan de toute la décomposition (§11.7→§11.14), chiffres vérifiés** : `SurfaceEditorScene.jsx` 1550 → 958
+lignes (-38,2 %, pas -42,6 % comme annoncé avant correction), 13 fichiers neufs dans
+`client/src/components/surfaceTools/` et `client/src/lib/surfaceTools/`, chacun une seule responsabilité,
+la plupart testés par comparaison croisée contre le comportement d'origine. Ce qui
 reste dans `Scene.jsx` : le moteur de glisser-déposer générique (`dragRef`/`setDrag`/
 `skipNextCanvasMouseDownRef`, les 3 handlers souris) — légitimement la seule pièce qui n'est PAS « un
 outil » mais le socle partagé par tous, pas encore auditée pour une extraction propre.
