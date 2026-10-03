@@ -138,10 +138,8 @@ function addReliefFace({
   height,
   depth,
   face,
-  profile,
   displace,
   uvScale,
-  uvOffset,
   segmentsPerUnit,
   maxSegments,
 }) {
@@ -207,14 +205,14 @@ function addReliefFace({
     ? clamp(Math.ceil(def.vSize * segmentsPerUnit), 2, maxSegments)
     : 1
   const explicitUvScale = normalizeUvScale(uvScale)
-  const explicitUvOffset = normalizeUvOffset(uvOffset)
-  const sampleScaleU = explicitUvScale ? explicitUvScale[0] : Math.max(1, def.uSize)
-  const sampleScaleV = explicitUvScale ? explicitUvScale[1] : Math.max(1, def.vSize)
-  const sampleOffsetU = explicitUvOffset ? explicitUvOffset[0] : 0
-  const sampleOffsetV = explicitUvOffset ? explicitUvOffset[1] : 0
   const startIndex = indices.length
   const baseIndex = positions.length / 3
 
+  // Le relief est porte par le GPU (displacementMap du materiau, voir proceduralMaterialAt()
+  // dans SurfaceDungeonScene.jsx) depuis le chantier perf motifs (Saar, 2026-10-03) — cette face
+  // reste subdivisee quand `displace` est vrai (pour donner des sommets au vertex shader) mais ne
+  // calcule plus aucun bruit elle-meme ; `displacementFor`/`sampleProceduralMaterialHeight` restent
+  // utilises par le chemin voxel (createReliefGeometryFromQuadData), non touche par ce chantier.
   for (let v = 0; v <= segV; v += 1) {
     const vr = v / segV
     for (let u = 0; u <= segU; u += 1) {
@@ -224,12 +222,7 @@ function addReliefFace({
       const z = def.origin[2] + def.uAxis[2] * ur + def.vAxis[2] * vr
       const uvU = explicitUvScale ? ur : ur * Math.max(1, def.uSize)
       const uvV = explicitUvScale ? vr : vr * Math.max(1, def.vSize)
-      const sampleU = sampleOffsetU + ur * sampleScaleU
-      const sampleV = sampleOffsetV + vr * sampleScaleV
-      const rawDisplacement = displace ? displacementFor(profile, sampleU, sampleV) : 0
-      const positiveFade = explicitUvScale ? textureTileEdgeFade(sampleU, sampleV) : edgeFade(ur, vr)
-      const displacement = rawDisplacement > 0 ? rawDisplacement * positiveFade : rawDisplacement
-      pushVertex(positions, def.normal, x, y, z, displacement)
+      pushVertex(positions, def.normal, x, y, z, 0)
       uvs.push(uvU, uvV)
     }
   }
@@ -287,9 +280,11 @@ export function createReliefBoxGeometry({
       height,
       depth,
       face,
-      profile,
       displace,
       uvScale: uvScales?.[face] || null,
+      // `uvOffset` ne sert plus qu'a la cle de cache de geometrie (ReliefBoxGeometry.jsx) depuis que
+      // le relief est porte par le GPU — jamais utilise par addReliefFace, laisse ici pour ne pas
+      // toucher a `uvOffsets`/la cle de cache, hors perimetre du chantier perf motifs.
       uvOffset: uvOffsets?.[face] || null,
       segmentsPerUnit,
       maxSegments,

@@ -7,6 +7,12 @@ MATERIAUX.md — Système de matériaux de surface (état actuel, v2)
     aucune correction de fond nécessaire au-delà du chaînon déjà réparé le même jour (§2.1/§5.2).
     Mis à jour 2026-09-30 (PLAN_WORLD_BUILDER_REWORK.md §18-19) : champ patternScale, correction de la
     clé de cache procédural, correction de l'autorité sur wallInteriorTex/wallInteriorMaterial (§2).
+    Mis à jour 2026-10-03 (chantier perf motifs, chute de performance constatée en sélectionnant un
+    motif en complément d'une matière) : le relief géométrique (realRelief) est désormais porté par
+    le GPU (displacementMap du matériau Three.js), plus par un calcul de bruit CPU répété à chaque
+    sommet de chaque surface — voir §4.2-4.3. §8 référence enfin reliefGeometry.js et
+    ReliefBoxGeometry.jsx, absents de ce document jusqu'ici bien qu'ils portent le relief depuis
+    l'origine.
 
     Statut : Document de référence décrivant l'existant.
     Lire pour : tout travail sur l'apparence des murs, sols, plafonds et le générateur procédural.
@@ -146,9 +152,9 @@ La génération s'effectue en cinq étapes successives sur un canvas 128×128 :
 
     Saleté (applyDirt) : ajoute des taches, des traînées et des particules de poussière en fonction du paramètre dirt.
 
-    Normal map (makeNormalMap) : dérive une normal map à partir du heightmap combiné (relief de la matière + motif + usure + saleté).
+    Normal map, rugosité et hauteur (makeNormalMap, makeRoughnessMap, makeHeightMap) : dérivées du même heightmap combiné (relief de la matière + motif + usure + saleté) — un seul calcul de bruit, jamais recalculé pour la géométrie (voir §4.3).
 
-Le canvas final est exporté en data URL PNG, et la normal map est générée séparément.
+Chaque étape produit un canvas (albedoCanvas, normalCanvas, roughnessCanvas, heightCanvas). Depuis le chantier perf motifs (2026-10-03), ce sont ces canvas qui alimentent directement le rendu 3D via THREE.CanvasTexture — plus d'aller-retour par data URL PNG (coûteux : encodage + redécodage asynchrone) pour ce chemin. generateProceduralMaterialTexture expose encore albedoDataUrl/normalDataUrl en propriétés calculées à la demande (mémoïsées), réservées à MaterialGeneratorTab.jsx (génération de packs de textures voxel, qui a besoin d'une chaîne à uploader).
 
 [VÉRIFIÉ] — proceduralMaterials.js, fonction generateProceduralMaterialTexture.
 4.3 Assemblage du matériau Three.js
@@ -162,6 +168,10 @@ Le matériau final est un THREE.MeshStandardMaterial avec :
     normalScale : ajusté selon l'intensité du relief
 
     roughness et metalness : déduits de la matière choisie via pbrForProcedural
+
+Relief géométrique (realRelief: true, §3) — depuis le chantier perf motifs (2026-10-03) : proceduralMaterialAt (SurfaceDungeonScene.jsx) construit en plus reliefFaceMaterial, un clone du matériau avec displacementMap (= heightCanvas), displacementScale et displacementBias (= DEFAULT_RELIEF_SCALE, reliefGeometry.js) — uniquement quand isRealReliefProfile(descriptor) est vrai, sinon reliefFaceMaterial vaut le matériau plat. Les composants de SurfaceDungeonScene.jsx (FloorTile, CeilingTile, WallSegment, RoomSlab, StairSegment) l'appliquent exclusivement à la face que désigne leur faceMask vers ReliefBoxGeometry — jamais aux faces voisines qui partagent le même matériau (embouts de mur, côtés d'un sol…), qui ne sont pas subdivisées et se déformeraient de travers sous un displacementMap. La géométrie elle-même (createReliefBoxGeometry/addReliefFace, reliefGeometry.js) ne déplace plus aucun sommet par calcul CPU : elle garde seulement la subdivision nécessaire pour donner des sommets au vertex shader. Le chemin voxel legacy (createReliefGeometryFromQuadData, non utilisé par SurfaceDungeonScene.jsx) garde l'ancien calcul CPU par sommet, volontairement non touché (chantier purge voxel en cours, jamais mélangé à un lot fonctionnel).
+
+[VÉRIFIÉ] — reliefGeometry.js, ReliefBoxGeometry.jsx, SurfaceDungeonScene.jsx (proceduralMaterialAt + les 5 composants cités) ; client/src/lib/reliefGeometry.test.mjs couvre la non-régression (une face à relief actif reste exactement sur la boîte, sans déplacement CPU).
 
 Matière	roughness	metalness
 steel	0.55	0.42
@@ -258,6 +268,8 @@ Les anciens champs floorTopTex, floorBottomTex, wallExteriorTex, etc. sont expli
 8. Fichiers de référence
 Fichier	Rôle
 client/src/lib/proceduralMaterials.js	Générateur procédural
+client/src/lib/reliefGeometry.js	Géométrie de relief (boîte subdivisée pour le displacement GPU ; chemin voxel legacy à part)
+client/src/components/ReliefBoxGeometry.jsx	Composant R3F, cache de géométrie par profil/dimensions
 client/src/lib/voxelTextures.js	Chargement des textures depuis l'API
 client/src/lib/surfaceData.js	Logique métier des surfaces
 client/src/lib/surfaceMaterial.js	Normalisation d'un profil de matériau

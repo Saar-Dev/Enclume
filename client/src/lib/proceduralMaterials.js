@@ -628,7 +628,7 @@ function makeNormalMap(height, size, strength) {
   }
 
   ctx.putImageData(image, 0, 0)
-  return canvas.toDataURL('image/png')
+  return canvas
 }
 
 // Une creuse (arete de plaque, rivet, soudure...) accumule la poussiere/graisse et disperse la
@@ -686,7 +686,32 @@ function makeRoughnessMap(roughness, size) {
   }
 
   ctx.putImageData(image, 0, 0)
-  return canvas.toDataURL('image/png')
+  return canvas
+}
+
+// Meme buffer `height` que la normal map (jamais un second calcul de bruit) : c'est la seule
+// matiere premiere du relief geometrique GPU (displacementMap, voir SurfaceDungeonScene.jsx) —
+// avant cette fonction, ce relief etait recalcule a la main par sommet (chantier perf motifs,
+// Saar, 2026-10-03).
+function makeHeightMap(height, size) {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const image = ctx.createImageData(size, size)
+  const data = image.data
+
+  for (let i = 0; i < size * size; i += 1) {
+    const v = Math.round(clamp(height[i]) * 255)
+    const o = i * 4
+    data[o] = v
+    data[o + 1] = v
+    data[o + 2] = v
+    data[o + 3] = 255
+  }
+
+  ctx.putImageData(image, 0, 0)
+  return canvas
 }
 
 export function generateProceduralMaterialTexture(options) {
@@ -732,10 +757,28 @@ export function generateProceduralMaterialTexture(options) {
   applyEdgeRoughness(height, roughness, size)
   clampRoughnessBand(roughness, size, material)
 
+  const normalCanvas = makeNormalMap(height, size, options.relief)
+  const roughnessCanvas = makeRoughnessMap(roughness, size)
+  const heightCanvas = makeHeightMap(height, size)
+  let cachedAlbedoUrl = null
+  let cachedNormalUrl = null
+
   return {
-    albedoDataUrl: canvas.toDataURL('image/png'),
-    normalDataUrl: makeNormalMap(height, size, options.relief),
-    roughnessDataUrl: makeRoughnessMap(roughness, size),
+    // Consommateur scène 3D (SurfaceDungeonScene.jsx) : canvas direct via THREE.CanvasTexture,
+    // jamais d'encodage PNG — c'était l'aller-retour toDataURL()+TextureLoader qui coûtait cher
+    // à chaque sélection de motif/matériau (chantier perf, Saar, 2026-10-03).
+    albedoCanvas: canvas,
+    normalCanvas,
+    roughnessCanvas,
+    heightCanvas,
+    // Consommateur MaterialGeneratorTab.jsx (upload de pack de texture, aperçu <img>) : seul lui a
+    // besoin d'une chaîne — calculée à la demande et mémoïsée, jamais payée par le chemin scène 3D.
+    get albedoDataUrl() {
+      return cachedAlbedoUrl ?? (cachedAlbedoUrl = canvas.toDataURL('image/png'))
+    },
+    get normalDataUrl() {
+      return cachedNormalUrl ?? (cachedNormalUrl = normalCanvas.toDataURL('image/png'))
+    },
     procedural: makeProceduralMaterialDescriptor(options),
     material,
     pattern: PATTERN_PRESETS.find(pattern => pattern.id === options.pattern) || PATTERN_PRESETS[0],

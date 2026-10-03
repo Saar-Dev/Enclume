@@ -1,3 +1,8 @@
+## v265 — 2026-10-03 — Éditeur de carte : moins de ralentissement en choisissant un motif
+
+### Matériaux procéduraux
+- [fix] Choisir un motif en complément d'une matière provoquait une chute de performance notable sur les sols, plafonds, murs et marches concernés. Le relief est maintenant calculé par la carte graphique plutôt que recalculé entièrement à chaque sélection.
+
 ## v264 — 2026-10-03 — Éditeur de carte : la suppression d'une salle supprime aussi ses entités
 
 ### Éditeur de carte

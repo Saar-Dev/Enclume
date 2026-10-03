@@ -10,6 +10,7 @@ import {
   isImportedPatternReady,
   onImportedPatternReady,
 } from '../lib/proceduralMaterials.js'
+import { isRealReliefProfile, DEFAULT_RELIEF_SCALE } from '../lib/reliefGeometry.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
@@ -157,8 +158,11 @@ function proceduralMaterialKey(descriptor) {
   return JSON.stringify(descriptor)
 }
 
-function makeDataTexture(dataUrl, color = true) {
-  const texture = new THREE.TextureLoader().load(dataUrl)
+// `CanvasTexture` lit le canvas directement — jamais d'encodage PNG (toDataURL) ni de redecodage
+// asynchrone (TextureLoader) pour une texture deja en memoire : c'etait l'aller-retour qui coutait
+// cher a chaque selection de motif/materiau (chantier perf motifs, Saar, 2026-10-03).
+function makeCanvasTexture(canvas, color = true) {
+  const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = color ? THREE.SRGBColorSpace : (THREE.NoColorSpace || '')
   texture.magFilter = THREE.NearestFilter
   texture.minFilter = THREE.NearestFilter
@@ -195,9 +199,9 @@ function proceduralMaterialAt(descriptor) {
 
   const patternReady = isImportedPatternReady(descriptor?.pattern)
   const generated = generateProceduralMaterialTexture({ ...descriptor, size: 128 })
-  const map = makeDataTexture(generated.albedoDataUrl, true)
-  const normalMap = makeDataTexture(generated.normalDataUrl, false)
-  const roughnessMap = makeDataTexture(generated.roughnessDataUrl, false)
+  const map = makeCanvasTexture(generated.albedoCanvas, true)
+  const normalMap = makeCanvasTexture(generated.normalCanvas, false)
+  const roughnessMap = makeCanvasTexture(generated.roughnessCanvas, false)
   const pbr = pbrForProcedural(generated.material?.id)
   const reliefStrength = Math.max(0, Math.min(1, Number(descriptor.relief) / 100 || 0))
   const material = new THREE.MeshStandardMaterial({
@@ -211,8 +215,22 @@ function proceduralMaterialAt(descriptor) {
     roughness: 1,
     metalness: pbr.metalness,
   })
+  // Relief geometrique porte par le GPU (displacementMap), jamais recalcule par sommet sur le CPU
+  // (chantier perf motifs, Saar, 2026-10-03) — meme condition que ReliefBoxGeometry utilise pour
+  // decider de subdiviser une face (`isRealReliefProfile`) : si elle est fausse, `reliefFaceMaterial`
+  // degrade vers le materiau plat. Variante reservee a LA face que l'appelant designe comme porteuse
+  // de relief (faceMask) — jamais aux autres faces partageant le meme materiau (embouts de mur,
+  // cotes d'un sol...), qui n'ont que 4 sommets non subdivises et se deformeraient de travers.
+  const reliefFaceMaterial = isRealReliefProfile(generated.procedural)
+    ? Object.assign(material.clone(), {
+      displacementMap: makeCanvasTexture(generated.heightCanvas, false),
+      displacementScale: DEFAULT_RELIEF_SCALE,
+      displacementBias: -0.5 * DEFAULT_RELIEF_SCALE,
+    })
+    : material
   const entry = {
     faceMaterials: [material, material, material, material, material, material],
+    reliefFaceMaterial,
     relief: generated.procedural,
   }
   proceduralSurfaceMaterialCache.set(key, entry)
@@ -311,7 +329,7 @@ function withRepeat(material, repeatX = 1, repeatY = 1, offsetX = 0, offsetY = 0
   if (variants.has(key)) return variants.get(key)
 
   const clone = material.clone()
-  for (const mapName of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
+  for (const mapName of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'displacementMap']) {
     if (!clone[mapName]) continue
     clone[mapName] = clone[mapName].clone()
     clone[mapName].repeat.set(safeX, safeY)
@@ -479,7 +497,7 @@ function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDeta
   const bottomProcedural = surfaceMaterialAt(floor.bottomMaterial || floor.material, showDetails)
   const topTex = floor.topTex || floor.tex
   const bottomTex = floor.bottomTex || floor.tex || topTex
-  const top = topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top)
+  const top = topProcedural?.reliefFaceMaterial || topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top)
   const side = topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
   const bottom = bottomProcedural?.faceMaterials[FACE.bottom]
     || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
@@ -540,7 +558,7 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
   const bottomProcedural = surfaceMaterialAt(ceiling.bottomMaterial || ceiling.material, showDetails)
   const topTex = ceiling.topTex || ceiling.tex
   const bottomTex = ceiling.bottomTex || ceiling.tex || topTex
-  const bottom = bottomProcedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
+  const bottom = bottomProcedural?.reliefFaceMaterial || bottomProcedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
     || materialAt(textureMaterials, ceiling.tex, FACE.top)
   if (!bottom) return null
 
@@ -586,8 +604,13 @@ function RoomSlab({
   const bottomTex = topTex
   const topProcedural = surfaceMaterialAt(topMaterialDescriptor, showDetails)
   const bottomProcedural = surfaceMaterialAt(bottomMaterialDescriptor, showDetails)
-  const top = topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top)
-  const bottom = bottomProcedural?.faceMaterials[FACE.bottom]
+  // La face porteuse de relief depend de isCeiling (voir faceMask plus bas : top pour un sol,
+  // bottom pour un plafond) — seule cette face recoit la variante avec displacement.
+  const top = (isCeiling ? topProcedural?.faceMaterials[FACE.top] : topProcedural?.reliefFaceMaterial)
+    || topProcedural?.faceMaterials[FACE.top]
+    || materialAt(textureMaterials, topTex, FACE.top)
+  const bottom = (isCeiling ? bottomProcedural?.reliefFaceMaterial : bottomProcedural?.faceMaterials[FACE.bottom])
+    || bottomProcedural?.faceMaterials[FACE.bottom]
     || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
     || top
   const side = topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
@@ -775,15 +798,18 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
       : withUvTransform(frontBase, faceUvTransforms[1])
     const top = withUvTransform(topBase, faceUvTransforms[2])
     const bottom = withUvTransform(topBase, faceUvTransforms[3])
-    const front = withUvTransform(frontBase, faceUvTransforms[4])
-    const back = withUvTransform(backBase, faceUvTransforms[5])
+    // Seules front/back portent le relief (faceMask plus bas) — frontBase/backBase restent la
+    // variante plate pour sideEast/sideWest (embouts du mur, jamais subdivisés, se déformeraient
+    // de travers avec un displacementMap).
+    const front = withUvTransform(frontProcedural?.reliefFaceMaterial || frontBase, faceUvTransforms[4])
+    const back = withUvTransform(backProcedural?.reliefFaceMaterial || backBase, faceUvTransforms[5])
     materials = [sideEast, sideWest, top, bottom, front, back]
     faceProfiles = [null, null, null, null, frontRelief, backRelief]
     faceMask = [false, false, false, false, true, true]
   } else {
     const forward = Number(wall.z1) >= Number(wall.z0)
-    const front = withUvTransform(frontBase, faceUvTransforms[0])
-    const back = withUvTransform(backBase, faceUvTransforms[1])
+    const front = withUvTransform(frontProcedural?.reliefFaceMaterial || frontBase, faceUvTransforms[0])
+    const back = withUvTransform(backProcedural?.reliefFaceMaterial || backBase, faceUvTransforms[1])
     const top = withUvTransform(topBase, faceUvTransforms[2])
     const bottom = withUvTransform(topBase, faceUvTransforms[3])
     const sideSouth = (forward ? wall.capEnd : wall.capStart) === false
@@ -1889,7 +1915,7 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
 
 function StairSegment({ stair, textureMaterials, opacity = 1, showDetails = true }) {
   const procedural = surfaceMaterialAt(stair.material, showDetails)
-  const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
+  const top = procedural?.reliefFaceMaterial || procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
   const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || top
   const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
   const relief = showDetails ? (procedural?.relief || reliefAt(textureMaterials, stair.tex)) : null

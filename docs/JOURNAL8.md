@@ -8994,3 +8994,53 @@ par le test unitaire, pas rejoué en jeu.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit ciblé suffit (aucune donnée persistée par ce correctif en
 dehors des entités que l'utilisateur supprime lui-même via l'action).
+
+---
+
+## Session (Dev) — 2026-10-03 — Chantier perf motifs : le relief géométrique passe du CPU au GPU
+
+**Signalé par Saar** (éditeur de carte) : chute de performance notable en sélectionnant un motif en
+complément d'une matière sur une surface. Lecture faite avant tout correctif (`proceduralMaterials.js`,
+`reliefGeometry.js`, `SurfaceDungeonScene.jsx`) : deux causes racines, pas une seule.
+
+**Cause racine 1** : choisir un motif force `relief: 50` (`SurfaceMaterialEditor.jsx`), ce qui active
+`realRelief` (vrai par défaut) et bascule chaque surface concernée (sol, plafond, mur, marche, jusqu'à
+192 segments par face sur un grand mur) d'une `THREE.BoxGeometry` quasi gratuite vers une géométrie
+subdivisée dont chaque sommet appelait `sampleProceduralMaterialHeight` — un recalcul de bruit fractal
+complet (3×`valueNoise`, 4×`hash2` chacun), en JS, sur le thread principal, dupliquant le même champ de
+hauteur déjà calculé pour la normal map.
+
+**Cause racine 2** : chaque génération de texture encodait 3 PNG (`canvas.toDataURL`) puis les
+redécodait de façon asynchrone (`TextureLoader().load(dataUrl)`) — un aller-retour inutile pour une
+texture déjà en mémoire sur un canvas.
+
+**Recherche faite avant de coder** (doc officielle Three.js + forum + un ticket `mrdoob/three.js`
+#19677) : `MeshStandardMaterial.displacementMap` fait nativement, sur GPU, exactement ce que le code
+recalculait à la main sur CPU ; `THREE.CanvasTexture` est la pratique recommandée pour une texture
+générée dynamiquement, sans passer par un encodage PNG. Three.js installé (0.183.2) supporte
+l'auto-ombrage avec `displacementMap` depuis la r132 — vérifié avant de s'y fier.
+
+**Correctif** : `generateProceduralMaterialTexture` expose en plus un canvas « hauteur »
+(`heightCanvas`, même buffer que la normal map, aucun second calcul de bruit) ; `addReliefFace`
+(reliefGeometry.js, chemin boîte uniquement — le chemin voxel legacy n'est pas touché, chantier purge
+voxel en cours) ne déplace plus aucun sommet par CPU, elle garde seulement la subdivision ;
+`proceduralMaterialAt` (SurfaceDungeonScene.jsx) construit `reliefFaceMaterial` (clone avec
+`displacementMap`/`displacementScale`/`displacementBias`) uniquement quand `isRealReliefProfile` est
+vraie, appliqué par les 5 composants concernés (`FloorTile`, `CeilingTile`, `WallSegment`, `RoomSlab`,
+`StairSegment`) exclusivement à la face que désigne leur `faceMask` — jamais aux faces voisines qui
+partagent le même matériau (embouts de mur, côtés d'un sol…), piège trouvé en relisant chaque appelant
+avant de coder : elles ne sont pas subdivisées et se seraient déformées de travers sous un
+`displacementMap` partagé. `makeCanvasTexture` (ex-`makeDataTexture`) utilise `THREE.CanvasTexture`
+directement. Détail complet : `docs/SYSTEME/MATERIAUX.md` §4.2-4.3 et §8.
+
+**Testé** : `node --check` sur les deux fichiers `.js` ; `eslint` propre sur les fichiers client
+touchés ; `node --test` sur `proceduralMaterials.test.mjs` (4/4, inchangé) et le nouveau
+`reliefGeometry.test.mjs` (3/3, dont un cas qui aurait échoué avant ce correctif — une face à relief
+actif reste désormais exactement sur la boîte, sans déplacement CPU) ; `vite build` complet sans
+erreur ; amélioration constatée par Saar en jeu (difficile à quantifier sans outil de profilage).
+**Non testé** : mesure chiffrée de la latence avant/après (pas d'outil de profilage utilisé) ; rendu
+des ombres sur une surface à relief et alignement du relief sur un grand mur/rectangle de salle, au-delà
+de la validation visuelle globale de Saar.
+**Données** : aucune — rendu client uniquement.
+**Retour arrière** : `git revert` des 3 fichiers modifiés (`proceduralMaterials.js`, `reliefGeometry.js`,
+`SurfaceDungeonScene.jsx`) suffit ; rien n'est persisté côté serveur ou base.
