@@ -21,17 +21,17 @@ Diagnostic [VÉRIFIÉ par lecture] — client/src/components/SceneCursorOverlay.
   [canvasEl, mode, inCombat]) pose immédiatement canvasEl.style.cursor = resolveCursorStyle(mode)
   = 'none' (le curseur natif est masqué : un overlay DOM <img> CURSEUR_CASE/CIBLE.svg doit le
   remplacer).
-- Mais l'overlay <img> ne se monte que quand `pos` est non-null, et `pos` n'est renseigné que par
-  le handler `pointermove` sur canvasEl (2e useEffect). Tant que la souris ne bouge pas après le
-  changement de mode, `pos` reste null → l'overlay retourne null (ligne 88 : \`if (!pos) return null\`).
+- Mais l'overlay <img> ne se monte que quand \`pos\` est non-null, et \`pos\` n'est renseigné que par
+  le handler \`pointermove\` sur canvasEl (2e useEffect). Tant que la souris ne bouge pas après le
+  changement de mode, \`pos\` reste null → l'overlay retourne null (ligne 88 : \`if (!pos) return null\`).
 - Résultat : entre le changement de mode et le 1er pointermove, curseur natif = 'none' ET overlay
   absent = aucun curseur visible. Aggravé quand la fenêtre de déclaration se met en opacity:0 /
   pointer-events:none au même instant (le clic qui déclenche le mode part de la fenêtre, pas du
   canvas — donc pas de pointermove canvas immédiat).
 
-Piste de correctif (NON codée, à valider) : au changement de mode, initialiser `pos` depuis la
+Piste de correctif (NON codée, à valider) : au changement de mode, initialiser \`pos\` depuis la
 dernière position pointeur connue (mémoriser le dernier clientX/clientY dans une ref alimentée
-globalement, ou sur le dernier pointermove document), OU ne poser cursor:'none' qu'une fois `pos`
+globalement, ou sur le dernier pointermove document), OU ne poser cursor:'none' qu'une fois \`pos\`
 non-null. Le 2e useEffect gère déjà pointerleave → 'auto'.
 
 Impact : purement client, aucun risque données. Gêne réelle en combat (ciblage/déplacement).
