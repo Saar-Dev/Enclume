@@ -20,17 +20,27 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
 
   const [reloadResult,        setReloadResult]        = useState(null)
   const [gmReloadResult,      setGmReloadResult]      = useState(null)
-  // File d'attente (combatDamageQueue.js) — un tireur PJ touchant plusieurs cibles dans le même
-  // round reçoit COMBAT_DAMAGE_PROMPT(cible suivante) avant COMBAT_DAMAGE_RESULT(cible courante) ;
-  // deux états plats indépendants écrasaient le mauvais côté (COMBAT-DAMAGE-WINDOW-WRONG-TARGET).
+  // File d'attente (combatDamageQueue.js) — une série d'attaques déclarées ensemble (CaC ou Tir
+  // Multi) devient plusieurs entrées d'échelle séparées (declaration_group_id,
+  // combatTurnEngine.js::buildTimelineEntries) qui peuvent chacune armer un dégât en attente pour
+  // le même tireur avant que le joueur ait fermé le précédent (armAwaitingDamage, 3 sites :
+  // resolveMeleeDefenseHitAttackerPj / resolveAttackHitPj / resolveAssaultAction,
+  // socketCombatHelpers.js — docs/PLAN_COMBAT_ACTION_QUEUE.md §3). confirmDamage (FIFO) émet le
+  // prompt de l'entrée suivante avant le résultat de l'entrée courante ; deux états plats
+  // indépendants écrasaient le mauvais côté (COMBAT-DAMAGE-WINDOW-WRONG-TARGET). [Corrigé 2026-10-03
+  // après relecture : le commentaire précédent citait `resolveMeleeAction`/`remainingMeleeActions`,
+  // une récursion qui n'existe plus depuis le passage à l'échelle de résolution — la vraie source
+  // est la série d'entrées ci-dessus, vérifiée en lisant `resolveMeleeAction` (plus aucun paramètre
+  // de ce nom) puis `armAwaitingDamage`.]
   const [damageQueue,         setDamageQueue]         = useState([])
   const damageEntry = currentDamageEntry(damageQueue)
   const damagePayload = damageEntry?.payload ?? null
   const damageResults = damageEntry?.results ?? null
   const dismissDamage = () => setDamageQueue(dismissDamageQueueHead)
-  // Même défaut, même correctif : resolveMeleeAction traite remainingMeleeActions en boucle côté
-  // serveur sans attendre que le joueur ait fermé le résultat de l'attaque précédente — un second
-  // COMBAT_ATTACK_PLAYER_RESULT pouvait écraser silencieusement le premier.
+  // Même défaut, même correctif : chaque entrée de la série peut émettre son propre
+  // COMBAT_ATTACK_PLAYER_RESULT (armAwaitingDamage n'émet le prompt de dégâts que si aucune autre
+  // entrée n'attendait déjà, mais le résultat toucher/raté lui-même n'a pas ce garde-fou) — un
+  // second résultat pouvait écraser silencieusement le premier.
   // [LIMITE CONNUE, non résolue ici] Sur un coup réussi, CombatModifiersWindow n'a pas de bouton
   // Fermer propre (le flux continue vers CombatDamageWindow) : fermer les dégâts (onDamageConfirmed,
   // SessionPage.jsx) dépile aussi cette file, comme le faisait déjà le `setAttackResult(null)`

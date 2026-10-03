@@ -9096,10 +9096,16 @@ avant la fin de l'action, signalé par Saar et un beta-testeur), aucun mécanism
 identifié avec la même certitude que le ticket précédent — `CombatActionWindow` se cache sur une
 condition volontairement complexe (beaucoup de masquages sont des relais vers une autre fenêtre, pas
 des bugs). Mais `attackResult` (`useCombatSocket.js`) s'est révélé souffrir **exactement** du même
-défaut que `damagePayload`/`damageResults` : un état plat unique, alors que `resolveMeleeAction`
-traite les attaques multiples d'un même round en boucle côté serveur sans attendre que le joueur ait
-fermé le résultat de l'attaque précédente — un second `COMBAT_ATTACK_PLAYER_RESULT` écrasait
-silencieusement le premier.
+défaut que `damagePayload`/`damageResults` : un état plat unique, alors qu'une série d'attaques
+déclarées ensemble (CaC ou Tir Multi) devient plusieurs entrées d'échelle séparées
+(`declaration_group_id`, `combatTurnEngine.js::buildTimelineEntries`) pouvant chacune émettre son
+propre `COMBAT_ATTACK_PLAYER_RESULT` avant que le joueur ait fermé le précédent — un second résultat
+écrasait silencieusement le premier. [Corrigé après relecture du jour même : une première rédaction
+de cette entrée attribuait la cause à `resolveMeleeAction`/`remainingMeleeActions`, une récursion qui
+n'existe plus depuis le passage à l'échelle de résolution (`docs/Old/PLAN_COMBAT_TIMELINE.md`) —
+vérifié en lisant la signature actuelle de `resolveMeleeAction` (`socketCombatHelpers.js:1368`, plus
+aucun paramètre de ce nom) puis `armAwaitingDamage`, ses 3 sites d'appel et
+`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3.]
 
 **Décision (Saar, « on verra durant les tests réels »)** : corriger ce défaut confirmé maintenant,
 par le même patron de file (`combatDamageQueue.js`, nouvelles fonctions génériques

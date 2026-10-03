@@ -51,3 +51,26 @@ multiples). **Ce correctif durcit un défaut réel, il ne ferme pas ce ticket av
 
 **Résultat attendu :** aucune fenêtre ne disparaît tant qu'une action n'est pas terminée, validée ou
 annulée explicitement.
+
+### COMBAT-MULTI-ATTACK-ROUND-BROKEN — architecture vérifiée, aucun nouveau défaut trouvé à ce stade
+**Ajouté le** : 2026-10-03.
+**Contexte** : exploration complète de l'enchaînement d'attaques multiples (sélection côté PJ,
+découpage en entrées d'échelle séparées, malus recalculé dynamiquement, résolution entrée par
+entrée). Architecture cohérente vérifiée en lisant le code actuel — aucun défaut concret trouvé en
+dehors de ceux déjà corrigés (`COMBAT-DAMAGE-WINDOW-WRONG-TARGET`,
+`COMBAT-WINDOW-CLOSES-BEFORE-DONE`). Le signalement initial (« plusieurs attaques par round ne
+fonctionne pas correctement ») reste possiblement couvert par ces deux correctifs, ou par un défaut
+non encore identifié faute de repro précise.
+
+**Scénario à dérouler :**
+1. PJ en CaC qui déclare 2 ou 3 attaques (chips « Attaques » du panneau CaC), une cible différente
+   par attaque si possible.
+2. Vérifier que chaque attaque résout bien contre SA cible déclarée (pas une confusion de cible entre
+   attaques).
+3. Vérifier le malus « Attaque multiple » affiché (-5 pour 2, -7 pour 3+) et qu'il reste cohérent si
+   une attaque de la série est perdue/sautée en cours de round (RAW : recompté sur les attaques
+   survivantes, pas figé à la déclaration).
+4. Même déroulé en Tir Multi (rafale, plusieurs tirs/cibles) si disponible.
+5. Si quelque chose « ne fonctionne pas », noter précisément : quelle étape (sélection, résolution,
+   fenêtre), quel nombre d'attaques, CaC ou Tir, cible unique ou multiple — c'est l'information qui
+   manque aujourd'hui pour aller plus loin.

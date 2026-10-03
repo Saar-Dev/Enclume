@@ -32,8 +32,9 @@ export function currentDamageEntry(queue) {
 // ===================================================================
 // File générique — COMBAT_ATTACK_PLAYER_RESULT (CombatModifiersWindow)
 // ===================================================================
-// Même besoin que la file de dégâts ci-dessus (resolveMeleeAction traite remainingMeleeActions en
-// boucle côté serveur, sans attendre que le joueur ait fermé le résultat de l'attaque précédente),
+// Même besoin que la file de dégâts ci-dessus (une série d'attaques déclarées ensemble devient
+// plusieurs entrées d'échelle séparées, chacune pouvant émettre son propre
+// COMBAT_ATTACK_PLAYER_RESULT avant que le joueur ait fermé le précédent — voir useCombatSocket.js),
 // mais sans distinction prompt/résultat : chaque entrée arrive déjà complète en un seul événement.
 
 export function pushAttackResult(queue, result) {

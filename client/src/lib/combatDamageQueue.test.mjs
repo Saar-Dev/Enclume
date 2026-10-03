@@ -104,8 +104,9 @@ test('file des résultats de tir : deux attaques en rafale avant fermeture ne se
   let queue = []
   assert.equal(currentAttackResult(queue), null)
 
-  // resolveMeleeAction traite remainingMeleeActions en boucle sans attendre le client (COMBAT_FLUX.md
-  // §7) : les deux résultats peuvent arriver avant que le joueur ait fermé le premier.
+  // Une série d'attaques déclarées ensemble devient plusieurs entrées d'échelle séparées
+  // (declaration_group_id) : les deux résultats peuvent arriver avant que le joueur ait fermé le
+  // premier.
   queue = pushAttackResult(queue, { hit: true, roll: 12, seuil: 10 })
   queue = pushAttackResult(queue, { hit: false, roll: 3, seuil: 10 })
   assert.equal(queue.length, 2)
