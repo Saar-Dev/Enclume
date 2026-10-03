@@ -138,9 +138,13 @@ const COMPANION_REGISTRY = {
 // drone_interception_targets ajoutée (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.6) : lien « ce drone protège
 // ce personnage » = agencement d'UNE campagne entre deux personnages, pas une donnée du drone ; un drone
 // cloné arrive sans ses protégés (ils n'existent pas dans la campagne de destination).
+// pending_chance_choices ajoutée (migration 338, 2026-09-11, jamais reportée ici — bug "Erreur lors de
+// l'approbation" sur tout transfert Coffre→campagne pendant ~3 semaines) : un choix de Chance en attente
+// est ancré à UN jet précis (site, test_label, context) dans UNE campagne, jamais une donnée du personnage.
 const EXCLUDED_TABLES = new Set([
   'tokens', 'trade_log', 'trade_offers', 'vault_transfer_requests',
   'wizard_locks', 'game_echeances', 'chat_messages', 'drone_interception_targets',
+  'pending_chance_choices',
 ])
 
 // ─── Garde-fou anti-dérive (PLAN_VAULT.md "Garde-fou anti-dérive") ──────────────────────────────
@@ -150,7 +154,7 @@ const EXCLUDED_TABLES = new Set([
 // ne cherchait que des colonnes nommées littéralement character_id/char_sheet_id et aurait raté
 // vault_transfer_requests (colonnes vault_character_id/created_character_id) — corrigé au Run à
 // vide 2026-07-10.
-async function assertRegistryUpToDate(trx) {
+export async function assertRegistryUpToDate(trx) {
   const registered = new Set()
   for (const entry of Object.values(COMPANION_REGISTRY)) {
     if (entry.hasCharSheet) registered.add('char_sheet')
