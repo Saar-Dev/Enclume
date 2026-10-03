@@ -1384,7 +1384,7 @@ function SessionContent({ campaignId }) {
           pjPreview={combatSocket.pjPreview}
           damagePayload={combatSocket.damagePayload}
           damageResults={combatSocket.damageResults}
-          onDamageConfirmed={() => { combatSocket.setDamagePayload(null); combatSocket.setDamageResults(null); combatSocket.setAttackResult(null) }}
+          onDamageConfirmed={() => { combatSocket.dismissDamage(); combatSocket.setAttackResult(null) }}
           attackResult={combatSocket.attackResult}
           onAttackConfirmed={() => combatSocket.setAttackResult(null)}
           gmAttackResult={combatSocket.gmAttackResult}

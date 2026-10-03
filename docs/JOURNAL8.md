@@ -9044,3 +9044,45 @@ de la validation visuelle globale de Saar.
 **Données** : aucune — rendu client uniquement.
 **Retour arrière** : `git revert` des 3 fichiers modifiés (`proceduralMaterials.js`, `reliefGeometry.js`,
 `SurfaceDungeonScene.jsx`) suffit ; rien n'est persisté côté serveur ou base.
+
+---
+
+## Session (Dev) — 2026-10-03 — Fenêtre de dégâts : la cible suivante n'écrase plus les dégâts de la précédente (COMBAT-DAMAGE-WINDOW-WRONG-TARGET)
+
+**Signalé indépendamment par Saar et par un beta-testeur** (session de correction de bugs du
+2026-10-03) : la fenêtre « Gestion des dégâts » pouvait apparaître pour le mauvais personnage, et
+un joueur a eu cette fenêtre restée figée. Un plan antérieur avait déjà posé le diagnostic exact
+sans le corriger (`docs/PLANS/PLAN_AOE.md` §5.1, « bug latent... jamais exercé ») : le beta-test l'a
+visiblement déclenché pour la première fois.
+
+**Cause racine, vérifiée en lisant le code actuel (pas seulement les docs)** : quand un PJ tireur a
+plusieurs dégâts en attente (plusieurs cibles touchées dans le même round), `confirmDamage`
+(`server/src/socket/socketCombatHelpers.js:548-580`) émet `COMBAT_DAMAGE_PROMPT` pour la cible
+suivante **avant** d'émettre `COMBAT_DAMAGE_RESULT` pour la cible qui vient d'être résolue. Côté
+client, `useCombatSocket.js` n'avait que deux états plats (`damagePayload`, `damageResults`) qui
+s'écrasaient indépendamment : la fenêtre affichait le nom de la cible suivante avec les dégâts de
+la précédente, avec un bouton « Fermer » qui remettait l'état à zéro sans rien dire au serveur — qui
+restait bloqué en `AWAITING_DAMAGE`, en attente d'une confirmation qu'aucune fenêtre ne pouvait plus
+déclencher.
+
+**Correctif** : réutilisation du patron déjà existant dans ce projet pour « plusieurs éléments en
+attente, un seul affiché à la fois » (`CatastropheChoiceQueue.jsx`) plutôt qu'un état inventé pour
+l'occasion. Nouvelle logique pure, séparée du hook React et testable sans rendu ni base
+(`client/src/lib/combatDamageQueue.js`) : `pushDamagePrompt`/`attachDamageResult`/
+`dismissDamageQueueHead`/`currentDamageEntry`. `useCombatSocket.js` remplace ses deux états plats par
+cette file ; `damagePayload`/`damageResults` restent exposés identiques (dérivés de la tête de
+file), donc **aucun changement** dans `CombatOverlay.jsx` ni `CombatDamageWindow.jsx`. Un seul
+changement dans `SessionPage.jsx` : la fermeture fait avancer la file (`dismissDamage()`) au lieu
+d'effacer l'état.
+
+**Testé** : `node --test client/src/lib/combatDamageQueue.test.mjs` (8/8, dont un test qui reproduit
+exactement l'ordre bugué du serveur — prompt de la cible suivante avant résultat de la cible
+courante — et vérifie que le résultat s'attache à la bonne entrée) ; `node --check` sur
+`useCombatSocket.js` ; `eslint` ciblé propre (0 erreur) sur les 5 fichiers concernés ; `vite build`
+complet sans erreur.
+**Non testé** (⚠️ clos partiel) : scénario réel en combat (PJ tireur touchant deux PJ distincts dans
+le même round) — nécessite plusieurs clients connectés, Saar ne peut pas le reproduire seul.
+Scénario consigné dans `docs/BETATEST.md` pour la prochaine session avec des beta-testeurs.
+**Données** : aucune migration, aucun changement serveur.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; rien n'est persisté en base par ce
+correctif au-delà du déroulement normal d'un combat.

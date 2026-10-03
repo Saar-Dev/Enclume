@@ -4,6 +4,7 @@ import { useSocket } from './SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { pushDamagePrompt, attachDamageResult, dismissDamageQueueHead, currentDamageEntry } from './combatDamageQueue.js'
 
 export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
@@ -16,8 +17,14 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
 
   const [reloadResult,        setReloadResult]        = useState(null)
   const [gmReloadResult,      setGmReloadResult]      = useState(null)
-  const [damagePayload,       setDamagePayload]        = useState(null)
-  const [damageResults,       setDamageResults]        = useState(null)
+  // File d'attente (combatDamageQueue.js) — un tireur PJ touchant plusieurs cibles dans le même
+  // round reçoit COMBAT_DAMAGE_PROMPT(cible suivante) avant COMBAT_DAMAGE_RESULT(cible courante) ;
+  // deux états plats indépendants écrasaient le mauvais côté (COMBAT-DAMAGE-WINDOW-WRONG-TARGET).
+  const [damageQueue,         setDamageQueue]         = useState([])
+  const damageEntry = currentDamageEntry(damageQueue)
+  const damagePayload = damageEntry?.payload ?? null
+  const damageResults = damageEntry?.results ?? null
+  const dismissDamage = () => setDamageQueue(dismissDamageQueueHead)
   const [attackResult,        setAttackResult]         = useState(null)
   const [gmAttackResult,      setGmAttackResult]       = useState(null)
   const [pnjAttackResult,     setPnjAttackResult]      = useState(null)
@@ -41,8 +48,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     }
     const onMeleeDefensePrompt  = (data) => { setMeleeDefensePrompt(data) }
     const onMeleeResult         = (data) => { setMeleeResult(data) }
-    const onDamagePrompt        = (data) => { setDamagePayload(data) }
-    const onDamageResult        = (data) => { setDamageResults(data) }
+    const onDamagePrompt        = (data) => { setDamageQueue(q => pushDamagePrompt(q, data)) }
+    const onDamageResult        = (data) => { setDamageQueue(q => attachDamageResult(q, data)) }
     const onStunPrompt          = (data) => { setStunPayload(data) }
     const onAttackPlayerResult  = (data) => { setAttackResult(data) }
     // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
@@ -74,8 +81,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       setAttackResult(null)
       setReloadResult(null)
       setGmReloadResult(null)
-      setDamagePayload(null)
-      setDamageResults(null)
+      setDamageQueue([])
       setGmAttackResult(null)
       setPnjAttackResult(null)
       setMeleeDefensePrompt(null)
@@ -259,8 +265,9 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   return {
     reloadResult,        setReloadResult,
     gmReloadResult,      setGmReloadResult,
-    damagePayload,       setDamagePayload,
-    damageResults,       setDamageResults,
+    damagePayload,
+    damageResults,
+    dismissDamage,
     attackResult,        setAttackResult,
     gmAttackResult,      setGmAttackResult,
     pnjAttackResult,     setPnjAttackResult,
