@@ -31,3 +31,23 @@ PJ différents dans le même round (condition que Saar ne peut pas réunir seul)
 
 **Résultat attendu :** chaque fenêtre affiche la bonne cible avec ses propres dégâts ; le combat ne
 se bloque jamais entre les deux résolutions.
+
+### COMBAT-WINDOW-CLOSES-BEFORE-DONE — résultats de tir en rafale (durcissement, pas une correction confirmée)
+**Ajouté le** : 2026-10-03.
+**Contexte** : signalé par Saar et un beta-testeur (fenêtre de combat qui disparaît avant la fin de
+l'action). Pas de mécanisme unique identifié avec certitude pour ce symptôme précis — mais un défaut
+confirmé de même nature que `COMBAT-DAMAGE-WINDOW-WRONG-TARGET` a été trouvé et corrigé par
+précaution (`attackResult` écrasait silencieusement un résultat de tir par un autre lors d'attaques
+multiples). **Ce correctif durcit un défaut réel, il ne ferme pas ce ticket avec certitude.**
+
+**Scénario à dérouler :**
+1. Combat avec un PJ qui enchaîne plusieurs attaques dans le même round (idéalement un mélange
+   Raté puis Touché, pas seulement des Touchés).
+2. Vérifier que le bandeau « Touché/Raté » de `CombatModifiersWindow` correspond bien à l'attaque en
+   cours, jamais à une attaque déjà close.
+3. Noter précisément toute disparition de fenêtre avant la fin d'une action (quelle fenêtre, quelle
+   action en cours, PJ ou MJ) — c'est l'information qui manque pour trancher si ce ticket est
+   réellement clos ou s'il reste une autre cause ailleurs.
+
+**Résultat attendu :** aucune fenêtre ne disparaît tant qu'une action n'est pas terminée, validée ou
+annulée explicitement.

@@ -4,7 +4,10 @@ import { useSocket } from './SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useSessionStore } from '../stores/sessionStore'
-import { pushDamagePrompt, attachDamageResult, dismissDamageQueueHead, currentDamageEntry } from './combatDamageQueue.js'
+import {
+  pushDamagePrompt, attachDamageResult, dismissDamageQueueHead, currentDamageEntry,
+  pushAttackResult, dismissAttackQueueHead, currentAttackResult,
+} from './combatDamageQueue.js'
 
 export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
@@ -25,7 +28,19 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const damagePayload = damageEntry?.payload ?? null
   const damageResults = damageEntry?.results ?? null
   const dismissDamage = () => setDamageQueue(dismissDamageQueueHead)
-  const [attackResult,        setAttackResult]         = useState(null)
+  // Même défaut, même correctif : resolveMeleeAction traite remainingMeleeActions en boucle côté
+  // serveur sans attendre que le joueur ait fermé le résultat de l'attaque précédente — un second
+  // COMBAT_ATTACK_PLAYER_RESULT pouvait écraser silencieusement le premier.
+  // [LIMITE CONNUE, non résolue ici] Sur un coup réussi, CombatModifiersWindow n'a pas de bouton
+  // Fermer propre (le flux continue vers CombatDamageWindow) : fermer les dégâts (onDamageConfirmed,
+  // SessionPage.jsx) dépile aussi cette file, comme le faisait déjà le `setAttackResult(null)`
+  // d'origine. Fidèle au comportement précédent pour la séquence réellement signalée (plusieurs
+  // touches d'affilée) ; une séquence qui mélangerait un Raté PAS ENCORE fermé par le joueur avec
+  // un Touché ultérieur pourrait dépiler la mauvaise entrée (aucun identifiant commun aux deux
+  // événements pour les corréler) — pas reproduit, à surveiller en jeu réel plutôt que deviné.
+  const [attackQueue,         setAttackQueue]          = useState([])
+  const attackResult = currentAttackResult(attackQueue)
+  const dismissAttackResult = () => setAttackQueue(dismissAttackQueueHead)
   const [gmAttackResult,      setGmAttackResult]       = useState(null)
   const [pnjAttackResult,     setPnjAttackResult]      = useState(null)
   const [meleeDefensePrompt,  setMeleeDefensePrompt]   = useState(null)
@@ -51,7 +66,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onDamagePrompt        = (data) => { setDamageQueue(q => pushDamagePrompt(q, data)) }
     const onDamageResult        = (data) => { setDamageQueue(q => attachDamageResult(q, data)) }
     const onStunPrompt          = (data) => { setStunPayload(data) }
-    const onAttackPlayerResult  = (data) => { setAttackResult(data) }
+    const onAttackPlayerResult  = (data) => { setAttackQueue(q => pushAttackResult(q, data)) }
     // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
     // exclusivité par EnvironmentalResultQueue.jsx (toujours monté, jamais gaté au mode combat, vraie
     // file d'attente) — jamais aussi ici, ce serait un double affichage pendant un combat réel.
@@ -78,7 +93,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       // rejetée en silence par le garde FSM (`ROSTER|null + COMBAT_DAMAGE_CONFIRM` observé en log) —
       // inoffensif pour les données mais confus pour l'utilisateur. Tous les états de fenêtre/résultat
       // de ce hook sont désormais purgés ensemble, même invariant que attackResult/reloadResult déjà là.
-      setAttackResult(null)
+      setAttackQueue([])
       setReloadResult(null)
       setGmReloadResult(null)
       setDamageQueue([])
@@ -268,7 +283,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     damagePayload,
     damageResults,
     dismissDamage,
-    attackResult,        setAttackResult,
+    attackResult,
+    dismissAttackResult,
     gmAttackResult,      setGmAttackResult,
     pnjAttackResult,     setPnjAttackResult,
     meleeDefensePrompt,  setMeleeDefensePrompt,

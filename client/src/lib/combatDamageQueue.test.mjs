@@ -6,6 +6,9 @@ import {
   attachDamageResult,
   dismissDamageQueueHead,
   currentDamageEntry,
+  pushAttackResult,
+  dismissAttackQueueHead,
+  currentAttackResult,
 } from './combatDamageQueue.js'
 
 test('file vide : aucune entrée courante', () => {
@@ -95,4 +98,26 @@ test('attacher un résultat quand toutes les entrées en ont déjà un ne fait r
   const before = queue
   queue = attachDamageResult(queue, { degautsBruts: 999 })
   assert.deepEqual(queue, before)
+})
+
+test('file des résultats de tir : deux attaques en rafale avant fermeture ne se perdent plus (CombatModifiersWindow)', () => {
+  let queue = []
+  assert.equal(currentAttackResult(queue), null)
+
+  // resolveMeleeAction traite remainingMeleeActions en boucle sans attendre le client (COMBAT_FLUX.md
+  // §7) : les deux résultats peuvent arriver avant que le joueur ait fermé le premier.
+  queue = pushAttackResult(queue, { hit: true, roll: 12, seuil: 10 })
+  queue = pushAttackResult(queue, { hit: false, roll: 3, seuil: 10 })
+  assert.equal(queue.length, 2)
+  assert.equal(currentAttackResult(queue).hit, true)
+
+  queue = dismissAttackQueueHead(queue)
+  assert.equal(currentAttackResult(queue).hit, false)
+
+  queue = dismissAttackQueueHead(queue)
+  assert.equal(currentAttackResult(queue), null)
+})
+
+test('fermer une file de résultats de tir déjà vide ne fait rien (pas de crash)', () => {
+  assert.deepEqual(dismissAttackQueueHead([]), [])
 })

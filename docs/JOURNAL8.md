@@ -9086,3 +9086,40 @@ Scénario consigné dans `docs/BETATEST.md` pour la prochaine session avec des b
 **Données** : aucune migration, aucun changement serveur.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; rien n'est persisté en base par ce
 correctif au-delà du déroulement normal d'un combat.
+
+---
+
+## Session (Dev) — 2026-10-03 — Résultats de tir en rafale : même défaut durci par précaution (lié à COMBAT-WINDOW-CLOSES-BEFORE-DONE, pas une fermeture confirmée)
+
+**Contexte** : en explorant `COMBAT-WINDOW-CLOSES-BEFORE-DONE` (fenêtre de combat qui disparaît
+avant la fin de l'action, signalé par Saar et un beta-testeur), aucun mécanisme unique n'a pu être
+identifié avec la même certitude que le ticket précédent — `CombatActionWindow` se cache sur une
+condition volontairement complexe (beaucoup de masquages sont des relais vers une autre fenêtre, pas
+des bugs). Mais `attackResult` (`useCombatSocket.js`) s'est révélé souffrir **exactement** du même
+défaut que `damagePayload`/`damageResults` : un état plat unique, alors que `resolveMeleeAction`
+traite les attaques multiples d'un même round en boucle côté serveur sans attendre que le joueur ait
+fermé le résultat de l'attaque précédente — un second `COMBAT_ATTACK_PLAYER_RESULT` écrasait
+silencieusement le premier.
+
+**Décision (Saar, « on verra durant les tests réels »)** : corriger ce défaut confirmé maintenant,
+par le même patron de file (`combatDamageQueue.js`, nouvelles fonctions génériques
+`pushAttackResult`/`dismissAttackQueueHead`/`currentAttackResult`), **sans garantie que ça ferme le
+ticket d'origine** — la cause exacte de « la fenêtre disparaît » reste possiblement ailleurs.
+
+**Limite assumée, documentée dans le code** (`useCombatSocket.js`) : sur un coup réussi,
+`CombatModifiersWindow` n'a pas de bouton Fermer propre (le flux continue vers
+`CombatDamageWindow`) — fermer les dégâts dépile donc aussi la file des résultats de tir, comme le
+faisait déjà l'ancien `setAttackResult(null)` global. Une séquence qui mélangerait un Raté pas
+encore fermé par le joueur avec un Touché ultérieur pourrait dépiler la mauvaise entrée (aucun
+identifiant commun entre les deux événements serveur pour les corréler) — non reproduit, à
+surveiller plutôt que deviné.
+
+**Testé** : `node --test client/src/lib/combatDamageQueue.test.mjs` (10/10, dont un nouveau cas
+« deux attaques en rafale avant fermeture ») ; `node --check` ; `eslint` ciblé sur les fichiers
+réellement modifiés (0 erreur — une erreur préexistante dans `CombatModifiersWindow.jsx`, non
+touché par ce correctif, déjà trackée sous `I18N-LINT3`) ; `vite build` complet sans erreur.
+**Non testé** (⚠️ clos partiel) : tout scénario réel multi-PJ — nécessite plusieurs clients
+connectés. Scénario et limite documentés dans `docs/BETATEST.md` pour la prochaine session avec des
+beta-testeurs ; ce ticket ne doit être refermé qu'après leur retour, pas sur ce seul correctif.
+**Données** : aucune migration, aucun changement serveur.
+**Retour arrière** : `git revert` des fichiers modifiés suffit.

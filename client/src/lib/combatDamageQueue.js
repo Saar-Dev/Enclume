@@ -28,3 +28,22 @@ export function dismissDamageQueueHead(queue) {
 export function currentDamageEntry(queue) {
   return queue[0] ?? null
 }
+
+// ===================================================================
+// File générique — COMBAT_ATTACK_PLAYER_RESULT (CombatModifiersWindow)
+// ===================================================================
+// Même besoin que la file de dégâts ci-dessus (resolveMeleeAction traite remainingMeleeActions en
+// boucle côté serveur, sans attendre que le joueur ait fermé le résultat de l'attaque précédente),
+// mais sans distinction prompt/résultat : chaque entrée arrive déjà complète en un seul événement.
+
+export function pushAttackResult(queue, result) {
+  return [...queue, result]
+}
+
+export function dismissAttackQueueHead(queue) {
+  return queue.slice(1)
+}
+
+export function currentAttackResult(queue) {
+  return queue[0] ?? null
+}
