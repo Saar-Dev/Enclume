@@ -44,6 +44,7 @@
     "reshapeButton": "Remodeler",
     "reshapeHint": "Peins ou efface des cases pour changer le contour de la salle. Astuce : glisse directement un mur déjà sélectionné dans la vue 3D pour le pousser d'une rangée, sans changer d'outil.",
     "deleteRoomButton": "Supprimer la salle",
+    "deleteWithEntitiesWarning": "{{count}} entité(s) posée(s) dans cette salle seront aussi supprimée(s).",
     "confirmDeleteButton": "Confirmer la suppression"
   },
   "surfaceWallPanel": {

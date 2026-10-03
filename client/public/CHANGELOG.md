@@ -1,3 +1,8 @@
+## v264 — 2026-10-03 — Éditeur de carte : la suppression d'une salle supprime aussi ses entités
+
+### Éditeur de carte
+- [fix] Supprimer une salle supprime maintenant aussi les entités posées à l'intérieur (avant, elles restaient flottantes, sans salle). La confirmation de suppression indique combien d'entités seront concernées.
+
 ## v263 — 2026-09-27 — Éditeur de carte : sidebar réorganisée, nouveaux matériaux, corrections
 
 ### Éditeur de carte

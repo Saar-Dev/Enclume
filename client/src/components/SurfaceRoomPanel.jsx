@@ -24,7 +24,7 @@ const MATERIAL_FACE = 'floor'
 // largeur varie (redimensionnable) — un `right` fixe recouvrait la sidebar selon sa largeur du
 // moment. `dockRight` = largeur réelle de la sidebar + marge, même patron que `DicePanel`/
 // `EncyclopediaWindow` (`sidebarWidth`), pas une nouvelle mécanique.
-export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClose, dockRight = 16 }) {
+export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, entitiesInRoomCount = 0, onClose, dockRight = 16 }) {
   const { t } = useTranslation('builder')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -204,6 +204,9 @@ export default function SurfaceRoomPanel({ room, tool, onPatch, onDelete, onClos
           </button>
         ) : (
           <div style={S.deleteActions}>
+            {entitiesInRoomCount > 0 && (
+              <p style={S.error}>{t('surfaceRoomPanel.deleteWithEntitiesWarning', { count: entitiesInRoomCount })}</p>
+            )}
             <button type="button" onClick={() => onDelete(room.id)} style={{ ...S.action, ...S.danger }}>
               {t('surfaceRoomPanel.confirmDeleteButton')}
             </button>

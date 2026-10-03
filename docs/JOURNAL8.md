@@ -8411,7 +8411,7 @@ purge à la mort (`applyDeathConsequences`), le MJ reste libre. Aucune migration
 - **Règles automatiques** : `.claude/rules/combat.md` (invariant statuts/cadavre + 4 chemins ajoutés à ses `paths`, dont
   `combatTurnEngine.js` qui n'était couvert par aucune règle).
 - **Suivi** : `ROADMAP.md` (ligne « 6ᵉ ligne du compteur de blessures », Lots 2-4 ; « Membres détruits » repointé) ; `EN_COURS.md` (ligne de
-  vigilance P59-P62) ; 7 tickets préparés dans `server/src/scripts/create_tickets_20260924_statut_mort_constats.js` (**à lancer par Saar** :
+  vigilance P59-P62) ; 7 tickets préparés dans `server/src/scripts/create_tickets_20260924_statut_mort_constats.js` (lancé par Saar le 2026-09-25 :
   `node --env-file=.env server/src/scripts/create_tickets_20260924_statut_mort_constats.js`) ; `CHANGELOG.md` v245→v250 (libellés réels de
   l'option). `ASBUILT.md` volontairement non touché : il décrit le *déployé et stable*, et ce chantier n'est pas déployé (non poussé).
 
@@ -8419,6 +8419,59 @@ purge à la mort (`applyDeathConsequences`), le MJ reste libre. Aucune migration
 `deathStateService.test.mjs` 8/8 lancés par Saar sur sa base ; `git diff --check`. **Non testé** : rien de nouveau (documentation).
 **Données** : aucune. **Reste** : push par Saar (3 commits de code locaux + ce commit de documentation) ; lancer le script de tickets ;
 puis Lots 2-4 (6ᵉ ligne) — plan + analyse à charge avant tout code.
+
+---
+
+## Session (Dev) — 2026-09-24 — Drone d'interception, Lot 3 : le CRD Neptune / Artémis (plafond, malus, rayon d'action)
+
+**Origine** : RAW `REGLEDRONE.md`, « Drones multi-fonctions Neptune et Artémis » : le CRD (contrôleur de réseau de défense) commande 10
+mini-drones qui se comportent, en défense, comme un drone bouclier de niveau d'interception 12 ; il gère plusieurs interceptions simultanées
+(−1 au Test par interception supplémentaire, 4 au plus) ; les mini-drones ne s'éloignent pas de plus de 10 m de l'armure. Saar prévoit de les
+utiliser (« On va les utiliser, go l'implanter »). Plan : `PLAN_DRONE_INTERCEPTION.md` §7quinquies (remplace le §5 d'origine).
+
+**Décisions de règle (Saar)** : un Test **raté** du CRD compte comme une interception utilisée (le groupe de drones s'est engagé) ; le CRD reste à
+**10 m** de l'armure, dans ce même lot.
+
+**Décisions d'architecture (analyse à charge)** :
+- **Un CRD est un drone (un token)**, pas 10 entités. Deux champs **explicites** de la fiche (`drone_sheet.interception_max_simultaneous`,
+  `interception_leash_m`, migration 362) ; **vides = drone bouclier personnel** (aucune règle de simultanéité, aucune limite de distance —
+  comportement des Lots 1-2 inchangé). Jamais déduit du nom ni de la charge utile. Le plan d'origine se contredisait (« NULL/1 = bouclier
+  personnel » vs « le bouclier n'a pas de plafond ») : tranché en faveur de « vide = aucune règle ».
+- **« Simultané » lu « dans le même Tour »** (simplification RAW).
+- **Compteur = table `drone_interception_uses`** (migrations 360-361), et non une colonne de `combat_roster` : un drone d'interception n'agit pas au
+  Tour, donc rien ne garantit une ligne de roster ; et un compteur remis à zéro par effet de bord en fin de Tour est le patron que
+  `droneTelepilotState.js` a écarté. Le **Tour est dans la clé** (rien à remettre à zéro) ; FK `combat_state` en **cascade** : `current_turn` repartant à 1
+  à chaque combat, un compteur ne doit pas lui survivre, et la suppression du combat le purge sans code à oublier. Exclue du coffre.
+- **Une requête atomique** `INSERT … ON CONFLICT DO UPDATE … WHERE uses < plafond … RETURNING uses` (doc PostgreSQL, clause `ON CONFLICT` ;
+  guide Neon sur le compteur à fenêtre fixe) : pas de verrou consultatif (la clé primaire est l'exclusion mutuelle), pas de ligne par tentative.
+- **L'interception est engagée après un déplacement réussi, avant le Test** : un déplacement impossible ne consomme rien ; un Test raté consomme.
+  Le Seuil réel vient du rang renvoyé par la base (`niveau − (rang − 1)`), pas de la lecture de tri.
+- **Le bonus de réussite critique garde le niveau de maîtrise** (RAW p.204 « et non le niveau global ») : le malus de simultanéité pénalise le
+  Test, il ne diminue pas la maîtrise. Seuil ≤ 0 : échec automatique.
+- **Rayon d'action mesuré en 3D** (un étage compte), **au protégé visé** (le livre dit « l'armure ») : tir = sa cible ; grenade = les protégés visés
+  que ce drone protège. Composé au prédicat de destination du déplacement. Le message d'impossibilité dit budget **et** rayon.
+- **Simplifications** : un CRD saturé sur la ligne de tir reste un obstacle physique (comme tout drone inéligible depuis le Lot 1) ; un CRD posé par
+  le MJ hors de son rayon n'intervient pas ; hors combat (aucun `combat_state`) aucune règle ne s'applique. Droits d'édition des deux champs =
+  ceux de la fiche drone (MJ ou propriétaire, comme le niveau d'Interception et la Vitesse).
+
+**Hors lot** : les 10 mini-drones comme entités individuelles ; les fonctions attaque et exploration des Neptune / Artémis ; le retour du drone à
+sa place après coup.
+
+**Testé** : `node --test shared/droneInterception.test.mjs` 36/36 (12 nouveaux : simultanéité, saturation, tri sur le Seuil effectif, rayon d'action,
+validation des champs) ; `droneInterceptionUsesService.test.mjs` 6/6 (tables TEMPORAIRES dans une transaction annulée) ; migrations 360-362 rejouées
+dans une transaction annulée sur la vraie base (up, up bis, 5 contraintes, cascade `combat_state` → compteur, CHECK, types numériques, down, down bis) ;
+rejeu lecture seule du plan de déplacement avec rayon d'action sur la carte de test ; `node --check` des fichiers serveur touchés ; lint des
+composants client ; `git diff --check`. **Non testé** : le tronc complet tir / grenade avec un CRD en jeu (base + monde + socket), l'affichage des deux
+champs sur la fiche drone, les messages `droneInterceptSimultaneous` / `droneInterceptNoReachLeash` / `saturated` → validation de Saar, scénario : CRD
+Interception 12, plafond 4, rayon 10 m, lié à une exo ; trois tirs dans un Tour → Seuils 12, 11, 10 ; un 5ᵉ refusé ; le Tour suivant remis à zéro ;
+armure éloignée de plus de 10 m → « hors de portée ». **Données** : migrations 360-362 (nouvelle table, deux colonnes nullables : aucun changement
+pour un drone existant). **Retour arrière** : `git revert` du commit du Lot 3 ; les `down()` des trois migrations sont écrits et rejoués.
+
+**LOT 3 MIS EN PAUSE (Saar, 2026-09-24)** : le code est écrit et vérifié hors jeu mais **non commité et non testé en jeu**. Constat en base : aucun
+modèle de drone n'existe (ni CRD, ni Neptune / Artémis : les drones sont des personnages de type `drone` créés à la main depuis le coffre), le
+chantier « **Import des drones RAW** » (`ROADMAP.md` §2) doit passer d'abord. Les migrations 360-362 sont déjà appliquées sur la base locale de
+Saar ; le code reste dans le worktree. Le texte CHANGELOG prévu (v251) a été retiré du CHANGELOG pour ne pas être publié par erreur : il est
+conservé dans `PLAN_DRONE_INTERCEPTION.md` §7quinquies.
 
 ## Session (Dev) — 2026-09-24 — Fusil à pompe (Klauss) : la zone est un tronc de cône, aperçu et touche partagent une seule forme
 
@@ -8859,15 +8912,7 @@ résultats rendus dans l'ordre des entrées. Client : `healingEntriesForLocation
 (un onglet ouvert avant le déploiement se recharge ; ses réponses partielles sont refusées avec un message).
 
 **Testé** : 255 tests en base (wound*, combatantContext, echeanceService, reviewTrace, migrations 365-366) dont 4 nouveaux du lot groupé (garde 409, périmées non exigées, ordre du plus léger au plus grave — vérifié par mutation : l'ordre inversé le fait échouer —, échec d'une guérison = toute la localisation annulée)
-et 2 de la vue ; 17 tests des gestes client ; 882 tests purs de `shared` ; build client ; validé en jeu par Saar (« Test ok »). **Données** : aucune (ni migration ni donnée). **Retour arrière** : `git revert` du commit.
-
----
-
-## Session (Dev) — 2026-09-27 — Chantier « guérison conforme au livre » laissé à ce stade
-
-**Décision de Saar (2026-09-27)** : « On va laisser ce chantier à ce stade dans l'immédiat. » Les Lots A, B1 et B2 sont clos, poussés et validés en jeu (`79f5557`, `e24da4c`, `5554b30`) : la règle des cases, l'infection par personnage et par localisation, et la réponse de soins par localisation
-sont conformes au livre. Rien n'est repris sans nouvelle demande de Saar. Restent en attente (voir `docs/ROADMAP.md`) : le Lot 2b de l'écran de revue (silhouette, choix des kits, `care` réellement envoyé), la reprise de l'ordre des bugs mis en pause pour ce chantier, et le ticket
-`EXO-AVARIE-LINE-CONVENTION` (décision de Saar en attente).
+et 2 de la vue ; 17 tests des gestes client ; 882 tests purs de `shared` ; build client. **Non testé** : en jeu (à faire par Saar), l'écran rendu. **Données** : aucune (ni migration ni donnée). **Retour arrière** : `git revert` du commit.
 
 ## Session (Dev) — 2026-09-30 — Kiwi : crash serveur + bascule définitive `vtt` → `enclumeBD`
 
@@ -8912,3 +8957,40 @@ démarrage ; le bug de rôle après login sur les autres comptes.
 définitivement (sauvegarde `pg_dump` conservée sur Kiwi, `~/backups/vtt_backup_20260930_204634.dump`).
 **Retour arrière** : aucun pour la suppression de `vtt` au-delà de la sauvegarde `pg_dump` (restauration
 manuelle, non triviale) — décision assumée par Saar, environnement de dev.
+
+---
+
+## Session (Dev) — 2026-10-03 — Suppression de salle : les entités posées dedans partent avec elle
+
+**Signalé par Saar** (session de correction de bugs) : supprimer une salle dans l'éditeur de carte
+laissait les entités posées à l'intérieur flottantes, sans salle. Lecture faite avant tout correctif :
+les paramètres d'apparence (`wallAppearanceProfiles`, matériaux sol/plafond) sont déjà embarqués dans
+l'objet salle lui-même et partaient bien avec elle (`deleteSurfaceRoom`, `surfaceRooms.js`) — seule la
+moitié « entités » du signalement de Saar se reproduisait réellement.
+
+**Cause racine** : une entité (`entities`, table dédiée côté serveur) n'a aucune référence `roomId` —
+sa position est purement spatiale (`pos_x`/`pos_y` horizontal, `pos_z` hauteur). `deleteSurfaceRoom` ne
+touche qu'au document `surfaceData` et n'a jamais eu accès à la liste des entités.
+
+**Correctif** : nouvelle fonction pure `getEntitiesInRoom(surfaceData, entities, roomId)`
+(`client/src/lib/surfaceRooms.js`, réexportée par `surfaceData.js`) qui réutilise `findRoomAtCell` —
+l'autorité spatiale déjà en place dans l'éditeur (gère nativement les salles imbriquées : une entité
+dans une alcôve plus petite n'est pas supprimée si seule la grande salle qui l'englobe est effacée).
+`Editor3D.jsx` l'appelle avant `handleSurfaceRoomDelete` et supprime chaque entité trouvée par le même
+chemin que Suppr/Backspace (REST `/entities/:id` → `removeEntity` → `WS.ENTITY_DELETED`). La
+confirmation de suppression (`SurfaceRoomPanel.jsx`) affiche désormais le nombre d'entités concernées
+avant que Saar valide.
+
+**Limite assumée, hors périmètre** : aucune transaction entre la suppression d'entité (immédiate,
+REST) et la sauvegarde de `surfaceData` (`saveSurfaceFireAndForget`, différée) — déjà la mécanique de
+toute édition de `surfaceData` aujourd'hui, pas une faiblesse introduite par ce correctif.
+
+**Testé** : `node --test client/src/lib/surfaceData.test.mjs` (51/51, dont le nouveau cas
+`getEntitiesInRoom` — salle imbriquée exclue, mauvais niveau exclu, salle absente) ; `eslint` ciblé
+propre (0 erreur) ; `vite build` complet sans erreur ; scénario réel validé par Saar (pose d'une
+entité, suppression de la salle, avertissement correct, entité supprimée).
+**Non testé** : cas alcôve (petite salle dans une grande) en conditions réelles navigateur — couvert
+par le test unitaire, pas rejoué en jeu.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit ciblé suffit (aucune donnée persistée par ce correctif en
+dehors des entités que l'utilisateur supprime lui-même via l'action).

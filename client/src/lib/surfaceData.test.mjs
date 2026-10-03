@@ -14,6 +14,7 @@ import {
   expandRoomsToSurface,
   findRoomAtCell,
   findRoomsInSelection,
+  getEntitiesInRoom,
   getRoomFootprintCells,
   getRoomBoundaryWallRuns,
   getWallRenderBox,
@@ -836,6 +837,29 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   const expanded = expandRoomsToSurface(result)
   assert.equal(Object.keys(expanded.floors).length, 16)
   assert.equal(roomsWallSegments(result.rooms).filter(wall => wall.roomIds.length === 2).length, 8)
+})
+
+test('getEntitiesInRoom résout par case/niveau comme findRoomAtCell, salle imbriquée incluse', () => {
+  const outer = { ...room('outer', 0), maxX: 3, maxZ: 3 }
+  const surface = emptySurface({ rooms: { outer } })
+  const result = applyRoomSelection(
+    surface,
+    { start: { x: 1, z: 1 }, end: { x: 2, z: 2 } },
+    { level: 0, roomHeightLevels: 1, wallHeightLevels: 1 },
+    null,
+    [],
+  )
+  const nestedId = 'room:1:1:2:2:0:1'
+
+  const inNested = { id: 'in-nested', pos_x: 1.5, pos_y: 1.5, pos_z: 0 }
+  const inOuterOnly = { id: 'in-outer-only', pos_x: 0.5, pos_y: 0.5, pos_z: 0 }
+  const wrongLevel = { id: 'wrong-level', pos_x: 0.5, pos_y: 0.5, pos_z: 5 } // niveau 2 (STORY_HEIGHT=2.5)
+  const entities = [inNested, inOuterOnly, wrongLevel]
+
+  assert.deepEqual(getEntitiesInRoom(result, entities, nestedId).map(e => e.id), ['in-nested'])
+  assert.deepEqual(getEntitiesInRoom(result, entities, 'outer').map(e => e.id), ['in-outer-only'])
+  assert.deepEqual(getEntitiesInRoom(result, [], 'outer'), [])
+  assert.deepEqual(getEntitiesInRoom(result, entities, 'salle-absente'), [])
 })
 
 test('la création d’une salle retourne son identité pour passer immédiatement en sélection', () => {

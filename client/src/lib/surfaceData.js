@@ -77,6 +77,7 @@ export { getWallFineBounds, getWallRenderBox, makeWallsFromDrag } from './surfac
 export {
   findRoomAtCell,
   findRoomsInSelection,
+  getEntitiesInRoom,
   getRoomBounds,
   makeRoomFromSelection,
   applyRoomSelection,

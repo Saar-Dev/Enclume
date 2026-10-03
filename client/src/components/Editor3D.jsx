@@ -30,6 +30,7 @@ import {
   computeSurfaceGridExtent,
   deleteRoomBoundaryWalls,
   expandRoomsToSurface,
+  getEntitiesInRoom,
   getFloorTopY,
   getWallRenderBox,
   hasSurfaceContent,
@@ -767,7 +768,7 @@ export default function Editor3D({
   sidebarWidth = 0,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
-  const { entities } = useEntityStore()
+  const { entities, removeEntity } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [textureMaterials, setTextureMaterials] = useState({})
@@ -928,6 +929,29 @@ export default function Editor3D({
     onSurfaceToolChange,
     onSurfaceDataChange: handleSurfaceDataChange,
   })
+
+  // Entités posées dans la salle sélectionnée — comptées pour l'avertissement de confirmation
+  // (SurfaceRoomPanel) et supprimées avec elle (handleSurfaceRoomDeleteWithEntities ci-dessous) :
+  // une entité n'a aucune référence roomId (position purement spatiale), surfaceData seul ne
+  // suffit pas à les retrouver, deleteSurfaceRoom ne les voit jamais.
+  const entitiesInSelectedRoom = useMemo(() => (
+    getEntitiesInRoom(surfaceData, entities, selectedSurfaceRoom?.id)
+  ), [surfaceData, entities, selectedSurfaceRoom?.id])
+
+  const handleSurfaceRoomDeleteWithEntities = useCallback(async (roomId) => {
+    const contained = getEntitiesInRoom(surfaceDataRef.current, entities, roomId)
+    for (const entity of contained) {
+      try {
+        await api.delete(`/entities/${entity.id}`)
+        removeEntity(entity.id)
+        if (selectedEntityId === entity.id) onEntitySelect?.(null)
+        socket?.emit(WS.ENTITY_DELETED, { entityId: entity.id })
+      } catch (err) {
+        console.error('[Editor3D] Suppression entité (salle supprimée) refusée :', err)
+      }
+    }
+    handleSurfaceRoomDelete(roomId)
+  }, [entities, handleSurfaceRoomDelete, onEntitySelect, removeEntity, selectedEntityId, socket, surfaceDataRef])
 
   useEffect(() => {
     const actionId = surfaceTool?.roomArcActionId
@@ -1157,7 +1181,8 @@ export default function Editor3D({
           room={selectedSurfaceRoom}
           tool={surfaceTool}
           onPatch={handleSurfaceSelectionToolPatch}
-          onDelete={handleSurfaceRoomDelete}
+          onDelete={handleSurfaceRoomDeleteWithEntities}
+          entitiesInRoomCount={entitiesInSelectedRoom.length}
           onClose={closeSurfaceRoomPanel}
           dockRight={sidebarWidth + 16}
         />

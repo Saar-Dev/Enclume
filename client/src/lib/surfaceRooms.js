@@ -346,6 +346,25 @@ export function findRoomsInSelection(data, selection, level = null) {
   return matches
 }
 
+// Entités dont la position (pos_x/pos_y horizontal, pos_z hauteur — repère entité, distinct du
+// repère salle x/z horizontal + y hauteur) résout, via la même autorité findRoomAtCell que le
+// reste de l'éditeur (salle imbriquée = la plus petite gagne), vers `roomId`. Approximation à la
+// case comme tous les appelants existants de findRoomAtCell (resolveSelectHit.js, connectors.js) —
+// pas une nouvelle granularité inventée pour l'occasion.
+export function getEntitiesInRoom(surfaceData, entities, roomId) {
+  if (!roomId || !Array.isArray(entities) || entities.length === 0) return []
+  const surface = normalizeSurfaceData(surfaceData)
+  if (!surface.rooms?.[roomId]) return []
+  return entities.filter(entity => {
+    const cell = {
+      x: Math.floor(Number(entity.pos_x) || 0),
+      z: Math.floor(Number(entity.pos_y) || 0),
+    }
+    const level = yToLevel(Number(entity.pos_z) || 0)
+    return findRoomAtCell(surface, cell, level)?.id === roomId
+  })
+}
+
 export function getRoomBounds(room) {
   const cells = Array.isArray(room?.cells) && room.cells.length > 0
     ? getRoomFootprintCells(room)
