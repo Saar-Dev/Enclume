@@ -44,11 +44,20 @@
  *      (toujours visible, y compris hors mode Progression — retour Saar 2026-10-04).
  *   4. Toutes conditions OK → visible, non verrouillée.
  *
- * Mode Progression :
- *   Chaque compétence visible affiche un bouton "+" avec le coût en PE.
- *   Clic → POST /api/char-sheet/:characterId/skills/buy → onSkillBought()
- *   Bouton désactivé si xpAvailable < coût ou si compétence (X) déjà apprise
- *   et mastery à 0 (cas non bloquant mais coût = 1).
+ * Mode Progression (CHARSHEET-XP-SPEND-CONFIRM, 2026-10-04 — file d'attente locale, aucun
+ * changement serveur) :
+ *   Chaque compétence visible affiche un bouton "+" avec le coût en PE. Le clic n'appelle plus le
+ *   serveur tout de suite : il empile un point dans `pendingPurchases` (file locale, ordre de clic
+ *   conservé) et l'aperçu Maîtrise/Total (computePreview) inclut déjà ce point en attente — une
+ *   compétence dont le prérequis SKILL_MIN est en train d'être atteint DANS LE MÊME lot se
+ *   déverrouille immédiatement à l'écran, avant toute validation.
+ *   Dès qu'au moins un point est en attente, `SkillPurchaseConfirmWindow` apparaît : Annuler vide la
+ *   file sans aucune requête ; Valider rejoue la file dans l'ordre, un appel
+ *   POST /api/char-sheet/:characterId/skills/buy par point (identique à un clic direct d'avant ce
+ *   correctif) — en cas d'échec en cours de route, la boucle s'arrête et les points déjà
+ *   validés sont retirés de la file, les suivants y restent avec l'erreur affichée.
+ *   Bouton désactivé si xpAvailable - coût déjà engagé < coût du prochain point, si la compétence
+ *   est verrouillée, ou pendant la validation en cours.
  *   Le coût de déblocage (X) est 1 PE (mastery → -3, affiché "Débloquer 1 PE").
  *
  * Sauvegarde directe (hors mode Progression) :
@@ -61,6 +70,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { effectiveRequirements, isBlockedByIdentityChain } from '../../../shared/skillRequirements.js'
 import SkillInfoPopover, { SkillInfoButton } from '../components/SkillInfoPopover.jsx'
+import SkillPurchaseConfirmWindow from '../components/SkillPurchaseConfirmWindow.jsx'
 
 // ─── Barème coût XP (miroir client de charStats.js — pour l'affichage uniquement) ──
 // Le serveur recalcule indépendamment. Ce calcul client n'est jamais envoyé comme
@@ -119,11 +129,12 @@ export default function SkillsPanel({
     return () => document.removeEventListener('mousedown', handler)
   }, [detailPanel])
 
-  // ─── State achat en cours (pour désactiver le bouton pendant la requête) ──
-  const [buyingSkillId, setBuyingSkillId] = useState(null)
-  // Ref miroir — guard synchrone contre les double-clics rapides.
-  // setBuyingSkillId est asynchrone (React batch) — isBuyingRef.current est synchrone.
-  const isBuyingRef = useRef(false)
+  // ─── File d'attente d'achats XP en attente de validation (CHARSHEET-XP-SPEND-CONFIRM) ───
+  // Un clic sur "+" empile ici au lieu d'appeler le serveur ; seul handleValidateAll touche le
+  // réseau. Ordre de clic conservé (important : Valider rejoue dans cet ordre).
+  const [pendingPurchases, setPendingPurchases] = useState([])
+  const [validating, setValidating] = useState(false)
+  const [validateError, setValidateError] = useState(null)
 
   useEffect(() => {
     const init = {}
@@ -168,12 +179,31 @@ export default function SkillsPanel({
     return an1 + an2 + malus
   }, [anMap])
 
-  // ─── Calcul Total d'une compétence (base + mastery locale) ───────────────
+  // ─── Aperçu Maîtrise/Apprise d'une compétence, points en attente inclus ──────────────────
+  // confirmé (localMastery/learnedSet) + effet net des entrées pendingPurchases de CETTE
+  // compétence, dans l'ordre de clic. Un déblocage (X) fixe la Maîtrise à -3 (même règle que le
+  // serveur, charStats.js), une augmentation ajoute +1 — jamais l'inverse d'une entrée à l'autre.
+  const computePreview = useCallback((skill) => {
+    let mastery = localMastery[skill.id] ?? 0
+    let learned = learnedSet.has(skill.id)
+    for (const p of pendingPurchases) {
+      if (p.skillId !== skill.id) continue
+      if (p.kind === 'unlock') { mastery = -3; learned = true }
+      else mastery += 1
+    }
+    return { mastery, learned }
+  }, [localMastery, learnedSet, pendingPurchases])
+
+  // ─── Calcul Total d'une compétence (base + aperçu de Maîtrise, points en attente inclus) ──
+  // Les points en attente comptent déjà ici (pas seulement après Valider) : une compétence dont
+  // le prérequis SKILL_MIN est atteint par des points encore en attente doit se déverrouiller à
+  // l'écran tout de suite — la file se rejoue dans l'ordre de clic, donc le prérequis sera bien
+  // validé en premier au moment de Valider (CHARSHEET-XP-SPEND-CONFIRM).
   const calcTotal = useCallback((skill) => {
-    const base    = calcBase(skill)
-    const mastery = localMastery[skill.id] ?? 0
+    const base = calcBase(skill)
+    const { mastery } = computePreview(skill)
     return base + mastery
-  }, [calcBase, localMastery])
+  }, [calcBase, computePreview])
 
   // ─── Vérifie une ligne de prérequis d'identité (MUTATION/ADVANTAGE/GENOTYPE) ──────────
   const isIdentityReqSatisfied = useCallback((req) => {
@@ -274,50 +304,92 @@ export default function SkillsPanel({
     })
   }, [])
 
-  // ─── Achat compétence en mode Progression ─────────────────────────────────
-  // isBuyingRef : guard synchrone contre les double-clics rapides.
-  // buyingSkillId reste pour l'affichage UI (bouton '…' + disabled).
-  const handleBuy = useCallback(async (skill) => {
-    if (isBuyingRef.current) return  // guard synchrone
+  // ─── Coût engagé par la file en attente + XP restants après l'avoir entièrement validée ──
+  const pendingTotalCost = useMemo(
+    () => pendingPurchases.reduce((sum, p) => sum + p.cost, 0),
+    [pendingPurchases],
+  )
+  const xpRemaining = xpAvailable - pendingTotalCost
 
-    const isX      = skill.marker === '(X)'
-    const learned  = learnedSet.has(skill.id)
-    const mastery  = localMastery[skill.id] ?? 0
-    const cout     = (isX && !learned) ? COUT_DEBLOCAGE_X : getCoutAugmentation(mastery)
+  // ─── Mise en file d'un point (mode Progression) — ne touche jamais le réseau ─────────────
+  // La dépense réelle n'a lieu qu'à handleValidateAll (CHARSHEET-XP-SPEND-CONFIRM). Coût et
+  // résultat calculés depuis l'aperçu (computePreview), donc cohérents avec les points déjà en
+  // attente sur CETTE compétence (un 2ᵉ clic coûte le prix du 2ᵉ point, pas une répétition du 1ᵉʳ).
+  const handleStagePurchase = useCallback((skill) => {
+    if (validating) return
+    const { locked } = getSkillGate(skill)
+    if (locked) return
 
-    if (xpAvailable < cout) return  // guard client (le serveur revérifie)
+    const { mastery, learned } = computePreview(skill)
+    const isX = skill.marker === '(X)'
+    const kind           = (isX && !learned) ? 'unlock' : 'increment'
+    const cost           = kind === 'unlock' ? COUT_DEBLOCAGE_X : getCoutAugmentation(mastery)
+    const resultMastery  = kind === 'unlock' ? -3 : mastery + 1
 
-    isBuyingRef.current = true
-    setBuyingSkillId(skill.id)
+    if (xpRemaining < cost) return  // guard client — le serveur revérifie à la validation
+
+    setPendingPurchases(prev => [...prev, {
+      localId: `${skill.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      skillId: skill.id,
+      skillLabel: skill.label,
+      kind, cost, resultMastery,
+    }])
+  }, [validating, getSkillGate, computePreview, xpRemaining])
+
+  const handleRemovePending = useCallback((localId) => {
+    setPendingPurchases(prev => prev.filter(p => p.localId !== localId))
+  }, [])
+
+  const handleCancelAllPending = useCallback(() => {
+    setPendingPurchases([])
+    setValidateError(null)
+  }, [])
+
+  // ─── Valider la file : rejoue chaque point dans l'ordre de clic, un appel serveur par point
+  // (identique à un clic direct d'avant ce correctif — aucun nouvel endpoint). À la première
+  // erreur, on arrête : les points déjà validés sont retirés de la file au fur et à mesure, ceux
+  // qui restent gardent leur place et l'erreur est affichée dans la fenêtre de confirmation. ────
+  const handleValidateAll = useCallback(async () => {
+    if (validating || pendingPurchases.length === 0) return
+    setValidating(true)
+    setValidateError(null)
     try {
-      const res = await api.post(`/char-sheet/${characterId}/skills/buy`, {
-        skill_id: skill.id,
-      })
-      onSkillBought?.(res.data)
+      for (const entry of pendingPurchases) {
+        const res = await api.post(`/char-sheet/${characterId}/skills/buy`, {
+          skill_id: entry.skillId,
+        })
+        onSkillBought?.(res.data)
+        setPendingPurchases(prev => prev.filter(p => p.localId !== entry.localId))
+      }
     } catch (err) {
-      console.error('Erreur achat compétence :', err)
+      console.error('Erreur validation achats XP :', err)
+      setValidateError(err.response?.data?.error?.message || t('skillsPanel.confirmWindow.genericError'))
     } finally {
-      isBuyingRef.current = false
-      setBuyingSkillId(null)
+      setValidating(false)
     }
-  }, [learnedSet, localMastery, xpAvailable, characterId, onSkillBought])
+  }, [validating, pendingPurchases, characterId, onSkillBought, t])
 
   // ─── Rendu d'une ligne compétence jouable ─────────────────────────────────
   // P3 : toutes les deps utilisées dans le callback sont listées
   const renderSkillRow = useCallback((skill) => {
-    const base    = calcBase(skill)
+    const base = calcBase(skill)
+    // mastery brute (localMastery) : seule valeur que l'input GM lit/écrit — jamais l'aperçu, la
+    // saisie directe du MJ reste une édition immédiate indépendante de la file XP en attente.
     const mastery = localMastery[skill.id] ?? 0
-    const total   = base + mastery
     const isDiff  = skill.marker === '(-3)'
     const isPN    = skill.marker === 'PN'
     const isX     = skill.marker === '(X)'
-    const learned = learnedSet.has(skill.id)
     const { locked, lockPrereqSkill } = getSkillGate(skill)
 
-    // Calcul du coût pour le mode Progression
-    const cout         = (isX && !learned) ? COUT_DEBLOCAGE_X : getCoutAugmentation(mastery)
-    const canAfford    = xpAvailable >= cout
-    const isBuying     = buyingSkillId === skill.id
+    // Aperçu (confirmé + points en attente) : Total affiché et coût/déverrouillage du bouton "+".
+    const { mastery: previewMastery, learned: previewLearned } = computePreview(skill)
+    const total           = base + previewMastery
+    const pendingForSkill = pendingPurchases.filter(p => p.skillId === skill.id)
+    const hasPending      = pendingForSkill.length > 0
+
+    // Calcul du coût pour le mode Progression — depuis l'aperçu, pas la valeur confirmée seule.
+    const cout      = (isX && !previewLearned) ? COUT_DEBLOCAGE_X : getCoutAugmentation(previewMastery)
+    const canAfford = xpRemaining >= cout
 
     return (
       <tr key={skill.id} style={s.row}>
@@ -383,39 +455,47 @@ export default function SkillsPanel({
               }}
             />
           ) : (
-            <span style={s.readonly}>{mastery >= 0 ? `+${mastery}` : mastery}</span>
+            <span
+              style={{ ...s.readonly, ...(hasPending ? s.readonlyPending : {}) }}
+              title={hasPending ? t('skillsPanel.pendingCount', { count: pendingForSkill.length }) : undefined}
+            >
+              {previewMastery >= 0 ? `+${previewMastery}` : previewMastery}
+            </span>
           )}
         </td>
 
-        {/* Total */}
+        {/* Total — inclut déjà les points en attente (aperçu, pas encore validés) */}
         <td style={s.td}>
-          <span style={{
-            ...s.total,
-            color: total >= 0 ? '#5b8dee' : '#e08888',
-          }}>
+          <span
+            style={{
+              ...s.total,
+              color: hasPending ? '#e0a030' : total >= 0 ? '#5b8dee' : '#e08888',
+            }}
+            title={hasPending ? t('skillsPanel.pendingCount', { count: pendingForSkill.length }) : undefined}
+          >
             {total >= 0 ? `+${total}` : total}
           </span>
         </td>
 
-        {/* Bouton + (mode Progression uniquement) */}
+        {/* Bouton + (mode Progression uniquement) — met en file, ne touche jamais le réseau */}
         {progressionMode && (
           <td style={s.td}>
             <button
               style={{
                 ...s.buyBtn,
-                ...((!canAfford || isBuying || locked) ? s.buyBtnDisabled : {}),
+                ...((!canAfford || validating || locked) ? s.buyBtnDisabled : {}),
               }}
-              disabled={!canAfford || isBuying || locked}
-              onClick={() => handleBuy(skill)}
+              disabled={!canAfford || validating || locked}
+              onClick={() => handleStagePurchase(skill)}
               title={
                 locked && lockPrereqSkill
                   ? t('skillsPanel.lockedByPrereq', { prereq: lockPrereqSkill.label })
-                  : isX && !learned
+                  : isX && !previewLearned
                   ? t('character.xp.unlock', { count: COUT_DEBLOCAGE_X })
                   : t('character.xp.cost', { count: cout })
               }
             >
-              {isBuying ? '…' : `+${cout} PE`}
+              {`+${cout} PE`}
             </button>
           </td>
         )}
@@ -423,8 +503,8 @@ export default function SkillsPanel({
       </tr>
     )
   }, [
-    calcBase, localMastery, learnedSet, isGm, progressionMode, getSkillGate,
-    xpAvailable, buyingSkillId, characterId, onSaved, handleBuy, t,
+    calcBase, localMastery, computePreview, pendingPurchases, isGm, progressionMode, getSkillGate,
+    xpRemaining, validating, characterId, onSaved, handleStagePurchase, t,
   ])
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
@@ -500,6 +580,17 @@ export default function SkillsPanel({
       popover={detailPanel}
       popoverRef={detailPanelRef}
       onClose={() => setDetailPanel(null)}
+    />
+
+    <SkillPurchaseConfirmWindow
+      pending={pendingPurchases}
+      totalCost={pendingTotalCost}
+      xpRemaining={xpRemaining}
+      validating={validating}
+      error={validateError}
+      onRemove={handleRemovePending}
+      onValidate={handleValidateAll}
+      onCancel={handleCancelAllPending}
     />
     </>
   )
@@ -598,6 +689,10 @@ const s = {
     fontSize: '12px',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  // Maîtrise affichée avec au moins un point en attente de validation (CHARSHEET-XP-SPEND-CONFIRM)
+  readonlyPending: {
+    color: '#e0a030',
   },
   masteryInput: {
     width: '44px',

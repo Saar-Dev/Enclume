@@ -569,20 +569,34 @@ onChange(xpAvailable, val)
 
 ### Achat compétence — Mode Progression (SkillsPanel)
 
+File d'attente locale, aucune requête avant validation (CHARSHEET-XP-SPEND-CONFIRM, 2026-10-04) —
+remplace l'ancien achat immédiat au clic (un clic malencontreux dépensait l'XP définitivement, sans
+retour possible).
+
 ```
-SkillsPanel.handleBuy(skill)
-  → if (isBuyingRef.current) return     ← guard synchrone (PC21)
-  → if (xpAvailable < cout) return      ← guard client
-  → isBuyingRef.current = true
-  → setBuyingSkillId(skill.id)          ← affichage UI bouton '…'
-  → POST /char-sheet/:characterId/skills/buy { skill_id }
-       → onSkillBought?.(res.data)
-            → CharacterSheet.handleSkillBought({ skill_id, mastery, is_learned, xp_available })
-                 → setCharSkills (map si existant, push si nouvelle entrée)
-                 → setXpAvailable(xp_available)
-                 → onSaved?.()
-  finally: isBuyingRef.current = false, setBuyingSkillId(null)
+SkillsPanel.handleStagePurchase(skill)      ← clic sur "+", AUCUN appel réseau
+  → if (validating || locked) return
+  → { mastery, learned } = computePreview(skill)   ← confirmé + pending déjà empilé sur CE skill
+  → kind  = (X) jamais appris ? 'unlock' : 'increment'
+  → cout  = unlock ? COUT_DEBLOCAGE_X : getCoutAugmentation(mastery)
+  → if (xpRemaining < cout) return            ← xpRemaining = xpAvailable - Σ coût déjà en file
+  → setPendingPurchases([...prev, { localId, skillId, kind, cost, resultMastery }])
+
+SkillPurchaseConfirmWindow (créé dès pendingPurchases.length > 0, porte rendu dans <body>)
+  → bouton "×" par ligne → handleRemovePending(localId)     ← retrait ciblé, pas de requête
+  → "Annuler" → handleCancelAllPending()                    ← vide la file, pas de requête
+  → "Valider" → handleValidateAll()
+       for (entry of pendingPurchases)  ← ORDRE DE CLIC CONSERVÉ, important pour les prérequis
+         POST /char-sheet/:characterId/skills/buy { skill_id: entry.skillId }  ← route inchangée
+              → onSkillBought?.(res.data) → CharacterSheet.handleSkillBought(...)
+              → setPendingPurchases(retire cette entrée)
+       si une entrée échoue : boucle arrêtée, erreur affichée, entrées restantes gardées en file
 ```
+
+`calcTotal`/`getSkillGate` utilisent `computePreview` (confirmé + pending de ce skill) — une
+compétence dont le prérequis SKILL_MIN est atteint par des points encore EN ATTENTE se déverrouille
+déjà à l'écran, avant Valider (sûr : la file se rejoue dans l'ordre de clic, le prérequis est donc
+réellement acheté avant la compétence qui en dépend).
 
 ---
 

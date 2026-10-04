@@ -1084,7 +1084,23 @@
     "colBase": "Base",
     "colMastery": "Maîtrise",
     "colTotal": "Total",
-    "lockedByPrereq": "Nécessite : {{prereq}}"
+    "lockedByPrereq": "Nécessite : {{prereq}}",
+    "pendingCount": "{{count}} point en attente de validation",
+    "pendingCount_other": "{{count}} points en attente de validation",
+    "confirmWindow": {
+      "title": "Confirmer l'allocation d'XP",
+      "lineUnlock": "{{skill}} — Déblocage ({{cost}} PE)",
+      "lineIncrement": "{{skill}} — Maîtrise {{mastery}} ({{cost}} PE)",
+      "remove": "Retirer ce point",
+      "totalCost": "Total engagé : {{count}} PE",
+      "xpRemaining": "XP restants après validation : {{count}}",
+      "validate": "Valider",
+      "cancel": "Annuler",
+      "validating": "Validation…",
+      "genericError": "Erreur lors de la validation.",
+      "errorRemaining": "{{count}} point en attente, non validé.",
+      "errorRemaining_other": "{{count}} points en attente, non validés."
+    }
   },
   "advantages": {
     "empty": "Aucun avantage ou désavantage enregistré.",

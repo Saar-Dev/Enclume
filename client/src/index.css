@@ -2406,6 +2406,12 @@ Convention :
   z-index: 9100; /* au-dessus de CharacterWindow (9000) */
 }
 
+/* ── Confirmation d'allocation d'XP (CHARSHEET-XP-SPEND-CONFIRM) — réutilise Palette A ── */
+.skill-purchase-confirm-win {
+  position: fixed;
+  z-index: 9100; /* au-dessus de CharacterWindow (9000) */
+}
+
 .moding-body {
   display: flex;
   flex: 1;

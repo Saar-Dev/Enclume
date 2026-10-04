@@ -9184,3 +9184,84 @@ Saar peut le reproduire seul (un seul personnage, pas de multi-client) — pas d
 **Données** : aucune migration.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; aucune donnée persistée au-delà
 d'un achat de compétence normal.
+
+## Session (Dev) — 2026-10-04 — Armure : libellés clairs + 7 valeurs de Choc du Livre de Base + 16 armures Guide Technique mal taguées (ARMOR-STATS-DISPLAY-INCOMPLETE)
+
+**Signalement** : affichage peu clair des bonus/malus d'armure équipée, Résistance au choc
+totalement absente, demande de renommer « valeur d'armure » en « Armure ».
+
+**Trois causes distinctes trouvées, pas une seule.**
+1. Libellés cryptiques `ETQ`/`PRT` (agrégat mille-feuille) et `E`/`P` (par couche) dans
+   `LocationPanel.jsx` — renommés `Armure`/`Choc` (clés `charSheet.locationPanel.statArmor`/
+   `statChoc`).
+2. 7 armures du Livre de Base ont une vraie valeur de Résistance au choc définie p.314
+   (« Armures simples & boucliers », colonne Choc) jamais saisie à l'import — vérifiée ligne par
+   ligne contre le texte du livre (triple clé Protection + catégorie de malus + localisation) :
+   Armure de sécurité Alpha (6), Bêta (8), Oméga (10), Protection en kevlar (4), Protection en
+   fibres polytitane (5), Protection matelassée (7), Robe des Ordonnateurs (2). Migration 381,
+   matchée par `name`.
+3. 16 armures personnelles (Gilet Soles/Vasta II/de fibres vivantes/en kevlar, Mil AZ,
+   Nano-cuirasse Mark I/II, Pagan, Protection Spider, Protector 201, Roga I/II, Sancta, Sec II,
+   Tenue NBC, Tenue sécurité Kevlar) étaient taguées `source = Livre de Base` alors qu'elles
+   viennent du supplément Guide Technique (confirmé par Saar — Protection Spider a d'ailleurs déjà
+   la bonne valeur Guide Technique en base, différente du Livre de Base, preuve que ces lignes
+   n'ont jamais eu besoin d'une correction de stat, seulement de source). Le mécanisme de Source
+   existait déjà (`ref_sources`/`assertSourceActive`, Lot A/B exo-armures + équipement,
+   2026-09-29) — ces 16 lignes avaient simplement été oubliées à l'audit de l'époque. Migration 382,
+   retag uniquement (aucune valeur de jeu touchée), matchée par `name`. Sans risque pour la
+   campagne réelle (LOCAL) : Guide Technique y est déjà activé, une seule des 16 armures est
+   possédée par un personnage (au Sac, jamais équipé) et la possession déjà acquise n'est jamais
+   remise en cause par une bascule de source.
+
+**Nouveau `docs/SYSTEME/SOURCES.md`** : contenu durable du mécanisme Source (concept, schéma,
+`assertSourceActive`, points gardés, déficit connu en lecture, méthode pour ajouter une source) —
+fermait le TODO resté ouvert dans `PLAN_SUPPLEMENTS.md` §6.7. `VOCABULARY.md` et
+`PLAN_SUPPLEMENTS.md` repointés vers ce nouveau doc ; `CHARACTER_FLUX.md`/`BLESSURES.md` corrigés
+(citaient encore ETQ/PRT).
+
+**Testé** : `node --check` sur les 2 migrations ; aller-retour `up()`/`down()` des deux sur la base
+locale (valeurs/sources appliquées puis proprement retirées, DB laissée propre, non appliquée
+définitivement — le sera au prochain démarrage serveur) ; `vite build` complet sans erreur.
+**Non testé** (⚠️ clos partiel) : affichage réel en navigateur (armure équipée avec/sans Choc).
+**Données** : migrations 381 (backfill Choc, 7 lignes) et 382 (retag source, 16 lignes) — pas
+encore appliquées en base de façon définitive au moment du commit.
+**Retour arrière** : `down()` de chaque migration restaure l'état antérieur exactement (testé).
+
+## Session (Dev) — 2026-10-04 — Compétences : fenêtre de confirmation avant dépense d'XP (CHARSHEET-XP-SPEND-CONFIRM)
+
+**Signalement** (Saar + un beta-testeur, indépendamment) : en Mode Progression, chaque point placé
+dans une compétence est immédiatement et définitivement dépensé — un clic malencontreux gaspille un
+point sans retour possible. Clarification de vocabulaire de Saar en cours de chantier : PC
+(Point de Création) ne concerne que la création de personnage, ce ticket porte uniquement sur l'XP
+(compétences) — le bouton « Modif. PC » d'Attribut, qui dépense aussi de l'XP en mode Progression,
+n'est PAS dans ce périmètre (signalé à part, question RAW possible mais non traitée ici).
+
+**Architecture : aucun changement serveur.** `POST /skills/buy` reste l'autorité unique, inchangée —
+un appel = un point, coût recalculé par le serveur à chaque fois. Ajout d'une file d'attente
+purement cliente dans `SkillsPanel.jsx` :
+- `pendingPurchases` (état local, ordre de clic conservé) — un clic sur "+" empile au lieu
+  d'appeler le serveur.
+- `computePreview(skill)` — Maîtrise/Apprise confirmées + effet net des entrées en attente de CE
+  skill. `calcTotal`/`getSkillGate` utilisent cet aperçu : une compétence dont le prérequis
+  SKILL_MIN est atteint par des points encore en attente se déverrouille déjà à l'écran, avant
+  validation (sûr : la file se rejoue dans l'ordre de clic à la validation, le prérequis est donc
+  réellement acheté avant la compétence qui en dépend).
+- Nouvelle fenêtre flottante `SkillPurchaseConfirmWindow.jsx` (même patron que
+  `WoundReviewWindow.jsx` — Palette A `.combat-win`, `createPortal` dans `<body>`, `useDraggable`) :
+  apparaît dès qu'au moins un point est en attente, liste chaque ligne avec un retrait ciblé (×),
+  « Annuler » (vide la file sans requête) et « Valider » (rejoue la file dans l'ordre, un appel
+  `/skills/buy` par point — identique à un clic direct d'avant ce correctif). En cas d'échec en
+  cours de route : la boucle s'arrête, les points déjà validés sont retirés de la file, les
+  suivants y restent avec l'erreur affichée.
+- Saisie directe de Maîtrise par le MJ (hors Progression) : totalement inchangée, chemin de code
+  séparé, jamais mélangé à la file XP.
+
+**Testé** : `node --test shared/skillRequirements.test.mjs` (14/14, logique partagée non touchée,
+vérifiée par précaution) ; `eslint` ciblé (0 erreur nouvelle — `canEdit` inutilisé et le warning de
+ref sont préexistants, vérifiés par `git stash`) ; `vite build` complet sans erreur.
+**Non testé** (⚠️ clos partiel) : scénario réel en navigateur (empiler plusieurs points sur
+plusieurs compétences, retirer une ligne, Valider, Annuler, déverrouillage d'un prérequis par des
+points encore en attente). Saar peut le reproduire seul (un personnage, mode Progression, pas de
+multi-client).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; la route serveur est inchangée.
