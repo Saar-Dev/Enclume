@@ -175,6 +175,17 @@ export const WS = {
   COMBAT_DECLARE_ERROR:          'combat:declare_error',           // serveur → socket : erreur de validation déclaration (ex: hors portée)
   COMBAT_RESOLVE_MOVE_BLOCKED:   'combat:resolve_move_blocked',    // serveur → socket : déplacement refusé en résolution (case occupée)
   COMBAT_ANNOUNCE_PREVIEW:       'combat:announce_preview',        // PJ → serveur → room : sélections en cours (éphémère, non persisté)
+  // COMBAT-RANGE-PLAYER-EDITABLE (2026-10-04) : MJ → serveur → room, pendant la phase RÉSOLUTION —
+  // surcharge narrative de Portée et/ou Taille pour l'assaut distance en cours. Payload PARTIEL
+  // { tokenId, portee?, taille? } — portee ∈ shared/combatRange.js RANGE_BANDS, taille ∈
+  // shared/sizeCategory.js SIZE_CATEGORIES, null pour effacer un champ, absent = champ non modifié
+  // (fusionné côté serveur avec la surcharge déjà en slot). Même patron que COMBAT_ANNOUNCE_PREVIEW
+  // (relais éphémère, resynchronisé à la reconnexion), mais consommé une seule fois par
+  // resolveAssaultAction puis supprimé — jamais purgé par un changement de phase comme combatPreviews.
+  // Le joueur ne soumet jamais ce champ (ni confirmedModifiers.portee, jamais lu côté serveur, ni
+  // confirmedModifiers.taille, stripGmOnlyModifiers le retire de sa propre soumission) — seule cette
+  // route MJ-only peut influencer le calcul.
+  COMBAT_RESOLUTION_OVERRIDE:    'combat:resolution_override',
   COMBAT_ACTION_PRECHECK:        'combat:action_precheck',          // client → serveur (ACK) : { tokenId, actionKey } → callback({ ok })
   COMBAT_APPLY_STUN:             'combat:apply_stun',              // GM → serveur : appliquer is_stunned manuellement { tokenId, outcome, duration }
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }

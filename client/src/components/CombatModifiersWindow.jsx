@@ -98,7 +98,7 @@ function calcPorteePalier(distance, rangeData) {
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n, impossible = false) { return impossible ? '✗' : n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
-export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed, targetSizeCategory = null, shooterAllureKey = null, targetAllureKey = null, combatModifiersMode = 'auto', isGm = false }) {
+export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed, targetSizeCategory = null, shooterAllureKey = null, targetAllureKey = null, combatModifiersMode = 'auto', isGm = false, gmOversightOnly = false }) {
   const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -109,16 +109,23 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     360,
   )
 
-  const [porteeOverride, setPorteeOverride] = useState(null)
+  // Surcharge MJ de Portée (COMBAT-RANGE-PLAYER-EDITABLE) — jamais un choix local comme avant : la
+  // valeur vient du serveur (COMBAT_RESOLUTION_OVERRIDE, relais éphémère combatResolutionOverrides),
+  // seule source qui influence réellement resolveAssaultAction. Null = pas de surcharge, bande
+  // affichée = celle calculée depuis la distance réelle (prefilledPortee ci-dessous).
+  const [gmPorteeOverride, setGmPorteeOverride] = useState(null)
   const [tireurAllureOverride, setTireurAllureOverride] = useState(null)
   const [cibleAllureOverride, setCibleAllureOverride] = useState(null)
   const [couvertures, setCouvertures] = useState([])
   const [obscurites, setObscurites] = useState([])
   // Taille de la cible : préselect serveur (targetSizeCategory, dérivée de la fiche de la cible via
-  // le PRECHECK) ; `tailleOverride` = choix manuel du MJ seulement (null tant qu'il n'y touche pas),
-  // même pattern que porteeOverride/tireurAllureOverride ci-dessus (PLAN_TAILLE.md S4).
+  // le PRECHECK) ; `tailleOverride` = choix manuel du MJ qui résout lui-même (PNJ/drone/exo, state
+  // local, comportement inchangé) ; `gmTailleOverride` = surcharge reçue du MJ en supervision d'un
+  // PJ (COMBAT-RANGE-PLAYER-EDITABLE, même canal que gmPorteeOverride) — prioritaire sur les deux
+  // autres quand présente.
   const [tailleOverride, setTailleOverride] = useState(null)
-  const taille = tailleOverride ?? targetSizeCategory ?? 'moyenne'
+  const [gmTailleOverride, setGmTailleOverride] = useState(null)
+  const taille = gmTailleOverride ?? tailleOverride ?? targetSizeCategory ?? 'moyenne'
   const [weaponSkill, setWeaponSkill] = useState(null)
   const [isRolling, setIsRolling] = useState(false)
 
@@ -138,10 +145,22 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   // taille + allure : éditable si MJ, ou en mode libre. La zone d'effet reste toujours éditable
   // pour l'allure (aucune autorité serveur — pas de cible unique).
   const modifiersEditable = isGm || !autoMode
+  // Allure tireur/cible, Couverture, Obscurité : jamais éditables pour le MJ en supervision d'un
+  // PJ (gmOversightOnly). Contrairement à Portée/Taille, l'Allure n'a AUCUN canal de surcharge MJ,
+  // même latent : en mode auto, socketCombatResolution.js (COMBAT_ACTION_CONFIRM, !isGm) écrase
+  // systématiquement confirmedModifiers.situation par l'allure réellement dérivée du mouvement
+  // déclaré (resolveRangedAllureKeys/applyDerivedAllureToSituation, shared/combatSituationMods.js)
+  // — jamais une valeur MJ consultée en priorité comme GM_ONLY_CONFIRMED_MODIFIER_KEYS le fait pour
+  // taille. En mode libre, c'est directement le choix du joueur dans SA fenêtre qui part au
+  // serveur, jamais relu ici. Donner au MJ un pouvoir de correction ici serait une capacité
+  // nouvelle, jamais demandée (même décision que Couverture/Obscurité, qui n'ont jamais eu
+  // d'autorité serveur à corriger — un fait déclaré à l'œil, pas une valeur calculée).
+  const gmReadOnlyInOversight = gmOversightOnly
 
   // Reset quand un nouvel assaut passe en résolution
   useEffect(() => {
-    setPorteeOverride(null)
+    setGmPorteeOverride(null)
+    setGmTailleOverride(null)
     setTireurAllureOverride(null)
     setCibleAllureOverride(null)
     setCouvertures([])
@@ -150,6 +169,24 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     setWeaponSkill(null)
     setIsRolling(false)
   }, [assaultAction?.id])
+
+  // Écoute la surcharge MJ de Portée/Taille — filtrée au token de CET assaut (le MJ peut en
+  // superviser un seul à la fois, mais le slot serveur est partagé par campagne). Le serveur
+  // renvoie toujours les DEUX champs fusionnés (jamais un payload partiel), donc appliquer les deux
+  // directement ici est sûr même si seul l'un des deux vient de changer. Même composant côté MJ (qui
+  // émet, cf. selects plus bas) et côté joueur (qui reçoit uniquement) — l'écho vers le MJ lui-même
+  // est inoffensif, même valeur déjà posée localement par son propre select.
+  useEffect(() => {
+    if (!socket) return
+    const tokenId = activeRosterEntry?.token_id ?? assaultAction?.token_id
+    const onOverride = (payload) => {
+      if (!tokenId || payload?.tokenId !== tokenId) return
+      setGmPorteeOverride(payload.portee ?? null)
+      setGmTailleOverride(payload.taille ?? null)
+    }
+    socket.on(WS.COMBAT_RESOLUTION_OVERRIDE, onOverride)
+    return () => socket.off(WS.COMBAT_RESOLUTION_OVERRIDE, onOverride)
+  }, [socket, activeRosterEntry?.token_id, assaultAction?.token_id])
 
   // Fetch compétence liée à l'arme (pour la pill)
   useEffect(() => {
@@ -206,7 +243,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     return { porteeKey: calcPorteePalier(distance, rangeData), distance: Math.round(distance * 10) / 10 }
   }, [assaultAction, tireurToken, cibleToken])
 
-  const effectivePortee   = porteeOverride ?? prefilledPortee?.porteeKey ?? null
+  const effectivePortee   = gmPorteeOverride ?? prefilledPortee?.porteeKey ?? null
   const isRushed          = activeRosterEntry?.state_vitesse === 'rushed'
   const tireurAllureDef   = TIREUR_ALLURES.find(a => a.val === tireurAllureVal)
   const cibleAllureDef    = CIBLE_ALLURES.find(a => a.val === cibleAllureVal)
@@ -247,16 +284,29 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   // de la même condition. Bug confirmé Saar (2026-09-02) : la section Portée avait bien disparu en
   // zone, mais le bouton "LANCER LES DÉS" restait grisé — son propre `disabled` dupliquait l'ancienne
   // condition sans `isAoeAction`, jamais mise à jour au premier correctif.
-  const canRoll = (effectivePortee || isAoeAction) && !hasTirImpossible && !isRolling
+  const canRoll = !gmOversightOnly && (effectivePortee || isAoeAction) && !hasTirImpossible && !isRolling
 
+  // confirmedModifiers ne porte plus `portee` (COMBAT-RANGE-PLAYER-EDITABLE) — resolveAssaultAction
+  // ne l'a jamais lu (authoritativeRangeBand toujours recalculée depuis la distance réelle, ou
+  // depuis la surcharge MJ COMBAT_RESOLUTION_OVERRIDE) ; l'envoyer entretenait une illusion.
   const handleLancer = () => {
     if (!canRoll) return
     setIsRolling(true)
     socket?.emit(WS.COMBAT_ACTION_CONFIRM, {
       tokenId: activeRosterEntry.token_id,
-      // portee: null en zone — champ ignoré par resolveAoeAssaultAction, jamais une valeur inventée.
-      confirmedModifiers: { portee: effectivePortee, situation: currentSituation, taille },
+      confirmedModifiers: { situation: currentSituation, taille },
     })
+  }
+
+  // MJ en supervision d'un assaut PJ (COMBAT-RANGE-PLAYER-EDITABLE) — émet la surcharge, jamais un
+  // state local (même émetteur que le serveur relaie ensuite, cf. useEffect d'écoute plus haut).
+  const handlePorteeOverride = (key) => {
+    socket?.emit(WS.COMBAT_RESOLUTION_OVERRIDE, { tokenId: activeRosterEntry.token_id, portee: key || null })
+  }
+  // Même émetteur, payload partiel — ne touche jamais au champ portee d'une surcharge déjà posée
+  // (fusion côté serveur, cf. socketCombatResolution.js).
+  const handleTailleOverride = (key) => {
+    socket?.emit(WS.COMBAT_RESOLUTION_OVERRIDE, { tokenId: activeRosterEntry.token_id, taille: key || null })
   }
 
   return (
@@ -376,27 +426,40 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
           {/* Portée — masquée en zone d'effet : pas de cible unique, pas de distance calculable, et
               resolveAoeAssaultAction ne lit de toute façon jamais confirmedModifiers.portee (recalculée
-              par cible touchée). Un sélecteur ici inviterait à choisir une valeur qui ne sert à rien. */}
+              par cible touchée). Un sélecteur ici inviterait à choisir une valeur qui ne sert à rien.
+              COMBAT-RANGE-PLAYER-EDITABLE : jamais éditable par le joueur (authoritativeRangeBand est
+              toujours recalculée depuis la distance réelle côté serveur, confirmedModifiers.portee
+              n'est lu nulle part) — seul le MJ a un select, qui émet la surcharge en direct (pas un
+              state local), visible immédiatement par le joueur via COMBAT_RESOLUTION_OVERRIDE. */}
           {!isAoeAction && (
             <div className="combat-float-section">
               <div style={styles.sectionTitle}>{t('modifiers.porteeSection')}</div>
-              <select
-                value={effectivePortee ?? ''}
-                onChange={e => setPorteeOverride(e.target.value || null)}
-                style={styles.select}
-              >
-                {!effectivePortee && <option value="">{t('modifiers.choosePlaceholder')}</option>}
-                {PORTEES.map(p => (
-                  <option key={p.key} value={p.key}>{t(p.label)} ({fmtOpt(p.mod)})</option>
-                ))}
-              </select>
+              {isGm ? (
+                <select
+                  value={effectivePortee ?? ''}
+                  onChange={e => handlePorteeOverride(e.target.value)}
+                  style={styles.select}
+                >
+                  {!effectivePortee && <option value="">{t('modifiers.choosePlaceholder')}</option>}
+                  {PORTEES.map(p => (
+                    <option key={p.key} value={p.key}>{t(p.label)} ({fmtOpt(p.mod)})</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={styles.infoValue}>
+                  {effectivePortee ? `${t(PORTEES.find(p => p.key === effectivePortee)?.label ?? '')} (${fmtOpt(porteeModComp)})` : t('modifiers.choosePlaceholder')}
+                  <span style={styles.autoHint}> · {t(gmPorteeOverride ? 'modifiers.porteeGmOverride' : 'modifiers.porteeAuto')}</span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Allure tireur — dérivée du mouvement en mode auto (lecture seule joueur) ; libre : select */}
+          {/* Allure tireur — dérivée du mouvement en mode auto (lecture seule joueur) ; libre :
+              select. gmOversightOnly : toujours lecture seule, jamais de surcharge (cf. commentaire
+              gmReadOnlyInOversight ci-dessus — aucune autorité MJ à exercer ici). */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.tireurAllureSection')}</div>
-            {modifiersEditable ? (
+            {modifiersEditable && !gmReadOnlyInOversight ? (
               <select
                 value={tireurAllureVal}
                 onChange={e => setTireurAllureOverride(e.target.value)}
@@ -409,15 +472,15 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ) : (
               <div style={styles.infoValue}>
                 {t(TIREUR_ALLURES.find(a => a.val === tireurAllureVal)?.label ?? 'modifiers.allures.immobile')} ({fmtOpt(tireurAllureMod, isImpossible(tireurAllureDef?.sitKey))})
-                <span style={styles.autoHint}> · {t('modifiers.allureAuto')}</span>
+                <span style={styles.autoHint}> · {t(autoMode ? 'modifiers.allureAuto' : 'modifiers.gmOversightNote')}</span>
               </div>
             )}
           </div>
 
-          {/* Allure cible */}
+          {/* Allure cible — même traitement que tireur ci-dessus. */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.cibleAllureSection')}</div>
-            {modifiersEditable ? (
+            {modifiersEditable && !gmReadOnlyInOversight ? (
               <select
                 value={cibleAllureVal}
                 onChange={e => setCibleAllureOverride(e.target.value)}
@@ -430,15 +493,20 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ) : (
               <div style={styles.infoValue}>
                 {t(CIBLE_ALLURES.find(a => a.val === cibleAllureVal)?.label ?? 'modifiers.allures.immobile')} ({fmtOpt(cibleAllureMod)})
-                <span style={styles.autoHint}> · {t('modifiers.allureAuto')}</span>
+                <span style={styles.autoHint}> · {t(autoMode ? 'modifiers.allureAuto' : 'modifiers.gmOversightNote')}</span>
               </div>
             )}
           </div>
 
-          {/* Couverture */}
+          {/* Couverture — case à cocher, confirmation libre (jamais d'autorité serveur à corriger,
+              contrairement à Portée/Taille). gmOversightOnly : aucune donnée à recaper (le MJ ne
+              reçoit jamais le choix en cours du joueur, aucun canal n'existe ni n'est construit ici
+              par choix — décision Saar) — note honnête plutôt qu'un faux récap "aucune". */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.couvertureSection')}</div>
-            {COUVERTURES.map(c => (
+            {gmReadOnlyInOversight ? (
+              <div style={styles.infoValue}>{t('modifiers.gmOversightNote')}</div>
+            ) : COUVERTURES.map(c => (
               <label key={c.key} style={styles.checkLabel}>
                 <input
                   type="checkbox"
@@ -454,10 +522,12 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ))}
           </div>
 
-          {/* Obscurité */}
+          {/* Obscurité — même traitement que Couverture ci-dessus. */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.obscuriteSection')}</div>
-            {OBSCURITES.map(o => (
+            {gmReadOnlyInOversight ? (
+              <div style={styles.infoValue}>{t('modifiers.gmOversightNote')}</div>
+            ) : OBSCURITES.map(o => (
               <label key={o.key} style={styles.checkLabel}>
                 <input
                   type="checkbox"
@@ -476,13 +546,16 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Taille cible — mode auto : préselect serveur (dérivée de la fiche), override MJ ;
-              mode libre : <select> neutre pour tous */}
+              mode libre : <select> neutre pour tous. gmOversightOnly (MJ supervise un PJ qui résout
+              lui-même, COMBAT-RANGE-PLAYER-EDITABLE) : le select MJ émet la surcharge au lieu d'un
+              state local, sinon (MJ résout lui-même un PNJ/drone/exo, ou joueur en mode libre)
+              comportement inchangé. */}
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
             {modifiersEditable ? (
               <select
                 value={taille}
-                onChange={e => setTailleOverride(e.target.value)}
+                onChange={e => (gmOversightOnly ? handleTailleOverride(e.target.value) : setTailleOverride(e.target.value))}
                 style={styles.select}
               >
                 {TAILLES.map(opt => (
@@ -492,7 +565,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             ) : (
               <div style={styles.infoValue}>
                 {t(TAILLES.find(o => o.key === taille)?.label ?? 'cacModifiers.tailles.moyenne')} ({fmtOpt(tailleModComp)})
-                <span style={styles.autoHint}> · {t('cacModifiers.targetSizeAuto')}</span>
+                <span style={styles.autoHint}> · {t(gmTailleOverride ? 'cacModifiers.targetSizeGmOverride' : 'cacModifiers.targetSizeAuto')}</span>
               </div>
             )}
           </div>
@@ -503,9 +576,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       {/* Poignée bas */}
       <div onMouseDown={onHeaderMouseDown} style={styles.bottomHandle} />
 
-      {/* Footer — 3 états : prêt / en cours / résultat */}
+      {/* Footer — 3 états : prêt / en cours / résultat. gmOversightOnly (COMBAT-RANGE-PLAYER-EDITABLE) :
+          le MJ supervise un assaut de PJ, c'est le joueur qui lance ses propres dés — aucun bouton. */}
       <div className="combat-float-footer">
-        {!attackResult && (
+        {!attackResult && !gmOversightOnly && (
           <button
             className="btn btn-gold"
             style={{

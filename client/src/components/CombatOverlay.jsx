@@ -422,8 +422,12 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         </div>
       )}
 
-      {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ ou drone ranged) */}
-      {isGm && phase === 'RESOLUTION' && activeAssaultAction && assaultPrecheckOk === true && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
+      {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ, drone ranged, ou supervision d'un
+          PJ qui résout lui-même — COMBAT-RANGE-PLAYER-EDITABLE : le MJ doit pouvoir voir/corriger la
+          Portée même sur l'assaut d'un PJ, plus seulement PNJ/drone). gmOversightOnly masque le
+          bouton "Lancer" côté MJ quand c'est un PJ : lui seul lance ses propres dés, le MJ ne fait
+          que superviser/surcharger la Portée en direct. */}
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && assaultPrecheckOk === true && gmActiveEntry && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={activeAssaultAction}
@@ -433,6 +437,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           targetAllureKey={assaultPrecheckAllure?.targetAllureKey ?? null}
           combatModifiersMode={combatModifiersMode}
           isGm={isGm}
+          gmOversightOnly={gmActiveCharacter?.type === 'pj'}
         />
       )}
 

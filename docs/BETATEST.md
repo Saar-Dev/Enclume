@@ -75,6 +75,45 @@ non encore identifié faute de repro précise.
    fenêtre), quel nombre d'attaques, CaC ou Tir, cible unique ou multiple — c'est l'information qui
    manque aujourd'hui pour aller plus loin.
 
+### COMBAT-RANGE-PLAYER-EDITABLE — synchro MJ↔joueur de la Portée et de la Taille en résolution
+**Ajouté le** : 2026-10-04.
+**Contexte** : correctif codé (nouvel événement `COMBAT_RESOLUTION_OVERRIDE`, `shared/events.js` +
+`combatTurnEngine.js` + `socketCombatResolution.js` + `socketCombatHelpers.js` +
+`CombatModifiersWindow.jsx` + `CombatOverlay.jsx`), étendu le même jour à Allure tireur/cible,
+Couverture et Obscurité (lecture seule pour le MJ en supervision, sans nouveau canal — ces 3 champs
+n'ont pas d'autorité serveur à corriger, voir `docs/JOURNAL8.md`), vérifié par build, lint et les
+suites existantes qui exercent `resolveAssaultAction` (105/105, chemin par défaut sans surcharge),
+mais jamais exercé avec un vrai second client — nécessite un MJ et un joueur, le joueur avec un PJ
+en train de résoudre un Tir.
+
+**Scénario à dérouler :**
+1. MJ et joueur en combat, le joueur déclare un Tir qui entre en phase RÉSOLUTION.
+2. Vérifier que le MJ voit désormais une fenêtre de modificateurs pour cet assaut (avant ce
+   correctif : rien ne s'affichait côté MJ pour un PJ).
+3. Vérifier que les champs Portée ET Taille cible sont en lecture seule chez le joueur (pas de
+   `<select>`), et modifiables uniquement chez le MJ.
+4. Le MJ change la Portée, puis la Taille (séparément) dans sa fenêtre — vérifier à chaque fois que
+   le joueur voit le changement apparaître **en direct**, sans recharger, avant de cliquer "Lancer
+   les dés" — et que changer l'un ne réinitialise pas l'autre (ex. changer la Taille après avoir
+   fixé la Portée ne doit pas effacer la Portée déjà posée).
+5. Le joueur lance les dés — vérifier que le résultat (touché/raté, dégâts) correspond bien à la
+   Portée ET à la Taille que le MJ a fixées, pas aux valeurs calculées automatiquement.
+6. Vérifier que le bouton "Lancer les dés" n'apparaît PAS dans la fenêtre du MJ (seul le joueur
+   lance ses propres dés).
+7. Vérifier que Allure tireur, Allure cible, Couverture et Obscurité sont AUSSI en lecture seule
+   chez le MJ (pas de `<select>` ni de case cochable) — ces 4 champs n'ont volontairement aucun
+   canal de surcharge, contrairement à Portée/Taille.
+8. Refaire sans intervention du MJ (il laisse Portée et Taille automatiques) — vérifier que rien ne
+   change par rapport au comportement d'avant ce correctif.
+9. Vérifier que le MJ résolvant lui-même un PNJ/drone/exo (pas un PJ) garde le comportement
+   inchangé pour tous les champs (bouton "Lancer" visible, select local comme avant, y compris pour
+   Allure/Couverture/Obscurité).
+
+**Résultat attendu :** le MJ supervise et peut corriger la Portée ET la Taille d'un PJ en temps
+réel, indépendamment l'une de l'autre ; Allure/Couverture/Obscurité restent lecture seule pour lui
+(aucun nouveau pouvoir) ; le joueur ne peut jamais éditer Portée/Taille lui-même ; sans intervention
+MJ, le comportement reste celui d'avant.
+
 ## Carte
 
 ### MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS — propagation live d'une édition de carte

@@ -3468,19 +3468,39 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       sourceTokenId: action.token_id,
       targetTokenId: action.target_token_id,
     })
-    const range = measurement.status === 'ok'
-      ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
-      : { status: measurement.status, band: null }
-    if (range.status !== 'ok') {
-      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-        username: character.name,
-        message: range.status === 'out-of-range'
-          ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
-          : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
-      } })
-      return { suspend: false, emissions }
+
+    // COMBAT-RANGE-PLAYER-EDITABLE — surcharge MJ narrative (Portée, puis Taille le même jour),
+    // consommée une seule fois (jamais réappliquée à un assaut suivant du même token) : prioritaire
+    // sur le calcul par distance pour Portée, y compris pour contourner un rejet « hors de portée »
+    // (jugement MJ assumé) ; pour Taille, injectée dans confirmedModifiers AVANT
+    // resolveAttackTargetSize plus bas, qui la lit déjà en priorité (mécanisme GM_ONLY_CONFIRMED_
+    // MODIFIER_KEYS existant, jusqu'ici inatteignable pour l'assaut d'un PJ faute de fenêtre MJ).
+    const resolutionOverride = pendingMaps.combatResolutionOverrides?.get(campaignId)
+    const hasResolutionOverride = resolutionOverride?.tokenId === action.token_id
+    const gmPorteeOverride = hasResolutionOverride ? resolutionOverride.portee : null
+    if (hasResolutionOverride) {
+      pendingMaps.combatResolutionOverrides.delete(campaignId)
+      if (resolutionOverride.taille) confirmedModifiers = { ...confirmedModifiers, taille: resolutionOverride.taille }
     }
-    const authoritativeRangeBand = range.band
+
+    let authoritativeRangeBand
+    if (gmPorteeOverride) {
+      authoritativeRangeBand = gmPorteeOverride
+    } else {
+      const range = measurement.status === 'ok'
+        ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
+        : { status: measurement.status, band: null }
+      if (range.status !== 'ok') {
+        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+          username: character.name,
+          message: range.status === 'out-of-range'
+            ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
+            : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
+        } })
+        return { suspend: false, emissions }
+      }
+      authoritativeRangeBand = range.band
+    }
 
     const userRow = character.user_id
       ? await db('users').where({ id: character.user_id }).select('color', 'username').first()

@@ -18,6 +18,8 @@ import { resolveRangedAllureKeys } from '../lib/combatAllureService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import { stripGmOnlyModifiers, applyDerivedAllureToSituation } from '../../../shared/combatSituationMods.js'
+import { RANGE_BANDS } from '../../../shared/combatRange.js'
+import { SIZE_CATEGORIES } from '../../../shared/sizeCategory.js'
 import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken, getDeclarationBlockedTokens,
   triggerActNow, triggerDelayedPass, registerAutonomousStepResolver,
@@ -263,6 +265,35 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)
       callback({ ok: false })
     }
+  })
+
+  // ─── COMBAT_RESOLUTION_OVERRIDE — surcharge MJ de Portée/Taille, phase RÉSOLUTION ────
+  // MJ-only (COMBAT-RANGE-PLAYER-EDITABLE, étendu à Taille le même jour : en élargissant la
+  // fenêtre MJ à l'assaut d'un PJ, son select Taille — modifiersEditable = isGm || !autoMode —
+  // devenait éditable mais n'écrivait qu'un state local, jamais envoyé : même illusion que Portée).
+  // Payload PARTIEL : { tokenId, portee? , taille? } — seul le(s) champ(s) fourni(s) est mis à jour,
+  // l'autre conservé (changer la Portée ne doit pas effacer une surcharge Taille déjà posée, et
+  // inversement). Relais éphémère (combatResolutionOverrides, consommé une fois par
+  // resolveAssaultAction), même esprit que COMBAT_ANNOUNCE_PREVIEW mais sans purge au changement
+  // de phase. Si le token diffère de celui déjà en slot (nouvel assaut), la base repart à zéro —
+  // jamais une surcharge d'un assaut précédent qui fuite sur le suivant.
+  socket.on(WS.COMBAT_RESOLUTION_OVERRIDE, ({ tokenId, portee, taille }) => {
+    if (!isGm || !tokenId) return
+    if (portee !== undefined && portee != null && !RANGE_BANDS.includes(portee)) return
+    if (taille !== undefined && taille != null && !SIZE_CATEGORIES.includes(taille)) return
+    const existing = pendingMaps.combatResolutionOverrides.get(campaignId)
+    const base = existing?.tokenId === tokenId ? existing : { tokenId, portee: null, taille: null }
+    const payload = {
+      tokenId,
+      portee: portee !== undefined ? (portee ?? null) : base.portee,
+      taille: taille !== undefined ? (taille ?? null) : base.taille,
+    }
+    if (payload.portee === null && payload.taille === null) {
+      pendingMaps.combatResolutionOverrides.delete(campaignId)
+    } else {
+      pendingMaps.combatResolutionOverrides.set(campaignId, payload)
+    }
+    io.to(campaignId).emit(WS.COMBAT_RESOLUTION_OVERRIDE, payload)
   })
 
   // ─── COMBAT_ACTION_CONFIRM — Phase Résolution ─────────────────────────

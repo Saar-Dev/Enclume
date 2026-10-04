@@ -9412,3 +9412,128 @@ sols/Chance/génotype ni retirer un avantage ; le MJ le peut toujours) — un se
 **Données** : aucune migration, aucun changement de schéma.
 **Retour arrière** : `git revert` du fichier serveur suffit à rouvrir les 4 champs ; les composants
 client retombent sur `isGm` par défaut si `isGmOrVaultOwner` n'est pas fourni (compatibilité).
+
+## Session (Dev) — 2026-10-04 — Combat : synchro MJ↔joueur réelle pour la Portée ET la Taille en résolution (COMBAT-RANGE-PLAYER-EDITABLE)
+
+**Signalement** (Saar) : le joueur peut modifier la Portée alors que ce champ devrait être en
+lecture seule pour lui ; attendu que la fenêtre s'affiche aussi côté MJ pour qu'il puisse la
+modifier.
+
+**Découverte qui a changé le périmètre du correctif** : `confirmedModifiers.portee`, envoyé par le
+client à `COMBAT_ACTION_CONFIRM`, n'est lu **nulle part** dans `resolveAssaultAction`
+(`socketCombatHelpers.js`) — vérifié par recherche exhaustive. Le serveur calcule toujours sa
+propre `authoritativeRangeBand` depuis la distance réelle entre tokens (conforme à
+`.claude/rules/combat.md`). Le sélecteur Portée du joueur n'a donc jamais été un moyen de tricher
+— c'est un contrôle qui affiche une valeur que personne ne regarde jamais côté serveur. Le vrai
+problème est la confiance/UX, pas la sécurité.
+
+**Second constat** : le patron MJ-only existant pour `taille` (filtré par
+`GM_ONLY_CONFIRMED_MODIFIER_KEYS`, lu en priorité par `resolveAttackTargetSize`) ne peut de toute
+façon jamais s'appliquer à l'assaut d'un PJ — le MJ n'a **aucune fenêtre** à ce moment
+(`CombatOverlay.jsx` excluait explicitement `gmActiveCharacter?.type !== 'pj'`). Pour un PJ, c'est
+le joueur qui résout lui-même ; le MJ ne voit rien, ne peut rien corriger.
+
+**Recherche demandée par Saar avant de coder** (« as-tu consulté ce que font les pros ? ») :
+confirmation que le mécanisme déjà présent dans ce fichier — `combatPreviews`
+(`combatTurnEngine.js`, un seul slot éphémère par campagne, relayé à la room, re-synchronisé à la
+reconnexion) — est exactement le patron standard (recherche externe : « renvoyer l'état courant à
+la reconnexion depuis un slot serveur » confirmé comme pratique reconnue en multijoueur
+temps réel). Décision : ne pas inventer un second mécanisme, étendre celui-ci.
+
+**Correctif, Portée :**
+- `shared/events.js` : nouvel événement `COMBAT_RESOLUTION_OVERRIDE` (MJ → serveur → room).
+- `combatTurnEngine.js` : nouveau slot éphémère `combatResolutionOverrides` (même esprit que
+  `combatPreviews`, cycle de vie différent : consommé une seule fois par `resolveAssaultAction`
+  puis supprimé, jamais purgé par un changement de phase).
+- `socket/index.js` : resynchronisé à la reconnexion (même bloc que `combatPreviews`), câblé dans
+  `pendingMaps`.
+- `socketCombatResolution.js` : nouveau handler MJ-only, valide la bande contre `RANGE_BANDS`
+  (`shared/combatRange.js`), relaie à la room.
+- `socketCombatHelpers.js` (`resolveAssaultAction`) : la surcharge, si présente pour CE token, est
+  prioritaire sur le calcul par distance — y compris pour contourner un rejet « hors de portée »
+  (jugement MJ assumé, même esprit que les autres surcharges MJ-only de ce fichier).
+- `CombatModifiersWindow.jsx` : Portée n'est plus jamais éditable côté joueur (affichage pur,
+  reflète la surcharge MJ en direct) ; `confirmedModifiers` ne porte plus `portee` (jamais lu de
+  toute façon). Nouvelle prop `gmOversightOnly` : masque le bouton "Lancer" quand le MJ supervise
+  un PJ (lui seul lance ses dés).
+- `CombatOverlay.jsx` : la fenêtre MJ s'affiche désormais aussi pour l'assaut distance d'un PJ
+  (exclusion `type !== 'pj'` retirée pour cette fenêtre précise — la CaC/`CombatCacModifiersWindow`
+  garde son exclusion, hors périmètre).
+
+**Taille — bug introduit par le correctif Portée lui-même, trouvé en le proposant pour Taille
+(Saar) et vérifié avant de coder** : en élargissant la fenêtre MJ à l'assaut d'un PJ, son select
+Taille (`modifiersEditable = isGm || !autoMode`, déjà vrai dès que `isGm`) devenait éditable pour
+le MJ — mais `setTailleOverride` n'écrit qu'un state React local à CETTE instance de fenêtre,
+jamais envoyé nulle part puisque le MJ ne clique plus "Lancer" (`gmOversightOnly`). Même illusion
+que Portée avant son propre correctif, introduite en élargissant la fenêtre. Corrigé en étendant le
+MÊME mécanisme plutôt qu'un second : `COMBAT_RESOLUTION_OVERRIDE` et `combatResolutionOverrides`
+portent maintenant `{ tokenId, portee, taille }` avec fusion PARTIELLE côté serveur (changer l'un
+ne doit jamais effacer l'autre) ; `taille` validée contre `SIZE_CATEGORIES`
+(`shared/sizeCategory.js`) ; injectée dans `confirmedModifiers.taille` avant
+`resolveAttackTargetSize`, qui la lit déjà en priorité (mécanisme `GM_ONLY_CONFIRMED_MODIFIER_KEYS`
+existant, jusqu'ici inatteignable pour un PJ faute de fenêtre MJ). Côté client : le select Taille
+du MJ émet la surcharge UNIQUEMENT quand `gmOversightOnly` (supervision d'un PJ) ; le cas MJ-résout-
+lui-même-un-PNJ/drone/exo garde son state local exact d'avant, inchangé.
+
+**Audit demandé par Saar (« il n'y a pas d'autres champs à régler/harmoniser ? ») — Allure
+tireur/cible, Couverture, Obscurité** : en élargissant la fenêtre MJ à l'assaut d'un PJ (correctif
+Portée ci-dessus), TOUS les contrôles restants de cette fenêtre sont devenus éditables pour le MJ
+sans qu'aucun n'ait été réaudité — même défaut que Taille, trouvé par relecture systématique plutôt
+qu'attendu : Allure tireur, Allure cible, Couverture et Obscurité écrivent chacun un state React
+local, jamais envoyé nulle part puisque le MJ en supervision (`gmOversightOnly`) ne clique plus
+"Lancer".
+
+Hypothèse de départ (note de reprise avant compact) : traiter Allure comme Taille (un canal de
+surcharge MJ à construire, le mouvement étant un « fait calculé que le MJ doit pouvoir corriger »).
+**Corrigée après lecture du code réel** (`socketCombatResolution.js:545-566`,
+`shared/combatSituationMods.js::applyDerivedAllureToSituation`/`resolveRangedAllureKeys`,
+`docs/Old/PLAN_ALLURE.md`) : contrairement à `taille` (qui a son propre
+`GM_ONLY_CONFIRMED_MODIFIER_KEYS`, consulté en priorité par `resolveAttackTargetSize`), l'Allure n'a
+**aucun** canal de surcharge MJ, même latent — en mode auto, le serveur écrase *systématiquement*
+`confirmedModifiers.situation` soumis par un joueur avec l'allure réellement dérivée du mouvement
+déclaré ce Tour, sans jamais consulter une éventuelle valeur MJ. Le commentaire d'origine du code
+est explicite sur l'intention RAW : « un joueur ne peut ni masquer son Allure maximale ni fausser
+son malus ». La mention « MJ garde le `<select>` » de `PLAN_ALLURE.md` (2026-09-09, antérieur à ce
+chantier) décrit uniquement le cas où le MJ résout lui-même un PNJ — ce plan ne prévoyait pas encore
+l'existence d'une fenêtre MJ pour l'assaut d'un PJ, concept introduit par le correctif Portée
+ci-dessus. Construire un canal de surcharge pour l'Allure aurait donc été une capacité **nouvelle**,
+contredisant une protection RAW déjà écrite dans le code, jamais demandée.
+
+**Décision (validée par Saar)** : Allure tireur/cible rejoint Couverture/Obscurité dans la même
+catégorie — aucune autorité serveur à corriger (Couverture/Obscurité : faits déclarés à l'œil,
+jamais calculés ; Allure : fait calculé mais déjà protégé côté serveur sans aucune surcharge
+prévue) → les 4 champs deviennent simplement **lecture seule pour le MJ en supervision**, sans
+nouveau pouvoir. Seules Portée et Taille gardent le canal `COMBAT_RESOLUTION_OVERRIDE`.
+
+**Correctif, Allure/Couverture/Obscurité :**
+- `CombatModifiersWindow.jsx` : nouvelle constante `gmReadOnlyInOversight` (= `gmOversightOnly`).
+  Allure tireur/cible : condition d'édition passe de `modifiersEditable` à
+  `modifiersEditable && !gmReadOnlyInOversight` — en supervision, affichage lecture seule de la
+  vraie valeur (identique à ce que voit le joueur), avec l'indice `modifiers.allureAuto` (mode auto)
+  ou le nouvel indice `modifiers.gmOversightNote` (mode libre — aucune valeur dérivée connue avant
+  le jet, le choix appartient au joueur). Couverture/Obscurité : cases à cocher remplacées par une
+  note `modifiers.gmOversightNote` en supervision, plutôt qu'un faux récap "aucune" — ces deux
+  champs n'ont jamais eu de canal pour que le MJ connaisse le choix en cours du joueur, avant ou
+  après ce chantier.
+- `client/src/locales/combat.json` : nouvelle clé `modifiers.gmOversightNote` (« choix du joueur —
+  non visible ici avant le jet »), namespace `combat`, ajoutée avant son usage.
+- Portée/Taille (ci-dessus) inchangés par cet ajout.
+
+**Scope qui reste resserré** : CaC/`CombatCacModifiersWindow.jsx` garde son exclusion
+`type !== 'pj'` — hors périmètre, pas touché.
+
+**Testé** : `eslint` ciblé (1 erreur préexistante confirmée inchangée — `set-state-in-effect` sur
+l'effet de reset, pas liée à ce correctif ; 1 warning préexistant sur une dépendance manquante,
+idem) ; `vite build` complet sans erreur ; `node -e "JSON.parse(...)"` sur `combat.json` ;
+`shared/**/*.test.mjs` (941/941) ; les 4 mêmes suites DB-backed (105/105, aucune régression),
+relancées après l'extension Allure/Couverture/Obscurité.
+**Non testé** (⚠️ clos partiel) : scénario réel à deux clients couvrant l'ensemble du chantier
+(Portée, Taille, Allure, Couverture, Obscurité) — nécessite plusieurs clients, `docs/BETATEST.md`
+mis à jour.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma, le
+slot éphémère disparaît avec le redémarrage serveur de toute façon.
+**Hors périmètre, noté sans être corrigé** : `docs/SYSTEME/COMBAT.md`/`COMBAT_FLUX.md`/
+`SERVICES_COMBAT.md` auraient mérité une section sur ce nouveau mécanisme, mais ces 3 fichiers sont
+déjà modifiés par un autre chantier en cours dans ce worktree (sessions parallèles) — pas touchés
+pour ne pas entremêler deux diffs non liés.

@@ -498,6 +498,7 @@
     "defenderSection": "Défenseur",
     "targetSizeSection": "Taille cible",
     "targetSizeAuto": "déterminée automatiquement",
+    "targetSizeGmOverride": "surcharge MJ",
     "rolling": "En cours…",
     "situationAtk": {
       "atkFlank": "Attaquant de côté",
@@ -634,10 +635,13 @@
     "rushed": "⚠ Précipité (−5 comp)",
     "distanceLabel": "Distance",
     "porteeSection": "Portée",
+    "porteeAuto": "calculée depuis la distance réelle",
+    "porteeGmOverride": "surcharge MJ",
     "choosePlaceholder": "— choisir —",
     "tireurAllureSection": "Allure tireur",
     "cibleAllureSection": "Allure cible",
     "allureAuto": "déterminée par le déplacement",
+    "gmOversightNote": "choix du joueur — non visible ici avant le jet",
     "couvertureSection": "Couverture",
     "obscuriteSection": "Obscurité",
     "portees": {

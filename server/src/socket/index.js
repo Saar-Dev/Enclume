@@ -7,7 +7,7 @@ import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerConnectorHandlers } from './socketConnector.js'
 import { registerCombatHandlers } from './socketCombat.js'
-import { pickNextTimelineStep, combatTimers, combatPreviews } from './combatTurnEngine.js'
+import { pickNextTimelineStep, combatTimers, combatPreviews, combatResolutionOverrides } from './combatTurnEngine.js'
 import { registerTradeHandlers } from './socketTrade.js'
 import { registerWizardHandlers } from './socketWizard.js'
 import { registerChatHandlers } from '../chat/socketChat.js'
@@ -148,9 +148,13 @@ const initSocket = (io) => {
               db('combat_actions').where({ campaign_id: campaignId, turn_number: activeCombat.current_turn }),
             ])
             socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
-            // Sync preview Ã©phÃ©mÃ¨re si un joueur est en train de dÃ©clarer
+            // Sync preview éphémère si un joueur est en train de déclarer
             const currentPreview = combatPreviews.get(campaignId)
             if (currentPreview) socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, currentPreview)
+
+            // Sync surcharge MJ de Portée/Taille éphémère si une résolution est en cours (COMBAT-RANGE-PLAYER-EDITABLE)
+            const currentResolutionOverride = combatResolutionOverrides.get(campaignId)
+            if (currentResolutionOverride) socket.emit(WS.COMBAT_RESOLUTION_OVERRIDE, currentResolutionOverride)
 
             // Tokens de CE combat que l'utilisateur (re)connecté contrôle — chaîne d'autorité
             // canonique tokens.character_id → characters.user_id (identique à
@@ -298,7 +302,7 @@ const initSocket = (io) => {
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerConnectorHandlers(io, socket, context, pendingConnectorActions)
-        registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
+        registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews, combatResolutionOverrides })
         registerTradeHandlers(io, socket, context)
         registerChatHandlers(io, socket, context)
         registerCatastropheHandlers(io, socket, context)

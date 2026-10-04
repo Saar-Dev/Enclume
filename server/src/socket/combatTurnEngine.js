@@ -62,6 +62,14 @@ const CARRY_OVER_BASE = 1_000_000
 // choix Chance, ce qui créerait un cycle d'import en les gardant dans index.js.
 export const combatTimers = new Map()
 export const combatPreviews = new Map()
+// combatResolutionOverrides — Map<campaignId, { tokenId, portee, taille }>, cache éphémère de la
+// surcharge MJ de Portée et/ou Taille en phase RÉSOLUTION (COMBAT-RANGE-PLAYER-EDITABLE, étendu à
+// Taille le même jour) — même esprit que combatPreviews
+// (non persisté, perte tolérée au redémarrage, resynchronisé au client sur SESSION_JOIN) mais cycle
+// de vie différent : pas purgé par un changement de phase, consommé une seule fois par
+// resolveAssaultAction (socketCombatHelpers.js) qui le supprime immédiatement après lecture — jamais
+// réutilisé pour un assaut suivant du même token.
+export const combatResolutionOverrides = new Map()
 
 // ─── Helper — démarrer les timers auto-skip pour la phase ANNONCE ─────────────
 // PC17 : skip uniquement si timerSec > 0. Exclut PNJs et tokens du GM (gmUserId).
