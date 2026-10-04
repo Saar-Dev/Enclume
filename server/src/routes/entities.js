@@ -10,10 +10,15 @@ import {
 } from '../services/worldMovementService.js'
 import { createOccupancyIndex } from '../../../shared/world/spatialIndex.js'
 import { withEntityScale, normalizeInteractionOverrides } from '../../../shared/world/entityTransform.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
 // quand monté sous /api/battlemaps/:id/entities
 const router = Router({ mergeParams: true })
+
+// ASSETS-ROUTE-NO-AUTH — signe blueprint.glb_url (niveau 2, voir le test de
+// server/src/lib/assetUrlSigning.js) avant l'envoi.
+router.use(signAssetFieldsMiddleware())
 
 function entityPlacementMode(blueprint) {
   const mode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'

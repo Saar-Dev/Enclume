@@ -9561,3 +9561,76 @@ slot éphémère disparaît avec le redémarrage serveur de toute façon.
 `SERVICES_COMBAT.md` auraient mérité une section sur ce nouveau mécanisme, mais ces 3 fichiers sont
 déjà modifiés par un autre chantier en cours dans ce worktree (sessions parallèles) — pas touchés
 pour ne pas entremêler deux diffs non liés.
+
+## Session (Dev) — 2026-10-04 — Infrastructure : `/api/assets/*` exigeait une authentification que personne n'imposait (ASSETS-ROUTE-NO-AUTH)
+
+**Signalement** (audit sécurité antérieur, 2026-09-26) : `server/src/routes/assets.js` affirme dans
+son propre commentaire « Auth requise — les assets ne sont pas publics », mais aucun middleware ne
+l'imposait — ni dans le routeur, ni à son montage (`server/src/index.js`). N'importe quel chemin
+MinIO deviné (portraits, GLB, images de carte) était lisible sans compte.
+
+**Premier correctif envisagé, PAS retenu** : monter simplement `requireAuth` (cookie de session) sur
+le routeur. Hypothèse de départ : le cookie (`sameSite:'lax'`) suit toujours puisque client et
+serveur sont *same-site* dans les deux topologies réelles (localhost en dev, même IP sur Kiwi, juste
+des ports différents). **Vérifiée fausse en creusant les sources réelles de three.js, pas supposée**
+: `GLTFLoader`/`FileLoader` appelle `fetch()` avec `credentials:'same-origin'` par défaut
+(`three/src/loaders/FileLoader.js:133`) — plus strict que « same-site », il exclut le cookie dès que
+le PORT diffère, ce qui est le cas en dev ET sur Kiwi. `TextureLoader`/`useTexture`
+(`ImageLoader`) pose `crossOrigin:'anonymous'` par défaut (`three/src/loaders/Loader.js:32`), qui
+exclut aussi explicitement les cookies en CORS. Seul un `<img src>` brut (portraits/vignettes 2D)
+s'en sortirait. Ce correctif aurait cassé le chargement de **tous** les modèles 3D (tokens, exo-
+armures, drones, aperçus d'objets) et de **tous** les fonds de carte, en dev comme en production —
+trouvé avant commit grâce à la vérification systématique demandée par Saar, pas par chance.
+
+**Correctif retenu — jeton signé par asset, même patron que les URLs présignées S3/GCS/Firebase
+Storage** : le jeton voyage dans la valeur du champ URL elle-même, signé par le serveur au moment
+où il répond une fiche déjà protégée par `requireAuth` — aucun consommateur (`<img>`, `GLTFLoader`,
+`TextureLoader`, un futur loader quelconque) n'a besoin de rien configurer, le problème de transport
+ne se pose plus par construction.
+- `server/src/middleware/auth.js` : `requireAuth` refactorée pour s'appuyer sur une nouvelle
+  variante non-levante, `getAuthenticatedUser(req)` (cookie absent/invalide → `null`, jamais une
+  exception) — réutilisée par `assets.js` pour accepter DEUX preuves d'autorisation (cookie OU
+  jeton), sans dupliquer la lecture cookie + vérification JWT.
+- `server/src/lib/assetUrlSigning.js` (nouveau) : `signAssetFieldValue` (signe le chemin pur,
+  préserve le `?v=<timestamp>` de cache-busting déjà stocké en base, réutilise `jsonwebtoken` +
+  `JWT_SECRET` — même autorité de signature que le cookie de session, pas une seconde mécanique
+  crypto) ; `ASSET_URL_FIELDS` (liste unique des champs concernés) ; `signAssetFieldsMiddleware()`
+  (parcours récursif borné, profondeur 5 — vérifié que les réponses réelles de ces routeurs
+  enveloppent TOUJOURS ces champs, parfois sur 2 niveaux, ex. `entities[].blueprint.glb_url`, jamais
+  à plat ; une première version ne parcourait que le niveau 1, corrigée après relecture réelle de
+  `entities.js`) ; `verifyAssetToken(filePath, token)` (jeton lié au CHEMIN exact, jamais à un
+  utilisateur — ces assets sont déjà partagés entre tous les membres d'une campagne, l'appartenance
+  a déjà été vérifiée par la route REST qui signe le lien). Testé : `assetUrlSigning.test.mjs`
+  (8/8, dont la préservation du `?v=`, le rejet d'un jeton valide pour un AUTRE chemin, et le
+  parcours récursif niveau 1 + niveau 2).
+- `server/src/routes/assets.js` : accepte `getAuthenticatedUser(req)` OU `verifyAssetToken` — jamais
+  l'un à la place de l'autre (un appel déjà authentifié par cookie, ex. outil admin, continue de
+  fonctionner sans jeton).
+- `characters.js` (2 routeurs : nested + `actionsRouter`), `battlemaps.js`, `campaigns.js`,
+  `entities.js`, `entity-blueprints.js` : chacun pose `signAssetFieldsMiddleware()` une fois — tous
+  leurs endpoints exigent déjà `requireAuth` (vérifié, aucune route publique dans ces 5 fichiers).
+- **Zéro changement client.** Le jeton est signé à la source (dans le champ `glb_url`/`portrait_url`/
+  etc. renvoyé par l'API), donc chaque composant qui construit
+  `` `${VITE_API_URL}/api/assets/${champ}` `` reçoit déjà l'URL complète — aucun appel `useGLTF`/
+  `useTexture`/`<img>` à retoucher.
+- `/api/assets/builtin-models` (`express.static`, modèles génériques non liés à une campagne) reste
+  monté séparément et public, avant ce routeur — hors périmètre, pas concerné.
+
+**Trouvaille en passant, pas corrigée (hors périmètre, à ticketer séparément si confirmé)** :
+`server/src/routes/textures.js` (`GET /api/textures/:pack/*filePath`) est aussi monté sans
+authentification, mais son commentaire ne revendique aucune auth (contrairement à `assets.js`) —
+pas la même contradiction documentée, pas traité ici.
+
+**Testé** : `node --check` sur les 8 fichiers touchés ; `assetUrlSigning.test.mjs` (8/8, nouveau) ;
+`shared/**/*.test.mjs` (941/941, aucune régression, sans lien direct mais confirme un worktree
+sain). Aucune suite d'intégration REST n'existe dans ce projet pour les routes Express (vérifié :
+aucun fichier `supertest` sur une route) — conforme à la pratique établie.
+**Non testé** (⚠️ clos partiel) : vérification en navigateur que portraits, GLB (token/exo/drone),
+fonds de carte et couvertures de campagne continuent de charger normalement — nécessite Saar.
+**Données** : aucune migration, aucun changement de schéma.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; les jetons sont sans état (JWT,
+aucune table), rien à nettoyer.
+**Non testé** (⚠️ clos partiel) : vérification en navigateur que portraits, GLB (token/exo) et
+images de carte/campagne continuent de charger normalement après ce correctif — nécessite Saar.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du fichier suffit ; aucun changement de schéma.

@@ -5,8 +5,12 @@ import { requireAuth } from '../middleware/auth.js'
 import { multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { syncBuiltinModels } from '../lib/builtinModelCatalog.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 const router = Router()
+
+// ASSETS-ROUTE-NO-AUTH — signe glb_url avant l'envoi, voir server/src/lib/assetUrlSigning.js.
+router.use(signAssetFieldsMiddleware())
 
 // ─── GET /api/entity-blueprints ───────────────────────────────────────────────
 // Liste tous les blueprints non-deprecated.

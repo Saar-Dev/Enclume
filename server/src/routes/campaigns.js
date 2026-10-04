@@ -21,8 +21,14 @@ import {
   declareColdExposure, clearColdExposure, getColdExposureState, applyColdDamageHits,
 } from '../lib/coldExposureService.js'
 import { getCampaignRoster } from '../lib/campaignRosterService.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 const router = Router()
+
+// ASSETS-ROUTE-NO-AUTH — signe cover_url/default_token_glb_url* avant l'envoi, voir
+// server/src/lib/assetUrlSigning.js pour le pourquoi (GLTFLoader n'envoie jamais le cookie
+// cross-origin).
+router.use(signAssetFieldsMiddleware())
 
 // ─── Constantes dés ────────────────────────────────────────────────────────────
 const VALID_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100']

@@ -10,11 +10,17 @@ import { removeTokens } from '../lib/tokenLifecycle.js'
 import { createCompanionSheet } from '../services/charSheetService.js'
 import { resolveOwnership } from '../services/characterOwnershipService.js'
 import { woundSeverityRankSql } from '../lib/woundUtils.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
 // Monté sous /api/campaigns/:campaignId/characters
 // Requiert mergeParams pour accéder à req.params.campaignId
 const router = Router({ mergeParams: true })
+
+// ASSETS-ROUTE-NO-AUTH — signe glb_url/portrait_url avant l'envoi, voir
+// server/src/lib/assetUrlSigning.js pour le pourquoi (GLTFLoader/TextureLoader n'envoient jamais
+// le cookie de session cross-origin).
+router.use(signAssetFieldsMiddleware())
 
 // GET /api/campaigns/:campaignId/characters
 // Accessible à tous les membres de la campagne.
@@ -138,6 +144,9 @@ export default router
 export const actionsRouter = Router()
 
 actionsRouter.use(requireAuth)
+// ASSETS-ROUTE-NO-AUTH — même raison que router.use ci-dessus (glb_url/portrait_url renvoyés par
+// PUT /:id et /:id/portrait, /:id/glb).
+actionsRouter.use(signAssetFieldsMiddleware())
 
 // ─── Ownership/appartenance sur toutes les routes /:id ───────────────────────
 // Personnage Coffre-native (campaign_id NULL) : pas de campaign_members à lire, accès réservé au

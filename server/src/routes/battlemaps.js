@@ -46,8 +46,13 @@ import {
   reconcileBattlemapElevators,
 } from '../services/worldElevatorService.js'
 import { WS } from '../../../shared/events.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 const router = Router({ mergeParams: true })
+
+// ASSETS-ROUTE-NO-AUTH — signe image_url avant l'envoi (jeton accepté par /api/assets en plus du
+// cookie, nécessaire pour GLTFLoader/TextureLoader qui ne l'envoient jamais cross-origin).
+router.use(signAssetFieldsMiddleware())
 
 // Notifie toute la campagne qu'une carte a changé (surface, voxels ou métadonnées) — un seul point
 // d'émission pour les 3 routes mutantes de ce fichier qui affectent ce qu'un joueur voit sur sa
