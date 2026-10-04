@@ -212,8 +212,8 @@ export default function LocationPanel({
         {/* Ligne agrégée mille-feuille — visible si ≥1 couche */}
         {equippedItems.length > 0 && (
           <div style={s.aggregateRow}>
-            {finalProt != null && <span>ETQ {fmt(finalProt)}</span>}
-            {finalChoc != null && <span>PRT {fmt(finalChoc)}</span>}
+            {finalProt != null && <span>{t('locationPanel.statArmor')} {fmt(finalProt)}</span>}
+            {finalChoc != null && <span>{t('locationPanel.statChoc')} {fmt(finalChoc)}</span>}
             {worstMalusLabel && worstMalusVal !== 0 && <span>{worstMalusLabel}/{worstMalusVal}</span>}
           </div>
         )}
@@ -385,8 +385,8 @@ function EquippedArmorRow({ item, canEdit, onUnequip, t }) {
         {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> {t('locationPanel.shieldTag')}</span>}
       </div>
       <div style={s.equippedStats}>
-        {item.ref_protection       != null && <span>E{item.ref_protection}</span>}
-        {item.ref_protection_shock != null && <span>P{item.ref_protection_shock}</span>}
+        {item.ref_protection       != null && <span>{t('locationPanel.statArmor')} {item.ref_protection}</span>}
+        {item.ref_protection_shock != null && <span>{t('locationPanel.statChoc')} {item.ref_protection_shock}</span>}
         {item.ref_malus_cat && <span>{item.ref_malus_cat}</span>}
       </div>
       {canEdit && (

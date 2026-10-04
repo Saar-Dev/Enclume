@@ -125,7 +125,7 @@ La Chance ne propose une réduction que vers un palier avec de la place (`comput
 CharacterWindow
 └── ArmorWoundPanel          — orchestrateur : charge wounds + inventory, layout 3 colonnes
     ├── LocationPanel × 6    — une localisation (Tête/Corps/Bras G/D/Jambe G/D)
-    │   ├── armures équipées (multi-couches, mille-feuille ETQ/PRT/malus_cat)
+    │   ├── armures équipées (multi-couches, mille-feuille Armure/Choc/malus_cat)
     │   ├── select ajout couche (filtré par refCode + container='Sac')
     │   └── grille blessures (WOUND_SEVERITIES × MAX_COUNTS — clic POST/PUT/DELETE ; 6ᵉ ligne = mot « Mort »/« Membre détruit », cliquable MJ seul, prop `isGm`)
     ├── ContainerPanel (D)   — Sac à dos : équipement conteneur
@@ -140,7 +140,7 @@ CharacterWindow
 const max  = Math.max(...vals)
 const rest = vals.reduce((s, v) => s + v, 0) - max
 return max + rest / 2
-// Affiché ETQ/PRT dans LocationPanel — non encore intégré côté serveur (résolution dommages future)
+// Affiché Armure/Choc dans LocationPanel (libellés clarifiés 2026-10-04) — non encore intégré côté serveur (résolution dommages future)
 ```
 
 ## Codes slots — PI6 / PI7

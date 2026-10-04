@@ -339,11 +339,13 @@ attendue une fois codé : tests ciblés avec la base locale (round-trip `up()`/`
 `.claude/rules/migrations.md`) et un scénario réel (créer une exo-armure via un template d'une
 source désactivée doit échouer), pas seulement `node --check`.
 
-### 6.7 Devenir documentaire
+### 6.7 Devenir documentaire [FAIT 2026-10-04]
 
-Ce PLAN est temporaire (`RegleDocumentaire.md` Règle 10). Une fois le Lot A codé, son contenu
-durable (le concept de **Source**, son fonctionnement) devra migrer vers un document SYSTEM
-(`docs/SYSTEME/SOURCES.md`, à créer) plutôt que de rester dans un PLAN archivé.
+Ce PLAN est temporaire (`RegleDocumentaire.md` Règle 10). Contenu durable (le concept de
+**Source**, son fonctionnement, l'autorité `assertSourceActive`, les points gardés, le déficit
+connu en lecture) migré vers `docs/SYSTEME/SOURCES.md` — ce PLAN reste la trace historique
+(précédents étudiés, analyse à charge) mais n'est plus à relire pour comprendre le mécanisme
+lui-même.
 
 ### 6.8 Alternative plus simple envisagée et écartée
 

@@ -308,8 +308,10 @@ function calcMillefeuille(items, field) {
 ```
 
 Appelée deux fois par LocationPanel :
-- `calcMillefeuille(equippedItems, 'ref_protection')` → ETQ (résistance)
-- `calcMillefeuille(equippedItems, 'ref_protection_shock')` → PRT (choc)
+- `calcMillefeuille(equippedItems, 'ref_protection')` → affiché « Armure » (résistance)
+- `calcMillefeuille(equippedItems, 'ref_protection_shock')` → affiché « Choc » (résistance au choc,
+  libellé clarifié 2026-10-04, ARMOR-STATS-DISPLAY-INCOMPLETE — anciennement ETQ/PRT, toujours les
+  noms des variables internes `finalProt`/`finalChoc`)
 
 **Arbitrage en attente :** les plans originaux spécifiaient `Math.ceil(max + rest/2)`. LdB à vérifier avant de trancher.
 

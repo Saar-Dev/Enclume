@@ -196,6 +196,8 @@
     "addLayerS": "+ Couche S",
     "addLayer": "+ Couche",
     "noArmor": "Aucune armure",
+    "statArmor": "Armure",
+    "statChoc": "Choc",
     "storedCandidate": "{{name}} est au Coffre",
     "woundStabilized": "Stabilisée — cliquer pour guérir",
     "woundActive": "Blessure — cliquer pour stabiliser",
