@@ -9306,3 +9306,61 @@ joueur déjà connecté voit la mise à jour sans recharger) — nécessite plus
 `docs/BETATEST.md`.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma.
+
+## Session (Dev) — 2026-10-04 — Personnage : la fiche se synchronise enfin entre MJ et joueur (CHARSHEET-XP-SYNC-PJMJ)
+
+**Signalement** (Saar) : le champ Expérience ne s'actualise pas de façon synchronisée entre PJ et
+MJ ; vérifier si d'autres champs partagent le même problème.
+
+**Cause racine confirmée en lisant le fichier ligne par ligne** : dans `char-sheet.js`, **toutes**
+les routes de mutation avant la section Blessures (identité, archétype, attributs, achat PC
+d'attribut, compétences, Pouvoirs Polaris, achat de compétence, Chance, XP, avantages, notes
+« Autres », mutations — 15 routes) n'émettaient rien du tout, contrairement aux routes à partir de
+la section Blessures (`WOUND_*`/`INVENTORY_*`/`SOLS_UPDATED`/`GAUGE_UPDATED`) qui diffusent déjà
+correctement. Même classe de défaut que `MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS` (une partie d'un
+fichier diffusée, l'autre jamais), mais sur un périmètre bien plus large — confirmé en vérifiant
+explicitement les « routes sœurs » avant de proposer un plan, à la suite de la question de Saar sur
+le correctif carte du même jour (« est-ce que ça aggrade ? »), appliquée ici dès le départ.
+
+**Recherche avant de coder** (demande explicite de Saar : « comment font les pros ? ») — le premier
+jet proposait un seul événement signal + refetch complet (patron `MAP_UPDATED` du jour). Rejeté
+après relecture : ce fichier a déjà résolu ce problème 3 fois différemment (`SOLS_UPDATED`,
+`GAUGE_UPDATED`, `FATIGUE_TEST_RESULT`) — un payload direct portant la valeur déjà calculée par la
+réponse REST de la route, jamais un refetch. C'est aussi le patron professionnel standard pour ce
+problème (Firestore field-level, GraphQL à delta, Redux par tranche de donnée) : un refetch complet
+aurait écrasé un champ texte en cours de frappe ailleurs sur la même fiche (debounce
+identité/attributs/chc/xp) à chaque mutation d'un AUTRE champ — exactement le risque que le patron
+`MAP_UPDATED` n'a pas (pas de frappe en cours sur un `WorldSnapshot`). CRDT/OT écarté explicitement :
+résout « deux personnes tapent dans le même champ en même temps », pas notre problème.
+
+**Piège trouvé en creusant, pas le symptôme signalé** : un personnage encore en création (Wizard
+non terminé) ne doit jamais être diffusé à toute la room de campagne (un autre joueur ne doit pas
+apprendre qu'un brouillon existe) — invariant déjà posé pour l'inventaire
+(`resolveInventoryBroadcastRoom`, ticket `COFFRE-INVROOM1`). Réutilisée telle quelle plutôt que
+recréer un `if (campaign_id)` naïf qui aurait rouvert la même fuite pour la fiche.
+
+**Correctif :**
+- `shared/events.js` : 11 nouveaux événements `CHAR_*` (XP, attributs, compétences, Chance,
+  identité, archétype, avantage ajouté/retiré, note ajoutée/retirée, mutations — signal seul pour
+  ce dernier).
+- `char-sheet.js` : `notifyCharSheetEvent(io, characterId, campaignId, event, payload)` — une seule
+  fonction, 17 appels aux 15 routes, salle résolue par `resolveInventoryBroadcastRoom` (réutilisée).
+- `CharacterSheet.jsx` : un nouvel effet socket, un écouteur par événement, écrit directement dans
+  les setters bruts (jamais `saveXxx`, qui redéclencherait un `PUT` — boucle d'écho). `CHAR_
+  MUTATIONS_UPDATED` rappelle `handleMutationsChanged`, déjà existant.
+- `AdvantagesPanel.jsx` : sa propre copie locale de `charMutations`/`advantageNotes` (déjà
+  dupliquée avec celle de `CharacterSheet.jsx` avant ce correctif) reçoit sa propre écoute —
+  duplication préexistante non introduite ici, non plus consolidée (hors périmètre de ce ticket).
+
+**Hors périmètre, noté sans être corrigé** : `PossessionNotes.jsx` (notes de possession pendant le
+Wizard) n'a aucune écoute socket — gap côté collaboration Wizard, chantier distinct déjà clos
+séparément (`docs/Old/PLAN_WIZARDCOLLAB.md`).
+
+**Testé** : `node --check` (3 fichiers serveur/partagés modifiés) ; `eslint` ciblé sur
+`CharacterSheet.jsx`/`AdvantagesPanel.jsx` (0 erreur nouvelle — les 3 problèmes préexistants sur
+`CharacterSheet.jsx` vérifiés par `git stash`) ; `vite build` complet sans erreur ;
+`shared/**/*.test.mjs` (941/941, aucune régression).
+**Non testé** (⚠️ clos partiel) : scénario réel à deux clients simultanés (MJ + joueur sur la même
+fiche) — nécessite plusieurs clients, ajouté à `docs/BETATEST.md`.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma.

@@ -47,6 +47,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
+import { useSocket } from '../lib/SocketContext.jsx'
+import { WS } from '../../../shared/events.js'
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -63,6 +65,7 @@ export default function AdvantagesPanel({
   onSkillLearnedChange,
 }) {
   const { t } = useTranslation()
+  const socket = useSocket()
 
   // ─── Données de référence ─────────────────────────────────────────────────
   const [refMutations, setRefMutations] = useState([])
@@ -130,6 +133,42 @@ export default function AdvantagesPanel({
       .catch(err => console.error('Erreur chargement mutations :', err))
     return () => { cancelled = true }
   }, [characterId])
+
+  // ─── Sync WS — notes et mutations mutées par un AUTRE client (CHARSHEET-XP-SYNC-PJMJ) ─────────
+  // charMutations et advantageNotes sont des copies locales à ce panneau (pas des props venues de
+  // CharacterSheet, contrairement à charAdvantages) — elles ont besoin de leur propre écoute, même
+  // patron que les deux useEffect de chargement ci-dessus (un simple refetch de la petite liste
+  // concernée). CharacterSheet.jsx a sa propre écoute CHAR_MUTATIONS_UPDATED pour sa propre copie de
+  // charMutations (handleMutationsChanged) — les deux copies existaient déjà séparément avant ce
+  // correctif, pas une duplication introduite ici.
+  useEffect(() => {
+    if (!socket) return
+
+    const onMutationsUpdated = ({ characterId: cId }) => {
+      if (cId !== characterId) return
+      api.get(`/char-sheet/${characterId}/mutations`)
+        .then(res => setCharMutations(res.data.mutations || []))
+        .catch(err => console.error('Erreur rechargement mutations :', err))
+    }
+    const onNoteAdded = ({ characterId: cId, note }) => {
+      if (cId !== characterId || !note || note.category !== 'narrative') return
+      setAdvantageNotes(prev => (prev.some(n => n.id === note.id) ? prev : [...prev, note]))
+    }
+    const onNoteRemoved = ({ characterId: cId, noteId }) => {
+      if (cId !== characterId) return
+      setAdvantageNotes(prev => prev.filter(n => n.id !== noteId))
+    }
+
+    socket.on(WS.CHAR_MUTATIONS_UPDATED,      onMutationsUpdated)
+    socket.on(WS.CHAR_ADVANTAGE_NOTE_ADDED,   onNoteAdded)
+    socket.on(WS.CHAR_ADVANTAGE_NOTE_REMOVED, onNoteRemoved)
+
+    return () => {
+      socket.off(WS.CHAR_MUTATIONS_UPDATED,      onMutationsUpdated)
+      socket.off(WS.CHAR_ADVANTAGE_NOTE_ADDED,   onNoteAdded)
+      socket.off(WS.CHAR_ADVANTAGE_NOTE_REMOVED, onNoteRemoved)
+    }
+  }, [socket, characterId])
 
   // ─── Set des pouvoirs Polaris appris (dérivé de charSkills prop) ─────────
   const learnedPolarisSet = useMemo(() => {

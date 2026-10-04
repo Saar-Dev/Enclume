@@ -72,6 +72,7 @@ import { applyExoTemplate } from '../../lib/exoTemplateService.js'
 import { assertSourceActive } from '../../lib/sourceService.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
 import { listInterceptionLinks, addInterceptionLink, removeInterceptionLink } from '../../services/droneInterceptionLinksService.js'
+import { INTERCEPTION_LIMIT_FIELDS, parseInterceptionLimit } from '../../../../shared/droneInterception.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
@@ -95,6 +96,15 @@ const router = Router()
 // Champs d'Intégrité éditables uniquement par le MJ (révision D3, L6) — le joueur passe désormais
 // par « Demander une réparation » (échéance validée par le MJ), jamais par une édition directe.
 const INTEGRITY_FIELDS = ['integrity_current', 'integrity_max', 'malfunction_severity']
+
+// Diffuse une mutation de la fiche (identité/archétype/attributs/compétences/chc/xp/avantages/
+// mutations) aux autres clients — même résolution de salle que l'inventaire
+// (resolveInventoryBroadcastRoom, réutilisée telle quelle : brouillon Wizard → wizard:<sheetId>,
+// personnage fini → campaign_id, Coffre → aucune diffusion). CHARSHEET-XP-SYNC-PJMJ, 2026-10-04.
+async function notifyCharSheetEvent(io, characterId, campaignId, event, payload) {
+  const room = await resolveInventoryBroadcastRoom(characterId, campaignId)
+  if (room) io.to(room).emit(event, { characterId, ...payload })
+}
 
 // ─── Auth + Ownership automatique sur toutes les routes /:characterId ──────────
 router.use(requireAuth)
@@ -253,6 +263,8 @@ router.put('/:characterId/identity', async (req, res, next) => {
       .update(updates)
       .returning('*')
 
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_IDENTITY_UPDATED, { identity: updated })
+
     res.json({ identity: updated })
   } catch (err) {
     next(err)
@@ -288,6 +300,8 @@ router.put('/:characterId/archetype', async (req, res, next) => {
       .where({ char_sheet_id: sheet.id })
       .update(updates)
       .returning('*')
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ARCHETYPE_UPDATED, { archetype: updated })
 
     res.json({ archetype: updated })
   } catch (err) {
@@ -340,6 +354,8 @@ router.put('/:characterId/attributes', async (req, res, next) => {
     const updated = await db('char_attributes')
       .where({ char_sheet_id: sheet.id })
       .select('*')
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ATTRIBUTES_UPDATED, { attributes: updated })
 
     res.json({ attributes: updated })
   } catch (err) {
@@ -399,10 +415,19 @@ router.post('/:characterId/attributes/buy', async (req, res, next) => {
         })
     })
 
+    const io = req.app.get('io')
+    const newXpAvailable = sheet.xp_available - cout
+    await notifyCharSheetEvent(io, req.params.characterId, req.character.campaign_id, WS.CHAR_ATTRIBUTES_UPDATED, {
+      attributes: [{ attr_id, base_level: attrRow?.base_level ?? 7, pc_modifier: newPc }],
+    })
+    await notifyCharSheetEvent(io, req.params.characterId, req.character.campaign_id, WS.CHAR_XP_UPDATED, {
+      xp_total: sheet.xp_total, xp_available: newXpAvailable,
+    })
+
     res.json({
       attr_id,
       pc_modifier:  newPc,
-      xp_available: sheet.xp_available - cout,
+      xp_available: newXpAvailable,
       cout,
     })
   } catch (err) {
@@ -443,6 +468,10 @@ router.put('/:characterId/skills/toggle-learned', async (req, res, next) => {
     const skill = await db('char_skills')
       .where({ char_sheet_id: sheet.id, skill_id })
       .first()
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_SKILLS_UPDATED, {
+      skills: [{ skill_id: skill.skill_id, mastery: skill.mastery, is_learned: skill.is_learned }],
+    })
 
     res.json({ skill })
   } catch (err) {
@@ -491,6 +520,8 @@ router.put('/:characterId/skills', async (req, res, next) => {
       .where({ char_sheet_id: sheet.id })
       .select('*')
 
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_SKILLS_UPDATED, { skills: updated })
+
     res.json({ skills: updated })
   } catch (err) {
     next(err)
@@ -514,6 +545,8 @@ router.put('/:characterId/chc', async (req, res, next) => {
       .where({ id: sheet.id })
       .update({ chc, updated_at: db.fn.now() })
       .returning('*')
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_CHC_UPDATED, { chc: updated.chc })
 
     res.json({ sheet: updated })
   } catch (err) {
@@ -562,6 +595,10 @@ router.put('/:characterId/xp', async (req, res, next) => {
       .where({ id: sheet.id })
       .update(updates)
       .returning('*')
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_XP_UPDATED, {
+      xp_total: updated.xp_total, xp_available: updated.xp_available,
+    })
 
     res.json({ sheet: updated })
   } catch (err) {
@@ -711,11 +748,20 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
         })
     })
 
+    const io = req.app.get('io')
+    const newXpAvailable = sheet.xp_available - cout
+    await notifyCharSheetEvent(io, req.params.characterId, req.character.campaign_id, WS.CHAR_SKILLS_UPDATED, {
+      skills: [{ skill_id, mastery: newMastery, is_learned: newIsLearned }],
+    })
+    await notifyCharSheetEvent(io, req.params.characterId, req.character.campaign_id, WS.CHAR_XP_UPDATED, {
+      xp_total: sheet.xp_total, xp_available: newXpAvailable,
+    })
+
     res.json({
       skill_id,
       mastery:      newMastery,
       is_learned:   newIsLearned,
-      xp_available: sheet.xp_available - cout,
+      xp_available: newXpAvailable,
       cout,
     })
   } catch (err) {
@@ -752,6 +798,9 @@ router.post('/:characterId/advantages', async (req, res, next) => {
     if (!advantage_id) throw new AppError(400, 'advantage_id is required')
 
     const advantage = await grantAdvantage(sheet.id, advantage_id, 'campaign')
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ADVANTAGE_ADDED, { advantage })
+
     res.status(201).json({ advantage })
   } catch (err) {
     next(err)
@@ -768,6 +817,9 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
 
     const { reason } = req.body || {}
     const advantage = await removeAdvantage(sheet.id, req.params.id, reason)
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ADVANTAGE_REMOVED, { advantageId: advantage.id })
+
     res.json({ deleted: true, advantage })
   } catch (err) {
     next(err)
@@ -800,6 +852,9 @@ router.post('/:characterId/advantage-notes', async (req, res, next) => {
     if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
 
     const note = await addAdvantageNote(sheet.id, req.body.label, req.body.category)
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ADVANTAGE_NOTE_ADDED, { note })
+
     res.status(201).json({ note })
   } catch (err) {
     next(err)
@@ -815,6 +870,9 @@ router.delete('/:characterId/advantage-notes/:id', async (req, res, next) => {
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
     const result = await removeAdvantageNote(sheet.id, req.params.id)
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_ADVANTAGE_NOTE_REMOVED, { noteId: req.params.id })
+
     res.json(result)
   } catch (err) {
     next(err)
@@ -868,6 +926,9 @@ router.post('/:characterId/mutations', async (req, res, next) => {
     if (!mutation_id) throw new AppError(400, 'mutation_id is required')
 
     const mutation = await addMutation(sheet.id, mutation_id, subtype_id ?? null)
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_MUTATIONS_UPDATED, {})
+
     res.status(201).json({ mutation })
   } catch (err) {
     next(err)
@@ -885,6 +946,9 @@ router.delete('/:characterId/mutations/:id', async (req, res, next) => {
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
     const mutation = await removeMutation(sheet.id, req.params.id)
+
+    await notifyCharSheetEvent(req.app.get('io'), req.params.characterId, req.character.campaign_id, WS.CHAR_MUTATIONS_UPDATED, {})
+
     res.json({ deleted: true, mutation })
   } catch (err) {
     next(err)
@@ -948,8 +1012,8 @@ router.post('/:characterId/wounds', async (req, res, next) => {
     const { location, severity } = req.body
     if (!WOUND_LOCATIONS.includes(location)) throw new AppError(400, `Localisation invalide : ${location}`)
     if (!WOUND_SEVERITIES.includes(severity)) throw new AppError(400, `Gravité invalide : ${severity}`)
-
     if (GM_ONLY_WOUND_SEVERITIES.includes(severity) && !req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
+
     // applyWound centralise insertion + échéance de Guérison (Lot 2, docs/PLAN_BLESSURES_GUERISON.md
     // §5) + broadcast WOUND_ADDED — cette route ne dupliquait plus que ça avant ce commit.
     const result = await applyWound(req.app.get('io'), db, req.character.campaign_id, {
@@ -1007,8 +1071,8 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
     const removed = await removeWound(req.app.get('io'), db, req.character.campaign_id, {
       charSheetId: sheet.id, characterId: req.params.characterId, woundId: req.params.woundId,
     })
-
     if (!removed) throw new AppError(404, 'Wound not found')
+
     res.json({ deleted: true, woundId: req.params.woundId })
   } catch (err) { next(err) }
 })
@@ -1760,6 +1824,16 @@ router.put('/:characterId/drone', async (req, res, next) => {
       charge_utile,
     }
     Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k])
+
+    // Champs de CRD (Lot 3) : plafond d'interceptions simultanées et rayon d'action, vides = drone bouclier personnel.
+    // Validation par l'autorité unique du noyau pur (la base garde les mêmes bornes en CHECK) ; mêmes droits que le
+    // reste de la fiche (MJ ou propriétaire, comme le niveau du programme Interception et la Vitesse).
+    for (const field of INTERCEPTION_LIMIT_FIELDS) {
+      if (req.body[field] === undefined) continue
+      const parsed = parseInterceptionLimit(field, req.body[field])
+      if (!parsed.ok) throw new AppError(400, `${field} invalide (${parsed.reason})`)
+      updates[field] = parsed.value
+    }
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 
     const [drone] = await db('drone_sheet')

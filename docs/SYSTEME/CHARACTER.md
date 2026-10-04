@@ -567,6 +567,50 @@ onChange(xpAvailable, val)
        → onSaved?.()
 ```
 
+### Sync WS entre clients (CHARSHEET-XP-SYNC-PJMJ, 2026-10-04)
+
+Avant ce correctif, aucune route de `char-sheet.js` avant la section Blessures n'émettait quoi que
+ce soit — un MJ et un joueur ayant la même fiche ouverte en même temps (ex. le MJ ajuste le XP
+disponible pendant que le joueur achète une compétence) voyaient des valeurs différentes jusqu'à
+fermer/rouvrir la fenêtre. 11 événements `CHAR_*` ciblés (`shared/events.js`), un payload direct
+par événement (la valeur déjà calculée par la réponse REST de la route, jamais un signal + refetch
+complet — cohérent avec `SOLS_UPDATED`/`GAUGE_UPDATED`/`FATIGUE_TEST_RESULT`, détail
+`docs/SYSTEME/ARCHITECTURE_SOCKET.md`) :
+
+```
+server/.../char-sheet.js — notifyCharSheetEvent(io, characterId, campaignId, event, payload)
+  → resolveInventoryBroadcastRoom(characterId, campaignId)   ← réutilisée telle quelle (lib/inventoryBroadcast.js)
+       brouillon Wizard → wizard:<sheetId> · personnage fini → campaign_id · Coffre → aucune diffusion
+  → io.to(room).emit(event, { characterId, ...payload })
+
+CharacterSheet.jsx (écoute locale, pas useCharacterSocket.js — ces champs sont de l'état local au
+composant, pas le store characterStore) :
+  CHAR_XP_UPDATED          → setXpTotal, setXpAvailable
+  CHAR_ATTRIBUTES_UPDATED  → merge dans attrsRef/setAttrs par attr_id (1 ou 8 lignes)
+  CHAR_SKILLS_UPDATED      → merge dans charSkills par skill_id (find-or-push, 1 ou N lignes)
+  CHAR_CHC_UPDATED         → setChc/chcRef
+  CHAR_IDENTITY_UPDATED    → les 10 setters identité (même champs que load())
+  CHAR_ARCHETYPE_UPDATED   → les 8 setters archétype (même champs que load())
+  CHAR_ADVANTAGE_ADDED/REMOVED → setCharAdvantages (push / filter par id)
+  CHAR_MUTATIONS_UPDATED   → rappelle handleMutationsChanged() (déjà existant, 2 endpoints légers)
+
+AdvantagesPanel.jsx (écoute locale, sa propre copie de charMutations/advantageNotes — déjà
+dupliquée avec celle de CharacterSheet.jsx avant ce correctif, pas introduit ici) :
+  CHAR_MUTATIONS_UPDATED        → refetch GET .../mutations
+  CHAR_ADVANTAGE_NOTE_ADDED     → setAdvantageNotes (push, filtré category==='narrative')
+  CHAR_ADVANTAGE_NOTE_REMOVED   → setAdvantageNotes (filter par id)
+```
+
+Jamais appeler les fonctions `saveXxx`/`saveIdentity`/`saveArchetype`/`saveAttributes`/`saveChc`/
+`saveXp` depuis ces handlers : elles déclenchent elles-mêmes le `PUT`/`POST` — les rappeler créerait
+une boucle d'écho. Un écho vers l'auteur de l'action lui-même (le serveur diffuse à toute la room,
+émetteur compris) est inoffensif, même valeur déjà posée par sa propre réponse HTTP — aucune garde
+« pas mon propre événement » nécessaire, même comportement que `SOLS_UPDATED`/`GAUGE_UPDATED`.
+
+Hors périmètre, noté sans être corrigé : `PossessionNotes.jsx` (notes de possession pendant le
+Wizard, catégorie `possession`) n'a aucune écoute socket — gap côté collaboration Wizard, chantier
+distinct déjà clos séparément (`docs/Old/PLAN_WIZARDCOLLAB.md`).
+
 ### Achat compétence — Mode Progression (SkillsPanel)
 
 File d'attente locale, aucune requête avant validation (CHARSHEET-XP-SPEND-CONFIRM, 2026-10-04) —

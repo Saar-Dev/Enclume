@@ -105,6 +105,32 @@ export const WS = {
   // une ligne d'arme qui, elle, ne change pas réellement (les mods vivent dans une table séparée)
   MOD_INSTALLED: 'mod:installed',  // serveur → room : mod installé sur une arme { characterId, weaponInvId, mods }
 
+  // Fiche personnage — identité/archétype/attributs/compétences/Chance/XP/avantages/mutations
+  // (CHARSHEET-XP-SYNC-PJMJ, 2026-10-04) : ces routes de char-sheet.js n'émettaient rien — un MJ et
+  // un joueur ayant la même fiche ouverte en même temps (scénario déjà traité une fois pour
+  // FATIGUE_TEST_RESULT ci-dessus, jamais généralisé) voyaient des valeurs différentes jusqu'à
+  // rouvrir la fenêtre. Payload direct (valeur déjà calculée par la réponse REST de la route),
+  // jamais un signal + refetch complet — cohérent avec SOLS_UPDATED/GAUGE_UPDATED/FATIGUE_TEST_RESULT
+  // ci-dessus, pas avec MAP_UPDATED (WorldSnapshot trop volumineux pour un payload direct, raison
+  // absente ici) : un refetch complet écraserait un champ texte en cours de frappe ailleurs sur la
+  // même fiche (debounce identité/attributs/chc/xp), alors qu'un payload ciblé ne touche jamais un
+  // champ qu'il n'a pas changé. Salle résolue via resolveInventoryBroadcastRoom (réutilisée telle
+  // quelle) : brouillon Wizard → wizard:<sheetId>, personnage fini → campaign_id, Coffre → aucune
+  // diffusion — même invariant de confidentialité que l'inventaire (COFFRE-INVROOM1).
+  CHAR_XP_UPDATED:            'char-sheet:xp_updated',             // { characterId, xp_total, xp_available }
+  CHAR_ATTRIBUTES_UPDATED:    'char-sheet:attributes_updated',     // { characterId, attributes: [{ attr_id, base_level, pc_modifier }] }
+  CHAR_SKILLS_UPDATED:        'char-sheet:skills_updated',         // { characterId, skills: [{ skill_id, mastery, is_learned }] }
+  CHAR_CHC_UPDATED:           'char-sheet:chc_updated',            // { characterId, chc }
+  CHAR_IDENTITY_UPDATED:      'char-sheet:identity_updated',       // { characterId, identity }
+  CHAR_ARCHETYPE_UPDATED:     'char-sheet:archetype_updated',      // { characterId, archetype }
+  CHAR_ADVANTAGE_ADDED:       'char-sheet:advantage_added',        // { characterId, advantage }
+  CHAR_ADVANTAGE_REMOVED:     'char-sheet:advantage_removed',      // { characterId, advantageId }
+  CHAR_ADVANTAGE_NOTE_ADDED:  'char-sheet:advantage_note_added',   // { characterId, note }
+  CHAR_ADVANTAGE_NOTE_REMOVED: 'char-sheet:advantage_note_removed', // { characterId, noteId }
+  // Signal seul (pas de payload de valeur) — le client rappelle son propre mécanisme de rechargement
+  // déjà existant (CharacterSheet.jsx::handleMutationsChanged, 2 endpoints légers), jamais dupliqué ici.
+  CHAR_MUTATIONS_UPDATED:     'char-sheet:mutations_updated',      // { characterId }
+
   // Combat (Chantier 11 — Sprint 1+)
   // Démarrage / arrêt
   COMBAT_START:          'combat:start',           // GM → serveur

@@ -97,3 +97,28 @@ carte que le MJ modifie.
 
 **Résultat attendu :** la carte affichée chez le joueur reflète l'édition du MJ en quelques
 secondes, sans rechargement manuel ; une carte non concernée reste silencieuse.
+
+## Personnage
+
+### CHARSHEET-XP-SYNC-PJMJ — sync fiche personnage entre MJ et joueur
+**Ajouté le** : 2026-10-04.
+**Contexte** : correctif codé (11 nouveaux événements `CHAR_*` ciblés, `shared/events.js` +
+`char-sheet.js` + `CharacterSheet.jsx` + `AdvantagesPanel.jsx`), vérifié par build client, lint et
+tests partagés (941/941), mais jamais exercé avec un vrai second client — nécessite un MJ et un
+joueur ayant chacun la fiche du même personnage ouverte en même temps.
+
+**Scénario à dérouler :**
+1. MJ et joueur ouvrent chacun la fiche du même personnage (fenêtre Personnage).
+2. Le joueur passe en Mode Progression et achète une compétence, puis augmente un attribut (Modif.
+   PC) — vérifier que le XP disponible ET la compétence/l'attribut se mettent à jour **côté MJ**
+   sans qu'il rouvre la fenêtre.
+3. Le MJ modifie le solde XP disponible (champ XP, debounce 500ms) — vérifier que le joueur voit la
+   nouvelle valeur sans recharger.
+4. Le MJ édite un champ d'identité (ex. signe distinctif) pendant que le joueur achète une
+   compétence au même moment — vérifier que ni l'un ni l'autre ne perd sa saisie en cours.
+5. Le MJ octroie un Avantage/une Mutation, ajoute une note "Autre" — vérifier l'apparition
+   immédiate côté joueur ; puis les retire — vérifier la disparition immédiate.
+6. Fermer/réouvrir le pouvoir Polaris (toggle) côté joueur — vérifier que le MJ voit le changement.
+
+**Résultat attendu :** chaque champ modifié par l'un des deux clients apparaît chez l'autre en
+quelques secondes, sans rechargement manuel, sans écraser une saisie en cours sur un AUTRE champ.

@@ -666,6 +666,107 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     })
   }, [])
 
+  // ─── Sync WS — fiche mutée par un AUTRE client (MJ + joueur ouverts en même temps sur la même
+  // fiche, CHARSHEET-XP-SYNC-PJMJ) ────────────────────────────────────────────────────────────────
+  // Même patron que FATIGUE_TEST_RESULT ci-dessus : payload direct (valeur déjà calculée côté
+  // serveur), écrit dans les setters bruts — jamais saveXxx (qui re-déclencherait un PUT, boucle
+  // d'écho). Un écho vers l'auteur de l'action lui-même est inoffensif (même valeur déjà posée par
+  // sa propre réponse HTTP), comme pour SOLS_UPDATED/GAUGE_UPDATED — aucune garde « pas mon propre
+  // événement » nécessaire.
+  useEffect(() => {
+    if (!socket) return
+
+    const onXpUpdated = ({ characterId: cId, xp_total, xp_available }) => {
+      if (cId !== characterId) return
+      setXpTotal(xp_total)
+      setXpAvailable(xp_available)
+    }
+    const onAttributesUpdated = ({ characterId: cId, attributes: rows }) => {
+      if (cId !== characterId || !rows) return
+      const next = { ...attrsRef.current }
+      rows.forEach(a => { next[a.attr_id] = { base: a.base_level, pc: a.pc_modifier } })
+      attrsRef.current = next
+      setAttrs(next)
+    }
+    const onSkillsUpdated = ({ characterId: cId, skills: rows }) => {
+      if (cId !== characterId || !rows) return
+      setCharSkills(prev => {
+        let next = prev
+        rows.forEach(row => {
+          const idx = next.findIndex(s => s.skill_id === row.skill_id)
+          next = idx >= 0
+            ? next.map((s, i) => (i === idx ? { ...s, mastery: row.mastery, is_learned: row.is_learned } : s))
+            : [...next, { skill_id: row.skill_id, mastery: row.mastery, is_learned: row.is_learned }]
+        })
+        return next
+      })
+    }
+    const onChcUpdated = ({ characterId: cId, chc: val }) => {
+      if (cId !== characterId) return
+      setChc(val)
+      chcRef.current = val
+    }
+    const onIdentityUpdated = ({ characterId: cId, identity }) => {
+      if (cId !== characterId || !identity) return
+      setPlayerName(identity.player_name || '')
+      setCharName(identity.char_name || '')
+      setHeight(identity.height ?? '')
+      setWeight(identity.weight ?? '')
+      setSkin(identity.skin || '')
+      setEyes(identity.eyes || '')
+      setHair(identity.hair || '')
+      setBuild(identity.build || '')
+      setDistinctiveSigns(identity.distinctive_signs || '')
+      setHandPref(identity.hand_pref || 'R')
+    }
+    const onArchetypeUpdated = ({ characterId: cId, archetype }) => {
+      if (cId !== characterId || !archetype) return
+      setGenotypeId(archetype.genotype_id || 'HUMAIN')
+      setAge(archetype.age ?? '')
+      setSex(archetype.sex || '')
+      setIsFertile(archetype.is_fertile ?? false)
+      setOriginGeo(archetype.origin_geo || '')
+      setOriginSoc(archetype.origin_soc || '')
+      setTrainingBase(archetype.training_base || '')
+      setHigherEd(archetype.higher_ed || '')
+    }
+    const onAdvantageAdded = ({ characterId: cId, advantage }) => {
+      if (cId !== characterId || !advantage) return
+      setCharAdvantages(prev => (prev.some(a => a.id === advantage.id) ? prev : [...prev, advantage]))
+    }
+    const onAdvantageRemoved = ({ characterId: cId, advantageId }) => {
+      if (cId !== characterId) return
+      setCharAdvantages(prev => prev.filter(a => a.id !== advantageId))
+    }
+    // Signal seul — réutilise le rechargement déjà existant (mutationEffects + charMutations).
+    const onMutationsUpdated = ({ characterId: cId }) => {
+      if (cId !== characterId) return
+      handleMutationsChanged()
+    }
+
+    socket.on(WS.CHAR_XP_UPDATED,         onXpUpdated)
+    socket.on(WS.CHAR_ATTRIBUTES_UPDATED, onAttributesUpdated)
+    socket.on(WS.CHAR_SKILLS_UPDATED,     onSkillsUpdated)
+    socket.on(WS.CHAR_CHC_UPDATED,        onChcUpdated)
+    socket.on(WS.CHAR_IDENTITY_UPDATED,   onIdentityUpdated)
+    socket.on(WS.CHAR_ARCHETYPE_UPDATED,  onArchetypeUpdated)
+    socket.on(WS.CHAR_ADVANTAGE_ADDED,    onAdvantageAdded)
+    socket.on(WS.CHAR_ADVANTAGE_REMOVED,  onAdvantageRemoved)
+    socket.on(WS.CHAR_MUTATIONS_UPDATED,  onMutationsUpdated)
+
+    return () => {
+      socket.off(WS.CHAR_XP_UPDATED,         onXpUpdated)
+      socket.off(WS.CHAR_ATTRIBUTES_UPDATED, onAttributesUpdated)
+      socket.off(WS.CHAR_SKILLS_UPDATED,     onSkillsUpdated)
+      socket.off(WS.CHAR_CHC_UPDATED,        onChcUpdated)
+      socket.off(WS.CHAR_IDENTITY_UPDATED,   onIdentityUpdated)
+      socket.off(WS.CHAR_ARCHETYPE_UPDATED,  onArchetypeUpdated)
+      socket.off(WS.CHAR_ADVANTAGE_ADDED,    onAdvantageAdded)
+      socket.off(WS.CHAR_ADVANTAGE_REMOVED,  onAdvantageRemoved)
+      socket.off(WS.CHAR_MUTATIONS_UPDATED,  onMutationsUpdated)
+    }
+  }, [socket, characterId, handleMutationsChanged])
+
   const canEdit = isGm || isOwner
 
   // ─── Rendu ─────────────────────────────────────────────────────────────────

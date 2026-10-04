@@ -1,6 +1,13 @@
 SYSTEME/ARCHITECTURE_SOCKET.md — Architecture de communication temps réel
 
-    Dernière mise à jour : 2026-10-04 — MAP_UPDATED ajouté (MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS) :
+    Dernière mise à jour : 2026-10-04 — CHAR_XP_UPDATED/CHAR_ATTRIBUTES_UPDATED/CHAR_SKILLS_UPDATED/
+    CHAR_CHC_UPDATED/CHAR_IDENTITY_UPDATED/CHAR_ARCHETYPE_UPDATED/CHAR_ADVANTAGE_ADDED/REMOVED/
+    CHAR_ADVANTAGE_NOTE_ADDED/REMOVED/CHAR_MUTATIONS_UPDATED ajoutés (CHARSHEET-XP-SYNC-PJMJ) : 15
+    routes de char-sheet.js (identité, archétype, attributs, achat PC, compétences, Pouvoirs Polaris,
+    achat compétence, Chance, XP, avantages, notes, mutations) n'émettaient rien — un MJ et un joueur
+    sur la même fiche en même temps voyaient des valeurs différentes jusqu'à rouvrir la fenêtre. Voir
+    §1bis ci-dessous pour le détail (payload direct, pas un signal+refetch).
+    MAP_UPDATED ajouté (MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS) :
     PUT /:id/surface, /:id/voxels et /:id (battlemaps.js) n'émettaient rien du tout à la sauvegarde —
     un joueur déjà en session ne voyait une carte éditée qu'en rechargeant la page. Émis directement
     depuis la route REST (patron identique à WORLD_RUNTIME_UPDATED, pas de module socketXxx.js dédié),
@@ -61,6 +68,31 @@ si la carte concernée n'est pas celle actuellement affichée (elle sera à jour
 affichage, pas la peine de la pousser maintenant) ; sinon, même requête `GET /battlemaps/:id` que
 `onMapSwitch`.
 
+**Fiche personnage — identité/archétype/attributs/compétences/chc/xp/avantages/mutations (ajouté
+2026-10-04, CHARSHEET-XP-SYNC-PJMJ)** : char-sheet.js n'émettait rien pour toutes les routes avant la
+section Blessures (seules WOUND_*/INVENTORY_*/SOLS_UPDATED/GAUGE_UPDATED, déjà listées ci-dessous,
+émettaient). Même cause que MAP_UPDATED (une partie d'un fichier diffusée, l'autre jamais) mais sur un
+périmètre plus large : 15 routes au lieu de 3. Choix d'architecture délibérément différent de
+MAP_UPDATED : des événements granulés avec le payload déjà calculé par la réponse REST de chaque
+route (`notifyCharSheetEvent(io, characterId, campaignId, event, payload)`, `char-sheet.js`), jamais
+un signal + refetch complet — cohérent avec SOLS_UPDATED/GAUGE_UPDATED/FATIGUE_TEST_RESULT déjà en
+place dans ce même fichier, pas avec MAP_UPDATED (le `WorldSnapshot` est trop volumineux pour un
+payload direct, raison absente ici ; un refetch complet aurait en plus écrasé un champ texte en
+cours de frappe ailleurs sur la même fiche, debounce identité/attributs/chc/xp). Salle résolue via
+`resolveInventoryBroadcastRoom` (réutilisée telle quelle, `lib/inventoryBroadcast.js`) : brouillon
+Wizard → `wizard:<sheetId>`, personnage fini → `campaign_id`, Coffre → aucune diffusion — même
+invariant de confidentialité que l'inventaire (COFFRE-INVROOM1), pas vérifié par le premier jet du
+correctif, retrouvé en relisant ce fichier avant de coder. Écouté par deux endroits distincts, pas
+`useCharacterSocket.js` : `CharacterSheet.jsx` (identité/archétype/attributs/compétences/chc/xp/
+avantages — état local du composant, pas le store `characterStore`) et `AdvantagesPanel.jsx` (sa
+propre copie locale de `charMutations`/`advantageNotes`, déjà dupliquée avec celle de
+`CharacterSheet.jsx` avant ce correctif — pas une duplication introduite ici, les deux copies
+préexistantes reçoivent chacune leur propre écoute). `CHAR_MUTATIONS_UPDATED` est un signal seul
+(pas de valeur) : il rappelle `CharacterSheet.jsx::handleMutationsChanged`, déjà existant.
+Hors périmètre, noté sans être corrigé : `PossessionNotes.jsx` (notes de possession pendant le
+Wizard, catégorie `possession`) n'a aucune écoute socket — gap côté collaboration Wizard, chantier
+distinct et déjà clos séparément (`docs/Old/PLAN_WIZARDCOLLAB.md`), pas élargi ici sans demande.
+
 Client :
 SocketProvider (créé dans SessionPage)
  ├── useTokenSocket()        — écoute TOKEN_MOVED, TOKEN_CREATED, TOKEN_DELETED, TOKEN_UPDATED, TOKEN_STATUS_UPDATED
@@ -71,6 +103,10 @@ SocketProvider (créé dans SessionPage)
  ├── useSessionSocket()      — écoute SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, DOC_*, 'error'
  ├── useCharacterSocket()    — écoute WOUND_ADDED/UPDATED/REMOVED, INVENTORY_ADDED/UPDATED/REMOVED,
  │                            SOLS_UPDATED, GAUGE_UPDATED ; expose woundVersions
+ ├── CharacterSheet.jsx (écoute locale, pas un hook partagé) — CHAR_XP_UPDATED, CHAR_ATTRIBUTES_UPDATED,
+ │                            CHAR_SKILLS_UPDATED, CHAR_CHC_UPDATED, CHAR_IDENTITY_UPDATED,
+ │                            CHAR_ARCHETYPE_UPDATED, CHAR_ADVANTAGE_ADDED/REMOVED, CHAR_MUTATIONS_UPDATED
+ ├── AdvantagesPanel.jsx (écoute locale) — CHAR_MUTATIONS_UPDATED (sa propre copie), CHAR_ADVANTAGE_NOTE_ADDED/REMOVED
  └── useCombatUIState()      — état UI combat sans socket : combatMoveMode, combatTargetMode, etc.
 
 2. Point d'entrée serveur
