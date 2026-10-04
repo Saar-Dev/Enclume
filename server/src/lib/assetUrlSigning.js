@@ -29,13 +29,28 @@ const TOKEN_TTL = '6h'
 
 // Noms de champs DB/REST connus pour porter un chemin /api/assets/<folder>/<filePath> (cache-
 // busting ?v=<timestamp> déjà stocké dans la valeur elle-même, préservé ici, jamais réinterprété).
+// Liste volontairement généreuse (ex. illustration_url/template_illustration_url : leur seul
+// consommateur actuel est un <img> brut, déjà sûr sans jeton — signées quand même par cohérence et
+// parce qu'un futur rendu 3D/texture de ces champs ne devra pas redécouvrir ce piège). `url`
+// (server/src/routes/documents.js, upload d'image Quill) volontairement PAS dans cette liste : nom
+// trop générique pour une liste globale (risque de signer un champ sans rapport ailleurs), et son
+// seul usage (quill.insertEmbed → <img> réel) n'a de toute façon jamais besoin d'un jeton.
 export const ASSET_URL_FIELDS = [
   'glb_url', 'portrait_url', 'image_url', 'cover_url',
   'default_token_glb_url', 'default_token_glb_url_drone', 'default_token_glb_url_exo',
+  'illustration_url', 'template_illustration_url',
+  // modelGlbUrl (connecteurs/portes, surface_data.connectors[].modelGlbUrl) : valeur COPIÉE depuis
+  // le catalogue entity_blueprints (déjà signée à CETTE source) puis PERSISTÉE telle quelle dans
+  // surface_data au moment où le MJ pose la porte — sans ce nom ici, le jeton capturé à la pose
+  // expirerait (6h) sans jamais être renouvelé à la relecture de la carte. signAssetFieldValue est
+  // idempotent (voir plus bas) : resigner une valeur déjà signée ne duplique jamais le jeton.
+  'modelGlbUrl',
 ]
 
-// Signe le chemin PUR (sans le ?v=... déjà présent) — c'est exactement ce qu'assets.js reconstruit
-// depuis :folder/*filePath (les query params n'entrent jamais dans le routage Express).
+// Signe le chemin PUR (sans la query déjà présente) — c'est exactement ce qu'assets.js reconstruit
+// depuis :folder/*filePath (les query params n'entrent jamais dans le routage Express). Idempotent :
+// un éventuel ?t=<ancien jeton> déjà présent (valeur relue depuis une signature précédente, ex.
+// surface_data persisté) est retiré avant d'en poser un nouveau — jamais deux `t=` accumulés.
 function signPath(purePath) {
   return jwt.sign({ p: purePath }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL })
 }
@@ -43,9 +58,10 @@ function signPath(purePath) {
 export function signAssetFieldValue(rawValue) {
   if (!rawValue || typeof rawValue !== 'string') return rawValue
   const [purePath, existingQuery] = rawValue.split('?')
-  const token = signPath(purePath)
-  const query = existingQuery ? `${existingQuery}&t=${token}` : `t=${token}`
-  return `${purePath}?${query}`
+  const params = new URLSearchParams(existingQuery || '')
+  params.delete('t')
+  params.set('t', signPath(purePath))
+  return `${purePath}?${params.toString()}`
 }
 
 // Parcours récursif borné — vérifié (pas supposé) que les réponses réelles de ces routeurs

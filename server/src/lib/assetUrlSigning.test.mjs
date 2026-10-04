@@ -25,6 +25,18 @@ test('signAssetFieldValue — préserve le ?v=<timestamp> déjà stocké, ajoute
   assert.ok(token)
 })
 
+test('signAssetFieldValue — idempotent : resigner une valeur déjà signée ne duplique jamais ?t=', () => {
+  const firstPass = signAssetFieldValue('entities/porte.glb?v=1')
+  const secondPass = signAssetFieldValue(firstPass)
+  const tCount = (secondPass.match(/[?&]t=/g) || []).length
+  assert.equal(tCount, 1, `attendu un seul t=, reçu: ${secondPass}`)
+  assert.ok(secondPass.includes('v=1'), `v= doit survivre au resign, reçu: ${secondPass}`)
+  // Le second jeton doit rester valide pour le même chemin pur (jamais cassé par le double-signage).
+  const { purePath, token } = tokenAndPureFrom(secondPass)
+  assert.equal(purePath, 'entities/porte.glb')
+  assert.equal(verifyAssetToken(purePath, token), true)
+})
+
 test('signAssetFieldValue — passthrough sur valeur absente/non-string', () => {
   assert.equal(signAssetFieldValue(null), null)
   assert.equal(signAssetFieldValue(undefined), undefined)
@@ -85,4 +97,37 @@ test('signAssetFieldsMiddleware — signe un champ niveau 1 ET niveau 2 (entitie
 test('ASSET_URL_FIELDS — liste non vide, pas de doublon', () => {
   assert.ok(ASSET_URL_FIELDS.length > 0)
   assert.equal(new Set(ASSET_URL_FIELDS).size, ASSET_URL_FIELDS.length)
+})
+
+test('ASSET_URL_FIELDS — couvre modelGlbUrl (connecteurs/portes, surface_data persisté)', () => {
+  assert.ok(ASSET_URL_FIELDS.includes('modelGlbUrl'))
+})
+
+test('signAssetFieldsMiddleware — signe modelGlbUrl niveau 4 (battlemap.surface_data.connectors.<id>.modelGlbUrl), même si déjà signé une fois (valeur persistée)', async () => {
+  const { signAssetFieldsMiddleware } = await import('./assetUrlSigning.js')
+  const middleware = signAssetFieldsMiddleware()
+  let captured = null
+  const res = { json: (body) => { captured = body; return res } }
+  middleware({}, res, () => {})
+
+  // Valeur déjà signée une fois (simulant une surcharge persistée depuis la pose de la porte, cf.
+  // commentaire ASSET_URL_FIELDS) — ne doit jamais accumuler un second jeton.
+  const alreadySigned = signAssetFieldValue('entities/door-blueprint-id.glb?v=1')
+  res.json({
+    battlemap: {
+      id: 'bm1',
+      surface_data: {
+        connectors: {
+          'legacy-1': { worldId: 'w1', modelGlbUrl: alreadySigned },
+        },
+      },
+    },
+  })
+
+  const value = captured.battlemap.surface_data.connectors['legacy-1'].modelGlbUrl
+  const tCount = (value.match(/[?&]t=/g) || []).length
+  assert.equal(tCount, 1, `attendu un seul t= après re-signature, reçu: ${value}`)
+  const { purePath, token } = tokenAndPureFrom(value)
+  assert.equal(purePath, 'entities/door-blueprint-id.glb')
+  assert.equal(verifyAssetToken(purePath, token), true)
 })

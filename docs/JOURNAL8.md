@@ -9630,7 +9630,34 @@ fonds de carte et couvertures de campagne continuent de charger normalement — 
 **Données** : aucune migration, aucun changement de schéma.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; les jetons sont sans état (JWT,
 aucune table), rien à nettoyer.
-**Non testé** (⚠️ clos partiel) : vérification en navigateur que portraits, GLB (token/exo) et
-images de carte/campagne continuent de charger normalement après ce correctif — nécessite Saar.
+
+**Correctif post-commit (suite, même jour)** — trouvé en sélectionnant le ticket suivant
+(`CONNECTOR-MODEL-URL-ABSOLUTE`, qui touche aussi `/api/assets`) : en vérifiant que ce correctif-ci
+ne cassait rien sur ce chemin voisin, 3 champs `/api/assets` supplémentaires se sont révélés
+non couverts par `ASSET_URL_FIELDS` :
+- `modelGlbUrl` (`surface_data.connectors[].modelGlbUrl`, portes/connecteurs) — cas le plus sérieux :
+  cette valeur est COPIÉE depuis le catalogue `entity_blueprints` (déjà signée à cette source) puis
+  **persistée telle quelle** dans `surface_data` au moment où le MJ pose la porte. Sans ce nom dans
+  la liste, le jeton capturé à la pose aurait expiré (6h) sans jamais être renouvelé à la relecture
+  de la carte — une porte qui charge pendant 6h puis ne charge plus jamais, sans aucun changement
+  apparent côté MJ. Ajouté à `ASSET_URL_FIELDS` ; a imposé de rendre `signAssetFieldValue` **idempotent**
+  (retire un éventuel `?t=<ancien jeton>` déjà présent avant d'en poser un nouveau — une valeur
+  signée une fois peut désormais être signée à nouveau sans accumuler les jetons).
+- `illustration_url` (exo_sheet) et `template_illustration_url` (ref_exo_templates, exposé par
+  `GET /:characterId/exo`) — trouvés en listant tous les champs `*_url` de `server/src/routes`
+  plutôt qu'en se fiant à la liste déjà écrite. Pas de casse confirmée (leur seul usage connu,
+  `ExoSettingsPanel.jsx`, est un `<img>` brut — sûr sans jeton) mais signés quand même, par
+  cohérence et pour qu'un futur rendu 3D de ces champs ne retombe pas dans le même trou. Routeurs
+  `exoTemplates.js` et `character/char-sheet.js` n'avaient pas encore `signAssetFieldsMiddleware()`.
+- `documents.js` (`{ url: objectName }`, upload d'image Quill) **délibérément PAS touché** après
+  vérification : `DocumentModal.jsx` passe cette URL à `quill.insertEmbed` qui crée un vrai `<img>`
+  DOM — le cookie suffit déjà, aucun jeton requis. `url` reste hors de `ASSET_URL_FIELDS` (nom trop
+  générique pour une liste globale, risque de signer un champ sans rapport ailleurs un jour).
+**Testé (ce correctif)** : `node --check` (3 fichiers) ; `assetUrlSigning.test.mjs` étendu à 11/11
+(idempotence, `modelGlbUrl` à 4 niveaux de profondeur avec valeur déjà signée) ;
+`shared/**/*.test.mjs` (941/941).
+**Non testé** (⚠️ clos partiel, inchangé) : vérification en navigateur — portraits, GLB
+(token/exo/drone), fonds de carte, couvertures de campagne ET portes/connecteurs doivent continuer
+à charger normalement.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du fichier suffit ; aucun changement de schéma.

@@ -48,6 +48,7 @@ import { AppError } from '../../lib/AppError.js'
 import { resolveInventoryBroadcastRoom, emitInventoryEvent } from '../../lib/inventoryBroadcast.js'
 import { resolveRefField, localizeRefAliased } from '../../lib/refI18n.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { signAssetFieldsMiddleware } from '../../lib/assetUrlSigning.js'
 import { multerUpload } from '../../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../../lib/minio.js'
 import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
@@ -108,6 +109,8 @@ async function notifyCharSheetEvent(io, characterId, campaignId, event, payload)
 
 // ─── Auth + Ownership automatique sur toutes les routes /:characterId ──────────
 router.use(requireAuth)
+// ASSETS-ROUTE-NO-AUTH — signe illustration_url/template_illustration_url (exo) avant l'envoi.
+router.use(signAssetFieldsMiddleware())
 
 router.param('characterId', async (req, res, next, characterId) => {
   try {

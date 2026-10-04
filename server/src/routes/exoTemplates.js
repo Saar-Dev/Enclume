@@ -29,8 +29,12 @@ import { requireAuth } from '../middleware/auth.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 import { multerUpload } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
+import { signAssetFieldsMiddleware } from '../lib/assetUrlSigning.js'
 
 const router = Router()
+
+// ASSETS-ROUTE-NO-AUTH — signe illustration_url avant l'envoi, voir server/src/lib/assetUrlSigning.js.
+router.use(signAssetFieldsMiddleware())
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
