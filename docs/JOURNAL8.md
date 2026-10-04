@@ -9530,6 +9530,30 @@ relancées après l'extension Allure/Couverture/Obscurité.
 **Non testé** (⚠️ clos partiel) : scénario réel à deux clients couvrant l'ensemble du chantier
 (Portée, Taille, Allure, Couverture, Obscurité) — nécessite plusieurs clients, `docs/BETATEST.md`
 mis à jour.
+
+**Correctif post-commit (analyse critique demandée par Saar, même jour, après le premier commit
+`b247e2ad`)** — fuite de surcharge trouvée en se relisant, pas signalée par Saar : le slot
+`combatResolutionOverrides` (`socketCombatHelpers.js::resolveAssaultAction`) n'était lu/vidé que
+juste avant le calcul de `authoritativeRangeBand`, après plusieurs `return` anticipés possibles
+(munitions insuffisantes, arme en panne/hors d'usage). Un Tir avorté pour une de ces raisons APRÈS
+que le MJ ait posé une surcharge la laissait collée dans le slot, prête à s'appliquer
+silencieusement au PROCHAIN Tir de ce même token (cible différente, Tour différent) sans
+intervention du MJ. Corrigé en déplaçant la lecture/suppression tout en haut de la fonction, avant
+tout retour anticipé — consommée une seule fois par résolution quoi qu'il arrive. Seule
+complication : la récursion d'interception LOS (`los.result === 'intercepted'`) rappelle
+`resolveAssaultAction` avec une nouvelle cible — comme le slot est déjà vidé par l'appel d'origine,
+la valeur de Portée est désormais relayée explicitement via `options.forcedPorteeOverride` plutôt
+que relue (à vide) une seconde fois ; la surcharge Taille, elle, traverse déjà la récursion
+naturellement (portée par `confirmedModifiers`, un paramètre, pas une variable à part). Effet de
+bord positif constaté : les drones (qui ne consomment jamais ce slot, branchés sur
+`resolveDroneAssaultAction` avant ce point) ne laissaient auparavant aucune suppression se produire
+du tout pour leur token si le MJ y posait une surcharge par erreur — fuite permanente, minime, mais
+réelle ; elle aussi couverte par ce déplacement.
+**Testé (ce correctif)** : `node --check`, `shared/**/*.test.mjs` (941/941), les 4 mêmes suites
+DB-backed (105/105, aucune régression sur le chemin par défaut).
+**Non testé** : le scénario de fuite lui-même (Tir avorté après surcharge MJ, puis second Tir du
+même token) n'a pas de test dédié — aucune suite existante ne couvre ce chemin avant comme après ce
+correctif.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma, le
 slot éphémère disparaît avec le redémarrage serveur de toute façon.

@@ -3333,6 +3333,31 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
   console.log(`[DBG] resolveAssaultAction — début token:${action.token_id} type_perso:${character.type}`)
   try {
     const emissions = []
+
+    // COMBAT-RANGE-PLAYER-EDITABLE — surcharge MJ narrative (Portée, puis Taille le même jour),
+    // consommée ICI, tout en haut, AVANT tout retour anticipé (arme absente, situation impossible,
+    // LOS, munitions, intégrité…). Défaut trouvé en relisant ce chantier après coup (Saar,
+    // 2026-10-04) : cette lecture/suppression vivait plus bas (juste avant le calcul de
+    // authoritativeRangeBand), après plusieurs `return` possibles (munitions insuffisantes, arme en
+    // panne/hors d'usage) — un Tir avorté pour une de ces raisons APRÈS que le MJ ait posé une
+    // surcharge la laissait collée dans le slot, prête à s'appliquer silencieusement au PROCHAIN
+    // Tir de ce même token (cible différente, Tour différent) sans que le MJ l'ait reposée.
+    // Consommée une seule fois ici, quoi qu'il arrive à la suite de CETTE résolution précise —
+    // `options.forcedPorteeOverride` relaie la valeur déjà extraite à la récursion d'interception
+    // LOS plus bas (le slot a déjà été vidé par l'appel d'origine, jamais une seconde lecture à
+    // vide). La fusion Taille, elle, traverse déjà la récursion naturellement via
+    // `confirmedModifiers` (paramètre, pas une variable à part).
+    let gmPorteeOverride = options.forcedPorteeOverride ?? null
+    if (options.forcedPorteeOverride === undefined) {
+      const resolutionOverride = pendingMaps.combatResolutionOverrides?.get(campaignId)
+      const hasResolutionOverride = resolutionOverride?.tokenId === action.token_id
+      if (hasResolutionOverride) {
+        pendingMaps.combatResolutionOverrides.delete(campaignId)
+        gmPorteeOverride = resolutionOverride.portee ?? null
+        if (resolutionOverride.taille) confirmedModifiers = { ...confirmedModifiers, taille: resolutionOverride.taille }
+      }
+    }
+
     // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT). Exo (PLAN_EXOARMURE.md
     // §16.4) routé en amont, dans socketCombatResolution.js — resolveExoAssaultAction vit dans
     // socketCombatExo.js, qui importe déjà plusieurs helpers de CE fichier (portée/LOS, dispatch de
@@ -3382,7 +3407,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       if (los.result === 'intercepted') {
         return resolveAssaultAction(io, campaignId,
           { ...action, target_token_id: los.newTargetTokenId },
-          confirmedModifiers, character, pendingMaps, { skipLos: true })
+          confirmedModifiers, character, pendingMaps, { skipLos: true, forcedPorteeOverride: gmPorteeOverride })
       }
       options.coverageModifier = los.coverageModifier ?? 0
     }
@@ -3468,20 +3493,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       sourceTokenId: action.token_id,
       targetTokenId: action.target_token_id,
     })
-
-    // COMBAT-RANGE-PLAYER-EDITABLE — surcharge MJ narrative (Portée, puis Taille le même jour),
-    // consommée une seule fois (jamais réappliquée à un assaut suivant du même token) : prioritaire
-    // sur le calcul par distance pour Portée, y compris pour contourner un rejet « hors de portée »
-    // (jugement MJ assumé) ; pour Taille, injectée dans confirmedModifiers AVANT
-    // resolveAttackTargetSize plus bas, qui la lit déjà en priorité (mécanisme GM_ONLY_CONFIRMED_
-    // MODIFIER_KEYS existant, jusqu'ici inatteignable pour l'assaut d'un PJ faute de fenêtre MJ).
-    const resolutionOverride = pendingMaps.combatResolutionOverrides?.get(campaignId)
-    const hasResolutionOverride = resolutionOverride?.tokenId === action.token_id
-    const gmPorteeOverride = hasResolutionOverride ? resolutionOverride.portee : null
-    if (hasResolutionOverride) {
-      pendingMaps.combatResolutionOverrides.delete(campaignId)
-      if (resolutionOverride.taille) confirmedModifiers = { ...confirmedModifiers, taille: resolutionOverride.taille }
-    }
 
     let authoritativeRangeBand
     if (gmPorteeOverride) {
