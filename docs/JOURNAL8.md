@@ -9129,3 +9129,58 @@ connectés. Scénario et limite documentés dans `docs/BETATEST.md` pour la proc
 beta-testeurs ; ce ticket ne doit être refermé qu'après leur retour, pas sur ce seul correctif.
 **Données** : aucune migration, aucun changement serveur.
 **Retour arrière** : `git revert` des fichiers modifiés suffit.
+
+---
+
+## Session (Dev) — 2026-10-04 — Pouvoirs Polaris accessibles sans l'Avantage (CHARSHEET-ADVANTAGE-SKILL-GATE)
+
+**Signalé indépendamment par Saar et un beta-testeur** : un personnage sans l'Avantage « Force
+Polaris » voyait quand même la liste des 50 Pouvoirs Polaris individuels (Onde Polaris, etc.).
+
+**Cause racine, trouvée en auditant la totalité des 98 lignes `ref_skill_requirements` (pas
+seulement le cas signalé)** : les 50 Pouvoirs individuels, enfants de la catégorie
+`POUVOIRS_POLARIS`, n'ont **aucun prérequis à eux**. Le seul verrou existant est une chaîne :
+`POUVOIRS_POLARIS` exige `SKILL_MIN(MAITRISE_DE_LA_FORCE_POLARIS, 1)`, qui elle-même exige
+`ADVANTAGE(adv_079)`. Ni le client (`SkillsPanel.jsx::isVisible`) ni le serveur
+(`POST /skills/buy`) ne remontaient cette chaîne : chacun ne regardait que les prérequis propres à
+la compétence ciblée, jamais ceux hérités de sa catégorie. Un enfant sans prérequis propre
+paraissait donc librement accessible — y compris côté serveur, via une requête directe
+(`skill_id: 'POUVOIRS_POLARIS_ONDE_POLARIS'`), contournement de l'UI qui aurait vraiment fonctionné.
+Audit complet : c'est la **seule** chaîne de ce type dans tout le catalogue (249 compétences) —
+Agilité Caudale (Mutation), Hybride (OU génotype/mutation) et toutes les autres ont leur verrou
+d'identité directement sur elles.
+
+**Retour Saar sur la distinction à appliquer** : un verrou d'Avantage/Mutation/Génotype doit
+toujours masquer la compétence (ex. Agilité Caudale sans la Mutation Queue) ; un simple prérequis
+de compétence (ex. Informatique → Culture générale) ne doit **jamais** masquer, seulement
+verrouiller (non augmentable) en mettant en avant le prérequis manquant — y compris hors mode
+Progression.
+
+**Correctif, partagé client/serveur (`shared/skillRequirements.js`, module déjà commun — jamais
+deux copies de la même règle)** :
+- `effectiveRequirements(skill, skillsById)` — un enfant sans prérequis propre hérite de ceux de sa
+  catégorie parente.
+- `isBlockedByIdentityChain(skill, skillsById, isIdentityReqSatisfied)` — remonte la chaîne
+  (directement, ou via une ligne SKILL_MIN) jusqu'à un éventuel verrou d'identité ; réutilise
+  `areRequirementsSatisfied` existant (ET/OU, or_group) sans le dupliquer.
+- `SkillsPanel.jsx` (`getSkillGate`, ex-`isVisible`) : masque uniquement sur un blocage d'identité ;
+  un verrou SKILL_MIN affiche la compétence grisée avec le prérequis manquant sous le nom
+  (`t('skillsPanel.lockedByPrereq')`), bouton d'achat désactivé.
+- `POST /skills/buy` (`char-sheet.js`) : même résolution de chaîne côté serveur — l'autorité réelle,
+  pas seulement l'affichage.
+- `docs/SYSTEME/CHARACTER.md` et le JSDoc de `SkillsPanel.jsx` mis à jour (l'ancien algorithme
+  documenté contredisait désormais le code ; corrigé au passage un coût de déblocage `(X)` erroné
+  dans la doc, 3 PE au lieu de 1 PE réel).
+
+**Testé** : `node --test shared/skillRequirements.test.mjs` (14/14, dont le cas exact Pouvoirs
+Polaris, la non-régression Hybride/OU, la protection anti-boucle, et la confirmation qu'une chaîne
+SKILL_MIN pure — type Informatique — ne bloque jamais) ; `node --test 'shared/**/*.test.mjs'`
+(941/941, aucune régression) ; `node --check` sur les fichiers serveur ; `eslint` ciblé (0 erreur
+nouvelle — `canEdit` inutilisé et le warning de nettoyage de ref sont préexistants, vérifiés par
+`git stash`) ; `vite build` complet sans erreur.
+**Non testé** (⚠️ clos partiel) : scénario réel en navigateur (achat réel d'Onde Polaris sans puis
+avec l'Avantage ; achat de Cartographie sans Culture générale pour vérifier l'affichage verrouillé).
+Saar peut le reproduire seul (un seul personnage, pas de multi-client) — pas dans `docs/BETATEST.md`.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; aucune donnée persistée au-delà
+d'un achat de compétence normal.

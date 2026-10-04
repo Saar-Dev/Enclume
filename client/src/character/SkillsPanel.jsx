@@ -19,22 +19,30 @@
  *   onSkillBought  — callback({ skill_id, mastery, is_learned, xp_available })
  *                    appelé après achat réussi — mise à jour locale dans CharacterSheet
  *   skillPrerequisitesEnabled — booléen — option de campagne OPT-07 (settings.skill_prerequisites,
- *                    défaut false/OFF). Si !== true, le prérequis SKILL_MIN est ignoré en visibilité
- *                    (MUTATION/ADVANTAGE/GENOTYPE restent toujours actifs, non concernés par cette option).
+ *                    défaut true depuis WIZ9 — une campagne créée avant ce correctif peut encore
+ *                    avoir false explicitement enregistré). Si !== true, le verrouillage SKILL_MIN
+ *                    est ignoré (MUTATION/ADVANTAGE/GENOTYPE restent toujours actifs, non concernés
+ *                    par cette option, y compris au bout d'une chaîne SKILL_MIN).
  *
  * Règles de calcul :
  *   Base  = AN(attr_1) + AN(attr_2)   — si attr_2 null : AN(attr_1) × 2 (PC4)
  *           marker='(-3)' : Base -3 (REGLECOMPETENCE.md:10-13, Q4 PLAN_XP.md close)
  *   Total = Base + mastery             — jamais clampé, peut être négatif (PC11)
  *
- * Algorithme de visibilité (ordre strict, source CHARACTER.md) :
- *   1. marker === '(X)' ET is_learned === false → masquée
- *      SAUF si mutation/avantage débloquant satisfait
- *   2. SKILL_MIN → si skillPrerequisitesEnabled === true ET Total de la prérequise < threshold → masquée
- *   3. MUTATION/ADVANTAGE/GENOTYPE — évalués via shared/skillRequirements.js (ET entre lignes/groupes,
- *      OU entre lignes qui partagent le même or_group — ex. HYBRIDE : génotype hybride OU mutation
- *      Amphibie, docs/PLAN_MUTATION2.md Lot 5) → un groupe/ligne non satisfait → masquée
- *   4. Toutes conditions OK → visible
+ * Algorithme de disponibilité (ordre strict, source CHARACTER.md — revu CHARSHEET-ADVANTAGE-SKILL-GATE
+ * 2026-10-04, retour Saar) : masquer pour un verrou d'identité, jamais pour un simple niveau de
+ * compétence atteignable — voir shared/skillRequirements.js pour le détail de chaque fonction citée.
+ *   1. MUTATION/ADVANTAGE/GENOTYPE manquant AU BOUT de la chaîne de prérequis (directement, ou via
+ *      une ligne SKILL_MIN qui mène à un verrou d'identité — ex. Pouvoirs Polaris → Maîtrise de la
+ *      Force Polaris → Avantage Force Polaris ; isBlockedByIdentityChain) → masquée, quel que soit
+ *      le mode. Un enfant de catégorie sans prérequis propre hérite de celui de sa catégorie
+ *      (effectiveRequirements) — les 50 Pouvoirs Polaris individuels n'ont aucun prérequis à eux.
+ *   2. (X) jamais appris SANS AUCUN prérequis (ni identité, ni compétence) → masquée hors mode
+ *      Progression (comportement historique, non concerné par ce correctif).
+ *   3. SKILL_MIN → si skillPrerequisitesEnabled === true ET Total de la prérequise < threshold →
+ *      JAMAIS masquée : affichée verrouillée (non augmentable), prérequis manquant mis en avant
+ *      (toujours visible, y compris hors mode Progression — retour Saar 2026-10-04).
+ *   4. Toutes conditions OK → visible, non verrouillée.
  *
  * Mode Progression :
  *   Chaque compétence visible affiche un bouton "+" avec le coût en PE.
@@ -51,7 +59,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
-import { areRequirementsSatisfied } from '../../../shared/skillRequirements.js'
+import { effectiveRequirements, isBlockedByIdentityChain } from '../../../shared/skillRequirements.js'
 import SkillInfoPopover, { SkillInfoButton } from '../components/SkillInfoPopover.jsx'
 
 // ─── Barème coût XP (miroir client de charStats.js — pour l'affichage uniquement) ──
@@ -175,31 +183,52 @@ export default function SkillsPanel({
     return true
   }, [activeMutations, activeAdvantageIds, genotypeId])
 
-  // ─── Algorithme de visibilité ─────────────────────────────────────────────
-  const isVisible = useCallback((skill) => {
-    if (skill.attr_1 === 'CHC') return false
+  // ─── Catalogue indexé par id — requis par effectiveRequirements/isBlockedByIdentityChain
+  // (shared/skillRequirements.js) pour remonter un enfant de catégorie jusqu'à sa catégorie
+  // parente, et une chaîne SKILL_MIN jusqu'à son éventuel verrou d'identité. ────────────────
+  const skillsById = useMemo(() => new Map(refSkills.map(s => [s.id, s])), [refSkills])
 
-    const unlockReqs = skill.requirements.filter(r => r.type === 'MUTATION' || r.type === 'ADVANTAGE')
-    const unlockSatisfied = unlockReqs.length > 0 && areRequirementsSatisfied(unlockReqs, isIdentityReqSatisfied)
+  // ─── Algorithme de disponibilité (CHARACTER.md, revu CHARSHEET-ADVANTAGE-SKILL-GATE
+  // 2026-10-04 — retour Saar) ──────────────────────────────────────────────────────────────
+  //   1. Masquée si un Avantage/Mutation/Génotype manque AU BOUT de la chaîne de prérequis
+  //      (directement, ou via un prérequis "compétence minimum" qui mène à un verrou
+  //      d'identité — ex. Pouvoirs Polaris → Maîtrise de la Force Polaris → Avantage Force
+  //      Polaris). Jamais affichée, quel que soit le mode : un personnage sans la Mutation
+  //      Queue ne doit jamais voir Agilité Caudale, un personnage sans Polaris ne doit jamais
+  //      voir un seul des 50 Pouvoirs.
+  //   2. Jamais masquée pour un simple prérequis "compétence minimum" atteignable normalement
+  //      (ex. Informatique → Culture générale) — affichée, verrouillée (non augmentable), avec
+  //      le prérequis manquant mis en avant. Vrai aussi hors mode Progression.
+  //   3. Un (X) jamais appris SANS AUCUN prérequis (ni identité, ni compétence) reste masqué
+  //      hors mode Progression — comportement existant, non concerné par ce correctif : la
+  //      liste ne doit pas s'remplir de centaines de compétences réservées jamais touchées.
+  const getSkillGate = useCallback((skill) => {
+    if (skill.attr_1 === 'CHC') return { hidden: true, locked: false, lockPrereqSkill: null }
 
-    if (skill.marker === '(X)' && !learnedSet.has(skill.id) && !unlockSatisfied) {
-      if (!progressionMode) return false
-      // En mode Progression : on continue — les prérequis SKILL_MIN s'appliquent toujours
+    if (isBlockedByIdentityChain(skill, skillsById, isIdentityReqSatisfied)) {
+      return { hidden: true, locked: false, lockPrereqSkill: null }
     }
 
-    for (const req of skill.requirements) {
-      if (req.type === 'SKILL_MIN' && skillPrerequisitesEnabled === true) {
+    const effReqs = effectiveRequirements(skill, skillsById)
+    const skillMinReqs = effReqs.filter(r => r.type === 'SKILL_MIN')
+
+    if (skill.marker === '(X)' && !learnedSet.has(skill.id) && effReqs.length === 0 && !progressionMode) {
+      return { hidden: true, locked: false, lockPrereqSkill: null }
+    }
+
+    if (skillPrerequisitesEnabled === true) {
+      for (const req of skillMinReqs) {
         const prereq = refSkills.find(s => s.id === req.value)
-        if (!prereq) return false
-        if (calcTotal(prereq) < req.threshold) return false
+        if (!prereq || calcTotal(prereq) < req.threshold) {
+          return { hidden: false, locked: true, lockPrereqSkill: prereq ?? null }
+        }
       }
     }
 
-    const identityReqs = skill.requirements.filter(r => r.type === 'MUTATION' || r.type === 'ADVANTAGE' || r.type === 'GENOTYPE')
-    if (!areRequirementsSatisfied(identityReqs, isIdentityReqSatisfied)) return false
+    return { hidden: false, locked: false, lockPrereqSkill: null }
+  }, [refSkills, skillsById, learnedSet, calcTotal, progressionMode, skillPrerequisitesEnabled, isIdentityReqSatisfied])
 
-    return true
-  }, [refSkills, learnedSet, calcTotal, progressionMode, skillPrerequisitesEnabled, isIdentityReqSatisfied])
+  const isVisible = useCallback((skill) => !getSkillGate(skill).hidden, [getSkillGate])
 
   // ─── Groupement hiérarchique par famille ──────────────────────────────────
   const families = useMemo(() => {
@@ -283,6 +312,7 @@ export default function SkillsPanel({
     const isPN    = skill.marker === 'PN'
     const isX     = skill.marker === '(X)'
     const learned = learnedSet.has(skill.id)
+    const { locked, lockPrereqSkill } = getSkillGate(skill)
 
     // Calcul du coût pour le mode Progression
     const cout         = (isX && !learned) ? COUT_DEBLOCAGE_X : getCoutAugmentation(mastery)
@@ -297,13 +327,18 @@ export default function SkillsPanel({
           <div style={{ display: 'flex', alignItems: 'center', gap: '3px', paddingLeft: skill.parent ? '14px' : '0' }}>
             <span style={{
               fontSize: '11px',
-              color: isDiff ? '#e08888' : isPN ? '#88c8a0' : '#b0b0c8',
+              color: locked ? '#6a6a80' : isDiff ? '#e08888' : isPN ? '#88c8a0' : '#b0b0c8',
               flex: 1,
               minWidth: 0,
             }}>
               {skill.label}
               {skill.marker && skill.marker !== 'S' && (
                 <span style={s.marker}> {skill.marker}</span>
+              )}
+              {locked && lockPrereqSkill && (
+                <div style={s.lockReason}>
+                  {t('skillsPanel.lockedByPrereq', { prereq: lockPrereqSkill.label })}
+                </div>
               )}
             </span>
             <SkillInfoButton skill={skill} setDetailPanel={setDetailPanel} />
@@ -368,12 +403,14 @@ export default function SkillsPanel({
             <button
               style={{
                 ...s.buyBtn,
-                ...((!canAfford || isBuying) ? s.buyBtnDisabled : {}),
+                ...((!canAfford || isBuying || locked) ? s.buyBtnDisabled : {}),
               }}
-              disabled={!canAfford || isBuying}
+              disabled={!canAfford || isBuying || locked}
               onClick={() => handleBuy(skill)}
               title={
-                isX && !learned
+                locked && lockPrereqSkill
+                  ? t('skillsPanel.lockedByPrereq', { prereq: lockPrereqSkill.label })
+                  : isX && !learned
                   ? t('character.xp.unlock', { count: COUT_DEBLOCAGE_X })
                   : t('character.xp.cost', { count: cout })
               }
@@ -386,7 +423,7 @@ export default function SkillsPanel({
       </tr>
     )
   }, [
-    calcBase, localMastery, learnedSet, isGm, progressionMode,
+    calcBase, localMastery, learnedSet, isGm, progressionMode, getSkillGate,
     xpAvailable, buyingSkillId, characterId, onSaved, handleBuy, t,
   ])
 
@@ -543,6 +580,11 @@ const s = {
   marker: {
     fontSize: '10px',
     color: '#6a6a8a',
+  },
+  lockReason: {
+    fontSize: '10px',
+    color: '#8a7a5a',
+    fontStyle: 'italic',
   },
   attrs: {
     fontSize: '10px',

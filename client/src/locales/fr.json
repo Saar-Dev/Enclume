@@ -1083,7 +1083,8 @@
     "colAttrs": "Attributs",
     "colBase": "Base",
     "colMastery": "Maîtrise",
-    "colTotal": "Total"
+    "colTotal": "Total",
+    "lockedByPrereq": "Nécessite : {{prereq}}"
   },
   "advantages": {
     "empty": "Aucun avantage ou désavantage enregistré.",

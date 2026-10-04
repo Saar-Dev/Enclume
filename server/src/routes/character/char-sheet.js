@@ -58,7 +58,7 @@ import {
   calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
   getNaturalArmorMod,
 } from '../../../../shared/polarisUtils.js'
-import { areRequirementsSatisfied } from '../../../../shared/skillRequirements.js'
+import { effectiveRequirements, isBlockedByIdentityChain } from '../../../../shared/skillRequirements.js'
 import { getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { applyWound, removeWound } from '../../lib/woundService.js'
 import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
@@ -606,16 +606,56 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
     const currentLearned  = charSkill?.is_learned  ?? false
     const isXReserved     = refSkill.marker === '(X)'
 
-    // OPT-07 (skill_prerequisites, défaut OFF) : réévalué côté serveur à chaque achat — ne jamais
+    // Chaîne de prérequis — un enfant de catégorie sans prérequis propre (ex. les 50 Pouvoirs
+    // Polaris, enfants de POUVOIRS_POLARIS) hérite de ceux de sa catégorie parente
+    // (shared/skillRequirements.js::effectiveRequirements) — sans ça, une requête forgée visant
+    // directement un pouvoir individuel ne rencontrait aucune vérification du tout
+    // (CHARSHEET-ADVANTAGE-SKILL-GATE, 2026-10-04). Catalogue complet chargé une fois, même forme
+    // que GET /api/char-ref/skills.
+    const [allRefSkills, allReqs] = await Promise.all([
+      db('ref_skills').select('id', 'parent', 'is_category'),
+      db('ref_skill_requirements').select('skill_id', 'type', 'value', 'threshold', 'or_group'),
+    ])
+    const reqsBySkill = allReqs.reduce((acc, r) => {
+      (acc[r.skill_id] ??= []).push(r)
+      return acc
+    }, {})
+    const skillsById = new Map(allRefSkills.map(s => [s.id, { ...s, requirements: reqsBySkill[s.id] || [] }]))
+    const targetSkillNode = skillsById.get(skill_id)
+
+    // MUTATION/ADVANTAGE/GENOTYPE : toujours revalidés côté serveur, jamais gatés par une option de
+    // campagne (contrairement à SKILL_MIN ci-dessous) — cf. docs/PLAN_MUTATION2.md Lot 5 [CS7]. Le
+    // client (SkillsPanel.jsx) masque déjà la compétence si ce prérequis n'est pas satisfait ;
+    // cette revalidation empêche un achat via une requête forgée qui contournerait l'UI.
+    // isBlockedByIdentityChain (shared/skillRequirements.js) : même évaluateur ET/OU que le client
+    // (or_group — ex. HYBRIDE : génotype hybride OU mutation Amphibie), et remonte la chaîne
+    // SKILL_MIN jusqu'à un éventuel verrou d'identité plutôt que de ne regarder que skill_id.
+    const [activeMutationIds, activeAdvantageIds, archetype] = await Promise.all([
+      db('char_mutations').where({ char_sheet_id: sheet.id, status: 'active' }).pluck('mutation_id'),
+      db('char_advantages').where({ char_sheet_id: sheet.id }).whereNull('removed_at').pluck('advantage_id'),
+      db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+    ])
+    const mutationSet = new Set(activeMutationIds.map(String))
+    const advantageSet = new Set(activeAdvantageIds)
+    const genotypeId = archetype?.genotype_id ?? null
+    const isIdentityReqSatisfied = (req_) => {
+      if (req_.type === 'MUTATION') return mutationSet.has(req_.value)
+      if (req_.type === 'ADVANTAGE') return advantageSet.has(req_.value)
+      if (req_.type === 'GENOTYPE') return genotypeId === req_.value
+      return true
+    }
+    if (targetSkillNode && isBlockedByIdentityChain(targetSkillNode, skillsById, isIdentityReqSatisfied)) {
+      throw new AppError(400, 'Prérequis non satisfait : mutation/avantage/génotype requis')
+    }
+
+    // OPT-07 (skill_prerequisites, défaut true) : réévalué côté serveur à chaque achat — ne jamais
     // faire confiance à un état déjà chargé côté client (GET /:characterId peut être périmé).
     const settings = await getCampaignSettings(db, req.character.campaign_id)
-    if (settings.skill_prerequisites) {
-      const skillMinReqs = await db('ref_skill_requirements')
-        .where({ skill_id, type: 'SKILL_MIN' })
+    if (settings.skill_prerequisites && targetSkillNode) {
+      const skillMinReqs = effectiveRequirements(targetSkillNode, skillsById).filter(r => r.type === 'SKILL_MIN')
       if (skillMinReqs.length > 0) {
-        const [attrs, archetype, mutationEffects] = await Promise.all([
+        const [attrs, mutationEffects] = await Promise.all([
           db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
-          db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
           getMutationEffects(sheet.id),
         ])
         const genotypeRow = archetype?.genotype_id
@@ -632,36 +672,6 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
             throw new AppError(400, `Prérequis non satisfait : ${prereqRefSkill?.label ?? req_.value} ${req_.threshold}+ requis (actuel ${total})`)
           }
         }
-      }
-    }
-
-    // MUTATION/ADVANTAGE/GENOTYPE : toujours revalidés côté serveur, jamais gatés par une option de
-    // campagne (contrairement à SKILL_MIN ci-dessus) — cf. docs/PLAN_MUTATION2.md Lot 5 [CS7]. Le
-    // client (SkillsPanel.jsx) masque déjà le bouton d'achat si le prérequis n'est pas satisfait ;
-    // cette revalidation empêche un achat via une requête forgée qui contournerait l'UI.
-    // areRequirementsSatisfied (shared/skillRequirements.js) : même évaluateur ET/OU que le client
-    // (or_group — ex. HYBRIDE : génotype hybride OU mutation Amphibie).
-    const identityReqs = await db('ref_skill_requirements')
-      .whereIn('type', ['MUTATION', 'ADVANTAGE', 'GENOTYPE'])
-      .where({ skill_id })
-    if (identityReqs.length > 0) {
-      const [activeMutationIds, activeAdvantageIds, archetype] = await Promise.all([
-        db('char_mutations').where({ char_sheet_id: sheet.id, status: 'active' }).pluck('mutation_id'),
-        db('char_advantages').where({ char_sheet_id: sheet.id }).whereNull('removed_at').pluck('advantage_id'),
-        db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
-      ])
-      const mutationSet = new Set(activeMutationIds.map(String))
-      const advantageSet = new Set(activeAdvantageIds)
-      const genotypeId = archetype?.genotype_id ?? null
-
-      const satisfied = areRequirementsSatisfied(identityReqs, (req_) => {
-        if (req_.type === 'MUTATION') return mutationSet.has(req_.value)
-        if (req_.type === 'ADVANTAGE') return advantageSet.has(req_.value)
-        if (req_.type === 'GENOTYPE') return genotypeId === req_.value
-        return true
-      })
-      if (!satisfied) {
-        throw new AppError(400, 'Prérequis non satisfait : mutation/avantage/génotype requis')
       }
     }
 

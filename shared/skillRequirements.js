@@ -34,3 +34,51 @@ export function areRequirementsSatisfied(requirements, isReqSatisfied) {
   }
   return true
 }
+
+const IDENTITY_TYPES = new Set(['MUTATION', 'ADVANTAGE', 'GENOTYPE'])
+
+// ─── Chaîne de prérequis — enfant de catégorie sans prérequis propre ──────────────────────────
+// Trouvé 2026-10-04 (CHARSHEET-ADVANTAGE-SKILL-GATE) : les 50 Pouvoirs Polaris (enfants de la
+// catégorie POUVOIRS_POLARIS) n'ont aucune ligne ref_skill_requirements à eux — seul le verrou
+// SKILL_MIN de la catégorie (→ MAITRISE_DE_LA_FORCE_POLARIS, elle-même gatée par l'Avantage Force
+// Polaris) régit leur accès. Sans remonter cette chaîne, chaque enfant paraît librement accessible.
+//
+// effectiveRequirements : prérequis réels d'une compétence — les siens, ou ceux de son parent
+// catégorie si elle n'en a aucun en propre (récursif — une seule génération dans les données
+// actuelles, mais général plutôt que spécifique à Polaris).
+export function effectiveRequirements(skill, skillsById, visited = new Set()) {
+  if (!skill || visited.has(skill.id)) return []
+  visited.add(skill.id)
+  if (skill.requirements?.length > 0) return skill.requirements
+  const parent = skill.parent ? skillsById.get(skill.parent) : null
+  return parent?.is_category ? effectiveRequirements(parent, skillsById, visited) : []
+}
+
+// gatherChainIdentityRequirements : rassemble toutes les lignes ADVANTAGE/MUTATION/GENOTYPE
+// rencontrées en remontant la chaîne de prérequis effectifs — directement sur la compétence, ou
+// via une ligne SKILL_MIN qui pointe vers une compétence elle-même gatée par l'identité (pas son
+// simple niveau). Un prérequis SKILL_MIN dont la cible n'a aucun verrou d'identité n'ajoute rien :
+// un niveau de compétence atteignable normalement n'est jamais un motif de masquage, seul un
+// Avantage/Mutation/Génotype manquant l'est (CHARSHEET-ADVANTAGE-SKILL-GATE, retour Saar 2026-10-04).
+export function gatherChainIdentityRequirements(skill, skillsById, visited = new Set(), acc = []) {
+  if (!skill || visited.has(skill.id)) return acc
+  visited.add(skill.id)
+  for (const req of effectiveRequirements(skill, skillsById)) {
+    if (IDENTITY_TYPES.has(req.type)) {
+      acc.push(req)
+    } else if (req.type === 'SKILL_MIN') {
+      const target = skillsById.get(req.value)
+      if (target) gatherChainIdentityRequirements(target, skillsById, visited, acc)
+    }
+  }
+  return acc
+}
+
+// isBlockedByIdentityChain : true si le blocage réel, au bout de la chaîne de prérequis, est un
+// Avantage/Mutation/Génotype manquant — jamais un simple niveau de compétence sous le seuil requis.
+// C'est cette distinction qui décide si une compétence doit être masquée (identité) ou affichée
+// grisée avec son prérequis mis en avant (compétence minimum atteignable).
+export function isBlockedByIdentityChain(skill, skillsById, isIdentityReqSatisfied) {
+  const chainReqs = gatherChainIdentityRequirements(skill, skillsById)
+  return chainReqs.length > 0 && !areRequirementsSatisfied(chainReqs, isIdentityReqSatisfied)
+}

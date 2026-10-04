@@ -176,9 +176,9 @@ app.use('/api/char-ref',   charRefRouter)
 
 | Valeur | Signification | Comportement dans SkillsPanel |
 |---|---|---|
-| `NULL` | Standard | Toujours visible (si prérequis `SKILL_MIN` satisfaits — évalué uniquement si `settings.skill_prerequisites` actif, OPT-07, défaut OFF, Session 141) |
+| `NULL` | Standard | Toujours visible ; verrouillée (non augmentable, prérequis affiché) si un prérequis `SKILL_MIN` non satisfait — évalué uniquement si `settings.skill_prerequisites` actif (OPT-07, défaut **true** depuis WIZ9 ; jamais masquée pour ce seul motif, retour Saar 2026-10-04) |
 | `'(-3)'` | Difficile | Malus -3 au niveau de base |
-| `'(X)'` | Réservée | Masquée sauf `is_learned=true` OU mutation débloquante active (PC15) |
+| `'(X)'` | Réservée | Masquée sauf `is_learned=true`, un Avantage/Mutation/Génotype débloquant actif (PC15), ou un prérequis `SKILL_MIN` présent (alors verrouillée, pas masquée — voir ci-dessous) |
 | `'PN'` | Progression Naturelle | Bonus immersion automatique (max +5) |
 | `'PREREQ'` | Prérequis (†) | Groupe avec prérequis — affiché comme sous-en-tête avec `†` |
 | `'S'` | Spécialisation | **Ne jamais utiliser** sur MUTATION_* ou POUVOIRS_POLARIS_* (PC17) |
@@ -668,28 +668,55 @@ Utilisé par `charStats.js` côté serveur (source de vérité) et en miroir dan
 | 15 | 11 |
 | > 15 | 11 (dernier palier LdB) |
 
-Déblocage compétence `(X)` : coût fixe **3 PE** — `mastery` reste 0, `is_learned → true`.
+Déblocage compétence `(X)` : coût fixe **1 PE** (`getCoutDeblocageX`, `server/src/lib/charStats.js`) — `mastery → -3`, `is_learned → true`.
 
-### Algorithme de visibilité (SkillsPanel.isVisible)
+### Algorithme de disponibilité (SkillsPanel.getSkillGate)
+
+> Revu CHARSHEET-ADVANTAGE-SKILL-GATE (2026-10-04, retour Saar) : un verrou d'Avantage/Mutation/
+> Génotype masque toujours la compétence, jamais un simple niveau de compétence (SKILL_MIN) qui
+> reste atteignable — celui-ci verrouille (non augmentable) et met en avant le prérequis manquant,
+> sans jamais masquer. La distinction se décide **au bout de la chaîne de prérequis**, pas sur la
+> ligne immédiate : voir `shared/skillRequirements.js`.
 
 ```
-1. attr_1 === 'CHC'                           → false (groupe structurel, PC13)
-2. Pré-calcul mutationsSatisfied :
-   mutationReqs = requirements.filter(MUTATION)
-   mutationsSatisfied = length > 0 AND every(r => activeMutations.has(r.value))
-3. marker === '(X)' AND NOT learnedSet AND NOT mutationsSatisfied :
-   - si !progressionMode → false (PC15)
-   - si progressionMode  → continue (prérequis SKILL_MIN évalués normalement)
-4. Pour chaque prérequis :
-   SKILL_MIN  → si skillPrerequisitesEnabled === true ET calcTotal(prereq) < threshold → false
-   MUTATION   → !activeMutations.has(value)    → false
-   GENOTYPE   → genotypeId !== value           → false
-5. → true (visible)
+1. attr_1 === 'CHC'                              → masquée (groupe structurel, PC13)
+2. isBlockedByIdentityChain(skill) :
+   - prérequis effectifs (effectiveRequirements : les siens, ou ceux de sa catégorie parente si
+     elle n'en a aucun en propre — ex. les 50 Pouvoirs Polaris individuels, enfants de la
+     catégorie POUVOIRS_POLARIS, qui n'ont eux-mêmes aucun prérequis)
+   - ADVANTAGE/MUTATION/GENOTYPE rencontré directement, OU via une ligne SKILL_MIN dont la cible
+     est elle-même gatée par l'identité (ex. POUVOIRS_POLARIS --SKILL_MIN--> MAITRISE_DE_LA_FORCE_
+     POLARIS --ADVANTAGE--> adv_079) : ET entre lignes/groupes, OU entre lignes du même or_group
+     (ex. HYBRIDE : génotype hybride OU mutation Amphibie)
+   - si non satisfait → masquée, quel que soit le mode
+3. marker === '(X)' AND NOT learnedSet AND effectiveRequirements(skill).length === 0
+   AND !progressionMode → masquée (comportement historique : un (X) sans aucun prérequis reste
+   caché hors Progression ; non concerné par ce correctif)
+4. Pour chaque prérequis SKILL_MIN effectif, si skillPrerequisitesEnabled === true ET
+   calcTotal(prereq) < threshold → verrouillée (pas masquée), bouton d'achat désactivé,
+   nom du prérequis manquant affiché sous la compétence — toujours, y compris hors Progression
+5. → visible, non verrouillée
 ```
 
-**OPT-07 (`settings.skill_prerequisites`, défaut OFF, câblée Session 141)** : seul le type `SKILL_MIN` est concerné — `MUTATION`/`GENOTYPE` restent des restrictions biologiques toujours actives, jamais optionnelles. Prop `skillPrerequisitesEnabled` transmise par `CharacterSheet.jsx` (lu depuis `GET /char-sheet/:characterId` → `settings`, merge défauts via `getCampaignSettings`). Revalidé indépendamment côté serveur dans `POST /skills/buy` (jamais fait confiance à un état client) via `calcSkillTotal` (`server/src/lib/charStats.js`, même fonction que le combat). Le marqueur `†` (`marker==='PREREQ'`, sous-en-tête de groupe) reste affiché quel que soit l'état de l'option — purement informatif, non lié à l'application réelle de la règle.
+**OPT-07 (`settings.skill_prerequisites`, défaut **true** depuis WIZ9 — une campagne créée avant ce
+correctif peut garder `false` explicitement enregistré, non rétroactif)** : seul le type
+`SKILL_MIN` est concerné — `MUTATION`/`ADVANTAGE`/`GENOTYPE` restent des restrictions toujours
+actives, jamais optionnelles, y compris au bout d'une chaîne SKILL_MIN (étape 2 ci-dessus, non
+gatée par cette option). Prop `skillPrerequisitesEnabled` transmise par `CharacterSheet.jsx` (lu
+depuis `GET /char-sheet/:characterId` → `settings`, merge défauts via `getCampaignSettings`).
+Revalidé indépendamment côté serveur dans `POST /skills/buy` (jamais fait confiance à un état
+client), avec la même résolution de chaîne (`effectiveRequirements`/`isBlockedByIdentityChain`,
+catalogue complet chargé une fois) — sans ça, une requête visant directement un enfant de catégorie
+sans prérequis propre ne rencontrait aucune vérification du tout. Le marqueur `†`
+(`marker==='PREREQ'`, sous-en-tête de groupe) reste affiché quel que soit l'état de l'option —
+purement informatif, non lié à l'application réelle de la règle.
 
-**Comportement mode Progression :** les compétences `(X)` non apprises deviennent visibles si leurs prérequis SKILL_MIN sont satisfaits (ou si l'option est désactivée) — permettant le déblocage via achat XP (3 PE). Les compétences `(X)` à prérequis MUTATION restent masquées (filtrées à l'étape 4). Les `(X)` sans prérequis (Langue étrangère, Survie…) deviennent visibles — cohérent avec la fiction (accord MJ implicite via distribution XP).
+**Comportement mode Progression :** les compétences `(X)` non apprises dont la chaîne n'est bloquée
+par aucune identité deviennent achetables (sauf verrouillage SKILL_MIN, désormais visible aussi hors
+Progression). Les compétences dont la chaîne aboutit à un Avantage/Mutation/Génotype manquant
+restent masquées en permanence, y compris en Progression. Les `(X)` sans aucun prérequis (Langue
+étrangère, Survie…) deviennent visibles dès le passage en Progression — cohérent avec la fiction
+(accord MJ implicite via distribution XP).
 
 `activeMutations` = Set des `muta_numero` présents dans `charAdvantages` (type=MUTATION).
 
