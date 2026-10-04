@@ -9364,3 +9364,51 @@ séparément (`docs/Old/PLAN_WIZARDCOLLAB.md`).
 fiche) — nécessite plusieurs clients, ajouté à `docs/BETATEST.md`.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma.
+
+## Session (Dev) — 2026-10-04 — Personnage : 4 champs protégés rendus au MJ (CHARSHEET-GOLD-FREELY-EDITABLE)
+
+**Signalement** (beta-testeur) : la quantité d'or est modifiable librement depuis la fiche, sans
+passer par le système de transactions prévu (Marchand).
+
+**Cause racine confirmée en lisant le code** : `PUT /char-sheet/:id/sols` ne bloquait qu'une
+*augmentation* par un non-MJ (403), jamais une diminution — un joueur pouvait dépenser son or en
+tapant directement un nombre plus petit, sans passer par `tradeService.js` (seule autorité réelle
+sur `char_sheet.sols`, débit/crédit direct en base, jamais par cette route). Côté client,
+`InventoryBanner.jsx` rendait le champ cliquable dès `isGm || isOwner`.
+
+**Vérification demandée par Saar avant de coder (« est-ce que ça aggrade ? »)** — réponse : non,
+pas avec un correctif limité à `sols` seul. Audit exhaustif du reste du fichier pour la même classe
+de défaut (« une route mute un champ protégé sans vérifier les droits ») :
+- **`PUT /chc` (Chance) — pire que `sols`** : aucune garde du tout, pas même une asymétrie. Un
+  joueur pouvait poser sa Chance à n'importe quelle valeur 1-20, contournant le plancher RAW (3) et
+  le plafond (20) déjà imposés par `chanceService.js` (« autorité unique des mutations
+  `char_sheet.chc` »), jamais appelé par cette route brute.
+- **`DELETE /advantages/:id`** : aucune garde, alors que sa sœur `POST` (l'octroi) est déjà
+  MJ-only. Un joueur pouvait retirer lui-même un Désavantage narratif sans accord du MJ.
+- **`PUT /archetype`** : aucune garde, et ce champ inclut `genotype_id` — qui modifie les attributs
+  dérivés (`getGenotypeModForAttr`, calcul de NA). Un joueur pouvait changer son génotype après la
+  création, en silence, avec un effet mécanique réel. Les autres champs d'`archetype` (âge, sexe,
+  origine, formation) restent de la narration pure, comme `identity` — non gardés, décision
+  confirmée par Saar.
+
+**Correctif :**
+- Serveur (`char-sheet.js`) : 4 gardes `!req.isGm && !req.isVaultOwner` ajoutées — `sols` (toute
+  valeur, plus seulement une hausse), `chc` (nouvelle garde complète), `advantages` DELETE
+  (symétrique de son POST), `archetype` (uniquement si `genotype_id` est présent dans le body).
+- Client : nouveau flag dérivé `isGmOrVaultOwner` (même autorité que `req.isGm || req.isVaultOwner`
+  côté serveur — un personnage du Coffre n'a pas de MJ mais son propriétaire a les mêmes droits sur
+  SA fiche), calculé une fois dans `CharacterWindow.jsx`, propagé à `CharacterSheet.jsx` (chc,
+  select génotype), `AdvantagesPanel.jsx` (bouton retrait avantage) et `InventoryBanner.jsx` (champ
+  sols) — remplace `canEdit`/`isGm` sur ces 4 affordances précises, le reste de la fiche inchangé.
+
+**Testé** : `node --check` (fichier serveur modifié) ; `eslint` ciblé sur les 4 fichiers client (0
+erreur nouvelle, 3 problèmes préexistants sur `CharacterSheet.jsx` vérifiés dans une session
+précédente) ; `vite build` complet sans erreur ; `node --test` sur
+`chanceService`/`advantageService`/`chanceCatastropheChoiceService` (25/25, aucune régression —
+ces services eux-mêmes non modifiés, seules les gardes de route l'étaient).
+**Non testé** (⚠️ clos partiel) : scénario réel en navigateur (un joueur ne peut plus éditer
+sols/Chance/génotype ni retirer un avantage ; le MJ le peut toujours) — un seul client suffit
+(compte joueur test), pas besoin de `docs/BETATEST.md`.
+**Données** : aucune migration, aucun changement de schéma.
+**Retour arrière** : `git revert` du fichier serveur suffit à rouvrir les 4 champs ; les composants
+client retombent sur `isGm` par défaut si `isGmOrVaultOwner` n'est pas fourni (compatibilité).

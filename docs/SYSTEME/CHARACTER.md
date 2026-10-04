@@ -55,11 +55,22 @@ Supprimer un `character` VTT supprime automatiquement toute sa fiche Polaris.
 personnage Coffre (`campaign_id NULL`, voir `docs/VOCABULARY.md` "Coffre (compte)"), il n'existe
 aucun GM de campagne : `router.param('characterId')` (`char-sheet.js` ~ligne 100-111) pose alors
 `req.isVaultOwner = true` pour son propriétaire, qui obtient exactement les mêmes droits qu'un GM
-sur cette fiche précise. Toutes les routes marquées **GM uniquement** dans ce document (attributs
-`char-sheet.js:279`, skills `:435`, XP `:507`, mutations POST/DELETE `:827`/`:847`, augmentation de
-sols `:1053`) testent en réalité `!req.isGm && !req.isVaultOwner`, jamais `!req.isGm` seul — vérifié
-sur les 6 occurrences du fichier. Ne pas confondre avec un simple `isOwner` (PC6) : un joueur
-propriétaire d'un personnage de campagne normal n'a toujours pas ces droits.
+sur cette fiche précise. Toutes les routes marquées **GM uniquement** dans ce document testent en
+réalité `!req.isGm && !req.isVaultOwner`, jamais `!req.isGm` seul. Ne pas confondre avec un simple
+`isOwner` (PC6) : un joueur propriétaire d'un personnage de campagne normal n'a toujours pas ces
+droits.
+
+**Liste à jour (CHARSHEET-GOLD-FREELY-EDITABLE, 2026-10-04 — 4 gardes ajoutées après un audit
+déclenché par un ticket limité à `sols` seul ; ne plus se fier à un comptage ancien)** :
+attributs bulk `char-sheet.js:324`, skills bulk `:495`, XP `:579`, avantages POST `:806` /
+DELETE `:832` (DELETE ajoutée — manquait avant ce jour, alors que POST l'avait déjà), mutations
+POST/DELETE `:939`/`:962`, sols `:1184` (corrigée — ne bloquait avant qu'une *augmentation*, pas
+toute écriture), chc/Chance `:546` (ajoutée — aucune garde avant ce jour, pas même une asymétrie),
+archétype `:291` (ajoutée, **mais seulement si `genotype_id` est présent** dans le body — `age`/
+`sexe`/`origine`/`formation` restent de la narration pure, comme `identity`, non gardés). Côté
+client, le flag miroir `isGmOrVaultOwner` (`CharacterWindow.jsx`, défaut `isGm` si non fourni) gate
+les affordances correspondantes dans `CharacterSheet.jsx` (chc, select génotype),
+`AdvantagesPanel.jsx` (retrait avantage) et `InventoryBanner.jsx` (champ sols).
 
 ---
 

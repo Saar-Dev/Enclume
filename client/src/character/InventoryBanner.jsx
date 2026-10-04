@@ -11,7 +11,7 @@ const weightFmt = (n) => n % 1 === 0 ? n : n.toFixed(1)
 // logique de couleur inchangée — §10 point 1 du plan, indépendante de SEVERITY_COLORS/silhouette).
 // Réutilise les clés i18n inventoryPanel.* existantes (même texte, précédent déjà établi dans ce
 // domaine : containerPanel.equipPlaceholder est de même consommé depuis LocationPanel.jsx).
-export default function InventoryBanner({ characterId, canEdit, isGm }) {
+export default function InventoryBanner({ characterId, isGmOrVaultOwner }) {
   const { t } = useTranslation('charSheet')
   const { totalWeight, threshold, iniPenalty, sols, loading } = useInventoryData(characterId)
   const setSolsStore = useCharacterStore(s => s.setSols)
@@ -22,13 +22,15 @@ export default function InventoryBanner({ characterId, canEdit, isGm }) {
   const [editingSols, setEditingSols] = useState(false)
   const [solsInput,   setSolsInput]   = useState('0')
 
+  // CHARSHEET-GOLD-FREELY-EDITABLE (2026-10-04) : ce champ était ouvert à isGm || isOwner — un
+  // joueur pouvait diminuer librement son propre or, en contournant le Marchand (tradeService.js,
+  // seule autorité réelle sur char_sheet.sols). Édition réservée à isGmOrVaultOwner (même garde
+  // que la route serveur) ; l'ancienne asymétrie « augmentation bloquée côté non-GM » n'a plus
+  // lieu d'être, le champ n'est simplement plus éditable pour un joueur en campagne.
   const handleSolsSave = useCallback(async () => {
     setEditingSols(false)
     const value = parseInt(solsInput, 10)
     if (isNaN(value) || value < 0 || value === sols) { setSolsInput(String(sols)); return }
-    // Asymétrie serveur (char-sheet.js : un non-GM ne peut que diminuer, 403 sinon) — bornée ici pour
-    // ne pas laisser un 403 surprendre l'utilisateur (§2.3 du plan), pas de requête envoyée dans ce cas.
-    if (!isGm && value > sols) { setSolsInput(String(sols)); return }
     try {
       const res = await api.put(`/char-sheet/${characterId}/sols`, { sols: value })
       setSolsStore(characterId, res.data.sols)
@@ -36,7 +38,7 @@ export default function InventoryBanner({ characterId, canEdit, isGm }) {
       console.error('Erreur sauvegarde sols :', err)
       setSolsInput(String(sols))
     }
-  }, [characterId, sols, solsInput, isGm, setSolsStore])
+  }, [characterId, sols, solsInput, setSolsStore])
 
   if (loading) return null
 
@@ -63,7 +65,7 @@ export default function InventoryBanner({ characterId, canEdit, isGm }) {
         )}
         <span style={{ ...s.statLabel, display: 'flex', alignItems: 'center', gap: 4 }}>
           {t('inventoryPanel.solLabel')}&nbsp;
-          {editingSols && canEdit ? (
+          {editingSols && isGmOrVaultOwner ? (
             <input
               style={s.solsInput}
               value={solsInput}
@@ -77,8 +79,8 @@ export default function InventoryBanner({ characterId, canEdit, isGm }) {
             />
           ) : (
             <span
-              style={{ color: '#c0c0d0', cursor: canEdit ? 'pointer' : 'default', textDecoration: canEdit ? 'underline dotted' : 'none' }}
-              onClick={() => { if (canEdit) { setSolsInput(String(sols)); setEditingSols(true) } }}
+              style={{ color: '#c0c0d0', cursor: isGmOrVaultOwner ? 'pointer' : 'default', textDecoration: isGmOrVaultOwner ? 'underline dotted' : 'none' }}
+              onClick={() => { if (isGmOrVaultOwner) { setSolsInput(String(sols)); setEditingSols(true) } }}
             >
               {sols}
             </span>

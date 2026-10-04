@@ -284,6 +284,14 @@ router.put('/:characterId/archetype', async (req, res, next) => {
       origin_geo, origin_soc, training_base, higher_ed,
     } = req.body
 
+    // CHARSHEET-GOLD-FREELY-EDITABLE (2026-10-04) : genotype_id modifie les attributs dérivés
+    // (getGenotypeModForAttr, calcul de NA côté client) — un joueur pouvait changer son génotype
+    // après la création, en silence, avec un effet mécanique réel. Les autres champs (âge, sexe,
+    // origine, formation) restent de la narration pure, comme identity — non gardés.
+    if (genotype_id !== undefined && !req.isGm && !req.isVaultOwner) {
+      throw new AppError(403, 'Seul le MJ peut modifier le génotype')
+    }
+
     const updates = {}
     if (genotype_id    !== undefined) updates.genotype_id    = genotype_id
     if (age            !== undefined) updates.age            = age
@@ -531,6 +539,14 @@ router.put('/:characterId/skills', async (req, res, next) => {
 // ─── PUT /api/char-sheet/:characterId/chc ────────────────────────────────────
 router.put('/:characterId/chc', async (req, res, next) => {
   try {
+    // CHARSHEET-GOLD-FREELY-EDITABLE (2026-10-04) : aucune garde avant ce correctif — un joueur
+    // pouvait poser sa Chance à n'importe quelle valeur, contournant le plancher/plafond RAW et le
+    // verrou anti-course de chanceService.js (« autorité unique des mutations char_sheet.chc »,
+    // jamais appelé par cette route). Même garde que xp/attributes (bulk)/skills (bulk).
+    if (!req.isGm && !req.isVaultOwner) {
+      throw new AppError(403, 'Seul le MJ peut modifier directement la Chance')
+    }
+
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -810,6 +826,11 @@ router.post('/:characterId/advantages', async (req, res, next) => {
 // ─── DELETE /api/char-sheet/:characterId/advantages/:id ──────────────────────
 router.delete('/:characterId/advantages/:id', async (req, res, next) => {
   try {
+    // CHARSHEET-GOLD-FREELY-EDITABLE (2026-10-04) : aucune garde avant ce correctif, alors que sa
+    // sœur POST (l'octroi) est déjà MJ-only — un joueur pouvait retirer lui-même un Désavantage
+    // narratif sans accord du MJ.
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
+
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -1157,8 +1178,11 @@ router.put('/:characterId/sols', async (req, res, next) => {
       .where({ character_id: req.params.characterId }).first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
-    if (sols > sheet.sols && !req.isGm && !req.isVaultOwner) {
-      throw new AppError(403, 'Seul le MJ peut augmenter le total de sols')
+    // CHARSHEET-GOLD-FREELY-EDITABLE (2026-10-04) : toute écriture directe, pas seulement une
+    // augmentation — un joueur qui veut dépenser de l'or passe par le Marchand (tradeService.js,
+    // débit/crédit direct en base, jamais par cette route), jamais par une édition libre du total.
+    if (!req.isGm && !req.isVaultOwner) {
+      throw new AppError(403, 'Seul le MJ peut modifier directement le total de sols')
     }
 
     const [updated] = await db('char_sheet')

@@ -11,6 +11,10 @@
  *   canEdit              — booléen (isGm || isOwner)
  *   isGm                 — booléen — gate l'ajout/retrait de mutations (MJ uniquement, Lot D :
  *                          octroi narratif, pas un choix libre du joueur)
+ *   isGmOrVaultOwner     — booléen (isGm || Coffre du propriétaire) — gate le RETRAIT d'un
+ *                          avantage/désavantage (CHARSHEET-GOLD-FREELY-EDITABLE, 2026-10-04) :
+ *                          sa sœur, l'octroi, est déjà MJ-only ; un joueur ne doit pas pouvoir
+ *                          retirer lui-même un Désavantage narratif sans accord du MJ.
  *   onSaved              — callback après opération réussie (feedback ✓ CharacterWindow)
  *   onMutationsChanged   — callback() après ajout/retrait d'une mutation — recharge
  *                          mutationEffects dans CharacterSheet (naMap sinon périmé tant que la
@@ -58,6 +62,7 @@ export default function AdvantagesPanel({
   onAdvantagesChange,
   canEdit,
   isGm,
+  isGmOrVaultOwner = isGm,
   onSaved,
   onMutationsChanged,
   charSkills,
@@ -372,7 +377,7 @@ export default function AdvantagesPanel({
                   {entry.data.type === 'advantage' ? t('advantages.badgeAdvantage') : t('advantages.badgeDisadvantage')}
                 </span>
                 <span style={s.entryLabel}>{entry.data.name}</span>
-                {canEdit && (
+                {isGmOrVaultOwner && (
                   <button
                     style={s.removeBtn}
                     onClick={() => handleRemove(entry.data)}

@@ -197,7 +197,7 @@ function loadAccordionState(isOwner) {
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) {
+export default function CharacterSheet({ characterId, isGm, isOwner, isGmOrVaultOwner = isGm, onSaved }) {
   const { t } = useTranslation()
 
   // ─── État chargement ───────────────────────────────────────────────────────
@@ -809,7 +809,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             <select
               style={s.headerSelect}
               value={genotypeId}
-              disabled={!canEdit}
+              disabled={!isGmOrVaultOwner}
               onChange={e => {
                 setGenotypeId(e.target.value)
                 saveArchetype({ genotype_id: e.target.value })
@@ -1058,7 +1058,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
                     min="1"
                     max="20"
                     value={chc}
-                    readOnly={!canEdit}
+                    readOnly={!isGmOrVaultOwner}
                     onChange={e => {
                       const val = parseInt(e.target.value) || 1
                       chcRef.current = val
@@ -1323,6 +1323,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           onAdvantagesChange={setCharAdvantages}
           canEdit={canEdit}
           isGm={isGm}
+          isGmOrVaultOwner={isGmOrVaultOwner}
           onSaved={onSaved}
           onMutationsChanged={handleMutationsChanged}
           charSkills={charSkills}

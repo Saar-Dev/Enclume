@@ -95,6 +95,11 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
   const isOwner = character.user_id != null && character.user_id === character._currentUserId
   const effectiveIsOwner = isOwner && !forceReadOnly
   const effectiveIsGm = isGm && !forceReadOnly
+  // Même autorité que req.isGm || req.isVaultOwner côté serveur (char-sheet.js) : un personnage du
+  // Coffre (hasCampaign=false) n'a pas de MJ, mais son propriétaire a les mêmes droits qu'un MJ sur
+  // SA PROPRE fiche — utilisé pour les champs normalement MJ-only (sols, Chance, génotype, retrait
+  // d'avantage) qui restent librement éditables dans le Coffre (CHARSHEET-GOLD-FREELY-EDITABLE).
+  const effectiveIsGmOrVaultOwner = effectiveIsGm || (!hasCampaign && !forceReadOnly)
 
   // ─── État fenêtre ──────────────────────────────────────────────────────────
   const [pos,  setPos]  = useState(INITIAL_POS)
@@ -439,6 +444,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
             characterId={character.id}
             isGm={effectiveIsGm}
             isOwner={effectiveIsOwner}
+            isGmOrVaultOwner={effectiveIsGmOrVaultOwner}
             onSaved={handleSaved}
           />
         )}
@@ -467,8 +473,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               inventoryBanner={
                 <InventoryBanner
                   characterId={character.id}
-                  canEdit={effectiveIsGm || effectiveIsOwner}
-                  isGm={effectiveIsGm}
+                  isGmOrVaultOwner={effectiveIsGmOrVaultOwner}
                 />
               }
             />
