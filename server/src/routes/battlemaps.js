@@ -49,6 +49,17 @@ import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
 
+// Notifie toute la campagne qu'une carte a changé (surface, voxels ou métadonnées) — un seul point
+// d'émission pour les 3 routes mutantes de ce fichier qui affectent ce qu'un joueur voit sur sa
+// carte active, pour qu'aucune future route ne puisse l'oublier silencieusement (audit du
+// 2026-10-04 : /surface n'émettait rien du tout, contrairement à world-move/world-visibility/
+// world-effects du même fichier qui émettent déjà WORLD_RUNTIME_UPDATED — MAP-UPDATE-NOT-PROPAGATED-
+// TO-PLAYERS). `battlemap` doit porter `id`/`campaign_id`, chargé AVANT la transaction (champs
+// jamais mutés par un UPDATE de ce fichier, donc toujours valides après coup).
+function notifyMapUpdated(io, battlemap) {
+  io.to(battlemap.campaign_id).emit(WS.MAP_UPDATED, { battlemapId: battlemap.id })
+}
+
 async function battlemapAndMember(battlemapId, userId) {
   const battlemap = await db('battlemaps').where({ id: battlemapId }).first()
   if (!battlemap) throw new AppError(404, 'Battlemap not found')
@@ -843,6 +854,7 @@ router.put('/:id',
       .update(updates)
       .returning('*')
 
+    notifyMapUpdated(req.app.get('io'), battlemap)
     res.json({ battlemap: updated })
   }
 )
@@ -930,6 +942,7 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
     })
 
     invalidateBattlemapWorld(req.params.id)
+    notifyMapUpdated(req.app.get('io'), battlemap)
     res.json({ ok: true, ...updated })
   } catch (err) {
     next(err)
@@ -996,6 +1009,7 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
     })
 
     cacheBattlemapWorldSnapshot(updated, snapshot)
+    notifyMapUpdated(req.app.get('io'), battlemap)
     res.json({ ok: true, ...updated, surface_data: prepared.surfaceData })
   } catch (err) {
     next(err)

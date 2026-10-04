@@ -9265,3 +9265,44 @@ points encore en attente). Saar peut le reproduire seul (un personnage, mode Pro
 multi-client).
 **Données** : aucune migration.
 **Retour arrière** : `git revert` des fichiers modifiés suffit ; la route serveur est inchangée.
+
+## Session (Dev) — 2026-10-04 — Carte : la mise à jour du MJ se propage enfin aux joueurs en session (MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS)
+
+**Signalement** (Saar) : quand le MJ modifie la carte, la mise à jour ne se propage pas côté
+joueur.
+
+**Cause racine confirmée en lisant le code** : `PUT /:id/surface` (`battlemaps.js`, la route que
+l'éditeur 3D appelle pour sauvegarder la géométrie) met bien à jour la base et le cache serveur du
+`WorldSnapshot`, mais n'émettait **aucun** événement socket — contrairement à d'autres routes du
+même fichier (`world-move`, `world-visibility`, `world-effects`) qui émettent déjà
+`WORLD_RUNTIME_UPDATED` après leur mutation. Un joueur déjà en session ne voyait la carte éditée
+qu'en rechargeant la page, ou si le MJ basculait sur une autre carte puis revenait (rechargement
+incident via `MAP_SWITCH`, déjà câblé).
+
+**Vérification demandée par Saar avant de coder** (« est-ce que ça aggrade la structure ou c'est un
+simple fix ? ») — réponse : non, pas dans le périmètre initialement proposé. `PUT /:id/voxels` et
+`PUT /:id` (métadonnées) du même fichier ont exactement le même trou ; corriger uniquement
+`/surface` aurait réglé le symptôme signalé sans fermer la classe de bug (la prochaine route
+mutante aurait pu reproduire le même oubli). Périmètre élargi aux 3 routes, avec un seul point
+d'émission partagé plutôt que 3 appels recopiés.
+
+**Correctif :**
+- `shared/events.js` : nouvel événement `MAP_UPDATED` (payload `{ battlemapId }`) — distinct de
+  `MAP_SWITCH` (changer QUELLE carte est affichée) et de `WORLD_RUNTIME_UPDATED` (état runtime :
+  portes, ascenseurs, effets), pour ne pas mélanger trois sens différents sous un seul nom.
+- `battlemaps.js` : `notifyMapUpdated(io, battlemap)` — une seule fonction, appelée par `PUT
+  /:id/surface`, `PUT /:id/voxels` et `PUT /:id` après leur sauvegarde respective.
+- `useEntitySocket.js` : nouvel écouteur `onMapUpdated` — ignore l'événement si la carte concernée
+  n'est pas celle actuellement affichée (`useMapStore.battlemap.id`), sinon recharge via `GET
+  /battlemaps/:id` (même requête que `onMapSwitch`, réutilisée telle quelle — aucune nouvelle route
+  REST).
+
+**Testé** : `node --check` sur les fichiers serveur modifiés ; `node --test
+server/src/services/battlemapWorldPersistence.test.mjs` (3/3) et `shared/**/*.test.mjs` (941/941,
+aucune régression) ; `eslint` ciblé (0 erreur nouvelle, 1 avertissement préexistant réduit d'une
+dépendance manquante) ; `vite build` complet sans erreur.
+**Non testé** (⚠️ clos partiel) : scénario réel à deux sessions simultanées (MJ édite la carte,
+joueur déjà connecté voit la mise à jour sans recharger) — nécessite plusieurs clients, ajouté à
+`docs/BETATEST.md`.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des fichiers modifiés suffit ; aucun changement de schéma.

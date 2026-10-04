@@ -44,6 +44,11 @@ export const WS = {
   // Battlemap
   MAP_SWITCH:   'map:switch',
   MAP_VIEWPORT: 'map:viewport',
+  // Document battlemap muté (surface_data, voxel_data ou métadonnées) — à distinguer de MAP_SWITCH
+  // (changer QUELLE carte est affichée) et de WORLD_RUNTIME_UPDATED (état runtime : portes,
+  // ascenseurs, effets). Payload { battlemapId } ; un client ne recharge que s'il affiche
+  // actuellement cette carte (MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS).
+  MAP_UPDATED: 'map:updated',
   WORLD_RUNTIME_UPDATED: 'world:runtime_updated',
 
   // Documents

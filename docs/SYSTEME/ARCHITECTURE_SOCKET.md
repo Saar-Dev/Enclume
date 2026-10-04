@@ -1,6 +1,10 @@
 SYSTEME/ARCHITECTURE_SOCKET.md — Architecture de communication temps réel
 
-    Dernière mise à jour : 2026-07-18
+    Dernière mise à jour : 2026-10-04 — MAP_UPDATED ajouté (MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS) :
+    PUT /:id/surface, /:id/voxels et /:id (battlemaps.js) n'émettaient rien du tout à la sauvegarde —
+    un joueur déjà en session ne voyait une carte éditée qu'en rechargeant la page. Émis directement
+    depuis la route REST (patron identique à WORLD_RUNTIME_UPDATED, pas de module socketXxx.js dédié),
+    écouté par useEntitySocket.js (ignore si ce n'est pas la carte actuellement affichée).
     Audit de compréhension approfondie 2026-08-26 (suite) : référence à "SYSTEME/FSM_COMBAT.md"
     corrigée (fichier inexistant, la vraie doc de combatFSM.js vit dans SERVICES_COMBAT.md §6) ;
     double enregistrement spécial-casé de registerWizardHandlers (Coffre-native hors campagne +
@@ -47,10 +51,20 @@ que le client continuait d'émettre — deux traitements distincts appliqués :
 - **MAP_VIEWPORT** : aucune émission trouvée nulle part, ni client ni serveur — pas un handler manquant,
   une constante déclarée et jamais utilisée. Rien à corriger côté code.
 
+**MAP_UPDATED (ajouté 2026-10-04, MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS)** : `PUT /:id/surface`
+mettait déjà à jour la base et le cache serveur du `WorldSnapshot` sans jamais notifier les clients
+connectés — `/:id/voxels` et `PUT /:id` (métadonnées) avaient le même trou dans le même fichier.
+Un seul point d'émission (`notifyMapUpdated(io, battlemap)`, `battlemaps.js`) appelé par les 3
+routes plutôt que 3 appels `io.emit` recopiés — pour qu'une 4ᵉ route ajoutée plus tard ne puisse
+pas reproduire le même oubli silencieusement. `useEntitySocket.js::onMapUpdated` ignore l'événement
+si la carte concernée n'est pas celle actuellement affichée (elle sera à jour à son prochain
+affichage, pas la peine de la pousser maintenant) ; sinon, même requête `GET /battlemaps/:id` que
+`onMapSwitch`.
+
 Client :
 SocketProvider (créé dans SessionPage)
  ├── useTokenSocket()        — écoute TOKEN_MOVED, TOKEN_CREATED, TOKEN_DELETED, TOKEN_UPDATED, TOKEN_STATUS_UPDATED
- ├── useEntitySocket()       — écoute MAP_SWITCH, ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT
+ ├── useEntitySocket()       — écoute MAP_SWITCH, MAP_UPDATED, ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT
  ├── useCombatSocket()       — écoute 21 événements COMBAT_* (corrigé 2026-08-26, comptage réel
  │                            `socket.on(WS...)`, était 18) ; expose des états UI (reloadResult,
  │                            damagePayload, etc.)

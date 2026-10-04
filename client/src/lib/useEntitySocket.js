@@ -13,7 +13,7 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
   const socket = useSocket()
   const { user } = useAuthStore()
   const { clearPendingEntityId, addMessage } = useSessionStore()
-  const { setBattlemap } = useMapStore()
+  const { battlemap, setBattlemap } = useMapStore()
   const { setTokens } = useTokenStore()
   const { setEntities } = useEntityStore()
   const { t } = useTranslation()
@@ -32,6 +32,16 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
         })
         .then(res => setEntities(res.data.entities || []))
         .catch(err => console.error('Erreur chargement carte MAP_SWITCH :', err))
+    }
+
+    // MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS : la carte affichée a été mutée (surface, voxels ou
+    // métadonnées) ailleurs — jamais un vrai changement de carte (MAP_SWITCH), donc on ignore si
+    // ce n'est pas la carte actuellement affichée (elle sera à jour à son prochain affichage).
+    const onMapUpdated = ({ battlemapId }) => {
+      if (String(battlemap?.id) !== String(battlemapId)) return
+      api.get(`/battlemaps/${battlemapId}`)
+        .then(res => setBattlemap(res.data.battlemap))
+        .catch(err => console.error('Erreur rechargement carte MAP_UPDATED :', err))
     }
 
     const onEntityActionPending = (pending) => {
@@ -127,6 +137,7 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
     }
 
     socket.on(WS.MAP_SWITCH,              onMapSwitch)
+    socket.on(WS.MAP_UPDATED,             onMapUpdated)
     socket.on(WS.ENTITY_ACTION_PENDING,   onEntityActionPending)
     socket.on(WS.ENTITY_ACTION_RESULT,    onEntityActionResult)
     socket.on(WS.ENTITY_MOVE_RESULT,      onEntityMoveResult)
@@ -136,6 +147,7 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
 
     return () => {
       socket.off(WS.MAP_SWITCH,            onMapSwitch)
+      socket.off(WS.MAP_UPDATED,           onMapUpdated)
       socket.off(WS.ENTITY_ACTION_PENDING, onEntityActionPending)
       socket.off(WS.ENTITY_ACTION_RESULT,  onEntityActionResult)
       socket.off(WS.ENTITY_MOVE_RESULT,    onEntityMoveResult)
@@ -143,6 +155,6 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
       socket.off(WS.TRADE_SELL_REQUEST,    onSellRequest)
       socket.off(WS.TRADE_OFFER_RECEIVED,  onOfferReceived)
     }
-  }, [socket, setRadialMenu, setMoveTarget])
+  }, [socket, setRadialMenu, setMoveTarget, battlemap, setBattlemap])
   // Pas de return — aucun état exposé
 }

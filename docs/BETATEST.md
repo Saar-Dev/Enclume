@@ -74,3 +74,26 @@ non encore identifié faute de repro précise.
 5. Si quelque chose « ne fonctionne pas », noter précisément : quelle étape (sélection, résolution,
    fenêtre), quel nombre d'attaques, CaC ou Tir, cible unique ou multiple — c'est l'information qui
    manque aujourd'hui pour aller plus loin.
+
+## Carte
+
+### MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS — propagation live d'une édition de carte
+**Ajouté le** : 2026-10-04.
+**Contexte** : correctif codé (nouvel événement `MAP_UPDATED`, `shared/events.js` +
+`battlemaps.js` + `useEntitySocket.js`), vérifié par tests unitaires/partagés et build client, mais
+jamais exercé avec un vrai second client connecté — nécessite un joueur déjà en session sur la
+carte que le MJ modifie.
+
+**Scénario à dérouler :**
+1. MJ et joueur connectés sur la même carte (le joueur doit l'avoir déjà affichée, pas juste la
+   campagne ouverte).
+2. Le MJ édite la géométrie dans l'éditeur 3D (ajouter/déplacer un mur, une salle) et sauvegarde.
+3. Vérifier que la carte du joueur se met à jour **sans qu'il recharge la page** et sans action de
+   sa part.
+4. Même vérification après une édition de voxels (textures/décors) et après un changement de
+   métadonnées (nom, grille) via les Paramètres de la carte.
+5. Vérifier qu'un joueur sur une **autre** carte (pas celle éditée) ne subit aucun rechargement
+   inutile.
+
+**Résultat attendu :** la carte affichée chez le joueur reflète l'édition du MJ en quelques
+secondes, sans rechargement manuel ; une carte non concernée reste silencieuse.
