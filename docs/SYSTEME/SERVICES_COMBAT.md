@@ -1,6 +1,6 @@
 SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 
-    Dernière mise à jour : 2026-09-24 — services du drone d'interception ajoutés à l'arborescence (§1).
+    Dernière mise à jour : 2026-09-24 — services du drone d'interception ajoutés à l'arborescence (§1) ; Lot 3 (CRD) : compteur `droneInterceptionUsesService`.
     Mis à jour 2026-09-25 — services de « Permuter l'arme en combat » ajoutés à l'arborescence (§1) : `combatGrabService`, `combatGrabAnnouncement`, `combatHandWeaponNotice`, `inventoryBroadcast` (COMBAT.md « Permuter l'arme en combat »).
     Précédemment : 2026-07-21 — ajout renvoi vers @MODING (mods d'armes).
     Audit de compréhension approfondie 2026-08-26 (suite) : §7 corrigé (advanceSlot périmé →
@@ -32,6 +32,8 @@ server/src/lib/
 ├── droneInterceptionService.js — drone d'interception : noyau commun tir/grenade (éligibilité, portée, déplacement,
 │                         Test, chat), resolveProtectorInterposition, resolveGrenadeInterposition, reportProtectedMiss,
 │                         filterProtectorInterceptors (COMBAT.md « Drone d'interception »)
+│                         (Lot 3, CRD : plafond, malus, rayon d'action — services/droneInterceptionUsesService.js tient le compteur
+│                         atomique par Tour, table drone_interception_uses)
 ├── droneDamageNotice.js — buildDroneDamageNotice : message de chat « le drone encaisse » (gravité, intégrité), pur
 ├── tokenMovementEmitter.js — buildTokenMovedPayload / emitExecutedTokenMovement : TOKEN_MOVED d'un déplacement exécuté
 ├── criticalFailReroll.js — resolveCriticalFailReroll (extrait de socketCombatHelpers.js) : relance d'un échec critique
@@ -100,8 +102,6 @@ await applyStun(io, db, campaignId, {
     Fallback (joueur hors ligne, pas de GM) → D6 auto serveur.
 
 Évolution post-REWORK-04 : le paramètre pendingStunActions a été retiré. L'état est persisté dans combat_pending (table DB) et consommé plus tard par COMBAT_STUN_CONFIRM.
-emitShockDiceResult
-
 applyStunWithDuration
 
 Écrit `stunned` / `unconscious` / `evanoui` (transaction : efface la famille puis insère — exclusion mutuelle) et diffuse
@@ -171,9 +171,9 @@ Logique détaillée :
 
     Dégâts nets — max(0, degautsBruts - (etq ?? 0) + rd).
 
-    Choc (optionnel) — résolution DSL de la munition via resolveChocFormula. Dommages virtuels (jamais de blessure créée). Si présent, le Test de Choc utilise le total combiné physique+Choc.
-
     Cadavre — si la cible est un cadavre (`isCharacterDead`), la blessure est appliquée mais AUCUN test de Choc n'est tiré (`shockResult` reste null, donc aucun D6 de durée ni `applyStun` en aval) : `resolveTargetHit` est le seul site de tirage du Choc.
+
+    Choc (optionnel) — résolution DSL de la munition via resolveChocFormula. Dommages virtuels (jamais de blessure créée). Si présent, le Test de Choc utilise le total combiné physique+Choc.
 
     Sévérité — basée sur les dégâts physiques seuls (woundSeverityForDamage, shared/woundConstants.js — autorité unique des seuils, humain et drone).
 

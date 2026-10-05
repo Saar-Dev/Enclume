@@ -5,10 +5,13 @@
 > drone, roster, obstacle géométrique, Lot 2). Dette RAW d'origine : `docs/SYSTEME/COMBAT_FLUX.md` §7.4.
 > Les marqueurs `[VÉRIFIÉ]` = lu dans le code / la base ; `[HYPOTHÈSE]` / `[INCONNU]` = à trancher au codage, jamais présumé.
 >
+> **⏸ LOT 3 EN PAUSE (Saar, 2026-09-24)** : codé mais non commité ni testé en jeu ; **prérequis : import des drones RAW** (ROADMAP §2) — voir §7quinquies, sous-section « Mise en pause ».
+>
 > **ÉTAT (2026-09-24, fin de journée)** : **Lot 1 (tir simple) commité `d75907b`** et **Lot 2 (grenades / explosifs) commité `b2cf98d`**,
 > poussés ; validés en jeu par Saar (drone qui perd, drone qui gagne à percussion) ; reste en **beta test** avec joueurs : grenade à
-> minuterie + drone gagnant, effets de bord. **Lot 3 (CRD) non commencé.** Clôture Règle 10 (archivage, `SYSTEME/COMBAT.md`,
-> `COMBAT_FLUX.md` §7.4, ROADMAP, JOURNAL8, CHANGELOG, `VOCABULARY.md`) **non faite** : à faire à la fin des lots.
+> minuterie + drone gagnant, effets de bord. **Lot 3 (CRD) codé le 2026-09-24, non commité** (§7quinquies : plafond, malus, rayon d'action ;
+> **le §5 d'origine est remplacé par §7quinquies**). Clôture Règle 10 : `SYSTEME/COMBAT.md`, `COMBAT_FLUX.md` §7.4, `VOCABULARY.md`, ROADMAP,
+> JOURNAL8 et CHANGELOG faits pour les Lots 1-3 ; **restent** : archivage du PLAN (`docs/Old/`) et `ASBUILT.md` après validation du beta test.
 >
 > **Comment lire ce fichier** : §0-§6 = conception d'origine ; §7ter, §7quater et ses sous-sections = **journal chronologique des décisions
 > prises en test** (elles PRÉVALENT sur §0-§6 en cas de divergence). Divergences connues : (1) « vise son protégé » d'une grenade = distance
@@ -336,7 +339,7 @@ mécanisme : le registre reste inchangé). Hypothèses à journaliser : la moiti
 avant blindage/RD** du drone (`calcDroneDegatsNets`, `:268`), **arrondie à l'inférieur** (même convention
 que `getCriticalSuccessBonus`, `polarisTestResolution.js:105`). Aucun autre protégé n'est concerné.
 
-## 5. Lot 3 — CRD multi-drones (plafond et malus)
+## 5. Lot 3 — CRD multi-drones (plafond et malus) — **REMPLACÉ par §7quinquies** (conception d'origine, gardée pour l'historique)
 Compteur **persistant** (un `pendingMaps` en mémoire ne survit pas à un redémarrage) :
 `combat_roster.interception_uses_this_turn smallint not null default 0`, remis à 0 dans le `update` en bloc
 d'`endTurn` (`combatTurnEngine.js:752`) `[VÉRIFIÉ]`. Malus = `−1 × usages déjà faits ce Tour` sur le Seuil ;
@@ -562,3 +565,80 @@ Constats HORS chantier (à ticketer, non corrigés ici) :
 - **`queryTokensInShape` ne filtre aucun statut** : un token tagué « mort » (Baboulinet) reste cible d'une zone et reçoit une fenêtre de
   Chance — à traiter avec le chantier statut `dead` (`PLAN_BLESSURE_SIXIEME_LIGNE.md`, Lot 1b) ;
 - 403 `GET /api/char-sheet/<PNJ>/wounds` côté client d'un joueur (déjà noté plus haut, aussi pour Baboulinet).
+
+## 7quinquies. Lot 3 — CRD Neptune / Artémis : conception finale, analyse à charge et code (2026-09-24)
+**Remplace le §5 d'origine.** Saar : « On va les utiliser, go l'implanter » ; deux décisions de règle : (1) un Test **raté** du CRD compte comme une
+interception utilisée (le groupe s'est engagé, comme pour le déplacement qui précède le Test) ; (2) le CRD reste à **10 m** de l'armure protégée,
+dans ce lot.
+
+### Ce que dit le RAW (`REGLEDRONE.md`, « Drones multi-fonctions Neptune et Artémis »)
+CRD = « contrôleur de réseau de défense » : il commande 10 mini-drones qui se comportent, en défense, « comme un drone bouclier avec un niveau
+d'interception de 12 » ; « peut gérer plusieurs interceptions simultanément [...] pour chaque interception supplémentaire, son test subit une
+pénalité de 1 » ; « ne peut pas contrer plus de 4 attaques simultanément » ; les drones « ne peuvent s'éloigner de plus de 10 mètres de
+l'armure » ; « contre une explosion, ils encaissent la moitié des dommages » ; « ne servent à rien au corps à corps ».
+
+### Constats de l'exploration (avant de coder) `[VÉRIFIÉ]`
+- **Aucun CRD n'existe dans le catalogue ni en base** (seul le programme `Interception` existe). Un CRD = un drone que le MJ crée (Interception
+  12, un token) ; il faut donc un **champ explicite**, jamais une détection par le nom ou la charge utile.
+- Le §5 d'origine se contredisait (« NULL/1 = bouclier personnel » vs « le bouclier n'a pas de plafond ») → **NULL = aucune règle de
+  simultanéité** (ni plafond ni malus), c'est le comportement des Lots 1-2, inchangé.
+- Le compteur prévu dans `combat_roster` est abandonné : un drone d'interception n'agit pas au Tour (Q3), rien ne garantit une ligne de roster ;
+  et remettre un compteur à zéro par effet de bord en fin de Tour est le patron que `droneTelepilotState.js` a écarté.
+- `combat_state.current_turn` **repart à 1 à chaque combat** (PK `campaign_id`, supprimé à `COMBAT_END`) : un compteur indexé par Tour ne doit pas
+  survivre à son combat.
+- Les colonnes numériques de `drone_sheet` sont des entiers ; `numeric` reviendrait en chaîne du driver → `double precision` pour le rayon.
+- La route `PUT /drone` est ouverte au MJ **et** au propriétaire (comme le niveau du programme Interception et la Vitesse) : mêmes droits pour les
+  deux nouveaux champs, pas de règle à part.
+
+### Recherche (patrons de référence)
+Guide Neon « Rate Limiting in Postgres » (compteur à fenêtre fixe : `INSERT … ON CONFLICT DO UPDATE` + verrou consultatif) et documentation
+PostgreSQL, `INSERT`, clause `ON CONFLICT` : « guarantees an atomic INSERT or UPDATE outcome [...] even under high concurrency » ; avec un
+`WHERE` sur `DO UPDATE`, « the row will not be returned » quand la condition échoue. Conséquence : **le verrou consultatif du guide est inutile
+ici** (la clé primaire est l'exclusion mutuelle) et la « fenêtre de temps » du guide devient le **Tour, dans la clé**. midi-qol / Foundry :
+« réaction utilisée » remise à zéro au début du tour du combattant — même idée (l'usage est borné par le tour), mais chez nous rien à remettre à
+zéro. Limite assumée : inspirations de forme, code source de midi-qol non lu (les pages consultées n'exposent pas l'implémentation).
+
+### Conception retenue
+- **Champs** (`drone_sheet`, migration 362, nullables, sans défaut) : `interception_max_simultaneous smallint` (CHECK ≥ 1) et
+  `interception_leash_m double precision` (CHECK > 0). Vides = drone bouclier personnel.
+- **Compteur** (`drone_interception_uses`, migrations 360-361) : PK (`campaign_id`, `drone_character_id`, `turn_number`), `uses`,
+  FK `combat_state(campaign_id)` **ON DELETE CASCADE** (le compteur disparaît avec le combat, sans code de purge à oublier), FK `characters`
+  cascade, CHECK `uses ≥ 1` et `turn_number ≥ 1`, table déclarée dans `EXCLUDED_TABLES` du coffre.
+  `engageInterception` : **une seule requête atomique** `INSERT … ON CONFLICT (…) DO UPDATE SET uses = uses + 1 WHERE uses < plafond RETURNING uses`
+  → rang (1 = sans malus) ou aucune ligne = saturé. Un drone sans plafond n'écrit rien.
+- **Noyau pur** (`shared/droneInterception.js`) : `effectiveLevel`, `isSaturated`, `simultaneityPenalty`, `hasSimultaneityRule`, `withinLeash`,
+  `parseInterceptionLimit`, motif `saturated` (entre `telepiloted` et `speed_missing`) ; `pickProtector` trie sur le Seuil effectif.
+- **Coquille** (`droneInterceptionService.js`) : `gatherCandidates` lit champs et usages ; `attemptInterposition` reçoit `anchorsByDrone`
+  (Map drone → pieds des protégés visés ; tir : la cible, grenade : les protégés visés que ce drone protège), compose
+  `segmentPredicate ∧ withinLeash`, **engage l'interception après un déplacement réussi et avant le Test**, calcule le Seuil réel depuis le rang
+  renvoyé par la base.
+- **Décisions annexes à consigner** : le bonus de réussite critique garde le niveau de **maîtrise** (RAW p.204), le malus ne touche que le Seuil ;
+  Seuil ≤ 0 = échec automatique ; distance du rayon = **3D** (un étage compte) ; rayon mesuré au **protégé** (le livre dit « l'armure ») ;
+  un CRD saturé sur la ligne de tir reste un **obstacle physique** comme tout drone inéligible ; un CRD déjà hors rayon n'intervient pas ;
+  hors combat, aucune règle. Pas de message « hors rayon » distinct du budget : `droneInterceptNoReachLeash` dit budget **et** rayon.
+- **Hors lot** : les 10 mini-drones comme entités individuelles ; attaque et exploration des Neptune / Artémis ; retour du drone à sa place.
+
+### Vérifié hors jeu
+`shared/droneInterception.test.mjs` (36 tests, dont 12 nouveaux) ; `droneInterceptionUsesService.test.mjs` (6 tests, tables TEMPORAIRES dans
+une transaction annulée : rangs 1-4 puis saturé, Tour suivant à zéro, plafond abaissé, plafond invalide) ; migrations 360-362 rejouées dans une
+transaction annulée sur la vraie base (`up`, `up` bis, contraintes, cascade `combat_state` → compteur, CHECK, types renvoyés en nombres,
+`down`, `down` bis) ; rejeu **lecture seule** du plan de déplacement avec rayon sur la carte de test (10 m : le drone reste ; 3 m : il se
+rapproche à 2,12 m ; 1,5 m : 1,50 m ; 0,3 m : hors de portée). **Non testé** : le tronc complet tir/grenade avec un CRD en jeu (base + monde +
+socket) → validation de Saar.
+
+### MISE EN PAUSE du Lot 3 (Saar, 2026-09-24) — et texte CHANGELOG conservé
+Aucun modèle de drone n'existe (voir ROADMAP §2, « Import des drones RAW ») : le Lot 3 est **codé, vérifié hors jeu, non commité, non testé en jeu**,
+en pause jusqu'à cet import. Migrations 360-362 déjà appliquées sur la base locale de Saar ; le code reste dans le worktree (fichiers listés dans
+`JOURNAL8.md`, entrée « Lot 3 »). À la reprise : tester le scénario CRD (Interception 12, plafond 4, rayon 10 m, trois tirs dans un Tour → Seuils
+12, 11, 10 ; 5ᵉ refusé ; Tour suivant à zéro ; armure à plus de 10 m → hors de portée), commiter par staging partiel, et remettre en tête de
+`client/public/CHANGELOG.md`, en numérotant la version à ce moment-là, le texte suivant (retiré du CHANGELOG le jour de la pause) :
+
+> **Drone d'interception : le CRD Neptune / Artémis** — *Combat*
+> - [add] Un drone d'interception peut désormais être réglé en **CRD** (contrôleur de réseau de défense) : deux nouveaux champs sur la section
+>   « Protection » de sa fiche — *interceptions simultanées (max.)* et *rayon d'action autour du protégé (m)*. Vides, le drone reste un drone
+>   bouclier personnel, comme avant. Pour un CRD Neptune / Artémis : 4 interceptions et 10 m.
+> - [add] Un CRD peut intercepter plusieurs attaques dans le même Tour, mais chaque interception en plus donne **−1** à son Test (2ᵉ : Seuil −1,
+>   3ᵉ : −2, 4ᵉ : −3). Au-delà du plafond, il est saturé : le chat le dit et l'attaque passe. Une interception compte dès que le drone s'y
+>   engage, même si son Test est raté. Le compteur repart à zéro à chaque Tour.
+> - [add] Un CRD ne quitte pas le rayon d'action de son protégé : s'il ne peut pas rejoindre la trajectoire dans ce rayon, il n'intervient pas et
+>   le chat l'explique.

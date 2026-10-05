@@ -425,6 +425,12 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
         <h4 style={{ fontSize: '10px', color: '#5b8dee', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px', fontWeight: '600' }}>
           {t('drone.sectionProtection')}
         </h4>
+        {/* CRD (Lot 3) : champs explicites, vides = drone bouclier personnel */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+          <StatField label={t('drone.fieldInterceptionMax')}   value={drone.interception_max_simultaneous} field="interception_max_simultaneous" isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldInterceptionLeash')} value={drone.interception_leash_m}         field="interception_leash_m"         isGm={canEdit} onSave={handleSave} />
+        </div>
+        <p style={{ fontSize: '11px', color: '#8888a8', margin: '4px 0 10px' }}>{t('drone.protectionLimitsHelp')}</p>
         <DroneProtectionSection
           characterId={characterId}
           drone={drone}

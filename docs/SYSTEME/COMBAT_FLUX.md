@@ -329,8 +329,10 @@ Si !needsDefenseWait → avance dans combat_timeline_entries (pickNextTimelineSt
 
 [8bis] Drone protecteur (résolution du Tir touché, avant dégâts) — resolveProtectorInterposition()
     Si isSuccess et cible = protégé d'au moins un drone (drone_interception_targets) :
-      éligibilité (shared/droneInterception.js) → portée (destinationPredicate, vitesse max)
-      → déplacement (avant le Test, TOKEN_MOVED) → Test d'Interception (DICE_RESULT)
+      éligibilité (shared/droneInterception.js, dont CRD saturé) → portée (destinationPredicate, vitesse max,
+      + rayon d'action d'un CRD)
+      → déplacement (avant le Test, TOKEN_MOVED) → CRD : engageInterception (compteur atomique, rang → malus)
+      → Test d'Interception (DICE_RESULT, Seuil = niveau − malus)
       → réussi ET marge > mr : action.target_token_id = drone (la suite est celle d'une cible drone)
       → sinon : le tir suit sa route vers le protégé
       chaque étape → COMBAT_SYSTEM_NOTICE (session.drone*), emissions de l'appelant, après le jet d'attaque
@@ -565,8 +567,6 @@ D20 roll serveur
   sinon                                       → outcome = 'inconscient'
 ```
 
-### `applyStun` — `statusService.js`
-```
 ### Cadavre : pas de Choc — `resolveTargetHit` (`damageService.js`)
 ```
 Si la cible est un cadavre (isCharacterDead : un token de son personnage porte un statut `isDeath`, mode 'enforced') :
@@ -575,6 +575,8 @@ Si la cible est un cadavre (isCharacterDead : un token de son personnage porte u
 ```
 `resolveTargetHit` est le seul site de tirage du test de Choc. Voir `SYSTEME/STATUTS_TOKEN.md` §6.
 
+### `applyStun` — `statusService.js`
+```
 Fetch char_type + user_id du token
 
 Si PJ :
@@ -601,9 +603,9 @@ applyStunWithDuration(…, { statusCode?, gmOverride? }) :
   INSERT token_statuses { status_code:'stunned'/'unconscious'/'evanoui', expires_at_turn: currentTurn + duration }
   (exclusion mutuelle : un nouvel état remplace l'ancien)
   EMIT TOKEN_STATUS_UPDATED → room
+  gmOverride : action MANUELLE du MJ (COMBAT_APPLY_STUN), jamais bornée par la règle du cadavre
 ```
 
-  gmOverride : action MANUELLE du MJ (COMBAT_APPLY_STUN), jamais bornée par la règle du cadavre
 ---
 
 ## 11. `advanceSlot` / `endTurn` — `advanceSlot` périmé, corrigé (audit 2026-08-26)
@@ -742,7 +744,7 @@ messages — jamais émis depuis cette fonction, il passerait avant « le drone 
 | §7.1 | INI télépiloté = INI pilote | Drone toujours INI 12 | Sprint télépilotage |
 | §7.2 | Séquence Détection→Ami/Ennemi→Armement | Non implémenté | Sprint Drones 2d |
 | §7.4 | Programme esquive : test d'opposition | Test simple forcé (sans esquive) | Sprint futur |
-| ~~§7.4~~ | Programme interception | **Résolu (Lots 1-2, 2026-09-24)** — tir simple et grenades ; reste le CRD multi-drones (Lot 3) : `PLANS/PLAN_DRONE_INTERCEPTION.md`, `COMBAT.md` « Drone d'interception » | Lot 3 : basse |
+| ~~§7.4~~ | Programme interception | **Résolu (Lots 1-3, 2026-09-24)** — tir simple, grenades et CRD multi-drones (plafond, malus, rayon d'action ; Lot 3 codé mais EN PAUSE — prérequis : import des drones RAW, ROADMAP §2) : `PLANS/PLAN_DRONE_INTERCEPTION.md`, `COMBAT.md` « Drone d'interception » | — |
 | §6.9 | Arts Martiaux | Non implémenté V1 | Hors scope |
 
 ---

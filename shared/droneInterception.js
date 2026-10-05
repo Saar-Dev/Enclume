@@ -1,4 +1,4 @@
-import { horizontalDistanceBetweenWorldPointsM, normalizeWorldPoint } from './world/worldMetrics.js'
+import { distanceBetweenWorldPointsM, horizontalDistanceBetweenWorldPointsM, normalizeWorldPoint } from './world/worldMetrics.js'
 
 // Décision d'interposition d'un drone protecteur — noyau PUR (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.2).
 // Aucun accès base, aucun socket : la coquille serveur (lib/droneInterceptionService.js) rassemble les
@@ -19,6 +19,7 @@ export const INELIGIBILITY_REASONS = Object.freeze([
   'other_battlemap',  // token sur une autre battlemap que le tir
   'is_target',        // le drone est la cible elle-même
   'telepiloted',      // RAW : réaction en mode autonome uniquement
+  'saturated',        // CRD : plafond d'interceptions simultanées atteint ce Tour (RAW : « pas plus de 4 »)
   'speed_missing',    // Vitesse non renseignée sur la fiche (RAW « - »)
   'unreachable',      // aucune case de la trajectoire atteignable dans le budget
 ])
@@ -33,6 +34,7 @@ export const INELIGIBILITY_REASONS = Object.freeze([
 //    isTarget, telepilotedThisTurn,
 //    speedM,                                         // budget de déplacement (m/Tour), null si absent
 //    reachable,                                      // true | false | undefined
+//    maxSimultaneous, usesThisTurn,                  // CRD : plafond (null = bouclier personnel, sans règle) et usages du Tour
 //  }
 export function ineligibilityReason(candidate, { attackKind } = {}) {
   if (!ATTACK_KINDS.includes(attackKind)) {
@@ -46,6 +48,7 @@ export function ineligibilityReason(candidate, { attackKind } = {}) {
   if (candidate.tokenBattlemapId !== candidate.shotBattlemapId) return 'other_battlemap'
   if (candidate.isTarget) return 'is_target'
   if (candidate.telepilotedThisTurn) return 'telepiloted'
+  if (isSaturated(candidate)) return 'saturated'
   if (!Number.isFinite(candidate.speedM)) return 'speed_missing'
   if (candidate.reachable === false) return 'unreachable'
   return null
@@ -76,8 +79,66 @@ export function pickProtector(candidates, { attackKind }) {
     else if (candidate.reachable !== true) rejected.push({ droneTokenId: candidate.droneTokenId, reason: 'unreachable' })
     else eligible.push(candidate)
   }
-  eligible.sort((a, b) => (b.level - a.level) || String(a.droneTokenId).localeCompare(String(b.droneTokenId)))
+  // Le meilleur Seuil EFFECTIF : un CRD déjà sollicité ce Tour (malus) peut passer derrière un drone plus frais.
+  eligible.sort((a, b) => (effectiveLevel(b) - effectiveLevel(a)) || String(a.droneTokenId).localeCompare(String(b.droneTokenId)))
   return { protector: eligible[0] ?? null, rejected }
+}
+
+// ── Interceptions simultanées et rayon d'action (CRD, Lot 3) ─────────────────────────────────────────────────
+// RAW (REGLEDRONE.md « Drones multi-fonctions Neptune et Artémis ») : le CRD « peut gérer plusieurs interceptions
+// simultanément [...] mais pour chaque interception supplémentaire, son test subit une pénalité de 1. Le système
+// ne peut contrer plus de 4 attaques simultanément » ; les mini-drones « ne peuvent s'éloigner de plus de 10
+// mètres de l'armure ». Ce sont deux CHAMPS de la fiche drone (drone_sheet.interception_max_simultaneous et
+// interception_leash_m), jamais déduits du nom ni de la charge utile du drone ; vides = drone bouclier personnel :
+// aucune règle de simultanéité, aucune limite de rayon. « Simultané » est lu « dans le même Tour » (JOURNAL8).
+export const SIMULTANEOUS_INTERCEPTION_PENALTY = 1 // RAW : −1 par interception supplémentaire
+
+// Le drone applique-t-il la règle de simultanéité ? (plafond renseigné, entier ≥ 1)
+export function hasSimultaneityRule(candidate) {
+  return Number.isInteger(candidate?.maxSimultaneous) && candidate.maxSimultaneous >= 1
+}
+
+// Plafond atteint : `usesThisTurn` interceptions déjà engagées ce Tour, au plus `maxSimultaneous` autorisées.
+export function isSaturated(candidate) {
+  return hasSimultaneityRule(candidate) && (candidate.usesThisTurn ?? 0) >= candidate.maxSimultaneous
+}
+
+// Malus du Test de la `rank`-ième interception du Tour (1 = la première, sans malus). Sans règle de simultanéité : 0.
+export function simultaneityPenalty(rank) {
+  if (!Number.isInteger(rank) || rank < 1) throw new RangeError('rank doit être un entier ≥ 1')
+  return (rank - 1) * SIMULTANEOUS_INTERCEPTION_PENALTY
+}
+
+// Seuil du Test d'Interception du PROCHAIN engagement du candidat : niveau du programme moins le malus dû aux
+// interceptions déjà engagées ce Tour (null si le niveau est absent). Autorité du tri de `pickProtector` ; le
+// service recalcule le Seuil réel depuis le rang renvoyé par la base à l'engagement (source atomique).
+export function effectiveLevel(candidate) {
+  if (!Number.isFinite(candidate?.level)) return null
+  if (!hasSimultaneityRule(candidate)) return candidate.level
+  return candidate.level - simultaneityPenalty((candidate.usesThisTurn ?? 0) + 1)
+}
+
+// Rayon d'action : `point` (monde) est-il à `leashM` mètres au plus (distance 3D, altitude comprise — un étage compte)
+// d'au moins un des `anchors` (pieds des protégés visés) ? `leashM` null/undefined = pas de limite. Une limite sans
+// aucun ancrage ne peut pas être vérifiée : refus, jamais un passage silencieux.
+export function withinLeash(point, anchors, leashM, metrics) {
+  if (leashM == null) return true
+  if (!Number.isFinite(leashM) || leashM <= 0) throw new RangeError('leashM doit être un nombre strictement positif (mètres)')
+  return (anchors ?? []).some(anchor => distanceBetweenWorldPointsM(point, anchor, metrics) <= leashM + 1e-9)
+}
+
+// Validation des deux champs de la fiche drone, autorité unique de la route REST (la base garde les mêmes bornes en
+// CHECK). `null` = champ vidé (bouclier personnel). Retourne { ok: true, value } ou { ok: false, reason }.
+export const INTERCEPTION_LIMIT_FIELDS = Object.freeze(['interception_max_simultaneous', 'interception_leash_m'])
+
+export function parseInterceptionLimit(field, raw) {
+  if (!INTERCEPTION_LIMIT_FIELDS.includes(field)) throw new RangeError(`champ inconnu : ${field}`)
+  if (raw === null || raw === '') return { ok: true, value: null }
+  const value = typeof raw === 'number' ? raw : Number(String(raw).trim().replace(',', '.'))
+  if (field === 'interception_max_simultaneous') {
+    return Number.isInteger(value) && value >= 1 ? { ok: true, value } : { ok: false, reason: 'not_a_positive_integer' }
+  }
+  return Number.isFinite(value) && value > 0 ? { ok: true, value } : { ok: false, reason: 'not_a_positive_number' }
 }
 
 // « S'il réussit [son test] et si la marge de réussite de ce test est supérieure à la marge de réussite de

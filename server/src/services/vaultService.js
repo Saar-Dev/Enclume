@@ -138,12 +138,14 @@ const COMPANION_REGISTRY = {
 // drone_interception_targets ajoutée (docs/PLANS/PLAN_DRONE_INTERCEPTION.md §3.6) : lien « ce drone protège
 // ce personnage » = agencement d'UNE campagne entre deux personnages, pas une donnée du drone ; un drone
 // cloné arrive sans ses protégés (ils n'existent pas dans la campagne de destination).
+// drone_interception_uses ajoutée (Lot 3, CRD) : compteur d'interceptions d'UN Tour d'UN combat, attaché à
+// combat_state (supprimé avec lui) — un état de session, jamais le personnage lui-même.
 // pending_chance_choices ajoutée (migration 338, 2026-09-11, jamais reportée ici — bug "Erreur lors de
 // l'approbation" sur tout transfert Coffre→campagne pendant ~3 semaines) : un choix de Chance en attente
 // est ancré à UN jet précis (site, test_label, context) dans UNE campagne, jamais une donnée du personnage.
 const EXCLUDED_TABLES = new Set([
   'tokens', 'trade_log', 'trade_offers', 'vault_transfer_requests',
-  'wizard_locks', 'game_echeances', 'chat_messages', 'drone_interception_targets',
+  'wizard_locks', 'game_echeances', 'chat_messages', 'drone_interception_targets', 'drone_interception_uses',
   'pending_chance_choices',
 ])
 

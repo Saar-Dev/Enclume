@@ -149,7 +149,7 @@ Une fiche non verrouillée (wizard_locked_at IS NULL) est masquée des listes.
 Sous /api/char-sheet/:characterId/drone. Lecture ouverte à tous les membres. Écriture : GM ou propriétaire.
 Route	Description
 GET /drone	Fiche + programmes
-PUT /drone	Stats descriptives
+PUT /drone	Stats descriptives ; champs CRD `interception_max_simultaneous` (entier ≥ 1) et `interception_leash_m` (mètres, > 0), `null` = drone bouclier personnel — validation `parseInterceptionLimit`, 400 sinon (GM ou propriétaire)
 GET /drone/cargo	Items dans le drone
 POST /drone/cargo/:invId/drop	Retourne un item vers le propriétaire
 PUT /drone/integrity	Intégrité + cases dommages

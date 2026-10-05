@@ -11,11 +11,13 @@ import { emitExecutedTokenMovement } from './tokenMovementEmitter.js'
 import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { planBattlemapTokenMovement, executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { listProtectorLinks, listProtectedTokens } from '../services/droneInterceptionLinksService.js'
+import { getInterceptionUses, engageInterception } from '../services/droneInterceptionUsesService.js'
 import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
 import { actorEyePoint, normalizeVisibilityProfile } from '../../../shared/world/visibility.js'
 import { createSegmentCellPredicate } from '../../../shared/world/gridCells.js'
 import {
   ATTACK_KINDS, GRENADE_PROTECTION_AIM_RADIUS_M, screenCandidates, pickProtector, isInterposed, aimedAtProtected,
+  hasSimultaneityRule, simultaneityPenalty, withinLeash,
 } from '../../../shared/droneInterception.js'
 import { getBattlemapWorldSnapshot } from '../services/worldService.js'
 
@@ -69,6 +71,7 @@ function shotTrajectory(shooterToken, targetToken) {
 }
 
 // Données brutes d'un candidat (voir shared/droneInterception.js). `reachable` est calculé plus tard.
+// `usesThisTurn` n'est lu que pour un CRD (plafond renseigné) ; un bouclier personnel n'a aucune règle de simultanéité.
 async function gatherCandidates(campaignId, droneCharacterIds, { battlemapId, targetTokenId }) {
   const candidates = []
   for (const droneCharacterId of droneCharacterIds) {
@@ -102,7 +105,17 @@ async function gatherCandidates(campaignId, droneCharacterIds, { battlemapId, ta
       isTarget: targetTokenId != null && token?.id === targetTokenId,
       telepilotedThisTurn: token ? await isDroneTelepilotedThisTurn(campaignId, droneCharacterId, token.id) : false,
       speedM,
+      // CRD (Lot 3) : champs explicites de la fiche, NULL = drone bouclier personnel (aucune règle).
+      maxSimultaneous: sheet?.interception_max_simultaneous ?? null,
+      leashM: sheet?.interception_leash_m ?? null,
+      usesThisTurn: 0,
     })
+  }
+  // Interceptions déjà engagées ce Tour : une seule lecture, et seulement si un candidat applique la règle.
+  const withRule = candidates.filter(hasSimultaneityRule)
+  if (withRule.length > 0) {
+    const uses = await getInterceptionUses(campaignId, withRule.map(c => c.droneCharacterId))
+    for (const candidate of withRule) candidate.usesThisTurn = uses.get(candidate.droneCharacterId) ?? 0
   }
   return candidates
 }
@@ -140,10 +153,13 @@ async function filterProtectorInterceptorsUnsafe(campaignId, { action, targetTok
   return interceptors.filter(i => !excluded.has(i.actorId))
 }
 
-async function rollInterceptionTest(io, campaignId, protector, targetTokenId) {
+// `seuil` = Seuil RÉEL du Test : niveau du programme moins, pour un CRD, le malus des interceptions déjà engagées ce
+// Tour. Le bonus de Réussite critique reste celui du niveau de MAÎTRISE du programme (RAW p.204 : « et non le niveau
+// global ») — le malus de simultanéité pénalise le Test, il ne diminue pas la maîtrise (JOURNAL8).
+async function rollInterceptionTest(io, campaignId, protector, targetTokenId, seuil) {
   const { total: roll, rolls, seed } = await parseDice('1d20')
   const outcomeCrit = applyCriticalSuccessBonus(
-    resolveTestOutcome(roll, protector.level),
+    resolveTestOutcome(roll, seuil),
     getCriticalSuccessBonus({ masteryLevel: protector.level }),
   )
   const outcome = await resolveCriticalFailReroll(outcomeCrit)
@@ -157,8 +173,8 @@ async function rollInterceptionTest(io, campaignId, protector, targetTokenId) {
     catastropheRisk: outcome.catastropheRisk,
     seed, timestamp: new Date().toISOString(),
     skillLabel: `Interception — ${protector.droneName}`,
-    mechanicalTotal: roll, diffLabel: `Seuil ${protector.level}`,
-    chancesDeReussite: protector.level, isSuccess: outcome.isSuccess, mr: outcome.mr,
+    mechanicalTotal: roll, diffLabel: `Seuil ${seuil}`,
+    chancesDeReussite: seuil, isSuccess: outcome.isSuccess, mr: outcome.mr,
   } }
   await maybeTriggerCatastrophe(io, campaignId, protector.droneTokenId, outcome.catastropheRisk, {
     site: 'drone_interception', actorTokenId: protector.droneTokenId, targetTokenId: targetTokenId ?? null,
@@ -209,8 +225,11 @@ async function interpose(io, campaignId, { action, mr, attackKind }) {
 
   const targetName = (await db('characters').where({ id: targetToken.character_id }).select('name').first())?.name
     ?? targetToken.label ?? '?'
+  // Rayon d'action d'un CRD : ancré sur la cible du tir (le protégé attaqué), pieds du token.
+  const targetFeet = dbPositionToWorldPoint(targetToken)
   const attempt = await attemptInterposition(io, campaignId, {
-    battlemap, protectedName: targetName, droneCharacterIds,
+    battlemap, protectedName: targetName,
+    anchorsByDrone: new Map(droneCharacterIds.map(id => [id, [targetFeet]])),
     trajectory: shotTrajectory(shooterToken, targetToken),
     attackMr: mr, targetTokenId: targetToken.id, zone: false,
   })
@@ -263,14 +282,19 @@ async function interposeGrenade(io, campaignId, { shooterToken, aimedPoint, impa
     return { ...unchanged, emissions: [systemNotice('session.droneGrenadeNotAimed', { protected: names, radius: GRENADE_PROTECTION_AIM_RADIUS_M })] }
   }
   // Plusieurs protégés peuvent tomber dans le rayon : la grenade les vise tous, les drones de chacun peuvent réagir
-  // (le noyau n'en retient qu'un : le meilleur niveau d'Interception).
-  const droneCharacterIds = [...new Set((await Promise.all(
-    [...new Set(aimedTokens.map(t => t.character_id))].map(id => listProtectorLinks(id)),
-  )).flat())]
+  // (le noyau n'en retient qu'un : le meilleur Seuil d'Interception). Chaque drone garde pour ancrages de son rayon
+  // d'action (CRD) les seuls protégés VISÉS qu'il protège : `Map<droneCharacterId, pieds des protégés visés[]>`.
+  const anchorsByDrone = new Map()
+  for (const token of aimedTokens) {
+    const feet = dbPositionToWorldPoint(token)
+    for (const droneId of await listProtectorLinks(token.character_id)) {
+      anchorsByDrone.set(droneId, [...(anchorsByDrone.get(droneId) ?? []), feet])
+    }
+  }
   const protectedName = (await characterNames(aimedTokens)).join(', ') || '?'
-  console.log(`[DBG] interposition — grenade lancée (MR ${mr}) visant ${protectedName} (à moins de ${GRENADE_PROTECTION_AIM_RADIUS_M} m), protégé(s) par ${droneCharacterIds.length} drone(s)`)
+  console.log(`[DBG] interposition — grenade lancée (MR ${mr}) visant ${protectedName} (à moins de ${GRENADE_PROTECTION_AIM_RADIUS_M} m), protégé(s) par ${anchorsByDrone.size} drone(s)`)
   const attempt = await attemptInterposition(io, campaignId, {
-    battlemap, protectedName, droneCharacterIds,
+    battlemap, protectedName, anchorsByDrone,
     trajectory: {
       from: actorEyePoint(dbPositionToWorldPoint(shooterToken), profile),
       to: impactPoint, // point au sol : la grenade retombe, elle ne vole pas « œil à œil » comme un tir
@@ -289,11 +313,19 @@ async function interposeGrenade(io, campaignId, { shooterToken, aimedPoint, impa
   }
 }
 
+// « Le drone ne peut pas rejoindre la trajectoire » : le budget de déplacement seul, ou — pour un CRD — le budget ET le
+// rayon d'action autour du protégé (le message ne doit pas accuser le budget quand le rayon est en cause). Retourne les
+// arguments de `notice`.
+const noReachNotice = (candidate) => (candidate.leashM != null
+  ? ['session.droneInterceptNoReachLeash', { drone: candidate.droneName, budget: roundMeters(candidate.speedM), leash: roundMeters(candidate.leashM) }]
+  : ['session.droneInterceptNoReach', { drone: candidate.droneName, budget: roundMeters(candidate.speedM) }])
+
 // Noyau commun au tir et à la grenade : éligibilité, portée, déplacement, Test, compte rendu au chat. Reçoit un protégé
-// (nom), les drones qui le protègent, la trajectoire à rejoindre et la marge de l'attaque ; ne connaît ni action de tir ni
-// grenade. `zone` ne change que le texte du chat (variantes `context: 'zone'`). Retourne { protector, interposed, emissions }.
+// (nom), les drones qui le protègent avec, pour chacun, les pieds des protégés visés (ancrages de son rayon d'action de
+// CRD), la trajectoire à rejoindre et la marge de l'attaque ; ne connaît ni action de tir ni grenade. `zone` ne change
+// que le texte du chat (variantes `context: 'zone'`). Retourne { protector, interposed, emissions }.
 async function attemptInterposition(io, campaignId, {
-  battlemap, protectedName, droneCharacterIds, trajectory, attackMr, targetTokenId, zone,
+  battlemap, protectedName, anchorsByDrone, trajectory, attackMr, targetTokenId, zone,
 }) {
   const attackKind = 'ranged' // le corps à corps est écarté en amont (RAW) ; une grenade est toujours à distance
   const emissions = []
@@ -301,13 +333,13 @@ async function attemptInterposition(io, campaignId, {
   const notice = (i18nKey, params) => emissions.push(systemNotice(i18nKey, params))
   const zoneParams = zone ? { context: 'zone' } : {}
 
-  const candidates = await gatherCandidates(campaignId, droneCharacterIds, { battlemapId: battlemap.id, targetTokenId })
+  const candidates = await gatherCandidates(campaignId, [...anchorsByDrone.keys()], { battlemapId: battlemap.id, targetTokenId })
   const { screened, rejected } = screenCandidates(candidates, { attackKind })
   for (const { droneTokenId, reason } of rejected) {
     const candidate = candidates.find(c => c.droneTokenId === droneTokenId)
     console.log(`[DBG] interposition — ${candidate?.droneName ?? droneTokenId} inéligible : ${reason}`)
     // « is_target » : le drone est la cible du tir, rien à expliquer. Les autres motifs sont dits au chat.
-    if (reason !== 'is_target') notice(`session.droneInterceptIneligible.${reason}`, { drone: candidate?.droneName ?? '?' })
+    if (reason !== 'is_target') notice(`session.droneInterceptIneligible.${reason}`, { drone: candidate?.droneName ?? '?', max: candidate?.maxSimultaneous ?? null })
   }
   if (screened.length === 0) {
     console.log('[DBG] interposition — aucun drone éligible, attaque inchangée')
@@ -316,18 +348,26 @@ async function attemptInterposition(io, campaignId, {
 
   // Portée : le drone doit pouvoir rejoindre, au plus court, une case que la trajectoire traverse — avec sa
   // vitesse max, chemin réel (murs, occupation) compris. Planification seule, rien n'est déplacé ici.
-  const destinationPredicate = createSegmentCellPredicate(trajectory.from, trajectory.to, { bodyHeight: trajectory.bodyHeight })
+  const segmentPredicate = createSegmentCellPredicate(trajectory.from, trajectory.to, { bodyHeight: trajectory.bodyHeight })
+  // Rayon d'action d'un CRD (RAW : « ne peuvent s'éloigner de plus de 10 mètres de l'armure ») : la case rejointe doit
+  // aussi rester dans ce rayon d'un des protégés visés. Métriques de la battlemap chargées seulement si un candidat en a un.
+  const metrics = screened.some(c => c.leashM != null) ? getBattlemapWorldSnapshot(battlemap).metrics : undefined
+  const predicateFor = (candidate) => {
+    if (candidate.leashM == null) return segmentPredicate
+    const anchors = anchorsByDrone.get(candidate.droneCharacterId) ?? []
+    return node => segmentPredicate(node) && withinLeash(node.point, anchors, candidate.leashM, metrics)
+  }
   for (const candidate of screened) {
     // Option B (décision Saar 2026-09-24) : le décor (entités) ne bloque pas le drone — petit et volant, il
     // se glisse entre les objets ; seuls les tokens occupent une case pour lui.
     const plan = await planBattlemapTokenMovement({
-      battlemap, token: candidate.token, authorizedBudgetM: candidate.speedM, destinationPredicate,
+      battlemap, token: candidate.token, authorizedBudgetM: candidate.speedM, destinationPredicate: predicateFor(candidate),
       ignoreEntityOccupants: true,
     })
     candidate.reachable = plan.status === 'destination'
     candidate.destination = plan.snappedTo ?? null
-    console.log(`[DBG] interposition — ${candidate.droneName} : portée ${plan.status}${plan.routeCostM != null ? ` (coût ${plan.routeCostM} m / budget ${candidate.speedM} m)` : ` (budget ${candidate.speedM} m)`}`)
-    if (!candidate.reachable) notice('session.droneInterceptNoReach', { drone: candidate.droneName, budget: roundMeters(candidate.speedM) })
+    console.log(`[DBG] interposition — ${candidate.droneName} : portée ${plan.status}${plan.routeCostM != null ? ` (coût ${plan.routeCostM} m / budget ${candidate.speedM} m)` : ` (budget ${candidate.speedM} m)`}${candidate.leashM != null ? `, rayon d'action ${candidate.leashM} m` : ''}`)
+    if (!candidate.reachable) notice(...noReachNotice(candidate))
   }
 
   const { protector } = pickProtector(screened, { attackKind })
@@ -354,26 +394,49 @@ async function attemptInterposition(io, campaignId, {
   if (move?.status !== 'destination') {
     // Le monde a changé entre la planification et l'exécution (occupation, porte) : pas de tentative.
     console.warn(`[WS] interposition — ${protector.droneName} n'a pas pu rejoindre la trajectoire (${move?.status})`)
-    notice('session.droneInterceptNoReach', { drone: protector.droneName, budget: roundMeters(protector.speedM) })
+    notice(...noReachNotice(protector))
     return { protector: null, interposed: false, emissions }
   }
   console.log(`[DBG] interposition — ${protector.droneName} rejoint la trajectoire${move.moved ? ` (déplacé de ${move.result.plan.spentM} m)` : ' (déjà dessus)'}`)
   if (move.moved) notice('session.droneRepositioned', { drone: protector.droneName, target: protectedName, distance: roundMeters(move.result.plan.spentM) })
   else notice('session.droneAlreadyInPlace', { drone: protector.droneName, target: protectedName })
 
-  const { outcome, emission } = await rollInterceptionTest(io, campaignId, protector, targetTokenId)
+  // CRD : l'interception est ENGAGÉE ici — après un déplacement réussi, avant le Test, que celui-ci réussisse ou non
+  // (le groupe de drones s'est engagé : décision Saar 2026-09-24). Le rang renvoyé par la base (compteur atomique) fixe
+  // le Seuil réel ; « plafond atteint » à ce stade signifie une course perdue contre une autre interception.
+  let seuil = protector.level
+  if (hasSimultaneityRule(protector)) {
+    const engaged = await engageInterception(campaignId, protector.droneCharacterId, protector.maxSimultaneous)
+    if (engaged.status === 'saturated') {
+      console.log(`[DBG] interposition — ${protector.droneName} saturé à l'engagement (${protector.maxSimultaneous} interceptions ce Tour)`)
+      notice('session.droneInterceptIneligible.saturated', { drone: protector.droneName, max: protector.maxSimultaneous })
+      return { protector: null, interposed: false, emissions }
+    }
+    if (engaged.status === 'engaged') {
+      seuil = protector.level - simultaneityPenalty(engaged.rank)
+      console.log(`[DBG] interposition — ${protector.droneName} : interception ${engaged.rank}/${protector.maxSimultaneous} ce Tour, Seuil ${seuil} (niveau ${protector.level})`)
+      if (engaged.rank > 1) {
+        notice('session.droneInterceptSimultaneous', {
+          drone: protector.droneName, rank: engaged.rank, max: protector.maxSimultaneous, penalty: simultaneityPenalty(engaged.rank), seuil, level: protector.level,
+        })
+      }
+    }
+    // 'no_combat' : hors combat il n'existe pas de Tour, la règle de simultanéité n'a pas de sens — Test au niveau plein.
+  }
+
+  const { outcome, emission } = await rollInterceptionTest(io, campaignId, protector, targetTokenId, seuil)
   emissions.push(emission)
   // Test RÉUSSI ET marge strictement supérieure (isInterposed) : un Test raté n'interpose jamais, même contre la marge
   // négative d'un lancer de grenade raté.
   const interposes = isInterposed(outcome, attackMr)
-  console.log(`[DBG] interposition — Test ${protector.droneName} : jet ${emission.data.total} Seuil ${protector.level} → ${outcome.isSuccess ? 'réussi' : 'raté'} MR ${outcome.mr} contre MR attaque ${attackMr} → ${interposes ? "s'interpose" : 'échoue'}`)
+  console.log(`[DBG] interposition — Test ${protector.droneName} : jet ${emission.data.total} Seuil ${seuil} → ${outcome.isSuccess ? 'réussi' : 'raté'} MR ${outcome.mr} contre MR attaque ${attackMr} → ${interposes ? "s'interpose" : 'échoue'}`)
   const margins = { drone: protector.droneName, target: protectedName, droneMr: outcome.mr, attackMr, ...zoneParams }
   if (!interposes) {
     // Deux échecs distincts, que la carte du Test rend contradictoires si le message les confond : Test RATÉ
     // (jet > Seuil, la marge est alors négative et sans intérêt) ou Test RÉUSSI mais marge non supérieure à
     // celle de l'attaque (la carte dit « réussi », le chat doit dire pourquoi l'attaque passe quand même).
     if (outcome.isSuccess) notice('session.droneInterceptOutmatched', margins)
-    else notice('session.droneInterceptTestFailed', { drone: protector.droneName, target: protectedName, roll: emission.data.total, seuil: protector.level, ...zoneParams })
+    else notice('session.droneInterceptTestFailed', { drone: protector.droneName, target: protectedName, roll: emission.data.total, seuil, ...zoneParams })
     return { protector, interposed: false, emissions }
   }
   notice('session.droneInterposed', margins)

@@ -4,12 +4,20 @@ import assert from 'node:assert/strict'
 import {
   GRENADE_PROTECTION_AIM_RADIUS_M,
   INELIGIBILITY_REASONS,
+  INTERCEPTION_LIMIT_FIELDS,
+  SIMULTANEOUS_INTERCEPTION_PENALTY,
   aimedAtProtected,
+  effectiveLevel,
   halveExplosionDamage,
+  hasSimultaneityRule,
   ineligibilityReason,
   isInterposed,
+  isSaturated,
+  parseInterceptionLimit,
   pickProtector,
   screenCandidates,
+  simultaneityPenalty,
+  withinLeash,
 } from './droneInterception.js'
 import { resolveTestOutcome } from './polarisTestResolution.js'
 import { createWorldMetrics } from './world/worldMetrics.js'
@@ -43,6 +51,7 @@ test('chaque motif d’inéligibilité est reconnu', () => {
     ['other_battlemap', { tokenBattlemapId: 'autre' }],
     ['is_target', { isTarget: true }],
     ['telepiloted', { telepilotedThisTurn: true }],
+    ['saturated', { maxSimultaneous: 4, usesThisTurn: 4 }],
     ['speed_missing', { speedM: null }],
     ['unreachable', { reachable: false }],
   ]
@@ -56,7 +65,7 @@ test('une vitesse explicitement nulle (RAW « Déplacement : - ») est une vites
 })
 
 test('tous les motifs déclarés sont couverts par les cas ci-dessus (garde-fou de dérive)', () => {
-  assert.deepEqual([...INELIGIBILITY_REASONS], ['melee', 'no_program', 'destroyed', 'no_token', 'hidden', 'other_battlemap', 'is_target', 'telepiloted', 'speed_missing', 'unreachable'])
+  assert.deepEqual([...INELIGIBILITY_REASONS], ['melee', 'no_program', 'destroyed', 'no_token', 'hidden', 'other_battlemap', 'is_target', 'telepiloted', 'saturated', 'speed_missing', 'unreachable'])
 })
 
 test('l’ordre d’évaluation est déterministe : le premier motif rencontré l’emporte', () => {
@@ -188,6 +197,107 @@ test('aimedAtProtected refuse une hauteur de corps ou un rayon invalides', () =>
   assert.throws(() => aimedAtProtected({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { bodyHeight: 0 }), RangeError)
   assert.throws(() => aimedAtProtected({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { bodyHeight: 1.8, radiusM: -1 }), RangeError)
   assert.throws(() => aimedAtProtected({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { bodyHeight: 1.8, radiusM: NaN }), RangeError)
+})
+
+// ── CRD : interceptions simultanées et rayon d'action (Lot 3) ────────────────────────────────────
+const crd = (patch = {}) => candidate({ level: 12, maxSimultaneous: 4, usesThisTurn: 0, ...patch })
+
+test('sans plafond renseigné (bouclier personnel) : aucune règle de simultanéité, ni malus ni saturation', () => {
+  for (const maxSimultaneous of [null, undefined]) {
+    const shield = candidate({ maxSimultaneous, usesThisTurn: 9 })
+    assert.equal(hasSimultaneityRule(shield), false)
+    assert.equal(isSaturated(shield), false)
+    assert.equal(effectiveLevel(shield), 12)
+    assert.equal(ineligibilityReason(shield, { attackKind: 'ranged' }), null)
+  }
+  assert.equal(hasSimultaneityRule({ maxSimultaneous: 0 }), false) // un plafond invalide n'active pas la règle
+  assert.equal(hasSimultaneityRule({ maxSimultaneous: 2.5 }), false)
+})
+
+test('CRD : −1 au Seuil par interception déjà engagée ce Tour, jusqu’au plafond (RAW : 12, 11, 10, 9 puis refus)', () => {
+  assert.equal(SIMULTANEOUS_INTERCEPTION_PENALTY, 1)
+  assert.deepEqual([0, 1, 2, 3].map(usesThisTurn => effectiveLevel(crd({ usesThisTurn }))), [12, 11, 10, 9])
+  assert.deepEqual([1, 2, 3, 4].map(simultaneityPenalty), [0, 1, 2, 3])
+  assert.equal(isSaturated(crd({ usesThisTurn: 3 })), false)
+  assert.equal(isSaturated(crd({ usesThisTurn: 4 })), true)
+  assert.equal(ineligibilityReason(crd({ usesThisTurn: 4 }), { attackKind: 'ranged' }), 'saturated')
+  assert.equal(ineligibilityReason(crd({ usesThisTurn: 3 }), { attackKind: 'ranged' }), null)
+})
+
+test('le plafond est une donnée de la fiche : un CRD réglé à 2 sature à 2', () => {
+  assert.equal(isSaturated(crd({ maxSimultaneous: 2, usesThisTurn: 1 })), false)
+  assert.equal(isSaturated(crd({ maxSimultaneous: 2, usesThisTurn: 2 })), true)
+})
+
+test('simultaneityPenalty refuse un rang invalide', () => {
+  for (const rank of [0, -1, 1.5, NaN, undefined]) assert.throws(() => simultaneityPenalty(rank), RangeError)
+})
+
+test('effectiveLevel : niveau absent → null, jamais NaN', () => {
+  assert.equal(effectiveLevel(crd({ level: null })), null)
+  assert.equal(effectiveLevel({}), null)
+})
+
+test('pickProtector : le Seuil EFFECTIF décide — un CRD déjà sollicité passe derrière un bouclier plus frais', () => {
+  const tired = crd({ droneTokenId: 'tok-crd', usesThisTurn: 2 })      // 12 − 2 = 10
+  const fresh = candidate({ droneTokenId: 'tok-shield', level: 11 })   // 11, sans règle
+  assert.equal(pickProtector([tired, fresh], { attackKind: 'ranged' }).protector.droneTokenId, 'tok-shield')
+  const rested = crd({ droneTokenId: 'tok-crd', usesThisTurn: 0 })     // 12
+  assert.equal(pickProtector([rested, fresh], { attackKind: 'ranged' }).protector.droneTokenId, 'tok-crd')
+})
+
+test('pickProtector : un CRD saturé est écarté avec son motif, un autre drone prend le relais', () => {
+  const saturated = crd({ droneTokenId: 'tok-crd', usesThisTurn: 4 })
+  const other = candidate({ droneTokenId: 'tok-b', level: 8 })
+  const { protector, rejected } = pickProtector([saturated, other], { attackKind: 'ranged' })
+  assert.equal(protector.droneTokenId, 'tok-b')
+  assert.deepEqual(rejected, [{ droneTokenId: 'tok-crd', reason: 'saturated' }])
+})
+
+test('withinLeash : distance 3D aux pieds du protégé, 10 m de rayon (1 unité monde = 1,5 m)', () => {
+  const armor = { x: 0, y: 0, z: 0 }
+  assert.equal(withinLeash({ x: 6, y: 0, z: 0 }, [armor], 10), true)    // 9 m
+  assert.equal(withinLeash({ x: 7, y: 0, z: 0 }, [armor], 10), false)   // 10,5 m
+  assert.equal(withinLeash({ x: 4, y: 4, z: 0 }, [armor], 10), true)    // altitude comprise : 8,49 m
+  assert.equal(withinLeash({ x: 5, y: 5, z: 0 }, [armor], 10), false)   // 10,6 m : un étage compte
+  assert.equal(withinLeash({ x: 200, y: 0, z: 0 }, [armor], null), true) // pas de limite (bouclier personnel)
+  assert.equal(withinLeash({ x: 200, y: 0, z: 0 }, [armor], undefined), true)
+})
+
+test('withinLeash : plusieurs protégés visés, il suffit d’être dans le rayon de l’un d’eux', () => {
+  const anchors = [{ x: 0, y: 0, z: 0 }, { x: 20, y: 0, z: 0 }]
+  assert.equal(withinLeash({ x: 19, y: 0, z: 0 }, anchors, 10), true)
+  assert.equal(withinLeash({ x: 10, y: 0, z: 0 }, anchors, 10), false) // à 15 m des deux
+})
+
+test('withinLeash : une limite sans ancrage ne peut pas être vérifiée → refus ; rayon invalide → erreur', () => {
+  assert.equal(withinLeash({ x: 0, y: 0, z: 0 }, [], 10), false)
+  assert.equal(withinLeash({ x: 0, y: 0, z: 0 }, undefined, 10), false)
+  for (const leash of [0, -3, NaN]) assert.throws(() => withinLeash({ x: 0, y: 0, z: 0 }, [{ x: 0, y: 0, z: 0 }], leash), RangeError)
+})
+
+test('withinLeash : les métriques de la battlemap convertissent les mètres', () => {
+  const anchors = [{ x: 0, y: 0, z: 0 }]
+  assert.equal(withinLeash({ x: 4, y: 0, z: 0 }, anchors, 10, createWorldMetrics({ metersPerCell: 3 })), false) // 12 m
+  assert.equal(withinLeash({ x: 4, y: 0, z: 0 }, anchors, 10, createWorldMetrics({ metersPerCell: 2 })), true)  // 8 m
+})
+
+test('parseInterceptionLimit : plafond entier ≥ 1, rayon > 0, vide = bouclier personnel', () => {
+  assert.deepEqual([...INTERCEPTION_LIMIT_FIELDS], ['interception_max_simultaneous', 'interception_leash_m'])
+  assert.deepEqual(parseInterceptionLimit('interception_max_simultaneous', 4), { ok: true, value: 4 })
+  assert.deepEqual(parseInterceptionLimit('interception_max_simultaneous', '4'), { ok: true, value: 4 })
+  assert.deepEqual(parseInterceptionLimit('interception_max_simultaneous', null), { ok: true, value: null })
+  assert.deepEqual(parseInterceptionLimit('interception_max_simultaneous', ''), { ok: true, value: null })
+  for (const bad of [0, -1, 2.5, 'abc', NaN]) {
+    assert.equal(parseInterceptionLimit('interception_max_simultaneous', bad).ok, false, String(bad))
+  }
+  assert.deepEqual(parseInterceptionLimit('interception_leash_m', 10), { ok: true, value: 10 })
+  assert.deepEqual(parseInterceptionLimit('interception_leash_m', '7,5'), { ok: true, value: 7.5 })
+  assert.deepEqual(parseInterceptionLimit('interception_leash_m', null), { ok: true, value: null })
+  for (const bad of [0, -2, 'x', Infinity]) {
+    assert.equal(parseInterceptionLimit('interception_leash_m', bad).ok, false, String(bad))
+  }
+  assert.throws(() => parseInterceptionLimit('vitesse', 3), RangeError)
 })
 
 // ── Liens de protection ──────────────────────────────────────────────────────────────────────────

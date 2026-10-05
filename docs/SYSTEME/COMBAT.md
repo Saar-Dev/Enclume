@@ -853,7 +853,7 @@ silencieusement absent, même cause que côté exo (colonnes `shock`/`shock_mech
 L'AOE tireur drone reste non câblé (`DRONE-ARMEMENT-PROGRAM-SPLIT`/Segment 2b `PLAN_ARMES_SPECIALES.md`
 — autre chantier) : si/quand il sera construit, inclure ces colonnes dès la première version.
 
-### Mode autonome drone — « ordres permanents » (Sprint 2d, `docs/PLANS/PLAN_DRONE.md`)
+### Mode autonome drone — « ordres permanents » (Sprint 2d, `docs/Old/PLAN_DRONE.md`)
 
 RAW (LdB p.320) : un drone autonome n'a pas d'Initiative propre, il réagit immédiatement — séquence
 Détection → Ami/Ennemi → Armement sans intervention MJ/joueur, jusqu'à 3 tentatives (INI 12 → 7 → 2).
@@ -888,7 +888,57 @@ comme tout Test du système ; Armement délègue à `resolveDroneAssaultAction` 
 visible seulement si le réglage pertinent pour ce drone vaut `ordres_permanents` ET qu'une ligne
 `combat_roster` existe (combat actif).
 
-### Drone d'interception (bouclier) — Lots 1 et 2, `PLANS/PLAN_DRONE_INTERCEPTION.md`
+### Télépilotage drone (Sprint 3, `docs/Old/PLAN_DRONE.md`) — clos, confirmé en jeu réel 2026-09-22
+
+RAW (LdB p.319) : le pilote utilise sa Compétence Télépilotage (limitative sur le programme du drone) ;
+« son action ce tour = l'action du drone », Initiative = celle du pilote. Non-persistant : un choix fait
+à chaque Tour, pas d'état à synchroniser dans la durée. Lien pilote↔drone = même autorité que Sprint
+2c/2d (`character.user_id === user.id` sur le DRONE), aucune colonne dédiée.
+
+**Déclaration** (`CombatActionWindow.jsx`) : bouton « Télépiloter <drone> » sur le tour du PILOTE
+(`ownedDroneTokensInRoster`), bascule intégrale vers `useDroneDeclare`/`DroneDeclareSection`/
+`DroneWeaponPanel` scopés au drone (pas de nouveau composant). Payload `COMBAT_ACTION_DECLARE` avec
+`tokenId` du pilote + `mapActions.dronePilot`. Garde selon `drone_turn_model` pertinent : `classique` →
+refuse si le drone a déjà `has_announced`; `ordres_permanents` → la ligne `combat_actions` `drone_auto`
+pré-remplie est retrouvée par `status` (jamais `combat_timeline_entries`, qui n'existe qu'après la
+transition RÉSOLUTION) — `status: 'pending'` → annulée (`status: 'skipped'`) et remplacée par la
+déclaration télépilotée ; sinon refus (« déjà agi ce Tour »). Les ordres permanents
+(`acquired_target_token_id`) ne sont jamais effacés par un télépilotage ponctuel.
+
+**Trois points de substitution pilote→drone** (le seul piège réel de ce Sprint — `combat_actions.token_id`
+stocké reste celui du pilote pour l'Initiative, mais chaque effet physique doit cibler le drone) :
+1. `socketCombatAnnouncement.js` (`COMBAT_ACTION_DECLARE`) — résout un second couple `droneToken`/
+   `droneCharacter` pour `planCombatWorldMovement` (budget/position du drone, pas du pilote).
+2. `socketCombatResolution.js` (`resolveAutonomousStep`/dispatch assault+melee) — reconstruit
+   `resolvedAction = { ...action, token_id: droneToken.id }` avant de déléguer à
+   `resolveDroneAssaultAction` (même patron que `resolveDroneAutoAction`).
+3. `socketCombatResolution.js` (boucle « actions simples » `COMBAT_ACTION_CONFIRM`, mouvement) — la
+   ligne `combat_actions` de type `move_short`/`move_long` porte aussi `drone_weapon_inv_id` quand
+   télépiloté (réutilise une colonne déjà nullable) ; la boucle résout `droneCharacter`/`droneToken` via
+   cette colonne et substitue avant `executeBattlemapTokenMovement`/`getCharacterMovementBudget`.
+
+**Plafond de compétence** : `calcLimitedSkillTotal` (déjà réutilisé pour Manœuvre d'armure/Exo) plafonne
+le Seuil (`programLevelCapped = calcLimitedSkillTotal(programme.level, telepilotageTotal)`), jamais la
+maîtrise/le bonus de critique (`getCriticalSuccessBonus` garde `programme.level` non plafonné) — même
+convention que l'appelant existant `combatantContextService.js`. Aucun garde bloquant si le pilote n'a
+jamais investi en Télépilotage (marqueur `(-3)`, pas `(X)` — dégrade proprement vers un Seuil bas).
+
+**Interception RAW en télépiloté** : un drone télépiloté ce Tour **ne s'interpose pas** (RAW : programme
+réactif, mode autonome uniquement) — motif d'inéligibilité `telepiloted` du drone d'interception
+(section suivante, `isDroneTelepilotedThisTurn`), pas une désactivation dans le télépilotage lui-même.
+
+**Bug trouvé et corrigé avant clôture** (arbitrage ambiant, voir [[feedback_ambient_mode_authority_duplication]]
+côté mémoire) : `CombatActionWindow.jsx` instancie `useAutoMoveMode`/`useCombatClickAttack` 3× (pilote /
+drone en tour propre / drone télépiloté) ; la condition `enabled` du pilote n'avait jamais été mise à
+jour avec `!telepilotDroneId`, le laissant actif en permanence pendant le télépilotage et empêchant le
+drone de s'armer. Corrigé + durci : `registerAmbientAttackHandler` (`useCombatUIState.js`) refuse
+désormais explicitement un écrasement par un autre déclarant (garde d'exclusivité par `tokenId`).
+
+**Statut** : déclaration, Tir, CaC et déplacement télépilotés confirmés fonctionnels en jeu réel par
+Saar le 2026-09-22 (`1054814`, `dev/Saar`, non poussé). Mode persistant (togglable, indépendant du
+Tour) resté en V2 différée, jamais demandé — cf. `PLAN_DRONE.md` § V2 différée.
+
+### Drone d'interception (bouclier) — Lots 1 à 3, `PLANS/PLAN_DRONE_INTERCEPTION.md`
 
 RAW (`REGLES/REGLEDRONE.md`, « Drone bouclier ») : test avec le niveau d'interception du drone ; si sa marge de
 réussite est supérieure à celle de l'attaque, il s'interpose et est traité comme un obstacle ; contre une arme
@@ -906,8 +956,9 @@ La table est déclarée dans `EXCLUDED_TABLES` du coffre (garde `assertRegistryU
 **Décision** — noyau pur `shared/droneInterception.js` (aucun accès base), coquille
 `server/src/lib/droneInterceptionService.js`. Motifs d'inéligibilité (premier échoué retenu) : `melee`,
 `no_program`, `destroyed`, `no_token`, `hidden` (couche MJ), `other_battlemap`, `is_target`, `telepiloted`,
-`speed_missing`, `unreachable`. Un seul protecteur par attaque : le meilleur niveau d'interception (égalité →
-`droneTokenId`), pas de cascade. `isInterposed` : Test **réussi** ET marge **strictement** supérieure.
+`saturated` (CRD, plafond atteint), `speed_missing`, `unreachable`. Un seul protecteur par attaque : le meilleur Seuil
+**effectif** (`effectiveLevel` : niveau du programme moins le malus de simultanéité du CRD ; égalité → `droneTokenId`),
+pas de cascade. `isInterposed` : Test **réussi** ET marge **strictement** supérieure.
 
 **Tir simple** — accroche unique par famille de tireur, moment « touché, avant dégâts » :
 `finalizeAssaultHitOutcome` (humanoïde, y compris après un choix de Chance) et `finalizeAssaultOutcome`
@@ -932,18 +983,48 @@ raté) ; trajectoire réelle (lanceur → impact après dispersion). Succès : l
 dommages **bruts**, arrondie à l'inférieur) à la ligne de ce drone seul. Cônes et jets non recentrés ; tireur
 exo/drone lançant une grenade non câblé.
 
+**CRD Neptune / Artémis (Lot 3)** — RAW (`REGLEDRONE.md`, « Drones multi-fonctions Neptune et Artémis ») : le CRD
+gère plusieurs interceptions simultanées, **−1 au Test par interception supplémentaire, 4 au plus** ; ses
+mini-drones ne s'éloignent pas de plus de **10 m** de l'armure. Un CRD est un drone que le MJ crée (programme
+Interception 12) : deux champs **explicites** de `drone_sheet` (migration 362), jamais déduits du nom ni de la charge
+utile — `interception_max_simultaneous` (plafond) et `interception_leash_m` (rayon d'action, mètres) ; **vides = drone
+bouclier personnel** (aucune règle de simultanéité, aucune limite de distance). Édition : mêmes droits que le reste de la
+fiche (`PUT /drone`, MJ ou propriétaire), validation `parseInterceptionLimit` (noyau pur, mêmes bornes que les CHECK).
+- *Simultanéité* — « simultané » est lu « dans le même Tour ». Compteur : table `drone_interception_uses`
+  (`campaign_id`, `drone_character_id`, `turn_number`, `uses` ; PK composite ; migrations 360-361 ; FK `combat_state`
+  **en cascade** : le compteur disparaît avec le combat, `current_turn` repartant à 1 à chaque combat ; exclue du coffre).
+  `droneInterceptionUsesService.engageInterception` = **une requête atomique** `INSERT … ON CONFLICT DO UPDATE … WHERE
+  uses < plafond … RETURNING uses` (doc PostgreSQL : atomique même sous concurrence ; une ligne non mise à jour n'est pas
+  retournée = saturé) — pas de verrou, le Tour est dans la clé, **rien à remettre à zéro**. Le Test de la *n*-ième
+  interception a pour Seuil `niveau − (n − 1)` ; le bonus de réussite critique reste celui du niveau de maîtrise
+  (RAW p.204). Un drone sans plafond n'écrit rien.
+- *Engagement* — l'interception est comptée quand le drone s'**engage** : après un déplacement réussi, avant le Test,
+  que celui-ci réussisse ou non (un déplacement impossible ne consomme rien). Saturé (déjà *max* engagements) : motif
+  `saturated`, un autre drone peut prendre le relais ; un CRD saturé sur la ligne de tir reste un obstacle physique
+  comme tout drone inéligible. Hors combat (aucun `combat_state`) : aucune règle, Test au niveau plein.
+- *Rayon d'action* — la case rejointe doit rester à ≤ `interception_leash_m` (distance 3D, `withinLeash`) des pieds d'un
+  des protégés **visés** : le tir a pour ancrage sa cible ; la grenade, les protégés qu'elle vise et que ce drone protège
+  (`anchorsByDrone`). Composé au prédicat de destination (`segmentPredicate ∧ withinLeash`). Un CRD déjà hors du rayon n'a
+  aucune case valide : « hors de portée » (`droneInterceptNoReachLeash` dit budget **et** rayon). Simplification : le
+  rayon se mesure au protégé (le livre dit « l'armure »).
+
 **Chat** — chaque branche est dite (`COMBAT_SYSTEM_NOTICE`, clés `session.drone*` de `fr.json`, variantes
-`_zone`) : inéligibilité et motif, portée impossible, déplacement ou « déjà en position », Test (carte
+`_zone`) : inéligibilité et motif (dont `saturated`), portée impossible (avec ou sans rayon d'action), déplacement ou
+« déjà en position », `droneInterceptSimultaneous` (« gère *n* interceptions ce Tour : Test à −*k*, Seuil *s* au lieu
+de *l* », dès la 2ᵉ), Test (carte
 « Interception — <drone> ») puis « s'interpose » / « rate son Test » / « réussit mais marge insuffisante »,
 tir raté sur un protégé, grenade ne visant aucun protégé, moitié absorbée, drone absent de la zone, dégâts
 encaissés (`buildDroneDamageNotice` : gravité, intégrité avant → après, destruction).
 
 **Simplifications actées** (`JOURNAL8.md`) : pas de registre de mouvement par Tour, drone aérien traité comme
-au sol, aucun modificateur sur le Test, décor ignoré, un seul protecteur, pas de cascade. **Non couvert** :
-CRD multi-drones (Lot 3, plafond 4 et −1 par interception supplémentaire).
+au sol, aucun modificateur sur le Test (hors malus de simultanéité du CRD), décor ignoré, un seul protecteur, pas de
+cascade. **Non couvert** : les 10 mini-drones comme entités individuelles (un CRD = un token), les fonctions attaque et
+exploration des Neptune / Artémis, le retour du drone à sa place après coup.
 
 **Statut** : Lots 1 et 2 validés en jeu par Saar le 2026-09-24 (drone qui perd, drone qui gagne à percussion) ;
-grenade à minuterie avec drone gagnant et effets de bord en beta test.
+grenade à minuterie avec drone gagnant et effets de bord en beta test. Lot 3 (CRD) codé le 2026-09-24 mais **EN PAUSE**
+(décision Saar) : compteur et migrations vérifiés hors jeu (voir `JOURNAL8.md`), jamais testé en jeu ni commité, car aucun
+modèle de drone n'existe encore — reprise après l'import des drones RAW (`ROADMAP.md` §2).
 
 ---
 
@@ -1713,6 +1794,7 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 | `CombatModifiersWindow` PJ | PJ + `phase === 'RESOLUTION' && (playerActiveAssaultAction \|\| attackResult)` |
 | `CombatModifiersWindow` GM | GM + `phase === 'RESOLUTION' && activeAssaultAction && character.type === 'pnj'` |
 | `CombatDamageWindow` | `damagePayload !== null` |
+| `WoundReactionDock` | **toujours monté** (`SessionPage`, hors `CombatOverlay`) — s'affiche dès qu'une réaction de Chance de blessure existe pour l'audience (PJ propriétaire / MJ pour un PNJ) |
 | Overlay visée cible | `combatTargetMode !== null` |
 | Overlay déplacement | `combatMoveMode !== null` |
 
@@ -1724,12 +1806,35 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 // CombatDamageWindow
 { payload: damagePayload, results: damageResults, socket, onConfirmed: onDamageConfirmed }
 
+// WoundReactionDock
+{ socket }   // lit chanceChoiceStore.entries (site 'wound_severity') et resultPanelRect
+
 // CombatRosterWindow
 { socket, battlemapId: battlemap?.id }
 
 // CombatActionWindow
 { socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, onEnterTargetMode }
 ```
+
+### Réaction de blessure (Chance) — `WoundReactionDock`
+
+Le choix de Chance d'une **blessure** (`site === 'wound_severity'`, règles : `BLESSURES.md` §« Réaction de Chance ») n'a **qu'une
+seule fenêtre** : `WoundReactionDock.jsx`, jamais une carte à part (décision de Saar, 2026-09-25 ; maquette validée,
+consommée par l'implémentation puis retirée du dépôt — historique : `JOURNAL8.md`). Toujours du côté du **blessé** : le joueur propriétaire pour un PJ, le MJ pour un PNJ
+(filtre d'audience appliqué à l'alimentation du store par `CatastropheChoiceQueue`, seul abonné aux événements `CHANCE_CHOICE_*`).
+
+- **Ancrage** : au-dessus du panneau « Résolution du tir » (`CombatResultGM` en bas à gauche, `CombatResultPlayer` en bas au centre),
+  sur le même axe. Le panneau **publie sa position mesurée** (`useResultPanelRect` : `getBoundingClientRect` + `ResizeObserver` →
+  `chanceChoiceStore.resultPanelRect`), le dock s'y ancre ; sans panneau il se place là où il apparaîtrait. Jamais en haut à droite.
+- **Contenu** : carte (résumé de la blessure — gravité, localisation, nom —, « Chance ▾ » qui déplie les options avec leur coût, « Accepter »,
+  barre de temps) ; **pile compacte** pour le MJ quand plusieurs PNJ sont blessés (la plus grave d'abord, « + N autres blessures ») ;
+  **pagination** « Réaction 1 / 2 » pour un joueur. Une Mort montre d'emblée son option de rachat et un bouton rouge « Accepter la mort ».
+- **Données** : le payload `CHANCE_CHOICE_PENDING` (`chanceChoicePendingPayload`, autorité unique de sa forme, aussi utilisée par le resync
+  `SESSION_JOIN`) porte `options`, `chcAvailable`, `fatal`, `woundSeverity`, `woundLocation`, `subjectLabel`. Logique pure (tri, titres,
+  libellés) : `client/src/lib/woundReactionModel.js`. Un choix disparaît quand le serveur confirme (`CHANCE_CHOICE_RESOLVED`), jamais en
+  optimiste ; les boutons sont désactivés dès le clic.
+- **La carte flottante** (`CatastropheChoiceQueue`) ne montre plus les blessures : elle garde les Catastrophes et le forçage de zone (avec
+  « Ne rien dépenser »).
 
 ### Fenêtres de déclaration (phase ANNONCE) — briques partagées
 
@@ -1794,7 +1899,6 @@ Flux réel :
 - `requestWorldPathPreview` (`Canvas3D.jsx:656`) appelle `POST /battlemaps/:id/world-path-preview`
   (`MOTEUR_MONDE.md` §5.3 — aperçu serveur, jamais un rayon calculé côté client) avec le budget
   `combatMoveMode.allures.max` ; construit `currentPath` à partir de `result.plan.segments` (points
-| `WoundReactionDock` | **toujours monté** (`SessionPage`, hors `CombatOverlay`) — s'affiche dès qu'une réaction de Chance de blessure existe pour l'audience (PJ propriétaire / MJ pour un PNJ) |
   déjà en espace monde canonique, mètres/pieds).
 - Rendu : un `<GroundCursorReticule>` (`SceneReticules.jsx`) par case de `currentPath`, coloré par
   `getCombatPathColor(cell.spentM, combatMoveMode.allures)` (`shared/combatMovement.js`) — bleu/vert/
@@ -1806,27 +1910,5 @@ Flux réel :
 - `useMemo([combatTargetMode?.pendingTargetId])`
 - Guard : requiert `pendingTargetId` + `tokenId` + les deux tokens trouvés dans tokenStore
 - Points : `Float32Array[6]` → `[myToken.pos_x+0.5, myToken.pos_z+1.5, myToken.pos_y+0.5, tgt.pos_x+0.5, tgt.pos_z+1.5, tgt.pos_y+0.5]`
-// WoundReactionDock
-{ socket }   // lit chanceChoiceStore.entries (site 'wound_severity') et resultPanelRect
-
 - (PE14 + PE34 : altitude = pos_z+1.5, profondeur = pos_y)
 - Rendu : `<line>` + `lineBasicMaterial color="#e07070"`
-### Réaction de blessure (Chance) — `WoundReactionDock`
-
-Le choix de Chance d'une **blessure** (`site === 'wound_severity'`, règles : `BLESSURES.md` §« Réaction de Chance ») n'a **qu'une
-seule fenêtre** : `WoundReactionDock.jsx`, jamais une carte à part (décision de Saar, 2026-09-25 ; maquette validée :
-`docs/PLANS/maquette-chance-reaction/preview.html`). Toujours du côté du **blessé** : le joueur propriétaire pour un PJ, le MJ pour un PNJ
-(filtre d'audience appliqué à l'alimentation du store par `CatastropheChoiceQueue`, seul abonné aux événements `CHANCE_CHOICE_*`).
-
-- **Ancrage** : au-dessus du panneau « Résolution du tir » (`CombatResultGM` en bas à gauche, `CombatResultPlayer` en bas au centre),
-  sur le même axe. Le panneau **publie sa position mesurée** (`useResultPanelRect` : `getBoundingClientRect` + `ResizeObserver` →
-  `chanceChoiceStore.resultPanelRect`), le dock s'y ancre ; sans panneau il se place là où il apparaîtrait. Jamais en haut à droite.
-- **Contenu** : carte (résumé de la blessure — gravité, localisation, nom —, « Chance ▾ » qui déplie les options avec leur coût, « Accepter »,
-  barre de temps) ; **pile compacte** pour le MJ quand plusieurs PNJ sont blessés (la plus grave d'abord, « + N autres blessures ») ;
-  **pagination** « Réaction 1 / 2 » pour un joueur. Une Mort montre d'emblée son option de rachat et un bouton rouge « Accepter la mort ».
-- **Données** : le payload `CHANCE_CHOICE_PENDING` (`chanceChoicePendingPayload`, autorité unique de sa forme, aussi utilisée par le resync
-  `SESSION_JOIN`) porte `options`, `chcAvailable`, `fatal`, `woundSeverity`, `woundLocation`, `subjectLabel`. Logique pure (tri, titres,
-  libellés) : `client/src/lib/woundReactionModel.js`. Un choix disparaît quand le serveur confirme (`CHANCE_CHOICE_RESOLVED`), jamais en
-  optimiste ; les boutons sont désactivés dès le clic.
-- **La carte flottante** (`CatastropheChoiceQueue`) ne montre plus les blessures : elle garde les Catastrophes et le forçage de zone (avec
-  « Ne rien dépenser »).
