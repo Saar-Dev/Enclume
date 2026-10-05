@@ -1,5 +1,12 @@
 # PLAN_EXPORT_CARTE.md — Segment S0 : export / import de carte
 
+> **EN PAUSE (Saar, 2026-09-27)** : le besoin de sauvegarde n'est urgent qu'une fois l'éditeur capable de vraies cartes
+> (voir `PLAN_WORLD_BUILDER_REWORK.md`, aujourd'hui limité aux rectangles) — pas avant. S0 reprendra après le cadrage et
+> le code de la forme des salles (S1/S2), sur le format qui en sortira. Rien n'est perdu : L1a-1/2/3 (`shared/world/
+> mapLimits.js`, `importGuard.js`, `surfaceFieldTypes.js`) sont commités et déjà utiles ailleurs (durcissent aussi
+> `PUT /surface` en production, ticket `SURFACE-DOC-NO-BOUNDS`) ; L1a-4 et la suite ne redémarrent qu'une fois le nouveau
+> format de salle connu, une partie du travail sur la complexité de contour par case étant probablement à refaire.
+>
 > Rédigé 2026-09-26 (Claude, avec les décisions de Saar), recadré en v1 « la carte seule », **réécrit après l'analyse à
 > charge** (quatre analyses en lecture seule — sécurité, format et méthode, interface, intégrité serveur — dont les points
 > décisifs ont été revérifiés dans le code). **Plan validé par Saar le 2026-09-26** ; le plan exact de chaque lot est présenté et validé avant son code (méthode AGENTS.md).

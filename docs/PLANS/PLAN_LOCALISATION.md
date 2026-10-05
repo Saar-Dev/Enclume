@@ -6,13 +6,14 @@
 > Statut (2026-07-25) : 🟢 **Lot 1 (Combat, 17 fichiers) entièrement clos** — `combatSections.js`
 > migré (Segments 1-7, §3bis) + texte propre à chacun des 17 fichiers (§3ter). Zéro texte en dur
 > restant, confirmé par ré-audit.
-> 🟡 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé et commité (`d6a21f4`), parcours navigateur
-> non testé** — détail §3quater.
-> 🟡 **Lot 3 (Builder/Surface, 6 fichiers) codé et commité (`211a523`), parcours navigateur non testé**
-> — détail §3quinquies.
-> 🟡 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé,
-> parcours navigateur non testé** — détail §3sexies. **Les 4 lots sont maintenant codés** ; archivage
-> de ce plan dans `docs/ASBUILT.md` différé jusqu'à validation navigateur complète.
+> 🟢 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé et commité (`d6a21f4`), confirmé fonctionnel
+> en navigateur** — détail §3quater.
+> 🟢 **Lot 3 (Builder/Surface, 6 fichiers) codé et commité (`211a523`), confirmé fonctionnel en
+> navigateur** — détail §3quinquies.
+> 🟢 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé
+> et confirmé fonctionnel en navigateur** — détail §3sexies. **Lots 1-4 CLOS, confirmés par Saar en
+> navigateur (2026-09-15)** — reste à archiver ce plan dans `docs/ASBUILT.md` (mécanique, pas encore
+> fait).
 > 🟡 **Lot 5 (contenu de catalogue `ref_*` en base, 10 tables) — architecture : colonne brute = FR +
 > JSONB `<champ>_i18n` pour les langues ≠ fr (`docs/SYSTEME/LOCALISATION.md` §6 ; pratiques pro §7.12 ;
 > adaptativité §7.13). **Phase A codée le 2026-09-02** (migration 318 + résolveur `refI18n.js` +
