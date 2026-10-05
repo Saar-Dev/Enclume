@@ -870,9 +870,18 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
   for (const door of doors) {
     const connector = door.connector
     const isOpen = door.state === 'open'
-    const blocks = isOpen
-      ? { movement: false, sight: false, water: false, gas: false }
-      : blockingChannels(connector, 'door')
+    // Jamais `blockingChannels(connector, 'door')` ici : ce serait lire connector.blocksMovement/
+    // barrierType, des champs figés dans le document statique au moment où l'état AUTORÉ a été
+    // enregistré (connectorCommonBlocking/connectorBlockingForState, client/src/lib/connectors.js
+    // et SurfaceConnectorPanel.jsx). Une porte ouverte/fermée en session écrit UNIQUEMENT
+    // `world_feature_states` (document statique et état runtime volontairement séparés,
+    // `.claude/rules/world.md`) — ces champs figés ne sont donc plus jamais rafraîchis dès qu'un
+    // joueur ou le MJ change l'état effectif en session, même si `door.state` (résolu juste
+    // au-dessus, runtime prioritaire sur l'autoré) est correct. Symptôme vécu (Saar, 2026-09-27) :
+    // portes rendues visuellement fermées mais traversables — le rendu suit déjà `door.state`
+    // correctement, seul le blocage lisait encore l'ancien figé. `door.state` est l'unique autorité
+    // ici, dérivée fraîche à chaque compilation, jamais un champ mis en cache sur le connecteur.
+    const blocks = { movement: !isOpen, sight: !isOpen, water: !isOpen, gas: !isOpen }
     const half = door.thickness / 2
     const doorFrom = door.axis === 'segment'
       ? {

@@ -13,9 +13,10 @@
 ## 0. Responsabilité unique
 
 Constater précisément pourquoi une porte-connecteur ne s'ouvre/ferme jamais visuellement à l'écran,
-alors que son état (ouvert/fermé/verrouillé), sa collision et sa LOS sont déjà corrects côté serveur.
-Ce document ne couvre que ce point (+ un bug cosmétique connexe, §4). Chaque correctif retenu aura son
-propre `PLAN_XXX.md`, un bug à la fois (AGENTS.md).
+alors que son état (ouvert/fermé/verrouillé) était supposé déjà correct côté serveur pour la collision
+et la LOS. **Ce postulat s'est révélé faux pour la collision — §8** : la collision suit bien l'état au
+moment de l'AUTORAT, mais pas toujours l'état RUNTIME une fois modifié en session (corrigé). Chaque
+correctif retenu a son propre paragraphe daté, un bug à la fois (AGENTS.md).
 
 ---
 
@@ -120,8 +121,7 @@ doivent rester dans une convention locale fixe, jamais pré-échangées.
 inchangé. `DoorConnectorModel` (le rendu réel du GLB) ne lit jamais `box.args` — seulement
 `box.floorPosition`/`box.rotationY`/sa propre échelle — donc l'apparence de la porte elle-même est
 inchangée ; seul le cadre de sélection (et le placeholder avant chargement du GLB) est affecté.
-`npx eslint`/`npm run build` propres. **Non testé en jeu** — à confirmer par Saar sur une porte posée
-sur un mur d'axe Z (le cas qui était visiblement cassé).
+`npx eslint`/`npm run build` propres. **Testé en jeu (Saar, 2026-09-27) : « Correction validée. »**
 
 ---
 
@@ -321,3 +321,89 @@ par l'usage, pas de réglage de décalage à faire.
 
 **Fil 1 (rendu 3D des portes) CLOS.** Reste le fil 2 (§5, bugs `EntityBuilderTab.jsx`) — code mort tant
 que l'Atelier reste à 0 pack, attend une décision produit distincte de Saar.
+
+---
+
+## 8. Bug de collision — portes traversables selon le type, CLOS (2026-09-27) [VÉRIFIÉ]
+
+**Signalé par Saar en jeu** : certaines portes bloquent les tokens (sas standard), d'autres non (sas
+étanche, triangulaire, vitrée, hangar, hangar vitré) — pas un pattern lié au modèle 3D en particulier.
+
+**Root cause vérifiée par lecture, pas devinée** : `shared/world/worldCompiler.js` (`addWallsAndDoors`,
+avant correctif) :
+```js
+const isOpen = door.state === 'open'
+const blocks = isOpen
+  ? { movement: false, sight: false, water: false, gas: false }
+  : blockingChannels(connector, 'door')
+```
+`blockingChannels(connector, 'door')` lit `connector.blocksMovement`/`blocksSight`/`blocksWater`/
+`barrierType` — des champs **figés dans le document statique** au moment où l'état AUTORÉ a été
+enregistré (`connectorCommonBlocking`, `client/src/lib/connectors.js` ; duplication quasi identique
+`connectorBlockingForState`, `SurfaceConnectorPanel.jsx` — édition via le panneau les garde
+synchronisés). Mais une porte ouverte/fermée **en session** écrit uniquement `world_feature_states`
+(document statique et état runtime volontairement séparés, `.claude/rules/world.md`) — ces champs
+figés ne sont donc **jamais rafraîchis** par une action en session, même si `door.state` (résolu juste
+au-dessus avec la bonne priorité runtime-sur-autoré) est parfaitement correct et déjà consommé par le
+rendu (fil 1). Toute porte dont l'état autoré différait de son état runtime au moment du test
+(ex. autorée `open` puis fermée en session, ou l'inverse) rendait un blocage figé sur l'état autoré,
+indépendamment de ce qui s'affichait à l'écran — d'où un blocage qui semblait dépendre du type de
+porte alors qu'il dépendait en réalité de l'historique d'édition de chaque instance testée.
+
+**Correctif** : dériver `blocks` uniquement depuis `isOpen` (donc depuis `door.state`, déjà l'autorité
+correcte), sans jamais consulter les champs figés du connecteur pour une porte :
+```js
+const blocks = { movement: !isOpen, sight: !isOpen, water: !isOpen, gas: !isOpen }
+```
+`door.state` reste l'unique autorité, dérivée fraîche à chaque compilation — jamais un champ mis en
+cache. `blockingChannels` reste utilisé tel quel pour murs/sols/plafonds (statiques, sans état) — hors
+périmètre, aucun changement.
+
+**Testé** : `node --test shared/world/worldCompiler.test.mjs` 26/26 ; `node --env-file=.env --test
+server/src/services/worldSpatialQueryService.test.mjs server/src/services/worldVisibilityService.test.mjs
+server/src/services/worldMovementService.test.mjs` 7+7+8 verts (fixtures en base nettoyées
+automatiquement, aucun résidu) ; `node --check` ; `npm run build` client propre. **Testé en jeu
+(Saar, 2026-09-27)** : « Fermée, les portes bloquent bien le passage des personnages » — confirmé sur
+7 des 8 types. Le 8ᵉ (porte coulissante) reste bloqué en permanence même ouvert — bug distinct,
+**§9**, pas une régression de ce correctif (le blocage général fonctionne, c'est le passage qui ne
+s'ouvre jamais pour ce type précis).
+
+**Données** : aucune migration. Les champs `blocksMovement`/`blocksSight`/`blocksWater`/`barrierType`
+restent en base sur les connecteurs existants (inoffensifs maintenant, plus jamais lus pour une porte)
+— aucun nettoyage nécessaire.
+
+---
+
+## 9. Porte coulissante (`03_sliding_door`) toujours infranchissable — OUVERT, EN COURS [INCONNU]
+
+**Signalé par Saar (2026-09-27)**, après validation du §8 sur les 7 autres types : la porte coulissante
+reste bloquante en permanence, même ouverte — « impossible de demander à un personnage de la traverser
+durant un tour de combat : le pathfinding bloque complet ». Connecteur supprimé et reposé par Saar :
+**même effet** — exclut une ligne de données ponctuellement corrompue, pointe vers quelque chose de
+reproductible (le type d'asset, ou l'endroit précis de la carte).
+
+**Vérifié, pas un défaut de fiche** : les propriétés statiques du modèle (largeur, hauteur, largeur de
+découpe dans le mur) sont numériquement identiques à `01_standard_hatch` (qui fonctionne).
+
+**Vérifié par compilation réelle** (`compileSurfaceWorld` appelé directement sur les données actuelles
+de la carte « Carte d'accueil », pas une supposition) : à l'instant de la vérification, l'état résolu
+de cette porte était `open`, sa barrière ne bloquait rien (`movement: false`), et le mur de part et
+d'autre était correctement découpé sous 2 m de hauteur des deux côtés du seuil — **rien d'anormal trouvé
+dans les données de collision compilées**.
+
+**Piste explorée et abandonnée pour l'instant** : sondage direct de `buildNavigationGraph`/
+`isSegmentClear` (`shared/world/navigation.js`, `shared/world/spatialIndex.js`) pour vérifier si le
+segment reliant les deux côtés du seuil est reconnu libre. Résultat non concluant — le même test donne
+« bloqué » pour la porte de hangar qui fonctionne pourtant en jeu, ce qui signifie que le script de
+sondage n'appelle pas le mécanisme exactement comme le fait le vrai pathfinding de combat. **Pas fiable,
+ne pas s'y fier pour trancher.**
+
+**Question ouverte posée à Saar** : la porte recréée a-t-elle été reposée au même endroit précis de la
+carte, ou ailleurs ? Une reproduction au même endroit orienterait vers une donnée locale de la carte
+(sol manquant, salle mal détectée à cet endroit précis) ; une reproduction ailleurs orienterait vers
+quelque chose de propre au type d'asset ou à l'outil de pose.
+
+**Aucun correctif proposé.** Prochaine étape : instrumenter le vrai service de pathfinding serveur
+(celui réellement appelé pour une déclaration de mouvement en combat, pas un appel direct aux
+primitives de `navigation.js`) avec les données réelles de cette porte, pour obtenir la raison exacte
+du rejet plutôt que de sonder les briques internes une par une.
