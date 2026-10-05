@@ -9661,3 +9661,37 @@ non couverts par `ASSET_URL_FIELDS` :
 à charger normalement.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du fichier suffit ; aucun changement de schéma.
+
+## Session (Dev) — 2026-10-04 — Monde : un modèle 3D de porte/connecteur pouvait pointer vers une URL externe (CONNECTOR-MODEL-URL-ABSOLUTE)
+
+**Signalement** (audit sécurité antérieur, 2026-09-26) : `connectorAssetUrl`
+(`client/src/components/SurfaceDungeonScene.jsx`) renvoie `modelGlbUrl` tel quel s'il commence par
+`http://`/`https://`, sinon le préfixe par `/api/assets`. Le validateur serveur
+(`shared/world/surfaceDocument.js`) ne contrôlait pas ce champ du tout — un `surface_data` avec une
+URL externe aurait fait charger ce fichier par **tous** les clients qui ouvrent la carte (fuite
+d'adresse IP, contenu tiers non contrôlé). Une valeur non-string aurait fait lever
+`rawUrl.startsWith` au rendu (TypeError). Vérifié en base (local) : aucune donnée existante
+concernée — exploitable aujourd'hui uniquement par un MJ qui écrit son propre document ; devient un
+vecteur réel avec l'import de cartes tierces (hors périmètre de ce chantier).
+
+**Correctif, root cause côté serveur** : `validateSurfaceData` (branche `connectors`, même style que
+les autres champs déjà validés là — `lockDifficultyDc`, les coordonnées finies) refuse désormais
+`modelGlbUrl` non-string, ou commençant par `http://`/`https://`/`//` (absolu ou protocol-relative).
+Appliqué à la sauvegarde (`PUT /:id/battlemaps/surface` → `prepareSurfaceData` →
+`assertSurfaceData`, déjà le seul point d'entrée) — aucune nouvelle route. `null`/absent restent
+valides (porte sans modèle 3D, repli cube `DoorConnectorFallback`).
+
+**Défense en profondeur côté client** : `connectorAssetUrl` ne fait plus confiance à la valeur
+stockée — ne plante jamais sur une valeur non-string, ne charge jamais une URL absolue/protocol-
+relative, même pour une carte DÉJÀ enregistrée avant ce correctif (la validation serveur ne
+s'applique qu'aux futures sauvegardes, aucun nettoyage rétroactif des données existantes). Bascule
+vers le repli cube dans ces deux cas, comme pour une porte sans modèle du tout.
+
+**Testé** : `surfaceDocument.test.mjs` — nouveau test dédié (chemin builtin/catalogue relatif valide,
+`http://`/`https://`/`//` refusés, non-string refusé, `null` valide) ; `shared/**/*.test.mjs`
+(942/942, aucune régression) ; `eslint` ciblé (0 erreur) ; `vite build` complet.
+**Non testé** : scénario réel navigateur (poser une porte, vérifier son modèle 3D continue de
+s'afficher) — risque faible, chemin existant (`builtin-models/...`) inchangé par la garde ajoutée,
+seul un nouveau cas (absolu/non-string) change de comportement.
+**Données** : aucune migration, aucun changement de schéma.
+**Retour arrière** : `git revert` des 2 fichiers modifiés suffit.

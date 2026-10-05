@@ -381,6 +381,20 @@ function validateFeature(collection, id, item, errors) {
     validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ', 'y', 'topY'], path, errors)
   } else if (collection === 'connectors') {
     if (typeof item.type !== 'string' || !item.type.trim()) errors.push(`${path}.type est obligatoire`)
+    // CONNECTOR-MODEL-URL-ABSOLUTE — modelGlbUrl est chargé TEL QUEL par tous les clients qui
+    // ouvrent la carte (client/src/components/SurfaceDungeonScene.jsx::connectorAssetUrl) : une URL
+    // absolue ferait fetcher un fichier tiers par tout le monde (fuite d'IP, contenu non contrôlé) ;
+    // une valeur non-string ferait lever `.startsWith` au rendu. Exploitable aujourd'hui seulement
+    // par un MJ qui écrit son propre document ; devient un vecteur réel avec l'import de cartes
+    // tierces. Un chemin MinIO relatif légitime (builtin ou catalogue entity_blueprints) n'est
+    // jamais absolu — null/undefined restent valides (porte sans modèle 3D, repli cube).
+    if (item.modelGlbUrl != null) {
+      if (typeof item.modelGlbUrl !== 'string') {
+        errors.push(`${path}.modelGlbUrl doit être une chaîne`)
+      } else if (/^(https?:)?\/\//i.test(item.modelGlbUrl)) {
+        errors.push(`${path}.modelGlbUrl ne peut pas être une URL absolue ou protocol-relative`)
+      }
+    }
     if (item.type === 'door') {
       if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
       validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1', 'y'], path, errors)

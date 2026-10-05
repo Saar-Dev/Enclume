@@ -364,3 +364,38 @@ test('lockDifficultyDc est optionnel sur une porte mais doit être un nombre fin
   surface.connectors.lockedDoor.lockDifficultyDc = NaN
   assert.equal(validateSurfaceData(surface).valid, false)
 })
+
+test('modelGlbUrl — refuse une URL absolue/protocol-relative ou non-string, accepte un chemin relatif (CONNECTOR-MODEL-URL-ABSOLUTE)', () => {
+  const surface = surfaceFixture()
+  surface.connectors.door1 = {
+    type: 'door',
+    axis: 'x',
+    x0: 0,
+    x1: 1,
+    z0: 0,
+    z1: 0,
+    y: 0,
+  }
+  assert.equal(validateSurfaceData(surface).valid, true, 'absent = valide (porte sans modèle 3D)')
+
+  surface.connectors.door1.modelGlbUrl = 'builtin-models/door-standard.glb'
+  assert.equal(validateSurfaceData(surface).valid, true, 'chemin builtin relatif valide')
+
+  surface.connectors.door1.modelGlbUrl = 'entities/abc-123.glb?v=42'
+  assert.equal(validateSurfaceData(surface).valid, true, 'chemin catalogue relatif valide')
+
+  surface.connectors.door1.modelGlbUrl = 'http://evil.example.com/malicious.glb'
+  assert.equal(validateSurfaceData(surface).valid, false, 'http:// absolu refusé')
+
+  surface.connectors.door1.modelGlbUrl = 'https://evil.example.com/malicious.glb'
+  assert.equal(validateSurfaceData(surface).valid, false, 'https:// absolu refusé')
+
+  surface.connectors.door1.modelGlbUrl = '//evil.example.com/malicious.glb'
+  assert.equal(validateSurfaceData(surface).valid, false, 'protocol-relative // refusé')
+
+  surface.connectors.door1.modelGlbUrl = 42
+  assert.equal(validateSurfaceData(surface).valid, false, 'non-string refusé (jamais un .startsWith au rendu)')
+
+  surface.connectors.door1.modelGlbUrl = null
+  assert.equal(validateSurfaceData(surface).valid, true, 'null = valide (repli cube)')
+})

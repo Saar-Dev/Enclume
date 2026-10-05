@@ -1436,13 +1436,18 @@ function connectorDoorBox(connector) {
   }
 }
 
+// CONNECTOR-MODEL-URL-ABSOLUTE — surfaceDocument.js refuse désormais une URL absolue/protocol-
+// relative ou non-string à la SAUVEGARDE, mais ne nettoie pas rétroactivement une carte déjà
+// enregistrée avant ce correctif. Défense en profondeur ici : jamais fetcher un fichier tiers
+// (fuite d'IP, contenu non contrôlé par tous les clients qui ouvrent la carte), jamais planter sur
+// une valeur inattendue — repli cube (DoorConnectorFallback), pas une URL quelconque.
 function connectorAssetUrl(connector) {
   const rawUrl = connector?.modelGlbUrl
-  if (!rawUrl) return null
+  if (!rawUrl || typeof rawUrl !== 'string') return null
+  if (/^(https?:)?\/\//i.test(rawUrl)) return null
   const versionedUrl = rawUrl.startsWith('builtin-models/') && !rawUrl.includes('?')
     ? `${rawUrl}?v=door-model-refresh-20260709`
     : rawUrl
-  if (/^https?:\/\//i.test(versionedUrl)) return versionedUrl
   return `${import.meta.env.VITE_API_URL}/api/assets/${versionedUrl}`
 }
 
