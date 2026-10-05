@@ -34,3 +34,6 @@ desktop.ini
 # (le partagé reste suivi : .claude/settings.json, .claude/rules/, .claude/hooks/)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Obsidian — config personnelle de l'éditeur (vault local), jamais partagée
+.obsidian/
