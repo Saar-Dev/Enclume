@@ -14,6 +14,7 @@ import {
   prepareSurfaceData,
 } from '../../../shared/world/surfaceDocument.js'
 import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
+import { scanJsonStructure, checkSurfaceLimits } from '../../../shared/world/importGuard.js'
 import {
   BATTLEMAP_DOCUMENT_REVISION_COLUMNS,
   hasRevisionConflict,
@@ -92,6 +93,15 @@ function parseBoolField(value, fallback) {
 // (Math.ceil, cohérent avec roomEffectiveGridCells qui travaille en cases entières), minimum 1 cellule
 // dans chaque dimension — une salle 0×N ne compile pas. Point unique appelé par POST / et PUT /:id
 // (nouvelle image) — pas de duplication de la formule entre création et modification (P4).
+// SURFACE-DOC-NO-BOUNDS — message technique (anglais, même registre que les AppError déjà levées
+// par cette route) listant les codes de garde, jamais affiché tel quel à un joueur : seul le MJ qui
+// sauvegarde l'éditeur voit cette erreur, et aucune UI ne consomme encore ces codes pour les traduire.
+function formatImportGuardErrors(result) {
+  return result.errors
+    .map(({ code, params }) => (Object.keys(params).length ? `${code} ${JSON.stringify(params)}` : code))
+    .join('; ')
+}
+
 function buildTrivialRoomSurfaceData({ battlemapId, gridSize, imageWidth, imageHeight }) {
   const widthCells = Math.max(1, Math.ceil((Number(imageWidth) || 0) / (Number(gridSize) || 64)))
   const depthCells = Math.max(1, Math.ceil((Number(imageHeight) || 0) / (Number(gridSize) || 64)))
@@ -969,6 +979,24 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
       .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
       .first()
     if (!member) throw new AppError(403, 'GM only')
+
+    // SURFACE-DOC-NO-BOUNDS — garde de structure et de plafonds AVANT tout calcul géométrique :
+    // validateSurfaceData (via prepareSurfaceData) ne vérifie que Number.isFinite sur les bornes
+    // d'une salle, sans aucune limite de taille, et compileSurfaceWorld (appelé plus bas) énumère
+    // ensuite toutes les cases de façon synchrone. Un document {minX:-1e8, maxX:1e8, ...} sans
+    // `cells` passerait la validation puis figerait la boucle d'événements Node pour toutes les
+    // campagnes. scanJsonStructure/checkSurfaceLimits (shared/world/importGuard.js, MAP_LIMITS)
+    // existaient déjà, testés (882/882), mais n'étaient jamais appelés depuis le serveur — seul
+    // point d'entrée externe de surface_data, donc seul endroit où les brancher. Ordre documenté
+    // par importGuard.js lui-même : structure puis plafonds, avant le validateur de production.
+    const structureCheck = scanJsonStructure(surface_data)
+    if (!structureCheck.ok) {
+      throw new AppError(400, `surface_data rejected: ${formatImportGuardErrors(structureCheck)}`)
+    }
+    const limitsCheck = checkSurfaceLimits(surface_data)
+    if (!limitsCheck.ok) {
+      throw new AppError(400, `surface_data rejected: ${formatImportGuardErrors(limitsCheck)}`)
+    }
 
     let prepared
     try {

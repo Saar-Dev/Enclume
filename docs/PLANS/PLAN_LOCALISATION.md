@@ -23,8 +23,9 @@
 > fichiers (Règle 2), indépendante de ce lot. **Schéma de payload choisi** (§9.7) : réutiliser
 > `i18nKey`/`params` tel quel (déjà en prod sur `COMBAT_SYSTEM_NOTICE`), aucun nouveau mécanisme.
 > **Les 59 clés nommées** (§9.8) : 6 réutilisées (Règle 2, correspondance exacte vérifiée), 53
-> nouvelles dans `combat.json` (`diceLabels.*`/`breakdown.*`). **Zéro plan de code, zéro code** —
-> reste à découper en lots codables (§9.9).
+> nouvelles dans `combat.json` (`diceLabels.*`/`breakdown.*`). **Plan de code écrit** (§9.9) : transition
+> à double forme côté client (3 fichiers), puis 15 fichiers serveur migrés un par un, commit final de
+> nettoyage — **zéro code produit**, prêt pour analyse à charge si Saar veut continuer.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1455,8 +1456,46 @@ clés, pas encore quel fichier/ligne appelle laquelle. C'est la portée du proch
 **Décompte final** : 6 réutilisées + 53 nouvelles (18+17 statiques, 17+5 gabarits paramétrés) = 59,
 cohérent avec §9.6.
 
-### 9.9 Prochaine étape
+### 9.9 Stratégie de transition et découpage en lots (2026-10-06)
 
-Nommage terminé. Reste, avant tout code : écrire le plan de code (découpage en lots, quel fichier
-dans quel commit, ordre, stratégie de transition tranchée — §9.7). Pas fait ici — décision Saar sur
-le moment d'y passer.
+**Le vrai problème de séquencement** `[VÉRIFIÉ]` : contrairement à B1/B2/B3 (chaque site lu
+indépendamment par son propre appelant), **les 15 fichiers émetteurs partagent les 3 MÊMES
+consommateurs client** (`MessageRendererRegistry.jsx` pour `skillLabel`, `DiceBreakdownPopover.jsx`
+pour `breakdown`, `CatastropheChoiceQueue.jsx` pour `testLabel`). `useSessionSocket.js` ne fait que
+relayer le payload, rien à y changer. Si le client bascule sur `{ i18nKey, params }` d'un coup, les
+14 fichiers pas encore migrés casseraient immédiatement (`t(undefined)`). Migrer fichier par fichier
+comme B1 est donc **impossible sans étape intermédiaire**.
+
+**Décision** : transition à double forme, même esprit que Lot 6 (« `message` optionnel en repli »,
+§8) — le client accepte les deux formes pendant la transition :
+```js
+// MessageRendererRegistry.jsx / DiceBreakdownPopover.jsx / CatastropheChoiceQueue.jsx
+const label = msg.skillLabelKey ? t(msg.skillLabelKey, msg.skillLabelParams) : msg.skillLabel
+```
+Ne contredit pas `rules/dice.md` (« émetteur et consommateurs compatibles dans un même commit ») :
+à tout instant, ce qui est mergé reste cohérent — le client sait lire les deux formes dans la MÊME
+version du code, aucun état intermédiaire cassé. Une fois les 15 fichiers migrés, un commit final
+retire le repli (`msg.skillLabel` disparaît du code client ET de tout émetteur).
+
+**Découpage proposé (un lot = un pas, comme B1)** :
+
+| Étape | Contenu |
+|---|---|
+| 0 | Ajouter les 59 clés à `combat.json` (`diceLabels.*`/`breakdown.*`) + le repli à double forme dans les 3 fichiers client. **Zéro changement de comportement** (aucun émetteur n'envoie encore la nouvelle forme) — commit isolé, le plus sûr de tout le chantier. |
+| 1-15 | Un fichier serveur à la fois (`socketCombatHelpers.js` en dernier — le plus gros, 36+33 sites — les 14 autres d'abord, du plus petit au plus gros) : remplacer chaque `skillLabel`/`testLabel`/`breakdown[].label` littéral par `{ ...Key, ...Params }`, vérifié par comparaison ancien texte / nouveau `t(clé, params)` résolu (même méthode que B3 §7.16.6 — comparer, pas juste relire). |
+| 16 | Commit final : retirer le repli dans les 3 fichiers client + supprimer `skillLabel`/`testLabel`/`breakdown[].label` bruts de `shared/events.js` si typés. |
+
+**Non tranché (décision Saar avant de coder quoi que ce soit)** :
+- Ordre exact des étapes 1-15 (proposé : du plus petit fichier au plus gros, comme Lot 1 §3ter —
+  mais `statusService.js`/`skillTestService.js`/`losService.js`/`surpriseService.js`/
+  `gmArbitratedTestService.js`/`exoPilotService.js`/`socketEntity.js`/`socketChance.js`/
+  `chanceCatastropheChoiceService.js`/`droneInterceptionService.js`/`socketDice.js` sont tous à
+  1-4 sites chacun → candidats naturels pour ouvrir, avant `socketCombatAoe.js` (5),
+  `socketCombatResolution.js` (1 — déjà compté), `socketCombatExo.js` (11),
+  `socketCombatHelpers.js` (36+33, en dernier).
+- Qui valide l'étape 0 en navigateur avant d'enchaîner (changement client sans changement serveur —
+  risque faible mais premier contact avec le nouveau code de rendu).
+- Relecture croisée avec Lot 6 avant de coder l'étape 0 (même motif, décision déjà notée §9.7).
+
+**Statut** : plan de code écrit, **zéro code produit**. Prêt pour une analyse à charge si Saar veut
+avancer encore, ou pour s'arrêter ici.
