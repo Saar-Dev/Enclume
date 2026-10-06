@@ -8,7 +8,7 @@
 // munitions, persistance, application par cible, finalisation).
 // Graphe d'import : ce module importe lib/services + le registre AOE + des symboles de
 // socketCombatHelpers.js (resolveCriticalFailReroll, fetchAssaultWeaponAndMods,
-// resolveDroneIntegrityLoss, SITUATION_LABELS) — jamais l'inverse.
+// resolveDroneIntegrityLoss, resolveSituationEntry) — jamais l'inverse.
 // socketCombatResolution.js importe resolveAoeAssaultAction d'ici.
 
 import { WS } from '../../../shared/events.js'
@@ -48,7 +48,7 @@ import {
   fetchDroneWeapon,
   resolveDroneIntegrityLoss,
   flushDeferredEmissions,
-  SITUATION_LABELS,
+  resolveSituationEntry,
 } from './socketCombatHelpers.js'
 // fetchExoWeapon — import socket→socket (socketCombatExo.js n'importe jamais socketCombatAoe.js,
 // vérifié : aucun cycle, même pattern que socketCombatResolution.js qui importe déjà les deux).
@@ -114,10 +114,10 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
   const rollResult = await resolveAoeAttackRoll({
     skillTotal, skillMastery: ctxTireur?.mastery ?? 0,
     contributions: [
-      { label: 'Malus santé / encombrement', value: ctxTireur?.effectiveMalus ?? 0, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: ctxTireur?.effectiveMalus ?? 0, type: 'malus' },
       ...situationMods.reduce((acc, k) => {
         const v = RANGED_SITUATION_MODS[k]?.mod
-        if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+        if (v !== undefined && v !== 0) acc.push(resolveSituationEntry(k, v, v > 0 ? 'bonus' : 'malus'))
         return acc
       }, []),
     ],
@@ -131,7 +131,8 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
     isCriticalSuccess: rollResult.isCriticalSuccess, isCriticalFail: rollResult.isCriticalFail,
     catastropheRisk: rollResult.catastropheRisk,
     seed: rollResult.attackSeed, timestamp: new Date().toISOString(),
-    skillLabel: `${weapon.display_name ?? weapon.ref_name ?? 'Arme de zone'} — Tir en zone`,
+    skillLabelKey: 'combat:diceLabels.armeZone',
+    skillLabelParams: { name: weapon.display_name ?? weapon.ref_name ?? 'Arme de zone' },
     mechanicalTotal: skillTotal,
     diffLabel: rollResult.seuil - skillTotal >= 0 ? `+${rollResult.seuil - skillTotal}` : `${rollResult.seuil - skillTotal}`,
     chancesDeReussite: rollResult.seuil, isSuccess: rollResult.isSuccess, mr: rollResult.mr,
@@ -403,7 +404,7 @@ async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToke
   const coord = await resolveAoeAttackRoll({
     skillTotal: testCtx?.skillTotal ?? 0,
     skillMastery: 0,
-    contributions: [{ label: 'Malus santé / encombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' }],
+    contributions: [{ i18nKey: 'combat:breakdown.malusSanteEncombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' }],
   })
 
   const failureMarginM = coord.isSuccess ? 0 : -coord.mr // mr = seuil - roll < 0 sur échec → -mr = mètres ratés
@@ -631,7 +632,8 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         formula: '1d20', rolls: coord.attackRolls, total: coord.rollAttaque,
         isCriticalSuccess: coord.isCriticalSuccess, isCriticalFail: coord.isCriticalFail,
         catastropheRisk: coord.catastropheRisk, seed: coord.attackSeed, timestamp: new Date().toISOString(),
-        skillLabel: `${weapon.ref_name ?? 'Grenade'} — Lancer (Test de Coordination)`,
+        skillLabelKey: 'combat:diceLabels.grenadeLancer',
+        skillLabelParams: { name: weapon.ref_name ?? 'Grenade' },
         mechanicalTotal: testCtx?.skillTotal ?? 0, chancesDeReussite: coord.seuil,
         isSuccess: coord.isSuccess, mr: coord.mr, breakdown: coord.breakdown,
       } })
@@ -865,7 +867,8 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       const groupCtx = { ctx, mechanic, resolveTargets, isPnjResult, tireurColor, tireurUsername }
       for (const opening of avoidanceOpenings) {
         await openChanceChoice(io, campaignId, opening.recipientCharacterId, {
-          testLabel: `${weapon.ref_name ?? 'Tir en zone'} — Éviter la zone d'effet (${opening.cibleName})`,
+          testLabelKey: 'combat:diceLabels.armeEviterZone',
+          testLabelParams: { name: weapon.ref_name ?? 'Tir en zone', cible: opening.cibleName },
           site: 'aoe_avoidance',
           actionId: action.id,
           targetTokenId: opening.targetTokenId,
@@ -1023,7 +1026,7 @@ async function finishAoeAvoidanceChoice(io, campaignId, resolved, { choice, cont
       isCriticalSuccess: testOutcome.isCriticalSuccess, isCriticalFail: testOutcome.isCriticalFail,
       catastropheRisk: false, // décision Saar 2026-09-11 — pas de Catastrophe sur un Test de Chance
       seed: null, timestamp: new Date().toISOString(),
-      skillLabel: 'Test de Chance — Éviter la zone d\'effet',
+      skillLabelKey: 'combat:diceLabels.testChanceEviterZone',
       mechanicalTotal: sheet.chc, chancesDeReussite: sheet.chc + modifier,
       diffLabel: modifier >= 0 ? `+${modifier}` : `${modifier}`,
       isSuccess: testOutcome.isSuccess, mr: testOutcome.mr,

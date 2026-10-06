@@ -1865,3 +1865,17 @@ déjà acceptés ailleurs dans ce lot, pas une composition serveur nouvelle).
 (aucune ne retombe sur elle-même) ; 12 valeurs paramétrées vérifiées **texte exact** contre la
 chaîne d'origine (`node -e` avec i18next réel) ; `node --check` sur le fichier ; build client.
 Aucun test ciblé existant pour ce fichier (recherché, aucun `.test.mjs`).
+
+### 9.20 Étape 12 — `socketCombatAoe.js` (2026-10-06)
+
+6 sites. `resolveAoeAttackRoll` enveloppe déjà `computeAttackRoll({skillLabel:'Compétence', ...})`
+(§9.18) — ses `breakdown[0]`/`[dernier]` ('Compétence'/'Seuil') sont déjà résolus, seules les
+CONTRIBUTIONS (`Malus santé / encombrement` ×2, situation via le nouveau `resolveSituationEntry`
+importé de `socketCombatHelpers.js`) restaient à migrer. + 4 gabarits/statique (`armeZone`,
+`grenadeLancer`, `armeEviterZone` — via `openChanceChoice`, relais déjà dual-shape depuis le §9.15 —
+`testChanceEviterZone`).
+
+**Validé** : 4 nouvelles clés résolues et comparées texte exact contre l'original (`node -e`,
+i18next réel). `node --test server/src/socket/socketCombatAoe.test.mjs` → 25/25 ✔ (fonctions pures,
+aucune DB — le fichier teste `resolveAoeAttackRoll` avec ses propres `contributions` factices,
+indépendantes des sites réels migrés, donc non affecté). `node --check`.
