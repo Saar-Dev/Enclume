@@ -2,7 +2,7 @@ import { Component, Suspense, useEffect, useMemo } from 'react'
 import { Billboard, Html, Text, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { tokenCropWindow } from '../lib/tokenCrop.js'
-import { TOKEN_STATUS_CATEGORY_COLORS, findTokenStatus } from '../../../shared/tokenStatusRegistry.js'
+import { TOKEN_STATUS_CATEGORY_COLORS, findTokenStatus, selectVisibleStatusBadges } from '../../../shared/tokenStatusRegistry.js'
 
 // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) — présentation pure (aucun état combat), extraite de
 // Canvas3D.jsx pour être partagée avec Canvas2D. FONT_URL reste utilisé directement par Canvas3D.jsx
@@ -170,10 +170,11 @@ export function TokenPortrait({ tokenStyle, portraitUrl, fallbackColor, radius =
 
 export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', offsetY = 2.1 }) {
   if (!(statuses?.length > 0) || statusEffectsMode === 'off') return null
+  const { visible, hiddenCount } = selectVisibleStatusBadges(statuses)
   return (
     <Html position={[0, offsetY, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{ display: 'flex', gap: 2 }}>
-        {(statuses.length > 4 ? statuses.slice(0, 3) : statuses).map(code => {
+        {visible.map(code => {
           // Registre unique (shared/tokenStatusRegistry.js) ; code hors registre (iem_survival, ati_*) → gris.
           const color = TOKEN_STATUS_CATEGORY_COLORS[findTokenStatus(code)?.category] ?? '#888'
           return (
@@ -193,7 +194,7 @@ export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', of
             />
           )
         })}
-        {statuses.length > 4 && (
+        {hiddenCount > 0 && (
           <span style={{
             fontSize: 14,
             color: '#ccc',
@@ -203,7 +204,7 @@ export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', of
             lineHeight: '28px',
             outline: '1px solid rgba(255,255,255,0.2)',
           }}>
-            +{statuses.length - 3}
+            +{hiddenCount}
           </span>
         )}
       </div>

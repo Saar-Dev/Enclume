@@ -9695,3 +9695,38 @@ s'afficher) — risque faible, chemin existant (`builtin-models/...`) inchangé 
 seul un nouveau cas (absolu/non-string) change de comportement.
 **Données** : aucune migration, aucun changement de schéma.
 **Retour arrière** : `git revert` des 2 fichiers modifiés suffit.
+
+## Session (Dev) — 2026-10-06 — Combat : badge « Mort »/« K.O. » pouvait disparaître sous l'empilement de statuts (STATUT-BADGES-LIMITE-3)
+
+**Signalement** (chantier « Statut Mort », 2026-09-24) : `TokenStatusBadges` (`TokenPresentation.jsx`)
+tronquait `statuses.slice(0, 3)` dans l'ordre brut reçu dès que le token portait plus de 4 statuts —
+un token déjà chargé de statuts mineurs avant de mourir pouvait afficher ses 3 premiers badges
+d'origine et jamais le badge « Mort », pourtant le plus important à lire d'un coup d'œil.
+
+**Recherche avant correctif** : patron « emplacement réservé » de FoundryVTT (`CONFIG.statusEffects`
++ drapeau `overlay` — un statut marqué ainsi n'entre jamais dans la file d'icônes concurrente, il a
+un emplacement à part, garanti) et pattern UI « Priority+ » (séparer ce qui doit toujours être
+visible de ce qu'on tronque, plutôt que trier toute la collection et espérer que l'important tombe
+dans la tranche visible). Un simple tri à deux paliers codé dans le composant aurait rechargé une
+décision d'architecture dans la fonction d'affichage, alors que `shared/tokenStatusRegistry.js`
+existe justement pour que chaque rôle sémantique reste une donnée déclarative du registre.
+
+**Correctif, root cause côté registre partagé** : nouvelle fonction pure exportée
+`selectVisibleStatusBadges(codes, { threshold = 4, maxVisible = 3 } = {})`
+(`shared/tokenStatusRegistry.js`) — en dessous du seuil, aucune troncature (comportement d'origine
+inchangé) ; au-delà, tout code dont l'entrée registre porte `isDeath` ou `blocksDeclaration` (cadavre,
+étourdi, inconscient — change fondamentalement ce que le personnage peut faire) est TOUJOURS inclus
+dans les badges visibles, hors concurrence avec le reste ; les places restantes se remplissent avec
+le reste des statuts, dans l'ordre reçu. Aucun nouveau drapeau inventé — réutilise `isDeath`/
+`blocksDeclaration`, déjà déclarés au registre pour cette raison. Un futur statut tout aussi critique
+devient automatiquement toujours visible en ajoutant son drapeau au registre, sans toucher à cette
+fonction ni au composant. `TokenPresentation.jsx` délègue entièrement : `TokenStatusBadges` ne connaît
+plus aucune règle de priorité.
+
+**Testé** : `shared/tokenStatusRegistry.test.mjs` étendu à 23/23 (4 statuts ou moins = aucune
+troncature ; `dead` en dernière position d'origine reste visible ; sans statut critique, troncature
+identique à l'ancien comportement ; `stunned` — `blocksDeclaration` — reste visible aussi) ; `eslint`
+ciblé sur `TokenPresentation.jsx` (0 erreur).
+**Non testé** : affichage réel en navigateur (token avec plusieurs statuts empilés).
+**Données** : aucune — fichiers partagés/client uniquement.
+**Retour arrière** : `git revert` des 3 fichiers modifiés suffit ; aucun changement de schéma.

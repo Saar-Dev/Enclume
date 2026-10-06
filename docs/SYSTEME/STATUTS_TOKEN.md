@@ -34,11 +34,11 @@ Forme d'une entrée : `{ code, category, ...drapeaux }` — un drapeau absent va
 | `category` | catégorie de couleur du badge/panneau (`TOKEN_STATUS_CATEGORY_COLORS`) | `TokenStatusPanel.jsx`, `TokenPresentation.jsx` |
 | `manualToggle` | accepté par `TOKEN_STATUS_TOGGLE` (bascule manuelle) | `socketToken.js` |
 | `inPanel` | affiché dans la grille du panneau (ordre du registre = ordre d'affichage) | `TokenStatusPanel.jsx` |
-| `blocksDeclaration` | le token ne peut plus agir : le moteur de tour le passe avant d'ouvrir sa fenêtre (§5) | `combatTurnEngine.js` (`getDeclarationBlockedTokens`) ; gardes de `socketCombatResolution.js` en filet |
+| `blocksDeclaration` | le token ne peut plus agir : le moteur de tour le passe avant d'ouvrir sa fenêtre (§5) ; badge toujours affiché, jamais tronqué | `combatTurnEngine.js` (`getDeclarationBlockedTokens`) ; gardes de `socketCombatResolution.js` en filet ; `selectVisibleStatusBadges` |
 | `defenseless` | la cible ne peut pas se défendre activement (DEF5) | `socketCombatHelpers.js` (`isTargetDefenseless`) |
 | `clearedAtCombatEnd` | retiré à la fin du combat | `socketCombatState.js` |
 | `gmOnly` | seul le MJ le pose/retire, quelle que soit l'option `players_edit_statuses` | `canEditTokenStatus` → `socketToken.js` (autorité) et `TokenStatusPanel.jsx` (aperçu) |
-| `isDeath` | le statut fait du token un cadavre (§6) | `deathStateService.js` |
+| `isDeath` | le statut fait du token un cadavre (§6) ; badge toujours affiché, jamais tronqué | `deathStateService.js` ; `selectVisibleStatusBadges` (`TokenPresentation.jsx`) |
 | `incompatibleWithDeath` | état d'un corps qui fonctionne : interdit sur un cadavre, retiré à la mort (§6) | `statusService.js`, `canEditTokenStatus` |
 | `setByFatalWound` | le statut que POSE une blessure « Mort » (`FATAL_WOUND_STATUS_CODE` ; un seul : `dead`) | `statusService.js` (`reconcileWoundDeath`) |
 
@@ -193,8 +193,7 @@ refusés. Il peut donc reposer à la main ce qu'il veut après la purge.
   tolère ; les y intégrer est un chantier ultérieur. Ensembles à sémantique propre volontairement **non** dérivés :
   événement d'expiration d'étourdissement (`combatTurnEngine.js`), exclusion mutuelle `stunned`/`unconscious`/
   `evanoui` (`statusService.js`), garde d'annonce `stunned` seul (`socketCombatAnnouncement.js`).
-- **Limites** (suivies en tickets) : `evanoui` sans clé i18n ni entrée de panneau ; `TokenStatusBadges` n'affiche que 3
-  badges au-delà de 4 statuts (un `dead` tardif peut ne pas se voir) ; le message de refus dit « vous êtes mort/
+- **Limites** (suivies en tickets) : `evanoui` sans clé i18n ni entrée de panneau ; le message de refus dit « vous êtes mort/
   étourdi/inconscient » même quand le MJ déclare pour un PNJ ; un choix d'étourdissement déjà ouvert chez un joueur à
   la mort reste affiché (sa confirmation est ignorée) ; un combat composé uniquement de drones en `ordres_permanents`
   boucle (préexistant) ; parité pour l'exo piloté : les statuts sont lus sur le token de l'exo, pas sur le pilote ; **un personnage sans token n'est pas

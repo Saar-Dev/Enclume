@@ -82,6 +82,28 @@ export function findTokenStatus(code) {
   return TOKEN_STATUS_REGISTRY.find(entry => entry.code === code)
 }
 
+// Sélection d'affichage d'un badge de token limité en place (TokenPresentation.jsx) — patron
+// « emplacement réservé » (FoundryVTT : un statut `overlay` n'entre jamais dans la file d'icônes
+// concurrente ; Priority+ : séparer ce qui doit toujours être visible de ce qu'on tronque), pas un tri
+// de toute la liste. Un code dont l'entrée registre est `isDeath` ou `blocksDeclaration` (cadavre,
+// étourdi, inconscient — change fondamentalement ce que le personnage peut faire) est TOUJOURS inclus,
+// hors concurrence avec le reste ; les places visibles restantes se remplissent avec le reste, dans
+// l'ordre reçu. Un nouveau statut tout aussi critique devient automatiquement toujours visible en
+// ajoutant son drapeau ici — jamais en retouchant cette fonction.
+// `threshold` : en dessous (ou égal), tout s'affiche sans troncature ni badge « +N » (comportement
+// d'origine conservé : 4 statuts ou moins = aucune troncature). `maxVisible` : nombre d'icônes
+// affichées une fois la troncature déclenchée.
+export function selectVisibleStatusBadges(codes, { threshold = 4, maxVisible = 3 } = {}) {
+  if (codes.length <= threshold) return { visible: codes, hiddenCount: 0 }
+  const always = codes.filter(code => {
+    const entry = findTokenStatus(code)
+    return entry?.isDeath || entry?.blocksDeclaration
+  })
+  const rest = codes.filter(code => !always.includes(code))
+  const visible = [...always, ...rest.slice(0, Math.max(0, maxVisible - always.length))]
+  return { visible, hiddenCount: codes.length - visible.length }
+}
+
 function codesWhere(flag) {
   return TOKEN_STATUS_REGISTRY.filter(entry => entry[flag]).map(entry => entry.code)
 }
