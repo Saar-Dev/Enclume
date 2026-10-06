@@ -10,13 +10,15 @@
 
 import db from '../db/knex.js'
 import { REPAIR_SKILL_IDS } from '../../../shared/integrityRules.js'
+import { resolveRefField, localizeRefAliased } from './refI18n.js'
 
 // Les 4 compétences de réparation (RAW) + leurs libellés, pour le `<select>` de changement de
 // compétence du panneau de revue MJ. Libellés lus une fois de `ref_skills` — jamais dupliqués côté
 // client. Ordre = `REPAIR_SKILL_IDS`.
+// i18n (PLAN_LOCALISATION.md §7.16.1a) : résout label via name_i18n, pass-through en fr.
 export async function getRepairSkillOptions() {
-  const rows = await db('ref_skills').whereIn('id', REPAIR_SKILL_IDS).select('id', 'label')
-  const labelById = Object.fromEntries(rows.map((r) => [r.id, r.label]))
+  const rows = await db('ref_skills').whereIn('id', REPAIR_SKILL_IDS).select('id', 'label', 'label_i18n')
+  const labelById = Object.fromEntries(rows.map((r) => [r.id, resolveRefField('ref_skills', r, 'label')]))
   return REPAIR_SKILL_IDS.map((id) => ({ id, label: labelById[id] ?? id }))
 }
 
@@ -27,15 +29,18 @@ async function enrichRepairEcheances(rows) {
   if (!rows.length) return []
 
   const itemIds = [...new Set(rows.map((r) => r.payload?.itemId).filter(Boolean))]
-  const items = itemIds.length
+  const itemsRaw = itemIds.length
     ? await db('char_inventory')
       .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
       .whereIn('char_inventory.id', itemIds)
       .select(
         'char_inventory.id', 'char_inventory.integrity_current', 'char_inventory.integrity_max',
         'char_inventory.malfunction_severity', 'char_inventory.custom_name', 'ref_equipment.name as ref_name',
+        'ref_equipment.name_i18n as ref_name_i18n',
       )
     : []
+  // i18n (PLAN_LOCALISATION.md §7.16.1a) : résout ref_name, pass-through en fr.
+  const items = itemsRaw.map((i) => localizeRefAliased('ref_equipment', i, { ref_name: 'name' }))
   const itemsById = Object.fromEntries(items.map((i) => [i.id, i]))
 
   const characterIds = [...new Set(rows.map((r) => r.character_id))]
