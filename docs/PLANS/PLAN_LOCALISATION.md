@@ -12,7 +12,13 @@
 > `char-sheet.js`) : audit complet (pas seulement la trouvaille initiale), correction trouvée en
 > analyse à charge (`COALESCE` SQL ne peut pas résoudre l'i18n, recalcul déplacé en JS), 14 points
 > d'édition en 1 commit, 114 lignes réelles comparées ancien/nouveau calcul, zéro désaccord. Détail
-> §7.16.5. **Commit : en attente de confirmation Saar.**
+> §7.16.5. **Validation navigateur partielle confirmée par Saar (2026-10-06)** : « test ok (partiel) »
+> — B2 et B3 passent de ⚠️ clos partiel à confirmés en usage réel, détail du périmètre testé non
+> précisé par Saar, pas réclamé vu le ton de sa confirmation.
+> 2026-10-06 (Dev) — **Lot 7 ouvert — inventaire seul** (§9) : à la demande de Saar (« on ouvre le
+> chantier, proprement, calmement, on documente, on avance pas à pas »), texte FR composé dans les
+> jets de dés et tests de combat (`DICE_RESULT`/`openChanceChoice`) — ~120 occurrences brutes sur 15
+> fichiers, plus gros que Lot 6. **Zéro plan, zéro code** — prochaine étape à décider avec Saar.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1206,3 +1212,102 @@ Texte brut de bout en bout, aucune clé.
 **Reste à écrire avant de coder** : inventaire exhaustif des sites (grep `COMBAT_DECLARE_ERROR` +
 `WS.COMBAT_DECLARE_ERROR`), regroupement par familles de message, forme du helper de résolution
 client, stratégie de transition (repli `message`).
+
+---
+
+## 9. Lot 7 — Texte FR composé dans les jets de dés et tests de combat (découvert 2026-10-06)
+
+> **Statut : inventaire seul, aucun plan, aucun code.** Ouvert à la demande de Saar après le Lot 5 B2
+> (§7.16.1b) — « on ouvre le chantier, proprement, calmement, on documente, on avance pas à pas ».
+> Cette section est la première étape (explorer), pas plus.
+
+### 9.1 Déclencheur
+
+Le Lot 5 B2 (§7.16.1b) a renvoyé à plus tard la résolution i18n de `weapon.display_name`/`ref_name`
+dans `skillLabel`/`testLabel` (drone/exo) au motif que la chaîne qui les contient est **composée côté
+serveur** (`` `${weapon.display_name ?? 'Armement'} — Drone` ``), donc toute résolution du nom seul
+serait cosmétique. En élargissant la recherche pour mesurer l'ampleur réelle, le motif s'avère
+beaucoup plus large que les seuls noms d'armes : **tout le texte des jets de dés et tests de
+combat** (`DICE_RESULT`, `openChanceChoice`) est construit de la même façon — chaînes FR figées,
+composées côté serveur, jamais de `i18nKey`/`params` (violation directe de `.claude/rules/i18n.md`,
+même nature que Lot 6 mais pour une autre famille d'événements).
+
+### 9.2 Méthode d'inventaire
+
+Même esprit que Lot 6 (§8) et l'audit §1 : grep exhaustif plutôt que supposition.
+
+```bash
+grep -rn "WS\.DICE_RESULT" server/src              # fichiers émetteurs
+grep -rn "openChanceChoice" server/src              # fichiers émetteurs (choix Chance/Catastrophe)
+grep -rn "skillLabel:\|testLabel:" <fichier>        # libellé principal du jet
+grep -rn "label:\s*['\"\`][A-ZÀ-ÿ]" <fichier>       # entrées breakdown/contributions
+```
+
+### 9.3 Familles de texte trouvées `[VÉRIFIÉ 2026-10-06]`
+
+**Fichiers émetteurs** (`DICE_RESULT` et/ou `openChanceChoice`, 15 au total) :
+`socketCombatHelpers.js`, `socketCombatExo.js`, `socketCombatAoe.js`, `socketCombatResolution.js`,
+`socketDice.js`, `socketEntity.js`, `socketChance.js`, `droneInterceptionService.js`,
+`statusService.js`, `skillTestService.js`, `losService.js`, `surpriseService.js`,
+`gmArbitratedTestService.js`, `chanceCatastropheChoiceService.js`, `exoPilotService.js`.
+
+**Famille A — `skillLabel`/`testLabel` (le titre du jet)** : **65 sites** d'affectation repérés dans
+ces 15 fichiers. Trois natures différentes, pas une seule :
+- **Statique pur**, aucune variable (`'Compétence'`, `'Jet pour toucher (contact)'`,
+  `"Manœuvre d'armure"`, `'Test de Réaction (Surprise)'`, `'Durée étourdissement'`…) — le plus simple
+  à cléer, pas de paramètre.
+- **Composé avec un nom d'arme** (`` `${weapon.display_name ?? 'Armement'} — Drone` ``,
+  `` `${weapon.ref_name ?? 'Grenade'} — Lancer…` ``) — le sous-ensemble déjà repéré en §7.16.1b,
+  11 sites dans `socketCombatExo.js`/`socketCombatAoe.js`/`socketCombatHelpers.js`.
+- **Composé avec un nom de personnage/une valeur dynamique** (`` `Dégâts — ${cibleCharacter.name}` ``,
+  `` `Détection — ${character.name} (tentative ${attempt + 1}/3)` ``,
+  `` `${tireurUsername} inflige ${degatsNets} dégâts` ``) — famille **pas du tout** couverte par
+  §7.16.1b, découverte ici.
+- Quelques sites sont des **passe-plat** (`skillLabel: refSkill.label`, `testLabel: pending.test_label`)
+  — la vraie source est un autre site de cette liste, pas une 4ᵉ famille.
+
+**Famille B — `breakdown`/`contributions` (le détail du calcul, ligne par ligne)** : **54 sites**
+repérés, tous statiques (`'Cible sans défense'`, `'Précipitation'`, `'Malus santé / encombrement'`,
+`'Couverture cible'`, `'Multi-adversaires'`, `'Seuil'`, `'Difficulté'`…) sauf une poignée interpolés
+(`` `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})` ``, `` `Visée ${LOCATION_LABELS[...]}` ``).
+**Forte réutilisation** : `'Malus santé / encombrement'` apparaît ~6 fois, `'Cible sans défense'` ~4
+fois, `'Précipitation'` ~4 fois — le nombre de **chaînes distinctes** à cléer est nettement plus petit
+que 54 (probablement 25-35), même phénomène que `combat.json` au Lot 1 (§3ter).
+
+**Famille C — tables de correspondance code→libellé FR**, consommées par les familles A/B :
+`SITUATION_LABELS` (12 entrées, `socketCombatHelpers.js`), `PORTEE_LABELS` (5), `TAILLE_LABELS` (8),
+`ATTR_LABELS` (`charStats.js`), `LOCATION_LABELS` (`shared/armorConstants.js`, **partagée avec le
+client** — déjà notée hors-périmètre pour une raison différente au Lot 2, §3quater : consommée aussi
+côté serveur pour du texte de jeu réel, donc jamais retouchée jusqu'ici). Pas comptées en détail ici —
+à faire si ce lot s'ouvre pour de vrai.
+
+**Ordre de grandeur total** : ~120 occurrences brutes (Familles A+B) + plusieurs tables de
+correspondance — **plus gros que Lot 6** (~70 sites), mais avec une réutilisation significative qui
+réduira le nombre réel de clés à créer.
+
+### 9.4 Pourquoi c'est un lot à part (même raisonnement que Lot 6, §8)
+
+- `DICE_RESULT`/`openChanceChoice` ont leur propre forme de payload (`skillLabel`, `testLabel`,
+  `breakdown[].label`) — aucune des deux ne porte `i18nKey`/`params` aujourd'hui, contrairement à
+  `COMBAT_SYSTEM_NOTICE` (déjà conforme, voir B2 §7.16.1a). Changement de schéma à concevoir, pas une
+  clé à ajouter dans un objet existant.
+- Chaîne client à adapter : `MessageRendererRegistry.jsx` (`msg.skillLabel`), `useSessionSocket.js`,
+  tout composant qui affiche `breakdown` (fenêtres de résultat, Chance/Catastrophe) — non auditée ici.
+- Combat-critique + Chance-critique (PLAN_CHANCE.md) → validation transport, pas seulement lecture.
+- Chevauche Lot 6 sur au moins un point (les deux visent le même problème structurel — texte FR figé
+  côté serveur) sans être le même mécanisme (événements différents) : les deux lots gagneraient
+  probablement à partager la même conception de helper de résolution côté client, à vérifier avant
+  de coder l'un ou l'autre.
+
+### 9.5 Ce qui n'est PAS fait (explicitement, pour ne rien perdre)
+
+- Liste exhaustive ligne par ligne des ~120 sites (le compte ci-dessus est agrégé par fichier/famille,
+  pas site par site — comme Lot 6 l'avait laissé à « reste à écrire avant de coder »).
+- Regroupement des chaînes dupliquées en clés uniques (Famille B surtout).
+- Conception du schéma de payload (`i18nKey`/`params` pour `DICE_RESULT`/`openChanceChoice`),
+  stratégie de transition, et la question du partage avec Lot 6.
+- Tout plan, toute analyse à charge, tout code.
+
+**Prochaine étape (pas aujourd'hui)** : décision Saar sur l'opportunité d'aller jusqu'au bout de cet
+inventaire avant de planifier, ou de regrouper d'abord Familles A/B en clés uniques pour avoir un
+vrai chiffre de « combien de clés, pas combien d'occurrences ».
