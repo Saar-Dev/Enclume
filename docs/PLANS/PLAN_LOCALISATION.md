@@ -22,7 +22,9 @@
 > dédoublonnage (§9.6). Trouvaille incidente : `'Durée étourdissement'` dupliquée identique dans 2
 > fichiers (Règle 2), indépendante de ce lot. **Schéma de payload choisi** (§9.7) : réutiliser
 > `i18nKey`/`params` tel quel (déjà en prod sur `COMBAT_SYSTEM_NOTICE`), aucun nouveau mécanisme.
-> **Zéro plan, zéro code** — prochaine étape à décider avec Saar.
+> **Les 59 clés nommées** (§9.8) : 6 réutilisées (Règle 2, correspondance exacte vérifiée), 53
+> nouvelles dans `combat.json` (`diceLabels.*`/`breakdown.*`). **Zéro plan de code, zéro code** —
+> reste à découper en lots codables (§9.9).
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1391,6 +1393,70 @@ chaîne par chaîne = travail du plan, pas fait ici.
   au moment d'écrire le plan de l'un ou l'autre.
 - Nommage/emplacement exact des ~59 clés dans `combat.json` (sections existantes vs nouvelles).
 
-**Prochaine étape (pas aujourd'hui)** : avec le schéma choisi, l'étape suivante est soit (a) finir le
-nommage chaîne par chaîne (les ~59), soit (b) écrire le vrai plan de code (découpage en lots,
-fichiers, ordre) — décision Saar sur laquelle des deux avancer la prochaine fois.
+### 9.8 Nommage des ~59 clés (2026-10-06)
+
+**Réutilisation confirmée (Règle 2, correspondance EXACTE de texte, pas seulement de concept)** —
+vérifié chaîne par chaîne contre tout `combat.json`, pas juste les 5 chaînes du spot-check initial :
+
+| Chaîne exacte | Clé existante réutilisée |
+|---|---|
+| `Taille cible` | `cacModifiers.targetSizeSection` |
+| `Tir visé` | `assaultPanel.aimedShot.label` |
+| `Mode de tir` | `modifiers.fireModeLabel` |
+| `État de l'arme` (+ param) | `modifiers.weaponState` |
+| `Test de Choc` | `damageWindow.shockTest` |
+| `Seuil` | `resultPanels.rollLine.threshold` |
+
+**Écarté après vérification** : le panneau de déclaration a déjà « Précipité »/« Taille cible »/etc.
+(`modifiers.rushed`, …) mais avec une formulation différente de celle du résultat post-jet (ex.
+`rushed: "⚠ Précipité (−5 comp)"` vs `breakdown[].label: 'Précipitation'`) — pas une correspondance
+exacte, donc pas réutilisable sans changer le texte affiché (hors scope : aucun changement de texte
+visible dans ce chantier, seulement sa résolution).
+
+**Nouvelles sections proposées dans `combat.json`** (namespace déjà utilisé pour tout le combat
+client, cohérent avec Lot 1) — `diceLabels.*` (Famille A) et `breakdown.*` (Famille B), ~53 clés :
+
+**`diceLabels.*` (18 statiques + repli `armementDroneSansFormule`/`armementExoSansFormule`)**
+`competence`, `jetToucherContact`, `jetToucherContactChance`, `jetDefendreContact`,
+`jetDefendreContactChance`, `jetToucherDistance`, `jetToucherDistanceChance`, `manoeuvreArmure`,
+`manoeuvreArmureChance`, `redresserArmure`, `redresserArmureChance`, `armementDroneSansFormule`,
+`armementExoSansFormule`, `localisationDistance`, `localisationDrone`, `testChanceEviterZone`,
+`testReactionSurprise`, `testChoc`.
+**Trouvaille §9.6 appliquée ici** : `dureeEtourdissement` — **une seule clé**, remplace les 2 chaînes
+identiques de `socketCombatResolution.js:718` et `statusService.js:199` (Règle 2, corrigé au passage).
+
+**`diceLabels.*` gabarits paramétrés (armes/personnages/divers)**
+`armeDrone` `{name} — Drone`, `armeExo` `{name} — Exo-armure`, `armeExoChance` `{name} — Exo-armure —
+Chance : relance`, `armeZone` `{name} — Tir en zone`, `grenadeLancer` `{name} — Lancer (Test de
+Coordination)`, `armeEviterZone` `{name} — Éviter la zone d'effet ({cible})`, `programmeManquant`
+`Armement Drone — programme "{category}" manquant`, `dommageInflige` `{tireur} inflige {degats}
+dégâts`, `detectionTentative` `Détection — {name} (tentative {n}/3)`, `amiEnnemiTentative`
+`Ami/Ennemi — {name} (tentative {n}/3)`, `degatsPersonnage` `Dégâts — {name}`,
+`degatsPersonnageIntegrite` `Dégâts — {name} · Intégrité : {avant} → {après}`, `degatsLocalisation`
+`Dégâts — {location}`, `chanceBouclierLocalisation` `Test de Chance — Bouclier ({location})`,
+`interception` `Interception — {droneName}`, `reparation` `{skill} — Réparation{item}`,
+`cibleInterposee` `Cible interposée — tir redirigé vers {label}`.
+
+**`breakdown.*` (17 statiques)**
+`multiAdversaires`, `multiAdversairesAttaquant`, `malusSanteEncombrement`,
+`malusSanteEncombrementPilote`, `precipitation`, `couvertureCible`, `cibleSansDefense`,
+`bouclierAdverse`, `attaqueMultiple`, `modsSituation`, `deuxArmesContact`, `deuxArmes`,
+`difficulte`, `modificateurGm`, `ordinateur`. (`tailleCible`/`modeDeTir`/`etatArme`/`testChoc`/`seuil`
+réutilisent les 6 clés ci-dessus, pas de doublon.)
+
+**`breakdown.*` gabarits paramétrés**
+`terrainInstable` `Terrain instable (Acrobatie/Équilibre: {valeur})`, `categorie` `Catégorie
+{categorie}`, `programmeNiveau` `Programme (niv. {niveau})`, `modeDeTirMultiplicateur` `Mode de tir
+(×{n})`, `viseeLocalisation` `Visée {location}`.
+
+**Pas fait ici** : l'assignation précise de CHAQUE site de code (~120) à SA clé — ce tableau nomme les
+clés, pas encore quel fichier/ligne appelle laquelle. C'est la portée du prochain pas (plan de code).
+
+**Décompte final** : 6 réutilisées + 53 nouvelles (18+17 statiques, 17+5 gabarits paramétrés) = 59,
+cohérent avec §9.6.
+
+### 9.9 Prochaine étape
+
+Nommage terminé. Reste, avant tout code : écrire le plan de code (découpage en lots, quel fichier
+dans quel commit, ordre, stratégie de transition tranchée — §9.7). Pas fait ici — décision Saar sur
+le moment d'y passer.
