@@ -1714,3 +1714,37 @@ sans rapport — dépendances `useEffect` non touchées par ce diff), `npm run b
 passe-plat** (aucun `skillLabel`/`testLabel` littéral, seulement relais de variable) — leur migration
 ne peut pas être un « fichier » indépendant : elle doit arriver DANS le même commit que le premier
 appelant qui migre vers `testLabelKey`, pour que le relais transporte aussi le nouveau champ.
+
+### 9.15 Étapes 5-6 — `socketEntity.js` (ATTR_LABELS) + mise à niveau du relais `chanceCatastropheChoiceService.js` (2026-10-06)
+
+Premier fichier à chaîner vers `openChanceChoice` (prédit à l'étape 1, §9.13) : `socketEntity.js` a
+1 site `DICE_RESULT` direct (`finalizeEntityDisplacement`, breakdown + skillLabel + `formula`) et 1
+site `testLabel` posé AVANT résolution via `openChanceChoice` (Catastrophe possible). Les deux lisent
+`ATTR_LABELS[attributeId] || attributeId` — `attributeId` vient de `interactions.attribute_id`
+(contenu auteur de carte), **pas garanti** dans `ATTR_LABELS` (8 codes fixes) : repli texte brut
+conservé à l'identique (`attrKnown = ATTR_LABELS[attributeId] != null`), migration seulement si
+connu (`skillLabelKey: 'attr.' + attributeId`, namespace par défaut — pas de préfixe `combat:`,
+`fr.json.attr.*` existe déjà). `formula` **non touché** (hors périmètre — texte FR brut affiché tel
+quel par `DicePanel.jsx#h.formula`, qui ne distingue pas ce champ d'une notation de dé `/r` ; un lot
+séparé, pas celui-ci).
+
+**Relais mis à niveau** (nécessaire pour que le site `testLabel` fonctionne du tout — pas un choix,
+une dépendance) : `chanceCatastropheChoiceService.js#persistChanceChoice` accepte maintenant
+`testLabelKey`/`testLabelParams`, rangés dans la colonne JSONB `context` déjà flexible (pas de
+migration de schéma) ; `chanceChoicePendingPayload` les extrait et les expose au même niveau que
+`testLabel`. `openChanceChoice`/`publishChanceChoice` et le resync `SESSION_JOIN` (`socket/index.js`)
+en bénéficient automatiquement (ils relaient déjà le payload tel quel). **Les 13 autres appelants de
+`persistChanceChoice`/`openChanceChoice` (dont `socketCombatAoe.js`) continuent de passer `testLabel`
+brut sans rien changer** — dual-shape au niveau du relais, pas un big-bang.
+
+**Côté client, vérifié sans rien changer** : `CatastropheChoiceQueue.jsx#onChancePending` et
+`chanceChoiceStore` relaient `{ ...data }` par spread — `testLabelKey`/`testLabelParams` arrivent
+déjà jusqu'au rendu (fallback câblé à l'étape 0, §9.12).
+
+**Test existant cassé puis corrigé** : `chanceCatastropheChoiceService.test.mjs` ligne 87-92 comparait
+le payload complet par `assert.deepEqual` — ajout de `testLabelKey: null, testLabelParams: null`
+dans l'objet attendu (le test exigeait une égalité exacte des clés, pas un sous-ensemble). **Validé** :
+`node --env-file=.env --test server/src/lib/chanceCatastropheChoiceService.test.mjs` → 14/14 ✔.
+Résidu vérifié : les seules lignes `test_label` correspondant au motif recherché après coup sont des
+données de jeu réelles (campagne « LOCAL », 2026-09-25, `resolved_by` non nul) — pas des fixtures
+oubliées. `node --check` sur `socketEntity.js`.

@@ -83,8 +83,16 @@ async function finalizeEntityDisplacement(io, campaignId, {
   const diffLabel = effectiveDifficulty >= 0 ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
   const timestamp = new Date().toISOString()
 
+  // i18n (PLAN_LOCALISATION.md §9.14, Lot 7) : attributeId vient de interactions.attribute_id, pas
+  // garanti dans ATTR_LABELS (contenu auteur de carte) — repli texte brut conservé si inconnu, comme
+  // avant. `formula` reste du texte FR brut volontairement : hors périmètre de ce lot (affiché par
+  // DicePanel.jsx#h.formula, qui ne distingue pas ce champ d'une notation de dé /r — un futur lot
+  // séparé, pas celui-ci).
+  const attrKnown = ATTR_LABELS[attributeId] != null
   const breakdownDisp = [
-    { label: ATTR_LABELS[attributeId] || attributeId, value: attributeAN, type: 'base' },
+    attrKnown
+      ? { i18nKey: 'attr.' + attributeId, value: attributeAN, type: 'base' }
+      : { label: attributeId, value: attributeAN, type: 'base' },
     ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
     { label: 'Seuil', value: chancesDeReussite, type: 'total' },
   ]
@@ -94,7 +102,9 @@ async function finalizeEntityDisplacement(io, campaignId, {
     rolls, total: diceRoll,
     type: 'entity_action', interactionType: 'displacement',
     isCriticalSuccess, isCriticalFail: false, seed, timestamp,
-    skillLabel: ATTR_LABELS[attributeId] || attributeId,
+    ...(attrKnown
+      ? { skillLabelKey: 'attr.' + attributeId }
+      : { skillLabel: attributeId }),
     mechanicalTotal: attributeAN, chancesDeReussite, diffLabel, isSuccess, mr,
     breakdown: breakdownDisp,
   })
@@ -631,7 +641,9 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       // finishEntityDisplacementChoice (SITE_HANDLERS.entity_displacement) une fois le choix résolu.
       if (rawOutcome.catastropheRisk) {
         await openChanceChoice(io, campaignId, token.character_id, {
-          testLabel: ATTR_LABELS[attributeId] || attributeId,
+          ...(ATTR_LABELS[attributeId] != null
+            ? { testLabelKey: 'attr.' + attributeId }
+            : { testLabel: attributeId }),
           site: 'entity_displacement',
           context: finalizeCtx,
         })

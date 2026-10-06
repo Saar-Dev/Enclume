@@ -50,14 +50,17 @@ const SITE_HANDLERS = {}
 // `options` (PLAN_CHANCE.md L5) : boutons dynamiques (nombre/libellé variable selon la capacité du palier visé, contrairement
 // aux 2 boutons fixes de L3e/L4), embarqués dans `context` (colonne déjà persistée) plutôt qu'une nouvelle colonne — c'est de la
 // métadonnée d'affichage, relue telle quelle par le resync SESSION_JOIN, jamais consultée par un handler de résolution.
-export async function persistChanceChoice(dbOrTrx, campaignId, characterId, { testLabel, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null, options = null } = {}) {
+export async function persistChanceChoice(dbOrTrx, campaignId, characterId, { testLabel, testLabelKey = null, testLabelParams = null, site, context = {}, timeoutMs = DEFAULT_TIMEOUT_MS, linkedCatastropheId = null, actionId = null, targetTokenId = null, options = null } = {}) {
   const [pending] = await dbOrTrx('pending_chance_choices')
     .insert({
       campaign_id: campaignId,
       character_id: characterId,
       site,
       test_label: testLabel ?? null,
-      context: JSON.stringify({ ...context, site, options }),
+      // i18n (PLAN_LOCALISATION.md §9.14, Lot 7) : testLabelKey/testLabelParams rangés dans `context`
+      // (JSONB déjà flexible, comme options/woundId) plutôt qu'une colonne dédiée — pas de migration
+      // pour un repli de transition. Repris par chanceChoicePendingPayload ci-dessous.
+      context: JSON.stringify({ ...context, site, options, testLabelKey, testLabelParams }),
       linked_catastrophe_id: linkedCatastropheId,
       timeout_ms: timeoutMs,
       action_id: actionId,
@@ -81,6 +84,8 @@ export function chanceChoicePendingPayload(pending) {
     id: pending.id,
     characterId: pending.character_id,
     testLabel: pending.test_label,
+    testLabelKey: context.testLabelKey ?? null,
+    testLabelParams: context.testLabelParams ?? null,
     site: pending.site,
     rolledAt: pending.rolled_at,
     linkedCatastropheId: pending.linked_catastrophe_id,

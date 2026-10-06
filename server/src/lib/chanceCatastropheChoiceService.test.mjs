@@ -85,7 +85,8 @@ test('publishChanceChoice émet CHANCE_CHOICE_PENDING avec le payload commun (op
     publishChanceChoice(io, fixture.campaign.id, pending)
     assert.equal(emitted.length, 1)
     assert.deepEqual(emitted[0].payload, {
-      id: pending.id, characterId: fixture.character.id, testLabel: 'Éviter la mort', site: 'wound_severity',
+      id: pending.id, characterId: fixture.character.id, testLabel: 'Éviter la mort',
+      testLabelKey: null, testLabelParams: null, site: 'wound_severity',
       rolledAt: pending.rolled_at, linkedCatastropheId: null, timeoutMs: 45000, actionId: null,
       options, woundId: 'w-1', chcAvailable: 8, fatal: true,
       woundSeverity: 'mort_subite', woundLocation: 'tete', subjectLabel: 'Kaël',
