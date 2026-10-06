@@ -15,10 +15,13 @@
 > §7.16.5. **Validation navigateur partielle confirmée par Saar (2026-10-06)** : « test ok (partiel) »
 > — B2 et B3 passent de ⚠️ clos partiel à confirmés en usage réel, détail du périmètre testé non
 > précisé par Saar, pas réclamé vu le ton de sa confirmation.
-> 2026-10-06 (Dev) — **Lot 7 ouvert — inventaire seul** (§9) : à la demande de Saar (« on ouvre le
-> chantier, proprement, calmement, on documente, on avance pas à pas »), texte FR composé dans les
-> jets de dés et tests de combat (`DICE_RESULT`/`openChanceChoice`) — ~120 occurrences brutes sur 15
-> fichiers, plus gros que Lot 6. **Zéro plan, zéro code** — prochaine étape à décider avec Saar.
+> 2026-10-06 (Dev) — **Lot 7 ouvert — inventaire + regroupement** (§9) : à la demande de Saar
+> (« on ouvre le chantier, proprement, calmement, on documente, on avance pas à pas »), texte FR
+> composé dans les jets de dés et tests de combat (`DICE_RESULT`/`openChanceChoice`) — ~120
+> occurrences brutes sur 15 fichiers, ramenées à **~59 chaînes/gabarits distincts** après
+> dédoublonnage (§9.6). Trouvaille incidente : `'Durée étourdissement'` dupliquée identique dans 2
+> fichiers (Règle 2), indépendante de ce lot. **Zéro plan, zéro code** — prochaine étape à décider
+> avec Saar.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1303,11 +1306,50 @@ réduira le nombre réel de clés à créer.
 
 - Liste exhaustive ligne par ligne des ~120 sites (le compte ci-dessus est agrégé par fichier/famille,
   pas site par site — comme Lot 6 l'avait laissé à « reste à écrire avant de coder »).
-- Regroupement des chaînes dupliquées en clés uniques (Famille B surtout).
 - Conception du schéma de payload (`i18nKey`/`params` pour `DICE_RESULT`/`openChanceChoice`),
   stratégie de transition, et la question du partage avec Lot 6.
+- Décision sur les tables de correspondance (Famille C) — certaines ont déjà une décision « hors
+  périmètre » prise pour une autre raison (`LOCATION_LABELS`, Lot 2 §3quater) : à revérifier pour
+  Lot 7, pas à re-décider en silence.
 - Tout plan, toute analyse à charge, tout code.
 
-**Prochaine étape (pas aujourd'hui)** : décision Saar sur l'opportunité d'aller jusqu'au bout de cet
-inventaire avant de planifier, ou de regrouper d'abord Familles A/B en clés uniques pour avoir un
-vrai chiffre de « combien de clés, pas combien d'occurrences ».
+### 9.6 Regroupement en chaînes distinctes (2026-10-06) — le vrai chiffre
+
+But : savoir « combien de clés », pas « combien d'occurrences ». Dédoublonnage manuel des Familles
+A/B, ligne par ligne, sur les relevés du §9.3.
+
+**Famille A (titre du jet)** — 65 occurrences brutes → **~35 chaînes/gabarits distincts** :
+- **18 statiques**, dont la réutilisation est déjà forte : `'Compétence'` seule revient **13 fois**
+  (quasi tous les jets d'attaque/défense humanoïdes) ; `'Jet pour toucher/défendre (contact/distance)'`
+  et leurs variantes « — Chance : relance » ≈ 8 occurrences pour 6 chaînes ; `"Manœuvre d'armure"` et
+  variantes ≈ 5 occurrences pour 3 chaînes.
+- **Trouvaille incidente** `[VÉRIFIÉ]` : `'Durée étourdissement'` existe **identique dans 2 fichiers**
+  (`socketCombatResolution.js:718` et `statusService.js:199`) — violation Règle 2 déjà présente,
+  indépendante de Lot 7, à corriger quoi qu'il arrive si ce lot se code (une seule clé, deux
+  consommateurs).
+- **~17 gabarits paramétrés** : nom d'arme + suffixe (6 variantes : Drone/Exo-armure/Exo-armure+Chance/
+  Tir en zone/Lancer grenade/Éviter la zone), nom de personnage + suffixe (5 : dégâts simple/dégâts+
+  intégrité/détection/ami-ennemi/interception), et quelques divers (réparation+objet, programme
+  manquant+catégorie, cible interposée+token). Chacun = 1 clé + 1-3 params.
+- 4 sites **passe-plat** (`refSkill.label`, `pending.test_label`, `formulaLabel`…) ne sont pas une
+  4ᵉ famille : ils relaient la valeur d'un autre site déjà compté, à vérifier au moment du code mais
+  pas une clé supplémentaire.
+
+**Famille B (détail du calcul, `breakdown`)** — 54 occurrences brutes → **~24 chaînes distinctes** :
+`Multi-adversaires` (+ variante « (attaquant) », 2 chaînes), `Malus santé / encombrement` (+ variante
+« (pilote) », 2 chaînes), `Précipitation`, `Couverture cible`, `Cible sans défense`, `Bouclier adverse`,
+`Attaque multiple`, `Mods situation`, `Taille cible`, `Deux armes au contact`, `Deux armes`, `Tir visé`,
+`État de l'arme`, `Seuil`, `Difficulté`, `Modificateur GM`, `Ordinateur` (libellé de repli) — 17
+statiques — + 4 gabarits paramétrés (`Terrain instable (Acrobatie/Équilibre: …)`, `Catégorie …`,
+`Programme (niv. …)`, `Mode de tir (×…)`, `Visée …`) ≈ 5, soit ~22-24 selon le compte exact des
+variantes « (pilote) »/« (attaquant) » (à trancher au moment de nommer les clés : fusionner avec un
+param, ou garder deux clés proches — question de conception, pas de compte).
+
+**Total révisé** : **~59 clés/gabarits distincts** pour ~119 occurrences brutes — confirme l'intuition
+du §9.3 (réduction d'environ moitié), et une portée de *conception* (nommer/structurer ~59 clés)
+nettement plus petite que la portée de *code* (~120 sites à toucher, un par un, pour appeler le bon
+`i18nKey`+`params` au lieu de la chaîne composée actuelle).
+
+**Prochaine étape (pas aujourd'hui)** : avec ce chiffre en main, décision Saar sur la suite — écrire
+le vrai plan (schéma de payload, nommage des clés, stratégie de transition, découpage en lots de
+code) est l'étape qui vient après, pas incluse ici.
