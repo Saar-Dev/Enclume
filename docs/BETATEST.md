@@ -114,6 +114,38 @@ réel, indépendamment l'une de l'autre ; Allure/Couverture/Obscurité restent l
 (aucun nouveau pouvoir) ; le joueur ne peut jamais éditer Portée/Taille lui-même ; sans intervention
 MJ, le comportement reste celui d'avant.
 
+### I18N-COMBAT-DICE-TEXT — texte des jets de dés et tests de combat (Lot 7 localisation)
+**Ajouté le** : 2026-10-06.
+**Contexte** : chantier de fond (`PLANS/PLAN_LOCALISATION.md` §9) — tout le texte affiché pour un
+jet de dé ou un test de combat (titre de la carte, détail du calcul ⊞, choix Chance) est passé
+d'un texte composé côté serveur à une clé résolue côté client. Changement entièrement interne :
+**aucun texte affiché ne doit changer**, seulement sa façon d'être construit. Vérifié à chaque étape
+par comparaison directe texte-contre-texte (pas en jeu), mais seul un vrai combat à plusieurs joueurs
+peut confirmer qu'aucun cas réel n'a été manqué — les ~100 textes concernés touchent Tir, CaC,
+Drone, Exo-armure, grenades, réparation, Choc, Surprise et les Tests hors combat (`/t`, Tests
+arbitrés MJ), soit la quasi-totalité des cartes de jet du jeu.
+
+**Scénario à dérouler** (MJ + au moins un joueur, idéalement deux pour croiser PJ/PNJ) :
+1. Dérouler un combat normal qui enchaîne plusieurs types d'action : Tir (toucher et défendre),
+   Corps à corps, une Manœuvre d'armure si un PJ en exo est disponible, une attaque Drone et une
+   attaque Exo-armure, une grenade (lancer + un jet « Éviter la zone » si une cible est à portée
+   longue/extrême).
+2. Après chaque jet, ouvrir le détail du calcul (bouton ⊞) et vérifier que chaque ligne (Précipitation,
+   Taille cible, Couverture, Portée, Allure, État de l'arme, etc.) affiche un texte normal — jamais
+   une clé technique brute (ex. `combat:breakdown.xxx`) ni `undefined`.
+3. Provoquer au moins un choix Chance (risque de Catastrophe) et vérifier que le titre du Test
+   affiché sur la carte de choix est correct.
+4. Si possible : un Test de Choc, un Test de Réaction (Surprise, début de combat), une réparation
+   d'équipement en combat, et un Test hors combat (`/t`) ou un Test arbitré par le MJ (bouton
+   « Réussite auto » ou Test MJ sur une entité/porte).
+5. Vérifier que l'animation du dé 3D correspond toujours au bon type de dé (d20 pour un Test, pas un
+   d6 ou une animation absente).
+
+**Résultat attendu** : tous les textes de jets de dés et de tests sont identiques à avant ce
+chantier — aucune clé brute, aucun texte manquant, aucune animation de dé incohérente. Si quelque
+chose cloche : noter précisément quelle action, quel texte/ligne, et si possible une capture —
+c'est l'information qui manque pour corriger vite.
+
 ## Carte
 
 ### MAP-UPDATE-NOT-PROPAGATED-TO-PLAYERS — propagation live d'une édition de carte
