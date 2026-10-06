@@ -945,8 +945,8 @@
     "amiEnnemiTentative": "Ami/Ennemi — {{name}} (tentative {{n}}/3)",
     "degatsPersonnage": "Dégâts — {{name}}",
     "degatsPersonnageIntegrite": "Dégâts — {{name}} · Intégrité : {{avant}} → {{apres}}",
-    "degatsLocalisation": "Dégâts — {{location}}",
-    "chanceBouclierLocalisation": "Test de Chance — Bouclier ({{location}})",
+    "degatsLocalisation": "Dégâts — $t(combat:breakdown.shortLocation.{{location}})",
+    "chanceBouclierLocalisation": "Test de Chance — Bouclier ($t(combat:breakdown.shortLocation.{{location}}))",
     "interception": "Interception — {{droneName}}",
     "reparation": "{{skill}} — Réparation{{item}}",
     "cibleInterposee": "Cible interposée — tir redirigé vers {{label}}"
@@ -972,7 +972,7 @@
     "categorie": "Catégorie {{categorie}}",
     "programmeNiveau": "Programme (niv. {{niveau}})",
     "modeDeTirMultiplicateur": "Mode de tir (×{{n}})",
-    "viseeLocalisation": "Visée {{location}}",
+    "viseeLocalisation": "Visée $t(combat:breakdown.shortLocation.{{location}})",
     "situation": {
       "cibleImmobile": "Cible immobile",
       "cibleAllureMoyenne": "Cible allure moyenne",
@@ -1001,10 +1001,18 @@
       "gigantesque": "Cible gigantesque (10m+)"
     },
     "shortLocation": {
+      "tete": "Tête",
+      "corps": "Corps",
       "brasGauche": "Bras G",
       "brasDroit": "Bras D",
       "jambeGauche": "Jambe G",
       "jambeDroite": "Jambe D"
+    },
+    "combatMode": {
+      "offensif": "Mode offensif",
+      "charge": "Mode charge",
+      "defensif": "Mode défensif",
+      "retraite": "Mode retraite"
     }
   }
 }

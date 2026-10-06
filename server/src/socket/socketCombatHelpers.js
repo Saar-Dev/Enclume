@@ -121,6 +121,79 @@ export const COMBAT_MODE_LABELS = {
   defensif: 'Mode défensif', retraite: 'Mode retraite',
 }
 
+// i18n (PLAN_LOCALISATION.md §9.19, Lot 7) : résolveurs d'entrée de breakdown pour les 3 tables
+// ci-dessus — code → clé i18n connue (`combat:breakdown.*`, ou une clé déjà réutilisée ailleurs
+// pour couverture/obscurité), repli texte brut (`TABLE[code] ?? code`, comportement identique à
+// avant) si le code n'a pas de clé. Un seul point de correction pour les 10 sites qui consomment
+// ces 3 tables dans ce fichier + socketCombatAoe.js + socketCombatExo.js, plutôt que de répéter la
+// même bascule 10 fois.
+const PORTEE_I18N_KEYS = {
+  bout_portant: 'combat:breakdown.portee.boutPortant', courte: 'combat:breakdown.portee.courte',
+  moyenne: 'combat:breakdown.portee.moyenne', longue: 'combat:breakdown.portee.longue',
+  extreme: 'combat:breakdown.portee.extreme',
+}
+const TAILLE_I18N_KEYS = {
+  minuscule: 'combat:breakdown.taille.minuscule', tres_petite: 'combat:breakdown.taille.tresPetite',
+  petite: 'combat:breakdown.taille.petite', moyenne: 'combat:breakdown.taille.moyenne',
+  grande: 'combat:breakdown.taille.grande', tres_grande: 'combat:breakdown.taille.tresGrande',
+  enorme: 'combat:breakdown.taille.enorme', gigantesque: 'combat:breakdown.taille.gigantesque',
+}
+const SITUATION_I18N_KEYS = {
+  // couverture/obscurité : correspondance EXACTE déjà dans combat.json (Règle 2) — réutilisées,
+  // jamais dupliquées dans une nouvelle section.
+  couverture_partielle: 'combat:modifiers.couvertures.partielle',
+  couverture_importante: 'combat:modifiers.couvertures.importante',
+  obscurite_legere: 'combat:modifiers.obscurites.legere',
+  obscurite_importante: 'combat:modifiers.obscurites.importante',
+  cible_immobile: 'combat:breakdown.situation.cibleImmobile',
+  cible_allure_moyenne: 'combat:breakdown.situation.cibleAllureMoyenne',
+  cible_allure_rapide: 'combat:breakdown.situation.cibleAllureRapide',
+  cible_allure_maximale: 'combat:breakdown.situation.cibleAllureMaximale',
+  tireur_allure_lente: 'combat:breakdown.situation.tireurAllureLente',
+  tireur_allure_moyenne: 'combat:breakdown.situation.tireurAllureMoyenne',
+  tireur_allure_rapide: 'combat:breakdown.situation.tireurAllureRapide',
+  tireur_allure_maximale: 'combat:breakdown.situation.tireurAllureMaximale',
+}
+export function resolvePorteeEntry(code, value, type) {
+  const i18nKey = PORTEE_I18N_KEYS[code]
+  return i18nKey ? { i18nKey, value, type } : { label: PORTEE_LABELS[code] ?? code, value, type }
+}
+export function resolveTailleEntry(code, value, type) {
+  const i18nKey = TAILLE_I18N_KEYS[code]
+  return i18nKey ? { i18nKey, value, type } : { label: TAILLE_LABELS[code] ?? code, value, type }
+}
+export function resolveSituationEntry(code, value, type) {
+  const i18nKey = SITUATION_I18N_KEYS[code]
+  return i18nKey ? { i18nKey, value, type } : { label: SITUATION_LABELS[code] ?? code, value, type }
+}
+
+// i18n (PLAN_LOCALISATION.md §9.19bis) — les gabarits paramétrés `degatsLocalisation`/
+// `viseeLocalisation`/`chanceBouclierLocalisation` (combat.json) résolvent leur {{location}} par
+// nesting i18next ($t(combat:breakdown.shortLocation.{{location}})) : le paramètre doit donc être
+// la sous-clé camelCase, jamais le code snake_case de `shared/armorConstants.js#LOCATION_LABELS`
+// (sinon la clé imbriquée ne matche rien et s'affiche brute). Table explicite plutôt qu'une
+// transformation générique snake→camel : seulement 6 valeurs, jamais appelé avec autre chose
+// qu'un code de LOCATION_LABELS.
+const LOCATION_SHORT_KEY = {
+  tete: 'tete', corps: 'corps',
+  bras_gauche: 'brasGauche', bras_droit: 'brasDroit',
+  jambe_gauche: 'jambeGauche', jambe_droite: 'jambeDroite',
+}
+export function resolveShortLocationParam(code) {
+  return LOCATION_SHORT_KEY[code] ?? code
+}
+
+// i18n (PLAN_LOCALISATION.md §9.19ter) — COMBAT_MODE_LABELS, table absente de l'inventaire initial
+// du §9.3 (trouvée en balayant ce fichier), même discipline que les 3 résolveurs ci-dessus.
+const COMBAT_MODE_I18N_KEYS = {
+  offensif: 'combat:breakdown.combatMode.offensif', charge: 'combat:breakdown.combatMode.charge',
+  defensif: 'combat:breakdown.combatMode.defensif', retraite: 'combat:breakdown.combatMode.retraite',
+}
+export function resolveCombatModeEntry(code, value, type) {
+  const i18nKey = COMBAT_MODE_I18N_KEYS[code]
+  return i18nKey ? { i18nKey, value, type } : { label: COMBAT_MODE_LABELS[code] ?? code, value, type }
+}
+
 // resolveCriticalFailReroll : voir lib/criticalFailReroll.js (réexporté ici — les importeurs existants, dont
 // socketCombatAoe.js et socketCombatExo.js, ne changent pas).
 export { resolveCriticalFailReroll }
@@ -210,10 +283,10 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, PLAN_RW_SYSCOMBAT.md
     // §2.4.h) au lieu d'un tableau assemblé à la main (miroir de resolveMeleeDefensePnj).
     const defenseContributions = [
-      { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' },
-      { label: 'Multi-adversaires', value: multiMalusDefenseur ?? 0, type: 'malus' },
-      { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
-      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
+      resolveCombatModeEntry(defCombatMode, modeCombatDefPj, modeCombatDefPj > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.multiAdversaires', value: multiMalusDefenseur ?? 0, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: defenderEffectiveMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.terrainInstable', params: { valeur: acrobatieDefTotal }, value: terrainInstableModDef, type: 'malus' },
     ]
     const defenseOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
@@ -237,7 +310,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       isCriticalSuccess: defenseOutcome.isCriticalSuccess, isCriticalFail: defenseOutcome.isCriticalFail,
       catastropheRisk:   defenseOutcome.catastropheRisk,
       seed: defSeed, timestamp: now,
-      skillLabel:        'Jet pour défendre (contact)',
+      skillLabelKey:     'combat:diceLabels.jetDefendreContact',
       mechanicalTotal:   defenderSkillTotal,
       diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
       chancesDeReussite: chanceDefense,
@@ -271,7 +344,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       const recipientCharacterId = await resolveChanceRecipientCharacterId(db, meleeCampaignId, characterIdCible, cibleType)
       if (recipientCharacterId) {
         await openChanceChoice(io, meleeCampaignId, recipientCharacterId, {
-          testLabel: 'Jet pour défendre (contact)',
+          testLabelKey: 'combat:diceLabels.jetDefendreContact',
           site: 'melee_defense',
           linkedCatastropheId: pendingCatastrophe?.id ?? null,
           context: finalizeCtx,
@@ -376,7 +449,7 @@ async function finishMeleeDefenseChoice(io, campaignId, resolved, { choice, cont
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed: defSeed, timestamp: new Date().toISOString(),
-      skillLabel: 'Jet pour défendre (contact) — Chance : relance',
+      skillLabelKey: 'combat:diceLabels.jetDefendreContactChance',
       mechanicalTotal: defenderSkillTotal,
       diffLabel: chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
       chancesDeReussite: chanceDefense, isSuccess: defenseSuccess, mr: mrDefense, breakdown,
@@ -705,7 +778,7 @@ async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
     formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — drone`,
+    skillLabelKey: 'combat:diceLabels.degatsDrone',
     mechanicalTotal: rawDice,
     diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
     chancesDeReussite: degatsNetsDrone,
@@ -753,7 +826,7 @@ async function resolveDamageConfirmExoTarget(io, campaignId, ctx, socket) {
     formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — exo-armure`,
+    skillLabelKey: 'combat:diceLabels.degatsExoArmure',
     mechanicalTotal: rawDice,
     diffLabel: `Blindage:${exoResult.bld} RD:${exoResult.rd}`,
     chancesDeReussite: exoResult.degatsNets,
@@ -843,7 +916,7 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
       formula: '1d20', rolls: locRolls, total: rollLoc,
       isCriticalSuccess: false, isCriticalFail: false,
       seed: locSeed, timestamp: now,
-      skillLabel: 'Localisation — Distance',
+      skillLabelKey: 'combat:diceLabels.localisationDistance',
       mechanicalTotal: rollLoc, diffLabel: '',
       chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
       isSuccess: true,
@@ -857,7 +930,8 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
       formula: '1d20', rolls: chanceRolls, total: rollChance,
       isCriticalSuccess: false, isCriticalFail: false,
       seed: chanceSeed, timestamp: now,
-      skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
+      skillLabelKey: 'combat:diceLabels.chanceBouclierLocalisation',
+      skillLabelParams: { location: resolveShortLocationParam(localisation) },
       mechanicalTotal: rollChance, diffLabel: '',
       chancesDeReussite: chanceThreshold,
       isSuccess: chanceSuccess,
@@ -868,7 +942,8 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
     formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+    skillLabelKey: 'combat:diceLabels.degatsLocalisation',
+    skillLabelParams: { location: resolveShortLocationParam(localisation) },
     mechanicalTotal: rawDice,
     diffLabel: `ETQ:${etq ?? 0} RD:${rd}`,
     chancesDeReussite: degatsNets,
@@ -883,7 +958,7 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
       isCriticalSuccess: false, isCriticalFail: false,
       seed: '', timestamp: now,
       interactionType: 'combat_damage',
-      skillLabel: `${tireurUsername} inflige ${degatsNets} dégâts`,
+      skillLabelKey: 'combat:diceLabels.dommageInflige', skillLabelParams: { tireur: tireurUsername, degats: degatsNets },
       targetName,
       localisation: LOCATION_LABELS[localisation] ?? localisation,
       severity: finalSeverity,
@@ -1641,18 +1716,18 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // l'ordre d'affichage client) ; le noyau somme, filtre les zéros et assemble le breakdown.
     // Ajouter un modificateur CaC = ajouter une entrée ici, jamais toucher au noyau.
     const attaqueContributions = [
-      { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
-      { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
-      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-      { label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' },
-      { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
-      { label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' },
-      { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
-      { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
-      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' },
-      { label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' },
-      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      resolveCombatModeEntry(combatModeAtk, attackModeBonus, 'bonus'),
+      { i18nKey: 'combat:breakdown.etatArme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
+      { i18nKey: 'combat:breakdown.precipitation', value: isRushedMod, type: 'malus' },
+      { i18nKey: 'combat:breakdown.multiAdversairesAttaquant', value: multiMalusAttaquant, type: 'malus' },
+      { i18nKey: 'combat:breakdown.attaqueMultiple', value: multiAttackMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: effectiveMalusAttaquant, type: 'malus' },
+      { i18nKey: 'combat:breakdown.modsSituation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
+      { i18nKey: 'combat:cacModifiers.targetSizeSection', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
+      { i18nKey: 'combat:breakdown.terrainInstable', params: { valeur: acrobatieTotal }, value: terrainInstableMod, type: 'malus' },
+      { i18nKey: 'combat:breakdown.deuxArmesContact', value: deuxArmesBonus, type: 'bonus' },
+      { i18nKey: 'combat:breakdown.bouclierAdverse', value: shieldAtkMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.cibleSansDefense', value: sansDefenseBonus, type: 'bonus' },
     ]
     const attaqueOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
@@ -1676,7 +1751,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       isCriticalSuccess: attaqueOutcome.isCriticalSuccess, isCriticalFail: attaqueOutcome.isCriticalFail,
       catastropheRisk:   attaqueOutcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel:        'Jet pour toucher (contact)',
+      skillLabelKey:     'combat:diceLabels.jetToucherContact',
       mechanicalTotal:   attackerSkillTotal,
       diffLabel:         chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
       chancesDeReussite: chancesAttaque,
@@ -1712,7 +1787,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // l'ATTAQUANT qui a produit la Catastrophe ici (contrairement à melee_defense).
     if (attaqueOutcome.catastropheRisk) {
       await openChanceChoice(io, campaignId, character.id, {
-        testLabel: 'Jet pour toucher (contact)',
+        testLabelKey: 'combat:diceLabels.jetToucherContact',
         site: 'melee_attack',
         linkedCatastropheId: pendingCatastrophe?.id ?? null,
         context: finalizeCtx,
@@ -1961,7 +2036,7 @@ async function finishMeleeAttackChoice(io, campaignId, resolved, { choice, conte
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed, timestamp: new Date().toISOString(),
-      skillLabel: 'Jet pour toucher (contact) — Chance : relance',
+      skillLabelKey: 'combat:diceLabels.jetToucherContactChance',
       mechanicalTotal: skillTotal,
       diffLabel: chancesAttaque - skillTotal >= 0 ? `+${chancesAttaque - skillTotal}` : `${chancesAttaque - skillTotal}`,
       chancesDeReussite: chancesAttaque, isSuccess: outcomeCrit.isSuccess, mr, breakdown,
@@ -2116,10 +2191,10 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   const defenseOutcome0 = computeAttackRoll({
     skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
     contributions: [
-      { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' },
-      { label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' },
-      { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
-      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
+      resolveCombatModeEntry(defCombatMode, modeCombatDef, modeCombatDef > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.multiAdversaires', value: multiMalusDefenseur, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: defenderEffectiveMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.terrainInstable', params: { valeur: acrobatieDefTotal }, value: terrainInstableModDef, type: 'malus' },
     ],
   })
   // Réussite critique défenseur (p.204, Lot 2) — même geste que l'attaquant (resolveMeleeAction),
@@ -2139,7 +2214,7 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     isCriticalSuccess: defenseOutcome.isCriticalSuccess, isCriticalFail: defenseOutcome.isCriticalFail,
     catastropheRisk:   defenseOutcome.catastropheRisk,
     seed: defSeed, timestamp: new Date().toISOString(),
-    skillLabel:        'Jet pour défendre (contact)',
+    skillLabelKey:     'combat:diceLabels.jetDefendreContact',
     mechanicalTotal:   defenderSkillTotal,
     diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
     chancesDeReussite: chanceDefense,
@@ -2501,7 +2576,7 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   const outcome0 = computeAttackRoll({
     skillLabel: "Manœuvre d'armure", skillTotal: ctx.skillTotal, totalLabel: 'Seuil', rollAttaque: roll,
     contributions: [
-      { label: `Catégorie ${exoSheet.category}`, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' },
+      { i18nKey: 'combat:breakdown.categorie', params: { categorie: exoSheet.category }, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' },
     ],
   })
   const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))
@@ -2516,7 +2591,7 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
     isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
     catastropheRisk:   outcome.catastropheRisk,
     seed, timestamp: new Date().toISOString(),
-    skillLabel:        "Tentative de se redresser (Manœuvre d'armure)",
+    skillLabelKey:     'combat:diceLabels.redresserArmure',
     mechanicalTotal:   ctx.skillTotal,
     diffLabel:         seuil - ctx.skillTotal >= 0 ? `+${seuil - ctx.skillTotal}` : `${seuil - ctx.skillTotal}`,
     chancesDeReussite: seuil,
@@ -2545,7 +2620,7 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   // timeout (L3e-1), contrairement à AWAITING_DAMAGE qui n'en a pas.
   if (outcome.catastropheRisk) {
     await openChanceChoice(io, campaignId, pilot.id, {
-      testLabel: "Manœuvre d'armure",
+      testLabelKey: 'combat:diceLabels.manoeuvreArmure',
       site: 'exo_stand_up',
       linkedCatastropheId: pendingCatastrophe?.id ?? null,
       context: {
@@ -2612,7 +2687,7 @@ async function finishExoStandUpChoice(io, campaignId, resolved, { choice, contex
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed, timestamp: new Date().toISOString(),
-      skillLabel: "Tentative de se redresser (Manœuvre d'armure) — Chance : relance",
+      skillLabelKey: 'combat:diceLabels.redresserArmureChance',
       mechanicalTotal: skillTotal,
       diffLabel: seuil - skillTotal >= 0 ? `+${seuil - skillTotal}` : `${seuil - skillTotal}`,
       chancesDeReussite: seuil,
@@ -2764,7 +2839,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
         formula: '—', rolls: [], total: 0,
         isCriticalSuccess: false, isCriticalFail: false, seed: null,
         timestamp: new Date().toISOString(),
-        skillLabel: `Armement Drone — arme sans formule de dégâts`,
+        skillLabelKey: 'combat:diceLabels.armementDroneSansFormule',
         mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false,
       } })
       return { suspend: false, emissions }
@@ -2825,7 +2900,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
         formula: '—', rolls: [], total: 0,
         isCriticalSuccess: false, isCriticalFail: false, seed: null,
         timestamp: new Date().toISOString(),
-        skillLabel: `Armement Drone — programme "${category}" manquant`,
+        skillLabelKey: 'combat:diceLabels.programmeManquant', skillLabelParams: { category },
         mechanicalTotal: 0, diffLabel: 'Configurer le programme dans la fiche drone', chancesDeReussite: 0, isSuccess: false,
       } })
       return { suspend: false, emissions }
@@ -2878,16 +2953,16 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const porteeModDrone = PORTEE_MOD_COMP[portee]?.mod ?? 0
     const tailleModDrone = tailleMod
     const breakdownDrone = [
-      { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
-      ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
+      { i18nKey: 'combat:breakdown.programmeNiveau', params: { niveau: programme.level }, value: programme.level, type: 'base' },
+      ...(porteeModDrone !== 0 ? [resolvePorteeEntry(portee, porteeModDrone, porteeModDrone > 0 ? 'bonus' : 'malus')] : []),
       ...situationMods.reduce((acc, k) => {
         const v = RANGED_SITUATION_MODS[k]?.mod
-        if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+        if (v !== undefined && v !== 0) acc.push(resolveSituationEntry(k, v, v > 0 ? 'bonus' : 'malus'))
         return acc
       }, []),
-      ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),
-      ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
-      { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+      ...(tailleModDrone !== 0 ? [resolveTailleEntry(tailleCategory, tailleModDrone, tailleModDrone > 0 ? 'bonus' : 'malus')] : []),
+      ...(coverageModifier !== 0 ? [{ i18nKey: 'combat:breakdown.couvertureCible', value: coverageModifier, type: 'malus' }] : []),
+      { i18nKey: 'combat:resultPanels.rollLine.threshold', value: chancesDeReussite, type: 'total' },
     ]
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId, username: tireurUsername, color: tireurColor,
@@ -2895,7 +2970,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       isCriticalSuccess: droneOutcome.isCriticalSuccess, isCriticalFail: droneOutcome.isCriticalFail,
       catastropheRisk: droneOutcome.catastropheRisk,
       seed: attSeed, timestamp: now,
-      skillLabel: `${weapon.display_name ?? 'Armement'} — Drone`,
+      skillLabelKey: 'combat:diceLabels.armeDrone', skillLabelParams: { name: weapon.display_name ?? 'Armement' },
       mechanicalTotal: roll,
       diffLabel: `${chancesDeReussite} (Prog. niv. ${programme.level})`,
       chancesDeReussite, isSuccess,
@@ -3023,7 +3098,7 @@ export async function resolveDroneAutoAction(io, campaignId, action, character, 
         isCriticalSuccess: detOutcome.isCriticalSuccess, isCriticalFail: detOutcome.isCriticalFail,
         catastropheRisk: detOutcome.catastropheRisk,
         seed: detSeed, timestamp: new Date().toISOString(),
-        skillLabel: `Détection — ${character.name ?? 'Drone'} (tentative ${attempt + 1}/3)`,
+        skillLabelKey: 'combat:diceLabels.detectionTentative', skillLabelParams: { name: character.name ?? 'Drone', n: attempt + 1 },
         mechanicalTotal: detRoll, diffLabel: `Seuil ${detectionProgramme.level}`,
         chancesDeReussite: detectionProgramme.level, isSuccess: detOutcome.isSuccess,
       } })
@@ -3047,7 +3122,7 @@ export async function resolveDroneAutoAction(io, campaignId, action, character, 
           isCriticalSuccess: aeOutcome.isCriticalSuccess, isCriticalFail: aeOutcome.isCriticalFail,
           catastropheRisk: aeOutcome.catastropheRisk,
           seed: aeSeed, timestamp: new Date().toISOString(),
-          skillLabel: `Ami/Ennemi — ${character.name ?? 'Drone'} (tentative ${attempt + 1}/3)`,
+          skillLabelKey: 'combat:diceLabels.amiEnnemiTentative', skillLabelParams: { name: character.name ?? 'Drone', n: attempt + 1 },
           mechanicalTotal: aeRoll, diffLabel: `Seuil ${amiEnnemiProgramme.level}`,
           chancesDeReussite: amiEnnemiProgramme.level, isSuccess: aeOutcome.isSuccess,
         } })
@@ -3142,7 +3217,7 @@ export async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
     formula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — ${cibleCharacter.name} · Intégrité : ${droneSheet.integrite_actuelle} → ${newIntegrite}`,
+    skillLabelKey: 'combat:diceLabels.degatsPersonnageIntegrite', skillLabelParams: { name: cibleCharacter.name, avant: droneSheet.integrite_actuelle, apres: newIntegrite },
     mechanicalTotal: rawDice,
     diffLabel: `+${modDomAttaque} MR · −${etqDrone} blindage · RD ${rdDrone}`,
     chancesDeReussite: degatsNets,
@@ -3172,7 +3247,7 @@ export async function resolveAttackHitExo(io, campaignId, ctx, emissions) {
     formula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — ${cibleCharacter.name}`,
+    skillLabelKey: 'combat:diceLabels.degatsPersonnage', skillLabelParams: { name: cibleCharacter.name },
     mechanicalTotal: rawDice,
     diffLabel: `+${modDomAttaque} MR · −${exoResult.bld} BLD · RD ${exoResult.rd}`,
     chancesDeReussite: exoResult.degatsNets,
@@ -3225,7 +3300,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
     formula: '1d20', rolls: locRolls, total: rollLoc,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: locSeed, timestamp: now,
-    skillLabel: 'Localisation — Drone', mechanicalTotal: rollLoc, diffLabel: '',
+    skillLabelKey: 'combat:diceLabels.localisationDrone', mechanicalTotal: rollLoc, diffLabel: '',
     chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation, isSuccess: true,
   } })
   emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -3233,7 +3308,8 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
     formula, rolls: dmgRolls, total: degautsBruts,
     isCriticalSuccess: false, isCriticalFail: false,
     seed: dmgSeed, timestamp: now,
-    skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+    skillLabelKey: 'combat:diceLabels.degatsLocalisation',
+    skillLabelParams: { location: resolveShortLocationParam(localisation) },
     mechanicalTotal: rawDice, diffLabel: `Armure:${etq ?? 0} RD:${rd}`,
     chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
   } })
@@ -3608,24 +3684,24 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ? (getIntegrityModifier(weapon.integrity_current) ?? 0) : 0
 
     const assaultContributions = [
-      { label: 'État de l\'arme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
-      { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
-      { label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' },
-      { label: 'Deux armes', value: dualWieldComp, type: 'bonus' },
-      { label: 'Tir visé', value: aimBonusComp, type: 'bonus' },
-      { label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' },
-      { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
-      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      { i18nKey: 'combat:breakdown.etatArme', value: itgAtkMod, type: itgAtkMod < 0 ? 'malus' : 'bonus' },
+      resolvePorteeEntry(authoritativeRangeBand, porteeModComp, porteeModComp > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.modeDeTirMultiplicateur', params: { n: action.bullet_count ?? 1 }, value: fireModeComp - dualWieldComp, type: 'bonus' },
+      { i18nKey: 'combat:breakdown.deuxArmes', value: dualWieldComp, type: 'bonus' },
+      { i18nKey: 'combat:assaultPanel.aimedShot.label', value: aimBonusComp, type: 'bonus' },
+      { i18nKey: 'combat:breakdown.viseeLocalisation', params: { location: resolveShortLocationParam(aimedLocationKey) }, value: aimedLocationMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.attaqueMultiple', value: multiAttackMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.bouclierAdverse', value: shieldAtkMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.cibleSansDefense', value: sansDefenseBonus, type: 'bonus' },
       ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).map(k => {
         const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
-        return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+        return resolveSituationEntry(k, v, v > 0 ? 'bonus' : 'malus')
       })),
-      { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
-      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-      { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
-      { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+      resolveTailleEntry(tailleCategory, tailleModComp, tailleModComp > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.precipitation', value: isRushedMod, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: effectiveMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.couvertureCible', value: coverageModifier, type: 'malus' },
     ]
     const assaultOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
@@ -3650,7 +3726,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       catastropheRisk:   assaultOutcome.catastropheRisk,
       seed:              attackSeed,
       timestamp:         new Date().toISOString(),
-      skillLabel:        'Jet pour toucher (distance)',
+      skillLabelKey:     'combat:diceLabels.jetToucherDistance',
       mechanicalTotal:   skillTotal,
       diffLabel:         chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
       chancesDeReussite,
@@ -3726,7 +3802,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // "comme DICE_RESULT"), seul le dispatch final (résolution dégâts ou notice d'échec) est différé.
     if (assaultOutcome.catastropheRisk) {
       await openChanceChoice(io, campaignId, character.id, {
-        testLabel: 'Jet pour toucher (distance)',
+        testLabelKey: 'combat:diceLabels.jetToucherDistance',
         site: 'assault',
         linkedCatastropheId: pendingCatastrophe?.id ?? null,
         context: finalizeCtx,
@@ -3889,7 +3965,7 @@ async function finishAssaultChoice(io, campaignId, resolved, { choice, context }
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed, timestamp: new Date().toISOString(),
-      skillLabel: 'Jet pour toucher (distance) — Chance : relance',
+      skillLabelKey: 'combat:diceLabels.jetToucherDistanceChance',
       mechanicalTotal: skillTotal,
       diffLabel: chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
       chancesDeReussite, isSuccess, mr, breakdown,

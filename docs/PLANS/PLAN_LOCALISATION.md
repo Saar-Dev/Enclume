@@ -1825,3 +1825,43 @@ séparément de l'argument `skillLabel` passé à `computeAttackRoll` (qui ne no
 attendre `i18nKey` à la place, sans toucher aux contributions (qui restent `label` brut — non
 concernées par ce noyau). **Validé** : `node --test server/src/lib/combatAttackRoll.test.mjs` →
 29/29 ✔ (test pur, aucune base).
+
+### 9.19 Étape 11 — `socketCombatHelpers.js` (le plus gros fichier) migré en entier (2026-10-06)
+
+Avant les sites propres à ce fichier, 2 nouvelles tables de résolution partagées (consommées aussi
+par `socketCombatAoe.js`/`socketCombatExo.js`, mêmes tables importées) :
+
+- **`resolvePorteeEntry`/`resolveTailleEntry`/`resolveSituationEntry`** — un seul point pour les 10
+  sites qui consomment `PORTEE_LABELS`/`TAILLE_LABELS`/`SITUATION_LABELS` dans les 3 fichiers. Repli
+  texte brut conservé à l'identique si le code n'a pas de clé connue.
+- **`resolveShortLocationParam`** — table explicite code snake_case (`LOCATION_LABELS`) → sous-clé
+  camelCase (`breakdown.shortLocation.*`), nécessaire pour les gabarits paramétrés ci-dessous.
+- **`resolveCombatModeEntry`** — **`COMBAT_MODE_LABELS` (offensif/charge/défensif/retraite), table
+  absente de l'inventaire initial du §9.3**, trouvée en balayant ce fichier (3 sites). Nouvelles
+  clés `breakdown.combatMode.*` (le panneau `modes.*` existant a un texte différent, pas « Mode »
+  en préfixe — pas réutilisable sans changer l'affichage).
+
+**Point technique vérifié avant de coder** (bloquant pour `degatsLocalisation`/`viseeLocalisation`/
+`chanceBouclierLocalisation`, dont le paramètre `{location}` doit rester un CODE, jamais du texte
+résolu côté serveur — sinon on recrée la violation qu'on corrige, juste cachée dans un param) :
+i18next supporte le *nesting* avec clé dynamique interpolée — `"Visée $t(combat:breakdown.
+shortLocation.{{location}})"` — **testé empiriquement** (`node -e` avec le package i18next réel)
+avant d'écrire quoi que ce soit. Trouvaille en testant : le préfixe de namespace (`combat:`) est
+**obligatoire** même à l'intérieur du nesting — une référence nue ne résout rien (retombe sur le
+namespace par défaut, échoue silencieusement, affiche la clé brute). **Conséquence** : `breakdown.
+shortLocation.*` doit contenir les 6 codes (pas 4) pour que le chemin de nesting reste uniforme —
+**annule la correction du §9.16/§9.12** qui avait retiré `tete`/`corps` comme « doublons évitables » ;
+ajoutés à nouveau, dupliquant `resultPanels.location.tete`/`.corps` (texte identique) — accepté comme
+exception mineure à Règle 2, imposée par la contrainte technique du nesting à chemin unique.
+
+**~40 sites migrés dans ce fichier** (statiques, gabarits paramétrés, et les 3 blocs de contributions
+CaC/Tir attaquant+défenseur, le bloc programme Drone) — toutes les valeurs de `skillLabel`/
+`testLabel`/`breakdown[].label` composées en dur, sauf : `refSkill.label`/noms d'arme résolus
+(domaine Lot 5, pas composition JS) et le repli `'Ordinateur'` (`params.item` d'un
+`COMBAT_SYSTEM_NOTICE` déjà conforme — même catégorie que les replis `?? 'Armement'`/`?? 'Grenade'`
+déjà acceptés ailleurs dans ce lot, pas une composition serveur nouvelle).
+
+**Validé** : chaque clé introduite (72 au total) résolue par script contre le vrai `combat.json`
+(aucune ne retombe sur elle-même) ; 12 valeurs paramétrées vérifiées **texte exact** contre la
+chaîne d'origine (`node -e` avec i18next réel) ; `node --check` sur le fichier ; build client.
+Aucun test ciblé existant pour ce fichier (recherché, aucun `.test.mjs`).
