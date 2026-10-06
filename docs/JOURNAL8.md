@@ -9759,3 +9759,40 @@ liste des cibles modables) ; fixtures vérifiées nettoyées en base après coup
 **Non testé** : scénario réel en navigateur (tentative d'installation depuis l'écran Modding).
 **Données** : aucune migration, aucun changement de schéma.
 **Retour arrière** : `git revert` du fichier suffit.
+
+## Session (Dev) — 2026-10-06 — Inventaire : les grenades et les armes de lancer ne s'empilaient jamais (GRENADE-STACK-BY-TYPE)
+
+**Signalement** (Saar, 2026-10-03, étendu en session à « armes de jet » par la même logique que
+GRENADE-ACCEPTS-WEAPON-MODS) : les grenades devraient s'empiler par type dans l'inventaire, comme
+les autres consommables.
+
+**Cause racine vérifiée en base** : `canStack` (`inventoryRules.js`) refuse de fusionner tout item à
+`location` équipable (`isEquippableLocation`), quel que soit `has_integrity`. Grenade et Armes de
+jet portent `location = 'M'` (tenues en main pour être lancées) comme n'importe quelle arme — la
+migration 333 (2026-09-09) leur avait déjà retiré `has_integrity` (ce sont des consommables sans
+état suivi) mais sans jamais toucher à ce deuxième verrou, laissant la question ouverte dans
+`PLAN_USURE&INTEGRITE.md` § L1 (« question ITG sur consommable à trancher avant L5 ») sans jamais la
+reprendre. Contrairement à une arme à feu (chargeur) ou à présent à un accessoire d'arme (fire_mode,
+voir GRENADE-ACCEPTS-WEAPON-MODS ci-dessus), ces deux catégories n'ont structurellement aucun état
+propre à l'exemplaire — rien ne justifiait qu'elles restent bloquées par la même règle qu'une arme.
+
+**Correctif** (`server/src/lib/inventoryRules.js`) : `canStack` porte une exception déclarative,
+`STACKABLE_DESPITE_EQUIPPED_CATEGORIES = new Set(['Grenade', 'Armes de jet'])` — réutilise exactement
+le même regroupement de catégories que la migration 333 (même décision, même raison), plutôt
+qu'inventer un nouveau critère. Les 3 sites appelants (`inventoryService.js` ×2,
+`modingService.js`) reçoivent désormais `category` dans leur `SELECT` ref_equipment (`tradeService.js`
+la sélectionnait déjà). Vérifié par lecture avant de coder : `consumeThrownGrenade`
+(`socketCombatAoe.js`, consommation d'une grenade lancée) et `countStowedByContainer`
+(`inventoryService.js`, « il en reste N » au chat) gèrent déjà correctement une ligne à
+`quantity > 1` — écrits en anticipant ce correctif, jamais exécutés jusqu'ici faute de stack
+possible. Aucun changement nécessaire côté combat.
+
+**Testé** : `inventoryRules.test.mjs` étendu (12/12, dont la garde explicite qu'une arme à feu ou de
+contact n'est PAS concernée par l'exception) ; `inventoryService.test.mjs` étendu de 4 tests réels
+contre la base locale (empilement à l'ajout, fusion sur un ajout ultérieur, grenade en main jamais
+fusionnée avec la réserve) — 30/30 ; `modingService.test.mjs` 5/5 (non-régression croisée avec le
+correctif précédent). Fixtures vérifiées nettoyées en base après coup (aucun résidu).
+**Non testé** : scénario réel en navigateur (ramasser/acheter plusieurs grenades identiques, lancer
+depuis une réserve de 2+, vérifier le message « il en reste N » au chat).
+**Données** : aucune migration, aucun changement de schéma — comportement d'écriture uniquement.
+**Retour arrière** : `git revert` des fichiers modifiés suffit.

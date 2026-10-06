@@ -164,6 +164,15 @@ vend du **neuf** (ITG courante = ITG max) ; les autres vendent de l'**occasion**
 > `integrity_current = integrity_max` + effacer `malfunction_severity` (comme `cloneExoSheet`).
 > Grenades `has_integrity` (`location='M'`, déjà non-stackables) : question « ITG sur consommable »
 > à trancher avant L5.
+>
+> **Tranchée le 2026-09-09 (migration 333)** : Grenade + Armes de jet passent `has_integrity = false`
+> (consommables sans état suivi) — mais restaient non-stackables malgré ça jusqu'au 2026-10-06
+> (`canStack` ne regardait que `isEquippableLocation`, qui reste vraie pour `location='M'`).
+> **GRENADE-STACK-BY-TYPE, corrigé 2026-10-06** : `canStack` porte désormais une exception
+> déclarative (`STACKABLE_DESPITE_EQUIPPED_CATEGORIES = Set(['Grenade', 'Armes de jet'])`) — ces deux
+> catégories stackent malgré leur `location` équipable, parce qu'elles n'ont structurellement aucun
+> état par-exemplaire (ni Intégrité depuis cette migration, ni munition chargée, ni mod depuis
+> GRENADE-ACCEPTS-WEAPON-MODS). Détail : `docs/JOURNAL8.md` (2026-10-06).
 
 `server/src/lib/inventoryRules.js` — ajouter, **sans** modifier `isEquippableLocation` (encore utilisé
 pour la logique de slot) :

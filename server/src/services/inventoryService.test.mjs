@@ -37,6 +37,9 @@ async function createFixture() {
   // Non équipable ET non suivi : doit continuer à stacker (non-régression).
   const stackableRef = await db('ref_equipment')
     .where({ family: 'Munitions' }).whereNull('location').first()
+  // GRENADE-STACK-BY-TYPE — équipable (location 'M') mais sans Intégrité : exception canStack.
+  const grenadeRef = await db('ref_equipment').where({ category: 'Grenade' }).first()
+  const thrownWeaponRef = await db('ref_equipment').where({ category: 'Armes de jet' }).first()
   // Arme has_integrity équipable (L3 : quick-equip MJ → 15/15).
   const weaponIntegrityRef = await db('ref_equipment')
     .where({ family: 'Armes', has_integrity: true, location: 'M' }).first()
@@ -61,7 +64,7 @@ async function createFixture() {
     .returning('*')
   await db('char_inventory_slots').insert({ char_inventory_id: shieldInHand.id, character_id: owner.id, slot_code: 'MD' })
 
-  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, weaponIntegrityRef, meleeInHand, meleeStored, shieldInHand }
+  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, grenadeRef, thrownWeaponRef, weaponIntegrityRef, meleeInHand, meleeStored, shieldInHand }
 }
 
 async function cleanup({ campaign, gm }) {
@@ -291,6 +294,76 @@ test('addItem — item ni équipable ni suivi (munition), quantity 3 : 1 seule l
     const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.stackableRef.id })
     assert.equal(rows.length, 1)
     assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// GRENADE-STACK-BY-TYPE — Grenade/Armes de jet sont équipables (location 'M', comme n'importe quelle
+// arme) mais sans Intégrité ni aucun état propre à l'exemplaire (migration 333) : exception à la
+// règle « équipable ne stacke pas », testée par catégorie réelle, pas seulement sur le flag isolé
+// (voir inventoryRules.test.mjs pour canStack lui-même).
+
+test('addItem — grenade, quantity 3 : 1 seule ligne quantity=3 (équipable mais sans Intégrité)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.grenadeRef, 'fixture : une grenade doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.grenadeRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.grenadeRef.id })
+    assert.equal(rows.length, 1, 'une seule ligne — pas 3')
+    assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — arme de jet, quantity 3 : 1 seule ligne quantity=3 (même exception que Grenade)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.thrownWeaponRef, 'fixture : une arme de jet doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.thrownWeaponRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.thrownWeaponRef.id })
+    assert.equal(rows.length, 1, 'une seule ligne — pas 3')
+    assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — grenade ajoutée en 2 fois dans le même conteneur : fusionne sur la ligne existante', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const first = await addItem(fx.owner.id, { equipment_id: fx.grenadeRef.id, container: 'Coffre', quantity: 2 }, true, true)
+    const second = await addItem(fx.owner.id, { equipment_id: fx.grenadeRef.id, container: 'Coffre', quantity: 1 }, true, true)
+    assert.equal(second.type, 'stack')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.grenadeRef.id })
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].quantity, 3)
+    assert.equal(rows[0].id, first.item?.id ?? first.items?.[0]?.id)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — une grenade déjà équipée en main (slot) n\'est jamais fusionnée avec le reste de la réserve', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    // Grenade en main : même convention que meleeInHand/shieldInHand du fixture (insert direct +
+    // char_inventory_slots), addItem/équipement par slot n'est pas l'objet de ce test.
+    const [inHand] = await db('char_inventory')
+      .insert({ character_id: fx.owner.id, equipment_id: fx.grenadeRef.id, container: 'Coffre', quantity: 1 })
+      .returning('*')
+    // '2M' : seul slot encore libre sur ce personnage (meleeInHand tient déjà 'MG', shieldInHand 'MD').
+    await db('char_inventory_slots').insert({ char_inventory_id: inHand.id, character_id: fx.owner.id, slot_code: '2M' })
+
+    await addItem(fx.owner.id, { equipment_id: fx.grenadeRef.id, container: 'Coffre', quantity: 2 }, true, true)
+
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.grenadeRef.id })
+    assert.equal(rows.length, 2, 'la grenade en main et la réserve (quantity=2) restent deux lignes distinctes')
+    const reserve = rows.find(r => r.id !== inHand.id)
+    assert.equal(reserve.quantity, 2)
   } finally {
     await cleanup(fx)
   }

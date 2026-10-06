@@ -6,8 +6,10 @@
 // (inventoryService.describeGrabCandidate), l'aperçu client n'est jamais l'autorité.
 // Plan : docs/Old/PLAN_PRISE_EN_MAIN.md.
 //
-// Les objets équipables ne s'empilent jamais (chaque grenade est une ligne d'inventaire), donc on REGROUPE les
-// exemplaires IDENTIQUES d'un même conteneur en une seule ligne « Grenade à fragmentation · Ceinture ×2 » ; choisir la
+// La plupart des objets équipables ne s'empilent jamais côté serveur (une arme à chargeur reste une ligne par
+// exemplaire) — Grenade/Armes de jet font exception depuis GRENADE-STACK-BY-TYPE (canStack, inventoryRules.js) et
+// arrivent donc déjà regroupées en une seule ligne quantity>1. On REGROUPE quand même ici les exemplaires IDENTIQUES
+// d'un même conteneur (server ET client) en une seule ligne « Grenade à fragmentation · Ceinture ×2 » ; choisir la
 // ligne prend le premier exemplaire (`itemId`) — les exemplaires d'un groupe sont interchangeables PARCE QU'ILS SONT IDENTIQUES :
 // même équipement, même conteneur, même ÉTAT (empreinte ci-dessous). Prendre « le premier » d'un groupe dont les exemplaires
 // diffèrent (chargeur, type de munition chargé, usure, nom, mods) serait faux : le joueur croirait choisir SON arme. Toute arme à

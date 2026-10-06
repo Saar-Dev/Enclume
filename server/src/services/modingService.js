@@ -56,7 +56,7 @@ export async function returnModToInventory(characterId, equipmentId, trx) {
   // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : char_inventory.slot retiré — ces accessoires ne sont
   // jamais équipables (aucune ligne char_inventory_slots possible pour eux), whereNotExists remplace
   // whereNull('slot').
-  const ref = await trx('ref_equipment').where({ id: equipmentId }).select('location', 'has_integrity').first()
+  const ref = await trx('ref_equipment').where({ id: equipmentId }).select('location', 'has_integrity', 'category').first()
   if (canStack(ref)) {
     const existing = await trx('char_inventory')
       .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })

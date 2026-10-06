@@ -36,3 +36,20 @@ test('canStack — ref absent (item custom sans equipment_id) : stackable', () =
   assert.equal(canStack(undefined), true)
   assert.equal(canStack({}), true)
 })
+
+// GRENADE-STACK-BY-TYPE — Grenade / Armes de jet sont équipables (location 'M') mais, depuis la
+// migration 333, sans Intégrité ni aucun état propre à l'exemplaire : exception à « équipable =
+// jamais stackable », pas un contournement.
+test('canStack — Grenade/Armes de jet : stackable malgré une location équipable', () => {
+  assert.equal(canStack({ location: 'M', has_integrity: false, category: 'Grenade' }), true)
+  assert.equal(canStack({ location: 'M', has_integrity: false, category: 'Armes de jet' }), true)
+})
+
+test('canStack — Grenade/Armes de jet : has_integrity (hypothétique) bloquerait quand même l\'empilement', () => {
+  assert.equal(canStack({ location: 'M', has_integrity: true, category: 'Grenade' }), false)
+})
+
+test('canStack — une autre catégorie équipable (ex. arme à feu) n\'est pas concernée par l\'exception', () => {
+  assert.equal(canStack({ location: 'M', has_integrity: false, category: 'Armes de poing' }), false)
+  assert.equal(canStack({ location: 'M', has_integrity: false, category: 'Arme de contact' }), false)
+})
