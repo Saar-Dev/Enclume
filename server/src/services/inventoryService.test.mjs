@@ -40,6 +40,17 @@ async function createFixture() {
   // GRENADE-STACK-BY-TYPE — équipable (location 'M') mais sans Intégrité : exception canStack.
   const grenadeRef = await db('ref_equipment').where({ category: 'Grenade' }).first()
   const thrownWeaponRef = await db('ref_equipment').where({ category: 'Armes de jet' }).first()
+  // Généralisation (2026-10-06) : règle sur has_integrity/caliber, pas sur la catégorie — une arme
+  // de corps à corps basique ou une armure simple sans Intégrité suivie stackent aussi désormais.
+  // whereNot(meleeRef.id) : meleeRef (ci-dessus, has_integrity indéterminé) sert déjà à meleeInHand/
+  // meleeStored — un même equipment_id fausserait le compte de lignes des tests de généralisation.
+  const basicMeleeRef = await db('ref_equipment')
+    .where({ category: 'Arme de contact', has_integrity: false }).whereNot('id', meleeRef.id).first()
+  const basicArmorRef = await db('ref_equipment')
+    .where({ has_integrity: false }).whereIn('category', ['Armure simple', 'Protection', 'Tenue']).first()
+  // Arme à calibre réel (97 au catalogue) : doit rester non-stackable même si, par exception,
+  // has_integrity y était faux (le calibre + l'emplacement corporel suffisent à bloquer).
+  const caliberWeaponRef = await db('ref_equipment').where({ family: 'Armes' }).whereNotNull('caliber').first()
   // Arme has_integrity équipable (L3 : quick-equip MJ → 15/15).
   const weaponIntegrityRef = await db('ref_equipment')
     .where({ family: 'Armes', has_integrity: true, location: 'M' }).first()
@@ -64,7 +75,11 @@ async function createFixture() {
     .returning('*')
   await db('char_inventory_slots').insert({ char_inventory_id: shieldInHand.id, character_id: owner.id, slot_code: 'MD' })
 
-  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef, grenadeRef, thrownWeaponRef, weaponIntegrityRef, meleeInHand, meleeStored, shieldInHand }
+  return {
+    gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, integrityRef, stackableRef,
+    grenadeRef, thrownWeaponRef, basicMeleeRef, basicArmorRef, caliberWeaponRef, weaponIntegrityRef,
+    meleeInHand, meleeStored, shieldInHand,
+  }
 }
 
 async function cleanup({ campaign, gm }) {
@@ -364,6 +379,66 @@ test('addItem — une grenade déjà équipée en main (slot) n\'est jamais fusi
     assert.equal(rows.length, 2, 'la grenade en main et la réserve (quantity=2) restent deux lignes distinctes')
     const reserve = rows.find(r => r.id !== inHand.id)
     assert.equal(reserve.quantity, 2)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// Généralisation (2026-10-06, en session) : la règle ne regarde plus la catégorie mais seulement
+// has_integrity/caliber — vérifiée ici sur des données réelles au-delà des grenades/armes de jet.
+
+test('addItem — arme de corps à corps basique (has_integrity=false), quantity 3 : 1 seule ligne (généralisation)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.basicMeleeRef, 'fixture : une arme de corps à corps has_integrity=false doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.basicMeleeRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.basicMeleeRef.id })
+    assert.equal(rows.length, 1, 'une seule ligne — pas 3')
+    assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — armure simple (has_integrity=false), quantity 3 : 1 seule ligne (généralisation)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.basicArmorRef, 'fixture : une armure has_integrity=false doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.basicArmorRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.basicArmorRef.id })
+    assert.equal(rows.length, 1, 'une seule ligne — pas 3')
+    assert.equal(rows[0].quantity, 3)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — arme à calibre réel, quantity 3 : 3 lignes distinctes (jamais stackable, chargeur par exemplaire)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.caliberWeaponRef, 'fixture : une arme à calibre doit exister')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.caliberWeaponRef.id, container: 'Coffre', quantity: 3 }, true, true)
+    assert.equal(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.caliberWeaponRef.id })
+    assert.equal(rows.length, 3)
+    assert.ok(rows.every(r => r.quantity === 1))
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — munition (caliber posé, le sien) continue de s\'empiler malgré son propre caliber', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    assert.ok(fx.stackableRef, 'fixture : une munition doit exister')
+    assert.ok(fx.stackableRef.caliber, 'fixture invalide : attendu une munition avec son propre caliber')
+    const res = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 5 }, true, true)
+    assert.notEqual(res.type, 'multi')
+    const rows = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.stackableRef.id })
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].quantity, 5)
   } finally {
     await cleanup(fx)
   }

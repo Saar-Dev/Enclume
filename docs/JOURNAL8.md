@@ -9776,23 +9776,42 @@ reprendre. Contrairement à une arme à feu (chargeur) ou à présent à un acce
 voir GRENADE-ACCEPTS-WEAPON-MODS ci-dessus), ces deux catégories n'ont structurellement aucun état
 propre à l'exemplaire — rien ne justifiait qu'elles restent bloquées par la même règle qu'une arme.
 
-**Correctif** (`server/src/lib/inventoryRules.js`) : `canStack` porte une exception déclarative,
-`STACKABLE_DESPITE_EQUIPPED_CATEGORIES = new Set(['Grenade', 'Armes de jet'])` — réutilise exactement
-le même regroupement de catégories que la migration 333 (même décision, même raison), plutôt
-qu'inventer un nouveau critère. Les 3 sites appelants (`inventoryService.js` ×2,
-`modingService.js`) reçoivent désormais `category` dans leur `SELECT` ref_equipment (`tradeService.js`
-la sélectionnait déjà). Vérifié par lecture avant de coder : `consumeThrownGrenade`
+**Correctif (v1, commit initial)** : `canStack` recevait une exception déclarative par catégorie,
+`STACKABLE_DESPITE_EQUIPPED_CATEGORIES = new Set(['Grenade', 'Armes de jet'])`.
+
+**Généralisée en session (Saar, même jour)** : « Tout stacker sauf armes/armures/ITG ? Comment font
+les pros ? » — recherche faite (pas supposée) avant de généraliser : les systèmes d'inventaire de
+jeu séparent la définition d'un objet (catalogue) de ses exemplaires, et un exemplaire ne reste
+jamais seul s'il porte une donnée propre à lui (durabilité/charges) ; FoundryVTT dnd5e distingue
+exactement pareil un objet à charges (jamais groupé) d'un consommable (toujours groupé). Vérifié en
+base avant de coder : dans ce catalogue, DEUX colonnes `ref_equipment` portent réellement un état
+par-exemplaire — `has_integrity` (ITG) et `caliber` (seule une arme à calibre charge/suit
+`current_ammo`/`ammo_remaining`, `resolveAmmoInit` clé déjà sur ce champ) — jamais la `location`
+(emplacement corporel) ni la `category`. 30 armes de corps à corps (sur 39) et 5 pièces d'armure
+basique ont déjà `has_integrity = false` en catalogue (bas niveau technologique, jamais suivies) ;
+3 armes à distance primitives (arc/arbalète/fronde) ont un `fire_mode` mais `caliber = NULL`. Vérifié
+en base réelle : zéro personnage avec un chargeur chargé, un nom personnalisé ou un exemplaire équipé
+parmi ces objets — aucun risque sur les parties en cours.
+
+**Correctif final** (`server/src/lib/inventoryRules.js`) : `canStack(ref) { return !ref?.has_integrity
+&& !ref?.caliber }` — la liste de catégories est retirée, remplacée par les deux seules colonnes qui
+comptent réellement. S'applique désormais aussi aux armes de corps à corps basiques et à l'armure
+simple, sans qu'aucune liste n'ait besoin d'être tenue à jour pour un futur objet du catalogue. Les 4
+sites appelants (`inventoryService.js` ×2, `modingService.js`, `tradeService.js`) sélectionnent
+`caliber` au lieu de `category`/`location`. Vérifié par lecture avant de coder : `consumeThrownGrenade`
 (`socketCombatAoe.js`, consommation d'une grenade lancée) et `countStowedByContainer`
 (`inventoryService.js`, « il en reste N » au chat) gèrent déjà correctement une ligne à
 `quantity > 1` — écrits en anticipant ce correctif, jamais exécutés jusqu'ici faute de stack
 possible. Aucun changement nécessaire côté combat.
 
-**Testé** : `inventoryRules.test.mjs` étendu (12/12, dont la garde explicite qu'une arme à feu ou de
-contact n'est PAS concernée par l'exception) ; `inventoryService.test.mjs` étendu de 4 tests réels
-contre la base locale (empilement à l'ajout, fusion sur un ajout ultérieur, grenade en main jamais
-fusionnée avec la réserve) — 30/30 ; `modingService.test.mjs` 5/5 (non-régression croisée avec le
-correctif précédent). Fixtures vérifiées nettoyées en base après coup (aucun résidu).
-**Non testé** : scénario réel en navigateur (ramasser/acheter plusieurs grenades identiques, lancer
-depuis une réserve de 2+, vérifier le message « il en reste N » au chat).
+**Testé** : `inventoryRules.test.mjs` réécrit sur les deux colonnes (7/7, dont le cas réel
+arc/arbalète/fronde : `has_integrity` faux mais `caliber` non nul reste non-stackable) ;
+`inventoryService.test.mjs` (grenade + arme de jet, 30/30, inchangés dans leur intention) ;
+`modingService.test.mjs` 5/5 (non-régression croisée). Fixtures vérifiées nettoyées en base après
+coup (aucun résidu).
+**Non testé** : scénario réel en navigateur (ramasser/acheter plusieurs grenades ou armes de corps à
+corps identiques, lancer depuis une réserve de 2+, vérifier le message « il en reste N » au chat) ;
+conséquence visible non encore montrée à Saar (armes de corps à corps basiques et armure simple
+empilables aussi, décidé en chat mais pas encore vu en jeu).
 **Données** : aucune migration, aucun changement de schéma — comportement d'écriture uniquement.
 **Retour arrière** : `git revert` des fichiers modifiés suffit.

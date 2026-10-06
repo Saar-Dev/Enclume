@@ -56,7 +56,7 @@ export async function returnModToInventory(characterId, equipmentId, trx) {
   // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : char_inventory.slot retiré — ces accessoires ne sont
   // jamais équipables (aucune ligne char_inventory_slots possible pour eux), whereNotExists remplace
   // whereNull('slot').
-  const ref = await trx('ref_equipment').where({ id: equipmentId }).select('location', 'has_integrity', 'category').first()
+  const ref = await trx('ref_equipment').where({ id: equipmentId }).select('has_integrity', 'caliber', 'location').first()
   if (canStack(ref)) {
     const existing = await trx('char_inventory')
       .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })
@@ -154,7 +154,9 @@ export async function installMod(characterId, weaponInvId, modInvId) {
       await trx('char_inventory_mods').insert({
         weapon_inv_id: weaponInvId,
         equipment_id:  mod.equipment_id,
-        mod_name:      modRef.name,
+        // i18n (PLAN_LOCALISATION.md §7.16.2) : passe par le résolveur plutôt que la colonne brute
+        // directement — pass-through en fr, complète la couture pour une future locale par appelant.
+        mod_name:      resolveRefField('ref_equipment', modRef, 'name'),
         mod_slot:      modRef.mod_slot ?? null,
       })
       // Consomme 1 unité du mod — jamais un DELETE inconditionnel (P7 : mod.quantity peut être

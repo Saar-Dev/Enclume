@@ -168,7 +168,7 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     const equipmentIds = [...new Set(items.map(i => i.equipmentId))]
     const equipmentRows = await trx('ref_equipment')
       .whereIn('id', equipmentIds)
-      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity', 'quality', 'source_id')
+      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location', 'has_integrity', 'caliber', 'quality', 'source_id')
 
     const rules = Array.isArray(merchant.rules) ? merchant.rules : JSON.parse(merchant.rules || '[]')
     const modGlobal = merchant.mod_global ?? 0

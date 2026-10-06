@@ -11,22 +11,22 @@ export function isEquippableLocation(location) {
   return location != null && !NON_EQUIP_LOCATIONS.has(location)
 }
 
-// Grenade / Armes de jet (migration 333_ref_equipment_thrown_no_integrity.js, décision Saar
-// 2026-09-09) : mêmes catégories, même raison déjà actée — consommables tenus en main (location
-// équipable) mais SANS aucun état propre à l'exemplaire (jamais d'Intégrité depuis 333, jamais de
-// munition chargée, jamais de mod — GRENADE-ACCEPTS-WEAPON-MODS exige déjà `fire_mode` pour en
-// recevoir un, que ces catégories n'ont jamais). La règle « équipable = jamais stackable » existe
-// pour protéger un état par-exemplaire qui, ici, ne peut structurellement pas exister : l'exception
-// ne contourne pas l'invariant, elle constate qu'il ne s'applique pas à ces deux catégories.
-const STACKABLE_DESPITE_EQUIPPED_CATEGORIES = new Set(['Grenade', 'Armes de jet'])
-
-// Un item ne peut partager une ligne d'inventaire (quantity > 1) que s'il n'est NI équipable NI
-// soumis au suivi d'Intégrité (`ref_equipment.has_integrity`, PLAN_USURE&INTEGRITE.md L1) : l'ITG
-// est la propriété d'un objet physique unique — une valeur unique sur une pile de N serait
-// indéfinie. Exception ci-dessus pour les deux catégories qui n'ont jamais cet état. Prend le `ref`
-// catalogue (`{ location, has_integrity, category }`), tolère `null`/`undefined` (item custom sans
-// equipment_id → stackable s'il n'a pas de location équipable).
+// GRENADE-STACK-BY-TYPE (2026-10-06) — généralisé après recherche (patron « définition vs instance »
+// des inventaires de jeu : un exemplaire ne reste jamais seul s'il porte une donnée propre à lui-même
+// — durabilité, charges —, FoundryVTT dnd5e distingue exactement pareil un objet à charges d'un
+// consommable groupable). Deux données réellement propres à un exemplaire : `has_integrity` (ITG
+// suivie, PLAN_USURE&INTEGRITE.md L1 — une valeur unique sur une pile de N serait indéfinie) et un
+// chargeur suivi (`current_ammo`/`ammo_remaining` par exemplaire, posé par `resolveAmmoInit` —
+// inventoryService.js — SEULEMENT quand l'item est équipé en main ET porte `caliber`, même garde que
+// `weaponAmmoStatus`/`ammoRules.js`). `caliber` seul ne suffit pas : une MUNITION porte aussi un
+// `caliber` (le sien — ce qu'elle EST, pas ce qu'elle charge) sans jamais recevoir de chargeur propre
+// — testé en base (non-régression) avant de fixer cette règle. Un item équipable sans ITG ni chargeur
+// réellement chargeable (grenade, arme de jet, arme de corps à corps basique, armure simple de bas
+// niveau technologique...) est un doublon parfait d'un autre exemplaire identique.
+// Prend le `ref` catalogue (`{ has_integrity, caliber, location }`), tolère `null`/`undefined` (item
+// custom sans equipment_id → stackable).
 export function canStack(ref) {
-  if (STACKABLE_DESPITE_EQUIPPED_CATEGORIES.has(ref?.category)) return !ref?.has_integrity
-  return !isEquippableLocation(ref?.location ?? null) && !ref?.has_integrity
+  if (ref?.has_integrity) return false
+  if (ref?.caliber && isEquippableLocation(ref?.location ?? null)) return false
+  return true
 }

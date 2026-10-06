@@ -568,7 +568,7 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   }
 
   const equipRef = equipment_id
-    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat', 'price', 'has_integrity', 'category').first()
+    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat', 'price', 'has_integrity', 'caliber').first()
     : null
 
   // INV2 — un MJ qui ajoute (ou fusionne sur un stack) ne débite jamais : geste privilégié, comme
@@ -644,10 +644,10 @@ export async function addItem(characterId, payload, autoValidate = false, isGm =
   }
 
   // Stacking : même equipment_id + même container + non équipé (aucune ligne char_inventory_slots).
-  // Jamais pour un item équipable (P57) ni `has_integrity` (L1 Usure) — chaque exemplaire reste une
-  // ligne indépendante (état de munition propre pour les armes, ITG propre pour le matériel suivi).
-  // Exception (canStack, inventoryRules.js) : Grenade / Armes de jet, équipables mais sans aucun
-  // état propre à l'exemplaire.
+  // `canStack` (inventoryRules.js, généralisé GRENADE-STACK-BY-TYPE 2026-10-06) : jamais pour un item
+  // `has_integrity` (ITG propre à l'exemplaire) ni à `caliber` (chargeur suivi par exemplaire) —
+  // chaque exemplaire reste sa propre ligne. Un item équipable sans ces deux états (grenade, arme de
+  // jet, arme de corps à corps basique...) stacke malgré tout : aucune donnée à distinguer.
   if (equipment_id && resolvedSlot === null && stackable) {
     const existing = await db('char_inventory')
       .where({ character_id: characterId, equipment_id, container })
@@ -922,7 +922,7 @@ export async function applyItemUpdate(trx, characterId, itemId, payload) {
     }
     // P57 / L1 Usure : un item équipable ou `has_integrity` ne stacke jamais — quantity reste 1.
     const ref = existing.equipment_id
-      ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('location', 'has_integrity', 'category').first()
+      ? await trx('ref_equipment').where({ id: existing.equipment_id }).select('has_integrity', 'caliber', 'location').first()
       : null
     if (!canStack(ref) && updates.quantity !== 1) {
       throw new AppError(400, 'Un item équipable ou suivi en intégrité ne peut pas avoir une quantité différente de 1')

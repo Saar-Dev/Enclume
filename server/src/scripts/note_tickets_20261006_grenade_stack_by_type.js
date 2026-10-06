@@ -1,33 +1,41 @@
 // Script à usage unique — note le correctif codé pour GRENADE-STACK-BY-TYPE (session de correction
-// de bugs du 2026-10-06, périmètre étendu aux Armes de jet par la même logique que
-// GRENADE-ACCEPTS-WEAPON-MODS). Statut reste 'in_progress' (pas 'resolved'), la validation en jeu
-// par Saar reste à faire (AGENTS.md § Clôture).
+// de bugs du 2026-10-06, généralisé en session au-delà des grenades/armes de jet). Statut reste
+// 'in_progress' (pas 'resolved'), la validation en jeu par Saar reste à faire (AGENTS.md § Clôture).
 // Idempotent (skip si déjà noté). Lancement manuel, local, depuis la racine :
 //   node --env-file=.env server/src/scripts/note_tickets_20261006_grenade_stack_by_type.js
 
 import db from '../db/knex.js'
 
-const MARKER = '--- 2026-10-06 : correctif codé (périmètre étendu aux Armes de jet) ---'
+const MARKER = '--- 2026-10-06 : correctif codé, règle généralisée (ITG + calibre) ---'
 
 const NOTE = `
 
 ${MARKER}
-Cause racine vérifiée en base : canStack (inventoryRules.js) refuse tout item à location équipable,
-quel que soit has_integrity. Grenade et Armes de jet portent location='M' comme n'importe quelle
-arme — la migration 333 (2026-09-09) leur avait déjà retiré has_integrity (consommables sans état
-suivi) sans jamais toucher à ce second verrou.
+Cause racine vérifiée en base : canStack (inventoryRules.js) refusait tout item à location
+équipable, quel que soit has_integrity. Grenade et Armes de jet portent location='M' comme
+n'importe quelle arme — la migration 333 (2026-09-09) leur avait déjà retiré has_integrity
+(consommables sans état suivi) sans jamais toucher à ce second verrou.
 
-Corrigé (server/src/lib/inventoryRules.js) : canStack porte une exception déclarative,
-STACKABLE_DESPITE_EQUIPPED_CATEGORIES = Set(['Grenade', 'Armes de jet']) — réutilise exactement le
-regroupement de catégories déjà décidé par la migration 333. Les sites appelants reçoivent category
-dans leur SELECT. Vérifié par lecture : consumeThrownGrenade (socketCombatAoe.js) et
-countStowedByContainer gèrent déjà correctement une ligne à quantity > 1 — écrits en anticipant ce
-correctif, jamais exécutés jusqu'ici faute de stack possible. Aucun changement côté combat.
+Généralisée en session (Saar) au-delà des grenades : recherche faite avant de coder (patron pro
+« définition vs instance » des inventaires de jeu — FoundryVTT dnd5e distingue un objet à charges
+(jamais groupé) d'un consommable (toujours groupé)). Vérifié en base : seules has_integrity (ITG) et
+caliber (chargeur suivi par exemplaire, resolveAmmoInit) portent un état réel par-exemplaire — ni
+location ni category. 30 armes de corps à corps (sur 39) et 5 pièces d'armure basique ont déjà
+has_integrity=false en catalogue ; 3 armes à distance primitives (arc/arbalète/fronde) ont un
+fire_mode mais caliber=NULL. Vérifié en base réelle : zéro personnage avec chargeur chargé, nom
+personnalisé ou exemplaire équipé parmi ces objets — aucun risque sur les parties en cours.
 
-Testé : inventoryRules.test.mjs (12/12) ; inventoryService.test.mjs étendu de 4 tests réels contre
-la base locale (empilement à l'ajout, fusion sur ajout ultérieur, grenade en main jamais fusionnée
-avec la réserve) — 30/30 ; modingService.test.mjs 5/5 (non-régression croisée). Non testé : scénario
-réel en navigateur (ramasser/acheter plusieurs grenades identiques, lancer depuis une réserve de 2+).
+Corrigé (server/src/lib/inventoryRules.js) : canStack(ref) { return !ref?.has_integrity &&
+!ref?.caliber } — liste de catégories retirée, remplacée par les deux colonnes qui comptent
+réellement. S'applique désormais aussi aux armes de corps à corps basiques et à l'armure simple.
+Vérifié par lecture : consumeThrownGrenade (socketCombatAoe.js) et countStowedByContainer gèrent
+déjà correctement une ligne à quantity > 1 — écrits en anticipant ce correctif. Aucun changement
+côté combat.
+
+Testé : inventoryRules.test.mjs réécrit (7/7, dont le cas réel arc/arbalète/fronde) ;
+inventoryService.test.mjs (grenade + arme de jet, 30/30) ; modingService.test.mjs 5/5
+(non-régression croisée). Non testé : scénario réel en navigateur ; conséquence visible (armes de
+corps à corps/armure basiques empilables) pas encore montrée à Saar en jeu avant de clore.
 Détail complet : docs/JOURNAL8.md, docs/PLANS/PLAN_USURE&INTEGRITE.md §3 (2026-10-06).`
 
 async function run() {

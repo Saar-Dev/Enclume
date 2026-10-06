@@ -168,11 +168,14 @@ vend du **neuf** (ITG courante = ITG max) ; les autres vendent de l'**occasion**
 > **Tranchée le 2026-09-09 (migration 333)** : Grenade + Armes de jet passent `has_integrity = false`
 > (consommables sans état suivi) — mais restaient non-stackables malgré ça jusqu'au 2026-10-06
 > (`canStack` ne regardait que `isEquippableLocation`, qui reste vraie pour `location='M'`).
-> **GRENADE-STACK-BY-TYPE, corrigé 2026-10-06** : `canStack` porte désormais une exception
-> déclarative (`STACKABLE_DESPITE_EQUIPPED_CATEGORIES = Set(['Grenade', 'Armes de jet'])`) — ces deux
-> catégories stackent malgré leur `location` équipable, parce qu'elles n'ont structurellement aucun
-> état par-exemplaire (ni Intégrité depuis cette migration, ni munition chargée, ni mod depuis
-> GRENADE-ACCEPTS-WEAPON-MODS). Détail : `docs/JOURNAL8.md` (2026-10-06).
+> **GRENADE-STACK-BY-TYPE, corrigé puis généralisé le 2026-10-06** : `canStack` ne regarde plus
+> `location`/`category` du tout — seulement `has_integrity` (ITG) et `caliber` (chargeur suivi), les
+> deux seules données réellement propres à un exemplaire (patron pro « définition vs instance »,
+> FoundryVTT dnd5e : un objet à charges ne groupe jamais, un consommable sans charge groupe toujours).
+> Conséquence plus large que les grenades : les armes de corps à corps basiques et l'armure simple
+> (déjà `has_integrity = false` en catalogue, bas niveau technologique) stackent aussi désormais — pas
+> une régression, la même règle appliquée sans exception de catégorie à maintenir à la main. Détail :
+> `docs/JOURNAL8.md` (2026-10-06).
 
 `server/src/lib/inventoryRules.js` — ajouter, **sans** modifier `isEquippableLocation` (encore utilisé
 pour la logique de slot) :
