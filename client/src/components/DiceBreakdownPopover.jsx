@@ -2,7 +2,11 @@
 // ─── Breakdown popover — détail des modificateurs d'un jet ──────────────────
 const TYPE_COLOR = { base: '#5b8dee', bonus: '#4CAF77', malus: '#E05C5C', neutral: '#909099', total: '#c8a030' }
 
-export default function DiceBreakdownPopover({ popover, popoverRef }) {
+// Lot 7 (PLAN_LOCALISATION.md §9.9, étape 0) : repli à double forme pendant la transition —
+// `entry.i18nKey` résolu via `t` (prop, déjà le `t` par défaut de Sidebar.jsx — `combat:breakdown.*`
+// marche tel quel, nsSeparator ':' déjà utilisé ailleurs, ex. MessageRendererRegistry.jsx) sinon
+// `entry.label` brut (aucun émetteur ne envoie encore la nouvelle forme à ce stade).
+export default function DiceBreakdownPopover({ popover, popoverRef, t }) {
   if (!popover) return null
   const { rect, breakdown } = popover
   const spaceBelow = window.innerHeight - rect.bottom
@@ -23,22 +27,25 @@ export default function DiceBreakdownPopover({ popover, popoverRef }) {
         zIndex: 9999, fontSize: 12, color: '#c0c0d0', userSelect: 'none',
       }}
     >
-      {breakdown.map((entry, i) => (
-        <div key={i} style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: entry.type === 'total' ? '5px 0 2px' : '2px 0',
-          borderTop: entry.type === 'total' ? '1px solid rgba(200,160,48,0.25)' : 'none',
-          marginTop: entry.type === 'total' ? 4 : 0,
-        }}>
-          <span style={{ color: entry.type === 'total' ? '#c8a030' : '#a0a8b8' }}>{entry.label}</span>
-          <span style={{
-            fontFamily: "'Share Tech Mono', monospace", fontWeight: 700,
-            color: TYPE_COLOR[entry.type] ?? '#c0c0d0',
+      {breakdown.map((entry, i) => {
+        const label = entry.i18nKey ? t(entry.i18nKey, entry.params) : entry.label
+        return (
+          <div key={i} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: entry.type === 'total' ? '5px 0 2px' : '2px 0',
+            borderTop: entry.type === 'total' ? '1px solid rgba(200,160,48,0.25)' : 'none',
+            marginTop: entry.type === 'total' ? 4 : 0,
           }}>
-            {entry.type !== 'total' && entry.type !== 'base' && entry.value > 0 ? `+${entry.value}` : entry.value}
-          </span>
-        </div>
-      ))}
+            <span style={{ color: entry.type === 'total' ? '#c8a030' : '#a0a8b8' }}>{label}</span>
+            <span style={{
+              fontFamily: "'Share Tech Mono', monospace", fontWeight: 700,
+              color: TYPE_COLOR[entry.type] ?? '#c0c0d0',
+            }}>
+              {entry.type !== 'total' && entry.type !== 'base' && entry.value > 0 ? `+${entry.value}` : entry.value}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

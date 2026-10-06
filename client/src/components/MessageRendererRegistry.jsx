@@ -231,7 +231,10 @@ function renderDice(msg, ctx) {
   }
 
   // ── Jet d'interaction entité — affichage structuré ──────────
-  if (msg.skillLabel !== undefined) {
+  // Lot 7 (PLAN_LOCALISATION.md §9.9/§9.11, étape 0) : discriminant de branche, pas seulement le
+  // texte affiché — doit rester vrai une fois un émetteur migré vers skillLabelKey (plus de
+  // skillLabel brut), sinon ce message ne serait plus reconnu du tout.
+  if (msg.skillLabel !== undefined || msg.skillLabelKey !== undefined) {
     const successStyle = msg.isSuccess
       ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
       : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
@@ -280,7 +283,7 @@ function renderDice(msg, ctx) {
           </div>
           {/* Corps : "Jet de Force" + résultat du dé en grand */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
-            <span style={styles.diceFormula}>{ctx.t('sidebar.displacementJet', { attr: msg.skillLabel })}</span>
+            <span style={styles.diceFormula}>{ctx.t('sidebar.displacementJet', { attr: msg.skillLabelKey ? ctx.t(msg.skillLabelKey, msg.skillLabelParams) : msg.skillLabel })}</span>
             <span style={styles.diceTotal}>{msg.total}</span>
           </div>
           {/* Détail : difficulté · seuil */}
@@ -319,7 +322,7 @@ function renderDice(msg, ctx) {
         </div>
         {/* Corps : nom compétence + résultat du dé en grand */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
-          <span style={styles.diceFormula}>{msg.skillLabel}</span>
+          <span style={styles.diceFormula}>{msg.skillLabelKey ? ctx.t(msg.skillLabelKey, msg.skillLabelParams) : msg.skillLabel}</span>
           <span style={styles.diceTotal}>{msg.total}</span>
         </div>
         {/* Détail : compétence · difficulté · seuil (ou Seuil seul pour un Test d'Attribut sans

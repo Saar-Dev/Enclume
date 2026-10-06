@@ -323,7 +323,7 @@ export default function Sidebar({
 
       {/* ─── Modale aide raccourcis ───────────────────────────────────────── */}
       <SidebarHelpModal mode={mode} open={showHelp} onClose={() => setShowHelp(false)} />
-      <DiceBreakdownPopover popover={breakdownPopover} popoverRef={popoverRef} />
+      <DiceBreakdownPopover popover={breakdownPopover} popoverRef={popoverRef} t={t} />
     </div>
   )
 }

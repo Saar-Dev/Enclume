@@ -157,7 +157,7 @@ export default function CatastropheChoiceQueue({ socket }) {
 
         {chance && (
           <>
-            <div className="chance-choice-test-label">{chance.testLabel}</div>
+            <div className="chance-choice-test-label">{chance.testLabelKey ? t(chance.testLabelKey, chance.testLabelParams) : chance.testLabel}</div>
             <div className="chance-choice-actions">
               {chance.site === 'aoe_avoidance' ? (
                 // Forçage AOE longue/extrême portée (PLAN_CHANCE.md L4) — vocabulaire RAW distinct de

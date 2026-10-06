@@ -26,7 +26,19 @@
 > nouvelles dans `combat.json` (`diceLabels.*`/`breakdown.*`). **Plan de code écrit** (§9.9) : transition
 > à double forme côté client, puis 15 fichiers serveur migrés un par un, commit final de nettoyage.
 > **Analyse à charge faite** (§9.10) : lacune trouvée (Famille C jamais nommée) — **comblée** (§9.8bis),
-> total définitif **98 points de résolution** (18 réutilisés, 80 nouveaux). **Zéro code produit.**
+> total définitif **98 points de résolution** (18 réutilisés, 80 nouveaux).
+> 2026-10-06 (Dev) — **Lot 7 Étape 0 CODÉE** (§9.12, feu vert Saar) : les 98 clés dans `combat.json`
+> (`diceLabels.*`/`breakdown.*`) + repli à double forme dans les 3 fichiers client
+> (`MessageRendererRegistry.jsx`, `DiceBreakdownPopover.jsx`+`Sidebar.jsx`, `CatastropheChoiceQueue.jsx`).
+> Vérification chaîne par chaîne refaite (pas relue) avant d'écrire le JSON : **4 écarts trouvés et
+> corrigés** par rapport au nommage §9.8/§9.8bis (`weaponState` pas réutilisable sans changer le texte
+> affiché, `tete`/`corps` en fait réutilisables, 2 entrées jamais nommées `degatsDrone`/
+> `degatsExoArmure`, `manoeuvreArmureChance` n'existe pas). Correction de discriminant trouvée en
+> codant : `MessageRendererRegistry.jsx` sélectionnait sa branche de rendu sur `msg.skillLabel !==
+> undefined` — câblé pour rester vrai une fois `skillLabel` remplacé par `skillLabelKey`. Lint + build
+> client propres. Zéro changement de comportement (aucun émetteur ne pose encore la nouvelle forme).
+> **⚠️ clos partiel** : validation navigateur Saar non faite. Étapes 1-15 (migration des 15 fichiers
+> serveur) non commencées.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1560,3 +1572,93 @@ forme et le découpage en 17 étapes restent valides ; cette lacune ajoute du tr
 
 **Statut** : plan de code écrit et critiqué, **zéro code produit**. Reste avant de coder l'étape 0 :
 nommer la Famille C (~35-40 clés). Prêt pour ça, ou pour s'arrêter ici — décision Saar.
+
+### 9.11 Analyse à charge de l'Étape 0 (2026-10-06, après nommage complet à 98)
+
+Relecture complète d'AGENTS.md/CLAUDE.md et des règles `.claude/rules/i18n.md`, `dice.md`, `combat.md`,
+`core.md`, `react.md` avant cette analyse (demande explicite de Saar). Trois vérifications faites,
+aucune ne remet en cause §9.9/§9.10 :
+
+- **État réel des 4 fichiers client, relu directement (pas supposé)** `[VÉRIFIÉ]` : confirme §9.10 à
+  l'identique — `MessageRendererRegistry.jsx` reçoit déjà `ctx.tCombat` (l.18/184 via `SidebarChatTab.jsx:42`),
+  utilise `msg.skillLabel`/`msg.breakdown` bruts (l.234, 277, 283, 316, 322) ; `CatastropheChoiceQueue.jsx`
+  a déjà `useTranslation('combat')` (l.36), affiche `chance.testLabel` brut (l.160) ; `DiceBreakdownPopover.jsx`
+  reste un composant 100% dumb (`entry.label` brut l.33), aucun `t`/`tCombat` ; `Sidebar.jsx` n'a que
+  `useTranslation()` par défaut (l.54) et passe seulement `popover`/`popoverRef` à `<DiceBreakdownPopover>`
+  (l.326), aucune prop `tCombat`.
+- **Relecture croisée Lot 6 (§8), prévue au §9.9 comme non tranchée** `[VÉRIFIÉ]` : aucun partage de code
+  possible ni nécessaire — Lot 6 reste différé et non codé (schéma `COMBAT_DECLARE_ERROR` →
+  `{ i18nKey, i18nParams }`, événement différent de `DICE_RESULT`/`openChanceChoice`). Les deux lots
+  réutilisent le même motif conceptuel (`i18nKey`/`params`, déjà prouvé par `COMBAT_SYSTEM_NOTICE`) sans
+  dépendance de code entre eux. Rien à changer dans le plan Lot 7 de ce fait.
+- **Collision de nom dans `combat.json`** `[VÉRIFIÉ]` : les 44 sections top-level existantes ne contiennent
+  ni `diceLabels` ni `breakdown` — les deux nouvelles sections proposées au §9.8 sont libres.
+
+**Reste non tranché (décision Saar avant de coder)** : qui valide l'étape 0 en navigateur avant
+d'enchaîner sur les étapes 1-15 (changement client seul, zéro changement de comportement puisqu'aucun
+émetteur ne parle encore la nouvelle forme — risque faible mais premier contact avec ce code de rendu) ;
+ordre exact des étapes 1-15 (proposition §9.9 : fichiers à 1-4 sites d'abord, `socketCombatHelpers.js`
+en dernier).
+
+**Statut** : analyse à charge de l'étape 0 terminée, **toujours zéro code produit**. Prêt à coder
+l'étape 0 (ajout des 98 clés à `combat.json` + repli à double forme dans les 3 fichiers client) sur
+confirmation de Saar.
+
+### 9.12 Étape 0 codée (2026-10-06, feu vert Saar)
+
+**Vérification chaîne par chaîne refaite avant d'écrire `combat.json`** (grep exhaustif des 15
+fichiers émetteurs pour `skillLabel:`/`testLabel:`/`label:` littéraux, pas une relecture du §9.8/
+§9.8bis) — **4 écarts trouvés par rapport au nommage déjà documenté**, corrigés ici :
+
+- **`modifiers.weaponState` n'est PAS réutilisable** `[VÉRIFIÉ]` : le texte source réel est
+  `{ label: 'État de l\'arme', value: itgAtkMod, ... }` (`socketCombatHelpers.js:1645,3611`) — static,
+  **sans** le `{{mod}}` que porte la clé existante (`"État de l'arme {{mod}}"`, utilisée pour un
+  usage différent, panneau de déclaration). Réutiliser aurait produit un espace final visible
+  (`"État de l'arme "`) — changement de texte affiché, interdit par ce chantier. Nouvelle clé propre :
+  `breakdown.etatArme` = `"État de l'arme"` (sans paramètre).
+- **`LOCATION_LABELS.tete`/`.corps` SONT réutilisables**, à l'inverse de ce que disait le §9.8bis/§9.10
+  (« 6 nouvelles ») `[VÉRIFIÉ]` : `resultPanels.location.tete` = `"Tête"` et `.corps` = `"Corps"` sont
+  des correspondances EXACTES (seuls bras/jambe diffèrent, forme longue vs courte). `breakdown.
+  shortLocation.*` n'a donc que **4 nouvelles entrées** (`brasGauche`/`brasDroit`/`jambeGauche`/
+  `jambeDroite`), pas 6 — 2 clés dupliquées évitées (Règle 2).
+- **2 entrées jamais nommées** `[VÉRIFIÉ]` : `skillLabel: \`Dégâts — drone\`` et `` `Dégâts — exo-armure` ``
+  (`socketCombatHelpers.js:708,756`) sont des littéraux **statiques** (pas le gabarit `degatsPersonnage`
+  à paramètre) — absents du §9.8. Ajoutés : `diceLabels.degatsDrone`/`degatsExoArmure`.
+- **`manoeuvreArmureChance` n'existe pas** `[VÉRIFIÉ]` : seules 3 chaînes réelles existent
+  (`"Manœuvre d'armure"`, `"Tentative de se redresser (Manœuvre d'armure)"`, et sa variante Chance)
+  — le §9.8 supposait une 4ᵉ variante par symétrie avec les jets toucher/défendre qui n'existe pas
+  dans le code. Nommage corrigé à 3 clés (`manoeuvreArmure`/`redresserArmure`/`redresserArmureChance`).
+- `ATTR_LABELS` vit dans `fr.json.attr.*` (namespace par défaut), pas `fr.json.charSheet.attr.*`
+  comme écrit au §9.8bis — chemin corrigé, contenu identique (vérifié exact).
+
+**Code produit** :
+- `client/src/locales/combat.json` — 2 nouvelles sections top-level `diceLabels`/`breakdown` (avec
+  `breakdown.situation`/`.portee`/`.taille`/`.shortLocation` imbriqués), toutes les valeurs vérifiées
+  mot pour mot contre le texte source actuel. JSON validé (`node -e "JSON.parse(...)"`).
+- `client/src/components/DiceBreakdownPopover.jsx` — nouvelle prop `t` ; `entry.i18nKey ? t(entry.
+  i18nKey, entry.params) : entry.label`.
+- `client/src/components/Sidebar.jsx` — passe son `t` déjà existant (l.54, défaut) en prop à
+  `<DiceBreakdownPopover>`. **Simplification trouvée vs §9.10** : pas besoin d'un second
+  `useTranslation('combat')` — le `t` par défaut résout déjà `combat:breakdown.xxx` via le séparateur
+  de namespace `:`, motif déjà utilisé ailleurs (`MessageRendererRegistry.jsx:259`,
+  `` ctx.t(`combat:resultPanels.severity.${...}`) ``) — un seul `t`, deux namespaces.
+- `client/src/components/MessageRendererRegistry.jsx` — **correction de discriminant** : la garde
+  `if (msg.skillLabel !== undefined)` sélectionne la branche de rendu, pas seulement le texte ; changée
+  en `if (msg.skillLabel !== undefined || msg.skillLabelKey !== undefined)` pour rester vraie une fois
+  un émetteur migré (sinon le message ne serait plus reconnu du tout après l'étape où son émetteur
+  passerait à la nouvelle forme). Les 2 sites d'affichage (`msg.skillLabel` direct, et en param de
+  `sidebar.displacementJet`) lisent `msg.skillLabelKey ? ctx.t(msg.skillLabelKey, msg.skillLabelParams)
+  : msg.skillLabel`.
+- `client/src/components/CatastropheChoiceQueue.jsx` — `chance.testLabelKey ? t(chance.testLabelKey,
+  chance.testLabelParams) : chance.testLabel`.
+
+**Validé** : `cd client && npx eslint <4 fichiers>` (0 erreur), `cd client && npm run build` (succès,
+aucune régression de taille/warning nouveau). Zéro changement de comportement confirmé par
+construction — aucun émetteur serveur ne pose encore `skillLabelKey`/`testLabelKey`/`breakdown[].
+i18nKey`, donc chaque fallback retombe systématiquement sur l'ancienne branche (`msg.skillLabel`/
+`chance.testLabel`/`entry.label`) dans le code actuellement déployé.
+
+**Non testé** : validation navigateur (Saar) — changement client seul, risque faible mais premier
+contact réel avec ce code de rendu modifié. **⚠️ clos partiel** tant que ce test n'est pas fait.
+
+**Reste à trancher avant l'étape 1** : ordre des étapes 1-15 (proposition §9.9 inchangée).
