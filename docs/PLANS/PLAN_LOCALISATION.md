@@ -1796,3 +1796,32 @@ Deux fichiers sans dépendance de relais (émission directe, aucun `openChanceCh
 
 **Validé** : `node --check` sur les 2 fichiers. Aucun test ciblé existant pour ni l'un ni l'autre
 (recherché, aucun `.test.mjs`).
+
+### 9.18 Étape 10 — `combatAttackRoll.js`, le noyau partagé (2026-10-06) — 14 sites résolus d'un coup
+
+Avant d'ouvrir `socketCombatAoe.js`/`socketCombatExo.js`/`socketCombatHelpers.js` (les 3 gros
+fichiers), un grep `totalLabel:` sur tout `server/src` montre que **les 14 points d'appel de
+`computeAttackRoll`** (noyau pur, `combatAttackRoll.js`) passent TOUS exactement la même paire
+(`skillLabel: 'Compétence'` ou `"Manœuvre d'armure"`, `totalLabel: 'Seuil'` — jamais autre chose).
+`computeAttackRoll` construit lui-même `breakdown[0]`/`breakdown[dernier]` à partir de ces deux
+paramètres (contrat verrouillé par `combatAttackRoll.test.mjs`, doc en tête de fichier) — **un seul
+point de correction résout ces 2 entrées de breakdown sur les 14 sites**, plutôt que de répéter le
+même changement dans 3 fichiers différents.
+
+**Décision** : le noyau reconnaît désormais ces 2 valeurs connues via une table interne
+(`SKILL_LABEL_I18N_KEYS`/`TOTAL_LABEL_I18N_KEYS`) et émet `{ i18nKey, value, type }` à la place de
+`{ label, value, type }` quand elles matchent — **repli texte brut conservé** si un futur appelant
+passe autre chose (jamais une erreur silencieuse, même discipline que les replis `ATTR_LABELS`/
+`attrKnown` des étapes précédentes). **Aucun des 14 appelants n'a besoin d'être modifié** : ils
+continuent de passer `'Compétence'`/`"Manœuvre d'armure"`/`'Seuil'` en texte, exactement comme avant.
+
+**Ne couvre PAS** : le `skillLabel`/`testLabel` EXTÉRIEUR de chaque émission `DICE_RESULT` (le titre
+de la carte chat, ex. `'Jet pour toucher (contact)'`) — c'est une variable distincte, assignée
+séparément de l'argument `skillLabel` passé à `computeAttackRoll` (qui ne nourrit QUE
+`breakdown[0]`). Ces titres restent à migrer fichier par fichier, sites restants inchangés.
+
+**Test existant mis à jour** (contrat de forme explicitement verrouillé par ce fichier de test) :
+3 assertions `breakdown` qui comparaient du texte littéral (`'Compétence'`/`'Seuil'`) adaptées pour
+attendre `i18nKey` à la place, sans toucher aux contributions (qui restent `label` brut — non
+concernées par ce noyau). **Validé** : `node --test server/src/lib/combatAttackRoll.test.mjs` →
+29/29 ✔ (test pur, aucune base).

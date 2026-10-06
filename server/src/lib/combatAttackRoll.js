@@ -14,13 +14,21 @@ import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestRe
  * modificateur au jeu = ajouter une entrée à la liste chez l'appelant — jamais toucher cette fonction.
  *
  * Garanties de forme (verrouillées par combatAttackRoll.test.mjs) :
- * - breakdown[0] = { label: skillLabel, value: skillTotal, type: 'base' }
+ * - breakdown[0] = { label: skillLabel, value: skillTotal, type: 'base' } (ou { i18nKey, ... }, voir
+ *   i18n ci-dessous)
  * - puis les contributions non nulles, dans l'ordre fourni (l'ordre EST l'ordre d'affichage client)
- * - breakdown[dernier] = { label: totalLabel, value: seuil, type: 'total' }
+ * - breakdown[dernier] = { label: totalLabel, value: seuil, type: 'total' } (idem)
  * - une contribution à zéro est absente du breakdown et ne change pas la somme
  * - deux contributions non nulles qui se compensent sont toutes deux conservées — si un domaine veut
  *   les masquer en bloc quand leur total est nul (mods d'arme, RV2 PLAN_RW_SYSCOMBAT.md §7),
  *   c'est à l'appelant de ne pas les verser dans la liste.
+ *
+ * i18n (PLAN_LOCALISATION.md §9.18, Lot 7) : `skillLabel`/`totalLabel` ne portent que 2 valeurs
+ * dans tout le projet, vérifié exhaustivement sur les 14 points d'appel (`'Compétence'`/
+ * `"Manœuvre d'armure"` + toujours `'Seuil'`) — corrigé UNE FOIS ici plutôt qu'à chacun des 14
+ * sites. Les appelants n'ont rien à changer : ce noyau reconnaît ces littéraux et émet `i18nKey`
+ * à la place de `label` ; un futur appelant qui passerait un autre texte garde l'ancien
+ * comportement (repli `label` brut, jamais une erreur silencieuse).
  *
  * isSuccess/isCriticalSuccess/isCriticalFail/mr délégués à resolveTestOutcome (shared/
  * polarisTestResolution.js, docs/PLAN_TEST_CRITIQUE.md) — autorité unique de la règle RAW
@@ -28,16 +36,26 @@ import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestRe
  * doit relancer un D20 et appliquer applyCriticalFailReroll (cette fonction reste pure, donc ne
  * fait pas ce second jet elle-même).
  */
+const SKILL_LABEL_I18N_KEYS = {
+  'Compétence': 'combat:diceLabels.competence',
+  "Manœuvre d'armure": 'combat:diceLabels.manoeuvreArmure',
+}
+const TOTAL_LABEL_I18N_KEYS = {
+  'Seuil': 'combat:resultPanels.rollLine.threshold',
+}
+
 export function computeAttackRoll({ skillLabel, skillTotal, contributions, totalLabel, rollAttaque }) {
   const kept = contributions.filter(c => c.value !== 0)
   const seuil = skillTotal + kept.reduce((sum, c) => sum + c.value, 0)
   const outcome = resolveTestOutcome(rollAttaque, seuil)
+  const skillLabelKey = SKILL_LABEL_I18N_KEYS[skillLabel]
+  const totalLabelKey = TOTAL_LABEL_I18N_KEYS[totalLabel]
   return {
     seuil,                        // = chancesAttaque (CaC) / chancesDeReussite (Tir)
     breakdown: [
-      { label: skillLabel, value: skillTotal, type: 'base' },
+      skillLabelKey ? { i18nKey: skillLabelKey, value: skillTotal, type: 'base' } : { label: skillLabel, value: skillTotal, type: 'base' },
       ...kept,
-      { label: totalLabel, value: seuil, type: 'total' },
+      totalLabelKey ? { i18nKey: totalLabelKey, value: seuil, type: 'total' } : { label: totalLabel, value: seuil, type: 'total' },
     ],
     ...outcome,
   }

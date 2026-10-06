@@ -12,8 +12,8 @@ test('aucune contribution — breakdown = base + total, seuil = compétence', ()
   })
   assert.equal(r.seuil, 12)
   assert.deepEqual(r.breakdown, [
-    { label: 'Compétence', value: 12, type: 'base' },
-    { label: 'Seuil', value: 12, type: 'total' },
+    { i18nKey: 'combat:diceLabels.competence', value: 12, type: 'base' },
+    { i18nKey: 'combat:resultPanels.rollLine.threshold', value: 12, type: 'total' },
   ])
 })
 
@@ -51,7 +51,9 @@ test('ordre préservé — base en tête, contributions dans l\'ordre fourni, to
       { label: 'C', value: 2, type: 'bonus' },
     ],
   })
-  assert.deepEqual(r.breakdown.map(e => e.label), ['Compétence', 'B', 'A', 'C', 'Seuil'])
+  assert.equal(r.breakdown[0].i18nKey, 'combat:diceLabels.competence')
+  assert.deepEqual(r.breakdown.slice(1, -1).map(e => e.label), ['B', 'A', 'C'])
+  assert.equal(r.breakdown.at(-1).i18nKey, 'combat:resultPanels.rollLine.threshold')
   assert.equal(r.breakdown[0].type, 'base')
   assert.equal(r.breakdown.at(-1).type, 'total')
 })
@@ -109,11 +111,11 @@ test('cas réaliste CaC — mode offensif + multi-adversaires + santé (valeurs 
   assert.equal(r.isSuccess, true)
   assert.equal(r.mr, 7)
   assert.deepEqual(r.breakdown, [
-    { label: 'Compétence', value: 12, type: 'base' },
+    { i18nKey: 'combat:diceLabels.competence', value: 12, type: 'base' },
     { label: 'Mode offensif', value: 3, type: 'bonus' },
     { label: 'Multi-adversaires (attaquant)', value: -3, type: 'malus' },
     { label: 'Malus santé / encombrement', value: -2, type: 'malus' },
-    { label: 'Seuil', value: 10, type: 'total' },
+    { i18nKey: 'combat:resultPanels.rollLine.threshold', value: 10, type: 'total' },
   ])
 })
 
