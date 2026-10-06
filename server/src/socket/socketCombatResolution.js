@@ -715,7 +715,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       formula: '1d6', rolls: d6Rolls, total: stunDuration,
       isCriticalSuccess: false, isCriticalFail: false,
       seed: d6Seed, timestamp: new Date().toISOString(),
-      skillLabel: 'Durée étourdissement',
+      skillLabelKey: 'combat:diceLabels.dureeEtourdissement',
       mechanicalTotal: d6Raw,
       diffLabel:    pending.outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
       chancesDeReussite: stunDuration,

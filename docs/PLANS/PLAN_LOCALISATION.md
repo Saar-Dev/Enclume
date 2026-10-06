@@ -1658,7 +1658,30 @@ construction — aucun émetteur serveur ne pose encore `skillLabelKey`/`testLab
 i18nKey`, donc chaque fallback retombe systématiquement sur l'ancienne branche (`msg.skillLabel`/
 `chance.testLabel`/`entry.label`) dans le code actuellement déployé.
 
-**Non testé** : validation navigateur (Saar) — changement client seul, risque faible mais premier
-contact réel avec ce code de rendu modifié. **⚠️ clos partiel** tant que ce test n'est pas fait.
+**Validation navigateur confirmée (Saar, 2026-10-06)** : « c'est bon » après avoir joué normalement
+(combat, jets de dés, bouton ⊞, choix Chance) — étape 0 passe de ⚠️ clos partiel à confirmée.
 
-**Reste à trancher avant l'étape 1** : ordre des étapes 1-15 (proposition §9.9 inchangée).
+### 9.13 Étape 1 — `statusService.js` + doublon `socketCombatResolution.js` (2026-10-06, feu vert Saar)
+
+Premier fichier migré (le plus petit, aucune dépendance de relais — émet `DICE_RESULT` directement,
+pas de `breakdown[]`). 2 sites : `skillLabel: 'Durée étourdissement'` (`_applyAutoStun`) →
+`skillLabelKey: 'combat:diceLabels.dureeEtourdissement'` ; `skillLabel: 'Test de Choc'`
+(`emitShockDiceResult`) → `skillLabelKey: 'combat:damageWindow.shockTest'` (clé réutilisée, pas
+`diceLabels` — voir §9.8). Même commit : le doublon exact (Règle 2, trouvé au §9.6) dans
+`socketCombatResolution.js:718` (`_applyAutoStun` inline, même texte) migré vers la même clé —
+même cause racine, pas un fichier à part.
+
+**Validé** : `node --check` sur les 2 fichiers, `node -e "JSON.parse(...)"` confirmant que les 2 clés
+résolvent exactement au texte original (`"Durée étourdissement"`/`"Test de Choc"`). Aucun test ciblé
+existant pour `emitShockDiceResult`/`_applyAutoStun` (recherché, aucun `.test.mjs` trouvé) — risque
+texte seul, `node --check` proportionné (AGENTS.md Clôture). Aucun branchement client sur le texte
+littéral de `skillLabel` trouvé (`grep skillLabel ===` sur `client/src`, aucun résultat) — migration
+sans risque de casser un discriminant caché.
+
+**Reste à trancher avant l'étape 1** : ordre des étapes 2-15 (proposition §9.9 inchangée — fichiers
+à 1-4 sites d'abord). Note découverte en ouvrant ce chantier : 3 des 15 fichiers listés au §9.3
+(`socketChance.js`, `chanceCatastropheChoiceService.js`, `exoPilotService.js`) sont du **pur
+passe-plat** (aucun `skillLabel`/`testLabel` littéral, seulement relais de variable) — leur migration
+ne peut pas être un « fichier » indépendant : elle doit arriver DANS le même commit que le premier
+appelant qui migre vers `testLabelKey`, pour que le relais transporte aussi le nouveau champ (sinon
+`i18nKey`/`params` serait perdu en chemin). À vérifier avant de choisir le 2ᵉ fichier.
