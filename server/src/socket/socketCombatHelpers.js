@@ -14,6 +14,7 @@ import { checkCombatLOS, checkLOSForPrecheck } from '../lib/losService.js'
 import { weaponNotInHandEmission, offhandNotInHandEmission } from '../lib/combatHandWeaponNotice.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS, getItemWithRef } from '../services/inventoryService.js'
+import { resolveRefField, localizeRefAliased } from '../lib/refI18n.js'
 import { getIntegrityModifier, getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { DEFENSELESS_STATUS_CODES } from '../../../shared/tokenStatusRegistry.js'
 import { runPanneTest, EXO_COMPUTER_ADAPTER, EXO_SYSTEM_ADAPTER, EXO_WEAPON_ADAPTER, EXO_EXOSQUELETTE_ADAPTER, EXO_GENERATOR_ADAPTER } from '../services/integrityService.js'
@@ -1144,18 +1145,20 @@ async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetN
     .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
     .where({ 'char_inventory.character_id': characterIdCible, 'ref_equipment.is_electronic': true })
     .whereNot({ 'char_inventory.container': 'Coffre' })
-    .select('char_inventory.id', 'ref_equipment.name')
+    .select('char_inventory.id', 'ref_equipment.name', 'ref_equipment.name_i18n')
   console.log(`[DBG] test de panne IEM — cible:${targetName} type:${cibleType} objets électroniques trouvés:${candidates.length}`)
   if (candidates.length === 0) return
 
   const picked = candidates[randomInt(0, candidates.length)]
+  // i18n (PLAN_LOCALISATION.md §7.16.1a) : résout ref_equipment.name, pass-through en fr.
+  const pickedName = resolveRefField('ref_equipment', picked, 'name')
 
   const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
   const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter, targetName)
 
   const res = await runPanneTest(picked.id, { reason: 'iem_hit', characterId: characterIdCible, modifier: IEM_PANNE_MALUS })
   if (res.panne === 'skipped') return
-  console.log(`[WS] test de panne IEM — ${cibleIdentity.username} (${picked.name}) : roll:${res.roll}/${res.threshold} → ${res.panne}${res.panne === 'simple' ? ' (-1 ITG)' : res.panne === 'critical' ? ` (-${res.loss} ITG)` : ''}`)
+  console.log(`[WS] test de panne IEM — ${cibleIdentity.username} (${pickedName}) : roll:${res.roll}/${res.threshold} → ${res.panne}${res.panne === 'simple' ? ' (-1 ITG)' : res.panne === 'critical' ? ` (-${res.loss} ITG)` : ''}`)
   const ts = new Date().toISOString()
 
   // 1. Le Test de panne (1d20 sous l'ITG courante + malus IEM).
@@ -1182,7 +1185,7 @@ async function runIemPanneTrigger({ ammoFx, characterIdCible, cibleType, targetN
     : res.panne === 'critical' ? 'combat:iemPanne.broken' : 'combat:iemPanne.jammed'
   emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
     i18nKey: noticeKey,
-    params: { name: cibleIdentity.username, item: picked.name, itg: res.threshold, loss: res.loss },
+    params: { name: cibleIdentity.username, item: pickedName, itg: res.threshold, loss: res.loss },
     timestamp: ts,
   } })
 
@@ -1288,10 +1291,12 @@ async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions, 
     // `token_statuses` n'admet qu'UNE ligne `iem_survival` par token (UNIQUE(token_id, status_code)),
     // un secours inactif n'est de toute façon pas "en service" au sens où la Survie I.E.M. aurait un
     // sens à s'y déclencher.
-    const systems = await db('exo_systems')
+    const systemsRaw = await db('exo_systems')
       .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
       .where({ 'exo_systems.character_id': characterIdCible })
-      .select('exo_systems.id', 'exo_systems.label_override', 'exo_systems.sort_order', 'ref_equipment.name as ref_name')
+      .select('exo_systems.id', 'exo_systems.label_override', 'exo_systems.sort_order', 'ref_equipment.name as ref_name', 'ref_equipment.name_i18n as ref_name_i18n')
+    // i18n (PLAN_LOCALISATION.md §7.16.1a) : résout ref_name, pass-through en fr.
+    const systems = systemsRaw.map(s => localizeRefAliased('ref_equipment', s, { ref_name: 'name' }))
     const computers = await db('exo_computers').where({ character_id: characterIdCible })
     const activeComputer = resolveActiveComputer(computers)
 
@@ -1345,10 +1350,12 @@ async function runIemPanneTriggerExo({ characterIdCible, targetName, emissions, 
   // Armement — exclusion RAW des équipements sans composants électroniques (REGLEARMURE.md:436).
   // `ref_equipment_id` requis (pas `label_override` seul) : une arme sans ligne catalogue n'a aucun
   // moyen de vérifier `is_electronic`, exclue par prudence plutôt que supposée électronique.
-  const weapons = await db('exo_weapons')
+  const weaponsRaw = await db('exo_weapons')
     .join('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
     .where({ 'exo_weapons.character_id': characterIdCible, 'ref_equipment.is_electronic': true })
-    .select('exo_weapons.id', 'exo_weapons.label_override', 'ref_equipment.name as ref_name')
+    .select('exo_weapons.id', 'exo_weapons.label_override', 'ref_equipment.name as ref_name', 'ref_equipment.name_i18n as ref_name_i18n')
+  // i18n (PLAN_LOCALISATION.md §7.16.1a) : résout ref_name, pass-through en fr.
+  const weapons = weaponsRaw.map(w => localizeRefAliased('ref_equipment', w, { ref_name: 'name' }))
   console.log(`[DBG] test de panne IEM exo — cible:${targetName} armes électroniques:${weapons.length}`)
   if (weapons.length === 0) return
   const picked = weapons[randomInt(0, weapons.length)]
