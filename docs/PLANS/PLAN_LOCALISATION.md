@@ -1497,5 +1497,41 @@ retire le repli (`msg.skillLabel` disparaît du code client ET de tout émetteur
   risque faible mais premier contact avec le nouveau code de rendu).
 - Relecture croisée avec Lot 6 avant de coder l'étape 0 (même motif, décision déjà notée §9.7).
 
-**Statut** : plan de code écrit, **zéro code produit**. Prêt pour une analyse à charge si Saar veut
-avancer encore, ou pour s'arrêter ici.
+### 9.10 Analyse à charge (2026-10-06)
+
+**Confirmé solide** `[VÉRIFIÉ]` : `ctx.tCombat` (= `useTranslation('combat')`, câblé depuis
+`SidebarChatTab.jsx:42`) arrive déjà jusqu'à `MessageRendererRegistry.jsx` (déjà utilisé ailleurs
+dans ce fichier, `formatMrDegreeTitle(ctx.tCombat, …)` l.295/343) — rien à ajouter pour ce fichier.
+`CatastropheChoiceQueue.jsx` a déjà son propre `useTranslation('combat')` (l.36) — le plus simple
+des trois, prêt tel quel.
+
+**Corrigé** : `DiceBreakdownPopover.jsx` n'a **aucun** `t`/`tCombat` (composant "dumb", props seules),
+et son parent `Sidebar.jsx` n'a que `useTranslation()` par défaut, jamais `useTranslation('combat')`
+(`Sidebar.jsx:54`). L'étape 0 demande concrètement, pour ce fichier seul, 3 micro-modifications :
+ajouter `useTranslation('combat')` dans `Sidebar.jsx`, passer `tCombat` en prop à
+`<DiceBreakdownPopover>` (l.326), l'utiliser dans le composant. Plus précis que « adapter 3 fichiers »
+— un des trois est en réalité 2 fichiers.
+
+**Lacune trouvée** : le total « ~59 clés » (§9.6/§9.8) **ne compte pas la Famille C** (tables
+`SITUATION_LABELS`/`PORTEE_LABELS`/`TAILLE_LABELS`/`LOCATION_LABELS`/`ATTR_LABELS`), explicitement
+reportée au §9.3/§9.5 mais jamais revenue nommer. Réutilisation testée et **écartée** `[VÉRIFIÉ]` :
+`combat.json.resultPanels.location.*` existe (`tete`, `corps`, `brasDroit`, `brasGauche`,
+`jambeDroite`, `jambeGauche`) mais en **forme longue** (« Bras gauche ») — `LOCATION_LABELS`
+(`shared/armorConstants.js`) consommé par les `breakdown` actuels est en **forme courte** (« Bras G »,
+« Jambe D »). Pas la même chaîne exacte → pas réutilisable sans changer le texte affiché (hors scope,
+même règle que partout ailleurs dans ce plan : zéro changement de texte visible, seulement sa
+résolution). Il faut une nouvelle section (`shortLocations.*` ou équivalent) + les clés
+`SITUATION_LABELS`/`PORTEE_LABELS`/`TAILLE_LABELS`/`ATTR_LABELS`, non comptées. **Total révisé
+estimé : ~95-100 clés**, pas 59 — à nommer avant de considérer le nommage (§9.8) terminé.
+Conséquence directe : les gabarits `degatsLocalisation`/`viseeLocalisation`/
+`chanceBouclierLocalisation` (§9.8) étaient sous-spécifiés — leur param `{location}` doit être un
+**code** (`tete`/`bras_gauche`/…), pas un texte résolu côté serveur, résolu par la nouvelle section
+`shortLocations.*` côté client — sinon on recrée exactement la violation qu'on corrige (texte FR
+figé transmis, juste caché dans un param plutôt que dans le champ principal).
+
+**Ne change rien aux décisions précédentes** (§9.4, §9.7, §9.9) — la stratégie de transition à double
+forme et le découpage en 17 étapes restent valides ; cette lacune ajoute du travail de nommage
+(Famille C), pas une remise en cause de l'architecture choisie.
+
+**Statut** : plan de code écrit et critiqué, **zéro code produit**. Reste avant de coder l'étape 0 :
+nommer la Famille C (~35-40 clés). Prêt pour ça, ou pour s'arrêter ici — décision Saar.
