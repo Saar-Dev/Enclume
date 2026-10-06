@@ -1879,3 +1879,22 @@ importé de `socketCombatHelpers.js`) restaient à migrer. + 4 gabarits/statique
 i18next réel). `node --test server/src/socket/socketCombatAoe.test.mjs` → 25/25 ✔ (fonctions pures,
 aucune DB — le fichier teste `resolveAoeAttackRoll` avec ses propres `contributions` factices,
 indépendantes des sites réels migrés, donc non affecté). `node --check`.
+
+### 9.21 Étape 13 — `socketCombatExo.js`, dernier fichier de la liste (2026-10-06)
+
+10 sites. Mêmes résolveurs partagés importés (`resolvePorteeEntry`/`resolveTailleEntry`/
+`resolveSituationEntry`, import `PORTEE_LABELS`/`TAILLE_LABELS`/`SITUATION_LABELS` retiré — plus
+aucun autre usage dans ce fichier, vérifié par grep avant de couper l'import). 2 blocs de
+contributions (Tir + CaC exo), 1 clé statique (`armementExoSansFormule`), 2 gabarits réutilisés à 4
+sites chacun (`armeExo` ×4 dont 2 via `openChanceChoice`, relais déjà dual-shape ; `armeExoChance`
+×2). `'Taille cible'` statique (CaC, `cacModifiers.targetSizeSection`) distingué de
+`TAILLE_LABELS[tailleCategory]` composé (Tir, `resolveTailleEntry`) — même distinction que
+`socketCombatHelpers.js` (§9.19).
+
+**Validé** : 3 clés vérifiées texte exact contre l'original (`node -e`, i18next réel). `node --check`.
+Aucun test ciblé existant pour ce fichier (recherché, aucun `.test.mjs`). Build client final propre.
+
+**Lot 7 — les 15 fichiers émetteurs + le noyau partagé sont maintenant tous migrés.** Reste
+l'étape 16 (commit de nettoyage final : retirer le repli à double forme dans les 3 fichiers client
+une fois ces 13 commits validés en jeu) — décision Saar avant de la faire, et un test réel en
+combat (le seul qui vaille, après tout ce travail texte-contre-texte).

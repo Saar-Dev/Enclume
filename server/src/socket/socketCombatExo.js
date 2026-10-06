@@ -30,7 +30,7 @@ import {
   resolveCriticalFailReroll,
   resolveAttackHitDrone, resolveAttackHitExo, resolveAttackHitPnj, resolveAttackHitPj,
   resolveDefenselessTarget, resolveMeleeDefensePnj, resolveMeleeDefenseDrone, resolveMeleeDefensePj,
-  PORTEE_LABELS, TAILLE_LABELS, SITUATION_LABELS,
+  resolvePorteeEntry, resolveTailleEntry, resolveSituationEntry,
   flushDeferredEmissions, finalizeAssaultOutcome,
 } from './socketCombatHelpers.js'
 import { advanceTimeline, combatTimers, combatPreviews } from './combatTurnEngine.js'
@@ -119,7 +119,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
         formula: '—', rolls: [], total: 0,
         isCriticalSuccess: false, isCriticalFail: false, seed: null,
         timestamp: new Date().toISOString(),
-        skillLabel: 'Armement exo — arme sans formule de dégâts',
+        skillLabelKey: 'combat:diceLabels.armementExoSansFormule',
         mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false,
       } })
       return { suspend: false, emissions }
@@ -203,16 +203,16 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
     const coverageModifier = options.coverageModifier ?? 0
 
     const contributions = [
-      { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
-      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      resolvePorteeEntry(authoritativeRangeBand, porteeModComp, porteeModComp > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.cibleSansDefense', value: sansDefenseBonus, type: 'bonus' },
       ...((confirmedModifiers?.situation ?? []).map(k => {
         const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
-        return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+        return resolveSituationEntry(k, v, v > 0 ? 'bonus' : 'malus')
       })),
-      { label: TAILLE_LABELS[tailleCategory] ?? tailleCategory, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
-      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-      { label: 'Malus santé / encombrement (pilote)', value: ctxTireur.effectiveMalus, type: 'malus' },
-      { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+      resolveTailleEntry(tailleCategory, tailleModComp, tailleModComp > 0 ? 'bonus' : 'malus'),
+      { i18nKey: 'combat:breakdown.precipitation', value: isRushedMod, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrementPilote', value: ctxTireur.effectiveMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.couvertureCible', value: coverageModifier, type: 'malus' },
     ]
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const assaultOutcome0 = computeAttackRoll({
@@ -228,7 +228,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       isCriticalSuccess: assaultOutcome.isCriticalSuccess, isCriticalFail: assaultOutcome.isCriticalFail,
       catastropheRisk: assaultOutcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+      skillLabelKey: 'combat:diceLabels.armeExo', skillLabelParams: { name: weapon.display_name ?? 'Armement' },
       mechanicalTotal: ctxTireur.skillTotal,
       diffLabel: chancesDeReussite - ctxTireur.skillTotal >= 0 ? `+${chancesDeReussite - ctxTireur.skillTotal}` : `${chancesDeReussite - ctxTireur.skillTotal}`,
       chancesDeReussite, isSuccess, mr, breakdown,
@@ -258,7 +258,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       // même bug qu'aurait pu avoir exo_stand_up si elle n'utilisait pas déjà pilot.id.
       const pilotCharacterId = (await db('char_sheet').where({ id: ctxTireur.sheetId }).first('character_id'))?.character_id ?? null
       await openChanceChoice(io, campaignId, pilotCharacterId, {
-        testLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+        testLabelKey: 'combat:diceLabels.armeExo', testLabelParams: { name: weapon.display_name ?? 'Armement' },
         site: 'exo_assault',
         linkedCatastropheId: pendingCatastrophe?.id ?? null,
         context: {
@@ -313,7 +313,7 @@ async function finishExoAssaultChoice(io, campaignId, resolved, { choice, contex
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel: `${weaponDisplayName} — Exo-armure — Chance : relance`,
+      skillLabelKey: 'combat:diceLabels.armeExoChance', skillLabelParams: { name: weaponDisplayName },
       mechanicalTotal: skillTotal,
       diffLabel: chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
       chancesDeReussite, isSuccess, mr, breakdown,
@@ -446,12 +446,12 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
     const attackerUsername = userRow?.username ?? character.name ?? 'Exo-armure'
 
     const attaqueContributions = [
-      { label: 'Précipitation', value: isRushedMod, type: 'malus' },
-      { label: 'Malus santé / encombrement (pilote)', value: effectiveMalusAttaquant, type: 'malus' },
-      { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
-      { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
-      { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
-      { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      { i18nKey: 'combat:breakdown.precipitation', value: isRushedMod, type: 'malus' },
+      { i18nKey: 'combat:breakdown.malusSanteEncombrementPilote', value: effectiveMalusAttaquant, type: 'malus' },
+      { i18nKey: 'combat:breakdown.modsSituation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
+      { i18nKey: 'combat:cacModifiers.targetSizeSection', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
+      { i18nKey: 'combat:breakdown.bouclierAdverse', value: shieldAtkMalus, type: 'malus' },
+      { i18nKey: 'combat:breakdown.cibleSansDefense', value: sansDefenseBonus, type: 'bonus' },
     ]
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const attaqueOutcome0 = computeAttackRoll({
@@ -468,7 +468,7 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
       isCriticalSuccess: attaqueOutcome.isCriticalSuccess, isCriticalFail: attaqueOutcome.isCriticalFail,
       catastropheRisk: attaqueOutcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+      skillLabelKey: 'combat:diceLabels.armeExo', skillLabelParams: { name: weapon.display_name ?? 'Armement' },
       mechanicalTotal: attackerSkillTotal,
       diffLabel: chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
       chancesDeReussite: chancesAttaque, isSuccess: attaqueOutcome.isSuccess, mr: attaqueOutcome.mr, breakdown: breakdownAtk,
@@ -494,7 +494,7 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
       // ctx.sheetId est déjà celui du pilote (resolveCombatantTestContext → resolveExoTestContext).
       const pilotCharacterId = (await db('char_sheet').where({ id: ctx.sheetId }).first('character_id'))?.character_id ?? null
       await openChanceChoice(io, campaignId, pilotCharacterId, {
-        testLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+        testLabelKey: 'combat:diceLabels.armeExo', testLabelParams: { name: weapon.display_name ?? 'Armement' },
         site: 'exo_melee',
         linkedCatastropheId: pendingCatastrophe?.id ?? null,
         context: finalizeCtx,
@@ -639,7 +639,7 @@ async function finishExoMeleeChoice(io, campaignId, resolved, { choice, context 
       isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
       catastropheRisk: outcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel: `${weaponDisplayName} — Exo-armure — Chance : relance`,
+      skillLabelKey: 'combat:diceLabels.armeExoChance', skillLabelParams: { name: weaponDisplayName },
       mechanicalTotal: attackerSkillTotal,
       diffLabel: chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
       chancesDeReussite: chancesAttaque, isSuccess: outcomeCrit.isSuccess, mr, breakdown,
