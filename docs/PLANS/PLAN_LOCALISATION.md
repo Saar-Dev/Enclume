@@ -20,8 +20,9 @@
 > composé dans les jets de dés et tests de combat (`DICE_RESULT`/`openChanceChoice`) — ~120
 > occurrences brutes sur 15 fichiers, ramenées à **~59 chaînes/gabarits distincts** après
 > dédoublonnage (§9.6). Trouvaille incidente : `'Durée étourdissement'` dupliquée identique dans 2
-> fichiers (Règle 2), indépendante de ce lot. **Zéro plan, zéro code** — prochaine étape à décider
-> avec Saar.
+> fichiers (Règle 2), indépendante de ce lot. **Schéma de payload choisi** (§9.7) : réutiliser
+> `i18nKey`/`params` tel quel (déjà en prod sur `COMBAT_SYSTEM_NOTICE`), aucun nouveau mécanisme.
+> **Zéro plan, zéro code** — prochaine étape à décider avec Saar.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1350,6 +1351,46 @@ du §9.3 (réduction d'environ moitié), et une portée de *conception* (nommer/
 nettement plus petite que la portée de *code* (~120 sites à toucher, un par un, pour appeler le bon
 `i18nKey`+`params` au lieu de la chaîne composée actuelle).
 
-**Prochaine étape (pas aujourd'hui)** : avec ce chiffre en main, décision Saar sur la suite — écrire
-le vrai plan (schéma de payload, nommage des clés, stratégie de transition, découpage en lots de
-code) est l'étape qui vient après, pas incluse ici.
+### 9.7 Conception du schéma de payload (2026-10-06)
+
+**Question** : `DICE_RESULT`/`openChanceChoice` ont besoin d'un nouveau mécanisme de résolution, ou
+le motif existant (`i18nKey`/`params`, déjà prouvé sur `COMBAT_SYSTEM_NOTICE`) suffit ?
+
+**Exploré avant de trancher** `[VÉRIFIÉ]` :
+- Côté client, `COMBAT_SYSTEM_NOTICE` est résolu par `t(payload.i18nKey, payload.params)`
+  (`useSessionSocket.js:63-64`, `useChatSocket.js:87`, `MessageRendererRegistry.jsx:438`) — motif
+  simple, déjà en prod, déjà validé.
+- Côté client, `skillLabel` (`MessageRendererRegistry.jsx:283,322`) et `breakdown[].label`
+  (`DiceBreakdownPopover.jsx:33`) sont rendus **tels quels**, aucun `t()` nulle part — confirme que
+  c'est un vrai changement de tuyauterie, pas un ajustement.
+- Autre précédent envisagé puis écarté : `combatSections.js` (client, Lot 1) fait transiter un
+  **code** (`label: 'moveZones.lente'`) résolu par le composant consommateur — mais c'est une config
+  **client-side**, pas un payload serveur→client ; introduire ce 2ᵉ motif (code + table de
+  correspondance côté client) pour `DICE_RESULT` dupliquerait un mécanisme qui existe déjà
+  (`i18nKey`/`params`) sans bénéfice identifié.
+
+**Décision (architecture, pas une question de règle de jeu)** : réutiliser `i18nKey`/`params` tel
+quel, sans 2ᵉ mécanisme — `skillLabel: string` → `{ skillLabelKey, skillLabelParams }` (ou noms
+équivalents, à trancher au plan), `breakdown[].label: string` → `breakdown[].i18nKey` +
+`breakdown[].params?`. Chaque entrée reste `{ i18nKey, params?, value, type }` — extension directe
+de la forme déjà en prod, zéro nouveau concept pour Saar ou pour un futur lecteur du code.
+
+**Vérifié avant de nommer les clés (Règle 2)** : `combat.json` (Lot 1) a déjà `threshold: "Seuil"` —
+réutilisable pour au moins 1 des ~59 chaînes. Les autres chaînes testées (`Compétence`,
+`Précipitation`, `Cible sans défense`, `Couverture cible`) n'ont pas d'équivalent existant — attendu,
+Lot 1 n'auditait que le texte `.jsx`, jamais le texte composé côté serveur. Vérification complète
+chaîne par chaîne = travail du plan, pas fait ici.
+
+**Questions encore ouvertes (pas tranchées, pas aujourd'hui)** :
+- Stratégie de transition : `rules/dice.md` dit les payloads « restent compatibles entre émetteur et
+  consommateurs dans un même commit de fusion » — suggère un changement atomique (émetteurs +
+  consommateurs dans le même commit), pas un repli `message` optionnel comme Lot 6 l'envisageait pour
+  une raison différente. À confirmer au moment du plan.
+- Partage de conception avec Lot 6 (même motif `i18nKey`/`params`, mécanisme différent) — probablement
+  rien à partager en code (Lot 6 reste sur `COMBAT_DECLARE_ERROR`), mais vaut une relecture croisée
+  au moment d'écrire le plan de l'un ou l'autre.
+- Nommage/emplacement exact des ~59 clés dans `combat.json` (sections existantes vs nouvelles).
+
+**Prochaine étape (pas aujourd'hui)** : avec le schéma choisi, l'étape suivante est soit (a) finir le
+nommage chaîne par chaîne (les ~59), soit (b) écrire le vrai plan de code (découpage en lots,
+fichiers, ordre) — décision Saar sur laquelle des deux avancer la prochaine fois.
