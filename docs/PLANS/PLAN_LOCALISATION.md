@@ -1,5 +1,15 @@
 # PLAN_LOCALISATION — Résorption du texte en dur (i18n)
 
+> 2026-10-06 (Dev) — **Lot 5 Phase B2 CODÉ ET VALIDÉ** (§7.16, B2.1→B2.4) : la prémisse de septembre
+> (comparaison en dur `ref_name !== 'Klauss'`) n'existait déjà plus dans le code, réglée par le
+> chantier AOE (migration 321, déjà clos, sans rapport avec ce plan). Portée réelle ré-auditée sur le
+> code actuel puis codée : 3 sites IEM (`socketCombatHelpers.js`) + 2 sites `equipmentRepairReviewService.js`
+> (trouvés en analyse à charge, patron B1, non dans l'inventaire de septembre) + snapshot `mod_name`
+> (`modingService.js`) + round-trip migration 318 validé en base locale (serveur confirmé arrêté par
+> Saar avant exécution). Détail §7.16.6. Reste empêtré avec une dette plus large que Lot 6 (UI de
+> jets de dés combat, jamais ouverte) volontairement laissé dehors (§7.16.1b), et §7.16.5 (gestion de
+> fiche drone/exo, `char-sheet.js`) laissé en trouvaille ouverte, non traitée. **Commit : en attente
+> de confirmation Saar.**
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -913,6 +923,192 @@ mode d'échec de la convention `<alias>_i18n`).
 - B2 (noms d'armes combat) — plan séparé.
 - `char_inventory.custom_name`/`custom_desc` — texte joueur, jamais i18n.
 - Les filtres `.where('ref_equipment.category', …)` et les sélects mécaniques (§7.7bis).
+
+---
+
+## 7.16 Lot 5 — Phase B2 (plan révisé 2026-10-06) : noms d'armes en combat + 2 détails triviaux
+
+### 7.16.0 Correction de prémisse (lecture code avant tout, AGENTS.md invariant 1)
+
+Le déclencheur cité par le §7.15 B2 (« comparaison en dur `weapon.ref_name !== 'Klauss'`,
+`socketCombatHelpers.js` l.3499 ») **n'existe plus** `[VÉRIFIÉ 2026-10-06]` — recherche exhaustive
+(`grep -r "Klauss"` + `ref_name\s*(===|!==)`) : zéro occurrence hors migrations. Remplacé par la
+colonne `ref_equipment.aoe_profile` (migration `321_ref_equipment_aoe_profile.js`) résolue via
+`shared/combatAoe.js` (`isAoeWeapon`/`getAoeMechanic`) — chantier AOE/grenades (`PLAN_ARMES_SPECIALES.md`
+§1.6), **déjà clos et validé**, sans rapport avec ce plan. **Rien à faire sur ce point** : la raison
+d'être originelle de B2 a disparu par un autre chantier, pas par celui-ci.
+
+### 7.16.1 Ré-audit du code réel (2026-10-06) — deux familles, pas une
+
+Les sites listés en §7.15 B2 ont bougé de ligne et, pour certains, de nature depuis septembre
+(chantiers AOE/Choc/Drone intercalés). Repérage frais par fichier/fonction plutôt que par numéro de
+ligne :
+
+**(a) Propre — pattern B1, aucun chevauchement Lot 6, à câbler dans ce lot.**
+
+Trois sites `socketCombatHelpers.js` (Attaque IEM — Lot 2bis, *pas* dans l'inventaire de septembre,
+ajoutés depuis) où `ref_equipment.name` alimente `params: { item: … }` d'un message **déjà**
+`i18nKey` (`combat:iemPanne.held`/`broken`/`jammed`) — donc déjà conforme à `rules/i18n.md`, juste la
+source du param n'est pas encore résolue :
+
+| Site | Select actuel | Consommateur |
+|---|---|---|
+| `runIemPanneTriggerExo` → candidats PJ/PNJ (~l.1143-1147) | `char_inventory.join(ref_equipment).select('char_inventory.id', 'ref_equipment.name')` | `picked.name` → `params.item` (~l.1185) |
+| Catégorie `systemes_auxiliaires` (~l.1291-1294) | `exo_systems.leftJoin(ref_equipment).select(…, 'ref_equipment.name as ref_name')` | `s.ref_name` → pool `.label` → `itemLabel` → `params.item` |
+| Catégorie `armement` (~l.1348-1351) | `exo_weapons.join(ref_equipment).select(…, 'ref_equipment.name as ref_name')` | `picked.ref_name` → `itemLabel` → `params.item` |
+
+Geste : ajouter `name_i18n`/`ref_name_i18n` aux trois `.select()` (import `refI18n.js`, absent de ce
+fichier à ce jour — `[VÉRIFIÉ]`), résoudre juste avant l'usage. **Précision après analyse à charge** :
+pas un choix libre entre les deux helpers — site 1 garde le nom de champ natif (`row.name`/
+`row.name_i18n`) → `resolveRefField('ref_equipment', picked, 'name')` ; sites 2 et 3 aliasent en
+`ref_name` → `localizeRefAliased('ref_equipment', row, { ref_name: 'name' })`, même patron que B1.4
+(`battlemaps.js`). Zéro changement de valeur en FR (pass-through), complète la couture pour une future
+locale — même esprit que B1.0-B1.6, mêmes garanties.
+
+**Ajout après analyse à charge (2026-10-06)** : `equipmentRepairReviewService.js` (domaine Usure &
+Intégrité, chantier V1 déjà clos — `enrichRepairEcheances` l.36/61 : `item.ref_name` ; `getRepairSkillOptions`
+l.18 : `ref_skills.label`) suit le même patron — JSON REST propre vers un panneau de revue MJ
+(`routes/campaigns.js`), jamais audité par §7.7bis. Même classe de risque que les 3 sites IEM, même
+lot, commit séparé (domaine différent de `socketCombatHelpers.js`/`modingService.js` — une cause
+racine par commit).
+
+**(b) Empêtré — PAS câblé dans ce lot, dette documentée.**
+
+`fetchDroneWeapon` (`socketCombatHelpers.js`), `fetchExoWeapon` (`socketCombatExo.js`),
+`fetchAssaultWeaponAndMods` (`socketCombatHelpers.js`) — leurs `COALESCE(label_override, …, name) as
+display_name` / `re.name as ref_name` alimentent `skillLabel`/`testLabel`/`weaponDisplayName`/
+`breakdown[].name` : des **chaînes FR composées côté serveur** (ex.
+`` `${weapon.display_name ?? 'Armement'} — Drone` ``, `` `${weapon.display_name ?? 'Armement'} —
+Exo-armure` ``) envoyées telles quelles dans le payload `DICE_RESULT`/`openChanceChoice`, **jamais**
+via `t()`/`i18nKey`. `[VÉRIFIÉ]` : les libellés voisins du même `breakdown` (`'Cible sans défense'`,
+`'Couverture cible'`, `'Précipitation'`, `'Programme (niv. X)'`…) sont **exactement le même patron FR
+figé**, pas une exception. Ce n'est pas seulement « chevauche Lot 6 » (`COMBAT_DECLARE_ERROR` — §8) :
+c'est un chantier plus large, jamais ouvert (toute l'UI de jet de dés combat), que ni Lot 5 ni Lot 6 ne
+couvrent. Résoudre `ref_equipment.name`/`display_name` ici sans toucher au reste de la chaîne serait
+cosmétique (la phrase composée resterait FR gelée quoi qu'il arrive) et incohérent avec ses voisins
+immédiats dans le même objet `breakdown`/payload.
+
+Même diagnostic pour `socketCombatAnnouncement.js`/`socketCombatExo.js` : `exoWeapon.ref_name` dans
+`weaponLabel` (message `COMBAT_DECLARE_ERROR` composé, « L'arme « ${weaponLabel} » de l'exo-armure tire
+en rafale… ») — ça, c'est strictement Lot 6 (§8), déjà différé par Saar (2026-08-28). Pas davantage
+dans ce lot.
+
+**Recommandation** : laisser (b) en dette connue, consignée ici, pas dans ce lot — décision Saar
+si/quand un chantier « UI de jets de dés combat » ou Lot 6 s'ouvre. Forcer un câblage partiel sur (b)
+maintenant n'apporterait aucun bénéfice observable (FR seul, chaîne composée inchangée) et romprait la
+cohérence du payload.
+
+### 7.16.2 Les 2 détails triviaux
+
+**`modingService.js:157` — snapshot `mod_name`.** `mod_name: modRef.name` prend la colonne brute
+directement (`modRef` = ligne `ref_equipment` complète, dont `name_i18n`, déjà fetchée l.109) sans
+passer par le résolveur. Même classe que `char_advantages.snapshot_data` (§7.6), traité en 5.3c
+(`advantageService.grantAdvantage` : `localizeRefRows` appliqué à `allRefAdvantages` avant
+`JSON.stringify`). Ici `mod_name` est une colonne texte simple (pas un blob JSON) — aucun risque de
+fuite `_i18n`, mais même principe de couture : passer par `localizeRef('ref_equipment',
+modRef).name` (ou `resolveRefField(…, 'name')`) avant l'`insert`, pour que l'écriture suive la même
+règle que toutes les autres (résolveur unique, §7.8) plutôt qu'un accès direct à la colonne. Zéro
+changement de valeur en FR. Commit isolé, une ligne.
+
+**Migration 318 — cycle `down()`/`up()`.** Relecture du fichier `[VÉRIFIÉ 2026-10-06]` : `up()`
+(`ADD COLUMN IF NOT EXISTS … DEFAULT '{}'::jsonb`) et `down()` (`DROP COLUMN IF EXISTS`) sont un DDL
+additif pur, idempotent, sans backfill — **aucune correction de code nécessaire**. Le seul « non
+testé » restant (§7.11) est l'**exécution** du round-trip en base locale, jamais faite.
+
+**Réserve ajoutée après analyse à charge (2026-10-06)** : `ADD`/`DROP COLUMN` prend un verrou
+`ACCESS EXCLUSIVE` sur chacune des 10 tables `ref_*` pendant la transaction DDL — si le serveur dev
+tourne (un autre terminal, hors contrôle de cet agent), ce round-trip gèlerait toute requête
+concurrente sur ces tables pendant son exécution. Ni la liste « tests ciblés base locale » ni les
+scripts de tickets pré-autorisés (`AGENTS.md` « Commandes ») ne couvrent ce cas — **cette étape attend
+confirmation de Saar sur le moment (serveur arrêté) avant exécution**, pas un lancement autonome par
+l'agent comme les `--test` ciblés. Pas un lot de code dans tous les cas : une étape de validation,
+selon `rules/migrations.md` (importer le module, appeler `up()`/`down()` directement, jamais la CLI
+knex brute ; `SELECT knex_migrations` avant tout rappel manuel).
+
+### 7.16.3 Découpage proposé (un seul lot, 4 commits)
+
+| Étape | Geste | Fichier(s) |
+|---|---|---|
+| B2.1 | Import `refI18n.js` + câblage des 3 sites IEM (§7.16.1a) | `socketCombatHelpers.js` |
+| B2.2 | `item.ref_name` + `ref_skills.label` (§7.16.1a, ajout analyse à charge) | `equipmentRepairReviewService.js` |
+| B2.3 | Snapshot `mod_name` via le résolveur (§7.16.2) | `modingService.js` |
+| B2.4 | Round-trip migration 318 en local — **attend confirmation du timing (serveur arrêté)**, pas de diff | — |
+
+Hors scope de ce lot (dette documentée, pas oubliée) : tout 7.16.1(b), tout Lot 6 (§8), et §7.16.5
+ci-dessous (trouvaille ouverte, décision Saar).
+
+### 7.16.5 Trouvaille ouverte (analyse à charge 2026-10-06) — gestion de fiche drone/exo, non auditée
+
+En élargissant la recherche au-delà de `socket*`/`services*` (résolution de combat), un foyer bien
+plus large apparaît dans `server/src/routes/character/char-sheet.js` — jamais vu par le ré-audit
+§7.7bis ni par aucune phase précédente : les routes de **gestion de fiche** drone/exo (pas la
+résolution de combat) renvoient `ref_equipment.name`/`description`/`category` et des
+`COALESCE(label_override, …, name) as display_name` **sans aucun `_i18n`**, en JSON REST propre
+(`res.json({ weapons })` etc.) :
+
+- `GET /:characterId/drone` (l.1801-1828, `program_name`/`program_description`)
+- `GET /:characterId/drone/cargo` (l.1877-1898, `ref_name`/`ref_family`)
+- `GET /:characterId/drone/weapons` (l.2106-2144, `display_name`/`ref_name`)
+- `exo_systems`/`exo_weapons` (≈l.2551-2573, `display_name`/`ref_description`/`ref_category`)
+- `exo_programs` (≈l.2909-2911, `program_name`/`program_description`)
+- probablement leurs miroirs POST/PUT (le commentaire l.2133 « sélectionnée aussi par POST/PUT —
+  réponse cohérente avec GET » le suggère explicitement pour `/drone/weapons`, à vérifier pour les
+  autres).
+
+Même patron, même risque (nul, FR seul) que B1 — mais une **surface comparable à B1 lui-même** (8-10+
+sites), pas un détail. **Pas intégré à ce lot** (romprait « un problème à la fois ») — consigné ici
+pour qu'il ne soit pas reperdu, décision Saar sur l'ouverture d'un lot dédié (B3 ?) et son moment.
+
+### 7.16.6 Validation réelle (2026-10-06)
+
+**Testé** :
+- `node --check` sur les 3 fichiers touchés (`socketCombatHelpers.js`, `equipmentRepairReviewService.js`,
+  `modingService.js`) + `git diff --check` — propres.
+- Round-trip migration 318 (B2.4) — serveur confirmé arrêté par Saar avant exécution (réserve du
+  verrou `ACCESS EXCLUSIVE`, §7.16.2, donc levée). Vérifié en base réelle avant tout geste : les 27
+  colonnes `*_i18n` des 10 tables sont vides à 100 % (`!= '{}'::jsonb` → 0 ligne), donc round-trip sans
+  perte possible. `down(db)` → 27 colonnes `_i18n` disparues ; `up(db)` → 27 colonnes revenues,
+  `ref_equipment.name_i18n` recontrôlée (`jsonb NOT NULL DEFAULT '{}'::jsonb`). `knex_migrations`
+  (entrée 318, batch 10) inchangée tout du long — confirme que l'appel direct des fonctions `up()`/
+  `down()` ne touche jamais la table de suivi knex, conforme à `rules/migrations.md`.
+- Suite ciblée (B2.1/B2.2/B2.3 + dépendants) : `modingService.test.mjs`,
+  `equipmentRepairService.test.mjs`, `refI18n.test.mjs`, `combatantContextService.test.mjs`,
+  `combatAttackRoll.test.mjs`, `socketCombatHandWeaponAbsence.test.mjs` → **115/115 verts** (un flake
+  isolé observé sur un lancement combiné — `returnModToInventory` item stackable, `2 !== 1` — non
+  reproductible seul (3/3 verts), fichier non touché par ce lot ; cause probable : chevauchement avec
+  une autre session concurrente sur `inventoryRules.js`/`canStack`, chantier `GRENADE-STACK-BY-TYPE`,
+  sans rapport).
+- Smoke base réelle (requêtes exactes des 3 sites IEM + `getRepairSkillOptions`) : résolution ==
+  colonne brute en fr sur des lignes réelles (`Jumelles`, `Radar portable Oural`, `Visière`,
+  `Interface de contrôle • Filet neuronal`, `Canon à neutron`…), zéro `_i18n` dans les objets résolus.
+- Smoke base réelle `installMod` (fixture dédiée, créée puis nettoyée — aucun résidu) : `mod_name`
+  écrit == `ref_equipment.name` du mod (`Système de tir assisté : Implant palmaire`), valeur identique
+  à avant le changement.
+
+**Non testé** :
+- Parcours navigateur réel (Attaque IEM, panneau de revue MJ réparation) — aucun scénario combat/UI
+  réel joué depuis ce lot.
+- `cd client && npm run build` — aucun `.jsx` touché, non lancé (cohérent avec Phase A/B1).
+
+**Retour arrière** : revert des 3 commits, indépendants (B2.1 `socketCombatHelpers.js`, B2.2
+`equipmentRepairReviewService.js`, B2.3 `modingService.js`) ; B2.4 n'a laissé aucune trace de code
+(validation pure, schéma identique avant/après).
+
+### 7.16.4 Validation prévue
+
+- `node --check` sur les 2 fichiers touchés + `git diff --check`.
+- Smoke base réelle : déclencher un test de panne IEM (PJ/PNJ + exo, les 3 branches) en fr, vérifier
+  `params.item` == nom catalogue actuel, zéro `_i18n` dans le payload émis.
+- Smoke base réelle : `getRepairRequestsForGm`/`getRepairRollsForPlayer` (une demande de réparation
+  existante ou créée en fixture) — `item.name` == nom catalogue actuel, `getRepairSkillOptions` ==
+  libellés actuels.
+- Installer un mod en session réelle, vérifier `char_inventory_mods.mod_name` identique à avant
+  (valeur FR inchangée).
+- Round-trip migration 318 (`up()` → `down()` → `up()`) importé directement, `SELECT knex_migrations`
+  avant/après, sur la base locale.
+- Pas de `vite build` (aucun `.jsx` touché). Pas de confirmation navigateur par étape (même décision
+  Saar que les lots précédents) — mais ce lot est petit et combat-sensible (Attaque IEM) : un scénario
+  réel en jeu reste recommandé avant de clore, pas juste la beta groupée générique.
 
 ---
 
