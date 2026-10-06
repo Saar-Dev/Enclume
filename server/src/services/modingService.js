@@ -26,6 +26,7 @@ export async function getModingState(characterId, trxOrDb = db) {
     WHERE ci.character_id = ?
       AND re.family = ?
       AND re.category != ?
+      AND re.fire_mode IS NOT NULL
     GROUP BY ci.id, ci.equipment_id, re.name, re.name_i18n, re.family, re.category
   `, [characterId, WEAPON_FAMILY, MOD_CATEGORY])
 
@@ -107,7 +108,11 @@ export async function installMod(characterId, weaponInvId, modInvId) {
   const weaponRef = await db('ref_equipment').where({ id: weapon.equipment_id }).first()
   const modRef    = await db('ref_equipment').where({ id: mod.equipment_id }).first()
 
-  if (weaponRef.family !== WEAPON_FAMILY || weaponRef.category === MOD_CATEGORY) {
+  // fire_mode n'existe que sur les armes qui tirent réellement (ref_equipment, voir rules/combat.md
+  // §Autorité — CC/RC/RL sont des modes de tir, une arme de contact n'en a aucun) : les accessoires
+  // de ce registre (lunette, silencieux, logiciel de visée...) n'ont de sens que sur ce sous-ensemble.
+  // Une arme de contact, de jet ou une grenade (toutes fire_mode NULL) n'est jamais une cible valide.
+  if (weaponRef.family !== WEAPON_FAMILY || weaponRef.category === MOD_CATEGORY || weaponRef.fire_mode == null) {
     throw new AppError(400, 'La cible n\'est pas une arme valide')
   }
   if (modRef.family !== WEAPON_FAMILY || modRef.category !== MOD_CATEGORY) {

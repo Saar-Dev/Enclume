@@ -9730,3 +9730,32 @@ ciblé sur `TokenPresentation.jsx` (0 erreur).
 **Non testé** : affichage réel en navigateur (token avec plusieurs statuts empilés).
 **Données** : aucune — fichiers partagés/client uniquement.
 **Retour arrière** : `git revert` des 3 fichiers modifiés suffit ; aucun changement de schéma.
+
+## Session (Dev) — 2026-10-06 — Inventaire : une grenade (ou une arme de contact/de jet) pouvait recevoir un accessoire d'arme (GRENADE-ACCEPTS-WEAPON-MODS)
+
+**Signalement** (Saar, 2026-10-03) : une grenade peut recevoir des mods d'arme (ex. viseur) alors que
+ça n'a pas de sens pour ce type d'objet. Aucun diagnostic fait à ce stade.
+
+**Cause racine vérifiée par lecture + requête en base** : `modingService.getModingState` (liste des
+cibles proposées) et `installMod` (garde serveur) ne filtraient que sur `family = 'Armes'` et
+`category != 'Accessoires pour armes'` — ni l'un ni l'autre n'excluait les catégories `Grenade`,
+`Arme de contact` ou `Armes de jet`. Vérifié en base : ces trois catégories partagent `fire_mode =
+NULL`, exactement le même champ déjà établi par `rules/combat.md` (§Autorité) pour distinguer Tir de
+Corps à corps (« CC/RC/RL sont des modes de tir ... une arme de contact n'a aucun `fire_mode` »). Les
+25 accessoires du catalogue (`Accessoires pour armes` : lunettes, silencieux, logiciels de visée,
+poignée, harnais, trépied) sont tous conçus pour une arme qui tire. Précédent exact du même type
+d'erreur de classification déjà rencontré deux fois sur ce projet (exo puis drone,
+`DRONE-CC-MELEE-MISCLASS`).
+
+**Correctif** (`server/src/services/modingService.js`) : ajout de `AND re.fire_mode IS NOT NULL`
+à la requête SQL de `getModingState` (liste des cibles) et `|| weaponRef.fire_mode == null` à la
+garde de `installMod` — réutilise une colonne déjà faisant autorité ailleurs dans le projet, aucune
+nouvelle donnée. Vérifié en base locale avant correctif : zéro mod déjà installé sur une arme
+`fire_mode` NULL — aucune donnée existante affectée, aucun nettoyage requis.
+
+**Testé** : `node --env-file=.env --test server/src/services/modingService.test.mjs` (5/5 — rejet
+d'une grenade comme cible, non-régression sur une vraie arme à feu, absence de la grenade dans la
+liste des cibles modables) ; fixtures vérifiées nettoyées en base après coup (aucun résidu).
+**Non testé** : scénario réel en navigateur (tentative d'installation depuis l'écran Modding).
+**Données** : aucune migration, aucun changement de schéma.
+**Retour arrière** : `git revert` du fichier suffit.

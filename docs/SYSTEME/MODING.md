@@ -69,6 +69,17 @@ fichier JS (précédent : PF2e Rule Elements, Foundry VTT — le type de comport
 l'item, pas une liste d'ID en code). Ajouter un futur item au même comportement ne touche qu'une
 migration, jamais `shared/weaponModRegistry.js`.
 
+### 2bis. Cible valide — `fire_mode IS NOT NULL` (corrigé 2026-10-06, GRENADE-ACCEPTS-WEAPON-MODS)
+
+`fire_mode` (`ref_equipment`) n'existe que sur les armes qui tirent réellement — `rules/combat.md`
+§Autorité : CC/RC/RL sont des modes de tir, une arme de contact n'en a jamais. `getModingState`
+(liste des cibles proposées) et `installMod` (garde serveur) filtrent désormais tous les deux sur
+`fire_mode IS NOT NULL`, en plus de `family = 'Armes'` et `category != 'Accessoires pour armes'`.
+Avant ce correctif, seuls ces deux derniers critères étaient vérifiés — une arme de contact, une arme
+de jet ou une grenade (toutes `fire_mode` NULL) passaient le filtre et pouvaient recevoir une lunette,
+un silencieux ou un logiciel de visée, sans aucun sens en jeu. Zéro donnée réelle affectée (vérifié en
+base locale : aucun mod installé sur une arme `fire_mode` NULL avant correctif).
+
 ---
 
 ## 3. Exclusivité de slot — réglée à l'installation, jamais au calcul
