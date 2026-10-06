@@ -91,7 +91,7 @@ async function finalizeEntityDisplacement(io, campaignId, {
   const attrKnown = ATTR_LABELS[attributeId] != null
   const breakdownDisp = [
     attrKnown
-      ? { i18nKey: 'attr.' + attributeId, value: attributeAN, type: 'base' }
+      ? { i18nKey: 'charSheet.attr.' + attributeId, value: attributeAN, type: 'base' }
       : { label: attributeId, value: attributeAN, type: 'base' },
     ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
     { label: 'Seuil', value: chancesDeReussite, type: 'total' },
@@ -103,7 +103,7 @@ async function finalizeEntityDisplacement(io, campaignId, {
     type: 'entity_action', interactionType: 'displacement',
     isCriticalSuccess, isCriticalFail: false, seed, timestamp,
     ...(attrKnown
-      ? { skillLabelKey: 'attr.' + attributeId }
+      ? { skillLabelKey: 'charSheet.attr.' + attributeId }
       : { skillLabel: attributeId }),
     mechanicalTotal: attributeAN, chancesDeReussite, diffLabel, isSuccess, mr,
     breakdown: breakdownDisp,
@@ -642,7 +642,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       if (rawOutcome.catastropheRisk) {
         await openChanceChoice(io, campaignId, token.character_id, {
           ...(ATTR_LABELS[attributeId] != null
-            ? { testLabelKey: 'attr.' + attributeId }
+            ? { testLabelKey: 'charSheet.attr.' + attributeId }
             : { testLabel: attributeId }),
           site: 'entity_displacement',
           context: finalizeCtx,

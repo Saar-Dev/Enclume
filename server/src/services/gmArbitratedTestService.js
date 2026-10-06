@@ -95,6 +95,10 @@ export async function resolveGmArbitratedTest({
     let mechanicalTotal = 0
     let effectiveMalus = 0
     let formulaLabel = skillId || attributeId || '?'
+    // i18n (PLAN_LOCALISATION.md §9.16, Lot 7) : renseigné SEULEMENT pour la branche Attribut
+    // (ATTR_LABELS) — jamais pour Compétence (refSkill.label, déjà résolu i18n côté Lot 5) ni le
+    // repli skillId brut, qui restent du texte de passage, pas une clé.
+    let formulaLabelKey
     // Renseigné selon le type de Test (mutuellement exclusif, cf. branchement plus bas) — sert
     // uniquement à résoudre le bonus de Réussite critique RAW p.204 (docs/PLAN_TEST_CRITIQUE.md
     // Lot 2) via getCriticalSuccessBonus, jamais recalculé à la main ici.
@@ -130,6 +134,7 @@ export async function resolveGmArbitratedTest({
         mechanicalTotal = calcAttributeAN(attrs, attributeId, genotypeRow, mutationEffects)
         attributeANForBonus = mechanicalTotal
         formulaLabel = ATTR_LABELS[attributeId] || attributeId
+        if (ATTR_LABELS[attributeId] != null) formulaLabelKey = 'charSheet.attr.' + attributeId
       }
 
       // ── Malus effectif (blessures + encombrement) ──────────────────────
@@ -162,7 +167,10 @@ export async function resolveGmArbitratedTest({
     } else {
       console.warn(`[WS] gmArbitratedTestService — char_sheet introuvable pour character ${characterId}, fallback total=0`)
       if (skillId) formulaLabel = skillId
-      else if (attributeId) formulaLabel = ATTR_LABELS[attributeId] || attributeId
+      else if (attributeId) {
+        formulaLabel = ATTR_LABELS[attributeId] || attributeId
+        if (ATTR_LABELS[attributeId] != null) formulaLabelKey = 'charSheet.attr.' + attributeId
+      }
     }
 
     const color = await getUserColor(db, playerUserId)
@@ -184,11 +192,13 @@ export async function resolveGmArbitratedTest({
     const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
 
     const breakdown = [
-      { label: formulaLabel, value: mechanicalTotal, type: 'base' },
-      ...(defaultDifficulty !== 0 ? [{ label: 'Difficulté', value: defaultDifficulty, type: defaultDifficulty > 0 ? 'bonus' : 'malus' }] : []),
-      ...(gmModifier !== 0 ? [{ label: 'Modificateur GM', value: gmModifier, type: gmModifier > 0 ? 'bonus' : 'malus' }] : []),
-      ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
-      { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+      formulaLabelKey
+        ? { i18nKey: formulaLabelKey, value: mechanicalTotal, type: 'base' }
+        : { label: formulaLabel, value: mechanicalTotal, type: 'base' },
+      ...(defaultDifficulty !== 0 ? [{ i18nKey: 'combat:breakdown.difficulte', value: defaultDifficulty, type: defaultDifficulty > 0 ? 'bonus' : 'malus' }] : []),
+      ...(gmModifier !== 0 ? [{ i18nKey: 'combat:breakdown.modificateurGm', value: gmModifier, type: gmModifier > 0 ? 'bonus' : 'malus' }] : []),
+      ...(effectiveMalus !== 0 ? [{ i18nKey: 'combat:breakdown.malusSanteEncombrement', value: effectiveMalus, type: 'malus' }] : []),
+      { i18nKey: 'combat:resultPanels.rollLine.threshold', value: chancesDeReussite, type: 'total' },
     ]
 
     const timestamp = new Date().toISOString()
@@ -205,7 +215,7 @@ export async function resolveGmArbitratedTest({
       catastropheRisk,
       seed,
       timestamp,
-      skillLabel: formulaLabel,
+      ...(formulaLabelKey ? { skillLabelKey: formulaLabelKey } : { skillLabel: formulaLabel }),
       mechanicalTotal,
       chancesDeReussite,
       effectiveMalus,

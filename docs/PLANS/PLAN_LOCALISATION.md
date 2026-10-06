@@ -1628,8 +1628,12 @@ fichiers émetteurs pour `skillLabel:`/`testLabel:`/`label:` littéraux, pas une
   (`"Manœuvre d'armure"`, `"Tentative de se redresser (Manœuvre d'armure)"`, et sa variante Chance)
   — le §9.8 supposait une 4ᵉ variante par symétrie avec les jets toucher/défendre qui n'existe pas
   dans le code. Nommage corrigé à 3 clés (`manoeuvreArmure`/`redresserArmure`/`redresserArmureChance`).
-- `ATTR_LABELS` vit dans `fr.json.attr.*` (namespace par défaut), pas `fr.json.charSheet.attr.*`
-  comme écrit au §9.8bis — chemin corrigé, contenu identique (vérifié exact).
+- ~~`ATTR_LABELS` vit dans `fr.json.attr.*` (namespace par défaut), pas `fr.json.charSheet.attr.*`
+  comme écrit au §9.8bis — chemin corrigé, contenu identique (vérifié exact).~~ **FAUX, corrigé au
+  §9.16** : le §9.8bis avait raison dès le départ (`fr.json.charSheet.attr.*`, imbriqué) — cette
+  « correction » était elle-même l'erreur, introduite par une vérification trop rapide (`data.attr`
+  testé sans tenir compte de l'imbrication). A fait passer un mauvais chemin de clé dans 2 fichiers
+  déjà commités (`socketEntity.js`, `gmArbitratedTestService.js`) avant d'être repéré et corrigé.
 
 **Code produit** :
 - `client/src/locales/combat.json` — 2 nouvelles sections top-level `diceLabels`/`breakdown` (avec
@@ -1723,8 +1727,9 @@ site `testLabel` posé AVANT résolution via `openChanceChoice` (Catastrophe pos
 `ATTR_LABELS[attributeId] || attributeId` — `attributeId` vient de `interactions.attribute_id`
 (contenu auteur de carte), **pas garanti** dans `ATTR_LABELS` (8 codes fixes) : repli texte brut
 conservé à l'identique (`attrKnown = ATTR_LABELS[attributeId] != null`), migration seulement si
-connu (`skillLabelKey: 'attr.' + attributeId`, namespace par défaut — pas de préfixe `combat:`,
-`fr.json.attr.*` existe déjà). `formula` **non touché** (hors périmètre — texte FR brut affiché tel
+connu (`skillLabelKey: 'charSheet.attr.' + attributeId` — namespace par défaut, pas de préfixe
+`combat:`, mais la table vit imbriquée sous `fr.json.charSheet.attr.*`, PAS à la racine : voir le
+correctif §9.16, trouvé après ce commit et appliqué ici rétroactivement). `formula` **non touché** (hors périmètre — texte FR brut affiché tel
 quel par `DicePanel.jsx#h.formula`, qui ne distingue pas ce champ d'une notation de dé `/r` ; un lot
 séparé, pas celui-ci).
 
@@ -1748,3 +1753,29 @@ dans l'objet attendu (le test exigeait une égalité exacte des clés, pas un so
 Résidu vérifié : les seules lignes `test_label` correspondant au motif recherché après coup sont des
 données de jeu réelles (campagne « LOCAL », 2026-09-25, `resolved_by` non nul) — pas des fixtures
 oubliées. `node --check` sur `socketEntity.js`.
+
+### 9.16 Correctif — mauvais chemin de clé `ATTR_LABELS` dans 2 fichiers déjà commités (2026-10-06)
+
+En codant `gmArbitratedTestService.js` (étape suivante), `node -e "JSON.parse(...)"` contre
+`fr.json.attr.FOR` a renvoyé `undefined` — le chemin utilisé dans `socketEntity.js` ET
+`gmArbitratedTestService.js` (`'attr.' + attributeId`, posé à l'étape 5-6, §9.15) **ne résout rien**.
+`grep -n '"attr"' fr.json` montre une seule occurrence, imbriquée à l'intérieur de la clé `charSheet`
+(ligne ~879-926 de `fr.json`), pas à la racine. **Le §9.8bis avait raison dès le départ**
+(`fr.json.charSheet.attr.*`) ; la « correction » écrite au §9.12 (« vit dans `fr.json.attr.*`, pas
+`fr.json.charSheet.attr.*` ») était elle-même fausse — produite par un test rapide
+(`data.attr ?? data.charSheet?.attr`) qui ne distinguait pas assez précisément les deux niveaux.
+
+**Pourquoi ça marche quand même en pratique sans préfixe `combat:`** : `charSheet` ici est une clé
+imbriquée ORDINAIRE à l'intérieur du namespace par défaut (`fr.json` = namespace `translation`), pas
+le namespace i18next séparé `charSheet` (chargé depuis `charSheet.json`, qui lui n'a AUCUNE clé
+`attr` — vérifié, les deux objets différents partagent juste le même nom). `keySeparator` ('.') et
+`nsSeparator` (':') sont indépendants : `t('charSheet.attr.FOR')` sans `:` reste entièrement un
+chemin de clé dans le namespace par défaut déjà actif pour l'appelant — jamais interprété comme un
+changement de namespace.
+
+**Corrigé** (`sed` ciblé, 5 sites, les 2 fichiers déjà commités) : `'attr.' + attributeId` →
+`'charSheet.attr.' + attributeId` dans `socketEntity.js` (×3 : breakdown, skillLabelKey, testLabelKey)
+et `gmArbitratedTestService.js` (×2 : les 2 affectations de `formulaLabelKey`). **Validé** :
+`node --check` sur les 2 fichiers, `node -e "..."` confirmant `fr.json.charSheet.attr.FOR === 'Force'`.
+Sera inclus dans le commit de l'étape en cours (`gmArbitratedTestService.js`), pas un commit séparé —
+même cause racine, correction avant que le code fautif n'ait été poussé.
