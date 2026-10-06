@@ -1806,7 +1806,7 @@ router.get('/:characterId/drone', async (req, res, next) => {
       .first()
     if (!drone) return res.json({ drone: null })
 
-    const programs = await db('drone_programs')
+    const programsRaw = await db('drone_programs')
       .where({ 'drone_programs.character_id': req.params.characterId })
       .leftJoin('ref_equipment', 'drone_programs.equipment_id', 'ref_equipment.id')
       .select(
@@ -1818,10 +1818,16 @@ router.get('/:characterId/drone', async (req, res, next) => {
         'drone_programs.level',
         'drone_programs.sort_order',
         'ref_equipment.name as program_name',
+        'ref_equipment.name_i18n as program_name_i18n',
         'ref_equipment.description as program_description',
+        'ref_equipment.description_i18n as program_description_i18n',
       )
       .orderBy('drone_programs.sort_order', 'asc')
       .orderBy('drone_programs.id', 'asc')
+    // i18n (PLAN_LOCALISATION.md §7.16.5) : aligne sur POST/PUT /drone/programs, déjà câblés.
+    const programs = programsRaw.map(p => localizeRefAliased('ref_equipment', p, {
+      program_name: 'name', program_description: 'description',
+    }))
 
     res.json({ drone, programs })
   } catch (err) { next(err) }
@@ -1876,7 +1882,7 @@ router.put('/:characterId/drone', async (req, res, next) => {
 // Lecture ouverte à tous les membres (même règle que les autres GET drone).
 router.get('/:characterId/drone/cargo', async (req, res, next) => {
   try {
-    const items = await db('char_inventory')
+    const itemsRaw = await db('char_inventory')
       .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
       .where({ 'char_inventory.character_id': req.params.characterId })
       .select(
@@ -1885,10 +1891,14 @@ router.get('/:characterId/drone/cargo', async (req, res, next) => {
         'char_inventory.quantity',
         'char_inventory.custom_name',
         'ref_equipment.name as ref_name',
+        'ref_equipment.name_i18n as ref_name_i18n',
         'ref_equipment.family as ref_family',
+        'ref_equipment.family_i18n as ref_family_i18n',
         'ref_equipment.weight as ref_weight',
       )
       .orderBy('char_inventory.created_at', 'asc')
+    // i18n (PLAN_LOCALISATION.md §7.16.5) : résout ref_name/ref_family, pass-through en fr.
+    const items = itemsRaw.map(i => localizeRefAliased('ref_equipment', i, { ref_name: 'name', ref_family: 'family' }))
 
     const total_weight = items.reduce((sum, item) =>
       sum + (item.ref_weight ?? 0) * (item.quantity ?? 1), 0)
@@ -2102,10 +2112,19 @@ router.delete('/:characterId/drone/programs/:programId', async (req, res, next) 
   } catch (err) { next(err) }
 })
 
+// i18n (PLAN_LOCALISATION.md §7.16.5) : display_name se calculait en SQL (COALESCE), ce qui bloque
+// à jamais toute résolution i18n du nom catalogue — recalculé ici après résolution de ref_name, même
+// ordre de priorité (label_override > nom personnalisé drone_weapons.name > nom catalogue).
+function withDroneWeaponDisplayName(row) {
+  if (row == null) return row
+  const resolved = localizeRefAliased('ref_equipment', row, { ref_name: 'name' })
+  return { ...resolved, display_name: resolved.label_override ?? resolved.name ?? resolved.ref_name ?? null }
+}
+
 // GET /:characterId/drone/weapons — liste armes avec stats ref_equipment
 router.get('/:characterId/drone/weapons', async (req, res, next) => {
   try {
-    const weapons = await db('drone_weapons')
+    const weaponsRaw = await db('drone_weapons')
       .where({ 'drone_weapons.character_id': req.params.characterId })
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
@@ -2121,8 +2140,8 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
         'drone_weapons.portee',
         'drone_weapons.fire_mode',
         'drone_weapons.notes',
-        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
+        'ref_equipment.name_i18n as ref_name_i18n',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
@@ -2138,6 +2157,7 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
       )
       .orderBy('drone_weapons.sort_order', 'asc')
       .orderBy('drone_weapons.id', 'asc')
+    const weapons = weaponsRaw.map(withDroneWeaponDisplayName)
 
     res.json({ weapons })
   } catch (err) { next(err) }
@@ -2192,8 +2212,8 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
         'drone_weapons.*',
-        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
+        'ref_equipment.name_i18n as ref_name_i18n',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
@@ -2209,7 +2229,7 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
       )
       .first()
 
-    res.status(201).json({ weapon: weaponWithRef })
+    res.status(201).json({ weapon: withDroneWeaponDisplayName(weaponWithRef) })
   } catch (err) { next(err) }
 })
 
@@ -2241,8 +2261,8 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
         'drone_weapons.*',
-        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
+        'ref_equipment.name_i18n as ref_name_i18n',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
@@ -2258,7 +2278,7 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
       )
       .first()
 
-    res.json({ weapon })
+    res.json({ weapon: withDroneWeaponDisplayName(weapon) })
   } catch (err) { next(err) }
 })
 
@@ -2544,12 +2564,24 @@ router.delete('/:characterId/exo/avaries/:severity', async (req, res, next) => {
 // Un seul catalogue depuis la fusion ref_exo_equipment → ref_equipment (PLAN_EXOEQ_FUSION.md) —
 // l'exclusive arc à 2 sources (migrations 260/262, archivées) n'a plus lieu d'être : il ne reste
 // qu'une seule vraie source catalogue possible (`ref_equipment_id`), plus de COALESCE entre 2 tables.
+// i18n (PLAN_LOCALISATION.md §7.16.5) : display_name se calculait en SQL (COALESCE), ce qui bloque
+// à jamais toute résolution i18n du nom catalogue — recalculé ici après résolution de ref_name, même
+// ordre de priorité (label_override > nom catalogue). Partagé systems/weapons (même logique,
+// `exo_systems`/`exo_weapons` n'ont ni l'un ni l'autre de nom personnalisé propre, contrairement à
+// drone_weapons — cf. withDroneWeaponDisplayName).
+function withExoDisplayName(row) {
+  if (row == null) return row
+  const resolved = localizeRefAliased('ref_equipment', row, { ref_name: 'name' })
+  return { ...resolved, display_name: resolved.label_override ?? resolved.ref_name ?? null }
+}
+
 function selectExoSystemFields(query) {
   return query
     .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_systems.*',
-      db.raw('COALESCE(exo_systems.label_override, ref_equipment.name) as display_name'),
+      'ref_equipment.name as ref_name',
+      'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.description as ref_description',
       'ref_equipment.category as ref_category',
     )
@@ -2560,7 +2592,8 @@ function selectExoWeaponFields(query) {
     .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_weapons.*',
-      db.raw('COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name'),
+      'ref_equipment.name as ref_name',
+      'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.description as ref_description',
       'ref_equipment.damage_h as ref_damage',
       'ref_equipment.shock as ref_shock',
@@ -2613,7 +2646,7 @@ router.get('/:characterId/exo/systems', async (req, res, next) => {
     const { disconnected } = selectDisconnectedSystems({ gestionSystemes, systems })
     const disconnectedIds = new Set(disconnected.map(s => s.id))
 
-    res.json({ systems: systems.map(s => ({ ...s, disconnected: disconnectedIds.has(s.id) })) })
+    res.json({ systems: systems.map(s => ({ ...withExoDisplayName(s), disconnected: disconnectedIds.has(s.id) })) })
   } catch (err) { next(err) }
 })
 
@@ -2649,7 +2682,7 @@ router.post('/:characterId/exo/systems', async (req, res, next) => {
       .returning('id')
     const system = await selectExoSystemFields(db('exo_systems').where({ 'exo_systems.id': inserted.id })).first()
 
-    res.status(201).json({ system })
+    res.status(201).json({ system: withExoDisplayName(system) })
   } catch (err) { next(err) }
 })
 
@@ -2674,7 +2707,7 @@ router.put('/:characterId/exo/systems/:systemId', async (req, res, next) => {
 
     await db('exo_systems').where({ id: req.params.systemId }).update(updates)
     const system = await selectExoSystemFields(db('exo_systems').where({ 'exo_systems.id': req.params.systemId })).first()
-    res.json({ system })
+    res.json({ system: withExoDisplayName(system) })
   } catch (err) { next(err) }
 })
 
@@ -2736,7 +2769,7 @@ router.get('/:characterId/exo/weapons', async (req, res, next) => {
     )
       .orderBy('exo_weapons.sort_order', 'asc')
       .orderBy('exo_weapons.id', 'asc')
-    res.json({ weapons })
+    res.json({ weapons: weapons.map(withExoDisplayName) })
   } catch (err) { next(err) }
 })
 
@@ -2768,7 +2801,7 @@ router.post('/:characterId/exo/weapons', async (req, res, next) => {
       .returning('id')
     const weapon = await selectExoWeaponFields(db('exo_weapons').where({ 'exo_weapons.id': inserted.id })).first()
 
-    res.status(201).json({ weapon })
+    res.status(201).json({ weapon: withExoDisplayName(weapon) })
   } catch (err) { next(err) }
 })
 
@@ -2792,7 +2825,7 @@ router.put('/:characterId/exo/weapons/:weaponId', async (req, res, next) => {
 
     await db('exo_weapons').where({ id: req.params.weaponId }).update(updates)
     const weapon = await selectExoWeaponFields(db('exo_weapons').where({ 'exo_weapons.id': req.params.weaponId })).first()
-    res.json({ weapon })
+    res.json({ weapon: withExoDisplayName(weapon) })
   } catch (err) { next(err) }
 })
 
@@ -2900,17 +2933,22 @@ router.delete('/:characterId/exo/computers/:computerId', async (req, res, next) 
 // GET /:characterId/exo/programs
 router.get('/:characterId/exo/programs', async (req, res, next) => {
   try {
-    const programs = await db('exo_programs')
+    const programsRaw = await db('exo_programs')
       .where({ 'exo_programs.character_id': req.params.characterId })
       .leftJoin('ref_equipment', 'exo_programs.equipment_id', 'ref_equipment.id')
       .select(
         'exo_programs.id', 'exo_programs.character_id', 'exo_programs.equipment_id',
         'exo_programs.label_override', 'exo_programs.category', 'exo_programs.level',
         'exo_programs.exo_computer_id', 'exo_programs.sort_order',
-        'ref_equipment.name as program_name', 'ref_equipment.description as program_description',
+        'ref_equipment.name as program_name', 'ref_equipment.name_i18n as program_name_i18n',
+        'ref_equipment.description as program_description', 'ref_equipment.description_i18n as program_description_i18n',
       )
       .orderBy('exo_programs.sort_order', 'asc')
       .orderBy('exo_programs.id', 'asc')
+    // i18n (PLAN_LOCALISATION.md §7.16.5) : aligne sur POST/PUT /exo/programs, déjà câblés.
+    const programs = programsRaw.map(p => localizeRefAliased('ref_equipment', p, {
+      program_name: 'name', program_description: 'description',
+    }))
     res.json({ programs })
   } catch (err) { next(err) }
 })
