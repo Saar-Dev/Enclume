@@ -7,9 +7,12 @@
 > (trouvés en analyse à charge, patron B1, non dans l'inventaire de septembre) + snapshot `mod_name`
 > (`modingService.js`) + round-trip migration 318 validé en base locale (serveur confirmé arrêté par
 > Saar avant exécution). Détail §7.16.6. Reste empêtré avec une dette plus large que Lot 6 (UI de
-> jets de dés combat, jamais ouverte) volontairement laissé dehors (§7.16.1b), et §7.16.5 (gestion de
-> fiche drone/exo, `char-sheet.js`) laissé en trouvaille ouverte, non traitée. **Commit : en attente
-> de confirmation Saar.**
+> jets de dés combat, jamais ouverte) volontairement laissé dehors (§7.16.1b).
+> 2026-10-06 (Dev) — **Lot 5 B3 CODÉ ET VALIDÉ** (§7.16.5, gestion de fiche drone/exo,
+> `char-sheet.js`) : audit complet (pas seulement la trouvaille initiale), correction trouvée en
+> analyse à charge (`COALESCE` SQL ne peut pas résoudre l'i18n, recalcul déplacé en JS), 14 points
+> d'édition en 1 commit, 114 lignes réelles comparées ancien/nouveau calcul, zéro désaccord. Détail
+> §7.16.5. **Commit : en attente de confirmation Saar.**
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1037,27 +1040,87 @@ knex brute ; `SELECT knex_migrations` avant tout rappel manuel).
 Hors scope de ce lot (dette documentée, pas oubliée) : tout 7.16.1(b), tout Lot 6 (§8), et §7.16.5
 ci-dessous (trouvaille ouverte, décision Saar).
 
-### 7.16.5 Trouvaille ouverte (analyse à charge 2026-10-06) — gestion de fiche drone/exo, non auditée
+### 7.16.5 Gestion de fiche drone/exo — audit complet (2026-10-06), devenu Lot 5 B3
 
-En élargissant la recherche au-delà de `socket*`/`services*` (résolution de combat), un foyer bien
-plus large apparaît dans `server/src/routes/character/char-sheet.js` — jamais vu par le ré-audit
-§7.7bis ni par aucune phase précédente : les routes de **gestion de fiche** drone/exo (pas la
-résolution de combat) renvoient `ref_equipment.name`/`description`/`category` et des
-`COALESCE(label_override, …, name) as display_name` **sans aucun `_i18n`**, en JSON REST propre
-(`res.json({ weapons })` etc.) :
+Trouvaille initiale élargie en audit complet de `server/src/routes/character/char-sheet.js` (toutes
+les routes drone/exo, GET/POST/PUT, pas seulement celles croisées en passant). Deux découvertes qui
+changent la portée par rapport au premier repérage :
 
-- `GET /:characterId/drone` (l.1801-1828, `program_name`/`program_description`)
-- `GET /:characterId/drone/cargo` (l.1877-1898, `ref_name`/`ref_family`)
-- `GET /:characterId/drone/weapons` (l.2106-2144, `display_name`/`ref_name`)
-- `exo_systems`/`exo_weapons` (≈l.2551-2573, `display_name`/`ref_description`/`ref_category`)
-- `exo_programs` (≈l.2909-2911, `program_name`/`program_description`)
-- probablement leurs miroirs POST/PUT (le commentaire l.2133 « sélectionnée aussi par POST/PUT —
-  réponse cohérente avec GET » le suggère explicitement pour `/drone/weapons`, à vérifier pour les
-  autres).
+1. **Câblage partiel déjà présent, incohérent** — `POST`/`PUT /drone/programs` (l.1998-2017/2056-2089)
+   et `POST`/`PUT /exo/programs` (l.2924-2987/2993-3045) résolvent déjà `program_name`/
+   `program_description` via `resolveRefField` (`name_i18n`/`description_i18n` sélectionnés). Mais le
+   `GET` liste de ces deux mêmes ressources (l.1801-1828 et l.2901-2916) ne le fait pas — une fiche
+   rechargée (F5) perdrait la résolution qu'un ajout/édition venait d'appliquer. C'est une
+   **incohérence lecture/écriture à corriger**, pas une dette neuve à inventer.
+2. **`exo_systems`/`exo_weapons` passent par 2 fonctions partagées** (`selectExoSystemFields`,
+   `selectExoWeaponFields`, l.2547-2578), réutilisées par GET/POST/PUT des deux ressources (précédent
+   2026-08-21 : bug réel de drift GET vs POST/PUT déjà corrigé une fois en unifiant sur ces fonctions,
+   `[VÉRIFIÉ]` commentaire l.2537-2546).
 
-Même patron, même risque (nul, FR seul) que B1 — mais une **surface comparable à B1 lui-même** (8-10+
-sites), pas un détail. **Pas intégré à ce lot** (romprait « un problème à la fois ») — consigné ici
-pour qu'il ne soit pas reperdu, décision Saar sur l'ouverture d'un lot dédié (B3 ?) et son moment.
+**Correction après analyse à charge (2026-10-06)** : l'idée « corriger les 2 fonctions couvre les 6
+routes d'un coup » est **fausse** — trouvée en examinant le SQL de près, pas en relisant le plan.
+`display_name` est un `COALESCE(label_override, …, ref_equipment.name)` calculé **côté SQL**, avant
+que le résolveur i18n puisse intervenir. Ajouter `name_i18n` à côté sans toucher ce `COALESCE` ne
+changerait rien : il continuerait à piocher directement `ref_equipment.name`, pour toujours — exactement
+la demi-mesure cosmétique interdite (AGENTS.md invariant 2). Le geste correct : sortir ce calcul du SQL,
+le refaire en JS après résolution (`label_override ?? nomPersonnalisé ?? resolveRefField(...)`,
+même ordre de priorité qu'avant). Mais `selectExoSystemFields`/`selectExoWeaponFields` renvoient une
+requête **non exécutée** (pour que `.orderBy()`/`.first()` s'enchaînent chez l'appelant) — le recalcul
+JS ne peut donc pas vivre dans la fonction elle-même, il doit se faire à **chacun des 6 points d'appel**
+(3 par table : GET liste l.2601/2734, POST l.2650/2769, PUT l.2676/2794) après l'`await`. Même chose pour
+`drone_weapons` (`COALESCE(label_override, drone_weapons.name, ref_equipment.name)`, 3 blocs
+indépendants déjà identifiés).
+
+**Liste finale corrigée des points d'édition (résolveur `refI18n.js`, même patron B1/B2, zéro
+changement de valeur en fr)** — ~14 points, pas 9 :
+
+| Site | Geste |
+|---|---|
+| `GET /:characterId/drone` (l.1801-1828) | `program_name`/`program_description` — ajouter `name_i18n`/`description_i18n`, résoudre (aligne sur POST/PUT déjà câblés). Simple, pas de `COALESCE`. |
+| `GET /:characterId/drone/cargo` (l.1877-1898) | `ref_name`/`ref_family` — `localizeRefAliased`. Simple. |
+| `GET` (l.2106-2144) + `POST` (l.2190-2210) + `PUT` (l.2239-2258) `/:characterId/drone/weapons` | 3 blocs : ajouter `name_i18n`, retirer le `COALESCE` SQL, recalculer `display_name` en JS après résolution de `ref_name`. |
+| `selectExoSystemFields` (l.2547-2556) | Ajouter `name_i18n`, retirer le `COALESCE` SQL (ne renvoie plus `display_name` tout fait). |
+| 3 appelants de `selectExoSystemFields` (GET l.2601, POST l.2650, PUT l.2676) | Recalculer `display_name` après l'`await` (`label_override ?? resolveRefField(...)`) — GET dans le `.map()` déjà présent (ajout `disconnected`, zéro ligne supplémentaire), POST/PUT une ligne chacun. |
+| `selectExoWeaponFields` (l.2558-2578) | Même geste que `selectExoSystemFields`. |
+| 3 appelants de `selectExoWeaponFields` (GET l.2734, POST l.2769, PUT l.2794) | Même geste que les 3 appelants systems. |
+| `GET /:characterId/exo/programs` (l.2901-2916) | `program_name`/`program_description` — aligne sur POST/PUT déjà câblés. Simple, pas de `COALESCE`. |
+
+Tous les sites `[VÉRIFIÉ]` — lecture directe de chaque ligne, pas une supposition sur un nom de route.
+
+**Vérifié avant de proposer ce lot** : aucune comparaison de valeur sur ces champs côté client
+(`grep` sur `client/src` pour `.ref_name`/`.display_name`/`.program_name` suivis de `===`/`!==` —
+zéro résultat) — même garantie que B2, pas de « deuxième Klauss » cette fois non plus. Tous ces champs
+sont des JSON REST propres consommés par des panneaux de fiche (pas des phrases composées) — zéro
+chevauchement Lot 6.
+
+**Hors scope de ce lot** : unifier `drone_weapons` sur une fonction partagée comme `selectExo*Fields`
+(amélioration structurelle réelle, mais une cause à la fois — pas dans ce tour) ; tout 7.16.1(b)/Lot 6.
+
+**Couverture de test** `[VÉRIFIÉ]` : aucun fichier `.test.mjs` n'exerce ces routes aujourd'hui (`grep`
+sur `server/src/**/*.test.mjs` pour chacune des 6 routes — zéro résultat), avant comme après ce lot.
+Ouvrir une couverture de route pour ce fichier serait un chantier séparé (test coverage), pas celui-ci.
+Validation par requête directe contre la base réelle (même méthode que B2, §7.16.6), pas par un test
+de route automatisé.
+
+**Découpage réel** : finalement **1 commit** (pas 6) — tout dans `char-sheet.js`, même invariant ;
+découper en 6 aurait exigé un staging par hunk (`git add -p`), interdit (jamais `-i`). Cohérent avec
+AGENTS.md (« plusieurs fichiers ensemble s'ils implémentent le même invariant » — ici, encore plus
+net, un seul fichier).
+
+**Codé et validé (2026-10-06)** — 14 points d'édition, les 9 sites du tableau ci-dessus :
+- `node --check` + `git diff --check` propres ; import à chaud du module (`await import(...)`) sans
+  erreur (capte une erreur de référence qu'`--check` ne verrait pas).
+- **Comparaison directe ancien SQL `COALESCE` vs nouveau calcul JS, sur la base réelle** : 92 lignes
+  `exo_systems` + 20 `exo_weapons` + 2 `drone_weapons` = **114 lignes comparées, zéro désaccord**.
+- 5 cas synthétiques couvrant toutes les branches du `COALESCE` à 3 niveaux (`drone_weapons` :
+  label_override seul / nom personnalisé seul / nom catalogue seul / tout rempli / tout vide) —
+  les 5 correspondent exactement à la sémantique SQL.
+- Smoke base réelle des 3 sites simples (`drone` programmes, `drone/cargo`, `exo/programs`) : noms
+  résolus identiques à la colonne brute en fr.
+- Suite ciblée (B2 + dépendants, `refI18n.js` inchangé) : 86/86 verts, aucune régression.
+- **Non testé** : aucun parcours navigateur (fiche drone/exo jamais ouverte depuis ce lot) ; aucun
+  test de route automatisé n'existe pour ce fichier (avant comme après, cf. ci-dessus).
+- **Retour arrière** : revert du commit unique, `char-sheet.js` seul touché.
 
 ### 7.16.6 Validation réelle (2026-10-06)
 
