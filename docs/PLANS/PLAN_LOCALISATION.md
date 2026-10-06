@@ -37,8 +37,17 @@
 > codant : `MessageRendererRegistry.jsx` sélectionnait sa branche de rendu sur `msg.skillLabel !==
 > undefined` — câblé pour rester vrai une fois `skillLabel` remplacé par `skillLabelKey`. Lint + build
 > client propres. Zéro changement de comportement (aucun émetteur ne pose encore la nouvelle forme).
-> **⚠️ clos partiel** : validation navigateur Saar non faite. Étapes 1-15 (migration des 15 fichiers
-> serveur) non commencées.
+> **Validation navigateur confirmée (Saar, « c'est bon »)** — étape 0 passe à confirmée.
+> 2026-10-06 (Dev) — **Lot 7 CODÉ EN ENTIER** (§9.13-§9.21, feu vert Saar « Go ») : les 15 fichiers
+> émetteurs + le noyau partagé `combatAttackRoll.js` migrés, un commit par étape (13 commits). 2
+> trouvailles critiques en route, corrigées avant propagation : l'animation du dé 3D dépendait aussi
+> de la présence de `skillLabel` (`useSessionSocket.js`, corrigé §9.14) ; le chemin de la table
+> `ATTR_LABELS` dans `fr.json` avait été mal « corrigé » plus tôt, 5 sites réparés (§9.16). Une table
+> absente de l'inventaire initial trouvée en cours de route (`COMBAT_MODE_LABELS`, §9.19). Chaque
+> nouvelle clé vérifiée texte exact contre l'original via i18next réel (pas une relecture). **Zéro
+> changement de comportement** : aucun changement de texte visible, seulement sa résolution.
+> **⚠️ clos partiel** : aucun test en jeu réel encore fait sur ce gros morceau — reste l'étape 16
+> (retrait du repli double forme côté client) après validation Saar.
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
