@@ -67,25 +67,28 @@ export function useSessionSocket() {
     }
     const onCharacterUpdated = (updatedCharacter) => upsertCharacter(updatedCharacter)
     const onDiceResult = ({ userId, username, color, formula, rolls, total,
-      isCriticalSuccess, isCriticalFail, catastropheRisk, seed, timestamp, skillLabel, mechanicalTotal,
+      isCriticalSuccess, isCriticalFail, catastropheRisk, seed, timestamp, skillLabel, skillLabelKey,
+      skillLabelParams, mechanicalTotal,
       chancesDeReussite, diffLabel, isSuccess, interactionType, cardType, mr, targetName,
       localisation, severity, severityColor, secret, breakdown }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`, type: 'dice', user: username, color,
         formula, rolls, total, isCriticalSuccess, isCriticalFail,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess,
+        skillLabel, skillLabelKey, skillLabelParams, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess,
         interactionType, cardType, mr, targetName, localisation, severity, severityColor,
         secret: secret || false, breakdown,
       })
-      // Animation 3D — un Test compétence-vs-Seuil (skillLabel défini) est toujours 1d20 par
-      // construction RAW (resolvePolarisTest/gmArbitratedTestService ne roulent jamais que ça pour un
-      // Test) : dieType déduit directement, jamais parsé depuis `formula`, qui porte ici le libellé de
-      // la compétence (ex. "Discrétion"), pas une notation de dé — la logique de parsing existante ne
-      // s'applique qu'au jet brut (/r, WOUND_INFECTION_ROLL). rolls.length exclut le cas "réussite
-      // auto sans jet" (gmArbitratedTestService.js, rolls:[], bouton MJ dédié) — rien à animer.
+      // Animation 3D — un Test compétence-vs-Seuil (skillLabel OU skillLabelKey défini, PLAN_LOCALISATION.md
+      // §9.13 Lot 7 — un émetteur migré pose skillLabelKey à la place de skillLabel, même nature de
+      // message) est toujours 1d20 par construction RAW (resolvePolarisTest/gmArbitratedTestService ne
+      // roulent jamais que ça pour un Test) : dieType déduit directement, jamais parsé depuis `formula`,
+      // qui porte ici le libellé de la compétence (ex. "Discrétion"), pas une notation de dé — la logique
+      // de parsing existante ne s'applique qu'au jet brut (/r, WOUND_INFECTION_ROLL). rolls.length exclut
+      // le cas "réussite auto sans jet" (gmArbitratedTestService.js, rolls:[], bouton MJ dédié) — rien à
+      // animer.
       if (rolls.length > 0) {
-        const dieType = skillLabel !== undefined
+        const dieType = (skillLabel !== undefined || skillLabelKey !== undefined)
           ? 'd20'
           : formula.replace(/^\d+/, '').split('+')[0].split('-')[0]
         setLastDiceRoll({ rolls, dieType, seed, timestamp, color })

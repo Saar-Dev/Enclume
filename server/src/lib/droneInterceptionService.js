@@ -172,7 +172,8 @@ async function rollInterceptionTest(io, campaignId, protector, targetTokenId, se
     isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
     catastropheRisk: outcome.catastropheRisk,
     seed, timestamp: new Date().toISOString(),
-    skillLabel: `Interception — ${protector.droneName}`,
+    skillLabelKey: 'combat:diceLabels.interception',
+    skillLabelParams: { droneName: protector.droneName },
     mechanicalTotal: roll, diffLabel: `Seuil ${seuil}`,
     chancesDeReussite: seuil, isSuccess: outcome.isSuccess, mr: outcome.mr,
   } }

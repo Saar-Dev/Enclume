@@ -49,7 +49,7 @@ export async function emitSurpriseDiceResult(io, campaignId, db, character, outc
     isCriticalFail: outcome.isCriticalFail,
     seed: outcome.seed,
     timestamp: new Date().toISOString(),
-    skillLabel: 'Test de Réaction (Surprise)',
+    skillLabelKey: 'combat:diceLabels.testReactionSurprise',
     cardType: 'surprise',
     chancesDeReussite: outcome.baseIni,
     isSuccess: outcome.isSuccess,

@@ -1674,14 +1674,43 @@ même cause racine, pas un fichier à part.
 **Validé** : `node --check` sur les 2 fichiers, `node -e "JSON.parse(...)"` confirmant que les 2 clés
 résolvent exactement au texte original (`"Durée étourdissement"`/`"Test de Choc"`). Aucun test ciblé
 existant pour `emitShockDiceResult`/`_applyAutoStun` (recherché, aucun `.test.mjs` trouvé) — risque
-texte seul, `node --check` proportionné (AGENTS.md Clôture). Aucun branchement client sur le texte
-littéral de `skillLabel` trouvé (`grep skillLabel ===` sur `client/src`, aucun résultat) — migration
-sans risque de casser un discriminant caché.
+texte seul, `node --check` proportionné (AGENTS.md Clôture).
 
-**Reste à trancher avant l'étape 1** : ordre des étapes 2-15 (proposition §9.9 inchangée — fichiers
-à 1-4 sites d'abord). Note découverte en ouvrant ce chantier : 3 des 15 fichiers listés au §9.3
+**Correction** : la phrase « aucun branchement client sur le texte littéral de `skillLabel` trouvé »
+écrite ici initialement était **fausse** — le grep utilisé (`skillLabel ===`/`==`/`.includes`/
+`.startsWith`) ne couvrait pas le pattern `!==`. Trouvaille réelle en lisant `skillTestService.js`
+juste après (§9.14) : corrigée là, pas ici, pour garder la trace de l'erreur.
+
+### 9.14 Trouvaille critique — 2ᵉ discriminant caché sur `skillLabel` (2026-10-06)
+
+En migrant `surpriseService.js`/`droneInterceptionService.js`/`losService.js`, un commentaire de
+`skillTestService.js:73` signalait que `useSessionSocket.js#onDiceResult` **anime le dé 3D en d20
+systématiquement si `skillLabel` est défini** (`skillLabel !== undefined ? 'd20' : <parsé depuis
+formula>`, l.88) — un 2ᵉ discriminant cassé par la migration, en plus de celui déjà corrigé à
+l'étape 0 dans `MessageRendererRegistry.jsx`. **Vérifié par grep exhaustif sur tout `client/src`**
+(patterns `!==`/`===`/`?`/`!`/`&&`/`)`) : un seul autre site existe, déjà corrigé. Sans ce correctif,
+**tous les sites déjà migrés** (statusService.js ×2, socketCombatResolution.js, et les 3 suivants)
+auraient fait animer un d6/aucun dé reconnu à la place d'un d20 — régression visible, pas seulement
+un problème de texte.
+
+**Corrigé** : `useSessionSocket.js` — `onDiceResult` destructure et relaie maintenant aussi
+`skillLabelKey`/`skillLabelParams` (sinon perdus avant d'atteindre `MessageRendererRegistry.jsx`,
+aussi silencieusement cassé), et le calcul de `dieType` teste `skillLabel !== undefined ||
+skillLabelKey !== undefined`.
+
+**Autres points vérifiés, rien à changer** : `normalizeChatMessage.js` (lecture d'historique) relaie
+déjà tout le payload par spread (`...rest`) — aucune liste de champs à jour à maintenir.
+`chatService.js#toClientMessage` relaie `row.payload` tel quel (JSONB, aucun whitelisting). Seul un
+site persiste un message `type: 'DICE'` (`socketDice.js:112`, jet `/r` brut, jamais `skillLabel`) et
+réutilise directement la même variable `payload` que l'émission live — aucun champ à ajouter là non
+plus.
+
+**Validé** : `cd client && npx eslint src/lib/useSessionSocket.js` (0 erreur, 1 warning préexistant
+sans rapport — dépendances `useEffect` non touchées par ce diff), `npm run build` (succès).
+
+**Reste à trancher avant l'étape 2** : ordre des étapes 2-15 (proposition §9.9 inchangée — fichiers
+à 1-4 sites d'abord). Note déjà écrite à l'étape 1 : 3 des 15 fichiers listés au §9.3
 (`socketChance.js`, `chanceCatastropheChoiceService.js`, `exoPilotService.js`) sont du **pur
 passe-plat** (aucun `skillLabel`/`testLabel` littéral, seulement relais de variable) — leur migration
 ne peut pas être un « fichier » indépendant : elle doit arriver DANS le même commit que le premier
-appelant qui migre vers `testLabelKey`, pour que le relais transporte aussi le nouveau champ (sinon
-`i18nKey`/`params` serait perdu en chemin). À vérifier avant de choisir le 2ᵉ fichier.
+appelant qui migre vers `testLabelKey`, pour que le relais transporte aussi le nouveau champ.
