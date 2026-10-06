@@ -1779,3 +1779,20 @@ et `gmArbitratedTestService.js` (×2 : les 2 affectations de `formulaLabelKey`).
 `node --check` sur les 2 fichiers, `node -e "..."` confirmant `fr.json.charSheet.attr.FOR === 'Force'`.
 Sera inclus dans le commit de l'étape en cours (`gmArbitratedTestService.js`), pas un commit séparé —
 même cause racine, correction avant que le code fautif n'ait été poussé.
+
+### 9.17 Étapes 8-9 — `skillTestService.js` + `socketDice.js` (2026-10-06)
+
+Deux fichiers sans dépendance de relais (émission directe, aucun `openChanceChoice`).
+
+- `skillTestService.js` (`/t`) : 3 entrées `breakdown` statiques migrées (Difficulté/Malus santé/
+  Seuil, toutes réutilisées). `refSkill.label` (base du breakdown, `skillLabel`, `formula`) **non
+  touché** — texte déjà résolu par `ref_skills.label`, domaine Lot 5 (`ref_*`), pas Lot 7 (texte
+  composé JS). Même frontière que partout ailleurs dans ce lot.
+- `socketDice.js` (réparation, `EQUIPMENT_REPAIR_ROLL`) : gabarit `reparation` — `skillLabel` et
+  `itemName` restent des valeurs déjà résolues (passées en paramètres, pas re-cléées), seule la
+  composition (`` `${skillLabel} — Réparation${itemName ? ... : ''}` ``) devient
+  `skillLabelKey: 'combat:diceLabels.reparation'` + `skillLabelParams: { skill, item }`. Aucun
+  `openChanceChoice` dans ce fichier (vérifié par grep) — pas de dépendance au relais du §9.15.
+
+**Validé** : `node --check` sur les 2 fichiers. Aucun test ciblé existant pour ni l'un ni l'autre
+(recherché, aucun `.test.mjs`).

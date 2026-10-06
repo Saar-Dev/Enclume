@@ -80,9 +80,9 @@ export async function resolveSkillTestCommand(io, db, campaignId, user, { target
   const diffLabel = difficulty >= 0 ? `+${difficulty}` : `${difficulty}`
   const breakdown = [
     { label: refSkill.label, value: skillTotal, type: 'base' },
-    ...(difficulty !== 0 ? [{ label: 'Difficulté', value: difficulty, type: difficulty > 0 ? 'bonus' : 'malus' }] : []),
-    ...(activeMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: activeMalus, type: 'malus' }] : []),
-    { label: 'Seuil', value: threshold, type: 'total' },
+    ...(difficulty !== 0 ? [{ i18nKey: 'combat:breakdown.difficulte', value: difficulty, type: difficulty > 0 ? 'bonus' : 'malus' }] : []),
+    ...(activeMalus !== 0 ? [{ i18nKey: 'combat:breakdown.malusSanteEncombrement', value: activeMalus, type: 'malus' }] : []),
+    { i18nKey: 'combat:resultPanels.rollLine.threshold', value: threshold, type: 'total' },
   ]
   io.to(campaignId).emit(WS.DICE_RESULT, {
     userId: user.id, username: user.username, color,

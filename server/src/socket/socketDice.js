@@ -406,7 +406,8 @@ export function registerDiceHandlers(io, socket, context) {
       io.to(campaignId).emit(WS.DICE_RESULT, {
         userId: character.user_id, username: user.username, color,
         formula: '1d20', rolls: [rollResult.roll], total: rollResult.roll,
-        skillLabel: `${skillLabel} — Réparation${itemName ? ` : ${itemName}` : ''}`,
+        skillLabelKey: 'combat:diceLabels.reparation',
+        skillLabelParams: { skill: skillLabel, item: itemName ? ` : ${itemName}` : '' },
         mechanicalTotal: skillTotal,
         diffLabel: diffMod >= 0 ? `+${diffMod}` : `${diffMod}`,
         chancesDeReussite: threshold,
