@@ -24,8 +24,9 @@
 > `i18nKey`/`params` tel quel (déjà en prod sur `COMBAT_SYSTEM_NOTICE`), aucun nouveau mécanisme.
 > **Les 59 clés nommées** (§9.8) : 6 réutilisées (Règle 2, correspondance exacte vérifiée), 53
 > nouvelles dans `combat.json` (`diceLabels.*`/`breakdown.*`). **Plan de code écrit** (§9.9) : transition
-> à double forme côté client (3 fichiers), puis 15 fichiers serveur migrés un par un, commit final de
-> nettoyage — **zéro code produit**, prêt pour analyse à charge si Saar veut continuer.
+> à double forme côté client, puis 15 fichiers serveur migrés un par un, commit final de nettoyage.
+> **Analyse à charge faite** (§9.10) : lacune trouvée (Famille C jamais nommée) — **comblée** (§9.8bis),
+> total définitif **98 points de résolution** (18 réutilisés, 80 nouveaux). **Zéro code produit.**
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
@@ -1453,8 +1454,32 @@ réutilisent les 6 clés ci-dessus, pas de doublon.)
 **Pas fait ici** : l'assignation précise de CHAQUE site de code (~120) à SA clé — ce tableau nomme les
 clés, pas encore quel fichier/ligne appelle laquelle. C'est la portée du prochain pas (plan de code).
 
-**Décompte final** : 6 réutilisées + 53 nouvelles (18+17 statiques, 17+5 gabarits paramétrés) = 59,
-cohérent avec §9.6.
+**Décompte Familles A+B** : 6 réutilisées + 53 nouvelles (18+17 statiques, 17+5 gabarits paramétrés)
+= 59, cohérent avec §9.6.
+
+### 9.8bis Nommage de la Famille C (2026-10-06, comble la lacune du §9.10)
+
+Vérification Règle 2 chaîne par chaîne (pas par concept — même discipline que §9.8) :
+
+| Table serveur | Entrées | Réutilisable ? |
+|---|---|---|
+| `ATTR_LABELS` (`charStats.js`, 8) | FOR/CON/COO/ADA/PER/INT/VOL/PRE | **Oui, les 8** — `fr.json.charSheet.attr.{code}` (défaut, pas `combat`), correspondance exacte vérifiée (`Force`, `Constitution`…). **0 nouvelle clé.** |
+| `SITUATION_LABELS` (`socketCombatHelpers.js`, 12) | couverture_partielle/importante, obscurite_legere/importante | **4 réutilisables** — `modifiers.couvertures.{partielle,importante}` / `modifiers.obscurites.{legere,importante}`, correspondance exacte. |
+| ″ | cible/tireur_allure_{immobile,moyenne,rapide,maximale} (×2 préfixes) | **8 nouvelles** — `modifiers.allures.*` existe mais en forme courte sans préfixe (`"Immobile"` vs `"Cible immobile"`) et une différence de casse qui interdirait une simple concaténation sans changer le texte affiché. Nouvelles clés `breakdown.situation.*` (8). |
+| `PORTEE_LABELS` (5) | bout_portant, courte, moyenne, longue, extreme | **5 nouvelles** — `modifiers.portees.*` existe mais texte différent (`"Bout portant"` vs `"À bout portant"`, `"Courte"` vs `"Portée courte"`). Nouvelles clés `breakdown.portee.*` (5). |
+| `TAILLE_LABELS` (8) | minuscule … gigantesque | **8 nouvelles** — `cacModifiers.tailles.*` existe mais texte différent (`"Minuscule (~30 cm)"` vs `"Cible minuscule (~30cm)"`, espacement et préfixe différents). Nouvelles clés `breakdown.taille.*` (8). |
+| `LOCATION_LABELS` forme courte (`shared/armorConstants.js`, 6) | tete, corps, bras_gauche/droit, jambe_gauche/droite | **6 nouvelles** — `resultPanels.location.*` existe mais en forme longue (§9.10). Nouvelles clés `breakdown.shortLocation.*` (6). |
+
+**Total Famille C** : 39 entrées, 12 réutilisées (ATTR_LABELS entier + 4 de SITUATION_LABELS), 27
+nouvelles (`breakdown.situation.*`/`breakdown.portee.*`/`breakdown.taille.*`/`breakdown.shortLocation.*`).
+
+### 9.8ter Total définitif
+
+**59 (Familles A+B) + 39 (Famille C) = 98 points de résolution** — 18 réutilisent une clé existante
+(6 + 12), 80 sont nouveaux (53 + 27). C'est le chiffre complet annoncé au §9.10, maintenant nommé
+entrée par entrée. Les gabarits `degatsLocalisation`/`viseeLocalisation`/`chanceBouclierLocalisation`
+(§9.8) prennent désormais un paramètre **code** (`tete`/`bras_gauche`/…), résolu côté client via
+`breakdown.shortLocation.*` — corrige la sous-spécification relevée au §9.10.
 
 ### 9.9 Stratégie de transition et découpage en lots (2026-10-06)
 
