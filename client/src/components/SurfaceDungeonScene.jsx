@@ -2032,7 +2032,17 @@ function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null, enab
 function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails }) {
   const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
     && room.verticalProfile.slices.length > 0
-  const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
+  // SURFACE-RENDER-IDENTITY-CHURN (suite, 2026-10-07) — roomSliceAtLevel/multiPolygonContours
+  // retournent un objet/tableau neuf à chaque appel (vérifié : roomVerticalSlices reconstruit tout
+  // depuis room à chaque fois). Sans ce useMemo, footprintContours changeait de référence à CHAQUE
+  // rendu de ce composant même quand `room` (désormais stable, cf. roomsById) ne changeait pas,
+  // cassant quand même le useMemo interne de CurvedRoomSlab (contours fait partie de ses deps) —
+  // confirmé en jeu : les plafonds recalculaient encore après le premier correctif.
+  const footprintContours = useMemo(() => {
+    if (!hasVerticalProfile) return null
+    const slice = roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT)
+    return slice ? multiPolygonContours(slice.footprint) : null
+  }, [hasVerticalProfile, room, roomLookup])
   if (room.floorEnabled === false) return null
   return (
     <RoomSlab
@@ -2042,12 +2052,19 @@ function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails }) {
       textureMaterials={textureMaterials}
       opacity={1}
       showDetails={showDetails}
-      footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
+      footprintContours={footprintContours}
     />
   )
 }
 
 function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails }) {
+  // Même défaut, même correctif (voir RoomFloorSurface ci-dessus) — horizontalInterface est déjà
+  // stable (élément d'un tableau mémorisé sur surface.rooms), donc ce useMemo ne recalcule plus que
+  // lorsque la salle change vraiment.
+  const footprintContours = useMemo(
+    () => multiPolygonContours(horizontalInterface.footprint),
+    [horizontalInterface],
+  )
   return (
     <RoomSlab
       room={room}
@@ -2056,7 +2073,7 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
       textureMaterials={textureMaterials}
       opacity={opacity}
       showDetails={showDetails}
-      footprintContours={multiPolygonContours(horizontalInterface.footprint)}
+      footprintContours={footprintContours}
       yOverride={horizontalInterface.y}
     />
   )
@@ -2119,6 +2136,27 @@ function SurfaceDungeonScene({
     [roomWallSegments, surfaceWallSegments],
   )
   const occludedWallIds = useOccludedWallIds(allWallSegments, displayLevel, cameraVolumeRoomId, wallOcclusionEnabled)
+  // SURFACE-RENDER-IDENTITY-CHURN (ticket 9f6c2a6e, défaut confirmé par logs répétés) — room={{ id,
+  // ...room }} / connector={{ id, ...connector, runtimeState }} étaient reconstruits en JSX à CHAQUE
+  // rendu de ce composant (y compris un rendu causé par cameraVolumeRoomId/occludedWallIds, sans
+  // rapport avec les données de la carte), cassant la mémorisation useMemo interne de CurvedRoomSlab
+  // et DoorConnectorModel (clonage GLTF + géométrie refaits pour rien). Un seul objet par salle,
+  // partagé entre son rendu en sol et en plafond ; un seul objet par connecteur — reconstruits
+  // seulement quand surface.rooms/connectors ou l'état runtime changent vraiment.
+  const roomsById = useMemo(() => {
+    const map = new Map()
+    for (const [id, room] of Object.entries(surface.rooms)) {
+      map.set(id, { id, ...room })
+    }
+    return map
+  }, [surface.rooms])
+  const connectorsById = useMemo(() => {
+    const map = new Map()
+    for (const [id, connector] of Object.entries(surface.connectors)) {
+      map.set(id, { id, ...connector, runtimeState: runtimeFeatureStates[connector?.worldId || id] || null })
+    }
+    return map
+  }, [surface.connectors, runtimeFeatureStates])
   const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
@@ -2169,7 +2207,7 @@ function SurfaceDungeonScene({
         return (
           <RoomFloorSurface
             key={id}
-            room={{ id, ...room }}
+            room={roomsById.get(id)}
             roomLookup={surface.rooms}
             textureMaterials={textureMaterials}
             showDetails={showDetails}
@@ -2198,7 +2236,7 @@ function SurfaceDungeonScene({
           <RoomCeilingInterface
             key={horizontalInterface.id}
             horizontalInterface={horizontalInterface}
-            room={{ id: horizontalInterface.ceilingRoomId, ...room }}
+            room={roomsById.get(horizontalInterface.ceilingRoomId)}
             roomLookup={surface.rooms}
             textureMaterials={textureMaterials}
             opacity={opacity}
@@ -2273,11 +2311,7 @@ function SurfaceDungeonScene({
       {Object.entries(surface.connectors).map(([id, connector]) => connectorIsVisible(connector) ? (
         <ConnectorSegment
           key={id}
-          connector={{
-            id,
-            ...connector,
-            runtimeState: runtimeFeatureStates[connector?.worldId || id] || null,
-          }}
+          connector={connectorsById.get(id)}
           curveWall={connector?.curveId ? curveWallsById.get(connector.curveId) || null : null}
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}

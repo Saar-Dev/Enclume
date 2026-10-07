@@ -1943,7 +1943,20 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const hoveringTokenRef = useRef(false)
 
   const [voxels, setVoxels] = useState({})
-  const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
+  // SURFACE-RENDER-IDENTITY-CHURN (ticket 9f6c2a6e) — sans ce useMemo, normalizeSurfaceData()
+  // (surfaceCore.js) reconstruit un objet neuf (rooms/room via Object.fromEntries+spread) à CHAQUE
+  // rendu de Canvas3D, quel qu'en soit le déclencheur (store de tokens, phase de combat, survol…).
+  // SurfaceDungeonScene.jsx mémorise déjà surface = useMemo(() => normalizeSurfaceData(surfaceData),
+  // [surfaceData]) un étage plus bas, mais cette mémorisation est inutile tant que sa propre entrée
+  // (surfaceData, ce prop) change de référence à chaque rendu : la clé change, le cache ne sert
+  // jamais. battlemap.surface_data n'est remplacé par une référence neuve que par un vrai
+  // setBattlemap/updateBattlemap (toujours une copie fraîche venue du serveur, jamais une mutation
+  // sur place — vérifié dans mapStore.js et tous ses appelants) : le mémoriser ici est donc sans
+  // risque de masquer un changement réel de carte.
+  const surfaceData = useMemo(
+    () => normalizeSurfaceData(battlemap?.surface_data),
+    [battlemap?.surface_data],
+  )
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
