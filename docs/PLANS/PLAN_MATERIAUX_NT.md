@@ -1,6 +1,8 @@
 # PLAN_MATERIAUX_NT.md — Catalogue de matières RAW, classé par Niveau Technologique
 
-> Créé le 2026-10-07. Statut : **code en cours, jamais vu en navigateur**. Source RAW :
+> Créé le 2026-10-07. Statut : **34 matériaux codés, lot du jour (25) vu en navigateur et
+> confirmé par Saar (2026-10-07)** ; verre encore non codé (§6, point d'architecture à trancher
+> en premier). Source RAW :
 > `docs/PLANS/GT_MATERIAUX.md` (Guide Technique Polaris, chapitre matériaux — extraction complète
 > vérifiée, s'arrête net après l'intro « Alliages particuliers » pour enchaîner sur les propulseurs,
 > ce n'est pas une troncature). Suite directe du mini-chantier miniatures Matière/Motif
@@ -131,28 +133,59 @@ en lisant le code, pas supposé depuis `MATERIAUX.md` qui est resté sur l'ancie
   l'avertissement §3 sur la fiabilité visuelle non vérifiée.
 
 **Non retravaillés, presets génériques existants, pas encore étiquetés NT** : `stainless_steel`,
-`aluminum`, `titanium`, `anticorrosion_coating`, `plastic`, `wood`.
+`aluminum`, `titanium`, `anticorrosion_coating`, `plastic`.
+
+### Lot 2026-10-07 (suite) — 25 matériaux supplémentaires, deux nouvelles familles partagées
+
+- **Métaux bruts/gueuses NT I-II** : `gold` (Or), `lead` (Plomb), `tungsten_alloy` (Alliage de
+  tungstène) — réutilisent `hammeredField` (porosité de coulée), zéro nouvelle branche.
+- **NT I non-métalliques** : `roche`/`brique` (nouveaux bruits — veines cellulaires isolées,
+  appareillage en panneresse modulo) ; `bois_charpente`/`contreplaque` (généralisation de `wood`
+  en `family: 'wood'`, `grainFrequency` paramétré pour le contreplaqué).
+- **Céramique technique** (`ceramic_technical`, NT II) : nouvelle famille `family: 'plated'`
+  (larges plaques cellulaires + frontière craquelée/jointée).
+- **Composites opaques NT II** partageant `family: 'plated'` avec leur propre `seamColor`/
+  `plateScale` : `composite_133_crha`, `composite_133_cvhs` (acier/céramique/acier, deux trempes),
+  `composite_tungsten_wc` (142-cW/WC). Plus `composite_fiberglass` (`family: 'composite_weave'`,
+  généralisation du tissage twill de `composite_carbon`) et `composite_al_tic` (nouvelle famille
+  `family: 'particulate'` — inclusions dispersées par seuil sur `cellularNoise.f1`).
+- **Alliages structurels NT III-V**, deux nouvelles familles : `family: 'crystal'` (facettes
+  cellulaires, `crystalWeight`/`crystalEdgeDarken`) pour `super_acier`/`tri_terranium` ; `family:
+  'particulate'` (généralisée, `inclusionColor`/`inclusionScale`/`inclusionThreshold`) pour
+  `armati`, `plastitane`, `tical`, `plastiral`, `fivaltine`, `alliage_cobalt`. `nano_titane_
+  structurel`/`alliage_al_plus` réutilisent le simple repli brossé (`brushFineness`/`brushContrast`).
+- **Gap trouvé en relisant le GT** : la lignée béton **VHSC** (économique) reçoit aussi le Cylast,
+  distincte de la lignée **UHPC** déjà construite — `concrete_hyper_vhsc` (NT III), `concrete_
+  nano_vhsc` (NT IV), branches dédiées, restent grises/industrielles (jamais blanc porcelaine,
+  signature propre à la lignée UHPC).
+- Alliage Al+ et Alliage de cobalt : nommés dans le GT via des factions (Ligue Rouge, Légion du
+  Cobalt), codés sans partir du lore faction pour le look (cohérent avec la consigne du
+  2026-10-07) — `alliage_cobalt` utilise `family: 'particulate'` pour les traces d'or/platine/
+  iridium littéralement nommées dans le texte.
 
 ## 5. Validation à chaque étape
 
 `eslint`/`npm run build`/`node --test proceduralMaterials.test.mjs materialDecision.test.mjs
 surfaceData.test.mjs` (73 tests) propres après chaque matériau ajouté — aucune régression sur tout
-le chantier. **Rien de tout ça n'a encore été vu en navigateur** : la lisibilité réelle des bruits
-(cristallin, martelage, tissage surtout) reste à confirmer par Saar avant de considérer un
-matériau « fini ».
+le chantier (34 matériaux neufs/retravaillés au total à ce stade). **Vu en navigateur et confirmé
+par Saar le 2026-10-07** (lot du jour, 25 matériaux) — aucun ajustement demandé à ce stade.
 
 ## 6. Reste à faire
 
-- Voir l'ensemble en navigateur, ajuster ce qui ne lit pas bien (le tissage carbone en premier
-  candidat probable).
 - Regroupement visuel par NT dans la grille Matière (même patron que `PROCEDURAL_PATTERN_GROUPS`).
 - Étiqueter NT les presets génériques restants (inox/alu/titane/revêtement anticorrosion/
-  plastique/bois) — certains ont un équivalent RAW direct (ex. Titane structurel, Aluminium
-  structurel), d'autres non (plastique/bois ne sont pas des entrées GT nommées).
-- Continuer le catalogue : céramique technique, verre/verre trempé (matériaux transparents — même
-  famille de blocage que l'irisé NT VI, demande probablement `MeshPhysicalMaterial`/`transmission`),
-  tungstène, composites multicouches (Al/TiC, acier/céramique/acier, tungstène/WC), NT III+
-  (super acier, hyper acier, ALON, plastitane...).
+  plastique) — `wood` a déjà sa famille (§4) ; certains ont un équivalent RAW direct (ex. Titane
+  structurel, Aluminium structurel), d'autres non (plastique n'est pas une entrée GT nommée).
+- **Verre** : Saar a tranché qu'un simple alpha-blend (`transparent: true` + `opacity < 1` sur le
+  `MeshStandardMaterial` existant) suffit — pas besoin de vraie transmission/réfraction
+  (`MeshPhysicalMaterial.transmission`), inutile pour un rendu VTT. Débloque Verre (NT I),
+  Plexiglas/Verre trempé/Verre blindé (NT II), Hyperverre/Hyper verre trempé (NT III-IV), Nano
+  verre trempé (NT IV), ALON et dérivés (céramique transparente). **Point d'architecture non
+  résolu avant de coder** : `withOpacity()` (`SurfaceDungeonScene.jsx`) écrase `material.opacity`
+  plutôt que de le composer avec l'opacité intrinsèque d'un preset — à corriger (multiplier, pas
+  écraser) avant d'ajouter le premier matériau transparent. Pas fait : ce fichier porte des
+  changements non commités d'une session parallèle au 2026-10-07, à vérifier propre avant d'y
+  toucher.
 - NT VI (irisé) : extension `SurfaceDungeonScene.jsx` pour supporter `MeshPhysicalMaterial` sur les
   matériaux qui le demandent — son propre sous-chantier, pas mélangé à l'ajout de presets.
 - Option C notée par Saar, non cadrée, basse priorité : un éditeur de matériau custom pour les MJ
