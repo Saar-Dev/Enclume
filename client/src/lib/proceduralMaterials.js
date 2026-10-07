@@ -3,15 +3,120 @@
 // rendu Three.js : SurfaceDungeonScene.jsx lit ces champs, aucune valeur dupliquee ailleurs.
 import { sampleDisplacementMap, isDisplacementMapReady, onDisplacementMapReady } from './displacementMaps.js'
 const MATERIAL_PRESETS = [
+  // ─── Ferreux (GT_MATERIAUX.md) ───
+  {
+    // NT I. Martelé à la forge : empreintes circulaires qui se chevauchent sur toute la surface —
+    // recherche texture-artistes PBR faite avant de coder ("hammered iron"), pas une tache de
+    // bruit diffuse. hammerScale/hammerDarken/hammerDepth pilotent hammeredField (voir plus bas,
+    // même mécanisme que cellularNoise — grille gigue + hash2) : grandes empreintes profondes ici,
+    // contrairement à la porosité fine de la fonte/l'acier moulé ci-dessous (même fonction,
+    // échelle différente — un affinage paramétrique, pas trois algorithmes).
+    id: 'iron_wrought',
+    label: 'Fer forge',
+    nt: 'I',
+    substrate: [52, 46, 40],
+    dark: [24, 21, 19],
+    light: [92, 84, 76],
+    rust: true,
+    roughness: 0.7,
+    metalness: 0.55,
+    hammerScale: 9,
+    hammerDarken: 0.38,
+    hammerDepth: 0.1,
+  },
+  {
+    // NT I. Porosité de moule de sable — petits creux denses et aléatoires (gaz emprisonné à la
+    // coulée), jamais dirigés comme les coups de marteau du fer forgé. Métallurgie réelle : la
+    // fonte et l'acier moulé sont quasi indiscernables à l'œil nu (recherche faite) — même
+    // algorithme que steel_cast plus bas, seule la teinte change.
+    id: 'cast_iron',
+    label: 'Fonte',
+    nt: 'I',
+    substrate: [34, 34, 34],
+    dark: [16, 16, 16],
+    light: [58, 58, 58],
+    rust: true,
+    roughness: 0.78,
+    metalness: 0.5,
+    hammerScale: 24,
+    hammerDarken: 0.22,
+    hammerDepth: 0.035,
+  },
   {
     id: 'steel',
-    label: 'Acier',
+    // NT II, AHL. RHA (plaque homogène laminé) = la trempe de référence du GT (toutes les
+    // comparaisons de blindage s'y rapportent) — reste la trempe "standard", id conservé (donnée
+    // déjà persistée). Les 3 autres trempes ci-dessous assument un écart avec la métallurgie
+    // réelle pour la variété du catalogue (Saar, 2026-10-07) : logique commune aux 4, voir le
+    // commentaire sur brushFineness/brushContrast dans materialBase.
+    label: 'Acier lamine [RHA]',
+    nt: 'II',
     substrate: [122, 130, 132],
     dark: [46, 52, 55],
     light: [190, 198, 198],
     rust: true,
     roughness: 0.55,
     metalness: 0.42,
+  },
+  {
+    // Trempe extrême : grain resserré et poli plutôt que brossé large (plus dur -> plus fin).
+    id: 'steel_vhs',
+    label: 'Acier lamine [VHS]',
+    nt: 'II',
+    substrate: [128, 136, 142],
+    dark: [42, 48, 54],
+    light: [200, 208, 212],
+    rust: true,
+    roughness: 0.38,
+    metalness: 0.55,
+    brushFineness: 2.2,
+    brushContrast: 0.6,
+  },
+  {
+    // Grande ductilité (acier de coque de sous-marin réel, cette appellation existe dans le monde
+    // actuel) : grain large et marqué, fini mat de travail plutôt que poli.
+    id: 'steel_hy80',
+    label: 'Acier lamine [HY-80]',
+    nt: 'II',
+    substrate: [116, 120, 112],
+    dark: [50, 54, 52],
+    light: [175, 180, 175],
+    rust: true,
+    roughness: 0.64,
+    metalness: 0.38,
+    brushFineness: 0.6,
+    brushContrast: 1.4,
+  },
+  {
+    // Évolution de l'HY-80 ("plus performant") : entre-deux assumé, pas une nouvelle extrémité.
+    id: 'steel_hsla100',
+    label: 'Acier lamine [HSLA-100]',
+    nt: 'II',
+    substrate: [118, 123, 124],
+    dark: [48, 53, 54],
+    light: [182, 188, 186],
+    rust: true,
+    roughness: 0.58,
+    metalness: 0.4,
+    brushFineness: 0.85,
+    brushContrast: 1.1,
+  },
+  {
+    // NT II. Coulé, pas laminé — même algorithme de porosité que la fonte (hammeredField, même
+    // échelle fine), teinte acier plus claire et empreintes un peu moins marquées (finition parfois
+    // plus lisse que la fonte brute, cf. recherche cast steel vs cast iron).
+    id: 'steel_cast',
+    label: 'Acier moule [AM]',
+    nt: 'II',
+    substrate: [108, 112, 116],
+    dark: [55, 57, 60],
+    light: [140, 143, 148],
+    rust: true,
+    roughness: 0.68,
+    metalness: 0.5,
+    hammerScale: 24,
+    hammerDarken: 0.16,
+    hammerDepth: 0.025,
   },
   {
     id: 'plastic',
@@ -33,6 +138,7 @@ const MATERIAL_PRESETS = [
     roughness: 0.78,
     metalness: 0.02,
   },
+  // ─── Béton (GT_MATERIAUX.md, chaîne NT II→VII) ───
   {
     id: 'concrete',
     label: 'Beton arme [VHSC]',
@@ -124,6 +230,35 @@ const MATERIAL_PRESETS = [
     roughness: 0.94,
     metalness: 0.02,
   },
+  {
+    // NT I. "Tres bonne resistance a la corrosion, souvent utilise par-dessus une structure en
+    // acier pour la protéger" -- la patine fait le travail de protection, voir le commentaire de
+    // la branche visuelle dans materialBase.
+    id: 'bronze',
+    label: 'Bronze',
+    nt: 'I',
+    substrate: [120, 85, 40],
+    dark: [70, 48, 20],
+    light: [180, 130, 60],
+    rust: false,
+    roughness: 0.5,
+    metalness: 0.48,
+  },
+  {
+    // NT II. "A masse egale, les fibres de carbone offrent une protection qui vaut plus du double
+    // de celle de l'acier RHA" -- materiau de choix pour les structures legeres. Gris-noir profond,
+    // vernis (roughness bas, metalness modere -- composite, pas un metal pur).
+    id: 'composite_carbon',
+    label: 'Composite (fibre de carbone/resine epoxy)',
+    nt: 'II',
+    substrate: [28, 29, 32],
+    dark: [14, 15, 17],
+    light: [52, 54, 58],
+    rust: false,
+    roughness: 0.35,
+    metalness: 0.18,
+  },
+  // ─── Alliages legers / autres (GT_MATERIAUX.md, pas encore etiquetes NT) ───
   {
     id: 'stainless_steel',
     label: 'Acier inoxydable',
@@ -364,7 +499,10 @@ function paintCoverageFor(material) {
   if (material.id === 'wood') return 0.35
   if (material.family === 'concrete') return 0.45
   // Metal brut (non revetu) : laisse davantage voir la teinte propre du materiau sous la peinture.
-  if (material.id === 'stainless_steel' || material.id === 'aluminum' || material.id === 'titanium') return 0.55
+  // Fer forge/fonte inclus : matieres anciennes/crues, le plus souvent laissees nues ou rouillees
+  // plutot que fraichement peintes (station delabree) -- l'acier lamine/moule (steel/steel_cast)
+  // reste au repli par defaut, plus proche d'une plaque de chantier naval peinte.
+  if (['stainless_steel', 'aluminum', 'titanium', 'iron_wrought', 'cast_iron'].includes(material.id)) return 0.55
   return 0.78
 }
 
@@ -469,8 +607,78 @@ function cellularNoise(x, y, scale, seed) {
   }
 }
 
+// Empreintes circulaires qui se chevauchent — martelage (fer forgé) ou porosité de coulée
+// (fonte/acier moulé), même geste à deux échelles différentes (voir presets). Même grille gigue
+// que cellularNoise, mais la sortie est une profondeur additive (plusieurs germes proches
+// s'accumulent, d'où le chevauchement) plutôt qu'une appartenance à une seule cellule.
+function hammeredField(x, y, scale, seed) {
+  const cx = Math.floor(x / scale)
+  const cy = Math.floor(y / scale)
+  let sum = 0
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      const ncx = cx + ox
+      const ncy = cy + oy
+      const fx = (ncx + hash2(ncx, ncy, `${seed}:hx`)) * scale
+      const fy = (ncy + hash2(ncx, ncy, `${seed}:hy`)) * scale
+      const r = scale * (0.35 + hash2(ncx, ncy, `${seed}:hr`) * 0.3)
+      const d = Math.hypot(x - fx, y - fy)
+      if (d < r) sum += 1 - smoothstep(d / r)
+    }
+  }
+  return clamp(sum)
+}
+
 function materialBase(material, x, y, size, seed) {
   const n = fractalNoise(x, y, size, `${seed}:base`)
+  if (material.hammerScale) {
+    const hammer = hammeredField(x, y, Math.max(3, size / material.hammerScale), seed)
+    const darken = material.hammerDarken ?? 0.3
+    const depth = material.hammerDepth ?? 0.08
+    const t = clamp(0.42 + n * 0.15 - hammer * darken)
+    return {
+      color: mixColor(material.dark, material.light, t),
+      height: 0.5 - hammer * depth,
+    }
+  }
+
+  if (material.id === 'bronze') {
+    // GT : résistant à la corrosion, souvent utilisé en revêtement protecteur par-dessus l'acier —
+    // la patine EST la couche protectrice (vrai en métallurgie), donc elle fait partie de
+    // l'identité de base du matériau, pas un effet d'usure à part. Plaques irrégulières (bruit
+    // cellulaire, seuil sur cellShade) plutôt qu'une teinte uniforme — recherche faite : la patine
+    // réelle forme des taches vert-bleu disparates sur le bronze doré, jamais un voile homogène.
+    const patina = cellularNoise(x, y, Math.max(8, size / 5), seed)
+    const patinaAmount = clamp((patina.cellShade - 0.35) / 0.3)
+    const base = clamp(0.4 + n * 0.25)
+    const metalColor = mixColor(material.dark, material.light, base)
+    const patinaColor = mixColor([50, 92, 78], [110, 150, 120], base)
+    return {
+      color: mixColor(metalColor, patinaColor, patinaAmount),
+      height: 0.5 + (n - 0.5) * 0.03 - patinaAmount * 0.02,
+    }
+  }
+
+  if (material.id === 'composite_carbon') {
+    // Approximation d'un tissage twill 2x2 (chevrons diagonaux) : deux diagonales perpendiculaires
+    // (diag1 à +45°, diag2 à -45°), dont l'une domine par bloc 2x2 le long de l'axe diagonal —
+    // alternance qui donne le motif de brins dessus/dessous, pas une grille basketweave droite.
+    // Recherche faite avant de coder (twill 2x2 = motif le plus courant) ; approximation
+    // géométrique, pas une reproduction exacte du tissage réel — à ajuster après retour visuel.
+    const weaveScale = Math.max(4, size / 16)
+    const diag1 = Math.sin(((x + y) / weaveScale) * Math.PI)
+    const diag2 = Math.sin(((x - y) / weaveScale) * Math.PI)
+    const blockU = Math.floor((x + y) / (weaveScale * 2))
+    const blockV = Math.floor((x - y) / (weaveScale * 2))
+    const over = (blockU + blockV) % 2 === 0
+    const weave = over ? diag1 : diag2
+    const t = clamp(0.4 + weave * 0.13 + n * 0.04)
+    return {
+      color: mixColor(material.dark, material.light, t),
+      height: 0.5 + weave * 0.02,
+    }
+  }
+
   if (material.id === 'wood') {
     const grain = Math.sin((x / size) * Math.PI * 16 + valueNoise(x, y, size / 5, `${seed}:grain`) * 8)
     const t = clamp(0.45 + grain * 0.22 + n * 0.18)
@@ -544,11 +752,18 @@ function materialBase(material, x, y, size, seed) {
     }
   }
 
-  const brushed = Math.sin((y / size) * Math.PI * 46 + valueNoise(x, y, size / 8, `${seed}:brushed`) * 3)
-  const t = clamp(0.45 + n * 0.22 + brushed * 0.08)
+  // brushFineness/brushContrast (absents = 1) : repli par défaut pour les 4 trempes d'acier laminé
+  // (RHA/VHS/HY-80/HSLA-100) ci-dessus, affiné par trempe — Saar, 2026-10-07 : la métallurgie réelle
+  // ne les distingue pas à l'œil, mais l'objectif du catalogue est la variété visuelle, donc un
+  // écart assumé avec le réel plutôt que 4 entrées identiques. Logique retenue (pas arbitraire) :
+  // plus dur/trempé -> grain plus fin et plus poli ; plus ductile -> grain plus large et plus mat.
+  const fineness = material.brushFineness || 1
+  const contrast = material.brushContrast ?? 1
+  const brushed = Math.sin((y / size) * Math.PI * 46 * fineness + valueNoise(x, y, size / 8, `${seed}:brushed`) * 3)
+  const t = clamp(0.45 + n * 0.22 + brushed * 0.08 * contrast)
   return {
     color: mixColor(material.dark, material.light, t),
-    height: 0.5 + brushed * 0.018 + (n - 0.5) * 0.035,
+    height: 0.5 + brushed * 0.018 * contrast + (n - 0.5) * 0.035,
   }
 }
 
