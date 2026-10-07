@@ -2443,6 +2443,37 @@ mur (mini-chantier candidat, à cadrer séparément, pas mélangé à ce correct
 
 **Testé par Saar (2026-09-30)** : « Fonctionnel. » — confirmation en jeu, panneau Apparence.
 
+## 22. Mini-chantier 3/4 (§15.2 point 3) — miniatures Matière/Motif : CLOS et validé en jeu (2026-10-07)
+
+Les deux `<select>` texte du panneau Apparence (`SurfaceMaterialEditor.jsx`, seule autorité partagée
+Salle/Mur/Peindre-un-mur) sont remplacés par des grilles de miniatures générées à la volée.
+
+- **Matière** : `albedoDataUrl` à teinte neutre (`DEFAULT_SURFACE_MATERIAL_PRESET.paint`), motif
+  `'none'` — l'albédo ne dépend jamais du motif (`applyPattern`/`applyImportedPattern` ne touchent
+  que le buffer `height`, jamais `ctx`), vérifié par lecture avant de coder.
+- **Motif** : `heightDataUrl` (niveaux de gris) — premier essai avec `normalDataUrl` rejeté par Saar
+  en test réel (« bleu bizarre », tangent-space illisible en miniature) ; corrigé sur `heightCanvas`,
+  déjà généré sans coût supplémentaire, même convention qu'ambientCG (source des motifs, §14) pour
+  prévisualiser un canal de déplacement. Base acier fixe + relief 50 (même valeur que §14.2) pour
+  isoler la lecture du motif de la matière réellement choisie par l'utilisateur.
+- Génération gatée par `IntersectionObserver` (patron déjà en prod, `SidebarChatTab.jsx`) : une
+  miniature hors champ ne déclenche ni génération ni décodage de height map importée — évite de
+  réintroduire le gel déjà corrigé une fois pour les motifs importés (§14.1). Cache par id de preset,
+  jamais combinatoire matière×motif×teinte (8 + 37 aujourd'hui).
+- Recherche pro avant code (Unity `AssetPreview`, Unreal `FAssetThumbnailPool`, Blender
+  `render_preview.cc`/asset-browser-grid-view, PDF.js thumbnail sidebar) : convergence sur génération
+  paresseuse + cache par clé + priorité au visible, confirmée par un précédent déjà dans ce code.
+- `eslint`/`build`/73 tests ciblés propres. Commité et poussé `dev/Saar` (`c631b278`).
+
+**Conséquence, pas cadrée ici** : une fois les miniatures lisibles, Saar constate un vrai manque de
+variété des matières/motifs (hard-SF sous-marin : bois quasi inexistant, matériaux de base hors
+sujet) — le béton reste pertinent (`docs/PLANS/GT_MATERIAUX.md` : dominant en structure permanente
+de surface/faible profondeur), contrairement à l'hypothèse initiale de Saar. **Mini-chantier 4/4
+(nuancier custom) abandonné** : Saar juge que compenser ce manque par de la couleur aurait traité le
+symptôme, pas la cause. Nouveau chantier séparé à cadrer : catalogue de matières RAW depuis
+`GT_MATERIAUX.md` (dizaines de matériaux nommés sur 7 paliers de NT, très au-delà des 8 presets
+génériques actuels) — voir ce document une fois ouvert.
+
 ## Historique
 
 - **2026-09-30** — Mini-chantiers §15.2 repris après §16, trois bugs réels trouvés et corrigés (aucun
