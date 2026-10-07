@@ -35,13 +35,94 @@ const MATERIAL_PRESETS = [
   },
   {
     id: 'concrete',
-    label: 'Beton',
+    label: 'Beton arme [VHSC]',
+    nt: 'II',
+    family: 'concrete',
     substrate: [118, 120, 116],
     dark: [64, 66, 64],
     light: [170, 172, 166],
     rust: false,
     roughness: 0.88,
     metalness: 0.01,
+  },
+  {
+    // GT_MATERIAUX.md NT III : "plus de micro-fibres, controles plus poussés, ajout de micro
+    // silice" par rapport au VHSC -- un affinage du meme beton, jamais un materiau different
+    // (pas de barres d'armature visibles, le renfort est micro). grainFineness/grainVariance
+    // traduisent ca visuellement : grain plus fin (frequence de bruit plus haute) et plus
+    // regulier (amplitude du mouchetage reduite) que le VHSC, memes couleurs de base.
+    id: 'concrete_uhpc',
+    label: 'Beton arme [UHPC]',
+    nt: 'III',
+    family: 'concrete',
+    substrate: [118, 120, 116],
+    dark: [64, 66, 64],
+    light: [170, 172, 166],
+    rust: false,
+    roughness: 0.82,
+    metalness: 0.01,
+    grainFineness: 1.8,
+    grainVariance: 0.55,
+  },
+  {
+    // GT_MATERIAUX.md NT IV : "C'est du béton armé [UHPC] auquel on a ajouté du Cylast" --
+    // le Cylast est décrit comme des trichites "sans défaut constituées en assemblant les atomes
+    // en une matrice parfaite" (§ Hypertechnologie, NT III) : une matrice atomique parfaite
+    // assemblée en fibres est une description de structure cristalline, pas une métaphore de ma
+    // part -- d'où le bruit cellulaire (facettes à bords nets) plutôt qu'un simple réglage de
+    // grain comme pour l'UHPC (§ commentaire ci-dessus).
+    id: 'concrete_hyper_uhpc',
+    label: 'Hyper-beton [UHPC]',
+    nt: 'IV',
+    family: 'concrete',
+    substrate: [130, 134, 138],
+    dark: [68, 72, 78],
+    light: [196, 200, 208],
+    rust: false,
+    roughness: 0.58,
+    metalness: 0.05,
+  },
+  {
+    // GT_MATERIAUX.md NT V : "C'est du béton armé [UHPC] auquel on a appliqué la technologie
+    // moléculaire" -- la suite logique du NT IV, pas un virage : même structure cristalline
+    // (même bruit cellulaire), mais la matrice moléculaire va jusqu'au bout de la "matrice
+    // parfaite" du Cylast -- les facettes et leurs arêtes se fondent, polies jusqu'à devenir
+    // invisibles (coefficients très réduits dans la branche visuelle, pas un nouvel algorithme).
+    // Teinte qui bascule du gris industriel vers un blanc froid presque porcelaine -- NT V est
+    // l'ancre « Citadelle » (dissimule sa fabrication), pas une suite grise de plus.
+    id: 'concrete_nano_uhpc',
+    label: 'Nano-beton [UHPC]',
+    nt: 'V',
+    family: 'concrete',
+    substrate: [200, 204, 210],
+    dark: [150, 155, 162],
+    light: [235, 238, 242],
+    rust: false,
+    roughness: 0.28,
+    metalness: 0.1,
+  },
+  {
+    // AUCUN texte GT au-delà du NT V pour le béton -- extrapolation explicite demandée par Saar
+    // (2026-10-07), pas une entrée canon : à ce palier le GT n'évolue plus les matériaux connus,
+    // il introduit des substances uniques (ACS, Fusion B, Pulsar...). Thème retenu : la matrice
+    // moléculaire du NT V est poussée jusqu'à piéger la lumière dans sa structure plutôt que de
+    // la réfléchir -- même principe géométrique que le Vantablack réel (la lumière entre dans la
+    // structure et n'en ressort jamais), PAS un noir brillant : rugosité haute, quasi aucun
+    // reflet spéculaire (recherche faite avant §21 miniatures -- un noir qui "avale" la lumière
+    // doit être mat, un noir brillant se lit comme du plastique mouillé).
+    id: 'concrete_nt7_absorbant',
+    label: 'Beton [matrice absorbante] (experimental)',
+    nt: 'VII',
+    family: 'concrete',
+    // Champ structuré (en plus du libellé, seul signal visible tant que le regroupement par NT
+    // n'est pas câblé dans l'UI) : permettra plus tard de filtrer/badger sans reparser le texte.
+    experimental: true,
+    substrate: [14, 15, 18],
+    dark: [6, 7, 9],
+    light: [26, 28, 33],
+    rust: false,
+    roughness: 0.94,
+    metalness: 0.02,
   },
   {
     id: 'stainless_steel',
@@ -281,7 +362,7 @@ function rgbToCss(rgb, alpha = 1) {
 
 function paintCoverageFor(material) {
   if (material.id === 'wood') return 0.35
-  if (material.id === 'concrete') return 0.45
+  if (material.family === 'concrete') return 0.45
   // Metal brut (non revetu) : laisse davantage voir la teinte propre du materiau sous la peinture.
   if (material.id === 'stainless_steel' || material.id === 'aluminum' || material.id === 'titanium') return 0.55
   return 0.78
@@ -352,6 +433,42 @@ function fractalNoise(x, y, size, seed) {
   return coarse * 0.5 + medium * 0.35 + fine * 0.15
 }
 
+// Bruit cellulaire (Worley/Voronoi) : un point-germe par cellule de grille (position giguée par
+// hash2, déterministe), chaque pixel hérite de la teinte plate de son germe le plus proche (f1) —
+// contrairement à fractalNoise (dégradés lisses), ça produit des facettes à bords nets, jamais une
+// tache. `edge` (f2-f1, normalisé) approche 0 près d'une frontière de cellule, utile pour assombrir
+// les arêtes entre facettes (rainure de cristal) indépendamment de la teinte de la facette elle-même.
+function cellularNoise(x, y, scale, seed) {
+  const cx = Math.floor(x / scale)
+  const cy = Math.floor(y / scale)
+  let best = Infinity
+  let second = Infinity
+  let bestCellX = cx
+  let bestCellY = cy
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      const ncx = cx + ox
+      const ncy = cy + oy
+      const fx = (ncx + hash2(ncx, ncy, `${seed}:jx`)) * scale
+      const fy = (ncy + hash2(ncx, ncy, `${seed}:jy`)) * scale
+      const d = Math.hypot(x - fx, y - fy)
+      if (d < best) {
+        second = best
+        best = d
+        bestCellX = ncx
+        bestCellY = ncy
+      } else if (d < second) {
+        second = d
+      }
+    }
+  }
+  return {
+    f1: best / scale,
+    edge: (second - best) / scale,
+    cellShade: hash2(bestCellX, bestCellY, `${seed}:shade`),
+  }
+}
+
 function materialBase(material, x, y, size, seed) {
   const n = fractalNoise(x, y, size, `${seed}:base`)
   if (material.id === 'wood') {
@@ -363,11 +480,58 @@ function materialBase(material, x, y, size, seed) {
     }
   }
 
-  if (material.id === 'concrete') {
-    const t = clamp(0.42 + n * 0.32 + (hash2(x, y, `${seed}:speckle`) - 0.5) * 0.16)
+  if (material.id === 'concrete_nt7_absorbant') {
+    // Même continuité cellulaire que le NT V, variation encore plus écrasée — assez pour rester
+    // lisible comme une vraie surface 3D sous éclairage (jamais un noir plat à l'écran, qui se
+    // lirait comme une texture manquante), jamais assez pour distraire du « ça n'a plus l'air
+    // d'un matériau de construction ». La rugosité (preset, 0.94) fait le vrai travail visuel ici.
+    const cell = cellularNoise(x, y, Math.max(6, size / 7), seed)
+    const t = clamp(0.5 + cell.cellShade * 0.02 + n * 0.015)
     return {
       color: mixColor(material.dark, material.light, t),
-      height: 0.48 + (n - 0.5) * 0.06,
+      height: 0.5 + (cell.cellShade - 0.5) * 0.006,
+    }
+  }
+
+  if (material.id === 'concrete_nano_uhpc') {
+    // Même structure cellulaire que l'Hyper-béton (continuité NT IV->V, voir commentaire du
+    // preset), coefficients écrasés : facettes et arêtes encore présentes dans le calcul mais
+    // presque invisibles au rendu — poli jusqu'à dissimuler sa propre fabrication.
+    const cell = cellularNoise(x, y, Math.max(6, size / 7), seed)
+    const edgeDarken = clamp(1 - cell.edge / 0.35)
+    const t = clamp(0.46 + cell.cellShade * 0.08 + n * 0.04)
+    const faceted = mixColor(material.dark, material.light, t)
+    return {
+      color: mixColor(faceted, [20, 22, 26], edgeDarken * 0.08),
+      height: 0.5 + (cell.cellShade - 0.5) * 0.012 - edgeDarken * 0.006,
+    }
+  }
+
+  if (material.id === 'concrete_hyper_uhpc') {
+    // Facettes à bords nets (bruit cellulaire) plutôt qu'un dégradé — voir le commentaire du
+    // preset pour la justification tirée du texte (matrice cristalline du Cylast). ~7 facettes
+    // par tuile (size/7), densité stable à toute résolution (miniature comme aperçu éditeur).
+    const cell = cellularNoise(x, y, Math.max(6, size / 7), seed)
+    const edgeDarken = clamp(1 - cell.edge / 0.35)
+    const t = clamp(0.35 + cell.cellShade * 0.45 + n * 0.08)
+    const faceted = mixColor(material.dark, material.light, t)
+    return {
+      color: mixColor(faceted, [20, 22, 26], edgeDarken * 0.6),
+      height: 0.5 + (cell.cellShade - 0.5) * 0.05 - edgeDarken * 0.04,
+    }
+  }
+
+  if (material.family === 'concrete') {
+    // grainFineness/grainVariance (absents = 1) : un affinage paramétrique du même béton d'un
+    // palier NT à l'autre, jamais une formule dupliquée par matériau (cf. commentaire NT III sur
+    // le preset) — defaut 1 préserve exactement le rendu VHSC historique (n inchangé, ×0.16 plein).
+    const fineness = material.grainFineness || 1
+    const variance = material.grainVariance ?? 1
+    const grainN = fineness === 1 ? n : fractalNoise(x * fineness, y * fineness, size, `${seed}:base`)
+    const t = clamp(0.42 + grainN * 0.32 + (hash2(x, y, `${seed}:speckle`) - 0.5) * 0.16 * variance)
+    return {
+      color: mixColor(material.dark, material.light, t),
+      height: 0.48 + (grainN - 0.5) * 0.06,
     }
   }
 
