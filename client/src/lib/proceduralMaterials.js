@@ -203,6 +203,62 @@ export const DEFAULT_SURFACE_MATERIAL_PRESET = {
   patternScale: 1,
 }
 
+// Miniatures de catalogue (PLAN_WORLD_BUILDER_REWORK.md §15.2 pt3) — l'identité visuelle d'un
+// preset seul (teinte neutre, aucune usure/crasse), jamais une combinaison matière+motif+teinte
+// choisie par l'utilisateur : le jeu de miniatures reste borné aux presets (8 + 37 aujourd'hui),
+// jamais combinatoire. Cache par id, génération au premier appel, jamais régénérée ensuite — un
+// preset ne change pas à l'exécution (seul un ajout en source change la liste).
+const MATERIAL_THUMBNAIL_SIZE = 56
+const materialThumbnailCache = new Map()
+const patternThumbnailCache = new Map()
+
+// Teinte neutre du projet (DEFAULT_SURFACE_MATERIAL_PRESET), motif 'none' : le motif ne touche
+// jamais l'albédo (voir applyPattern/applyImportedPattern, seulement le buffer `height`), donc
+// l'identité d'une matière se lit entièrement sur albedoDataUrl, indépendamment du relief.
+export function getMaterialThumbnailUrl(materialId) {
+  if (materialThumbnailCache.has(materialId)) return materialThumbnailCache.get(materialId)
+  const generated = generateProceduralMaterialTexture({
+    material: materialId,
+    paint: DEFAULT_SURFACE_MATERIAL_PRESET.paint,
+    pattern: 'none',
+    wear: 0,
+    dirt: 0,
+    relief: 0,
+    size: MATERIAL_THUMBNAIL_SIZE,
+  })
+  const url = generated.albedoDataUrl
+  materialThumbnailCache.set(materialId, url)
+  return url
+}
+
+// À l'inverse, un motif ne se lit jamais sur l'albédo — seulement sur le buffer `height` (relief).
+// heightDataUrl (niveaux de gris) plutôt que normalDataUrl : une normal map encode une direction en
+// tangent-space, toujours bleu-violet par construction — illisible en miniature (constat Saar,
+// 2026-10-07). La hauteur en niveaux de gris est aussi la convention d'ambientCG (source des motifs
+// importés, §14) pour prévisualiser un canal de déplacement.
+// Base acier (bruit de fond le plus faible des matières, cf. materialBase) pour isoler la lecture
+// du motif de la matière réellement choisie par l'utilisateur ; relief fixe à 50, même valeur que
+// SurfaceMaterialEditor applique déjà automatiquement au choix d'un motif réel (§14.2) — à 0 le
+// motif ne se voit pas, pas une valeur de miniature inventée à part.
+// Pas mis en cache tant que la height map importée n'est pas décodée (§14.1) : le résultat serait
+// un relief neutre périmé — l'appelant revient une fois `onImportedPatternReady` déclenché.
+export function getPatternThumbnailUrl(patternId) {
+  if (patternThumbnailCache.has(patternId)) return patternThumbnailCache.get(patternId)
+  const generated = generateProceduralMaterialTexture({
+    material: DEFAULT_SURFACE_MATERIAL_PRESET.material,
+    paint: DEFAULT_SURFACE_MATERIAL_PRESET.paint,
+    pattern: patternId,
+    wear: 0,
+    dirt: 0,
+    relief: patternId === 'none' ? 0 : 50,
+    patternScale: 1,
+    size: MATERIAL_THUMBNAIL_SIZE,
+  })
+  const url = generated.heightDataUrl
+  if (isImportedPatternReady(patternId)) patternThumbnailCache.set(patternId, url)
+  return url
+}
+
 function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value))
 }
@@ -762,6 +818,7 @@ export function generateProceduralMaterialTexture(options) {
   const heightCanvas = makeHeightMap(height, size)
   let cachedAlbedoUrl = null
   let cachedNormalUrl = null
+  let cachedHeightUrl = null
 
   return {
     // Consommateur scène 3D (SurfaceDungeonScene.jsx) : canvas direct via THREE.CanvasTexture,
@@ -778,6 +835,12 @@ export function generateProceduralMaterialTexture(options) {
     },
     get normalDataUrl() {
       return cachedNormalUrl ?? (cachedNormalUrl = normalCanvas.toDataURL('image/png'))
+    },
+    // Consommateur miniature Motif (SurfaceMaterialEditor.jsx) : niveaux de gris, pas l'encodage
+    // tangent-space bleu-violet d'une normal map (illisible en miniature) — même convention
+    // qu'ambientCG (source des motifs importés, §14) pour prévisualiser un canal de déplacement.
+    get heightDataUrl() {
+      return cachedHeightUrl ?? (cachedHeightUrl = heightCanvas.toDataURL('image/png'))
     },
     procedural: makeProceduralMaterialDescriptor(options),
     material,
