@@ -102,16 +102,27 @@ function formatImportGuardErrors(result) {
     .join('; ')
 }
 
-function buildTrivialRoomSurfaceData({ battlemapId, gridSize, imageWidth, imageHeight }) {
+// SURFACE-DOC-NO-BOUNDS — widthCells/depthCells viennent de image_width/image_height/grid_size
+// envoyés par le client (POST / et PUT /:id ci-dessous), sans aucun plafond : compileSurfaceWorld,
+// appelé plus tard (première ouverture de l'éditeur ou arrivée d'un joueur, jamais ici), énumère les
+// cases de la salle de façon synchrone et gèlerait le serveur pour toutes les campagnes — même faille
+// que celle déjà corrigée sur PUT /:id/surface (commit 70872d10), juste une deuxième porte d'entrée
+// que ce correctif n'avait pas couverte. Même garde (checkSurfaceLimits), posée AVANT prepareSurfaceData
+// comme sur cette route : checkRoom (importGuard.js) ne lit que minX/maxX/minZ/maxZ, déjà présents ici
+// sous leur forme brute. scanJsonStructure n'a pas lieu d'être : cet objet est construit par nous à
+// partir de 4 champs numériques, jamais une structure JSON arbitraire.
+export function buildTrivialRoomSurfaceData({ battlemapId, gridSize, imageWidth, imageHeight }) {
   const widthCells = Math.max(1, Math.ceil((Number(imageWidth) || 0) / (Number(gridSize) || 64)))
   const depthCells = Math.max(1, Math.ceil((Number(imageHeight) || 0) / (Number(gridSize) || 64)))
+  const surfaceData = { rooms: { main: {
+    minX: 0, maxX: widthCells - 1, minZ: 0, maxZ: depthCells - 1, wallEnabled: false,
+  } } }
+  const limitsCheck = checkSurfaceLimits(surfaceData)
+  if (!limitsCheck.ok) {
+    throw new AppError(400, `surface_data rejected: ${formatImportGuardErrors(limitsCheck)}`)
+  }
   try {
-    return prepareSurfaceData(
-      { rooms: { main: {
-        minX: 0, maxX: widthCells - 1, minZ: 0, maxZ: depthCells - 1, wallEnabled: false,
-      } } },
-      { battlemapId }
-    ).surfaceData
+    return prepareSurfaceData(surfaceData, { battlemapId }).surfaceData
   } catch (error) {
     if (error instanceof SurfaceDocumentError) throw new AppError(400, error.message)
     throw error
