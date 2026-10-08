@@ -79,18 +79,23 @@ export function useSessionSocket() {
         interactionType, cardType, mr, targetName, localisation, severity, severityColor,
         secret: secret || false, breakdown,
       })
-      // Animation 3D — un Test compétence-vs-Seuil (skillLabel OU skillLabelKey défini, PLAN_LOCALISATION.md
-      // §9.13 Lot 7 — un émetteur migré pose skillLabelKey à la place de skillLabel, même nature de
-      // message) est toujours 1d20 par construction RAW (resolvePolarisTest/gmArbitratedTestService ne
-      // roulent jamais que ça pour un Test) : dieType déduit directement, jamais parsé depuis `formula`,
-      // qui porte ici le libellé de la compétence (ex. "Discrétion"), pas une notation de dé — la logique
-      // de parsing existante ne s'applique qu'au jet brut (/r, WOUND_INFECTION_ROLL). rolls.length exclut
-      // le cas "réussite auto sans jet" (gmArbitratedTestService.js, rolls:[], bouton MJ dédié) — rien à
-      // animer.
+      // Animation 3D — dieType est lu directement dans `formula` dès qu'elle commence par une
+      // notation de dé (ex. "2d6+3" pour un jet de dégâts, "1d20" pour une défense CaC). Un Test
+      // compétence-vs-Seuil (skillLabel/skillLabelKey, PLAN_LOCALISATION.md §9.13 Lot 7) porte lui
+      // le libellé de la compétence dans `formula` (ex. "Discrétion", skillTestService.js) — aucune
+      // notation à y lire, repli sur 'd20' (toujours vrai par construction RAW : un Test ne roule
+      // jamais que ça). COMBAT-DAMAGE-DICE-MODEL-MISMATCH (2026-10-08) : un jet de dégâts
+      // (resolvedFormula/damageFormula, socketCombatHelpers.js) porte AUSSI un skillLabelKey, pour
+      // son libellé narratif ("Dégâts infligés...") — l'ancien test sur skillLabelKey seul forçait
+      // donc 'd20' même pour un dégât en 2d6/1d10/etc., d'où le d20 systématique. rolls.length
+      // exclut le cas "réussite auto sans jet" (gmArbitratedTestService.js, rolls:[], bouton MJ
+      // dédié) — rien à animer.
+      // Limite connue, pas une régression : un dégât composite (base+bonus-dropoff,
+      // damageService.js, ex. "2d6+1d4") n'anime qu'avec le type de la composante de base —
+      // decomposeDice (diceMath.js) ne gère qu'un seul dieType par jet.
       if (rolls.length > 0) {
-        const dieType = (skillLabel !== undefined || skillLabelKey !== undefined)
-          ? 'd20'
-          : formula.replace(/^\d+/, '').split('+')[0].split('-')[0]
+        const diceNotation = /^\d*d(\d+)/i.exec(formula)
+        const dieType = diceNotation ? `d${diceNotation[1]}` : 'd20'
         setLastDiceRoll({ rolls, dieType, seed, timestamp, color })
       }
       // Popup explicatif (docs/PLANS/PLAN_TEST_CRITIQUE.md Lot 3) — Réussite critique prioritaire sur
