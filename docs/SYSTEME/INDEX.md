@@ -1,5 +1,7 @@
 # INDEX.md — Carte documentaire d’Enclume
 
+> Mise à jour 2026-10-08 — chantier « Sources de contenu » clos (doc définitive déjà écrite le
+> 2026-10-04) : `SOURCES.md` ajouté à la table §3.4, plan archivé `Old/PLAN_SUPPLEMENTS.md`.
 > Mise à jour 2026-09-25 — chantier « Permuter l'arme en combat » clos : documentation définitive dans `COMBAT.md`, `COMBAT_FLUX.md`,
 > `SERVICES_COMBAT.md`, `CHARACTER.md` ; plan archivé `Old/PLAN_PRISE_EN_MAIN.md` (+ `Old/maquette-permuter/`), `PLAN_OBJETS_AU_SOL.md` (v2) ajouté au §6.
 > Mise à jour 2026-09-24 — chantier « Statut Mort » clos : `STATUTS_TOKEN.md` réécrit (registre, options de campagne, blocage
@@ -95,6 +97,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MODING.md` | Système de mods d'armes : deux générations coexistantes, registre à hooks | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/STATUTS_TOKEN.md` | Statuts de token (`token_statuses`) : registre unique `shared/tokenStatusRegistry.js`, options de campagne (`status_effects_mode`, `players_edit_statuses`), blocage proactif « qui peut agir », règles du cadavre (statut `dead`) | ✅ Créé 2026-09-24, réécrit à la clôture du chantier « Statut Mort » |
+| `SYSTEME/SOURCES.md` | Sources de contenu de catalogue (`ref_sources`) : Livre de Base toujours actif, suppléments (Guide Technique) activables par campagne, autorité unique `assertSourceActive`, points d'écriture gardés, déficit connu en lecture | ✅ Créé 2026-10-04 |
 | `SYSTEME/CHAT.md` | Système de chat : architecture, flux, types de messages, événements WS | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/ASSETS.md` | MinIO, textures, Atelier GM, uploads, chemins assets | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MATERIAUX.md` | Pipeline de matériaux procédural : génération, cache, flux de données | 🔎 Analysé en profondeur (2026-08-26) |

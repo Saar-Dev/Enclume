@@ -2,7 +2,7 @@ VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
     Version : V3.3 — 2026-10-08 : ajout « Noyade/Asphyxie (3 phases) » et « Hyperventilation »
     (chantier `docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` Lot 6, codé).
-    Précédent : V3.2 — 2026-09-29 : ajout « Source (de contenu) » (chantier `docs/PLANS/PLAN_SUPPLEMENTS.md`
+    Précédent : V3.2 — 2026-09-29 : ajout « Source (de contenu) » (chantier `docs/Old/PLAN_SUPPLEMENTS.md`
     Lot A, `ref_sources`/`ref_exo_templates.source_id`/`campaign_enabled_sources` codés).
     Précédent : V3.1 — 2026-09-24 : ajout « CRD (contrôleur de réseau de défense) », « Interceptions simultanées (CRD) » et
     « Rayon d'action (CRD) » (chantier `docs/PLANS/PLAN_DRONE_INTERCEPTION.md`, Lot 3).

@@ -9937,3 +9937,33 @@ cadavre en cours de Souffle, Avantage Souffle réel) — ⚠️ clos partiel, at
 jeu.
 **Données** : aucune migration (`token_statuses.data` existe déjà).
 **Retour arrière** : commit unique prévu pour ce lot, `git revert` suffit (aucune migration à défaire).
+
+## Session (Claude) — 2026-10-08 — Clôture documentaire du chantier « Sources de contenu »
+
+Code déjà fait, testé et poussé depuis le 2026-09-29 (Lots A/B/C : `ref_sources`, filtrage
+exo-armures et équipement, illustrations) — zéro code touché dans cette session. La checklist de
+clôture (Règle 10, `docs/RegleDocumentaire.md`) était restée à moitié appliquée : la doc définitive
+existait déjà (`docs/SYSTEME/SOURCES.md`, écrite le 2026-10-04) mais le plan n'avait jamais été
+archivé, `ROADMAP.md`/`INDEX.md` n'avaient pas été mis à jour, et aucune entrée JOURNAL8/CHANGELOG
+ne couvrait la clôture elle-même.
+
+**Fait** :
+- `docs/PLANS/PLAN_SUPPLEMENTS.md` → `docs/Old/PLAN_SUPPLEMENTS.md` (`git mv`).
+- `docs/SYSTEME/INDEX.md` : ligne ajoutée §3.4 pour `SOURCES.md` ; bannière de tête mise à jour.
+  Deux pointeurs de chemin corrigés dans `SOURCES.md` et `VOCABULARY.md` (citaient encore
+  `docs/PLANS/PLAN_SUPPLEMENTS.md`, chemin devenu faux après l'archivage).
+- `docs/ROADMAP.md` : ligne « Sources de contenu » retirée du §1 (chantiers actifs — un chantier
+  clos est retiré, jamais barré). Le reliquat volontairement différé (filtrage en lecture de
+  `GET /api/equipment`, déjà noté §2.5/§3 de l'ancien plan et §4 de `SOURCES.md`) reporté en dette
+  ponctuelle §5, pour qu'il ne disparaisse pas avec la ligne retirée.
+- `client/public/CHANGELOG.md` : entrée v267 (onglet « Sources de contenu », badge de source sur
+  le sélecteur de modèle exo-armure) — jamais journalisé au moment du code le 2026-09-29.
+
+**Testé** : lecture directe de chaque fichier avant modification (ancien plan, `SOURCES.md`,
+`INDEX.md`, `ROADMAP.md`, `VOCABULARY.md`) ; grep sur `PLAN_SUPPLEMENTS` dans `docs/` pour
+recenser toutes les références avant de décider lesquelles corriger (chemins actifs) et lesquelles
+laisser (entrées historiques JOURNAL8, déjà au passé, et renvois informels dans
+`PLAN_EXOGT.md` qui nomment le document sans son chemin complet).
+**Non testé** : sans objet — changement documentaire pur, aucun fichier de code touché.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit (inclut le `git mv`, restauré automatiquement).

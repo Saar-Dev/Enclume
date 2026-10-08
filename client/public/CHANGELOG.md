@@ -1,3 +1,11 @@
+## v267 — 2026-10-08 — Configuration de campagne : onglet Sources de contenu
+
+### Configuration de campagne
+- [feat] Nouvel onglet « Sources de contenu » : le MJ choisit, par campagne, quelles sources de catalogue sont actives en plus du Livre de Base (par exemple le Guide Technique, pour les exo-armures et l'équipement). Une source désactivée ne peut plus être utilisée pour équiper un personnage, un drone ou une exo-armure.
+
+### Exo-armures
+- [add] Le sélecteur de modèle d'exo-armure affiche un badge avec le nom de la source dès qu'au moins une source autre que le Livre de Base est active pour la campagne, pour distinguer deux fiches du même nom.
+
 ## v266 — 2026-10-08 — Noyade / Asphyxie : retenir son souffle en combat
 
 ### Combat

@@ -1,7 +1,8 @@
 SYSTEME/SOURCES.md — Sources de contenu de catalogue (Livre de Base, suppléments)
 
     Créé 2026-10-04 (chantier ARMOR-STATS-DISPLAY-INCOMPLETE) — contenu durable extrait de
-    docs/PLANS/PLAN_SUPPLEMENTS.md (Lots A/B, codés et testés le 2026-09-29), qui reste la source
+    docs/Old/PLAN_SUPPLEMENTS.md (Lots A/B, codés et testés le 2026-09-29 ; plan archivé à la
+    clôture du chantier le 2026-10-08), qui reste la source
     historique (précédents étudiés, analyse à charge) mais ne doit plus être relu pour comprendre
     le mécanisme lui-même (Règle 10 RegleDocumentaire.md : un PLAN est temporaire).
 
@@ -9,7 +10,7 @@ SYSTEME/SOURCES.md — Sources de contenu de catalogue (Livre de Base, suppléme
     Livre de Base ou à un supplément, comment l'activer par campagne, où brancher la vérification
     sur un nouveau point d'écriture, comment ajouter une future source.
 
-    > Voir aussi : docs/PLANS/PLAN_SUPPLEMENTS.md (historique, précédents Foundry VTT/Comp-Con/MekHQ,
+    > Voir aussi : docs/Old/PLAN_SUPPLEMENTS.md (historique, précédents Foundry VTT/Comp-Con/MekHQ,
     > analyse à charge détaillée). docs/VOCABULARY.md « Source (de contenu) ».
 
 ---
