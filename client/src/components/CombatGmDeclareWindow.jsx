@@ -77,6 +77,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [swap,            setSwap]            = useState(null)
   const [swapPanel,       setSwapPanel]       = useState(null)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
+  // Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — même déclencheur ponctuel que CombatActionWindow.jsx.
+  const [breathChoice,    setBreathChoice]    = useState(null)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
 
   // ── Sous-état de sélection Tir (M0.4) — reducer partagé PJ / MJ ───────────
@@ -186,6 +188,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setSwapPanel(null)
     setMeleePendingMode(false)
     setPendingMove(null)
+    setBreathChoice(null)
     assaultDecl.clear()
     meleeDecl.clear()
     setIsSelectingOnMap(false)
@@ -377,6 +380,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // haut) — pas dupliqués ici.
   const activeToken = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
   const isStunnedActivePnj = activeToken?.statuses?.includes('stunned') ?? false
+  // Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — même dérivation que CombatActionWindow.jsx.
+  const isHoldingBreathActivePnj = activeToken?.statuses?.includes('breath_hold') || activeToken?.statuses?.includes('asphyxia') || false
 
   // Quand le slot actif est un PJ (ni PNJ ni drone) — identifier le bloquant
   const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
@@ -594,6 +599,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         hasMove:        pendingMove != null,
         hasStateChange: hasDeliberateStateChange(decl, initialStates),
         hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
+        breathStarted:  breathChoice != null,
       })
   const canDeclare = (isActivePnj && assault.valid && melee.valid && grab.valid) || (isActiveDrone && droneDeclare.canDeclare)
   const blockReason = isActiveDrone ? null : buildBlockReason({ assault, melee, grab })
@@ -806,6 +812,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       mapAction,
       grabItemId: grabRow?.itemId ?? null,
       grabReplaceItemId: grabRow ? (swap.replaceItemId ?? null) : null,
+      breath: breathChoice,
     }))
   }
 
@@ -922,6 +929,41 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       </div>
                     )
                   })}
+                </div>
+              </div>
+
+              {/* SOUFFLE (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — déclencheur ponctuel, indépendant
+                  du choix Tir/CaC/Déplacement, même garde PNJ que ACTIONS RAPIDES ci-dessus. */}
+              <div className="combat-win-section" style={{ borderBottom: 'none' }}>
+                <span className="combat-win-section-title" style={{ color: '#5a8a5a' }}>{t('actionWindow.breathSection')}</span>
+                <div style={{ display: 'flex', gap: 6, padding: '4px 0 2px', flexWrap: 'wrap' }}>
+                  {!isHoldingBreathActivePnj && (
+                    <>
+                      <button
+                        type="button"
+                        className={`btn btn-toggle${breathChoice === 'retenir' ? ' active' : ''}`}
+                        onClick={() => setBreathChoice(breathChoice === 'retenir' ? null : 'retenir')}
+                      >
+                        {t('actionWindow.breathRetenir')}
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-toggle${breathChoice === 'hyperventiler' ? ' active' : ''}`}
+                        onClick={() => setBreathChoice(breathChoice === 'hyperventiler' ? null : 'hyperventiler')}
+                      >
+                        {t('actionWindow.breathHyperventiler')}
+                      </button>
+                    </>
+                  )}
+                  {isHoldingBreathActivePnj && (
+                    <button
+                      type="button"
+                      className={`btn btn-toggle btn-danger${breathChoice === 'cesser' ? ' active' : ''}`}
+                      onClick={() => setBreathChoice(breathChoice === 'cesser' ? null : 'cesser')}
+                    >
+                      {t('actionWindow.breathCesser')}
+                    </button>
+                  )}
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import AimedLocationPicker from './AimedLocationPicker.jsx'
 import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environmentalHazardPresets.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
-import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, DEATH_STATUS_CODES, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
+import { PANEL_STATUSES, TOKEN_STATUS_CATEGORY_COLORS, DEATH_STATUS_CODES, MANUAL_TOGGLE_STATUS_CODES, canEditTokenStatus } from '../../../shared/tokenStatusRegistry.js'
 import { ENVIRONMENTAL_HAZARD_REGISTRY, findHazardRegistryEntry } from '../../../shared/environmentalHazardRegistry.js'
 
 const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
@@ -26,6 +26,16 @@ const HAZARD_CODES = new Set(ENVIRONMENTAL_HAZARD_REGISTRY.map(entry => entry.co
 // comme les dangers ci-dessus : sous-formulaire dédié (tranche/paliers extrêmes/humide), jamais un
 // simple toggle (écraserait silencieusement l'exposition posée, même raison que HAZARD_CODES).
 const CHRONIC_HAZARD_CODES = new Set(['hypothermia'])
+
+// isActionable — un code `inPanel` n'a pas forcément de chemin de clic : `asphyxia`/`breath_hold`
+// (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) sont désormais purement automatiques (breathHoldService.js),
+// sans bascule nue ni formulaire dédié — trouvé en retirant `manualToggle` d'`asphyxia`
+// (shared/tokenStatusRegistry.js) : sans cette garde, `clickable` ci-dessous (qui ne lisait que
+// `canEdit`) aurait continué à afficher une case cliquable qui n'aurait plus rien fait au clic (le
+// serveur rejette déjà silencieusement, socketToken.js), un papercut UI plutôt qu'un bug mécanique,
+// mais à corriger à la racine plutôt qu'à rustiner `asphyxia` seul — tout futur code non-actionnable
+// est couvert pareil.
+const isActionable = (code) => MANUAL_TOGGLE_STATUS_CODES.includes(code) || HAZARD_CODES.has(code) || CHRONIC_HAZARD_CODES.has(code)
 
 // ─── TokenStatusPanel ────────────────────────────────────────────────────────
 // Bulle-grille 3×5 pour ajouter/retirer les statuts d'un token. Les 3 codes danger environnemental
@@ -530,7 +540,7 @@ export default function TokenStatusPanel({
             {STATUS_LIST.map(({ code, category }) => {
               const active  = statuses.includes(code)
               const color   = CATEGORY_COLOR[category]
-              const clickable = canEdit(code)
+              const clickable = canEdit(code) && isActionable(code)
 
               return (
                 <div

@@ -157,6 +157,7 @@ export function buildBlockReason({ assault, melee, reload, grab } = {}) {
  */
 export function hasSomethingToDeclare({
   attackStarted, meleeStarted, reloadStarted, grabStarted = false, hasMove, hasStateChange, hasQuick,
+  breathStarted = false,
 } = {}) {
-  return !!(attackStarted || meleeStarted || reloadStarted || grabStarted || hasMove || hasStateChange || hasQuick)
+  return !!(attackStarted || meleeStarted || reloadStarted || grabStarted || hasMove || hasStateChange || hasQuick || breathStarted)
 }

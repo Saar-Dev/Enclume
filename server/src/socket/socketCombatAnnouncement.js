@@ -23,6 +23,10 @@ import { getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
 import { firstFireMode, parseFireModes } from '../../../shared/fireModes.js'
+import {
+  startBreathHold, resolveHyperventilation, clearBreathHold,
+  BREATH_HOLD_STATUS_CODE, ASPHYXIA_STATUS_CODE,
+} from '../lib/breathHoldService.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
 // "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
@@ -356,6 +360,31 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
       // Attaque du même Tour avec l'objet qu'une permutation met en main : voir isGrabbedInHand.
       const isGrabbedInHandHere = (invId, allowedSlots) => isGrabbedInHand(grabDeclaration, invId, allowedSlots)
+
+      // Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — validé tôt (même site que grab), exécuté
+      // après la transaction d'état ci-dessous (même site que le broadcast final). Jamais un
+      // re-déclenchement si déjà actif, jamais un "cesser" sans rien à cesser — l'idempotence revient
+      // au déclarant (breathHoldService.js reste agnostique de qui a le droit de l'appeler).
+      let breathAction = null
+      if (mapActions?.breath) {
+        if (!['retenir', 'hyperventiler', 'cesser'].includes(mapActions.breath)) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: `Souffle : valeur "${mapActions.breath}" inconnue` })
+          return
+        }
+        const existingBreath = await db('token_statuses')
+          .where({ token_id: tokenId })
+          .whereIn('status_code', [BREATH_HOLD_STATUS_CODE, ASPHYXIA_STATUS_CODE])
+          .first()
+        if (mapActions.breath === 'cesser' && !existingBreath) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Souffle : ce personnage ne retient pas son souffle' })
+          return
+        }
+        if (mapActions.breath !== 'cesser' && existingBreath) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Souffle : ce personnage retient déjà son souffle' })
+          return
+        }
+        breathAction = mapActions.breath
+      }
 
       // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
       let assaultWeaponRefRange = null
@@ -1056,6 +1085,33 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       })
 
       const updatedInitiative = updated.initiative
+
+      // Souffle — exécution (validée plus haut). `hyperventiler` lance un vrai Test (secret RAW,
+      // visibilité lanceur+MJ — même patron que MACRO_ROLL, socketDice.js), `retenir`/`cesser`
+      // n'ont aucun jet, appliqués directement.
+      if (breathAction === 'retenir') {
+        await startBreathHold(io, db, campaignId, tokenId)
+      } else if (breathAction === 'cesser') {
+        await clearBreathHold(io, db, campaignId, tokenId)
+      } else if (breathAction === 'hyperventiler') {
+        const outcome = await resolveHyperventilation(io, db, campaignId, tokenId)
+        if (outcome) {
+          const diceResultPayload = {
+            userId: user.id, username: character.name, color: character.color ?? '#808080',
+            formula: '1d20', rolls: [outcome.roll], total: outcome.roll,
+            isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+            seed: outcome.seed, timestamp: new Date().toISOString(),
+            skillLabelKey: 'combat:diceLabels.hyperventilation', mechanicalTotal: outcome.threshold,
+            isSuccess: outcome.isSuccess, mr: outcome.mr, secret: true,
+          }
+          socket.emit(WS.DICE_RESULT, diceResultPayload)
+          if (!isGm) {
+            const roomSockets = await io.in(campaignId).fetchSockets()
+            const gmSockets = roomSockets.filter(s => s.data.role === 'gm')
+            gmSockets.forEach(s => s.emit(WS.DICE_RESULT, diceResultPayload))
+          }
+        }
+      }
 
       // turn_number (docs/PLAN_COMBAT_TIMELINE.md §6bis point 5) — porté par chaque ligne pour que la
       // file "en cours" se filtre sur le Tour plutôt que sur le contenu total de la table, maintenant

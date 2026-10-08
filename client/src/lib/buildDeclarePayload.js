@@ -103,6 +103,10 @@ export function buildHumanDeclarePayload(sel) {
       ...(sel.grabItemId
         ? { grab: { itemId: sel.grabItemId, ...(sel.grabReplaceItemId ? { replaceItemId: sel.grabReplaceItemId } : {}) } }
         : {}),
+      // Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) : déclencheur ponctuel 'retenir'|
+      // 'hyperventiler'|'cesser', absent du payload tant que le joueur n'a rien changé cette Tour
+      // (l'autorité du compteur reste token_statuses, breathHoldService.js — jamais re-déclaré).
+      ...(sel.breath ? { breath: sel.breath } : {}),
     },
     quick: {
       observer: sel.decl.quick.observer,
@@ -186,6 +190,8 @@ export function buildGmDeclarePayload(sel) {
       ...(sel.grabItemId
         ? { grab: { itemId: sel.grabItemId, ...(sel.grabReplaceItemId ? { replaceItemId: sel.grabReplaceItemId } : {}) } }
         : {}),
+      // Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — même déclencheur ponctuel que le PJ.
+      ...(sel.breath ? { breath: sel.breath } : {}),
     },
     quick: { ...sel.decl.quick },
   }

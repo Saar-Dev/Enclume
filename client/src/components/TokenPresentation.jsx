@@ -168,9 +168,16 @@ export function TokenPortrait({ tokenStyle, portraitUrl, fallbackColor, radius =
   )
 }
 
+// Codes avec un visuel dédié (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6, BreathHoldIndicator ci-dessous)
+// — exclus de la rangée de badges plats, jamais affichés deux fois. `asphyxia` (Phase 2) garde
+// volontairement le badge plat existant (décision cadrage §12) : seule `breath_hold` (Phase 1) a sa
+// propre tension visuelle ("points qui s'assombrissent").
+const STATUS_CODES_WITH_DEDICATED_VISUAL = ['breath_hold']
+
 export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', offsetY = 2.1 }) {
-  if (!(statuses?.length > 0) || statusEffectsMode === 'off') return null
-  const { visible, hiddenCount } = selectVisibleStatusBadges(statuses)
+  const flatStatuses = statuses?.filter(code => !STATUS_CODES_WITH_DEDICATED_VISUAL.includes(code)) ?? []
+  if (!(flatStatuses.length > 0) || statusEffectsMode === 'off') return null
+  const { visible, hiddenCount } = selectVisibleStatusBadges(flatStatuses)
   return (
     <Html position={[0, offsetY, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{ display: 'flex', gap: 2 }}>
@@ -207,6 +214,36 @@ export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', of
             +{hiddenCount}
           </span>
         )}
+      </div>
+    </Html>
+  )
+}
+
+// BreathHoldIndicator — Phase 1 (apnée) de Noyade/Asphyxie (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) :
+// points bleus "combien de Souffle reste-t-il", tension visuelle distincte de la rangée de badges plats
+// (sémantique différente : "combien reste" vs "cet état est actif", cadrage §12). Plafond 10 points
+// visibles ; au-delà, un point = ⌈max/10⌉ points de Souffle réels (généralisation valable aussi >20, pas
+// seulement 11-20 — pas de palier arbitraire supplémentaire). `data` = `token.statusData.breath_hold`
+// (TOKEN_STATUS_UPDATED étendu, statusService.js). Absent (pas en train de retenir son souffle) → rien.
+export function BreathHoldIndicator({ data, offsetY = 1.7 }) {
+  if (!data || data.max == null) return null
+  const unit = data.max <= 10 ? 1 : Math.ceil(data.max / 10)
+  const totalSlots = Math.ceil(data.max / unit)
+  const filledSlots = Math.min(totalSlots, Math.ceil(Math.max(0, data.remaining ?? 0) / unit))
+  return (
+    <Html position={[0, offsetY, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {Array.from({ length: totalSlots }, (_, i) => {
+          const filled = i < filledSlots
+          return (
+            <span key={i} style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: filled ? '#3a8adf' : 'rgba(58,138,223,0.25)',
+              outline: filled ? '1px solid #8fc4ff' : '1px solid rgba(143,196,255,0.3)',
+              filter: filled ? 'drop-shadow(0 0 2px #3a8adf)' : 'none',
+            }} />
+          )
+        })}
       </div>
     </Html>
   )

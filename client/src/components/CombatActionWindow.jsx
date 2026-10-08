@@ -73,6 +73,10 @@ export default function CombatActionWindow({
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
   const isStunned   = playerToken?.statuses?.includes('stunned') ?? false
   const isDrone     = playerChar?.type === 'drone'
+  // Souffle (Lot 6) — Phase 1 (breath_hold) ou Phase 2 (asphyxia) déjà actives sur CE token : le
+  // sélecteur propose "Cesser" plutôt que "Retenir"/"Hyperventiler" (RAW : retenir son souffle n'a de
+  // sens que si on ne le retient pas déjà).
+  const isHoldingBreath = playerToken?.statuses?.includes('breath_hold') || playerToken?.statuses?.includes('asphyxia') || false
 
   // Télépilotage (Sprint 3, PLAN_DRONE.md) — drones possédés par ce compte (character.user_id, même
   // autorité que Sprint 2c/2d), présents dans ce combat, télépilotables depuis le tour du PJ PILOTE.
@@ -115,6 +119,15 @@ export default function CombatActionWindow({
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour (has_announced true→false)
   const prevTokenRef           = useRef(null)   // détection changement de slot actif
   const [mortallyWounded, setMortallyWounded] = useState(false)
+
+  // --- Souffle (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6, critique Saar 2026-10-08) ------------------
+  // Déclencheur ponctuel, jamais un `state_*` persistant (combat_roster) : l'autorité du compteur de
+  // Souffle est `token_statuses` (breathHoldService.js), re-déclarer chaque Tour dupliquerait cette
+  // autorité. `breathChoice` ne vaut donc quelque chose que le Tour où le joueur CHANGE d'intention
+  // (retenir/hyperventiler/cesser) — absent du payload les autres Tours, le tick continue tout seul.
+  // Indépendant du choix Attaque/CaC/Déplacement (mapSelected) : rien dans le RAW n'empêche de se
+  // battre en retenant son souffle.
+  const [breathChoice, setBreathChoice] = useState(null)
 
   // --- actions sur la carte (multi-select) ----------------------------------
   const [mapSelected, setMapSelected] = useState(new Set())
@@ -364,6 +377,7 @@ export default function CombatActionWindow({
     setSelectedAmmoId(null)
     meleeDecl.clear()
     setInMeleeTargetMode(false)
+    setBreathChoice(null)
     // Même correctif que CombatGmDeclareWindow.jsx (bug confirmé Saar 2026-09-02) : un mode de visée
     // armé pour l'ancien token de ce slot ne peut plus être pertinent une fois qu'on bascule sur un
     // autre — annulation sans condition, sans risque (le bouton qui l'arme n'existe que pour le token
@@ -875,6 +889,7 @@ export default function CombatActionWindow({
     hasMove:        moveSelection != null || chargeSelection?.move != null,
     hasStateChange: hasDeliberateStateChange(decl, initialStates.current),
     hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
+    breathStarted:  breathChoice != null,
   })
   const canDeclare = isDrone
     ? droneDeclare.canDeclare
@@ -929,6 +944,7 @@ export default function CombatActionWindow({
       reloadSelected, selectedWeapon, selectedAmmoId,
       grabItemId: grabRow?.itemId ?? null,
       grabReplaceItemId: grabRow ? (swap.replaceItemId ?? null) : null,
+      breath: breathChoice,
     }))
   }
 
@@ -1325,6 +1341,45 @@ export default function CombatActionWindow({
                 </div>
               )
             })}
+          </div>
+          )}
+
+          {/* SOUFFLE (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) — déclencheur ponctuel, indépendant du
+              choix Attaque/CaC/Déplacement (mapSelected) : jamais fusionné dans son groupe exclusif,
+              RAW n'empêche pas de combattre en retenant son souffle. Masqué pour drone/exo télépiloté
+              (mécanique biologique, mêmes gardes que ACTIONS RAPIDES ci-dessus). */}
+          {!isDrone && !telepilotDroneId && (
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
+            <div style={W.sectionTitle}>{t('actionWindow.breathSection')}</div>
+            <div style={{ display: 'flex', gap: 6, padding: '4px 10px 8px', flexWrap: 'wrap' }}>
+              {!isHoldingBreath && (
+                <>
+                  <button
+                    type="button"
+                    className={`btn btn-toggle${breathChoice === 'retenir' ? ' active' : ''}`}
+                    onClick={() => setBreathChoice(breathChoice === 'retenir' ? null : 'retenir')}
+                  >
+                    {t('actionWindow.breathRetenir')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-toggle${breathChoice === 'hyperventiler' ? ' active' : ''}`}
+                    onClick={() => setBreathChoice(breathChoice === 'hyperventiler' ? null : 'hyperventiler')}
+                  >
+                    {t('actionWindow.breathHyperventiler')}
+                  </button>
+                </>
+              )}
+              {isHoldingBreath && (
+                <button
+                  type="button"
+                  className={`btn btn-toggle btn-danger${breathChoice === 'cesser' ? ' active' : ''}`}
+                  onClick={() => setBreathChoice(breathChoice === 'cesser' ? null : 'cesser')}
+                >
+                  {t('actionWindow.breathCesser')}
+                </button>
+              )}
+            </div>
           </div>
           )}
 

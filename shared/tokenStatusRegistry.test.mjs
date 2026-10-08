@@ -14,10 +14,14 @@ import { ENVIRONMENTAL_HAZARD_REGISTRY } from './environmentalHazardRegistry.js'
 // main depuis le code d'alors (le commit 1a ne devait changer AUCUN comportement : ce test le prouvait).
 // Un nouveau statut modifie ces attentes VOLONTAIREMENT, dans le diff du commit qui l'ajoute — jamais en
 // silence. Mis à jour par le commit qui ajoute `dead` (chantier 6ᵉ ligne du compteur de blessures, 1b).
+// Mis à jour 2026-10-08 (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) : `asphyxia` perd `manualToggle`
+// (devenu mécanique, breathHoldService.js — une bascule nue poserait une ligne malformée, cf.
+// shared/tokenStatusRegistry.js) ; `breath_hold` ajouté, hors bascule/panneau (catégorie dédiée
+// `respiration`, visuel dédié TokenPresentation.jsx:BreathHoldIndicator).
 const AVANT = {
   // socketToken.js — VALID_STATUS_CODES
   basculeManuelle: [
-    'grappled', 'restrained', 'off_balance', 'asphyxia', 'electrocuted',
+    'grappled', 'restrained', 'off_balance', 'electrocuted',
     'stunned', 'unconscious', 'blinded', 'hypothermia', 'infected', 'poisoned', 'irradiated',
     'dead',
   ],
@@ -29,16 +33,16 @@ const AVANT = {
     ['hypothermia', 'chronique'], ['infected', 'chronique'], ['poisoned', 'chronique'], ['irradiated', 'chronique'],
     ['dead', 'mort'],
   ],
-  // TokenPresentation.jsx — STATUS_CATEGORY (16 codes, dont evanoui)
+  // TokenPresentation.jsx — STATUS_CATEGORY (17 codes, dont evanoui et breath_hold)
   categories: {
     grappled: 'entrave', restrained: 'entrave', off_balance: 'entrave',
-    burning: 'dot', acid: 'dot', asphyxia: 'dot', decompression: 'dot', electrocuted: 'dot',
+    burning: 'dot', acid: 'dot', breath_hold: 'respiration', asphyxia: 'dot', decompression: 'dot', electrocuted: 'dot',
     stunned: 'sens', unconscious: 'sens', blinded: 'sens', evanoui: 'sens',
     hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
     dead: 'mort',
   },
   // TokenStatusPanel.jsx CATEGORY_COLOR et TokenPresentation.jsx STATUS_CATEGORY_COLOR (identiques)
-  couleurs: { entrave: '#d8a838', dot: '#d84838', sens: '#9858c8', chronique: '#38a8c8', mort: '#8b8b9a' },
+  couleurs: { entrave: '#d8a838', dot: '#d84838', sens: '#9858c8', chronique: '#38a8c8', mort: '#8b8b9a', respiration: '#3a8adf' },
   // socketCombatResolution.js:165/353 (STUN2)
   bloqueDeclaration: ['stunned', 'unconscious', 'dead'],
   // socketCombatHelpers.js:996 (isTargetDefenseless, DEF5)
@@ -161,9 +165,9 @@ test('setByFatalWound : la blessure « Mort » pose un statut de cadavre, et un 
   assert.deepEqual(TOKEN_STATUS_REGISTRY.filter(e => e.setByFatalWound).map(e => e.code), ['dead'])
 })
 
-test('incompatibleWithDeath : 8 états de corps vivant interdits sur un cadavre, les 8 autres (processus/saisie) autorisés', () => {
+test('incompatibleWithDeath : 9 états de corps vivant interdits sur un cadavre (dont breath_hold, Lot 6), les 8 autres (processus/saisie) autorisés', () => {
   assert.deepEqual(trie(DEATH_INCOMPATIBLE_STATUS_CODES), trie([
-    'restrained', 'off_balance', 'stunned', 'unconscious', 'asphyxia', 'blinded', 'hypothermia', 'evanoui',
+    'restrained', 'off_balance', 'stunned', 'unconscious', 'asphyxia', 'blinded', 'hypothermia', 'evanoui', 'breath_hold',
   ]))
   const autorises = ['burning', 'acid', 'irradiated', 'grappled', 'electrocuted', 'infected', 'poisoned', 'decompression']
   for (const code of autorises) assert.equal(DEATH_INCOMPATIBLE_STATUS_CODES.includes(code), false, code)

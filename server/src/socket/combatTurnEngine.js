@@ -39,6 +39,7 @@ import { getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { resolveActiveEffects, sweepZoneExposure } from '../services/effectLineResolverService.js'
 import { tickWorldEffectInstanceDurations } from '../services/worldEffectService.js'
 import { resolveIemSurvivalTicks, IEM_SURVIVAL_STATUS_CODE } from '../lib/iemSurvivalService.js'
+import { resolveBreathHoldTicks, BREATH_HOLD_STATUS_CODE, ASPHYXIA_STATUS_CODE } from '../lib/breathHoldService.js'
 import { resolveZoneModifierTicks } from '../lib/zoneModifierService.js'
 import * as statusService from '../lib/statusService.js'
 import { rollSurpriseTest, emitSurpriseDiceResult } from '../lib/surpriseService.js'
@@ -444,6 +445,17 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active', 'ts.status_code': IEM_SURVIVAL_STATUS_CODE })
       .select('roster.token_id', 'ts.data')
     await resolveIemSurvivalTicks(io, db, campaignId, currentTurn, iemSurvivalRows)
+
+    // Noyade/Asphyxie (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6, 2026-10-08) — décompte Phase 1
+    // (breath_hold) / Phase 2 (asphyxia), boucle indépendante des dangers/IEM ci-dessus (même
+    // principe de séparation par domaine). Pure cascade de statut, jamais un dégât : n'entre jamais
+    // dans resolveActiveEffects (type 'damage' uniquement, analyse à charge §12 point 3).
+    const breathHoldRows = await db('combat_roster as roster')
+      .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
+      .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active' })
+      .whereIn('ts.status_code', [BREATH_HOLD_STATUS_CODE, ASPHYXIA_STATUS_CODE])
+      .select('roster.token_id', 'ts.status_code', 'ts.data')
+    await resolveBreathHoldTicks(io, db, campaignId, currentTurn, breathHoldRows)
 
     // Zones dangereuses — malus `modifier` (Z4, docs/PLANS/PLAN_ZONES_DANGER.md §6) : décroissance
     // `remanence:'decay'` des lignes posées par zoneModifierService.js (`data.kind:'zoneModifier'`),

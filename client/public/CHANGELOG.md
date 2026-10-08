@@ -1,3 +1,8 @@
+## v266 — 2026-10-08 — Noyade / Asphyxie : retenir son souffle en combat
+
+### Combat
+- [add] Un nouveau choix « Souffle » dans la fenêtre d'action (joueur et MJ) permet de retenir son souffle ou d'hyperventiler avant une apnée. Le temps de Souffle restant s'affiche en points bleus au-dessus du token ; une fois épuisé, le personnage entre en Suffocation active puis sombre dans l'inconscience s'il n'est pas ramené à la surface à temps.
+
 ## v265 — 2026-10-03 — Éditeur de carte : moins de ralentissement en choisissant un motif
 
 ### Matériaux procéduraux

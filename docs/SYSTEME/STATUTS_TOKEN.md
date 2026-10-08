@@ -5,7 +5,10 @@
 > advient d'un token mort. Les règles Polaris (Choc, Fatigue, Froid…) restent dans leurs documents ; les
 > effets d'un statut sur le déroulé d'un combat sont dans `COMBAT.md` / `COMBAT_FLUX.md`. Historique et décisions :
 > `docs/Old/PLAN_STATUT_MORT.md` (archivé). **Mis à jour 2026-09-25** : la blessure « Mort » du compteur pose maintenant `dead` (Lot 2b du
-> chantier « 6ᵉ ligne », §4 et §6).
+> chantier « 6ᵉ ligne », §4 et §6). **Mis à jour 2026-10-08** : Lot 6 Noyade/Asphyxie
+> (`docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` §12) — `asphyxia` perd `manualToggle` (devenu mécanique) et
+> gagne un 2ᵉ écrivain automatique (`breathHoldService.js`) ; `breath_hold` ajouté, seul code du
+> registre sans `inPanel` ni `manualToggle` (visuel dédié, voir §2).
 
 ## 1. Deux choses distinctes
 
@@ -51,7 +54,7 @@ Les 16 codes (l'ordre est celui du panneau) :
 | `off_balance` | Déséquilibré | entrave | ✔ | | | | | ✔ |
 | `burning` | Enflammé | dot | formulaire | | | | ✔ | |
 | `acid` | Corrodé | dot | formulaire | | | | ✔ | |
-| `asphyxia` | Asphyxie | dot | ✔ | | | | | ✔ |
+| `asphyxia` | Asphyxie | dot | ~~✔~~ | | | | | ✔ |
 | `decompression` | Décompression | dot | formulaire | | | | ✔ | |
 | `electrocuted` | Électrocuté | dot | ✔ | | | | | |
 | `stunned` | Étourdi | sens | ✔ | ✔ | ✔ | ✔ | | ✔ |
@@ -63,6 +66,17 @@ Les 16 codes (l'ordre est celui du panneau) :
 | `poisoned` | Empoisonné | chronique | ✔ | | | | | |
 | `irradiated` | Irradié | chronique | ✔ | | | | | |
 | `dead` | Mort | mort | ✔ | ✔ | ✔ | | ✔ | (est `isDeath`) |
+
+`asphyxia` : bascule nue retirée 2026-10-08 (Lot 6, `breathHoldService.js` en devient le 2ᵉ écrivain
+automatique, pose/tick/retrait — une bascule nue poserait une ligne sans `data`, lue `remaining:0` dès
+le Tour suivant). `breath_hold` (Phase 1, Souffle) n'apparaît **pas** dans ce tableau : seul code du
+registre à la fois hors panneau et hors bascule — posé exclusivement par `breathHoldService.js`
+(déclaration dans la fenêtre d'action, jamais un formulaire ni une bascule), affiché par un composant
+dédié (`TokenPresentation.jsx:BreathHoldIndicator`, points bleus au-dessus du token), explicitement
+exclu de la rangée de badges plats. Présent dans le registre uniquement pour `incompatibleWithDeath`
+(catégorie `respiration`). Cascade complète : `breath_hold` (Phase 1, décompte) → `asphyxia` (Phase 2,
+2D6 Tours) → `unconscious` (Phase 3, posé par `applyStunWithDuration`) — voir
+`docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` §12.
 
 Structures dérivées exportées (tableaux, pour `whereIn`) : `MANUAL_TOGGLE_STATUS_CODES`, `PANEL_STATUSES`,
 `DECLARATION_BLOCKING_STATUS_CODES`, `DEFENSELESS_STATUS_CODES`, `COMBAT_END_CLEARED_STATUS_CODES`,
@@ -99,6 +113,7 @@ rien de la *manière* de poser (bascule nue = `manualToggle`, ou formulaire déd
 | MJ (étourdissement manuel avec durée) | idem | `COMBAT_APPLY_STUN` → `applyStunWithDuration(…, { gmOverride: true })` |
 | Blessure « Mort » (automatique) | `dead`, marqué `data.source = 'wound'`, sur tous les tokens du personnage ; retiré avec la blessure, mais **seulement** s'il porte cette marque ; **posé seulement quand la réaction de Chance de la Mort est fermée** (invariant `dead` ⇔ blessure mortelle sans réaction ouverte) | `reconcileWoundDeath` (dans la transaction de `applyWound`/`removeWound`, puis à la fermeture de la réaction : `settleFatalWound`, `statusService.js`/`woundService.js`) puis `announceWoundDeath` après validation |
 | Mods d'arme, `iem_survival` | statuts propres (voir §8) | `applyModStatus` |
+| Déclaration Souffle (joueur ou MJ pour un PNJ, fenêtre d'action, jamais un formulaire MJ) | `breath_hold` → `asphyxia` → `unconscious` (automatique, un tick par Tour, `combatTurnEngine.js`) | `breathHoldService.js` |
 | Purge | statuts expirés (`expires_at_turn ≤ tour`) à `endTurn` ; statuts `clearedAtCombatEnd` à la fin du combat ; **tous** les statuts à `/heal` (résurrection voulue) | `combatTurnEngine.js`, `socketCombatState.js`, `woundService.js` |
 
 ## 5. Blocage proactif : « ce token peut-il agir ? »
@@ -144,8 +159,8 @@ Conséquences (toutes en `enforced`) :
    exo-armure : l'exo OU son pilote mort. Sites couverts : esquive de zone (`socketCombatAoe.js`), réduction de
    gravité (`woundService.js`), Catastrophe de défense au contact (`socketCombatHelpers.js`). Non couvertes (un mort
    n'agit plus) : les Chances de l'ACTEUR (test d'attaque, manœuvre d'exo, interaction d'entité).
-2. **Statuts interdits** (`incompatibleWithDeath`, 8) : Entravé, Déséquilibré, Étourdi, Inconscient, Asphyxie, Aveuglé,
-   Hypothermie, Évanoui — états d'un corps qui fonctionne. **Autorisés** : Enflammé, Corrodé, Irradié, Saisi,
+2. **Statuts interdits** (`incompatibleWithDeath`, 9) : Entravé, Déséquilibré, Étourdi, Inconscient, Asphyxie, Aveuglé,
+   Hypothermie, Évanoui, **Retient son souffle** (`breath_hold`, Lot 6) — états d'un corps qui fonctionne. **Autorisés** : Enflammé, Corrodé, Irradié, Saisi,
    Électrocuté, Infecté, Empoisonné, Décompression — processus qui agissent sur un corps, ou saisie ; un mort qui porte un
    danger en subit encore les ticks (voulu).
 3. **Barrière automatique** — `applyStunWithDuration` refuse sur un cadavre, sans rien écrire ni effacer.
@@ -201,4 +216,5 @@ refusés. Il peut donc reposer à la main ce qu'il veut après la purge.
 
 Documents associés : `docs/Old/PLAN_STATUT_MORT.md` (historique) ; `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots
 3-4 : Chance sur la 6ᵉ ligne, état permanent du membre) ; `MODING.md` (statuts de mods) ; `INFORMATIQUE.md` (`iem_survival`) ;
-`COMBAT_FLUX.md` (gardes STUN2/DEF5, file d'annonce) ; `BLESSURES.md` (compteur de blessures).
+`COMBAT_FLUX.md` (gardes STUN2/DEF5, file d'annonce) ; `BLESSURES.md` (compteur de blessures) ;
+`docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` §12 (Lot 6, Noyade/Asphyxie — `breath_hold`/`asphyxia`/`unconscious`).

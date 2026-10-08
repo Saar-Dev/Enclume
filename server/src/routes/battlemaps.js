@@ -793,16 +793,24 @@ router.get('/:id', requireAuth, async (req, res) => {
   // Enrichir chaque token avec ses statuts actifs
   const tokenIds = tokens.map(t => t.id)
   let statusMap = {}
+  // statusDataMap (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6) : même extension ciblée qu'
+  // emitTokenStatusUpdated (statusService.js) — seul `breath_hold` en a besoin au chargement initial
+  // de la carte, pas un `data` général pour tout statut (fuite de `data` de danger MJ vers les joueurs).
+  let statusDataMap = {}
   if (tokenIds.length > 0) {
     const allStatuses = await db('token_statuses')
       .whereIn('token_id', tokenIds)
-      .select('token_id', 'status_code')
+      .select('token_id', 'status_code', 'data')
     allStatuses.forEach(s => {
       if (!statusMap[s.token_id]) statusMap[s.token_id] = []
       statusMap[s.token_id].push(s.status_code)
+      if (s.status_code === 'breath_hold') {
+        if (!statusDataMap[s.token_id]) statusDataMap[s.token_id] = {}
+        statusDataMap[s.token_id][s.status_code] = s.data
+      }
     })
   }
-  const tokensWithStatuses = tokens.map(t => ({ ...t, statuses: statusMap[t.id] || [] }))
+  const tokensWithStatuses = tokens.map(t => ({ ...t, statuses: statusMap[t.id] || [], statusData: statusDataMap[t.id] || {} }))
 
   res.json({ battlemap, tokens: tokensWithStatuses })
 })

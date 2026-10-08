@@ -112,6 +112,37 @@
 > logique de dégâts. Cette relecture a aussi révélé que le badge `asphyxia` existant (libellé "Asphyxie")
 > ne peut pas représenter la Phase 1 (apnée tranquille) sans induire le joueur en erreur — un second
 > status_code est nécessaire. Aucun code écrit, cadrage prêt pour implémentation.
+> **2026-10-08 — Lot 6 codé et testé.** Cadrage §12 revérifié contre le code réel (2 mois d'écart) avant
+> code : architecture statuts passée à un registre déclaratif (`shared/tokenStatusRegistry.js`,
+> chantier 6ᵉ ligne), `resolveEnvironmentalHazardTicks` remplacée par `effectLineResolverService.js`
+> (chantier Zones dangereuses) — conclusions du cadrage inchangées, meilleur précédent trouvé entre-temps
+> (`iemSurvivalService.js`, statut unique pose+tick, patron copié tel quel). **Décision UI révisée avec
+> Saar** : pas de secteur RadialMenu dédié — déclencheur ponctuel (`mapActions.breath`,
+> `'retenir'|'hyperventiler'|'cesser'`) dans la fenêtre de déclaration (PJ et MJ), **jamais un
+> `state_*` persistant** (l'autorité du compteur reste `token_statuses`, un `state_*` dupliquerait
+> cette autorité) — indépendant du choix Attaque/CaC/Déplacement (rien n'empêche de combattre en
+> retenant son souffle). 2 bugs trouvés et corrigés en auto-critique avant tout test navigateur : (1)
+> `asphyxia` gardait `manualToggle` (hérité d'avant ce lot, cosmétique) — une bascule nue aurait posé une
+> ligne sans `data`, lue `remaining:0` au Tour suivant, rendant le token inconscient sans déclencheur
+> volontaire ; retiré du registre, même classe de correctif que burning/acid/decompression
+> (`TokenStatusPanel.jsx` gagne un garde-fou générique `isActionable`, pas une rustine ciblée) ; (2)
+> `calcSouffle` appelé avec un modificateur d'Avantage codé en dur à 0 au lieu de
+> `getAdvantageModForAttr(advantages, 'breath')` (déjà le calcul utilisé fiche perso/macros) — un
+> Avantage augmentant le Souffle aurait affiché une valeur et appliqué une autre, plus courte, en combat ;
+> corrigé en rebranchant sur `characterTestContext.js:loadCharacterTestContext` (3ᵉ consommateur réel,
+> même chargement que MACRO_ROLL/`/t`), qui a aussi fourni `activeMalus` pour le Test d'Athlétisme
+> d'Hyperventilation (manquant dans la 1ʳᵉ version). Fichiers : `server/src/lib/breathHoldService.js`
+> (nouveau, patron `iemSurvivalService.js`), tick câblé dans `combatTurnEngine.js:startResolutionPhase`,
+> `statusService.js`/`battlemaps.js` (extension ciblée du payload `data` pour `breath_hold` seul, pas une
+> fuite générale), `TokenPresentation.jsx` (`BreathHoldIndicator`, points bleus, plafond 10),
+> `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (sélecteur Souffle), `socketCombatAnnouncement.js`
+> (validation + exécution du trigger, jet d'Hyperventilation résolu immédiatement à la déclaration —
+> pas séquencé façon `exo_stand_up`, aucune intégration Chance/Catastrophe décidée pour ce jet). 8/8 tests
+> `breathHoldService.test.mjs` (base locale), 23/23 `tokenStatusRegistry.test.mjs` (golden master mis à
+> jour volontairement), 946/946 `shared/**/*.test.mjs`, 89/89 `buildDeclarePayload.test.mjs`, build client
+> propre. **⚠️ Non testé en navigateur** (déclaration réelle en combat, transition de phase visible,
+> cadavre en cours de Souffle, Avantage Souffle réel) — attend confirmation Saar avant clôture complète.
+> Détail : `docs/SYSTEME/STATUTS_TOKEN.md`.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -2326,8 +2357,9 @@ Saar en navigateur. Point d'entrée partagé (`setFatiguePoints`) et registre de
 
 **Lot 5 ✅ clos (2026-07-31)** — Froid (§11), confirmé fonctionnel par Saar en navigateur.
 
-**Lot 6 (Noyade/Asphyxie) — cadrage détaillé rédigé (§12), 2026-08-06.** Réflexion RAW + UI/UX
-complète avec Saar, aucun code écrit. Prêt pour implémentation sur confirmation de Saar.
+**Lot 6 (Noyade/Asphyxie) ✅ codé et testé (2026-10-08)**, voir §12 pour le détail complet (bugs
+trouvés/corrigés en auto-critique, architecture finale). **⚠️ Validation en jeu par Saar encore
+attendue** avant clôture complète (déclaration réelle en combat, transitions de phase, cadavre).
 
 Les Lots 7 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
 « à vérifier/trancher en codant » sont volontairement laissés ouverts (ils dépendent de détails du

@@ -15,8 +15,8 @@ export function useTokenSocket() {
     const onCreated = ({ token }) => addToken(token)
     const onDeleted = ({ tokenId }) => removeToken(tokenId)
     const onUpdated = ({ token }) => updateToken(token)
-    const onStatus  = ({ tokenId, statuses, statusExpiries }) =>
-      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {} })
+    const onStatus  = ({ tokenId, statuses, statusExpiries, statusData }) =>
+      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {}, statusData: statusData ?? {} })
 
     socket.on(WS.TOKEN_MOVED,          onMoved)
     socket.on(WS.TOKEN_CREATED,        onCreated)

@@ -19,7 +19,7 @@ import Skydome from './Skydome.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
-import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPresentation.jsx'
+import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges, BreathHoldIndicator } from './TokenPresentation.jsx'
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
@@ -433,6 +433,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
       <TokenLabel label={label} color={color} isGmLayer={isGmLayer} />
       {isGmLayer && <TokenGmBadge />}
       <TokenStatusBadges statuses={token.statuses} statusEffectsMode={statusEffectsMode} />
+      <BreathHoldIndicator data={token.statusData?.breath_hold} />
     </group>
   )
 }

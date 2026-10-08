@@ -7,7 +7,7 @@ import api from '../lib/api.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
-import { TokenLabel, TokenGmBadge, TokenStatusBadges, TokenPortrait, ImageErrorBoundary } from './TokenPresentation.jsx'
+import { TokenLabel, TokenGmBadge, TokenStatusBadges, TokenPortrait, ImageErrorBoundary, BreathHoldIndicator } from './TokenPresentation.jsx'
 
 // docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) — clé de la salle triviale synthétisée par le serveur à la
 // création d'une carte 2D (server/src/routes/battlemaps.js, POST /).
@@ -183,6 +183,7 @@ function Token2D({ token, isDragging, dragPos, onDragStart, statusEffectsMode })
       <TokenLabel label={label} color={color} isGmLayer={isGmLayer} offsetY={0.72} />
       {isGmLayer && <TokenGmBadge offsetY={0.92} />}
       <TokenStatusBadges statuses={token.statuses} statusEffectsMode={statusEffectsMode} offsetY={0.55} />
+      <BreathHoldIndicator data={token.statusData?.breath_hold} offsetY={0.4} />
     </group>
   )
 }

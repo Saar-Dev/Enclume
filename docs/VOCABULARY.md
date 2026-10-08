@@ -1,6 +1,8 @@
 VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
-    Version : V3.2 — 2026-09-29 : ajout « Source (de contenu) » (chantier `docs/PLANS/PLAN_SUPPLEMENTS.md`
+    Version : V3.3 — 2026-10-08 : ajout « Noyade/Asphyxie (3 phases) » et « Hyperventilation »
+    (chantier `docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` Lot 6, codé).
+    Précédent : V3.2 — 2026-09-29 : ajout « Source (de contenu) » (chantier `docs/PLANS/PLAN_SUPPLEMENTS.md`
     Lot A, `ref_sources`/`ref_exo_templates.source_id`/`campaign_enabled_sources` codés).
     Précédent : V3.1 — 2026-09-24 : ajout « CRD (contrôleur de réseau de défense) », « Interceptions simultanées (CRD) » et
     « Rayon d'action (CRD) » (chantier `docs/PLANS/PLAN_DRONE_INTERCEPTION.md`, Lot 3).
@@ -115,6 +117,8 @@ token_style	Apparence du token 2D (forme, cadrage, bordure)	characters.token_sty
 Horloge de campagne	Compteur de temps de jeu en minutes, ajusté par le MJ	gameTimeService.js
 Fatigue (Compteur de Fatigue)	État gradué avec malus aux Tests	fatigueService.js
 Froid (tranche/exposition)	Danger environnemental avec cadence de Tests	coldExposureService.js
+Noyade/Asphyxie (3 phases)	Cascade de statut pure (jamais un dégât) : Souffle (breath_hold, apnée volontaire) → Suffocation active (asphyxia, 2D6 Tours) → Inconscient. Déclenchée par le propriétaire du token, jamais une exposition MJ.	breathHoldService.js. Autorité : docs/PLANS/PLAN_FATIGUE_DOMMAGES.md §12, docs/SYSTEME/STATUTS_TOKEN.md.
+Hyperventilation	Technique optionnelle précédant Retenir son souffle : Test d'Athlétisme secret (visible lanceur+MJ), modificateur de réussite/échec appliqué au Souffle disponible.	breathHoldService.js:resolveHyperventilation
 Surface data	Document surface_data v12 décrivant les salles, murs, sols, plafonds, escaliers et connecteurs. Source de vérité de l'éditeur de surface.	shared/world/surfaceDocument.js (validation serveur), client/src/lib/surfaceData.js (manipulation client). Autorité : docs/SYSTEME/SURFACES_SALLES.md.
 Connecteur	Élément structurel lié à une salle : porte, échelle, ascenseur. Stocké dans surface_data.connectors. À ne pas confondre avec une entité libre.	surface_data.connectors, client/src/lib/surfaceData.js (création), docs/SYSTEME/SURFACES_SALLES.md.
 Blueprint (entité)	Modèle 3D définissant l'apparence et les propriétés d'une entité libre (géométrie, textures, GLB, interactions). Les blueprints sont créés dans l'Atelier GM ou proviennent des modèles intégrés.	entity_blueprints table, entityStore.blueprints. Autorité : docs/SYSTEME/ENTITES.md.

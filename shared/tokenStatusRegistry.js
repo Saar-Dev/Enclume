@@ -44,11 +44,12 @@
 // erreur.
 
 export const TOKEN_STATUS_CATEGORY_COLORS = {
-  entrave:   '#d8a838',
-  dot:       '#d84838',
-  sens:      '#9858c8',
-  chronique: '#38a8c8',
-  mort:      '#8b8b9a',
+  entrave:     '#d8a838',
+  dot:         '#d84838',
+  sens:        '#9858c8',
+  chronique:   '#38a8c8',
+  mort:        '#8b8b9a',
+  respiration: '#3a8adf',
 }
 
 export const TOKEN_STATUS_REGISTRY = [
@@ -57,7 +58,24 @@ export const TOKEN_STATUS_REGISTRY = [
   { code: 'off_balance',   category: 'entrave',   manualToggle: true,  inPanel: true, incompatibleWithDeath: true },
   { code: 'burning',       category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'acid',          category: 'dot',                             inPanel: true, gmOnly: true },
-  { code: 'asphyxia',      category: 'dot',       manualToggle: true,  inPanel: true, incompatibleWithDeath: true },
+  // breath_hold (docs/PLANS/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6, Phase 1 Noyade/Asphyxie) : jamais
+  // `manualToggle` ni `inPanel` — posé par breathHoldService.js (déclaration dans la fenêtre d'action,
+  // jamais une bascule nue) et affiché par un composant dédié (TokenPresentation.jsx:BreathHoldIndicator,
+  // points bleus), jamais la rangée de badges plats (exclusion explicite, même fichier). Présent dans ce
+  // registre uniquement pour `incompatibleWithDeath` (nettoyage automatique à la mort, applyDeathConsequences)
+  // — sans quoi un cadavre garderait un décompte de Souffle qui n'a plus de sens.
+  { code: 'breath_hold',   category: 'respiration',                                          incompatibleWithDeath: true },
+  // asphyxia — `manualToggle` RETIRÉ (2026-10-08, trouvé en relisant mon propre code, Lot 6) : cette
+  // ligne portait `manualToggle: true` depuis avant Lot 6 (badge cosmétique sans mécanique). Depuis
+  // que breathHoldService.js tique ce statut (Phase 2, décompte réel vers l'inconscience), une bascule
+  // nue (TOKEN_STATUS_TOGGLE, `data` toujours null) poserait une ligne malformée que
+  // resolveBreathHoldTicks lirait comme `remaining:0` dès le prochain Tour — un MJ qui coche juste le
+  // badge "Asphyxie" par réflexe (comportement permis AVANT ce lot) rendrait le token inconscient au
+  // Tour suivant sans l'avoir voulu. Même classe de bug déjà corrigée une fois pour burning/acid/
+  // decompression (commentaire socketToken.js) — même remède : plus de bascule nue, passage exclusif
+  // par breathHoldService (TokenStatusPanel.jsx exclut aussi ce code de `clickable`, cf. son propre
+  // commentaire `isActionable`).
+  { code: 'asphyxia',      category: 'dot',                              inPanel: true, incompatibleWithDeath: true },
   { code: 'decompression', category: 'dot',                             inPanel: true, gmOnly: true },
   { code: 'electrocuted',  category: 'dot',       manualToggle: true,  inPanel: true },
   { code: 'stunned',       category: 'sens',      manualToggle: true,  inPanel: true,

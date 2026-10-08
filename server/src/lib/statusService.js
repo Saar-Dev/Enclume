@@ -15,11 +15,21 @@ import { emitSystemNotice }    from './systemNotice.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).
+// statusData (docs/PLAN_FATIGUE_DOMMAGES.md §12 Lot 6, analyse à charge point 5) : extension CIBLÉE,
+// pas un `data` général pour tout statut — un `data` de danger environnemental (formula/locations MJ)
+// ne doit jamais fuiter à tous les joueurs via ce broadcast. Seul `breath_hold` en a besoin aujourd'hui
+// (BreathHoldIndicator, points bleus) ; un futur 2ᵉ consommateur généralisera via un flag registre
+// plutôt qu'un littéral ici (même principe que `manualToggle`/`inPanel`).
+const STATUS_CODES_WITH_DATA_IN_PAYLOAD = ['breath_hold']
+
 export async function emitTokenStatusUpdated(io, db, campaignId, tokenId) {
-  const rows = await db('token_statuses').where({ token_id: tokenId }).select('status_code', 'expires_at_turn')
+  const rows = await db('token_statuses').where({ token_id: tokenId }).select('status_code', 'expires_at_turn', 'data')
   const statuses      = rows.map(r => r.status_code)
   const statusExpiries = Object.fromEntries(rows.map(r => [r.status_code, r.expires_at_turn]))
-  io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses, statusExpiries })
+  const statusData = Object.fromEntries(
+    rows.filter(r => STATUS_CODES_WITH_DATA_IN_PAYLOAD.includes(r.status_code)).map(r => [r.status_code, r.data])
+  )
+  io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses, statusExpiries, statusData })
 }
 
 // ─── applyStunWithDuration ────────────────────────────────────────────────────

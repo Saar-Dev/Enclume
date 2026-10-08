@@ -9877,3 +9877,63 @@ continue (voir ticket `bug_tickets` 9f6c2a6e pour le détail factuel complet, no
 **Données** : aucune migration.
 **Retour arrière** : deux commits distincts (`0e271ffd`, `450ee60a`), `git revert` ciblé possible sur
 l'un sans toucher l'autre.
+
+## Session (Claude) — 2026-10-08 — Fatigue & Dommages Lot 6 : Noyade/Asphyxie codée (`docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` §12)
+
+Cadrage §12 écrit le 2026-08-06, bloqué depuis sur une seule question (déclenchement automatique par
+une Catastrophe Usure/Intégrité, ou toujours volontaire) — tranchée par Saar : **toujours volontaire,
+acté**. Avant de coder, revérifié le cadrage contre le code réel (2 mois d'écart, plusieurs chantiers
+passés entre-temps) : l'architecture des statuts est devenue un registre déclaratif
+(`shared/tokenStatusRegistry.js`, chantier 6ᵉ ligne), `resolveEnvironmentalHazardTicks` a été
+remplacée par `effectLineResolverService.js` (chantier Zones dangereuses). Conclusions du cadrage
+inchangées, mais meilleur précédent trouvé entre-temps : `iemSurvivalService.js` (statut unique,
+pose+tick dans un seul fichier, aucun registre) — copié tel quel pour `breathHoldService.js`.
+
+**Décision UI révisée avec Saar en cours de route** : sa proposition (« exclusif à cocher sur la
+fenêtre d'action ») remplace le secteur RadialMenu du cadrage original — plus simple, et colle au
+fait que le mécanisme est strictement Tour-scope (le temps n'est décompté qu'en combat). Correction
+apportée à la proposition : l'exclusivité doit être interne au groupe Souffle (Retenir/Hyperventiler/
+Cesser), jamais fusionnée avec le choix Attaque/CaC/Déplacement (rien n'empêche RAW de combattre en
+retenant son souffle) ; et le déclencheur doit être un `mapActions.breath` ponctuel, jamais un
+`state_*` persistant de `combat_roster` — sinon double autorité avec `token_statuses`, déjà choisi
+comme source unique du compteur (invariant CLAUDE.md §1.3/§7).
+
+**2 bugs trouvés et corrigés en auto-critique, avant tout test navigateur** (Saar : « analyse critique
+si pertinent ») :
+1. `asphyxia` gardait `manualToggle: true` (hérité d'avant ce lot, badge cosmétique sans mécanique).
+   Depuis que `breathHoldService.js` le tique réellement, une bascule nue (`TOKEN_STATUS_TOGGLE`,
+   `data` toujours `null`) aurait posé une ligne lue `remaining:0` dès le Tour suivant — un MJ qui
+   cochait juste le badge par réflexe (permis avant ce lot) aurait rendu le token inconscient sans
+   l'avoir voulu. Retiré du registre (même classe de correctif que burning/acid/decompression déjà
+   fait avant ce lot) ; `TokenStatusPanel.jsx` gagne un garde-fou générique `isActionable` (un code
+   `inPanel` sans bascule/formulaire/danger ne doit pas s'afficher cliquable), pas une rustine ciblée
+   à `asphyxia`.
+2. `calcSouffle` appelé avec un modificateur d'Avantage codé en dur à `0` au lieu de
+   `getAdvantageModForAttr(advantages, 'breath')` — déjà le calcul utilisé partout ailleurs (fiche
+   perso, macros joueur) pour cette même valeur. Un Avantage augmentant le Souffle aurait affiché une
+   valeur sur la fiche et appliqué une autre (plus courte) en combat. Corrigé en rebranchant sur
+   `characterTestContext.js:loadCharacterTestContext` (3ᵉ consommateur réel, même chargement que
+   MACRO_ROLL/`/t`) plutôt que `effectLineResolverService.js:loadTargetContext` (trop étroit, pas
+   d'`advantages`) — a aussi fourni `activeMalus`, manquant pour le Test d'Athlétisme
+   d'Hyperventilation dans la 1ʳᵉ version.
+
+**Fichiers** : `server/src/lib/breathHoldService.js` (nouveau — `startBreathHold`,
+`resolveHyperventilation`, `resolveBreathHoldTicks`, `clearBreathHold`) ; tick câblé dans
+`combatTurnEngine.js:startResolutionPhase` ; `statusService.js`/`battlemaps.js` (extension ciblée du
+payload `data`, `breath_hold` seul — pas une fuite générale des `data` de danger MJ) ;
+`TokenPresentation.jsx` (`BreathHoldIndicator`, points bleus, plafond 10) ; `CombatActionWindow.jsx` /
+`CombatGmDeclareWindow.jsx` (sélecteur Souffle, PJ et MJ) ; `socketCombatAnnouncement.js` (validation +
+exécution du trigger — jet d'Hyperventilation résolu immédiatement à la déclaration, pas séquencé
+façon `exo_stand_up` : aucune intégration Chance/Catastrophe décidée pour ce jet, RAW n'en décrit
+aucune).
+
+**Testé** : `breathHoldService.test.mjs` (base locale) 8/8 ; `tokenStatusRegistry.test.mjs` 23/23
+(golden master mis à jour volontairement — retrait `asphyxia` de la bascule manuelle, ajout
+`breath_hold`) ; `shared/**/*.test.mjs` 946/946 ; `buildDeclarePayload.test.mjs` 89/89 ; ESLint sur
+les 9 fichiers client touchés (0 nouvelle erreur, comparé à HEAD par stash/pop) ; build client propre ;
+`node --check` serveur/partagé ; `git diff --check`.
+**Non testé** : aucun scénario navigateur réel (déclaration en combat, transition de phase visible,
+cadavre en cours de Souffle, Avantage Souffle réel) — ⚠️ clos partiel, attend confirmation de Saar en
+jeu.
+**Données** : aucune migration (`token_statuses.data` existe déjà).
+**Retour arrière** : commit unique prévu pour ce lot, `git revert` suffit (aucune migration à défaire).
