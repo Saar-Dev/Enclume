@@ -52,7 +52,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const attackResult = currentAttackResult(attackQueue)
   const dismissAttackResult = () => setAttackQueue(dismissAttackQueueHead)
   const [gmAttackResult,      setGmAttackResult]       = useState(null)
-  const [pnjAttackResult,     setPnjAttackResult]      = useState(null)
+  const [targetAttackResult, setTargetAttackResult]    = useState(null)
   const [meleeDefensePrompt,  setMeleeDefensePrompt]   = useState(null)
   const [meleeResult,         setMeleeResult]          = useState(null)
   const [stunPayload,         setStunPayload]          = useState(null)
@@ -80,14 +80,20 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
     // exclusivité par EnvironmentalResultQueue.jsx (toujours monté, jamais gaté au mode combat, vraie
     // file d'attente) — jamais aussi ici, ce serait un double affichage pendant un combat réel.
+    // COMBAT-RESOLUTION-TIR-WINDOW-VISIBILITY (2026-10-08) — qui doit VOIR ce résultat ne dépend
+    // jamais de qui a tiré (`data.isPnj`, qui ne décrit que l'attaquant) : seul compte « suis-je le
+    // MJ ? » ou « suis-je la cible ? » (cibleId), déjà la condition exacte lue par CombatOverlay.jsx
+    // pour afficher CombatResultPlayer. Avant ce correctif, un tir PJ (confirmDamage —
+    // `resolveDamageConfirmNormalTarget`/Drone/Exo, socketCombatHelpers.js, qui ne posent jamais
+    // `isPnj`) ne mettait à jour que l'état MJ : la cible, si c'était un joueur, ne recevait jamais
+    // sa fenêtre — ni, par ricochet, WoundReactionDock qui s'ancre sur sa position
+    // (useResultPanelRect). On note systématiquement les deux états ; chaque composant choisit déjà
+    // lequel lui correspond (`isGm` / `cibleId === playerToken?.id`), aucune raison de refaire ce tri
+    // une seconde fois ici.
     const onAttackResult        = (data) => {
       if (data.sourceCode) return
-      if (data.isPnj) {
-        setGmAttackResult(data)
-        setPnjAttackResult(data)
-      } else if (isGm) {
-        setGmAttackResult(data)
-      }
+      setGmAttackResult(data)
+      setTargetAttackResult(data)
     }
     const onCombatStarted = ({ roster, phase, droneTurnModelGm, droneTurnModelPlayer }) => {
       setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0, droneTurnModelGm, droneTurnModelPlayer })
@@ -108,7 +114,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       setGmReloadResult(null)
       setDamageQueue([])
       setGmAttackResult(null)
-      setPnjAttackResult(null)
+      setTargetAttackResult(null)
       setMeleeDefensePrompt(null)
       setMeleeResult(null)
       setStunPayload(null)
@@ -296,7 +302,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     attackResult,
     dismissAttackResult,
     gmAttackResult,      setGmAttackResult,
-    pnjAttackResult,     setPnjAttackResult,
+    targetAttackResult,  setTargetAttackResult,
     meleeDefensePrompt,  setMeleeDefensePrompt,
     meleeResult,         setMeleeResult,
     stunPayload,         setStunPayload,

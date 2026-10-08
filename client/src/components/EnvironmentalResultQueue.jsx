@@ -10,7 +10,7 @@ let nextQueueId = 0
 
 // EnvironmentalResultQueue — file d'attente pour les résultats de dangers environnementaux
 // (Froid/Feu/Acide/Décompression) hors du mode combat (bug trouvé par Saar, docs/
-// PLAN_FATIGUE_DOMMAGES.md §11 Lot 5). `CombatOverlay.jsx` (gmAttackResult/pnjAttackResult) n'est
+// PLAN_FATIGUE_DOMMAGES.md §11 Lot 5). `CombatOverlay.jsx` (gmAttackResult/targetAttackResult) n'est
 // monté que si mode==='combat' et ne garde qu'un seul résultat à la fois (état simple, jamais un
 // tableau) — jamais un problème pour Acide/Décompression/Feu (ils ne tickent que pendant
 // startResolutionPhase, donc le combat est déjà ouvert par construction), mais un vrai bug pour le

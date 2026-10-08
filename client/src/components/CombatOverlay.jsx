@@ -18,7 +18,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 import CombatTargetRecapToast from './CombatTargetRecapToast.jsx'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, combatModifiersMode = 'auto', pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, gmReloadResult, onGmReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, combatModifiersMode = 'auto', pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeAim, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, targetAttackResult, onTargetAttackResultClose, reloadResult, onReloadResultClose, gmReloadResult, onGmReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
   const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
@@ -566,7 +566,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         </div>
       )}
 
-      {/* Panneau résultat assaut PNJ — GM uniquement, après résolution auto */}
+      {/* Panneau résultat de tir — vue MJ, tout attaquant (PJ ou PNJ) */}
       {isGm && gmAttackResult && (
         <CombatResultGM
           attaquant={resolveAttaquantLabel(gmAttackResult)}
@@ -588,19 +588,21 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Panneau résultat assaut PNJ — Joueur ciblé uniquement */}
-      {!isGm && pnjAttackResult && pnjAttackResult.cibleId === playerToken?.id && (
+      {/* Panneau résultat de tir — joueur visé uniquement, quel que soit l'attaquant (PJ ou PNJ,
+          COMBAT-RESOLUTION-TIR-WINDOW-VISIBILITY : qui a tiré n'a jamais été le critère pertinent
+          ici, seule la cible compte) */}
+      {!isGm && targetAttackResult && targetAttackResult.cibleId === playerToken?.id && (
         <CombatResultPlayer
-          attaquant={resolveAttaquantLabel(pnjAttackResult)}
-          isSuccess={pnjAttackResult.isSuccess}
-          roll={pnjAttackResult.roll}
-          seuil={pnjAttackResult.chancesDeReussite}
-          localisation={pnjAttackResult.localisation}
-          degatsBruts={pnjAttackResult.degautsBruts}
-          degatsNets={pnjAttackResult.degatsNets}
-          severity={pnjAttackResult.severity}
-          shockResult={pnjAttackResult.shockResult}
-          onClose={onPnjAttackResultClose}
+          attaquant={resolveAttaquantLabel(targetAttackResult)}
+          isSuccess={targetAttackResult.isSuccess}
+          roll={targetAttackResult.roll}
+          seuil={targetAttackResult.chancesDeReussite}
+          localisation={targetAttackResult.localisation}
+          degatsBruts={targetAttackResult.degautsBruts}
+          degatsNets={targetAttackResult.degatsNets}
+          severity={targetAttackResult.severity}
+          shockResult={targetAttackResult.shockResult}
+          onClose={onTargetAttackResultClose}
         />
       )}
 

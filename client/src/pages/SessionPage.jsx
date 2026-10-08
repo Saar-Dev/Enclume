@@ -1389,8 +1389,8 @@ function SessionContent({ campaignId }) {
           onAttackConfirmed={combatSocket.dismissAttackResult}
           gmAttackResult={combatSocket.gmAttackResult}
           onGmAttackResultClose={() => combatSocket.setGmAttackResult(null)}
-          pnjAttackResult={combatSocket.pnjAttackResult}
-          onPnjAttackResultClose={() => combatSocket.setPnjAttackResult(null)}
+          targetAttackResult={combatSocket.targetAttackResult}
+          onTargetAttackResultClose={() => combatSocket.setTargetAttackResult(null)}
           reloadResult={combatSocket.reloadResult}
           onReloadResultClose={() => combatSocket.setReloadResult(null)}
           gmReloadResult={combatSocket.gmReloadResult}
