@@ -1487,6 +1487,8 @@
       "detail_nt": "NT",
       "detail_gen": "Gén.",
       "detail_rarity": "Rareté",
+      "ammo_compatible": "Compatible avec : {{weapons}}",
+      "ammo_incompatible": "Aucune arme de calibre {{caliber}} dans l'inventaire",
       "cart_empty": "Panier vide",
       "cart_total": "Total :",
       "cart_checkout": "Acheter",

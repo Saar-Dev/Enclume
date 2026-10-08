@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
+import { AMMO_FAMILY, ammoMatchesWeapon } from '../../../shared/ammoRules.js'
 import api from '../lib/api'
 import { useDraggable } from '../lib/useDraggable.js'
 
@@ -233,7 +234,7 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
   }
 
   useEffect(() => {
-    if ((playerTab === 'exchange' || playerTab === 'sell') && myInventory.length === 0 && !invLoading) loadInventory()
+    if ((playerTab === 'catalogue' || playerTab === 'exchange' || playerTab === 'sell') && myInventory.length === 0 && !invLoading) loadInventory()
   }, [playerTab, myInventory.length, invLoading, loadInventory])
 
   // Timer sell expiry
@@ -503,6 +504,12 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
   const filteredItems = selFamily ? catalog.filter(i => i.family === selFamily) : catalog
   const cartTotal     = cart.reduce((sum, c) => sum + c.item.catalog_price * c.qty, 0)
   const sellBadge     = sellRequests.length
+
+  // MARCHAND-UX-REVIEW — armes possédées, pour indiquer dans le catalogue si une munition correspond
+  // à une arme déjà en inventaire. ammoMatchesWeapon (shared/ammoRules.js) reste l'autorité unique du
+  // lien arme↔munition (même règle que le rechargement en combat et la fiche personnage) — comparée
+  // ici à l'appel, jamais une égalité de calibre réécrite en silence.
+  const ownedWeapons = myInventory.filter(invItem => invItem.ref_family !== AMMO_FAMILY && invItem.ref_caliber)
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
 
@@ -807,16 +814,31 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                     <span style={S.catalogItemName}>{item.name}</span>
                     <span style={S.catalogItemPrice}>{item.catalog_price} S</span>
                     <button className="btn btn-ghost" style={S.cartAddBtn} onClick={e => { e.stopPropagation(); addToCart(item) }}>+</button>
-                    {item.family === 'Munitions' && (
+                    {item.family === AMMO_FAMILY && (
                       <button className="btn btn-ghost" style={{ ...S.cartAddBtn, fontSize: '11px' }} onClick={e => { e.stopPropagation(); addToCart(item, 10) }}>+10</button>
                     )}
                   </div>
                   {isSelected && (
                     <div style={S.itemDetail}>
+                      {item.description && <div style={S.itemDescription}>{item.description}</div>}
                       {item.weight     != null && <span>{t('trade.window.detail_weight')}: {item.weight} kg</span>}
                       {item.tech_level != null && <span>{t('trade.window.detail_nt')}: {item.tech_level}</span>}
                       {item.generation != null && <span>{t('trade.window.detail_gen')}: {item.generation}</span>}
                       {item.rarity               && <span>{t('trade.window.detail_rarity')}: {item.rarity}</span>}
+                      {item.family === AMMO_FAMILY && item.caliber && (() => {
+                        const compatibleNames = [...new Set(
+                          ownedWeapons
+                            .filter(w => ammoMatchesWeapon(w.ref_caliber, item.caliber))
+                            .map(w => w.ref_name),
+                        )]
+                        return (
+                          <div style={S.itemCompat}>
+                            {compatibleNames.length > 0
+                              ? <span style={{ color: '#3aaa6a' }}>{t('trade.window.ammo_compatible', { weapons: compatibleNames.join(', ') })}</span>
+                              : <span style={{ color: '#c86030' }}>{t('trade.window.ammo_incompatible', { caliber: item.caliber })}</span>}
+                          </div>
+                        )
+                      })()}
                       {cartEntry && (
                         <div style={S.qtyRow}>
                           <button className="btn btn-ghost" style={S.qtyBtn} onClick={() => removeFromCart(item.id)}>−</button>
@@ -1102,6 +1124,8 @@ const S = {
   catalogItemPrice:  { flex: '0 0 56px', fontSize: '12px', color: '#c8a84b', textAlign: 'right' },
   cartAddBtn:        { flexShrink: 0, fontSize: '14px', padding: '1px 8px' },
   itemDetail:        { padding: '4px 8px 8px', display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '11px', color: '#999' },
+  itemDescription:   { width: '100%', fontSize: '12px', fontStyle: 'italic', color: '#bbb' },
+  itemCompat:        { width: '100%', fontSize: '11px' },
   qtyRow:            { display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '2px' },
   qtyBtn:            { padding: '1px 8px', fontSize: '14px' },
   qtyVal:            { fontSize: '13px', color: '#ddd', minWidth: '20px', textAlign: 'center' },
