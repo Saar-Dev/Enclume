@@ -353,8 +353,15 @@ export default function MerchantsPage() {
                                     <button style={S.ruleBtn} onClick={() => toggleRule('ITEM', fam, cat, item.name)}>
                                       <RuleBadge mode={itemRule?.mode} inherited={itemInherited} />
                                     </button>
-                                    <span style={S.itemName}>{item.name}</span>
-                                    <span style={S.itemMeta}>NT{item.tech_level}</span>
+                                    <div style={S.itemInfo}>
+                                      <div style={S.itemNameRow}>
+                                        <span style={S.itemName}>{item.name}</span>
+                                        <span style={S.itemMeta}>NT{item.tech_level} · {item.price ?? 0} S</span>
+                                      </div>
+                                      {/* MARCHAND-UX-REVIEW (demande Saar) — la description reste la seule information
+                                          que le MJ ne peut pas deviner du nom seul ; toujours visible, pas derrière un clic. */}
+                                      {item.description && <span style={S.itemDescription}>{item.description}</span>}
+                                    </div>
                                   </div>
                                 )
                               })}
@@ -498,9 +505,12 @@ const S = {
   catHeader:    { display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px 5px 20px', backgroundColor: 'var(--bg-surface)' },
   catName:      { fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' },
   itemCount:    { fontSize: '10px', color: 'var(--text-muted)' },
-  itemRow:      { display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 10px 3px 36px', borderTop: '1px solid rgba(255,255,255,0.04)' },
-  itemName:     { fontSize: '12px', color: 'var(--text-primary)', flex: 1 },
-  itemMeta:     { fontSize: '10px', color: 'var(--text-muted)' },
+  itemRow:      { display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '5px 10px 5px 36px', borderTop: '1px solid rgba(255,255,255,0.04)' },
+  itemInfo:     { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+  itemNameRow:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
+  itemName:     { fontSize: '12px', color: 'var(--text-primary)' },
+  itemMeta:     { fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 },
+  itemDescription: { fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' },
 
   ruleBtn:      { background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 },
   badgeHerited:        { fontSize: '9px', padding: '1px 5px', borderRadius: '3px', backgroundColor: 'rgba(136,136,136,0.2)', color: '#888', display: 'inline-block' },

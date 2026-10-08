@@ -3,6 +3,7 @@ import { createSearchMatcher } from '../../../shared/textSearch.js'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { equipmentDisplayFields } from '../lib/equipmentFields.js'
 
 // ─── EquipmentCatalogPage ───────────────────────────────────────────────────────
 // Consultation lecture seule de ref_equipment — ouverte à tout utilisateur connecté,
@@ -12,54 +13,9 @@ import api from '../lib/api'
 // déjà ouvertes à tout utilisateur authentifié (equipment.js), aucun travail serveur ici.
 // 678 lignes au total (vérifié) : chargées une fois, filtrées côté client — pas de pagination
 // serveur nécessaire pour ce volume.
-
-// Libellés repris tels quels de server/src/admin/ref-equipment-tool.html (seule source de
-// terminologie FR pour ces champs — autorité unique, pas de traduction inventée ici). Ordre
-// groupé par thème (identité, prix, général, offensif, défensif, conteneur, munitions), miroir
-// des sections du formulaire admin.
-const FIELD_ORDER = [
-  'description',
-  'price', 'price_modifier', 'rarity',
-  'weight', 'manufacturer', 'nation', 'max_level', 'bonus', 'generation',
-  'damage_h', 'damage_v_low', 'damage_v_high', 'shock', 'range',
-  'min_str', 'init_mod', 'fire_mode', 'ammo_count', 'ammo_cost', 'caliber', 'linked_attr',
-  'protection', 'protection_modifier', 'protection_shock', 'location', 'malus_cat',
-  'capacity', 'waterproof',
-  'ammo_effects',
-]
-
-const FIELD_LABELS = {
-  description: 'Description',
-  price: 'Prix (créd.)',
-  price_modifier: 'Modificateur prix',
-  rarity: 'Rareté',
-  weight: 'Poids (kg)',
-  manufacturer: 'Fabricant',
-  nation: 'Nation / Faction',
-  max_level: 'Niveau max',
-  bonus: 'Bonus',
-  generation: 'Génération',
-  damage_h: 'Dommage (H)',
-  damage_v_low: 'Dommage (V-)',
-  damage_v_high: 'Dommage (V+)',
-  shock: 'Choc',
-  range: 'Portée',
-  min_str: 'FOR min requise',
-  init_mod: 'Modif. Initiative',
-  fire_mode: 'Mode de tir',
-  ammo_count: 'Mun. — Quantité chargeur',
-  ammo_cost: 'Mun. — Coût ravitaillement',
-  caliber: 'Calibre',
-  linked_attr: 'Attribut lié',
-  protection: 'Protection',
-  protection_modifier: 'Modif. Protection',
-  protection_shock: 'Protection Choc',
-  location: 'Localisation',
-  malus_cat: 'Catégorie de malus',
-  capacity: 'Contenance (unités)',
-  waterproof: 'Étanche',
-  ammo_effects: 'Effets spéciaux munitions',
-}
+//
+// Libellés/ordre des champs extraits dans lib/equipmentFields.js (MARCHAND-UX-REVIEW) — autorité
+// unique réutilisée par le catalogue d'achat du Marchand (TradeWindow.jsx), pas une copie locale.
 
 export default function EquipmentCatalogPage() {
   const navigate = useNavigate()
@@ -187,16 +143,12 @@ export default function EquipmentCatalogPage() {
                   <span style={S.modalSubtitle}>{selected.family} — {selected.category}</span>
                 </div>
                 <div style={S.detailGrid}>
-                  {FIELD_ORDER
-                    .filter(key => selected[key] !== null && selected[key] !== undefined && selected[key] !== '')
-                    .map(key => (
-                      <div key={key} style={S.detailRow}>
-                        <span style={S.detailLabel}>{FIELD_LABELS[key]}</span>
-                        <span style={S.detailValue}>
-                          {typeof selected[key] === 'boolean' ? (selected[key] ? '✓' : '—') : String(selected[key])}
-                        </span>
-                      </div>
-                    ))}
+                  {equipmentDisplayFields(selected).map(({ key, label, value }) => (
+                    <div key={key} style={S.detailRow}>
+                      <span style={S.detailLabel}>{label}</span>
+                      <span style={S.detailValue}>{value}</span>
+                    </div>
+                  ))}
                 </div>
                 <div style={S.modalFooter}>
                   <button className="btn btn-ghost" onClick={() => setSelected(null)}>{t('common.close')}</button>

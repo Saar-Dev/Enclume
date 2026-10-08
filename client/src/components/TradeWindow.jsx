@@ -4,6 +4,7 @@ import { WS } from '../../../shared/events.js'
 import { AMMO_FAMILY, ammoMatchesWeapon } from '../../../shared/ammoRules.js'
 import api from '../lib/api'
 import { useDraggable } from '../lib/useDraggable.js'
+import { equipmentDisplayFields } from '../lib/equipmentFields.js'
 
 const PANEL_W   = 480
 const PAGE_SIZE = 50
@@ -818,13 +819,16 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                       <button className="btn btn-ghost" style={{ ...S.cartAddBtn, fontSize: '11px' }} onClick={e => { e.stopPropagation(); addToCart(item, 10) }}>+10</button>
                     )}
                   </div>
+                  {/* MARCHAND-UX-REVIEW — la description reste visible sans clic (demande Saar,
+                      « à minima »), seul le détail complet (tous les champs renseignés + compatibilité
+                      munitions) reste derrière le clic pour ne pas allonger démesurément la liste. */}
+                  {item.description && <div style={S.itemDescriptionAlways}>{item.description}</div>}
                   {isSelected && (
                     <div style={S.itemDetail}>
-                      {item.description && <div style={S.itemDescription}>{item.description}</div>}
-                      {item.weight     != null && <span>{t('trade.window.detail_weight')}: {item.weight} kg</span>}
                       {item.tech_level != null && <span>{t('trade.window.detail_nt')}: {item.tech_level}</span>}
-                      {item.generation != null && <span>{t('trade.window.detail_gen')}: {item.generation}</span>}
-                      {item.rarity               && <span>{t('trade.window.detail_rarity')}: {item.rarity}</span>}
+                      {equipmentDisplayFields(item, ['description']).map(({ key, label, value }) => (
+                        <span key={key}>{label}: {value}</span>
+                      ))}
                       {item.family === AMMO_FAMILY && item.caliber && (() => {
                         const compatibleNames = [...new Set(
                           ownedWeapons
@@ -1124,7 +1128,7 @@ const S = {
   catalogItemPrice:  { flex: '0 0 56px', fontSize: '12px', color: '#c8a84b', textAlign: 'right' },
   cartAddBtn:        { flexShrink: 0, fontSize: '14px', padding: '1px 8px' },
   itemDetail:        { padding: '4px 8px 8px', display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '11px', color: '#999' },
-  itemDescription:   { width: '100%', fontSize: '12px', fontStyle: 'italic', color: '#bbb' },
+  itemDescriptionAlways: { padding: '0 8px 4px', fontSize: '12px', fontStyle: 'italic', color: '#bbb' },
   itemCompat:        { width: '100%', fontSize: '11px' },
   qtyRow:            { display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '2px' },
   qtyBtn:            { padding: '1px 8px', fontSize: '14px' },
