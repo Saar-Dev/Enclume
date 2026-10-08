@@ -740,6 +740,12 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
 
   return (
     <div ref={setNodeRef} style={{ ...s.itemRow, ...dragStyle }} {...listeners} {...attributes}>
+      {/* MARCHAND-UX-REVIEW — remplace l'ancien tooltip au survol (data-tooltip=ref_description,
+          quasi invisible) : description toujours accessible au clic, plus le détail complet. Tout
+          à gauche (demande Saar 2026-10-08) : colonne fixe, comme une icône d'objet, plutôt qu'une
+          position qui bouge selon la longueur du nom — et jamais sur le nom lui-même, déjà la
+          poignée de glisser-déposer de toute la ligne. */}
+      <EquipmentInfoButton item={item} setDetailPanel={onOpenInfoPopover} />
       <span style={s.itemName}>
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
@@ -747,9 +753,6 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
           <span style={s.itemSlot}> [{item.slots.map(sl => SLOT_LABEL_I18N_KEYS[sl] ? t(SLOT_LABEL_I18N_KEYS[sl]) : sl).join('/')}]</span>
         )}
       </span>
-      {/* MARCHAND-UX-REVIEW — remplace l'ancien tooltip au survol (data-tooltip=ref_description,
-          quasi invisible) : description toujours accessible au clic, plus le détail complet. */}
-      <EquipmentInfoButton item={item} setDetailPanel={onOpenInfoPopover} />
       {isWeaponLike && DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => item[field] && (
         <span key={key} className={`badge badge-compact ${className}`} style={s.itemDamageBadge}>{t(i18nKey)} <span className="num">{item[field]}</span></span>
       ))}
