@@ -1,6 +1,17 @@
 SYSTEME/ARCHITECTURE_SOCKET.md — Architecture de communication temps réel
 
-    Dernière mise à jour : 2026-10-04 — CHAR_XP_UPDATED/CHAR_ATTRIBUTES_UPDATED/CHAR_SKILLS_UPDATED/
+    Dernière mise à jour : 2026-10-08 (SOCKET-STRICTMODE-RECONNECT-HANG, ticket bug_tickets
+    9f6c2a6e) — SocketContext.jsx recréait un socket neuf (io(...)) à CHAQUE montage de
+    SocketProvider ; sous StrictMode (toujours actif en dev, main.jsx), l'effet montait deux fois
+    de suite (connect → disconnect → connect, mêmes deps) et la 2ᵉ connexion arrivait parfois sur
+    une session engine.io déjà fermée côté serveur (400 Bad Request / upgrade WebSocket refusé,
+    observé en journal réseau). Corrigé selon le patron officiel socket.io (how-to/use-with-react) :
+    un seul Socket/Manager créé HORS du composant (module-level, `autoConnect: false`), l'effet ne
+    fait plus que connect()/disconnect() sur ce même objet. Conséquence : `socket` (valeur de
+    useSocket()) est désormais STABLE pour toute la durée de l'onglet — les sections 5/6/Piège P3
+    ci-dessous sont corrigées en consequence. N'a pas résolu, à lui seul, un trou de chargement de
+    20-40 s par ailleurs observé (cause externe au code suspectée, voir le ticket).
+    Dernière mise à jour précédente : 2026-10-04 — CHAR_XP_UPDATED/CHAR_ATTRIBUTES_UPDATED/CHAR_SKILLS_UPDATED/
     CHAR_CHC_UPDATED/CHAR_IDENTITY_UPDATED/CHAR_ARCHETYPE_UPDATED/CHAR_ADVANTAGE_ADDED/REMOVED/
     CHAR_ADVANTAGE_NOTE_ADDED/REMOVED/CHAR_MUTATIONS_UPDATED ajoutés (CHARSHEET-XP-SYNC-PJMJ) : 15
     routes de char-sheet.js (identité, archétype, attributs, achat PC, compétences, Pouvoirs Polaris,
@@ -186,7 +197,7 @@ Règles :
 
 Piège [R8-8] : Ne jamais se repérer aux numéros de ligne pour localiser un handler. Utiliser le nom d'événement (socket.on(WS.XXX, ...)).
 
-Piège [R8-11] : Si SESSION_JOIN est émis deux fois sur le même socket (reconnexion), les register* enregistrent les listeners en double → double DB write. Mitigation côté client : le socket est détruit au démontage.
+Piège [R8-11] : Si SESSION_JOIN est émis deux fois sur le même socket (reconnexion), les register* enregistrent les listeners en double → double DB write. Mitigation côté client — corrigée 2026-10-08 (SOCKET-STRICTMODE-RECONNECT-HANG) : le socket n'est plus détruit au démontage (il est désormais un singleton module-level, réutilisé pour toute la durée de l'onglet) ; la protection vient maintenant du retrait explicite des handlers nommés (`socket.off('connect', handleConnect)` etc.) dans le nettoyage de l'effet avant tout nouveau `socket.connect()`, sur ce même objet.
 5. SocketProvider client
 
 client/src/lib/SocketContext.jsx :
@@ -196,13 +207,20 @@ jsx
   <SessionContent />
 </SocketProvider>
 
-    Crée le socket avec io(url, { withCredentials: true }).
+    Crée le socket UNE SEULE FOIS, hors du composant (module-level, io(url, { withCredentials: true,
+    autoConnect: false })) — corrigé 2026-10-08, voir l'en-tête de ce document. L'effet de
+    SocketProvider appelle connect()/disconnect() sur ce même objet à chaque montage/démontage ou
+    changement de campaignId/context ; il n'en crée plus jamais un nouveau.
 
     Sur l'événement connect (connexion initiale ET reconnexion automatique), émet SESSION_JOIN.
 
-    Le socket est stocké dans un état useState, puis fourni via useSocket().
+    Le socket (la référence stable, pas un état) est fourni via useSocket().
 
-    useSocket() retourne null tant que le socket n'est pas prêt.
+    useSocket() ne retourne jamais null À L'INTÉRIEUR d'un SocketProvider (le socket existe dès le
+    premier rendu, avant même le premier connect()) — il retourne le `null` par défaut du Contexte
+    seulement pour un composant rendu HORS de tout SocketProvider. Le signal « prêt à émettre des
+    événements de domaine » reste useSocketReady() (passe à true sur SESSION_JOINED), jamais la
+    simple non-nullité du socket.
 
 6. Hooks socket client
 
@@ -222,13 +240,15 @@ export function useMonHook() {
 
 Obligatoire : les handlers sont nommés (const onX = ...) pour permettre un cleanup ciblé. socket.off(WS.X) sans handler supprimerait TOUS les listeners de cet événement.
 
-Piège P3 — **corrigé (audit 2026-08-26), ce document se trompait, `docs/SYSTEME/REACT.md` a la bonne
-version** : `socket` n'est **pas** stable (`SocketProvider` crée une nouvelle instance à chaque
-reconnexion) — `socket` **doit** rester dans les dépendances de tout `useCallback`/`useEffect` qui
-émet ou écoute. Vérifié dans le code réel : `handleEntityActionResolve`, `handleTokenSetRotation`,
-`handleSurpriseRolled` (`SessionPage.jsx:561-575`) incluent tous `[socket]`. Ne pas retirer `socket`
-d'un tableau de dépendances sous prétexte de ce piège — l'inverse causerait une régression
-(callback figé sur un ancien socket après reconnexion).
+Piège P3 — **mis à jour 2026-10-08 (SOCKET-STRICTMODE-RECONNECT-HANG)** : avant cette date, `socket`
+n'était pas stable (`SocketProvider` créait une nouvelle instance à chaque reconnexion), d'où
+l'exigence stricte de garder `socket` dans les dépendances. Depuis le correctif, `socket` est un
+singleton module-level qui ne change plus JAMAIS de référence, même après reconnexion — cette raison
+précise n'existe plus. **Garder `[socket]` dans les dépendances reste sans risque** (un singleton
+stable dans un tableau de deps ne redéclenche simplement jamais l'effet pour cette raison) et évite
+de réécrire 20+ fichiers sans bénéfice ; ne pas le retirer par souci de « nettoyage » — mais ne plus
+invoquer l'ancienne justification (« callback figé après reconnexion ») si la question revient, elle
+ne s'applique plus.
 7. Ordre d'enregistrement client
 
 Dans SessionContent, l'ordre est contraint :

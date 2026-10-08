@@ -9815,3 +9815,65 @@ conséquence visible non encore montrée à Saar (armes de corps à corps basiqu
 empilables aussi, décidé en chat mais pas encore vu en jeu).
 **Données** : aucune migration, aucun changement de schéma — comportement d'écriture uniquement.
 **Retour arrière** : `git revert` des fichiers modifiés suffit.
+
+---
+
+## Session (Dev) — 2026-10-08 — Monde/Réseau : plafonds/sols/portes recalculés pour rien + enquête trou de chargement (ticket 9f6c2a6e)
+
+**Repris du ticket `bug_tickets` 9f6c2a6e / `WORLD-COMPILE-SUPERLINEAR`** — deux sujets distincts
+sous le même ticket : un correctif de rendu confirmé et clos, et une enquête sur un trou de
+chargement de 20-40 s en session, isolée mais pas encore résolue.
+
+**Correctif confirmé en jeu (Saar)** : le défaut noté le 2026-10-07 avait en réalité DEUX causes.
+(1) `SurfaceDungeonScene.jsx` reconstruisait un objet salle/connecteur neuf en JSX à chaque rendu
+(`room={{ id, ...room }}`, `connector={{ id, ...connector, runtimeState }}`), cassant la mémoïsation
+interne de `CurvedRoomSlab`/`DoorConnectorModel` (clonage GLTF et géométrie refaits sans raison) —
+corrigé par un cache (`roomsById`/`connectorsById`, `useMemo`). (2) Cause sœur non vue au premier
+passage : `footprintContours` (`RoomFloorSurface`/`RoomCeilingInterface`) était recalculé en JSX à
+chaque rendu lui aussi — confirmé par les journaux de Saar montrant les plafonds recalculer encore
+sans aucun changement de `surface.rooms` en amont. Même patron de correctif. Une 3ᵉ piste (cache fin
+par connecteur avec `useRef` muté dans `useMemo`) a été écartée : viole `react-hooks/refs` (React
+19, « Cannot access refs during render ») — revenu à la version simple, déjà une nette amélioration.
+Racine plus en amont aussi corrigée : `Canvas3D.jsx` ne mémorisait jamais `normalizeSurfaceData(
+battlemap?.surface_data)`, recalculé à chaque rendu du composant quel qu'en soit le déclencheur.
+Commit `0e271ffd`.
+
+**Correctif réseau, cause distincte mais pas confirmée comme étant celle du trou** :
+`SocketContext.jsx` créait une connexion socket.io neuve à chaque montage de `SocketProvider`. Sous
+StrictMode (toujours actif en dev), l'effet monte deux fois de suite (connect → disconnect →
+connect) ; la 2ᵉ connexion arrivait parfois sur une session engine.io déjà fermée côté serveur,
+confirmé par des erreurs réseau réelles (400 Bad Request, upgrade WebSocket refusé). Corrigé selon
+le patron officiel (socket.io/how-to/use-with-react) : un seul Socket/Manager créé hors du
+composant, `connect()`/`disconnect()` gérés dans l'effet. Vérifié aussi dans le code source de
+socket.io-client 4.8.3, pas seulement la doc. Commit `450ee60a`. **N'a pas fait disparaître le trou
+de chargement.**
+
+**Enquête du trou de 20-40 s — isolée, pas résolue** : après plusieurs cycles de reproduction
+instrumentée (journal navigateur + serveur + nodemon), exclusion d'une hypothèse de session Claude
+parallèle (HMR) et d'une hypothèse de fenêtre « contaminée » par de vieux tests :
+- Fermeture complète du navigateur + fenêtre neuve + chargement de la session = trou de ~40 s,
+  reproduit de façon fiable.
+- Depuis cette même fenêtre déjà chargée : naviguer vers le Dashboard et revenir, ou passer en mode
+  édition et revenir = quasi instantané, aucun trou — même code de connexion exécuté une seconde
+  fois.
+=> Le trou ne reproduit QUE sur le tout premier chargement d'un navigateur qui vient de démarrer.
+Élimine une cause purement applicative (React/socket.io) comme explication complète. Hypothèse non
+vérifiée : cause externe au code (réseau ou sécurité Windows inspectant la toute première connexion
+sortante d'un processus navigateur neuf — même famille qu'un problème déjà rencontré et corrigé sur
+Vite lui-même le 2026-09-24, cf. commentaire `client/vite.config.js`, même machine). Prochaine étape
+demandée à Saar, pas encore faite : Gestionnaire des tâches ouvert avant le lancement du navigateur,
+observer tous les processus pendant une reproduction en fenêtre neuve.
+
+**Rappel non résolu** : `shared/world/roomGeometry.js` (mémoïsation WeakMap de
+`roomBoundaryMultiPolygon`) reste non commité dans le dossier de travail malgré une mention erronée
+de commit dans ce même ticket (le commit cité ne contient pas ce correctif, vérifié par lecture) —
+hors périmètre de cette session, à committer séparément.
+
+**Testé** : lint ciblé (0 nouvelle erreur sur les deux correctifs, comparé avant/après par
+stash/pop), build client complet (propre) à chaque étape, confirmation fonctionnelle de Saar en jeu
+pour le correctif plafonds/sols/portes.
+**Non testé** : la cause du trou de chargement lui-même — ⚠️ clos partiel sur ce volet, l'enquête
+continue (voir ticket `bug_tickets` 9f6c2a6e pour le détail factuel complet, note du 2026-10-08).
+**Données** : aucune migration.
+**Retour arrière** : deux commits distincts (`0e271ffd`, `450ee60a`), `git revert` ciblé possible sur
+l'un sans toucher l'autre.
