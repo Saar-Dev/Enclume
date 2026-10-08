@@ -3,6 +3,9 @@
     "loadingModel": "Chargement du modèle…"
   },
   "surfaceMaterialEditor": {
+    "materialsAndPatternsSection": "Matériaux et motifs",
+    "ntGroupLabel": "NT {{nt}} ({{count}})",
+    "genericGroupLabel": "Générique ({{count}})",
     "materialLabel": "Matière",
     "patternLabel": "Motif",
     "paintLabel": "Peinture",

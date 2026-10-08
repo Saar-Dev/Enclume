@@ -1,8 +1,8 @@
 # PLAN_MATERIAUX_NT.md — Catalogue de matières RAW, classé par Niveau Technologique
 
-> Créé le 2026-10-07. Statut : **34 matériaux codés, lot du jour (25) vu en navigateur et
-> confirmé par Saar (2026-10-07)** ; verre encore non codé (§6, point d'architecture à trancher
-> en premier). Source RAW :
+> Créé le 2026-10-07. Statut (2026-10-08) : **48 matériaux codés (dont 3 verre), regroupement
+> visuel par NT en accordéon dans la grille Matière — vu en navigateur et confirmé par Saar**.
+> Source RAW :
 > `docs/PLANS/GT_MATERIAUX.md` (Guide Technique Polaris, chapitre matériaux — extraction complète
 > vérifiée, s'arrête net après l'intro « Alliages particuliers » pour enchaîner sur les propulseurs,
 > ce n'est pas une troncature). Suite directe du mini-chantier miniatures Matière/Motif
@@ -163,29 +163,52 @@ en lisant le code, pas supposé depuis `MATERIAUX.md` qui est resté sur l'ancie
   2026-10-07) — `alliage_cobalt` utilise `family: 'particulate'` pour les traces d'or/platine/
   iridium littéralement nommées dans le texte.
 
+### Lot 2026-10-08 — Verre (architecture d'opacité) + rangement NT dans l'UI
+
+- **Verre** (`family: 'glass'`, nouvelle branche visuelle minimale — pas de grain directionnel,
+  le repli brossé aurait dessiné des stries incohérentes pour une matière coulée) : `verre` (NT I),
+  `plexiglas` (NT II), `verre_trempe` (NT II). Alpha blend simple (`transparent`/`opacity`),
+  **pas** `MeshPhysicalMaterial.transmission` — vérifié contre la doc officielle Three.js
+  (*"Never use MeshPhysicalMaterial when MeshStandardMaterial suffices"*) : la transmission
+  calcule une vraie réfraction, inutile pour un rendu VTT. Coût connu et accepté : l'alpha blend
+  ne produit aucun reflet spéculaire à opacité réduite (limite documentée, pas un défaut
+  d'implémentation) ; les miniatures de catalogue (canvas 2D) ne peuvent pas non plus montrer la
+  transparence (pas de fond derrière le swatch) — ces deux limites restent non résolues, acceptées
+  pour l'instant.
+- **Fix d'architecture associé** (`SurfaceDungeonScene.jsx`) : `pbrForProcedural()` expose
+  désormais `opacity` (lu depuis `preset.baseOpacity`, défaut 1) en plus de roughness/metalness —
+  même autorité unique que l'existant. `proceduralMaterialAt`/`proceduralPreviewMaterialAt`
+  fixent `transparent`/`opacity` à la construction si `baseOpacity < 1`. **`withOpacity()`
+  composait avant un bug latent** : `clone.opacity = opacity` écrasait toute opacité intrinsèque
+  plutôt que de la composer — corrigé en `clone.opacity = (material.opacity ?? 1) * opacity`
+  (comportement historique inchangé pour tout matériau opaque, `material.opacity` vaut alors 1).
+  Sans ce fix, un verre sur un étage estompé (affichage multi-niveaux) aurait perdu son aspect
+  transparent. Édité sans toucher à l'instrumentation debug temporaire (`[DBG-LOADTIME]`) d'une
+  session parallèle, présente ailleurs dans le même fichier — hunks vérifiés disjoints avant édition.
+- **Rangement par NT dans l'UI** (`SurfaceMaterialEditor.jsx`) : la grille Matière (48 presets,
+  devenue illisible à plat) est remplacée par un accordéon — un seul NT ouvert à la fois,
+  celui du matériau sélectionné par défaut, resynchronisé si la sélection change de l'extérieur
+  (le panneau n'est jamais démonté entre deux murs/sols sélectionnés — ajustement d'état pendant
+  le rendu, pas dans un effet, pour éviter le rendu en cascade flagué par le lint du projet).
+  Nouvel export `PROCEDURAL_MATERIAL_GROUPS` (`proceduralMaterials.js`, même patron calculé-une-
+  fois que `PROCEDURAL_PATTERN_GROUPS`) : `aluminum`/`titanium` étiquetés NT II (équivalent RAW
+  direct, GT liste NT II) ; `plastic`/`wood`/`stainless_steel`/`anticorrosion_coating` restent
+  dans un groupe **« Générique »** à part — aucune entrée RAW nommée correspondante, un NT
+  inventé serait moins honnête. Le Motif (groupé par substance, pas par NT) n'est pas touché.
+
 ## 5. Validation à chaque étape
 
 `eslint`/`npm run build`/`node --test proceduralMaterials.test.mjs materialDecision.test.mjs
-surfaceData.test.mjs` (73 tests) propres après chaque matériau ajouté — aucune régression sur tout
-le chantier (34 matériaux neufs/retravaillés au total à ce stade). **Vu en navigateur et confirmé
-par Saar le 2026-10-07** (lot du jour, 25 matériaux) — aucun ajustement demandé à ce stade.
+surfaceData.test.mjs` (73 tests) propres après chaque matériau/étape ajoutée — aucune régression
+sur tout le chantier (48 matériaux au total). **Vu en navigateur et confirmé par Saar** pour le lot
+du 2026-10-07 (25 matériaux) et pour le lot du 2026-10-08 (verre + accordéon NT, « c'est exactement
+ce que je pensais ») — aucun ajustement demandé à ce stade.
 
 ## 6. Reste à faire
 
-- Regroupement visuel par NT dans la grille Matière (même patron que `PROCEDURAL_PATTERN_GROUPS`).
-- Étiqueter NT les presets génériques restants (inox/alu/titane/revêtement anticorrosion/
-  plastique) — `wood` a déjà sa famille (§4) ; certains ont un équivalent RAW direct (ex. Titane
-  structurel, Aluminium structurel), d'autres non (plastique n'est pas une entrée GT nommée).
-- **Verre** : Saar a tranché qu'un simple alpha-blend (`transparent: true` + `opacity < 1` sur le
-  `MeshStandardMaterial` existant) suffit — pas besoin de vraie transmission/réfraction
-  (`MeshPhysicalMaterial.transmission`), inutile pour un rendu VTT. Débloque Verre (NT I),
-  Plexiglas/Verre trempé/Verre blindé (NT II), Hyperverre/Hyper verre trempé (NT III-IV), Nano
-  verre trempé (NT IV), ALON et dérivés (céramique transparente). **Point d'architecture non
-  résolu avant de coder** : `withOpacity()` (`SurfaceDungeonScene.jsx`) écrase `material.opacity`
-  plutôt que de le composer avec l'opacité intrinsèque d'un preset — à corriger (multiplier, pas
-  écraser) avant d'ajouter le premier matériau transparent. Pas fait : ce fichier porte des
-  changements non commités d'une session parallèle au 2026-10-07, à vérifier propre avant d'y
-  toucher.
+- Hyperverre/Hyper verre trempé (NT III-IV), Nano verre trempé (NT IV), Verre blindé (NT II), ALON
+  et dérivés (céramique transparente) : même famille `glass` déjà posée, pas de nouveau blocage
+  d'architecture — juste des presets à ajouter.
 - NT VI (irisé) : extension `SurfaceDungeonScene.jsx` pour supporter `MeshPhysicalMaterial` sur les
   matériaux qui le demandent — son propre sous-chantier, pas mélangé à l'ajout de presets.
 - Option C notée par Saar, non cadrée, basse priorité : un éditeur de matériau custom pour les MJ

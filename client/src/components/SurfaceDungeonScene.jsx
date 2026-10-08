@@ -176,8 +176,8 @@ function makeCanvasTexture(canvas, color = true) {
 // generique (deja arrive : Inox/Alu/Titane rendus quasi non-metalliques faute d'entree ici).
 function pbrForProcedural(materialId) {
   const preset = PROCEDURAL_MATERIAL_PRESETS.find(entry => entry.id === materialId)
-  if (preset) return { roughness: preset.roughness, metalness: preset.metalness }
-  return { roughness: 0.72, metalness: 0.08 }
+  if (preset) return { roughness: preset.roughness, metalness: preset.metalness, opacity: preset.baseOpacity ?? 1 }
+  return { roughness: 0.72, metalness: 0.08, opacity: 1 }
 }
 
 // Un motif importé (§14, proceduralMaterials.js) peut ne pas encore être décodé au moment où ce
@@ -215,6 +215,19 @@ function proceduralMaterialAt(descriptor) {
     roughness: 1,
     metalness: pbr.metalness,
   })
+  if (pbr.opacity < 1) {
+    // Verre/plastique transparent (baseOpacity du preset, proceduralMaterials.js) : alpha blending
+    // simple (transparent+opacity), pas MeshPhysicalMaterial.transmission -- recherche faite
+    // (doc officielle Three.js, Saar 2026-10-08) : la transmission calcule une vraie refraction,
+    // couteuse et inutile pour un rendu VTT vu de loin/dessus ; l'alpha blend est la pratique
+    // recommandee quand on n'a pas besoin de cette refraction. Cout connu et accepte : opacity<1
+    // ne produit aucun reflet speculaire (limite de l'alpha blend, pas un defaut d'implementation).
+    // depthWrite reste a sa valeur par defaut (true) ici -- withOpacity() ci-dessous le desactive
+    // explicitement pour son propre usage (estompage multi-etages, plusieurs surfaces transparentes
+    // superposees), pas pertinent pour un verre isole qui garde son occlusion normale.
+    material.transparent = true
+    material.opacity = pbr.opacity
+  }
   // Relief geometrique porte par le GPU (displacementMap), jamais recalcule par sommet sur le CPU
   // (chantier perf motifs, Saar, 2026-10-03) — meme condition que ReliefBoxGeometry utilise pour
   // decider de subdiviser une face (`isRealReliefProfile`) : si elle est fausse, `reliefFaceMaterial`
@@ -264,6 +277,10 @@ function proceduralPreviewMaterialAt(descriptor) {
     roughness: pbr.roughness,
     metalness: pbr.metalness,
   })
+  if (pbr.opacity < 1) {
+    material.transparent = true
+    material.opacity = pbr.opacity
+  }
   const entry = {
     faceMaterials: [material, material, material, material, material, material],
     relief: null,
@@ -300,7 +317,12 @@ function withOpacity(materials, opacity) {
     if (variants.has(key)) return variants.get(key)
     const clone = material.clone()
     clone.transparent = true
-    clone.opacity = opacity
+    // Compose avec l'opacite intrinseque du materiau (verre, proceduralMaterials.js baseOpacity)
+    // au lieu de l'ecraser -- deux causes d'opacite independantes (estompage d'affichage ici,
+    // transparence du materiau lui-meme) doivent se multiplier, pas s'annuler l'une l'autre.
+    // material.opacity vaut 1 pour tout materiau opaque existant : aucun changement de rendu pour
+    // eux (clone.opacity = 1 * opacity = opacity, comportement historique inchange).
+    clone.opacity = (material.opacity ?? 1) * opacity
     clone.depthWrite = false
     variants.set(key, clone)
     return clone

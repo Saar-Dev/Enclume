@@ -696,6 +696,57 @@ const MATERIAL_PRESETS = [
     roughness: 0.45,
     metalness: 0.78,
   },
+  // ─── Verre (GT_MATERIAUX.md) — alpha blend simple, pas de refraction (voir SurfaceDungeonScene
+  // .jsx, pbrForProcedural/withOpacity, 2026-10-08 : doc officielle Three.js, transmission jugee
+  // inutile pour un rendu VTT) ───
+  {
+    // NT I. "Materiau tres fragile obtenu en refroidissant progressivement de la silice en
+    // fusion." Teinte bleu-vert pale caracteristique du verre reel (fer residuel dans la silice),
+    // roughness tres bas (poli par fusion).
+    id: 'verre',
+    label: 'Verre',
+    nt: 'I',
+    family: 'glass',
+    baseOpacity: 0.3,
+    substrate: [160, 182, 176],
+    dark: [150, 175, 170],
+    light: [200, 218, 212],
+    rust: false,
+    roughness: 0.08,
+    metalness: 0,
+  },
+  {
+    // NT II. "Matiere plastique (acrylique) transparente." Teinte legerement plus chaude/jaune que
+    // le verre (acrylique non traite), roughness un peu plus haut (moins dur/poli que du verre
+    // fondu).
+    id: 'plexiglas',
+    label: 'Plexiglas',
+    nt: 'II',
+    family: 'glass',
+    baseOpacity: 0.35,
+    substrate: [178, 172, 142],
+    dark: [165, 160, 130],
+    light: [215, 210, 185],
+    rust: false,
+    roughness: 0.15,
+    metalness: 0,
+  },
+  {
+    // NT II. "Trempe chimique... presque 5 fois plus resistant que le verre de base." Meme verre,
+    // memes teintes -- juste traite, pas un autre materiau visuellement (GT ne decrit aucune
+    // difference d'aspect) ; legerement plus clair/raffine (controle de fabrication meilleur).
+    id: 'verre_trempe',
+    label: 'Verre trempe',
+    nt: 'II',
+    family: 'glass',
+    baseOpacity: 0.26,
+    substrate: [160, 182, 176],
+    dark: [150, 175, 170],
+    light: [200, 218, 212],
+    rust: false,
+    roughness: 0.06,
+    metalness: 0,
+  },
   // ─── Alliages legers / autres (GT_MATERIAUX.md, pas encore etiquetes NT) ───
   {
     id: 'stainless_steel',
@@ -708,8 +759,11 @@ const MATERIAL_PRESETS = [
     metalness: 0.85,
   },
   {
+    // NT II. "Il existe de nombreux types d'alliages d'aluminium..." (GT, liste NT II) --
+    // etiquetage de rangement (pas de changement visuel), meme logique que titanium ci-dessous.
     id: 'aluminum',
     label: 'Aluminium',
+    nt: 'II',
     substrate: [172, 176, 180],
     dark: [96, 100, 104],
     light: [225, 228, 230],
@@ -718,8 +772,10 @@ const MATERIAL_PRESETS = [
     metalness: 0.82,
   },
   {
+    // NT II. "Il existe de nombreux types d'alliages de titane..." (GT, liste NT II).
     id: 'titanium',
     label: 'Titane',
+    nt: 'II',
     substrate: [120, 118, 116],
     dark: [55, 52, 50],
     light: [175, 172, 168],
@@ -814,6 +870,27 @@ export function onImportedPatternReady(patternId, callback) {
 
 export const PROCEDURAL_MATERIAL_PRESETS = MATERIAL_PRESETS
 export const PROCEDURAL_PATTERN_PRESETS = PATTERN_PRESETS
+
+// Clé du groupe de repli pour les presets sans `nt` (plastic/wood/stainless_steel/
+// anticorrosion_coating : aucune entree RAW nommee correspondante dans le GT, contrairement a
+// aluminum/titanium qui ont ete etiquetes 'II' -- un NT invente serait moins honnete qu'un
+// panneau "Generique" a part, voir PLAN_MATERIAUX_NT.md).
+export const PROCEDURAL_MATERIAL_GENERIC_GROUP = 'generique'
+
+// Regroupe les matieres par `nt` (meme patron que PROCEDURAL_PATTERN_GROUPS ci-dessus, calcule
+// une fois) -- ordre NT croissant puis le groupe generique en dernier ; un NT sans aucun preset
+// aujourd'hui (NT VI) est omis plutot que d'afficher un panneau d'accordeon vide.
+export const PROCEDURAL_MATERIAL_GROUPS = (() => {
+  const order = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', PROCEDURAL_MATERIAL_GENERIC_GROUP]
+  const byNt = new Map(order.map(key => [key, []]))
+  for (const preset of MATERIAL_PRESETS) {
+    const key = preset.nt || PROCEDURAL_MATERIAL_GENERIC_GROUP
+    byNt.get(key).push(preset)
+  }
+  return order
+    .map(nt => ({ nt, materials: byNt.get(nt) }))
+    .filter(group => group.materials.length > 0)
+})()
 
 // Regroupe les motifs par `group` (ordre de première apparition) pour un <select> en <optgroup> —
 // calculé une fois ici plutôt que dans chaque composant qui affiche la liste.
@@ -1180,6 +1257,19 @@ function materialBase(material, x, y, size, seed) {
     return {
       color: mixColor(material.dark, material.light, t),
       height: 0.5 + weave * 0.02,
+    }
+  }
+
+  if (material.family === 'glass') {
+    // Verre/plexiglas : surface quasi uniforme -- le repli brosse (repli par defaut plus bas)
+    // dessinerait des stries directionnelles incoherentes pour une matiere coulee/moulee, pas
+    // travaillee. Tres legere variation de clarte (defauts optiques mineurs, bulles de
+    // fabrication) ; le rendu "verre" vient surtout de baseOpacity + roughness bas, lus par
+    // SurfaceDungeonScene.jsx (pbrForProcedural), pas de cette texture.
+    const t = clamp(0.5 + (n - 0.5) * 0.08)
+    return {
+      color: mixColor(material.dark, material.light, t),
+      height: 0.5 + (n - 0.5) * 0.01,
     }
   }
 
