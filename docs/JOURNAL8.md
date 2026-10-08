@@ -10146,3 +10146,46 @@ régression.
 ouverte qui se rafraîchit).
 **Données** : aucune migration (`condition_type` n'est pas contraint par la base).
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-08 — Fix WOUND-DEATH-NO-TOKEN
+
+Ticket `WOUND-DEATH-NO-TOKEN` : un personnage sans token n'était pas mort mécaniquement, et un
+token créé après la mort n'avait pas le statut `dead`.
+
+**Cause racine** : le statut `dead` est porté par les TOKENS, jamais par la fiche (décision du
+chantier « Statut Mort », 2026-09-24). `reconcileWoundDeath` (`statusService.js`) pose ce statut
+sur les tokens EXISTANTS d'un personnage, mais ne s'exécute qu'au moment où une blessure s'écrit ou
+qu'une réaction de Chance se ferme — un personnage sans token à cet instant restait mécaniquement
+vivant jusqu'à un hasard (un futur événement de blessure).
+
+**Fix** : à la création d'un token lié à un personnage (`POST /api/battlemaps/:id/tokens`, seul
+point d'insertion dans la table `tokens`, vérifié), réconciliation immédiate — réutilise
+`settleFatalWound` (déjà écrit pour la fermeture d'une réaction de Chance, `woundService.js`,
+désormais exporté), appelée APRÈS les émissions `TOKEN_CREATED`/`WORLD_RUNTIME_UPDATED` (jamais
+avant : un client ne doit jamais recevoir un statut pour un token qu'il ne connaît pas encore).
+Vérifié que la garde « réaction de Chance encore ouverte » de `reconcileWoundDeath` s'applique sans
+rien y changer : une réaction porte sur la blessure (char_sheet), jamais sur un token, elle peut
+déjà exister à ce moment-là.
+
+**Question tranchée par Saar (2026-10-08)** : un token créé pour un personnage déjà mort doit
+apparaître mort tout de suite (sinon un MJ qui pose un cadavre sur la carte le verrait bouger/
+combattre comme un vivant) — confirmé.
+
+**Limite résiduelle, documentée, non corrigée** (`docs/SYSTEME/STATUTS_TOKEN.md` §8) : un
+personnage qui ne reçoit JAMAIS aucun token reste hors de portée — `isCharacterDead` lit les
+tokens, et sans token il n'y a nulle part où écrire `dead`. Cas résiduel rare (Chance/Choc se
+jouent sur une carte, donc avec un token) ; documenté comme limite connue plutôt que d'ajouter une
+seconde autorité (lire les blessures directement) qui dupliquerait la règle « la mort vit sur le
+token ».
+
+**Fichiers** : `server/src/lib/woundService.js` (export `settleFatalWound`),
+`server/src/routes/tokens.js` (appel), `woundService.test.mjs` (1 test ajouté),
+`docs/SYSTEME/STATUTS_TOKEN.md`.
+
+**Testé** : `node --check` sur les 2 fichiers serveur ; `woundService.test.mjs` 54/54 (1 nouveau
+test : Mort posée sans token → `isCharacterDead` reste faux → token créé → `settleFatalWound` →
+`dead` posé, `isCharacterDead` devient vrai) ; `deathStateService.test.mjs` +
+`chanceCatastropheChoiceService.test.mjs` 22/22, aucune régression.
+**Non testé** : scénario réel navigateur (MJ place un token sur un personnage déjà mort).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit.

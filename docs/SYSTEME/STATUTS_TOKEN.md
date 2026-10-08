@@ -9,6 +9,8 @@
 > (`docs/PLANS/PLAN_FATIGUE_DOMMAGES.md` §12) — `asphyxia` perd `manualToggle` (devenu mécanique) et
 > gagne un 2ᵉ écrivain automatique (`breathHoldService.js`) ; `breath_hold` ajouté, seul code du
 > registre sans `inPanel` ni `manualToggle` (visuel dédié, voir §2).
+> **Mis à jour 2026-10-08 (`WOUND-DEATH-NO-TOKEN`)** : un token créé APRÈS la Mort d'un personnage
+> reçoit maintenant `dead` dès sa création (`settleFatalWound`, appelée par `routes/tokens.js` — voir §8).
 
 ## 1. Deux choses distinctes
 
@@ -211,8 +213,11 @@ refusés. Il peut donc reposer à la main ce qu'il veut après la purge.
 - **Limites** (suivies en tickets) : `evanoui` sans clé i18n ni entrée de panneau ; le message de refus dit « vous êtes mort/
   étourdi/inconscient » même quand le MJ déclare pour un PNJ ; un choix d'étourdissement déjà ouvert chez un joueur à
   la mort reste affiché (sa confirmation est ignorée) ; un combat composé uniquement de drones en `ordres_permanents`
-  boucle (préexistant) ; parité pour l'exo piloté : les statuts sont lus sur le token de l'exo, pas sur le pilote ; **un personnage sans token n'est pas
-  « mort » mécaniquement** (la mort se lit sur les tokens) et un token créé après la mort n'a pas `dead`.
+  boucle (préexistant) ; parité pour l'exo piloté : les statuts sont lus sur le token de l'exo, pas sur le pilote ; **un
+  personnage qui ne reçoit JAMAIS aucun token reste mécaniquement vivant** (`isCharacterDead` lit les tokens — pas de
+  token veut dire nulle part où écrire `dead` ; cas résiduel, Chance/Choc se jouant sur une carte donc avec un token,
+  `WOUND-DEATH-NO-TOKEN` 2026-10-08). Un token créé APRÈS la mort, lui, reçoit désormais `dead` dès sa création
+  (`settleFatalWound`, `routes/tokens.js` — même correctif, 2026-10-08).
 
 Documents associés : `docs/Old/PLAN_STATUT_MORT.md` (historique) ; `docs/PLANS/PLAN_BLESSURE_SIXIEME_LIGNE.md` (Lots
 3-4 : Chance sur la 6ᵉ ligne, état permanent du membre) ; `MODING.md` (statuts de mods) ; `INFORMATIQUE.md` (`iem_survival`) ;

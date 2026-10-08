@@ -96,7 +96,12 @@ async function openWoundReaction(trx, { campaignId, charSheetId, characterId, in
 // settleFatalWound — appelée à la FERMETURE d'une réaction sur une Mort, quelle qu'en soit l'issue : la mort est posée si une
 // blessure mortelle subsiste sans réaction ouverte (`reconcileWoundDeath` porte la règle), sinon rien. Ne lève jamais : elle
 // s'exécute dans un `finally`.
-async function settleFatalWound(io, campaignId, { characterId, charSheetId }) {
+// Second appelant (WOUND-LEGERE... non, WOUND-DEATH-NO-TOKEN, 2026-10-08) : `routes/tokens.js`, juste après la création d'un
+// token lié à un personnage — `reconcileWoundDeath` ne pose `dead` que sur les tokens EXISTANTS (`resolveCharacterTokens`) ;
+// un personnage mort avant d'avoir le moindre token restait mécaniquement vivant jusqu'à ce qu'un autre événement de
+// blessure le retranche. Même garde « réaction encore ouverte » ici, sans rien de spécial à ajouter : une réaction porte sur
+// la blessure (char_sheet), jamais sur un token, elle peut déjà exister à ce moment-là.
+export async function settleFatalWound(io, campaignId, { characterId, charSheetId }) {
   try {
     const change = await db.transaction(trx => reconcileWoundDeath(trx, campaignId, { characterId, charSheetId }))
     await announceWoundDeath(io, db, campaignId, characterId, change)

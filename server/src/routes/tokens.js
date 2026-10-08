@@ -9,6 +9,7 @@ import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { resolveBattlemapPlacement } from '../services/worldMovementService.js'
 import { loadBattlemapRuntimeContext } from '../services/worldEffectService.js'
 import { syncTokenElevatorPassenger } from '../services/worldElevatorService.js'
+import { settleFatalWound } from '../lib/woundService.js'
 
 const router = Router({ mergeParams: true })
 
@@ -100,6 +101,18 @@ router.post('/', requireAuth, async (req, res) => {
     runtimeRevision,
     kind: 'token-created',
   })
+
+  // WOUND-DEATH-NO-TOKEN — réconcilie APRÈS les émissions ci-dessus (jamais avant : un client ne doit
+  // jamais recevoir un statut pour un token qu'il ne connaît pas encore). Un personnage mort avant
+  // d'avoir le moindre token restait mécaniquement vivant (reconcileWoundDeath ne pose `dead` que sur
+  // les tokens déjà existants) — ce nouveau token doit refléter sa mort dès son apparition, pas
+  // attendre un hasard (un prochain événement de blessure). Pas de char_sheet (PNJ sans fiche) = pas
+  // de blessure possible dans ce système (character_wounds est scopé par char_sheet_id) = rien à
+  // réconcilier, jamais une erreur.
+  if (token.character_id) {
+    const sheet = await db('char_sheet').where({ character_id: token.character_id }).select('id').first()
+    if (sheet) await settleFatalWound(io, battlemap.campaign_id, { characterId: token.character_id, charSheetId: sheet.id })
+  }
 
   res.status(201).json({ token })
 })

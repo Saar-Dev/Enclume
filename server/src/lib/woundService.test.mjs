@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { applyWound, removeWound, clearCharacterWoundsAndStatuses } from './woundService.js'
+import { applyWound, removeWound, clearCharacterWoundsAndStatuses, settleFatalWound } from './woundService.js'
 import { resolveChanceChoice, listPendingChanceChoices } from './chanceCatastropheChoiceService.js'
+import { isCharacterDead } from './deathStateService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (applyWound crée une échéance de guérison à l'insertion)
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/woundService.test.mjs
@@ -405,6 +406,33 @@ test('applyWound (Mort en Tête) pose `dead` sur TOUS les tokens du personnage, 
     assert.ok(badges.every(e => e.payload.statuses.includes('dead')))
   } finally {
     await cleanupTokens(tk)
+    await cleanup(fixture)
+  }
+})
+
+// WOUND-DEATH-NO-TOKEN (2026-10-08) : une Mort posée alors qu'aucun token n'existe encore reste
+// mécaniquement vivante (isCharacterDead) jusqu'à la création d'un token — settleFatalWound (appelée
+// par routes/tokens.js juste après l'insertion) répare l'invariant au moment où un token apparaît.
+test('settleFatalWound : un token créé APRÈS la Mort devient `dead` tout de suite ; isCharacterDead passe à vrai', { skip }, async () => {
+  const fixture = await createFixture(NO_CHANCE)
+  try {
+    const result = await applyWound(fakeIo, db, fixture.campaign.id, woundArgs(fixture, 'tete', 'mort_subite'))
+    assert.equal(result.finalSeverity, 'mort_subite')
+    assert.equal(await isCharacterDead(db, fixture.campaign.id, fixture.character.id), false, 'bug reproduit : aucun token, donc mécaniquement vivant')
+
+    const tk = await addTokens(fixture)
+    try {
+      assert.deepEqual(await statusRows(tk.ids), [], 'le nouveau token naît sans statut (aucune réconciliation encore faite)')
+
+      await settleFatalWound(fakeIo, fixture.campaign.id, { characterId: fixture.character.id, charSheetId: fixture.charSheet.id })
+
+      const rows = await statusRows(tk.ids)
+      assert.deepEqual(rows.map(r => r.status_code), ['dead'])
+      assert.equal(await isCharacterDead(db, fixture.campaign.id, fixture.character.id), true)
+    } finally {
+      await cleanupTokens(tk)
+    }
+  } finally {
     await cleanup(fixture)
   }
 })
