@@ -142,6 +142,9 @@ export default function EquipmentCatalogPage() {
                   <h2 style={S.modalTitle}>{selected.name}</h2>
                   <span style={S.modalSubtitle}>{selected.family} — {selected.category}</span>
                 </div>
+                {/* Avis UX (2026-10-08) : le nom reste la première chose lue, la description est un
+                    texte de contexte à part — jamais en tête de la grille de statistiques (equipmentFields.js). */}
+                {selected.description && <p style={S.detailDescription}>{selected.description}</p>}
                 <div style={S.detailGrid}>
                   {equipmentDisplayFields(selected).map(({ key, label, value }) => (
                     <div key={key} style={S.detailRow}>
@@ -191,6 +194,7 @@ const S = {
   modalHeader: { display: 'flex', flexDirection: 'column', gap: '2px' },
   modalTitle: { fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 },
   modalSubtitle: { fontSize: '12px', color: 'var(--text-muted)' },
+  detailDescription: { fontSize: '13px', fontStyle: 'italic', color: 'var(--text-secondary)', margin: 0 },
   detailGrid: { display: 'flex', flexDirection: 'column', gap: '6px' },
   detailRow: { display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' },
   detailLabel: { color: 'var(--text-muted)', flexShrink: 0 },

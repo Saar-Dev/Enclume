@@ -50,11 +50,16 @@ export const EQUIPMENT_FIELD_LABELS = {
 }
 
 // equipmentDisplayFields — champs réellement renseignés d'un objet, dans l'ordre thématique
-// ci-dessus, prêts à être rendus (label + valeur affichable). `excludeKeys` retire des champs déjà
-// montrés ailleurs par l'appelant (ex. TradeWindow affiche son propre prix catalogue, pas price brut).
+// ci-dessus, prêts à être rendus (label + valeur affichable). `description` en est exclue par
+// défaut : avis UX (2026-10-08) — un nom/prix doit rester la première chose lue dans une liste
+// d'objets (ce qui pilote la décision), la description est un texte de contexte à afficher à part,
+// jamais mêlée en tête d'une grille de statistiques. Chaque appelant (TradeWindow, MerchantsPage,
+// EquipmentCatalogPage) affiche donc `item.description` lui-même, à l'endroit qui lui convient.
+// `excludeKeys` retire en plus des champs déjà montrés ailleurs par l'appelant (ex. TradeWindow
+// affiche son propre prix catalogue, pas price brut).
 export function equipmentDisplayFields(item, excludeKeys = []) {
   if (!item) return []
-  const excluded = new Set(excludeKeys)
+  const excluded = new Set(['description', ...excludeKeys])
   return EQUIPMENT_FIELD_ORDER
     .filter(key => !excluded.has(key) && item[key] !== null && item[key] !== undefined && item[key] !== '')
     .map(key => ({

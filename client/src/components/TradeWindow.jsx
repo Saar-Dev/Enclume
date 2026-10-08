@@ -826,7 +826,7 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                   {isSelected && (
                     <div style={S.itemDetail}>
                       {item.tech_level != null && <span>{t('trade.window.detail_nt')}: {item.tech_level}</span>}
-                      {equipmentDisplayFields(item, ['description']).map(({ key, label, value }) => (
+                      {equipmentDisplayFields(item).map(({ key, label, value }) => (
                         <span key={key}>{label}: {value}</span>
                       ))}
                       {item.family === AMMO_FAMILY && item.caliber && (() => {
