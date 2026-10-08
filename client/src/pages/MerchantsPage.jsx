@@ -145,22 +145,6 @@ export default function MerchantsPage() {
     }
   }, [form, getRuleFor])
 
-  // MARCHAND-BULK-CATALOG-RULES — poser INCLUDE/EXCLUDE sur chaque FAMILLE d'un coup plutôt que de
-  // cliquer catégorie par catégorie, objet par objet. Remplace uniquement les règles FAM existantes
-  // (une par famille du catalogue) ; les règles CAT/ITEM plus fines posées à la main restent intactes
-  // et continuent à surcharger la famille via getEffectiveInherited — aucun objet n'est jamais écrit
-  // individuellement en base pour ce bouton.
-  const setAllFamilies = useCallback((mode) => {
-    const fams = Object.keys(catalogTree)
-    setForm(f => ({
-      ...f,
-      rules: [
-        ...f.rules.filter(r => !(r.level === 'FAM' && fams.includes(r.fam))),
-        ...fams.map(fam => ({ mode, level: 'FAM', fam, cat: null, name: null })),
-      ],
-    }))
-  }, [catalogTree])
-
   const getEffectiveInherited = useCallback((level, fam, cat) => {
     if (level === 'CAT') {
       return getRuleFor('FAM', fam)?.mode ?? null
@@ -183,6 +167,22 @@ export default function MerchantsPage() {
     }
     return tree
   })()
+
+  // MARCHAND-BULK-CATALOG-RULES — poser INCLUDE/EXCLUDE sur chaque FAMILLE d'un coup plutôt que de
+  // cliquer catégorie par catégorie, objet par objet. Remplace uniquement les règles FAM existantes
+  // (une par famille du catalogue) ; les règles CAT/ITEM plus fines posées à la main restent intactes
+  // et continuent à surcharger la famille via getEffectiveInherited — aucun objet n'est jamais écrit
+  // individuellement en base pour ce bouton.
+  const setAllFamilies = useCallback((mode) => {
+    const fams = Object.keys(catalogTree)
+    setForm(f => ({
+      ...f,
+      rules: [
+        ...f.rules.filter(r => !(r.level === 'FAM' && fams.includes(r.fam))),
+        ...fams.map(fam => ({ mode, level: 'FAM', fam, cat: null, name: null })),
+      ],
+    }))
+  }, [catalogTree])
 
   // ─── Badge tri-state ─────────────────────────────────────────────────────────
   function RuleBadge({ mode, inherited }) {
