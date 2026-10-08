@@ -415,6 +415,47 @@ test('findNextAnnounceSlot — personne à déclarer → undefined (knex .first(
   } finally { await fx.cleanup() }
 })
 
+// ─── COMBAT-SURPRISE-NO-ACTION-WINDOW (2026-10-08) — un non-PNJ surpris non résolu ne doit jamais
+// être renvoyé comme prochain slot (ni présenté, ni autorisé à déclarer via la même fonction côté
+// COMBAT_ACTION_DECLARE) ; un PNJ surpris non résolu doit continuer à l'être (son auto-résolution
+// dans advanceAnnouncementQueue dépend de ce comportement, tests PNJ plus bas).
+test('findNextAnnounceSlot — ignore un PJ surpris non résolu même si Initiative la plus basse', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [
+    { baseIni: 3, announced: false },   // surpris, non résolu ci-dessous — doit être ignoré
+    { baseIni: 9, announced: false },   // doit devenir le prochain slot
+  ] })
+  const surprisedTokenId = fx.roster[0].token.id
+  await db('combat_roster').where({ token_id: surprisedTokenId }).update({ is_surprised: true })
+  try {
+    const slot = await findNextAnnounceSlot(fx.campaign.id)
+    assert.equal(slot.token_id, fx.roster[1].token.id)
+  } finally { await fx.cleanup() }
+})
+
+test('findNextAnnounceSlot — un PNJ surpris non résolu reste renvoyé (nécessaire à son auto-résolution)', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [
+    { baseIni: 3, announced: false, type: 'pnj', userId: null },
+  ] })
+  const pnjTokenId = fx.roster[0].token.id
+  await db('combat_roster').where({ token_id: pnjTokenId }).update({ is_surprised: true })
+  try {
+    const slot = await findNextAnnounceSlot(fx.campaign.id)
+    assert.equal(slot.token_id, pnjTokenId)
+  } finally { await fx.cleanup() }
+})
+
+test('findNextAnnounceSlot — un PJ surpris redevient présentable une fois surprise_roll posé', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [
+    { baseIni: 3, announced: false },
+  ] })
+  const tokenId = fx.roster[0].token.id
+  await db('combat_roster').where({ token_id: tokenId }).update({ is_surprised: true, surprise_roll: 14 })
+  try {
+    const slot = await findNextAnnounceSlot(fx.campaign.id)
+    assert.equal(slot.token_id, tokenId)
+  } finally { await fx.cleanup() }
+})
+
 test('advanceAnnouncementQueue — au moins un non-annoncé → émet COMBAT_SLOT_ADVANCED pour le bon token, ne bascule pas la phase', { skip }, async () => {
   const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', roster: [
     { baseIni: 12, announced: false },

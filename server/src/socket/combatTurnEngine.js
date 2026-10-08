@@ -171,10 +171,27 @@ async function resolveAutoSkipStatus(campaignId, tokenId) {
 // (skipPlayer, endTurn, COMBAT_ACTION_DECLARE, COMBAT_ANNOUNCE_START, garde « c'est ton tour de
 // déclarer ») : centralisée ici comme point d'extension unique, notamment pour le pré-remplissage des
 // drones en `ordres_permanents` (Sprint 2d) avant même que la file ne soit consultée.
+// COMBAT-SURPRISE-NO-ACTION-WINDOW (2026-10-08) — un token surpris dont le Test de Réaction n'est
+// pas encore résolu (`is_surprised` ET `surprise_roll IS NULL`) ne peut pas être présenté : il doit
+// d'abord répondre au prompt séparé COMBAT_SURPRISE_ROLL (PJ, COMBAT_ANNOUNCE_START) ou attendre la
+// résolution auto-PNJ (bloc dédié ci-dessous dans advanceAnnouncementQueue). Exception explicite
+// `characters.type = 'pnj'` : cette fonction est PRÉCISÉMENT ce qui doit continuer à renvoyer un tel
+// PNJ comme nextSlot pour que ce bloc puisse le résoudre — jamais un PJ/exo/drone, qui n'ont pas de
+// résolution automatique. Autorité unique : cette même fonction sert aussi de garde côté
+// COMBAT_ACTION_DECLARE (socketCombatAnnouncement.js, « ce n'est pas encore votre tour ») — corriger
+// ici suffit aux deux usages, jamais une deuxième version de cette règle.
 export async function findNextAnnounceSlot(campaignId) {
   return db('combat_roster')
-    .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-    .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+    .leftJoin('tokens', 'combat_roster.token_id', 'tokens.id')
+    .leftJoin('characters', 'tokens.character_id', 'characters.id')
+    .where({ 'combat_roster.campaign_id': campaignId, 'combat_roster.has_announced': false, 'combat_roster.status': 'active' })
+    .andWhere((qb) => {
+      qb.where('combat_roster.is_surprised', false)
+        .orWhereNotNull('combat_roster.surprise_roll')
+        .orWhere('characters.type', 'pnj')
+    })
+    .orderBy('combat_roster.base_ini', 'asc').orderBy('combat_roster.token_id', 'asc')
+    .select('combat_roster.*')
     .first()
 }
 

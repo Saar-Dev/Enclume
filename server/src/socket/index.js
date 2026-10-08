@@ -7,7 +7,7 @@ import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerConnectorHandlers } from './socketConnector.js'
 import { registerCombatHandlers } from './socketCombat.js'
-import { pickNextTimelineStep, combatTimers, combatPreviews, combatResolutionOverrides } from './combatTurnEngine.js'
+import { pickNextTimelineStep, findNextAnnounceSlot, combatTimers, combatPreviews, combatResolutionOverrides } from './combatTurnEngine.js'
 import { registerTradeHandlers } from './socketTrade.js'
 import { registerWizardHandlers } from './socketWizard.js'
 import { registerChatHandlers } from '../chat/socketChat.js'
@@ -45,6 +45,10 @@ const initSocket = (io) => {
     // `context: joinContext` — renommé : un `const context` plus bas dans ce handler (objet passé
     // aux registerXHandlers) shadowerait le paramètre sur tout le scope → TDZ sur toute lecture avant.
     socket.on(WS.SESSION_JOIN, async ({ campaignId, context: joinContext = 'session' }) => {
+      // [DBG-LOADTIME] Instrumentation TEMPORAIRE (SESSION-LOADTIME-DIAG, non committée) — même
+      // diagnostic que index.js : isoler le temps réel de chaque étape de SESSION_JOIN. À retirer.
+      const __t0 = Date.now()
+      const __mark = (label) => console.log(`[DBG-LOADTIME] SESSION_JOIN ${label} +${Date.now() - __t0}ms`)
       try {
         // Session solo (pas de campagne) : aucune room de campagne a rejoindre, aucun autre
         // utilisateur ne peut jamais y avoir acces (meme invariant que vaultService.js - "un Vault
@@ -80,6 +84,7 @@ const initSocket = (io) => {
         const member = await db('campaign_members')
           .where({ campaign_id: campaignId, user_id: socket.user.id })
           .first()
+        __mark('campaign_members')
 
         if (!member) {
           socket.emit('error', { message: 'Access denied' })
@@ -104,6 +109,7 @@ const initSocket = (io) => {
             console.error('[presence] startPresence:', err.message)
           }
         }
+        __mark('startPresence')
 
         // Enregistre ICI, avant SESSION_JOINED : le Wizard collaboratif (WizardLockSync.jsx) emet
         // WIZARD_JOIN des que useSocket() retourne un objet non-null, sans attendre le sync combat
@@ -113,9 +119,11 @@ const initSocket = (io) => {
         // navigateur, docs/PLAN_WIZARDCOLLAB.md). Les autres registerXHandlers restent apres
         // SESSION_JOINED : rien d'observe ne les fait emettre aussi tot apres le montage.
         registerWizardHandlers(io, socket, { campaignId, user: socket.user, isGm: socket.role === 'gm' })
+        __mark('registerWizardHandlers')
 
         // RÃ©cupÃ©rer les utilisateurs dÃ©jÃ  dans la room (avant le join du nouvel arrivant)
         const existingSockets = await io.in(campaignId).fetchSockets()
+        __mark('fetchSockets')
         const onlineUserIds = existingSockets
           .map(s => s.data.userId)
           .filter(id => id && id !== socket.user.id)
@@ -128,6 +136,7 @@ const initSocket = (io) => {
           role: member.role,
           onlineUserIds,
         })
+        __mark('SESSION_JOINED emitted')
 
         // Annoncer aux autres membres que quelqu'un a rejoint
         socket.to(campaignId).emit(WS.SESSION_USER_JOINED, {
@@ -139,6 +148,7 @@ const initSocket = (io) => {
         // â”€â”€ Combat state sync â€” reconnexion en cours de combat (PC14) â”€â”€â”€â”€â”€â”€â”€â”€
         try {
           const activeCombat = await db('combat_state').where({ campaign_id: campaignId }).first()
+          __mark(`combat_state (activeCombat=${!!activeCombat})`)
           if (activeCombat) {
             const [roster, actions] = await Promise.all([
               db('combat_roster').where({ campaign_id: campaignId }),
@@ -179,6 +189,21 @@ const initSocket = (io) => {
               if (pendingSurprise) {
                 socket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: pendingSurprise.token_id })
               }
+            }
+
+            // COMBAT-SURPRISE-NO-ACTION-WINDOW — un reconnectant en phase ANNOUNCEMENT n'a aucun
+            // `activeTokenId` tant qu'un COMBAT_SLOT_ADVANCED ne lui parvient pas : CombatActionWindow.jsx
+            // et CombatGmDeclareWindow.jsx retombent alors sur un calcul de repli (base_ini ASC parmi
+            // has_announced=false) qui ignore la Surprise. Même patron que le resync RESOLUTION
+            // (COMBAT_TIMELINE_UPDATED/currentStep ci-dessous) : renvoyer ICI le slot autoritaire
+            // (findNextAnnounceSlot, déjà corrigé pour exclure un non-PNJ surpris non résolu) ferme la
+            // fenêtre de repli au lieu de la rendre "plus intelligente" — jamais une 2e version de la
+            // règle côté client. Silencieux si personne n'est actuellement présentable (ex. tous les
+            // tokens restants surpris simultanément) : le repli client reste alors exposé à ce cas
+            // résiduel, étroit, laissé de côté par décision Saar (2026-10-08).
+            if (activeCombat.phase === 'ANNOUNCEMENT') {
+              const nextSlot = await findNextAnnounceSlot(campaignId)
+              if (nextSlot) socket.emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextSlot.token_id })
             }
 
             // C3 — restauration combat_pending sur reconnexion en phase RESOLUTION

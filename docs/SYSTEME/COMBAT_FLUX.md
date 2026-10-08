@@ -1,6 +1,7 @@
 # SYSTEME/COMBAT_FLUX.md — Déroulement complet d'un tour de combat
 
-> Dernière mise à jour : 2026-08-28 (audit reset fin de tour : §11/§13/§14 alignés sur INI4 +
+> Dernière mise à jour : 2026-10-08 (COMBAT-SURPRISE-NO-ACTION-WINDOW, voir note d'audit plus bas)
+> — mise à jour précédente 2026-08-28 (audit reset fin de tour : §11/§13/§14 alignés sur INI4 +
 > PLAN_CHARACTER_STATES §0.2 — `initiative` remise à `base_ini`, `state_position` non réinitialisé)
 > Sources : `socketCombatState.js`, `socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`, `statusService.js`, `combatFSM.js`
 > Lire pour : comprendre le déroulement complet d'un tour de combat, de la phase ROSTER jusqu'à endTurn.
@@ -25,6 +26,19 @@
 > `confirmDamage()` qui calcule correctement la RD via `calcDroneDegatsNets`) — corrigées avec
 > historique conservé barré. Le reste de §6-14 (pipelines Assaut/CaC, Test de Choc, RD drone, pièges)
 > confirmé fidèle au code sur les points sondés.
+>
+> **Corrigé (2026-10-08) — COMBAT-SURPRISE-NO-ACTION-WINDOW.** `findNextAnnounceSlot`
+> (`combatTurnEngine.js`, autorité unique partagée avec le guard `COMBAT_ACTION_DECLARE`
+> de `socketCombatAnnouncement.js`) exclut désormais un token surpris non-PNJ dont le Test de
+> Réaction n'est pas résolu (`is_surprised` ET `surprise_roll IS NULL`) — un PNJ surpris non résolu
+> reste renvoyé, nécessaire à son auto-résolution (bloc dédié dans `advanceAnnouncementQueue`).
+> Avant ce correctif, ce token restait présentable normalement : la fenêtre de déclaration
+> (`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`) s'ouvrait alors qu'il devait d'abord
+> répondre au prompt séparé `COMBAT_SURPRISE_ROLL`. Un rappel équivalent au resync RESOLUTION
+> (`COMBAT_TIMELINE_UPDATED`/`currentStep`, cf. `server/src/socket/index.js`) a été ajouté pour
+> ANNOUNCEMENT : un reconnectant reçoit désormais `COMBAT_SLOT_ADVANCED` pour le slot autoritaire
+> au lieu de laisser le repli client (base_ini ASC, ignorant la Surprise) deviner seul. La table
+> `COMBAT_SURPRISE_RESULT` ci-dessous est mise à jour en conséquence (branche Succès).
 
 ---
 
@@ -75,9 +89,9 @@ null|null
 | Guard | `entry.is_surprised === true` |
 | Jet | D20 côté serveur — non manipulable |
 | **Test Réaction** | `isSuccess = roll <= entry.base_ini` (LdB p.213) |
-| Succès | `initiative = roll` |
-| Échec | `initiative = 0`, `has_announced = true`, insert `type:'skip', sequence:99` |
-| PC13 | Si échec et tous annoncés → `startResolutionPhase()` |
+| Succès | `initiative = mr` (marge de réussite, majorée du bonus Critique — INI1) ; `advanceAnnouncementQueue()` (2026-10-08, sinon ce token ne redevient jamais présentable depuis que `findNextAnnounceSlot` l'exclut tant que non résolu) |
+| Échec | `initiative = 0`, `has_announced = true`, insert `type:'skip', sequence:99`, `advanceAnnouncementQueue()` |
+| PC13 | `advanceAnnouncementQueue()` bascule seul en RÉSOLUTION si plus personne à annoncer — jamais un appel direct à `startResolutionPhase()` ici |
 
 ### `COMBAT_INIT_STATE` — `socketCombatState.js`
 

@@ -9967,3 +9967,77 @@ laisser (entrées historiques JOURNAL8, déjà au passé, et renvois informels d
 **Non testé** : sans objet — changement documentaire pur, aucun fichier de code touché.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit (inclut le `git mv`, restauré automatiquement).
+
+## Session (Claude) — 2026-10-08 — Fix COMBAT-DAMAGE-DICE-MODEL-MISMATCH (dé animé toujours d20)
+
+Ticket `COMBAT-DAMAGE-DICE-MODEL-MISMATCH` (signalé par Saar, 2026-10-03) : le dé 3D animé lors d'un
+jet de dégâts affichait toujours un D20, quelle que soit l'arme.
+
+**Cause racine** : `useSessionSocket.js` (`onDiceResult`) forçait `dieType = 'd20'` dès que
+`skillLabel`/`skillLabelKey` était posé dans le payload `DICE_RESULT`, en assumant que seul un Test
+compétence-vs-Seuil pose ce champ. Or un jet de dégâts (humanoïde/drone/exo,
+`socketCombatHelpers.js`) pose *aussi* `skillLabelKey` — pour son libellé narratif de chat
+("Dégâts infligés...") — sans être un Test. `formula` portait pourtant déjà la vraie notation de
+dé (`resolvedFormula`/`damageFormula`, ex. "2d6+3") : jamais lue dans ce cas précis.
+
+**Fix** : `dieType` est maintenant dérivé directement de `formula` via une regex (`/^\d*d(\d+)/i`)
+dès qu'elle commence par une notation de dé ; repli sur `'d20'` sinon (cas où `formula` porte un
+libellé de compétence, ex. "Discrétion", jamais une notation — toujours un vrai Test 1d20 par
+construction RAW dans ce cas).
+
+**Fichiers** : `client/src/lib/useSessionSocket.js` (seul fichier touché).
+
+**Testé** : `node --check`, lint ciblé (0 nouvelle erreur), logique de la regex vérifiée contre tous
+les formats de `formula` réellement émis par le serveur (dégâts simples, dégâts composites,
+placeholders `'—'`, libellés de compétence) ; confirmé fonctionnel en jeu par Saar.
+**Non testé** : limite connue, pas une régression — un dégât composite (base+bonus-dropoff,
+`damageService.js`, ex. "2d6+1d4") n'anime qu'avec le type de la composante de base
+(`decomposeDice` ne gère qu'un seul `dieType` par jet).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit (fichier client unique, sans effet serveur/base).
+
+## Session (Claude) — 2026-10-08 — Fix COMBAT-SURPRISE-NO-ACTION-WINDOW
+
+Ticket `COMBAT-SURPRISE-NO-ACTION-WINDOW` (signalé par Saar, 2026-10-03, lié à `SURPRISE1` déjà
+clos — symptôme distinct) : une fenêtre de déclaration d'action pouvait s'ouvrir pour un personnage
+surpris dont le Test de Réaction n'était pas encore résolu.
+
+**Cause racine** : `findNextAnnounceSlot` (`combatTurnEngine.js`) — l'autorité unique déjà
+partagée par `advanceAnnouncementQueue` (présentation du tour) et le guard `COMBAT_ACTION_DECLARE`
+de `socketCombatAnnouncement.js` (« c'est votre tour ? ») — ne tenait pas compte de la Surprise : un
+PJ (ou autre non-PNJ) surpris non résolu pouvait devenir le slot présenté. Analyse à charge initiale
+écartée : une 1ʳᵉ version du plan proposait de dupliquer la règle dans une fonction partagée
+`shared/` ET dans les deux fenêtres client (`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`) —
+abandonnée après avoir trouvé que l'autorité unique existait déjà côté serveur (ce même
+`findNextAnnounceSlot`, utilisé à deux endroits) ; seul manquait son exclusion de la Surprise, plus
+un rappel de cette autorité au reconnectant (cf. pattern déjà établi pour la phase RÉSOLUTION,
+`COMBAT_TIMELINE_UPDATED`/`currentStep`). Recherche externe (server-authoritative reconciliation
+pattern, Foundry VTT `Combat`) confirmant cette direction avant de coder.
+
+**Fix** (3 corrections, aucune nouvelle structure) :
+1. `findNextAnnounceSlot` exclut un non-PNJ surpris non résolu (`is_surprised` ET
+   `surprise_roll IS NULL`) — exception explicite `characters.type === 'pnj'`, nécessaire à son
+   auto-résolution déjà existante dans `advanceAnnouncementQueue`.
+2. `COMBAT_SURPRISE_RESULT` (`socketCombatState.js`), branche Succès : ajout de l'appel
+   `advanceAnnouncementQueue()` manquant (la branche Échec l'avait déjà) — sinon, depuis la
+   correction 1, ce joueur ne redevenait jamais présentable après un jet réussi.
+3. `server/src/socket/index.js`, resync `COMBAT_STATE_SYNC` : un reconnectant en phase ANNOUNCEMENT
+   reçoit désormais `COMBAT_SLOT_ADVANCED` pour le slot autoritaire (`findNextAnnounceSlot`) — sans
+   ça, le repli client (devinant depuis le roster seul, ignorant la Surprise) restait la seule
+   source avant le premier vrai `COMBAT_SLOT_ADVANCED` du Tour.
+
+**Limite résiduelle acceptée (décision Saar, 2026-10-08)** : si *tous* les tokens restant à
+annoncer sont surpris et non résolus simultanément, le resync de reconnexion n'émet rien (aucun
+slot éligible) et le repli client reste exposé pour ce cas précis — plus étroit que le bug
+d'origine, laissé de côté plutôt que de toucher les deux fenêtres client pour le fermer.
+
+**Fichiers** : `combatTurnEngine.js`, `socketCombatState.js`, `server/src/socket/index.js`,
+`combatTurnEngine.test.mjs` (3 tests ajoutés).
+
+**Testé** : `node --check` sur les 3 fichiers serveur ; `combatTurnEngine.test.mjs` 43/43 (base
+locale) — 3 nouveaux tests (PJ surpris exclu, PNJ surpris toujours renvoyé, PJ redevient
+présentable une fois résolu) + tests PNJ existants inchangés (non-régression).
+**Non testé** : scénario réel navigateur (reconnexion en phase ANNOUNCEMENT avec personnage
+surpris) — ⚠️ clos partiel, attend confirmation de Saar en jeu.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit (3 fichiers serveur + 1 test, aucun effet base).

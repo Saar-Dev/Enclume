@@ -538,6 +538,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           .where({ campaign_id: campaignId, token_id: tokenId })
           .update({ surprise_roll: diceRoll, initiative: mr, updated_at: db.fn.now() })
         console.log(`[DBG] surprise_result: rows updated=${rowsUpdated}`)
+        // COMBAT-SURPRISE-NO-ACTION-WINDOW — symétrique de la branche échec ci-dessous : depuis que
+        // findNextAnnounceSlot (combatTurnEngine.js) exclut ce token tant que surprise_roll est NULL,
+        // la file ne le présente plus tout seule une fois résolu — sans ce rappel, un succès laissait
+        // ce joueur bloqué indéfiniment (son slot n'était jamais (re)annoncé).
+        await advanceAnnouncementQueue(io, campaignId, pendingMaps)
       } else {
         // Échec : initiative = 0, auto-skip, ne peut pas agir ce tour
         console.log(`[DBG] surprise_result: ÉCHEC roll:${diceRoll} > base_ini:${entry.base_ini} → ini:0`)
