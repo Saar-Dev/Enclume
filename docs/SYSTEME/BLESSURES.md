@@ -1,4 +1,8 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> **Amendé 2026-10-08 (`WOUND-LEGERE-NEVER-HEALS`)** : une Blessure légère a maintenant sa propre échéance de guérison,
+> `wound_legere_heal` — **non interactive** (aucun Test, RAW REGLEBLESSURES.md:420), contrairement à `wound_healing_check`.
+> Avant ce correctif, « guérit seule, sans échéance » était pris au sens littéral : aucun mécanisme ne retirait jamais la
+> case après son jour de guérison. Voir §« `wound_legere_heal` ».
 > **Amendé 2026-09-25 (nuit) — Lot 2a de `PLANS/PLAN_REVUE_GUERISON.md`** : l'écran de revue est refait (`WoundReviewWindow`), l'ancien écran et ses trois routes sont supprimés, la vue porte l'avance en attente (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 1 de `PLANS/PLAN_REVUE_GUERISON.md`** : kits de soin dans `WOUND_HEALING`, vue et résolution GROUPÉES de l'écran de revue (§« Routes »).
 > **Amendé 2026-09-25 (nuit) — Lot 0 de `PLANS/PLAN_REVUE_GUERISON.md`** : une échéance meurt avec sa case (plus d'échéance fantôme), et un Échec/une Catastrophe ne
@@ -257,7 +261,8 @@ Autorité complète (archivée) : `docs/Old/PLAN_BLESSURES_GUERISON.md`.
 
 ```
 server/src/lib/woundEvolutionService.js  — les 2 handlers ci-dessous
-shared/echeanceTypeRegistry.js           — condition_type → handler, interactive: true
+shared/echeanceTypeRegistry.js           — condition_type → handler (wound_healing_check/wound_infection_check : interactive: true ;
+                                                                       wound_legere_heal : interactive: false, voir ci-dessous)
 server/src/routes/campaigns.js           — routes ci-dessous
 client/src/components/woundReview/              — écran de revue MJ (WoundReviewWindow, carte par personnage) ; données : client/src/lib/useWoundReview.js,
                                                    logique pure testée : client/src/lib/woundReviewGestures.js
@@ -281,8 +286,18 @@ une gravité) :
 | Mortelle | 5 semaines | Oui | hebdomadaire, 5 occurrences |
 | Membre détruit (`mort_subite` sur un bras/une jambe) | 3 semaines | Oui | hebdomadaire, 3 occurrences |
 
-Légère guérit seule, sans échéance ni Test. **Une Mort (`mort_subite` en Tête/Corps) n'a aucune échéance** : la résurrection reste une
-décision du MJ. `echec`/`catastrophe` **assurent le Test d'infection de la LOCALISATION** (`ensureLocationInfection` : créé, ou fusionné avec celui qui existe — jamais un deuxième) **et ne terminent jamais l'échéance de guérison** (voir « Le Test suivant » ci-dessous).
+Légère guérit seule, sans Test (ligne absente de `WOUND_HEALING` : `getWoundHealing('legere')` vaut `null`) — mais a sa PROPRE
+échéance, `wound_legere_heal`, voir ci-dessous. **Une Mort (`mort_subite` en Tête/Corps) n'a, elle, strictement aucune échéance** : la
+résurrection reste une décision du MJ. `echec`/`catastrophe` **assurent le Test d'infection de la LOCALISATION**
+(`ensureLocationInfection` : créé, ou fusionné avec celui qui existe — jamais un deuxième) **et ne terminent jamais l'échéance de guérison** (voir « Le Test suivant » ci-dessous).
+
+**`wound_legere_heal`** (`WOUND-LEGERE-NEVER-HEALS`, 2026-10-08) — `interactive: false` : jamais via l'écran de revue MJ, résolue
+directement par le balayage automatique `sweepDueEcheances` (même famille que `cold_fatigue_check`/`cold_damage_tick`,
+`coldExposureService.js`). Créée par `initializeWoundHealingEcheance` à `occurred_at + 1 jour` (RAW), ponctuelle. Son handler
+(`woundLegereHealHandler`, `woundEvolutionService.js`) appelle directement `resolveWoundImprovement` — aucun `mjChoice`, la case
+disparaît (Légère est le palier le plus bas, aucune case de remplacement). `effects: { kind: 'woundLegereHealed' }` est consommé
+après le commit par `processGameTimeEffects` (`routes/campaigns.js`), qui émet `WOUND_REMOVED` ; aucune ligne de chat (pas une
+décision de soin, voir `emitCareNotices`, `woundReviewBatchService.js`).
 
 **Cible d'une amélioration** — `improvedSeverity(severity)` (`woundUtils.js`, lit `WOUND_IMPROVEMENT_TARGET`) : la gravité juste en
 dessous, **sauf** la 6ᵉ ligne qui devient une **Critique** (RAW : « un Membre détruit devient une Blessure critique » ;
@@ -293,7 +308,7 @@ cible d'une guérison. `resolveWoundImprovement` (guérison, et Chance) l'utilis
 `character_wounds` — insertion d'un coup, cascade de promotion, amélioration (guérison ou Chance), case ajoutée par une infection.
 Il programme l'échéance de guérison de la case écrite (`woundHealingSchedule.js:initializeWoundHealingEcheance`) dans la même
 transaction ; un appelant qui n'a pas le contexte `{ campaignId, characterId }` échoue tout de suite, il n'écrit jamais une case sans
-échéance. Conséquences : la guérison s'enchaîne (Critique → Grave → Moyenne → Légère, la Légère guérit seule) ; la case obtenue par
+échéance. Conséquences : la guérison s'enchaîne (Critique → Grave → Moyenne → Légère, qui obtient sa propre `wound_legere_heal`) ; la case obtenue par
 la **Chance** guérit comme si elle avait été reçue ainsi (décision de Saar, 2026-09-25) ; la case ajoutée par une **infection** a sa propre
 échéance (idem).
 - **Départ de la durée de guérison de la case obtenue** : le jour d'échéance de la guérison qui l'a produite

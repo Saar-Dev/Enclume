@@ -232,10 +232,15 @@ test('resolveWoundInsertion : la case Moyenne naît avec son échéance de guér
   }), /ROLLBACK_WOUND_TEST/)
 })
 
-test('resolveWoundInsertion : Légère et Mort (Tête/Corps) n\'ont aucune échéance de guérison', { skip }, async () => {
+// WOUND-LEGERE-NEVER-HEALS (2026-10-08) : une Légère n'a toujours aucun Test de guérison
+// (wound_healing_check), mais a désormais sa propre échéance non interactive (wound_legere_heal) —
+// sans elle, rien ne la retirait jamais après son jour de guérison RAW (REGLEBLESSURES.md:420).
+test('resolveWoundInsertion : Mort (Tête/Corps) n\'a aucune échéance de guérison ; Légère a la sienne, non interactive', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, charSheet, schedule } = await createFixture(trx)
-    assert.equal((await resolveWoundInsertion(trx, charSheet.id, 'corps', 'legere', schedule)).echeance, null)
+    const { echeance: legereEcheance } = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'legere', schedule)
+    assert.equal(legereEcheance.condition_type, 'wound_legere_heal')
+    assert.equal(legereEcheance.interactive, false)
     assert.equal((await resolveWoundInsertion(trx, charSheet.id, 'tete', 'mort_subite', schedule)).echeance, null)
     assert.equal((await healingEcheancesOf(trx, campaign.id)).length, 0)
     throw new Error('ROLLBACK_WOUND_TEST')
@@ -295,13 +300,18 @@ test('resolveWoundImprovement : Membre détruit -> Critique, échéance hebdomad
   }), /ROLLBACK_WOUND_TEST/)
 })
 
-test('resolveWoundImprovement : Moyenne -> Légère (guérit seule) et Légère -> guérie : aucune échéance', { skip }, async () => {
+// WOUND-LEGERE-NEVER-HEALS (2026-10-08) : la Légère obtenue a maintenant sa propre échéance non
+// interactive (wound_legere_heal, jamais wound_healing_check — healingEcheancesOf reste à 0). Une
+// fois guérie entièrement (healed:true), plus aucune case : échéance null, inchangé.
+test('resolveWoundImprovement : Moyenne -> Légère (sa propre échéance non interactive) et Légère -> guérie (plus de case, plus d\'échéance)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, charSheet, schedule } = await createFixture(trx)
     const [moyenne] = await insertWounds(trx, charSheet.id, 'corps', 'moyenne', 1)
     const toLegere = await resolveWoundImprovement(trx, moyenne.id, schedule)
     assert.equal(toLegere.wound.severity, 'legere')
-    assert.equal(toLegere.echeance, null)
+    assert.equal(toLegere.echeance.condition_type, 'wound_legere_heal')
+    assert.equal(toLegere.echeance.interactive, false)
+    assert.equal((await healingEcheancesOf(trx, campaign.id)).length, 0)
     const healed = await resolveWoundImprovement(trx, toLegere.wound.id, schedule)
     assert.equal(healed.healed, true)
     assert.equal(healed.echeance, null)

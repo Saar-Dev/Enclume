@@ -3,12 +3,18 @@
 // `character_wounds`) l'appelle à CHAQUE écriture ; les handlers de woundEvolutionService.js n'ont pas à le faire —
 // et ce fichier ne dépend ni de l'un ni de l'autre (sinon import circulaire woundUtils ↔ woundEvolutionService).
 import { getWoundHealing, getHealingTotalTests, findInfectionTarget, SOINS_CONSTANTS_INTERVAL_MINUTES } from '../../../shared/woundConstants.js'
+import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { createEcheance } from './echeanceService.js'
 
 // « Vivante » = pas encore terminée, annulée ni en erreur. Deux formes d'échéance de blessure : la GUÉRISON appartient à une CASE (`payload.woundId`,
 // chaque blessure a sa période — REGLEBLESSURES.md:393-395) ; l'INFECTION appartient à une LOCALISATION d'un personnage (`payload.location` — le livre
 // la joue « pour chaque Localisation », REGLEBLESSURES.md:439-442 ; un seul Test par localisation, Lot B1 de PLAN_GUERISON_RAW).
-const HEALING_TYPE = 'wound_healing_check'
+// `wound_healing_check` (Moyenne+) est INTERACTIVE (Test de guérison revu par le MJ) ; `wound_legere_heal`
+// (WOUND-LEGERE-NEVER-HEALS) ne l'est jamais — RAW : Légère guérit seule, sans Test, 1 jour (REGLEBLESSURES.md:420) —
+// même patron automatique que cold_fatigue_check/cold_damage_tick (coldExposureService.js). Les deux sont des
+// échéances de GUÉRISON (meurent avec leur case, voir cancelWoundEcheances ci-dessous) : groupées sous HEALING_TYPES.
+const HEALING_TYPES = ['wound_healing_check', 'wound_legere_heal']
+const LEGERE_HEAL_TYPE = 'wound_legere_heal'
 const INFECTION_TYPE = 'wound_infection_check'
 const LIVE_STATUSES = ['active', 'pending_mj_review', 'awaiting_player_roll']
 
@@ -21,7 +27,7 @@ const LIVE_STATUSES = ['active', 'pending_mj_review', 'awaiting_player_roll']
 export async function cancelWoundEcheances(trx, woundIds, { exceptEcheanceId = null } = {}) {
   if (woundIds.length === 0) return []
   const query = trx('game_echeances')
-    .where({ condition_type: HEALING_TYPE })
+    .whereIn('condition_type', HEALING_TYPES)
     .whereIn('status', LIVE_STATUSES)
     .whereIn(trx.raw("payload->>'woundId'"), woundIds)
   if (exceptEcheanceId) query.whereNot('id', exceptEcheanceId)
@@ -41,12 +47,22 @@ export function getHealingRetrySchedule(severity, location) {
   return { intervalMinutes: healing.soinsConstants ? SOINS_CONSTANTS_INTERVAL_MINUTES : healing.durationMinutes, occurrencesRemaining: 1 }
 }
 
-// Appelée par woundUtils.js juste après l'écriture d'une case, uniquement pour Moyenne+ — Légère guérit seule, sans Test ni
-// échéance (RAW, REGLEBLESSURES.md:402-403). Une Mort (Tête/Corps) n'en a pas non plus (getWoundHealing = null) ; un Membre
-// détruit a la sienne (3 semaines, soins constants).
+// Appelée par woundUtils.js juste après l'écriture d'une case, pour TOUTE case qui doit un jour disparaître — Moyenne+ (Test de
+// guérison revu par le MJ) ET Légère (WOUND-LEGERE-NEVER-HEALS : guérit seule, SANS Test, 1 jour, RAW REGLEBLESSURES.md:420 —
+// `getWoundHealing` reste `null` pour elle par construction, mais ça ne veut dire « pas de Test » que pour la ligne 'Moyenne+',
+// pas « jamais retirée » : seule une Mort (Tête/Corps) n'a aucune échéance, getWoundHealing = null ET severity !== 'legere').
+// Un Membre détruit a la sienne (3 semaines, soins constants) comme n'importe quelle ligne WOUND_HEALING.
 export async function initializeWoundHealingEcheance(trx, { campaignId, characterId, wound }) {
   const healing = getWoundHealing(wound.severity, wound.location)
-  if (!healing) return null
+  if (!healing) {
+    if (wound.severity !== 'legere') return null
+    return createEcheance(trx, {
+      campaignId, characterId, conditionType: LEGERE_HEAL_TYPE, payload: { woundId: wound.id },
+      nextDueMinutes: wound.occurred_at_game_minutes + MINUTES_PER_DAY,
+      intervalMinutes: null,
+      occurrencesRemaining: null,
+    })
+  }
 
   const payload = { woundId: wound.id }
   const baseMinutes = wound.occurred_at_game_minutes

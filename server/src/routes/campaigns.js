@@ -309,6 +309,12 @@ async function processGameTimeEffects(io, campaignId, effects = []) {
       io.to(campaignId).emit(WS.FATIGUE_TEST_RESULT, effect.payload)
     } else if (effect.kind === 'coldDamageHits') {
       await applyColdDamageHits(io, effect.campaignId, effect.characterId, effect.hitSpecs)
+    } else if (effect.kind === 'woundLegereHealed') {
+      // WOUND-LEGERE-NEVER-HEALS — wound_legere_heal est non interactive (sweepDueEcheances), jamais
+      // passée par l'écran de revue MJ qui émet WOUND_REMOVED lui-même : seul chemin où une case de
+      // blessure disparaît sans que personne n'émette cet événement, d'où ce relais après commit.
+      const worst_wound_severity = await getWorstWoundSeverity(db, effect.charSheetId)
+      io.to(effect.campaignId).emit(WS.WOUND_REMOVED, { characterId: effect.characterId, woundId: effect.woundId, worst_wound_severity })
     }
   }
 }

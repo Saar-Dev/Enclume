@@ -5,7 +5,7 @@
 // démarrage (server/src/index.js). Import à effet de bord uniquement (push dans le registre) : ne
 // jamais réimporter ce fichier ailleurs qu'à l'entrée du serveur, sous peine de doublons.
 import { ECHEANCE_TYPE_REGISTRY } from '../../../shared/echeanceTypeRegistry.js'
-import { woundHealingCheckHandler, woundInfectionCheckHandler } from './woundEvolutionService.js'
+import { woundHealingCheckHandler, woundInfectionCheckHandler, woundLegereHealHandler } from './woundEvolutionService.js'
 import { coldFatigueCheckHandler, coldDamageTickHandler } from './coldExposureService.js'
 import { equipmentRepairHandler } from './equipmentRepairService.js'
 
@@ -14,6 +14,9 @@ ECHEANCE_TYPE_REGISTRY.push(
   // (advanceDriven implicite = true).
   { key: 'wound_healing_check', interactive: true, handler: woundHealingCheckHandler },
   { key: 'wound_infection_check', interactive: true, handler: woundInfectionCheckHandler },
+  // Légère (WOUND-LEGERE-NEVER-HEALS) — RAW : aucun Test, guérit seule en 1 jour. Patron automatique,
+  // jamais de revue MJ, même famille que Froid ci-dessous.
+  { key: 'wound_legere_heal', interactive: false, handler: woundLegereHealHandler },
   // Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — patron automatique, jamais de revue MJ.
   { key: 'cold_fatigue_check', interactive: false, handler: coldFatigueCheckHandler },
   { key: 'cold_damage_tick', interactive: false, handler: coldDamageTickHandler },

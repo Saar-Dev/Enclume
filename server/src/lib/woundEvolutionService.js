@@ -145,6 +145,30 @@ export async function woundHealingCheckHandler(trx, echeance, context = {}) {
   return { resolved: true, reschedule, spawn, undoEntries }
 }
 
+// wound_legere_heal — WOUND-LEGERE-NEVER-HEALS. Non interactive (RAW : aucun Test, aucun soin, REGLEBLESSURES.md:420) :
+// contrairement à wound_healing_check ci-dessus, jamais de mjChoice à attendre, résolution directe en guérison. Même
+// patron automatique que coldFatigueCheckHandler/coldDamageTickHandler (coldExposureService.js) — `effects` est
+// consommé après le commit par processGameTimeEffects (campaigns.js), qui émet WOUND_REMOVED (aucune ligne de chat :
+// ce n'est pas une décision de soin, voir woundReviewBatchService.js#emitCareNotices, juste une échéance qui expire).
+export async function woundLegereHealHandler(trx, echeance) {
+  const wound = await trx('character_wounds').where({ id: echeance.payload.woundId }).first()
+  if (!wound) return { resolved: true, reschedule: null, spawn: [], undoEntries: [] } // déjà guérie/supprimée par une autre voie
+
+  const result = await resolveWoundImprovement(
+    trx, wound.id,
+    { campaignId: echeance.campaign_id, characterId: echeance.character_id },
+    { occurredAtGameMinutes: echeance.next_due_minutes, exceptEcheanceId: echeance.id },
+  )
+
+  return {
+    resolved: true,
+    reschedule: null,
+    spawn: [],
+    undoEntries: buildWoundImprovementUndoEntries(wound, result),
+    effects: { kind: 'woundLegereHealed', campaignId: echeance.campaign_id, characterId: echeance.character_id, charSheetId: wound.char_sheet_id, woundId: wound.id },
+  }
+}
+
 // NA(Constitution) — même chaîne que char-sheet.js (route macro-preview, ligne ~1291) :
 // char_attributes + char_archetype/genotype + mutations, réutilisée telle quelle plutôt que
 // dupliquée. Lit via `trx` (pas `db`) pour char_attributes/char_archetype/ref_genotypes — cohérent

@@ -10041,3 +10041,108 @@ présentable une fois résolu) + tests PNJ existants inchangés (non-régression
 surpris) — ⚠️ clos partiel, attend confirmation de Saar en jeu.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit (3 fichiers serveur + 1 test, aucun effet base).
+
+## Session (Claude) — 2026-10-08 — Fix COMBAT-RESOLUTION-TIR-WINDOW-VISIBILITY (+ extension spectateur)
+
+Ticket `COMBAT-RESOLUTION-TIR-WINDOW-VISIBILITY` : la fenêtre « Résolution du tir » n'atteignait pas
+tous les clients concernés.
+
+**Cause racine** : `onAttackResult` (`useCombatSocket.js`) ne mettait à jour l'état MJ
+(`setGmAttackResult`) que si l'attaquant était un PNJ (`data.isPnj`) — un tir PJ (`confirmDamage`
+côté PJ/Drone/Exo, qui ne pose jamais `isPnj`) ne mettait jamais à jour l'état ciblé par la cible.
+Qui a tiré n'a jamais été le bon critère ; seule la cible compte (déjà le filtre lu par
+`CombatResultPlayer`/`CombatResultGM`).
+
+**Fix** : `onAttackResult` alimente désormais systématiquement les deux états
+(`gmAttackResult`/`targetAttackResult`, renommé depuis `pnjAttackResult`). Extension (retour Saar en
+session : « tous les joueurs doivent voir ce qu'il se passe dans le combat, même les non-acteurs ») :
+un spectateur (ni MJ, ni cible) reçoit le même panneau neutre que le MJ (`CombatResultGM`, réutilisé
+sans `onApplyStun`) — aligne le tir sur le corps-à-corps (`CombatResultMelee`), déjà visible de tous
+sans condition.
+
+**Fichiers** : `client/src/lib/useCombatSocket.js`, `client/src/components/CombatOverlay.jsx`,
+`client/src/components/EnvironmentalResultQueue.jsx` (commentaire), `client/src/pages/SessionPage.jsx`
+(renommage des 2 props).
+
+**Testé** : eslint propre, `npm run build` propre.
+**Non testé** : scénario réel navigateur à plusieurs clients (MJ, cible, spectateur) — Saar doit
+confirmer en jeu.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` des commits `16d80fe0`/`468c8316`.
+
+## Session (Claude) — 2026-10-08 — Fix SURFACE-DOC-NO-BOUNDS (deuxième porte d'entrée)
+
+Ticket `SURFACE-DOC-NO-BOUNDS` : `surface_data` sans plafond pouvait figer le serveur (boucle
+synchrone de `compileSurfaceWorld`). Le correctif principal (`PUT /:id/surface`, commit `70872d10`,
+session précédente) brancha `scanJsonStructure`/`checkSurfaceLimits` (`shared/world/importGuard.js`)
+sur la route de sauvegarde de l'éditeur — jamais noté en base ni testé en relisant tous les points
+d'écriture de `surface_data`.
+
+**Trou restant trouvé** : `buildTrivialRoomSurfaceData` (`battlemaps.js`) construit la salle unique
+d'une carte 2D depuis `image_width`/`image_height`/`grid_size` envoyés par le client, sans aucun
+plafond — appelée par `POST /campaigns/:id/battlemaps` (création) et `PUT /:id` (ré-upload d'image
+2D), deux routes que le correctif précédent ne couvrait pas. Le gel se produirait au premier
+`compileSurfaceWorld` déclenché sur cette carte (ouverture éditeur ou arrivée d'un joueur), pas à
+l'enregistrement.
+
+**Fix** : même garde (`checkSurfaceLimits`), posée une seule fois dans `buildTrivialRoomSurfaceData`
+elle-même (avant `prepareSurfaceData` — `checkRoom` ne lit que `minX/maxX/minZ/maxZ` bruts, déjà
+présents sous cette forme ici), ferme les deux routes d'un coup.
+
+**Fichiers** : `server/src/routes/battlemaps.js`, nouveau test
+`battlemaps.buildTrivialRoomSurfaceData.test.mjs`.
+
+**Testé** : `node --check`, nouveau test (3/3), `importGuard`/`surfaceDocument` (53/53, aucune
+régression). Vérifié en base locale : aucune carte 2D existante, aucune carte réelle ne casse avec
+ce correctif.
+**Non testé** : scénario réel navigateur (créer une carte 2D avec une image énorme).
+**Données** : aucune migration. Ticket passé en `resolved` en base (correctif principal + ce
+complément documentés).
+**Retour arrière** : `git revert` du commit `a29f6653`.
+
+## Session (Claude) — 2026-10-08 — Fix WOUND-LEGERE-NEVER-HEALS
+
+Ticket `WOUND-LEGERE-NEVER-HEALS` : une Blessure légère (RAW REGLEBLESSURES.md:420 — 1 jour,
+guérison naturelle, aucun soin) ne disparaissait jamais, trouvé en corrigeant
+`WOUND-HEAL-CHAIN-STOPS`.
+
+**Cause racine** : `initializeWoundHealingEcheance` (`woundHealingSchedule.js`) retourne `null` pour
+une Légère (`getWoundHealing('legere')` vaut `null` par construction) — correct pour dire « aucun
+Test », mais rien n'appelait ensuite jamais `resolveWoundImprovement` (déjà testé : fait disparaître
+une Légère sans nouvelle case) pour la retirer après son jour de guérison. La chaîne de guérison
+(Critique → Grave → Moyenne → Légère) s'arrêtait donc sur une Légère qui restait indéfiniment, et
+les lignes de Légères pleines finissaient par promouvoir vers la Moyenne.
+
+**Fix** (réutilise l'existant, un seul nouveau point, même patron que `cold_fatigue_check`/
+`cold_damage_tick`) :
+1. Nouveau `condition_type` non interactif `wound_legere_heal` (registre
+   `echeanceHandlerRegistrations.js`).
+2. `initializeWoundHealingEcheance` crée cette échéance ponctuelle (`occurred_at + 1 jour`) pour une
+   Légère au lieu de retourner `null` — couvre automatiquement les deux origines possibles (coup
+   reçu, chaîne de guérison) : `insertWoundRow` (`woundUtils.js`) est le SEUL écrivain de
+   `character_wounds`, utilisé par les deux.
+3. Nouveau handler `woundLegereHealHandler` (`woundEvolutionService.js`) : charge la blessure,
+   appelle directement `resolveWoundImprovement` (aucun `mjChoice`), retourne `effects:
+   { kind: 'woundLegereHealed' }`.
+4. `processGameTimeEffects` (`campaigns.js`) consomme cet `effect` et émet `WOUND_REMOVED` — sans ça,
+   la fiche ouverte à l'écran ne se serait jamais rafraîchie (seule échéance de blessure non
+   interactive à ce jour, jamais passée par l'écran de revue MJ qui émet cet événement lui-même).
+   Aucune ligne de chat (pas une décision de soin, voir `woundCare.notice`) — décision Saar.
+5. `cancelWoundEcheances` élargie aux deux types de guérison (sinon une Légère supprimée par une
+   autre voie laisserait une échéance fantôme, même classe que `WOUND-ECHEANCE-GHOSTS`).
+
+**Fichiers** : `server/src/lib/woundHealingSchedule.js`, `woundEvolutionService.js`,
+`echeanceHandlerRegistrations.js`, `server/src/routes/campaigns.js`,
+`docs/SYSTEME/BLESSURES.md`. Tests mis à jour (2 assertions qui encodaient l'absence d'échéance
+comme correcte) + 2 nouveaux tests du handler, dans `woundEvolutionService.test.mjs`/
+`woundUtils.test.mjs`.
+
+**Testé** : `node --check` sur les 4 fichiers serveur ; `woundEvolutionService.test.mjs` 52/52,
+`woundUtils.test.mjs` 57/57, suite transverse blessures/échéances (`woundService`,
+`woundReviewService`, `woundReviewBatchService`, `gameTimeService`, `echeanceService`,
+`coldExposureService`, `equipmentRepairService`) 231/231, `shared/**/*.test.mjs` 290/290, aucune
+régression.
+**Non testé** : scénario réel navigateur (une Légère qui disparaît après avance de temps, fiche
+ouverte qui se rafraîchit).
+**Données** : aucune migration (`condition_type` n'est pas contraint par la base).
+**Retour arrière** : `git revert` du commit.

@@ -8,6 +8,7 @@ import { initializeWoundHealingEcheance, ensureLocationInfection } from './wound
 import {
   woundHealingCheckHandler,
   computeLocationInfectionThreshold, woundInfectionCheckHandler,
+  woundLegereHealHandler,
 } from './woundEvolutionService.js'
 import './echeanceHandlerRegistrations.js' // effet de bord : peuple le registre (wound_healing_check + infection)
 
@@ -54,14 +55,67 @@ const hasUndoEntry = (undoEntries, rowId, predicate = () => true) => undoEntries
 
 // ─── initializeWoundHealingEcheance ─────────────────────────────────────────────────────────────
 
-test('initializeWoundHealingEcheance : Légère -> aucune échéance (guérit seule)', { skip }, async () => {
+// WOUND-LEGERE-NEVER-HEALS (2026-10-08) : cette assertion encodait le bug (aucune échéance -> rien ne
+// retire jamais la case). Légère guérit seule SANS Test (RAW REGLEBLESSURES.md:420), mais a quand
+// même besoin d'une échéance non interactive pour disparaître après 1 jour — voir le test suivant.
+test('initializeWoundHealingEcheance : Légère -> échéance non interactive unique à occurred_at + 1 jour', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx)
     const wound = await createWound(trx, charSheet.id, { severity: 'legere', occurredAt: 1000 })
+    const echeance = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+    assert.equal(echeance.condition_type, 'wound_legere_heal')
+    assert.equal(echeance.interactive, false)
+    assert.equal(echeance.next_due_minutes, 1000 + MINUTES_PER_DAY)
+    assert.equal(echeance.interval_minutes, null)
+    assert.equal(echeance.occurrences_remaining, null)
+    assert.deepEqual(echeance.payload, { woundId: wound.id })
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('initializeWoundHealingEcheance : Mort (Tête ou Corps) -> toujours aucune échéance (jamais confondue avec Légère)', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { location: 'tete', severity: 'mort_subite', occurredAt: 1000 })
     const result = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
     assert.equal(result, null)
     const echeances = await trx('game_echeances').where({ campaign_id: campaign.id })
     assert.equal(echeances.length, 0)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+// ─── woundLegereHealHandler ──────────────────────────────────────────────────────────────────────
+
+test('woundLegereHealHandler : la case disparaît, aucune nouvelle case, effects pour WOUND_REMOVED', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { severity: 'legere', occurredAt: 1000 })
+    const echeance = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+
+    const result = await woundLegereHealHandler(trx, echeance)
+
+    assert.equal(result.resolved, true)
+    assert.equal(result.reschedule, null)
+    assert.deepEqual(result.effects, {
+      kind: 'woundLegereHealed', campaignId: campaign.id, characterId: character.id, charSheetId: charSheet.id, woundId: wound.id,
+    })
+    assert.equal(await trx('character_wounds').where({ id: wound.id }).first(), undefined)
+    assert.equal((await trx('character_wounds').where({ char_sheet_id: charSheet.id }).select('*')).length, 0, 'aucune nouvelle case, Légère est le palier le plus bas')
+    assert.ok(result.undoEntries.some(e => e.table === 'character_wounds' && e.rowId === wound.id && e.previousValues?.id === wound.id))
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('woundLegereHealHandler : échéance déjà sans case (supprimée par une autre voie) -> résout sans planter', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { severity: 'legere', occurredAt: 1000 })
+    const echeance = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+    await trx('character_wounds').where({ id: wound.id }).del()
+
+    const result = await woundLegereHealHandler(trx, echeance)
+    assert.deepEqual(result, { resolved: true, reschedule: null, spawn: [], undoEntries: [] })
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
@@ -148,11 +202,14 @@ test('handler : amélioration sur échéance unique (Moyenne) -> resolveWoundImp
     assert.equal(result.resolved, true)
     assert.equal(result.reschedule, null)
     assert.equal(result.spawn.length, 0)
-    assert.equal(result.undoEntries.length, 2) // delete de l'original + insert de la nouvelle case
+    // delete de l'original + insert de la nouvelle case + sa propre échéance wound_legere_heal
+    // (WOUND-LEGERE-NEVER-HEALS, 2026-10-08 : avant ce correctif, une Légère n'avait aucune échéance, 2 entrées ici).
+    assert.equal(result.undoEntries.length, 3)
 
     const remaining = await trx('character_wounds').where({ char_sheet_id: charSheet.id }).select('*')
     assert.equal(remaining.length, 1)
     assert.equal(remaining[0].severity, 'legere') // previousSeverity('moyenne')
+    assert.equal((await trx('game_echeances').where({ condition_type: 'wound_legere_heal' })).length, 1)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
@@ -634,7 +691,7 @@ test('handler : la case obtenue par une guérison naît avec son échéance, dat
   }), /ROLLBACK_WES_TEST/)
 })
 
-test('handler : la guérison s\'enchaîne Critique -> Grave -> Moyenne -> Légère (plus d\'échéance, elle guérit seule)', { skip }, async () => {
+test('handler : la guérison s\'enchaîne Critique -> Grave -> Moyenne -> Légère (plus de Test, guérit seule via wound_legere_heal)', { skip }, async () => {
   await assert.rejects(db.transaction(async (trx) => {
     const { campaign, character, charSheet } = await createFixture(trx, { resolvedMinutes: 1000 })
     let wound = await createWound(trx, charSheet.id, { severity: 'critique', occurredAt: 1000 })
@@ -662,7 +719,12 @@ test('handler : la guérison s\'enchaîne Critique -> Grave -> Moyenne -> Légè
     const none = await trx('game_echeances')
       .where({ campaign_id: campaign.id, condition_type: 'wound_healing_check' })
       .whereRaw("payload->>'woundId' = ?", [legere.id])
-    assert.equal(none.length, 0, 'la Légère guérit seule : aucune échéance')
+    assert.equal(none.length, 0, 'la Légère guérit seule : aucun Test de guérison (wound_healing_check)')
+    const legereHeal = await trx('game_echeances')
+      .where({ campaign_id: campaign.id, condition_type: 'wound_legere_heal' })
+      .whereRaw("payload->>'woundId' = ?", [legere.id]).first()
+    assert.ok(legereHeal, 'mais elle a bien sa propre échéance non interactive (WOUND-LEGERE-NEVER-HEALS)')
+    assert.equal(legereHeal.interactive, false)
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })
