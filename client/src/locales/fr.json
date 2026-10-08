@@ -1456,6 +1456,8 @@
       "saving": "...",
       "savedOk": "Enregistré",
       "catalogLoading": "Chargement du catalogue...",
+      "catalogIncludeAll": "Tout inclure",
+      "catalogExcludeAll": "Tout exclure",
       "ruleHerited": "HÉRITE",
       "ruleInclude": "INCL",
       "ruleExclude": "EXCL",

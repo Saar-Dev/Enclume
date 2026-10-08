@@ -145,6 +145,22 @@ export default function MerchantsPage() {
     }
   }, [form, getRuleFor])
 
+  // MARCHAND-BULK-CATALOG-RULES — poser INCLUDE/EXCLUDE sur chaque FAMILLE d'un coup plutôt que de
+  // cliquer catégorie par catégorie, objet par objet. Remplace uniquement les règles FAM existantes
+  // (une par famille du catalogue) ; les règles CAT/ITEM plus fines posées à la main restent intactes
+  // et continuent à surcharger la famille via getEffectiveInherited — aucun objet n'est jamais écrit
+  // individuellement en base pour ce bouton.
+  const setAllFamilies = useCallback((mode) => {
+    const fams = Object.keys(catalogTree)
+    setForm(f => ({
+      ...f,
+      rules: [
+        ...f.rules.filter(r => !(r.level === 'FAM' && fams.includes(r.fam))),
+        ...fams.map(fam => ({ mode, level: 'FAM', fam, cat: null, name: null })),
+      ],
+    }))
+  }, [catalogTree])
+
   const getEffectiveInherited = useCallback((level, fam, cat) => {
     if (level === 'CAT') {
       return getRuleFor('FAM', fam)?.mode ?? null
@@ -288,6 +304,22 @@ export default function MerchantsPage() {
                   <div style={S.saveRow}>
                     <button style={S.btnPrimary} onClick={handleSave} disabled={saving}>
                       {saving ? t('trade.merchants.saving') : savedMsg ? t('trade.merchants.savedOk') : t('trade.merchants.save')}
+                    </button>
+                  </div>
+                  <div style={S.bulkRow}>
+                    <button
+                      style={S.btnGhost}
+                      onClick={() => setAllFamilies('INCLUDE')}
+                      disabled={catalogLoading || Object.keys(catalogTree).length === 0}
+                    >
+                      {t('trade.merchants.catalogIncludeAll')}
+                    </button>
+                    <button
+                      style={S.btnGhost}
+                      onClick={() => setAllFamilies('EXCLUDE')}
+                      disabled={catalogLoading || Object.keys(catalogTree).length === 0}
+                    >
+                      {t('trade.merchants.catalogExcludeAll')}
                     </button>
                   </div>
                   {catalogLoading && <p style={S.muted}>{t('trade.merchants.catalogLoading')}</p>}
@@ -457,6 +489,7 @@ const S = {
   toggleOpen:   { backgroundColor: 'rgba(76,175,119,0.15)', color: '#4caf77', border: '1px solid #4caf77' },
   toggleClosed: { backgroundColor: 'rgba(136,136,136,0.15)', color: '#888', border: '1px solid #555' },
   saveRow:      { display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' },
+  bulkRow:      { display: 'flex', gap: '12px', paddingBottom: '4px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '4px' },
 
   famBlock:     { border: '1px solid var(--border-subtle)', borderRadius: '6px', overflow: 'hidden' },
   famHeader:    { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', backgroundColor: 'var(--bg-elevated)', cursor: 'default' },
