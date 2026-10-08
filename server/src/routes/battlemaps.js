@@ -1049,6 +1049,34 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
   }
 })
 
+// BATTLEMAP-DUPLICATE-INCOMPLETE — les entités posées (Bâtisseur : portes, caisses, props) vivent
+// dans leur propre table, jamais copiée par l'INSERT de /duplicate ; une carte dupliquée démarrait
+// toujours vide d'entités. Pas de worldId de surface_data à remapper ici (entities référence
+// seulement blueprint_id + position/rotation brutes), donc une simple copie de lignes suffit.
+// Exportée (seule fonction nommée de ce fichier de routes) pour être testée contre la base locale :
+// ce projet ne teste aucune route via un serveur HTTP, et appeler le vrai code plutôt que de le
+// reproduire dans un test est l'invariant qui compte ici.
+export async function duplicateBattlemapEntities(trx, fromBattlemapId, toBattlemapId) {
+  const entities = await trx('entities').where({ battlemap_id: fromBattlemapId })
+  if (entities.length === 0) return 0
+  await trx('entities').insert(entities.map(entity => ({
+    battlemap_id: toBattlemapId,
+    blueprint_id: entity.blueprint_id,
+    pos_x: entity.pos_x,
+    pos_y: entity.pos_y,
+    pos_z: entity.pos_z,
+    r: entity.r,
+    current_state_id: entity.current_state_id,
+    gm_only: entity.gm_only,
+    label_override: entity.label_override,
+    interaction_overrides: JSON.stringify(entity.interaction_overrides),
+    disabled_interactions: entity.disabled_interactions,
+    state: JSON.stringify(entity.state),
+    notes_gm: entity.notes_gm,
+  })))
+  return entities.length
+}
+
 // POST /api/battlemaps/:id/duplicate — dupliquer une carte
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
@@ -1072,13 +1100,17 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
         campaign_id: battlemap.campaign_id,
         name: `${battlemap.name} (copie)`,
         folder_id: battlemap.folder_id,
+        image_url: battlemap.image_url,
         scale_label: battlemap.scale_label,
         grid_size: battlemap.grid_size,
         grid_enabled: battlemap.grid_enabled,
         grid_opacity: battlemap.grid_opacity,
+        grid_offset_x: battlemap.grid_offset_x,
+        grid_offset_y: battlemap.grid_offset_y,
+        render_mode: battlemap.render_mode,
+        voxel_scale: battlemap.voxel_scale,
         voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
         surface_data: JSON.stringify(duplicatedSurface),
-        // image_url et cover_image_url non copiés — la carte est nouvelle
       })
       .returning('*')
 
@@ -1088,6 +1120,8 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
       battlemap.voxel_data || {},
       duplicatedSurface,
     )
+
+    await duplicateBattlemapEntities(trx, battlemap.id, duplicatedId)
   })
 
   res.status(201).json({ battlemap: duplicated })
