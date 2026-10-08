@@ -11,6 +11,7 @@ import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegri
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import IntegrityPopover from './IntegrityPopover.jsx'
+import EquipmentInfoPopover, { EquipmentInfoButton } from './EquipmentInfoPopover.jsx'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
 import { createSearchMatcher } from '../../../shared/textSearch.js'
@@ -158,6 +159,22 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   useEffect(() => {
     if (itgPopover && !items.some((i) => i.id === itgPopover.itemId)) setItgPopover(null)
   }, [items, itgPopover])
+
+  // ── Popover de détail objet (MARCHAND-UX-REVIEW) — même patron que la fenêtre d'Intégrité
+  //    ci-dessus : état + clic-dehors ici, rendu dans EquipmentInfoPopover.
+  const [infoPopover, setInfoPopover] = useState(null) // { data: item, x, y, width } | null
+  const infoPopoverRef = useRef(null)
+  useEffect(() => {
+    if (!infoPopover) return undefined
+    const onDown = (e) => {
+      if (infoPopoverRef.current && !infoPopoverRef.current.contains(e.target)) setInfoPopover(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [infoPopover])
+  useEffect(() => {
+    if (infoPopover && !items.some((i) => i.id === infoPopover.data.id)) setInfoPopover(null)
+  }, [items, infoPopover])
 
   // INV2 (docs/EN_COURS.md) — la validation MJ peut désormais être refusée par le serveur (Sols
   // insuffisants chez le joueur, inventoryService.js#_chargeSols) : un console.error silencieux
@@ -378,6 +395,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 onDelete={handleDelete}
                 onValidate={handleValidate}
                 onOpenIntegrityPopover={openItgPopover}
+                onOpenInfoPopover={setInfoPopover}
               />
             ))}
           </div>
@@ -417,6 +435,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               onEquip={handleEquip}
               onDelete={handleDelete}
               onOpenIntegrityPopover={openItgPopover}
+              onOpenInfoPopover={setInfoPopover}
             />
           ))
         ) : (
@@ -617,6 +636,15 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
           onCancelRepair={handleCancelRepair}
         />
       )}
+
+      {infoPopover && (
+        <EquipmentInfoPopover
+          key={infoPopover.data.id}
+          popover={infoPopover}
+          popoverRef={infoPopoverRef}
+          onClose={() => setInfoPopover(null)}
+        />
+      )}
     </div>
   )
 }
@@ -679,7 +707,7 @@ function IntegritySegment({ item, onOpen }) {
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onOpenIntegrityPopover }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onOpenIntegrityPopover, onOpenInfoPopover }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -712,17 +740,16 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
 
   return (
     <div ref={setNodeRef} style={{ ...s.itemRow, ...dragStyle }} {...listeners} {...attributes}>
-      <span
-        style={s.itemName}
-        className={item.ref_description ? 'has-tooltip' : undefined}
-        data-tooltip={item.ref_description || undefined}
-      >
+      <span style={s.itemName}>
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
         {item.slots?.length > 0 && (
           <span style={s.itemSlot}> [{item.slots.map(sl => SLOT_LABEL_I18N_KEYS[sl] ? t(SLOT_LABEL_I18N_KEYS[sl]) : sl).join('/')}]</span>
         )}
       </span>
+      {/* MARCHAND-UX-REVIEW — remplace l'ancien tooltip au survol (data-tooltip=ref_description,
+          quasi invisible) : description toujours accessible au clic, plus le détail complet. */}
+      <EquipmentInfoButton item={item} setDetailPanel={onOpenInfoPopover} />
       {isWeaponLike && DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => item[field] && (
         <span key={key} className={`badge badge-compact ${className}`} style={s.itemDamageBadge}>{t(i18nKey)} <span className="num">{item[field]}</span></span>
       ))}

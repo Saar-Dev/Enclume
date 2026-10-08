@@ -126,6 +126,11 @@
     "validateButton": "Validé",
     "validateTooltip": "Valider cet objet",
     "validatedBadge": "Validé",
+    "infoPopover": {
+      "buttonTitle": "Voir le détail",
+      "loading": "Chargement du détail…",
+      "loadError": "Détail indisponible"
+    },
     "integrity": {
       "undefinedTooltip": "Intégrité non définie — cet objet peut s'user",
       "modifierTooltip": "État {{tier}} : {{modifier}} aux Tests d'utilisation",
