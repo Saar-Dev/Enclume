@@ -1520,6 +1520,7 @@
       "tab_sell": "Vente",
       "tab_sells": "Reventes",
       "sell_no_items": "Inventaire vide",
+      "sell_remove": "Retirer de la liste",
       "sell_price_label": "Prix demandé",
       "sell_propose": "Proposer la vente",
       "sell_pending": "En attente d'approbation GM...",

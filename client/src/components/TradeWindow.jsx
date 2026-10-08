@@ -420,6 +420,13 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
     })
   }
 
+  // MARCHAND-REMOVE-FROM-CART — même geste que re-cliquer l'objet dans la liste d'inventaire
+  // (toggleSellItem), mais accessible directement depuis le récapitulatif de vente : jusqu'ici
+  // aucun bouton n'y permettait de retirer une ligne, contrairement au panier d'achat (removeFromCart).
+  const removeSellItem = (itemId) => {
+    setSellItems(prev => prev.filter(o => o.char_inventory_id !== itemId))
+  }
+
   // Quantité proposée à la revente pour un item déjà sélectionné — plafonnée par le stack réellement
   // possédé (`maxQty`, revalidé de toute façon côté serveur à l'acceptation, `executeSell`).
   const changeSellQty = (itemId, delta, maxQty) => {
@@ -1026,6 +1033,12 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                         {sellItems.map(o => (
                           <div key={o.char_inventory_id} style={S.cartRow}>
                             <span style={S.cartItemName}>{o.name}{o.qty > 1 ? ` ×${o.qty}` : ''}</span>
+                            <button
+                              className="btn btn-ghost"
+                              style={S.qtyBtn}
+                              onClick={() => removeSellItem(o.char_inventory_id)}
+                              aria-label={t('trade.window.sell_remove')}
+                            >−</button>
                           </div>
                         ))}
                       </div>
