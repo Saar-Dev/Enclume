@@ -606,6 +606,26 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
+      {/* Panneau résultat de tir — joueur NON visé (spectateur) : même compte-rendu neutre que le
+          MJ, lecture seule (pas d'onApplyStun — déjà conçu pour disparaître sans ce prop). Retour
+          Saar 2026-10-08 : tout le combat reste visible à la table, acteur ou pas — même principe
+          déjà appliqué sans condition à CombatResultMelee plus bas, maintenant cohérent ici aussi. */}
+      {!isGm && targetAttackResult && targetAttackResult.cibleId !== playerToken?.id && (
+        <CombatResultGM
+          attaquant={resolveAttaquantLabel(targetAttackResult)}
+          cible={tokens.find(tk => tk.id === targetAttackResult.cibleId)?.label ?? '?'}
+          isSuccess={targetAttackResult.isSuccess}
+          roll={targetAttackResult.roll}
+          seuil={targetAttackResult.chancesDeReussite}
+          localisation={targetAttackResult.localisation}
+          degatsBruts={targetAttackResult.degautsBruts}
+          degatsNets={targetAttackResult.degatsNets}
+          severity={targetAttackResult.severity}
+          shockResult={targetAttackResult.shockResult}
+          onClose={onTargetAttackResultClose}
+        />
+      )}
+
       {/* Résultat rechargement — joueur rechargeur uniquement, persistant après avance du slot */}
       {!isGm && reloadResult && reloadResult.characterId === playerCharacter?.id && (
         <CombatResultReload result={reloadResult} onClose={onReloadResultClose} />
