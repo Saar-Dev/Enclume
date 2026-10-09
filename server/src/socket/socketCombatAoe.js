@@ -16,9 +16,9 @@ import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { computeAttackRoll } from '../lib/combatAttackRoll.js'
 import { applyCriticalSuccessBonus, getCriticalSuccessBonus, resolveChanceTest } from '../../../shared/polarisTestResolution.js'
-import { RANGED_SITUATION_MODS, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
+import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
-import { parseWeaponRangeBands } from '../../../shared/combatRange.js'
+import { parseWeaponRangeBands, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { getAoeMechanic, normalizeGrenadeDetonation } from '../../../shared/combatAoe.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import { resolveGrenadeInterposition } from '../lib/droneInterceptionService.js'
@@ -40,7 +40,7 @@ import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { resolveCombatantTestContext, resolveCombatantDisplayIdentity } from '../lib/combatantContextService.js'
 import { resolveChanceRecipientCharacterId } from '../lib/exoPilotService.js'
 import { resolveScatter } from '../../../shared/world/aoeShapes.js'
-import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
+import { dbPositionToWorldPoint, distanceBetweenWorldPointsM } from '../../../shared/world/worldMetrics.js'
 import { findAoeMechanismEntry } from '../lib/aoeMechanisms/registry.js'
 import {
   resolveCriticalFailReroll,
@@ -49,6 +49,7 @@ import {
   resolveDroneIntegrityLoss,
   flushDeferredEmissions,
   resolveSituationEntry,
+  resolvePorteeEntry,
 } from './socketCombatHelpers.js'
 // fetchExoWeapon — import socket→socket (socketCombatExo.js n'importe jamais socketCombatAoe.js,
 // vérifié : aucun cycle, même pattern que socketCombatResolution.js qui importe déjà les deux).
@@ -386,10 +387,28 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
 //  1. `resolveAoeAssaultAction` a vérifié `findAoeMechanismEntry(mechanic)` existe (message clair sinon) ;
 //  2. `aoe.intendedOrigin` en base ⟹ l'annonce a validé `shape: 'circle'` (seule forme qui produit un
 //     point visé). Un name-check redondant à mettre à jour par type = l'anti-pattern que le registre tue.
-async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics }) {
+async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics, confirmedModifiers }) {
   if (character.type !== 'pj' && character.type !== 'pnj') {
     return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
       username: character.name, message: 'Lancer de grenade exo/drone — pas encore câblé (PLAN_GRENADES.md §3d).',
+    } } }
+  }
+
+  // GRENADE-COORD-MODS — Difficulté du Test de Coordination liée à la distance réelle du lancer
+  // (lanceur → point visé), jamais à la taille d'une cible (décision Saar 2026-10-09 : une grenade
+  // vise toujours un point, jamais une créature d'une taille donnée — RAW muet sur ce cas précis,
+  // écart documenté JOURNAL8.md). `weapon.ref_range` = autorité catalogue UNIQUE, identique à
+  // chaque autre arme de jet/à distance (resolveWeaponRangeBand), jamais une seconde table pour la
+  // grenade. Calculée depuis la position RÉELLE du lanceur à la résolution (jamais figée à
+  // l'annonce), même principe que le Tir (rules/combat.md : « recalculer... depuis la position
+  // réellement atteinte »). Refus à la RÉSOLUTION seulement, jamais à l'annonce (même règle que
+  // toute autre action, rules/combat.md §Autorité).
+  const throwDistanceM = distanceBetweenWorldPointsM(dbPositionToWorldPoint(shooterToken), aoe.intendedOrigin, worldMetrics)
+  const throwRange = resolveWeaponRangeBand(throwDistanceM, weapon.ref_range)
+  if (throwRange.status !== 'ok') {
+    return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name,
+      message: `Lancer impossible — point visé hors de portée (${throwDistanceM.toFixed(1)} m)`,
     } } }
   }
 
@@ -401,10 +420,27 @@ async function resolveGrenadeThrow({ action, aoe, character, weapon, shooterToke
     } } }
   }
 
+  const throwPorteeMod = PORTEE_MOD_COMP[throwRange.band]?.mod ?? 0
+  // Situation : seules les clés propres au LANCEUR ont un sens pour un point visé (bouger en même
+  // temps qu'on lance, viser dans le noir ou la vue bloquée — même contributions que runAoePhaseA
+  // ci-dessus). Les clés `cible_*` (allure d'UNE cible) sont écartées : il n'y a pas de cible
+  // unique à ce jet, même raison que l'absence de modificateur de taille (ticket jumeau déjà ouvert
+  // pour le fusil à pompe/lance-flammes, « Zone d'effet (AOE) — modificateurs situationnels à
+  // nettoyer » — pas corrigé ici, périmètre séparé).
+  const throwerSituation = (confirmedModifiers?.situation ?? []).filter(k => !k.startsWith('cible_'))
+
   const coord = await resolveAoeAttackRoll({
     skillTotal: testCtx?.skillTotal ?? 0,
     skillMastery: 0,
-    contributions: [{ i18nKey: 'combat:breakdown.malusSanteEncombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' }],
+    contributions: [
+      { i18nKey: 'combat:breakdown.malusSanteEncombrement', value: testCtx?.effectiveMalus ?? 0, type: 'malus' },
+      ...(throwPorteeMod !== 0 ? [resolvePorteeEntry(throwRange.band, throwPorteeMod, throwPorteeMod > 0 ? 'bonus' : 'malus')] : []),
+      ...throwerSituation.reduce((acc, k) => {
+        const v = RANGED_SITUATION_MODS[k]?.mod
+        if (v !== undefined && v !== 0) acc.push(resolveSituationEntry(k, v, v > 0 ? 'bonus' : 'malus'))
+        return acc
+      }, []),
+    ],
   })
 
   const failureMarginM = coord.isSuccess ? 0 : -coord.mr // mr = seuil - roll < 0 sur échec → -mr = mètres ratés
@@ -621,7 +657,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         return { suspend: false, emissions }
       }
 
-      const thrown = await resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics })
+      const thrown = await resolveGrenadeThrow({ action, aoe, character, weapon, shooterToken, worldMetrics, confirmedModifiers })
       if (thrown.blocked) { emissions.push(thrown.blocked); return { suspend: false, emissions } }
       const { coord, weaponSnapshot, failureMarginM, d6Roll, testCtx } = thrown
       let resolvedOrigin = thrown.resolvedOrigin

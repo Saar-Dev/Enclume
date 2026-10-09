@@ -10189,3 +10189,59 @@ test : Mort posée sans token → `isCharacterDead` reste faux → token créé 
 **Non testé** : scénario réel navigateur (MJ place un token sur un personnage déjà mort).
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-09 — Fix GRENADE-COORD-MODS
+
+**Symptôme** : le Test de Coordination du lancer de grenade affichait toujours « Dif. : — » — la
+difficulté ne dépendait de rien, alors que `confirmedModifiers` portait des valeurs (taille,
+situation) jamais lues par `resolveGrenadeThrow` (`server/src/socket/socketCombatAoe.js`).
+
+**Écart RAW tranché par Saar (2026-10-09)** : le texte (`REGLES_ARMES_SPECIALES.md` § « Grenades et
+mines ») dit « Difficulté dépendant de la zone visée... modificateurs des Tests de tir, liés à la
+taille des cibles ». Jugé inapplicable : une grenade vise toujours la même chose (un point au sol),
+jamais une créature d'une taille donnée — aucun modificateur de taille ne peut varier. Remplacé par
+la distance réelle du lancer (lanceur → point visé), seule variable qui ait un sens ici. Cohérent
+avec le retrait du modificateur de taille en zone d'effet déjà décidé le 2026-09-15 (`PLAN_TAILLE.md`
+D7, même raison : un jet unique ne peut pas porter une taille par cible).
+
+**Portée retenue** : celle déjà publiée au catalogue pour le Javelot (`2/5/10/20 (40)` m) — RAW ne
+donne aucune formule de portée de lancer (vérifié : rien dans `REGLESYSCOMBAT.md` ni ailleurs liant
+Force/poids à une distance de lancer), donc pas de chiffre inventé, un chiffre déjà écrit dans le
+livre pour l'arme de jet la plus proche du geste (lancer à pleine volée). Comparaison externe pour
+validation (pas une source RAW) : D&D 5e javelin 30/120 pieds ≈ 9/36 m, Traveller paliers 15/30/45 m
+— même ordre de grandeur.
+
+**Trouvaille connexe, ticketée séparément, pas corrigée ici** : le fusil à pompe et le
+lance-flammes (`runAoePhaseA`, même fichier) appliquent aujourd'hui un bonus « cible immobile »
+(+3) systématique à toute action de zone, sans vraie cible unique (`target_token_id` toujours null
+pour un tir de zone) — défaut déjà diagnostiqué dans une session antérieure
+(`server/src/scripts/note_ticket_aoe_situational_mods.js`, jamais exécuté), ticket créé aujourd'hui.
+
+**Fait** :
+- `shared/combatRange.js` — nouvelle constante documentée `GRENADE_THROW_RANGE`.
+- `server/src/db/migrations/385_ref_equipment_grenade_frag_throw_range.js` — pose
+  `ref_equipment.range` pour « Grenade à fragmentation » (miroir de la migration 325, matché par
+  `name`, jamais par `id`).
+- `server/src/socket/socketCombatAoe.js` — `resolveGrenadeThrow` reçoit désormais
+  `confirmedModifiers`, calcule la distance réelle (`distanceBetweenWorldPointsM`), résout le palier
+  (`resolveWeaponRangeBand`, même autorité que toute arme à distance), rejette le lancer hors de
+  portée (au moment de la résolution, jamais de l'annonce — `rules/combat.md`), ajoute la
+  contribution de portée (`PORTEE_MOD_COMP`/`resolvePorteeEntry`, même primitives que le Tir) et les
+  modificateurs de situation propres au LANCEUR uniquement (allure, couverture, obscurité — jamais
+  les clés `cible_*`, qui n'ont aucun sens sans cible unique). `isImpossibleRangedSituation` déjà
+  vérifié en amont pour toute action de zone, pas dupliqué.
+
+**Testé** : `node --check` (3 fichiers) ; `shared/**/*.test.mjs` 947/947 (1 nouveau test de garde
+`GRENADE_THROW_RANGE`) ; `socketCombatAoe.test.mjs` 25/25 (aucune régression) ; test ciblé base
+locale `385_ref_equipment_grenade_frag_throw_range.test.mjs` (round-trip + idempotence, 2/2) ;
+`socketCombatHandWeaponAbsence.test.mjs` 9/9 (aucune régression, y compris le scénario grenade à la
+Ceinture) ; `grenadeFrag.test.mjs`/`grenadeEnergy.test.mjs` 22/22 (mécanisme d'explosion non touché).
+**Non testé** : scénario réel en session (lancer une grenade à courte distance, à longue distance,
+et au-delà de 40 m pour confirmer le refus) — aucun test automatisé n'exerce aujourd'hui
+`resolveAoeAssaultAction` avec un monde compilé réel (choix délibéré : la seule logique nouvelle,
+le calcul de palier/modificateur, est déjà couverte par les tests purs de `combatRange.test.mjs` ;
+construire un monde de test complet pour ce seul branchement aurait été disproportionné par rapport
+au risque, cf. autres tickets combat de ce journal clos sur ce même type de « codé, scénario réel
+non testé »).
+**Données** : migration 385 (réversible, `down()` remet `range` à `null`).
+**Retour arrière** : `git revert` du commit, ou rollback de la migration 385 seule si le code reste.

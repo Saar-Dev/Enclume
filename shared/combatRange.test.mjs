@@ -5,6 +5,7 @@ import {
   parseWeaponRangeBands, resolveWeaponRangeBand, resolveMeleeReachM,
   resolveShotgunSpread, resolveShotgunCone, SHOTGUN_SPREAD_BY_BAND,
   GRENADE_FRAG_BANDS, GRENADE_FRAG_MAX_RADIUS_M, resolveGrenadeBand,
+  GRENADE_THROW_RANGE,
 } from './combatRange.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js,
@@ -119,6 +120,15 @@ test('GRENADE_FRAG_BANDS — 5 paliers RAW, rayons = moitié du diamètre, trié
 test('GRENADE_FRAG_MAX_RADIUS_M — borne du dernier palier = radiusM figé par la migration 325', () => {
   assert.equal(GRENADE_FRAG_MAX_RADIUS_M, 15)
   assert.equal(GRENADE_FRAG_MAX_RADIUS_M, GRENADE_FRAG_BANDS[GRENADE_FRAG_BANDS.length - 1].maxDistanceM)
+})
+
+test('GRENADE_THROW_RANGE — valeur figée = celle que la migration 385 doit écrire dans ref_equipment.range', () => {
+  assert.equal(GRENADE_THROW_RANGE, '2/5/10/20 (40)')
+  assert.deepEqual(parseWeaponRangeBands(GRENADE_THROW_RANGE), [2, 5, 10, 20, 40])
+  assert.equal(resolveWeaponRangeBand(2, GRENADE_THROW_RANGE).band, 'bout_portant')
+  assert.equal(resolveWeaponRangeBand(20, GRENADE_THROW_RANGE).band, 'longue')
+  assert.equal(resolveWeaponRangeBand(40, GRENADE_THROW_RANGE).band, 'extreme')
+  assert.equal(resolveWeaponRangeBand(40.01, GRENADE_THROW_RANGE).status, 'out-of-range')
 })
 
 test('resolveGrenadeBand — bornes des paliers', () => {

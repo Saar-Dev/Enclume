@@ -183,3 +183,36 @@ export const GRENADE_FRAG_MAX_RADIUS_M = GRENADE_FRAG_BANDS[GRENADE_FRAG_BANDS.l
 export function resolveGrenadeBand(distanceM) {
   return resolveDistanceBand(distanceM, GRENADE_FRAG_BANDS)
 }
+
+// ─── Grenade — portée du LANCER (distance lanceur → point visé, ticket GRENADE-COORD-MODS) ──────
+//
+// Ne pas confondre avec GRENADE_FRAG_BANDS ci-dessus (dégression des DÉGÂTS depuis le point
+// d'EXPLOSION) : ceci est la difficulté du Test de Coordination qui précède, fonction de la
+// distance entre le lanceur et le point visé.
+//
+// [HYPOTHÈSE validée Saar 2026-10-09] Le RAW (REGLES_ARMES_SPECIALES.md § « Grenades et mines »)
+// dit seulement « Difficulté dépendant de la zone visée... utilisez les modificateurs des Tests de
+// tir, liés à la taille des cibles » — Saar a jugé cette phrase inapplicable ici : une grenade vise
+// toujours la même chose (un point au sol, jamais une créature d'une taille donnée), donc aucun
+// modificateur de taille ne peut s'appliquer (cohérent avec le retrait du modificateur de taille en
+// zone d'effet, décidé le 2026-09-15, PLAN_TAILLE.md D7 — même logique : un jet unique ne peut pas
+// porter une taille par cible). Décision produit : remplacer par la distance réelle du lancer,
+// seule variable qui a un sens pour viser un point (RAW muet sur ce point précis — écart documenté
+// ici et dans JOURNAL8.md, invariant AGENTS.md #5).
+//
+// Valeur retenue : la portée DÉJÀ PUBLIÉE du Javelot (ref_equipment.range), pas un chiffre inventé —
+// RAW ne donne aucune formule de portée de lancer (vérifié : aucune règle liant Force/poids à une
+// distance de lancer n'existe dans ce livre), et le javelot est l'arme de jet du catalogue la plus
+// proche du geste (lancer à pleine volée, pas un jet de poignet comme un couteau). Confirmé par
+// comparaison externe (D&D 5e javelin 30/120 pieds ≈ 9/36 m, Traveller paliers 15/30/45 m) : même
+// ordre de grandeur, le choix n'est pas un outlier.
+//
+// Format IDENTIQUE à `ref_equipment.range` (parseWeaponRangeBands ci-dessus) : cette constante n'est
+// PAS lue à l'exécution (le serveur lit toujours `weapon.ref_range`, autorité unique du catalogue,
+// comme pour toute autre arme) — elle documente la valeur que la migration 385 doit écrire, pour que
+// ce chiffre ne soit jamais un magique isolé dans une migration. Garde de cohérence :
+// shared/combatRange.test.mjs (même patron que GRENADE_FRAG_MAX_RADIUS_M/migration 325 ci-dessus).
+// Une future grenade (concussion, sonique — segments non codés à ce jour) réutilise cette même
+// constante dans sa propre migration plutôt que d'inventer une nouvelle valeur, sauf besoin RAW
+// contraire documenté.
+export const GRENADE_THROW_RANGE = '2/5/10/20 (40)'
