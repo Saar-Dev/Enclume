@@ -10245,3 +10245,44 @@ au risque, cf. autres tickets combat de ce journal clos sur ce même type de « 
 non testé »).
 **Données** : migration 385 (réversible, `down()` remet `range` à `null`).
 **Retour arrière** : `git revert` du commit, ou rollback de la migration 385 seule si le code reste.
+
+## Session (Claude) — 2026-10-10 — Fix COMBAT-PATHCOLOR-RELIEF-HIDDEN
+
+Déplacement en combat : côté joueur, seule la case de destination s'affichait (carré bleu) ; aucune
+case intermédiaire du chemin coloré par allure n'apparaissait, alors que le MJ voyait le dégradé
+complet. Non reproductible en changeant de rôle seul (confirmé avec un token MJ sur la même salle :
+même symptôme) — deux causes distinctes trouvées en route, par élimination instrumentée (calcul
+d'allures, axes, échelle, chargement/contenu de la texture SVG, angle de caméra : tous vérifiés sains
+avant la vraie cause).
+
+**Cause 1** : la caméra 3e personne (vue épaule, jamais bornée au combat) restait active pour un
+joueur avec un token possédé même pendant le combat — un joueur ne voyait donc que la case juste
+devant lui, jamais la vue du dessus que le MJ utilise pour voir tout le chemin.
+
+**Cause 2, la vraie origine de l'invisibilité** : le sol de la salle testée a un matériau à relief
+géométrique réel (`realRelief: true`, `relief: 100`, tuiles de sol) — déplacement jusqu'à ±0,12 m
+(`DEFAULT_RELIEF_SCALE`, `client/src/lib/reliefGeometry.js`). Le réticule de chemin est posé à +0,02 m
+au-dessus du sol nominal, le carré de destination à +0,06 m : sur ce sol-là, le relief dépasse
+largement ces deux marges à la plupart des positions, et le sol recouvre littéralement le survol —
+un problème de rendu pur, aucun lien avec le rôle (le MJ n'avait simplement jamais testé le
+déplacement en combat sur cette carte précise au sol accidenté).
+
+**Fait** :
+- `client/src/components/Canvas3D.jsx` — `thirdPersonCameraActive` exige désormais `phase == null`
+  (`useCombatStore`) ; la case de destination (`meshBasicMaterial` du survol bleu) passe en
+  `depthTest={false}` + `renderOrder={50}`.
+- `client/src/components/SceneReticules.jsx` — `GroundCursorReticule` (réticule de chaque case du
+  chemin) même traitement `depthTest={false}` + `renderOrder={50}` : ces survols de gameplay se
+  dessinent désormais toujours par-dessus le sol, quel que soit son relief, comme un calque
+  d'interface plutôt qu'un objet physique du décor (patron confirmé dans d'autres moteurs pour ce
+  cas précis : survol tactique sur terrain irrégulier).
+
+**Testé** : `node --check` (route serveur, instrumentation retirée) ; lint ciblé des 2 fichiers
+touchés (erreurs restantes toutes préexistantes, aucune sur les lignes modifiées) ; `npm run build`
+client complet, propre ; scénario réel en session confirmé par Saar (joueur ET MJ, même salle à
+relief) après correctif.
+**Non testé** : les autres survols au sol de combat (zones d'effet/grenades, ligne de vue) utilisent
+la même famille de marge fixe au-dessus du sol et pourraient partager la même fragilité sur un sol à
+fort relief — jamais signalé comme cassé, volontairement laissé hors périmètre de ce correctif.
+**Données** : aucune (changement de rendu client uniquement).
+**Retour arrière** : `git revert` du commit.
