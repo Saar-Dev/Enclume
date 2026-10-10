@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SEVERITY_COLORS as SEV } from '../../../shared/woundConstants.js'
 
@@ -100,6 +100,15 @@ export default function TokenRadialMenu({
     return () => cancelAnimationFrame(id)
   }, [])
 
+  // LINT-TOKENRADIALMENU-DOCLOSE — doClose doit être déclaré AVANT l'effet qui le référence
+  // (TDZ : la déclaration de fonction ci-dessous n'est pas « remontée » comme le serait une
+  // `function` nommée). useCallback (pas une fonction brute) pour que la dépendance listée dans
+  // l'effet ci-dessous soit stable tant que `onClose` ne change pas.
+  const doClose = useCallback(() => {
+    setClosing(true)
+    setTimeout(onClose, 150)
+  }, [onClose])
+
   // Fermeture sur clic extérieur ou Échap
   useEffect(() => {
     const onMouseDown = (e) => {
@@ -112,12 +121,7 @@ export default function TokenRadialMenu({
       document.removeEventListener('mousedown', onMouseDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [])
-
-  const doClose = () => {
-    setClosing(true)
-    setTimeout(onClose, 150)
-  }
+  }, [doClose])
 
   // ─── Suivi souris pour la boussole ───────────────────────────────────────
   const handleMouseMove = (e) => {
