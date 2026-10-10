@@ -12,9 +12,15 @@ function EntryLines({ entry, tokens }) {
 
   const actionLabelKey = ACTION_LABELS[entry.actionType]
   const actionLabel = actionLabelKey ? t(actionLabelKey) : (entry.actionType ?? '–')
-  const moveDest = entry.moveTarget
-    ? `[${entry.moveTarget.x ?? '?'}, ${entry.moveTarget.y ?? entry.moveTarget.z ?? '?'}]`
-    : null
+  // Distance plutôt que coordonnées brutes (retour Saar, COMBAT-GM-RECAP-WINDOW-MISMATCH) — même
+  // notion de distance que le reste du combat (coût de déplacement pondéré par le terrain, pas une
+  // mesure géométrique pure, cf. commentaire serveur socketCombatAnnouncement.js).
+  const moveDest = Number.isFinite(entry.distanceM) ? `(${entry.distanceM.toFixed(1)}m)` : null
+  const weaponOrSkillLabel = entry.weaponLabel ?? (entry.meleeBareHands ? t('meleeCombatPanel.bareHands') : null)
+  // Distance à la cible gardée même sans nom d'arme (drone/exo, hors périmètre pour le nom — voir
+  // socketCombatAnnouncement.js) : la distance, elle, ne dépend pas du type de tireur.
+  const attackMetaParts = [weaponOrSkillLabel, Number.isFinite(entry.attackDistanceM) ? `${entry.attackDistanceM.toFixed(1)}m` : null].filter(Boolean)
+  const attackMetaLabel = attackMetaParts.length > 0 ? ` (${attackMetaParts.join(', ')})` : ''
 
   return (
     <>
@@ -54,6 +60,7 @@ function EntryLines({ entry, tokens }) {
         }>
           {actionLabel}
           {isPureMove && moveDest ? ` ${moveDest}` : ''}
+          {attackMetaLabel}
           {atkTok ? ` → ${atkTok.label}` : ''}
         </span>
       </div>

@@ -178,10 +178,18 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onRosterUpdated   = ({ roster }) => { updateRoster(roster) }
     const onSurpriseRoll    = ({ tokenId }) => { setPendingSurpriseRoll({ tokenId }) }
     const onAnnouncePreview = (preview) => { setPjPreview(preview) }
-    const onActionDeclared  = ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
+    const onActionDeclared  = ({ tokenId, actionType, initiative, moveTarget, distanceM, attackTargetId, weaponLabel, meleeBareHands, attackDistanceM }) => {
       markTokenAnnounced(tokenId, initiative)
       setPjPreview(null)
-      addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
+      addAnnouncedAction({
+        tokenId, actionType, initiative,
+        moveTarget: moveTarget ?? null,
+        distanceM: distanceM ?? null,
+        attackTargetId: attackTargetId ?? null,
+        weaponLabel: weaponLabel ?? null,
+        meleeBareHands: !!meleeBareHands,
+        attackDistanceM: attackDistanceM ?? null,
+      })
     }
     // onModeReset avant advanceSlot — le survol/ciblage combat (combatMoveMode/combatTargetMode) était
     // armé pour l'ancien token actif et ne se réinitialisait jamais au changement de slot (seuls

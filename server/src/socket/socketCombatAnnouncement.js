@@ -17,7 +17,9 @@ import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/w
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { computeIniDelta } from '../../../shared/combatIniCost.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { getOwnedHandWeapon, getItemWithRef, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { itemDisplayName } from '../lib/combatHandWeaponNotice.js'
+import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { validateGrabDeclaration, isGrabbedInHand, buildGrabActionRow } from '../lib/combatGrabAnnouncement.js'
 import { getWeaponIntegrityBlock } from '../../../shared/integrityRules.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
@@ -1128,6 +1130,37 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       else if (mapActions?.reload) actionType = 'reload'
       else if (isExoStandUpAttempt) actionType = 'exo_stand_up'
 
+      // COMBAT-GM-RECAP-WINDOW-MISMATCH (en réalité : bandeau de déclaration trop pauvre, identique
+      // MJ/joueur — aucune différence de rôle trouvée dans CombatDeclareLog.jsx) — arme + distance à
+      // la cible, pour que le bandeau au-dessus du chat dise autre chose que des coordonnées brutes.
+      // attackTargetIdForLog : même repli attack[0]/melee[0] que l'existant ci-dessous, calculé une
+      // fois pour servir aussi à la distance.
+      const attackTargetIdForLog = mapActions?.attack?.[0]?.targetTokenId
+        ?? mapActions?.melee?.[0]?.targetTokenId
+        ?? null
+      // Nom d'arme : humanoïde seulement (weaponInvId ∈ attack[0]/melee[0]) — drone/exo stockent
+      // l'arme sous un autre champ (drone_weapon_inv_id/exo_weapon_inv_id), hors périmètre de ce lot
+      // (pas de régression : weaponLabel reste simplement absent pour eux). meleeBareHands distingue
+      // « CaC à mains nues » (affichage dédié côté client) d'un simple « pas d'info d'arme à ce lot »
+      // (drone/exo) — le client ne doit jamais deviner ça depuis l'absence de weaponLabel seule.
+      const attackWeaponInvId = mapActions?.attack?.[0]?.weaponInvId
+        ?? mapActions?.melee?.[0]?.weaponInvId
+        ?? null
+      let weaponLabel = null
+      if (attackWeaponInvId && !isDrone && !isExo) {
+        const attackItem = await getItemWithRef(attackWeaponInvId)
+        weaponLabel = attackItem ? itemDisplayName(attackItem) : null
+      }
+      const meleeBareHands = !isDrone && !isExo && !attackWeaponInvId
+        && Array.isArray(mapActions?.melee) && mapActions.melee.length > 0
+      // Distance à la cible — purement informatif pour ce bandeau, jamais une autorité de portée
+      // (`.claude/rules/combat.md` : seule la Résolution vérifie ce qui est réellement possible).
+      let attackDistanceM = null
+      if (attackTargetIdForLog) {
+        const distanceMeasurement = await measureBattlemapTokenDistance({ sourceTokenId: tokenId, targetTokenId: attackTargetIdForLog })
+        if (distanceMeasurement.status === 'ok') attackDistanceM = distanceMeasurement.distanceM
+      }
+
       io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, {
         tokenId,
         actionType,
@@ -1141,11 +1174,16 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             z: movementDeclaration.dbDestination.pos_z,
           }
           : null,
+        // Distance de déplacement — même valeur que la couleur du chemin/le choix d'allure côté
+        // client (Canvas3D.jsx, costM) : un coût pondéré par le terrain, pas une mesure géométrique
+        // pure — cohérent avec la seule notion de « distance » que le reste du combat affiche déjà.
+        distanceM: movementDeclaration ? movementDeclaration.costM : null,
         // Token cible (tir ou CaC, pour ligne d'annonce spectateurs) — premier tir de la série pour
         // Tir Multi (docs/PLAN_TIRMULTI.md), même patron que melee[0] déjà en place.
-        attackTargetId: mapActions?.attack?.[0]?.targetTokenId
-          ?? mapActions?.melee?.[0]?.targetTokenId
-          ?? null,
+        attackTargetId: attackTargetIdForLog,
+        weaponLabel,
+        meleeBareHands,
+        attackDistanceM,
       })
 
       // Nettoyer le timer auto-skip si actif
