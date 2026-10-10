@@ -70,19 +70,22 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
       .where('ca.char_sheet_id', sheetId)
       .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
 
-    const [ledger, allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
-      trx('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
-      trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows)),
-      trx('char_mutations as cm')
-        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
-        .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
-        .first(),
-      trx('char_sheet as cs')
-        .join('characters as c', 'c.id', 'cs.character_id')
-        .where('cs.id', sheetId)
-        .select('c.campaign_id')
-        .first(),
-    ])
+    // WIZ-ROUNDTRIP-DEPWARN — ces 4 lectures ne dépendent pas l'une de l'autre, mais un Promise.all
+    // sur la MÊME connexion (trx) ne les parallélise déjà pas réellement (une connexion pg traite
+    // une requête à la fois) ; ce n'était qu'un DeprecationWarning sans effet aujourd'hui, mais un
+    // throw en pg 9. Séquentiel explicite, même patron que mutationService.js#addMutation (déjà
+    // sans Promise.all sur trx) — aucun changement de résultat ni de latence réelle.
+    const ledger = await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).first()
+    const allRefAdvantages = await trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows))
+    const sterileMutation = await trx('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
+      .first()
+    const sheetCampaign = await trx('char_sheet as cs')
+      .join('characters as c', 'c.id', 'cs.character_id')
+      .where('cs.id', sheetId)
+      .select('c.campaign_id')
+      .first()
     if (!ledger) throw new AppError(500, 'Ledger PC manquant — incohérence wizard')
 
     const settings = await getCampaignSettings(trx, sheetCampaign.campaign_id)
@@ -177,18 +180,17 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring, trxOp
       .where('ca.char_sheet_id', sheetId)
       .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
 
-    const [allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
-      trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows)),
-      trx('char_mutations as cm')
-        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
-        .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
-        .first(),
-      trx('char_sheet as cs')
-        .join('characters as c', 'c.id', 'cs.character_id')
-        .where('cs.id', sheetId)
-        .select('c.campaign_id')
-        .first(),
-    ])
+    // WIZ-ROUNDTRIP-DEPWARN — même correctif que addAdvantage ci-dessus, même raison.
+    const allRefAdvantages = await trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows))
+    const sterileMutation = await trx('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
+      .first()
+    const sheetCampaign = await trx('char_sheet as cs')
+      .join('characters as c', 'c.id', 'cs.character_id')
+      .where('cs.id', sheetId)
+      .select('c.campaign_id')
+      .first()
 
     const settings = await getCampaignSettings(trx, sheetCampaign.campaign_id)
 
