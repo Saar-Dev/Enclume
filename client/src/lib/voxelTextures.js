@@ -43,9 +43,14 @@ function proceduralReliefForFaces(faces) {
 // Normal maps optionnelles : <face>_normal > all_normal.
 export async function loadVoxelTextures(textures) {
   const loader = new THREE.TextureLoader()
-  const result = {}
 
-  for (const tex of textures) {
+  // WORLD-COMPILE-SUPERLINEAR (suite) — la boucle externe sur les textures était séquentielle (un
+  // `await` par texture avant de passer à la suivante) ; seules les faces À L'INTÉRIEUR d'une même
+  // texture étaient déjà parallélisées. Avec N textures distinctes sur une carte, ça fait N allers-
+  // retours réseau en série avant que le rendu ne démarre. `THREE.TextureLoader` ne porte aucun état
+  // partagé entre deux `load()` — réutiliser la même instance pour des chargements concurrents est
+  // le patron standard (chaque appel crée sa propre Texture, aucune mutation croisée possible).
+  const entries = await Promise.all(textures.map(async (tex) => {
     const faces = resolveLegacyFaces(tex.faces)
     const packId = tex.pack_id
 
@@ -93,11 +98,11 @@ export async function loadVoxelTextures(textures) {
       return makeMat(map, normalMap)
     }))
 
-    result[tex.id] = {
+    return [tex.id, {
       faceMaterials: loadedFaces,
       relief: proceduralReliefForFaces(faces),
-    }
-  }
+    }]
+  }))
 
-  return result
+  return Object.fromEntries(entries)
 }

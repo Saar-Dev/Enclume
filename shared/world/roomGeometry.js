@@ -977,9 +977,9 @@ function multiPolygonsHaveSameArea(left, right) {
   return multiPolygonArea(leftOnly) <= EPSILON && multiPolygonArea(rightOnly) <= EPSILON
 }
 
-export function roomBoundaryMultiPolygon(room, roomLookup = {}, visitedRoomIds = new Set()) {
+function computeRoomBoundaryMultiPolygon(room, roomLookup, visitedRoomIds) {
   const profile = explicitVerticalSlices(room)
-  if (profile?.[0]?.footprint?.length > 0) return cloneMultiPolygon(profile[0].footprint)
+  if (profile?.[0]?.footprint?.length > 0) return profile[0].footprint
   const subject = contoursToMultiPolygon(rawRoomBoundaryContours(room))
   if (subject.length === 0) return []
   const currentId = String(room?.id || '')
@@ -998,6 +998,44 @@ export function roomBoundaryMultiPolygon(room, roomLookup = {}, visitedRoomIds =
     if (clipGeometry.length > 0) clips.push(clipGeometry)
   }
   return clips.length > 0 ? polygonClipping.difference(subject, ...clips) : subject
+}
+
+function isCacheableKey(value) {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function'
+}
+
+// WORLD-COMPILE-SUPERLINEAR — mémoïsation par WeakMap (patron `weakMapMemoize` de Reselect : un
+// niveau de WeakMap par argument-objet, valeur libérée automatiquement avec l'objet, jamais
+// d'invalidation manuelle). `roomEffectiveGridCells`/`multiPolygonGridCells` appellent cette
+// fonction UNE FOIS PAR CASE testée avec le même `room`/`roomLookup` — sans cache, une salle de
+// 900 cases recalculait tout son contour (tracé des arêtes, decoupe des clips) 900 fois (mesuré :
+// ratio coût total / coût d'un seul appel ≈ 954, quasi exactement N). `visitedRoomIds` est
+// volontairement hors clé de cache : c'est un garde anti-cycle de la récursion sur les salles de
+// découpe, pas une donnée qui change le résultat géométrique pour un document déjà validé acyclique
+// (validateSurfaceData rejette tout cycle de `geometryClipRoomIds` avant d'arriver ici).
+// Chaque case du cache est elle-même nettoyée : `prepareSurfaceData` clone les salles à chaque
+// appel (surfaceDocument.js), donc `room`/`roomLookup` sont des objets neufs à chaque compilation —
+// aucune entrée ne survit au-delà d'un seul `compileSurfaceWorld`.
+const boundaryMultiPolygonCache = new WeakMap()
+
+export function roomBoundaryMultiPolygon(room, roomLookup = {}, visitedRoomIds = new Set()) {
+  if (!isCacheableKey(room) || !isCacheableKey(roomLookup)) {
+    return cloneMultiPolygon(computeRoomBoundaryMultiPolygon(room, roomLookup, visitedRoomIds))
+  }
+  let byLookup = boundaryMultiPolygonCache.get(room)
+  if (!byLookup) {
+    byLookup = new WeakMap()
+    boundaryMultiPolygonCache.set(room, byLookup)
+  }
+  let cached = byLookup.get(roomLookup)
+  if (!cached) {
+    cached = computeRoomBoundaryMultiPolygon(room, roomLookup, visitedRoomIds)
+    byLookup.set(roomLookup, cached)
+  }
+  // Clone à chaque appel : plusieurs sites appellent polygonClipping.* sur ce résultat sans cloner
+  // au préalable (comportement déjà présent avant ce correctif) — un cache qui rendrait la même
+  // référence partagerait un état mutable entre appelants qui ne s'y attendent pas.
+  return cloneMultiPolygon(cached)
 }
 
 export function roomBoundaryContours(room, roomLookup = {}) {

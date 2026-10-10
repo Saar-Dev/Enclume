@@ -10286,3 +10286,57 @@ la même famille de marge fixe au-dessus du sol et pourraient partager la même 
 fort relief — jamais signalé comme cassé, volontairement laissé hors périmètre de ce correctif.
 **Données** : aucune (changement de rendu client uniquement).
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-10 — Enquête conclue : ticket 9f6c2a6e / WORLD-COMPILE-SUPERLINEAR, trou de chargement 20-44 s
+
+Repris là où la session du 2026-10-08 s'était arrêtée (`⚠️ clos partiel`, cause du trou non trouvée).
+**Conclusion : ce n'est pas un bug applicatif.**
+
+**Démarche d'élimination, chaque piste testée empiriquement avant d'être écartée** (jamais sur la
+seule lecture du code) :
+- `VITE_API_URL`/`MINIO_ENDPOINT` en `localhost` vs `127.0.0.1` : aucun effet mesuré sur le temps de
+  chargement (le premier changement, sur `VITE_API_URL`, casse même l'authentification par cookie —
+  origine différente — annulé immédiatement).
+- `getBucketRegionAsync` (bibliothèque `minio`, requête de région au premier accès par bucket, piste
+  documentée ailleurs dans l'écosystème S3-compatible) : reproduit en isolation, hors de toute
+  l'application → **16 ms**, pas 19 s.
+- `compileSurfaceWorld` sur les vraies données de la carte testée (7 salles, 16 segments de passerelle
+  superposés à la même salle) : reproduit en isolation → **203 ms**, pas 19 s.
+- Chemin complet `statObject` + `getObject` de `assets.js`, sur les deux vrais objets MinIO
+  responsables du trou, séquentiel ET concurrent (`Promise.all`, comme le fait le navigateur) :
+  reproduit en isolation → **sous 100 ms** dans tous les cas.
+
+**La preuve décisive, trouvée dans une trace Firefox Profiler fournie par Saar (`docs/Test001.json`,
+format `profiler.firefox.com`)** : les deux marqueurs réseau exacts des requêtes `illustration`
+montrent `requestStart`→`responseEnd` = **234 ms** (DNS + connexion + réponse serveur + téléchargement
+du fichier, cohérent avec toutes les mesures isolées ci-dessus), mais le marqueur `STATUS_STOP` lui-
+même ne se déclenche que **20,5 s après** la fin réelle du téléchargement. Confirmé indépendamment par
+le marqueur natif `LargestContentfulPaint` du navigateur : `timeMs: 23691` sur l'élément `<img>`
+concerné. Le fichier arrive vite ; le navigateur met ~20 s à considérer la requête terminée — après
+réception, donc hors de portée du serveur ou du réseau.
+
+**Confirmé par Saar** : le trou disparaît en mode sans extensions Firefox, et disparaît avec un autre
+navigateur sans extension. Cause réelle : une ou plusieurs extensions du profil Firefox utilisé pour
+les tests (liste visible dans la trace : Adblock Plus, Privacy Badger, LeechBlock NG, Facebook
+Container, Consent-O-Matic, parmi 18 extensions) interceptent/retiennent les requêtes d'images de ce
+site en local. Aucune action côté application ne peut corriger ça — hors périmètre du projet.
+
+**Deux vrais correctifs trouvés en route, sans lien avec la cause du trou, mais valides sur leur
+propre mérite** (écrits par une session antérieure, restés non commités, vérifiés puis commités ici) :
+`shared/world/roomGeometry.js` (mémoïsation WeakMap de `roomBoundaryMultiPolygon` — évite un
+recalcul répété du contour d'une salle, mesuré ×954 sur une salle de 400 cases dans une session
+antérieure) et `client/src/lib/voxelTextures.js` (chargement des textures d'une carte en parallèle
+plutôt qu'en série). Ni l'un ni l'autre n'a changé le temps du trou mesuré (testé après redémarrage
+complet garanti de la stack) — attendu, puisque la vraie cause est ailleurs, mais les deux restent de
+vraies améliorations pour leur propre cas (recalcul évité pendant l'interaction, pas au premier
+chargement).
+
+**Fait** : instrumentation `[DBG-LOADTIME]` de la session du 2026-10-08 retirée (`SurfaceDungeonScene.jsx`,
+`SocketContext.jsx`, `main.jsx`, `server/src/index.js`) — diagnostic terminé, plus nécessaire.
+**Testé** : `shared/world/roomGeometry.test.mjs` 24/24 ; `shared/**/*.test.mjs` 947/947 ; lint ciblé
+`voxelTextures.js` propre ; `npm run build` client complet déjà validé dans cette même session (fichier
+inchangé depuis).
+**Non testé** : aucune piste applicative restante à tester — la cause est confirmée hors du code.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit (les deux correctifs de performance restent désirables même
+si retirés de cette clôture).
