@@ -93,9 +93,13 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
       if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_ACTION_DECLARE')) {
         console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_ACTION_DECLARE`)
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Déclaration refusée — l'état du combat a changé entre-temps, réessayez" })
         return
       }
-      if (!tokenId || !state) return
+      if (!tokenId || !state) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Déclaration invalide' })
+        return
+      }
 
       // Valeurs autorisées par état
       const VALID_STATES = {
@@ -107,7 +111,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         combat_mode:  ['normal', 'offensif', 'charge', 'defensif', 'retraite'],
       }
       for (const [k, vals] of Object.entries(VALID_STATES)) {
-        if (state[k] && !vals.includes(state[k])) return
+        if (state[k] && !vals.includes(state[k])) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Déclaration invalide — état incohérent' })
+          return
+        }
       }
 
       // CaC et Tir mutuellement exclusifs à la déclaration — une seule « Action de combat » par Tour
@@ -139,7 +146,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         const py = Number(mapActions.move.targetPosY)
         const pz = Number(mapActions.move.targetPosZ)
         if (![px, py, pz].every(Number.isFinite)) {
-          socket.emit('error', { message: 'Coordonnées de déplacement invalides (PC33)' })
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Coordonnées de déplacement invalides (PC33)' })
           return
         }
       }
@@ -149,34 +156,61 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // après la garde d'ordre de file ci-dessous ; `tokenId` (paramètre brut) n'est lui jamais
       // réassigné, cf. bloc Télépilotage.
       let token = await db('tokens').where({ id: tokenId }).first()
-      if (!token) return
+      if (!token) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Déclaration refusée — jeton introuvable' })
+        return
+      }
       // PC27 — entité de décor : ne déclare pas d'action en combat
-      if (!token.character_id) return
+      if (!token.character_id) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Déclaration refusée — ce jeton n'a pas de personnage" })
+        return
+      }
       let character = await db('characters').where({ id: token.character_id }).first()
-      if (!character) return
+      if (!character) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Déclaration refusée — personnage introuvable' })
+        return
+      }
       if (character.type === 'pnj') {
-        if (!isGm) return
+        if (!isGm) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Seul le MJ peut déclarer pour un PNJ' })
+          return
+        }
       } else if (character.type === 'drone') {
         const isOwner = character.user_id && character.user_id === user.id
-        if (!isGm && !isOwner) return
+        if (!isGm && !isOwner) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Vous n'êtes pas autorisé à déclarer pour ce drone" })
+          return
+        }
       } else if (character.type === 'exo') {
         // PLAN_EXOARMURE.md Lot 2bis §9.3 (trouvé en câblant le côté MJ) — sans cette branche, 'exo'
         // tombait dans le else générique ci-dessous (propriétaire brut seul), rendant la déclaration
         // impossible pour un pilote ≠ propriétaire. Même autorité que l'édition de fiche (Lot 1 §6.3,
         // combatantContextService.js:isExoActorAuthorized, une seule source pour "GM/propriétaire/pilote").
-        if (!(await isExoActorAuthorized(db, character, { isGm, userId: user.id }))) return
+        if (!(await isExoActorAuthorized(db, character, { isGm, userId: user.id }))) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Vous n'êtes pas autorisé à déclarer pour cette exo-armure" })
+          return
+        }
       } else {
-        if (character.user_id !== user.id) return
+        if (character.user_id !== user.id) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Vous n'êtes pas autorisé à déclarer pour ce personnage" })
+          return
+        }
       }
 
       const entry = await db('combat_roster')
         .where({ campaign_id: campaignId, token_id: tokenId })
         .first()
-      if (!entry || entry.has_announced) return
+      if (!entry || entry.has_announced) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Vous avez déjà déclaré votre action ce Tour' })
+        return
+      }
 
       // LdB p.212 — guard ordre d'annonce : seul le slot actuel (base_ini ASC) peut déclarer
       const announceState = await db('combat_state').where({ campaign_id: campaignId }).first()
-      if (!announceState || announceState.phase !== 'ANNOUNCEMENT') return
+      if (!announceState || announceState.phase !== 'ANNOUNCEMENT') {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Déclaration refusée — le combat n'est plus en phase d'Annonce" })
+        return
+      }
       const firstNonAnnounced = await findNextAnnounceSlot(campaignId)
       if (!firstNonAnnounced || firstNonAnnounced.token_id !== tokenId) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Ce n'est pas encore votre tour de déclarer" })
@@ -1208,6 +1242,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       console.log(`[WS] combat:action_declare v2 — ${user.username} state:${JSON.stringify(state)} iniDelta:${iniDelta} -> ${updatedInitiative}`)
     } catch (err) {
       console.error('[WS] combat:action_declare error:', err.message)
+      socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Erreur interne — réessayez' })
     }
   })
 
@@ -1237,6 +1272,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       await skipPlayer(io, campaignId, tokenId, pendingMaps)
     } catch (err) {
       console.error('[WS] combat:skip_player error:', err.message)
+      socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Erreur interne — réessayez' })
     }
   })
 
