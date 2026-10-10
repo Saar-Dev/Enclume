@@ -2918,6 +2918,14 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     totalModComp += tailleMod
     const situationMods = confirmedModifiers?.situation ?? []
     totalModComp += sumRangedSituationMods(situationMods)
+    // DEF5 — « Autorité unique tir + CaC — jamais dupliquée par type d'attaque » (commentaire
+    // isTargetDefenseless ci-dessus) : un tireur drone en bénéficie au même titre qu'un tireur
+    // humain ou un pilote d'exo (socketCombatExo.js) ; trou resté ouvert jusqu'ici parce que cette
+    // fonction (Sprint 2c) n'avait pas encore été écrite quand DEF5 a été corrigé ailleurs (2026-07-19).
+    const settings = await getCampaignSettings(db, campaignId)
+    const targetDefenseless = await isTargetDefenseless(campaignId, action.target_token_id, settings)
+    const sansDefenseBonus = targetDefenseless ? 5 : 0
+    totalModComp += sansDefenseBonus
     const coverageModifier  = options.coverageModifier ?? 0
     // Télépilotage (Sprint 3, PLAN_DRONE.md) — Compétence limitative (REGLECOMPETENCE.md:29-34,
     // ATTRIBUTS.md:209-211) : le niveau du programme est plafonné par le Seuil complet du pilote sur
@@ -2961,6 +2969,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
         return acc
       }, []),
       ...(tailleModDrone !== 0 ? [resolveTailleEntry(tailleCategory, tailleModDrone, tailleModDrone > 0 ? 'bonus' : 'malus')] : []),
+      ...(sansDefenseBonus !== 0 ? [{ i18nKey: 'combat:breakdown.cibleSansDefense', value: sansDefenseBonus, type: 'bonus' }] : []),
       ...(coverageModifier !== 0 ? [{ i18nKey: 'combat:breakdown.couvertureCible', value: coverageModifier, type: 'malus' }] : []),
       { i18nKey: 'combat:resultPanels.rollLine.threshold', value: chancesDeReussite, type: 'total' },
     ]
