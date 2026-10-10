@@ -692,7 +692,13 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             // délibéré). Sans effet aujourd'hui pour le Tir visé (la précondition "pas encore en coup
             // par coup" ci-dessus rend déjà ce cas inatteignable) — ajouté pour ne pas laisser un bug
             // dormant identique à celui corrigé côté AOE, cf. getStateTransitionReasons.
-            weaponFireModes: parseFireModes(weapon.ref_fire_mode),
+            // COMBAT-DECLARATION-REFUSED-NO-MESSAGE — `weapon` (const du bloc humanoïde refermé
+            // ligne 615) était hors de portée ici : ReferenceError à CHAQUE Tir visé humain, rattrapé
+            // par le catch global (console.error seul, aucun message au joueur) — tout Tir visé
+            // plantait en silence. assaultWeaponFireModeRaw est la variable déjà hoistée pour
+            // survivre à cette fermeture de bloc (même raison que son usage ligne 630, 30 lignes plus
+            // haut, qui lui ne s'est jamais trompé).
+            weaponFireModes: parseFireModes(assaultWeaponFireModeRaw),
           })
           if (aimReasons.length > 0) {
             console.log(`[DBG] Tir visé refusé — reasons: ${JSON.stringify(aimReasons)} state:${JSON.stringify(state)} entry.state_*:${JSON.stringify({ position: entry.state_position, weapon: entry.state_weapon, fire_mode: entry.state_fire_mode, cover: entry.state_cover, vitesse: entry.state_vitesse })}`)
