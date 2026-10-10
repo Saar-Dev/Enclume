@@ -38,15 +38,23 @@ export function TargetReticule({ color = '#D94A4A', opacity = 1 }) {
 
 // Réticule à plat au sol — une par case du chemin de déplacement combat (retour Saar 2026-08-07 :
 // remplace les cases pleines colorées par allure — le réticule prend directement la couleur d'allure
-// de sa case, `color` passé par l'appelant via `getCombatPathColor`). +0.02 de hauteur pour éviter le
-// z-fighting avec le sol.
+// de sa case, `color` passé par l'appelant via `getCombatPathColor`).
+// COMBAT-PATHCOLOR-RELIEF-HIDDEN (2026-10-10) — un sol à relief réel (`realRelief`, jusqu'à ±0.12 m de
+// déplacement géométrique, `client/src/lib/reliefGeometry.js`) peut dépasser localement la hauteur du
+// réticule et le recouvrir complètement : invisible sur toute carte au sol suffisamment accidenté,
+// quel que soit le rôle (confirmé avec un token MJ sur la même salle). C'est un survol de gameplay, pas
+// un objet physique du décor — `depthTest={false}` le fait toujours dessiner par-dessus le sol, quel
+// que soit son relief, comme les autres survols de combat de ce fichier/`Canvas3D.jsx`. `renderOrder`
+// fixe l'ordre entre éléments eux-mêmes non testés par profondeur (sans quoi l'ordre de scène déciderait
+// arbitrairement). +0.02 de hauteur conservé par cohérence visuelle (évite que le réticule semble à
+// fleur de sol une fois qu'il n'est plus masqué), mais ne conditionne plus sa visibilité.
 export function GroundCursorReticule({ position, color = '#ffffff' }) {
   const texture = useTexture('/assets/RETICULE_CASE.svg')
   const liftedPosition = position ? [position[0], position[1] + 0.02, position[2]] : position
   return (
-    <mesh position={liftedPosition} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh position={liftedPosition} rotation={[-Math.PI / 2, 0, 0]} renderOrder={50}>
       <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial map={texture} color={color} transparent depthWrite={false} />
+      <meshBasicMaterial map={texture} color={color} transparent depthWrite={false} depthTest={false} />
     </mesh>
   )
 }

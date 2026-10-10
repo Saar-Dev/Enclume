@@ -645,7 +645,11 @@ function Scene({
     () => resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId: null, isGm }),
     [tokens, characters, user?.id, isGm]
   )
-  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken && !freeCameraOverride
+  // `phase` (useCombatStore, lu plus bas) : la 3e personne est une vue d'EXPLORATION, jamais
+  // bornée au combat jusqu'ici — un joueur en combat ne voyait donc que la case juste devant lui
+  // au lieu du chemin coloré par allure (vu par le MJ en vue du dessus, jamais en 3e personne).
+  // `phase === null` hors combat : la 3e personne reprend normalement à la fin du combat.
+  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken && !freeCameraOverride && phase == null
 
   // ─── Échap : sortir de la caméra troisième personne (token possédé, jamais désélectionnable) ──
   useEffect(() => {
@@ -1675,6 +1679,9 @@ function Scene({
       ))}
 
       {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
+      {/* COMBAT-PATHCOLOR-RELIEF-HIDDEN (2026-10-10) — même survol de gameplay que GroundCursorReticule  */}
+      {/* ci-dessus : depthTest désactivé pour rester visible par-dessus un sol à relief réel, quel que   */}
+      {/* soit le rôle (confirmé avec un token MJ) ; renderOrder aligné sur le même calque.               */}
       {combatMoveMode && pendingMoveSelection && (() => {
         return (
           <mesh
@@ -1684,9 +1691,10 @@ function Scene({
               pendingMoveSelection.targetPosY,
             ]}
             rotation={[-Math.PI / 2, 0, 0]}
+            renderOrder={50}
           >
             <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color="#3b82f6" transparent opacity={0.7} depthWrite={false} />
+            <meshBasicMaterial color="#3b82f6" transparent opacity={0.7} depthWrite={false} depthTest={false} />
           </mesh>
         )
       })()}
