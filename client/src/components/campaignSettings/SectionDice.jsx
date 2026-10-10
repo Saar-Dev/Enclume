@@ -1,7 +1,6 @@
 // client/src/components/campaignSettings/SectionDice.jsx
 import { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { sharedStyles as styles } from './sharedStyles'
 
 const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100']
 const DICE_FACES = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100 }
@@ -152,76 +151,76 @@ export default function SectionDice({ initialConfig, onChange }) {
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.diceTitle')}</h2>
+      <h2 className="cs-section-title">{t('settings.diceTitle')}</h2>
 
-      <label style={styles.toggleRow}>
-        <input type="checkbox" checked={diceEnabled} onChange={e => toggleDice(e.target.checked)} style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.diceEnable')}</span>
-        <span style={styles.toggleHint}>{t('settings.diceEnableHint')}</span>
+      <label className="cs-toggle-row">
+        <input type="checkbox" checked={diceEnabled} onChange={e => toggleDice(e.target.checked)} className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.diceEnable')}</span>
+        <span className="cs-toggle-hint">{t('settings.diceEnableHint')}</span>
       </label>
 
       {diceEnabled && (
         <div style={{ marginTop: '20px' }}>
           {!expertMode ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{t('settings.diceSimpleTitle')}</p>
+              <p className="cs-dice-subtitle">{t('settings.diceSimpleTitle')}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', minWidth: '220px' }}>
-                    <input type="checkbox" checked={successActive} onChange={e => toggleSuccess(e.target.checked)} style={styles.checkbox} />
+                  <label className="cs-dice-option-label">
+                    <input type="checkbox" checked={successActive} onChange={e => toggleSuccess(e.target.checked)} className="cs-checkbox" />
                     <span style={{ marginLeft: '8px' }}>{t('settings.diceSuccessLabel')}</span>
                   </label>
                   {successActive && (
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button className="btn-toggle" data-active={successOn === 'min'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setSuccessOnFn('min')}>{t('settings.diceToggleMin')}</button>
-                      <button className="btn-toggle" data-active={successOn === 'max'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setSuccessOnFn('max')}>{t('settings.diceToggleMax')}</button>
+                      <button className="btn-toggle cs-dice-toggle-btn" data-active={successOn === 'min'} onClick={() => setSuccessOnFn('min')}>{t('settings.diceToggleMin')}</button>
+                      <button className="btn-toggle cs-dice-toggle-btn" data-active={successOn === 'max'} onClick={() => setSuccessOnFn('max')}>{t('settings.diceToggleMax')}</button>
                     </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer', minWidth: '220px' }}>
-                    <input type="checkbox" checked={failActive} onChange={e => toggleFail(e.target.checked)} style={styles.checkbox} />
+                  <label className="cs-dice-option-label">
+                    <input type="checkbox" checked={failActive} onChange={e => toggleFail(e.target.checked)} className="cs-checkbox" />
                     <span style={{ marginLeft: '8px' }}>{t('settings.diceFailLabel')}</span>
                   </label>
                   {failActive && (
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button className="btn-toggle" data-active={failOn === 'min'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setFailOnFn('min')}>{t('settings.diceToggleMin')}</button>
-                      <button className="btn-toggle" data-active={failOn === 'max'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setFailOnFn('max')}>{t('settings.diceToggleMax')}</button>
+                      <button className="btn-toggle cs-dice-toggle-btn" data-active={failOn === 'min'} onClick={() => setFailOnFn('min')}>{t('settings.diceToggleMin')}</button>
+                      <button className="btn-toggle cs-dice-toggle-btn" data-active={failOn === 'max'} onClick={() => setFailOnFn('max')}>{t('settings.diceToggleMax')}</button>
                     </div>
                   )}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-app)', borderRadius: '8px', padding: '12px 16px', border: '1px solid var(--border-subtle)', alignSelf: 'flex-start' }}>
+              <div className="cs-dice-preview-box">
                 <DiceD20Icon size={52} color={previewSuccessValue !== null ? 'var(--color-success, #4caf77)' : previewFailValue !== null ? 'var(--color-danger)' : 'var(--text-muted)'} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {previewSuccessValue !== null && (
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', color: '#4caf77', fontWeight: '500', minWidth: '60px' }}>{t('settings.dicePreviewSuccess')}</span>
-                      <span style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{previewSuccessValue}</span>
+                      <span className="cs-dice-preview-success-label">{t('settings.dicePreviewSuccess')}</span>
+                      <span className="cs-dice-preview-value">{previewSuccessValue}</span>
                     </div>
                   )}
                   {previewFailValue !== null && (
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--color-danger)', fontWeight: '500', minWidth: '60px' }}>{t('settings.dicePreviewFail')}</span>
-                      <span style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{previewFailValue}</span>
+                      <span className="cs-dice-preview-fail-label">{t('settings.dicePreviewFail')}</span>
+                      <span className="cs-dice-preview-value">{previewFailValue}</span>
                     </div>
                   )}
-                  {previewSuccessValue === null && previewFailValue === null && <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>—</span>}
+                  {previewSuccessValue === null && previewFailValue === null && <span className="cs-dice-preview-empty">—</span>}
                 </div>
               </div>
-              <button style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToExpert}>{t('settings.diceExpertLink')}</button>
+              <button className="cs-dice-link-btn" onClick={switchToExpert}>{t('settings.diceExpertLink')}</button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{t('settings.diceExpertTitle')}</p>
+              <p className="cs-dice-subtitle">{t('settings.diceExpertTitle')}</p>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <table className="cs-dice-expert-table">
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)', width: '60px' }}>{t('settings.diceColDie')}</th>
-                      <th style={{ textAlign: 'center', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)', width: '60px' }}>{t('settings.diceColActive')}</th>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{t('settings.diceColSuccess')}</th>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{t('settings.diceColFail')}</th>
+                      <th className="cs-dice-expert-th" style={{ width: '60px' }}>{t('settings.diceColDie')}</th>
+                      <th className="cs-dice-expert-th" style={{ textAlign: 'center', width: '60px' }}>{t('settings.diceColActive')}</th>
+                      <th className="cs-dice-expert-th">{t('settings.diceColSuccess')}</th>
+                      <th className="cs-dice-expert-th">{t('settings.diceColFail')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -229,20 +228,20 @@ export default function SectionDice({ initialConfig, onChange }) {
                       const row = expertRows[die]
                       const faces = DICE_FACES[die]
                       return (
-                        <tr key={die} style={{ borderBottom: '1px solid var(--border-subtle)', opacity: row.active ? 1 : 0.4 }}>
-                          <td style={{ padding: '10px 12px', fontWeight: '600', color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: '13px' }}>{DICE_LABELS[die]}</td>
+                        <tr key={die} className="cs-dice-expert-tr" style={{ opacity: row.active ? 1 : 0.4 }}>
+                          <td className="cs-dice-expert-td-die">{DICE_LABELS[die]}</td>
                           <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                            <input type="checkbox" checked={row.active} onChange={e => updateExpertRow(die, 'active', e.target.checked)} style={styles.checkbox} />
+                            <input type="checkbox" checked={row.active} onChange={e => updateExpertRow(die, 'active', e.target.checked)} className="cs-checkbox" />
                           </td>
                           <td style={{ padding: '10px 12px' }}>
                             {row.active && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input type="checkbox" checked={row.successActive} onChange={e => updateExpertRow(die, 'successActive', e.target.checked)} style={styles.checkbox} />
+                                <input type="checkbox" checked={row.successActive} onChange={e => updateExpertRow(die, 'successActive', e.target.checked)} className="cs-checkbox" />
                                 {row.successActive && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <input type="number" min={1} max={faces} value={row.successMin} onChange={e => updateExpertRow(die, 'successMin', e.target.value)} style={styles.numInput} />
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>–</span>
-                                    <input type="number" min={1} max={faces} value={row.successMax} onChange={e => updateExpertRow(die, 'successMax', e.target.value)} style={styles.numInput} />
+                                    <input type="number" min={1} max={faces} value={row.successMin} onChange={e => updateExpertRow(die, 'successMin', e.target.value)} className="cs-num-input" />
+                                    <span className="cs-dice-expert-dash">–</span>
+                                    <input type="number" min={1} max={faces} value={row.successMax} onChange={e => updateExpertRow(die, 'successMax', e.target.value)} className="cs-num-input" />
                                   </div>
                                 )}
                               </div>
@@ -251,12 +250,12 @@ export default function SectionDice({ initialConfig, onChange }) {
                           <td style={{ padding: '10px 12px' }}>
                             {row.active && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input type="checkbox" checked={row.failActive} onChange={e => updateExpertRow(die, 'failActive', e.target.checked)} style={styles.checkbox} />
+                                <input type="checkbox" checked={row.failActive} onChange={e => updateExpertRow(die, 'failActive', e.target.checked)} className="cs-checkbox" />
                                 {row.failActive && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <input type="number" min={1} max={faces} value={row.failMin} onChange={e => updateExpertRow(die, 'failMin', e.target.value)} style={styles.numInput} />
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>–</span>
-                                    <input type="number" min={1} max={faces} value={row.failMax} onChange={e => updateExpertRow(die, 'failMax', e.target.value)} style={styles.numInput} />
+                                    <input type="number" min={1} max={faces} value={row.failMin} onChange={e => updateExpertRow(die, 'failMin', e.target.value)} className="cs-num-input" />
+                                    <span className="cs-dice-expert-dash">–</span>
+                                    <input type="number" min={1} max={faces} value={row.failMax} onChange={e => updateExpertRow(die, 'failMax', e.target.value)} className="cs-num-input" />
                                   </div>
                                 )}
                               </div>
@@ -268,7 +267,7 @@ export default function SectionDice({ initialConfig, onChange }) {
                   </tbody>
                 </table>
               </div>
-              <button style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToSimple}>{t('settings.diceSimpleLink')}</button>
+              <button className="cs-dice-link-btn" onClick={switchToSimple}>{t('settings.diceSimpleLink')}</button>
             </div>
           )}
         </div>

@@ -11,7 +11,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
-import { sharedStyles as styles } from './sharedStyles'
 
 const TYPE_LABEL_KEY = { pj: 'vault.typePj', pnj: 'vault.typePnj', drone: 'vault.typeDrone', exo: 'vault.typeExo' }
 
@@ -91,10 +90,10 @@ export default function SectionPlayers({ campaignId }) {
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.sectionPlayers')}</h2>
+      <h2 className="cs-section-title">{t('settings.sectionPlayers')}</h2>
 
       {!loading && campaignStats && (
-        <p style={s.campaignStats}>
+        <p className="cs-roster-campaign-stats">
           {t('settings.rosterCampaignStats', {
             combats: campaignStats.combatCount,
             duration: formatDuration(campaignStats.combatSeconds, t),
@@ -102,14 +101,14 @@ export default function SectionPlayers({ campaignId }) {
         </p>
       )}
 
-      {error && <p style={{ ...styles.placeholderText, color: 'var(--color-danger)' }}>{error}</p>}
+      {error && <p className="cs-placeholder-text cs-text-danger">{error}</p>}
 
       {loading ? (
-        <p style={styles.placeholderText}>{t('common.loading')}</p>
+        <p className="cs-placeholder-text">{t('common.loading')}</p>
       ) : roster.length === 0 ? (
-        <p style={styles.placeholderText}>{t('settings.rosterEmpty')}</p>
+        <p className="cs-placeholder-text">{t('settings.rosterEmpty')}</p>
       ) : (
-        <div style={s.list}>
+        <div className="cs-roster-list">
           {roster.map(player => (
             <PlayerCard
               key={player.userId}
@@ -132,11 +131,11 @@ function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onRes
   const isGm = player.role === 'gm'
 
   return (
-    <div style={s.card}>
-      <div style={s.cardHeader}>
-        <span style={s.playerName}>{player.username}</span>
-        {player.stats?.online && <span style={s.onlineTag}>● {t('settings.rosterOnline')}</span>}
-        <span className={isGm ? 'badge badge-gm' : 'badge badge-player'} style={s.roleBadge}>
+    <div className="cs-roster-card">
+      <div className="cs-roster-card-header">
+        <span className="cs-roster-player-name">{player.username}</span>
+        {player.stats?.online && <span className="cs-roster-online-tag">● {t('settings.rosterOnline')}</span>}
+        <span className={`${isGm ? 'badge badge-gm' : 'badge badge-player'} cs-roster-role-badge`}>
           {isGm ? t('dashboard.roleGM') : t('dashboard.rolePlayer')}
         </span>
       </div>
@@ -145,22 +144,22 @@ function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onRes
 
       {!isGm && (
         <>
-          <div style={s.subBlock}>
-            <div style={s.subLabel}>{t('settings.rosterCharacters')}</div>
+          <div className="cs-roster-sub-block">
+            <div className="cs-roster-sub-label">{t('settings.rosterCharacters')}</div>
             {player.characters.length === 0 ? (
-              <p style={styles.placeholderText}>{t('settings.rosterNoCharacter')}</p>
+              <p className="cs-placeholder-text">{t('settings.rosterNoCharacter')}</p>
             ) : (
               player.characters.map(c => (
-                <div key={c.id} style={s.row}>
-                  <span style={s.rowName}>{c.name || t('settings.rosterUnnamed')}</span>
-                  <span style={s.typeTag}>{t(TYPE_LABEL_KEY[c.type] ?? 'vault.typePnj')}</span>
-                  {!c.visible && <span style={s.hiddenTag}>{t('settings.rosterHidden')}</span>}
+                <div key={c.id} className="cs-roster-row">
+                  <span className="cs-roster-row-name">{c.name || t('settings.rosterUnnamed')}</span>
+                  <span className="cs-roster-type-tag">{t(TYPE_LABEL_KEY[c.type] ?? 'vault.typePnj')}</span>
+                  {!c.visible && <span className="cs-roster-hidden-tag">{t('settings.rosterHidden')}</span>}
                   {c.status === 'draft' ? (
-                    <button className="btn btn-ghost" style={s.rowBtn} onClick={() => onResumeDraft(c.sheetId)}>
+                    <button className="btn btn-ghost cs-roster-row-btn" onClick={() => onResumeDraft(c.sheetId)}>
                       {t('settings.rosterResume')}
                     </button>
                   ) : (
-                    <button className="btn btn-ghost" style={s.rowBtn} onClick={() => onOpenSheet(c.id)}>
+                    <button className="btn btn-ghost cs-roster-row-btn" onClick={() => onOpenSheet(c.id)}>
                       {t('settings.rosterOpenSheet')}
                     </button>
                   )}
@@ -170,13 +169,13 @@ function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onRes
           </div>
 
           {player.transferRequests.length > 0 && (
-            <div style={s.subBlock}>
-              <div style={s.subLabel}>{t('settings.transferRequestsTitle')}</div>
+            <div className="cs-roster-sub-block">
+              <div className="cs-roster-sub-label">{t('settings.transferRequestsTitle')}</div>
               {player.transferRequests.map(r => (
-                <div key={r.id} style={s.row}>
-                  <span style={s.rowName}>{r.characterName}</span>
-                  <span style={s.typeTag}>{t(TYPE_LABEL_KEY[r.characterType] ?? 'vault.typePnj')}</span>
-                  <div style={s.rowActions}>
+                <div key={r.id} className="cs-roster-row">
+                  <span className="cs-roster-row-name">{r.characterName}</span>
+                  <span className="cs-roster-type-tag">{t(TYPE_LABEL_KEY[r.characterType] ?? 'vault.typePnj')}</span>
+                  <div className="cs-roster-row-actions">
                     <button className="btn btn-ghost" disabled={busyId === r.id} onClick={() => onApprove(r.id)}>
                       {t('settings.transferRequestApprove')}
                     </button>
@@ -199,9 +198,9 @@ function PlayerCard({ player, t, busyId, onApprove, onReject, onOpenSheet, onRes
 function ActivityBlock({ stats, t }) {
   const lastDate = formatStatDate(stats?.lastConnectedAt)
   return (
-    <div style={s.subBlock}>
-      <div style={s.subLabel}>{t('settings.rosterActivity')}</div>
-      <div style={s.activityRow}>
+    <div className="cs-roster-sub-block">
+      <div className="cs-roster-sub-label">{t('settings.rosterActivity')}</div>
+      <div className="cs-roster-activity-row">
         <span>{t('settings.rosterStatPlay')} : {formatDuration(stats?.sessionSeconds, t)}</span>
         <span>{t('settings.rosterStatWizard')} : {formatDuration(stats?.wizardSeconds, t)}</span>
         <span>{t('settings.rosterStatVisits', { count: stats?.visitCount ?? 0 })}</span>
@@ -209,36 +208,4 @@ function ActivityBlock({ stats, t }) {
       </div>
     </div>
   )
-}
-
-const s = {
-  list: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  campaignStats: { fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px 0' },
-  card: {
-    display: 'flex', flexDirection: 'column', gap: '10px',
-    backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-    borderRadius: '8px', padding: '12px 14px',
-  },
-  cardHeader: { display: 'flex', alignItems: 'center', gap: '8px' },
-  playerName: { fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' },
-  onlineTag: { fontSize: '11px', color: 'var(--color-success-soft)' },
-  roleBadge: { marginLeft: 'auto' },
-  activityRow: {
-    display: 'flex', flexWrap: 'wrap', gap: '4px 14px',
-    fontSize: '12px', color: 'var(--text-secondary)',
-  },
-  subBlock: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  subLabel: {
-    fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em',
-    color: 'var(--text-muted)',
-  },
-  row: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-  rowName: { fontSize: '13px', color: 'var(--text-primary)' },
-  rowActions: { display: 'flex', gap: '8px', marginLeft: 'auto' },
-  rowBtn: { marginLeft: 'auto' },
-  typeTag: {
-    fontSize: '10px', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)',
-    borderRadius: '4px', padding: '2px 6px',
-  },
-  hiddenTag: { fontSize: '10px', color: 'var(--text-muted)', fontStyle: 'italic' },
 }

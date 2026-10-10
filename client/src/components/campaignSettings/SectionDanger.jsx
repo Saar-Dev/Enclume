@@ -6,7 +6,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
-import { sharedStyles as styles } from './sharedStyles'
 
 export default function SectionDanger({ campaignId, campaignName }) {
   const { t } = useTranslation()
@@ -32,11 +31,11 @@ export default function SectionDanger({ campaignId, campaignName }) {
 
   return (
     <section className="card card-danger">
-      <h2 style={styles.sectionTitle}>{t('settings.dangerTitle')}</h2>
+      <h2 className="cs-section-title">{t('settings.dangerTitle')}</h2>
 
-      <p style={styles.placeholderText}>{t('settings.deleteCampaignHint')}</p>
+      <p className="cs-placeholder-text">{t('settings.deleteCampaignHint')}</p>
 
-      {error && <p style={{ ...styles.placeholderText, color: 'var(--color-danger)' }}>{error}</p>}
+      {error && <p className="cs-placeholder-text cs-text-danger">{error}</p>}
 
       <button
         className="btn btn-danger"

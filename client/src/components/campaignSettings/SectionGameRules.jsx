@@ -1,7 +1,6 @@
 // client/src/components/campaignSettings/SectionGameRules.jsx
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { sharedStyles as styles } from './sharedStyles'
 
 export default function SectionGameRules({ initialData, onChange }) {
   const { t } = useTranslation()
@@ -40,60 +39,60 @@ export default function SectionGameRules({ initialData, onChange }) {
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.sectionRules')}</h2>
+      <h2 className="cs-section-title">{t('settings.sectionRules')}</h2>
 
-      <label style={styles.toggleRow}>
+      <label className="cs-toggle-row">
         <input type="checkbox" checked={pnjUnlimitedAmmo}
           onChange={e => handlePnjUnlimitedAmmo(e.target.checked)}
-          style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.pnjAmmoLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.pnjAmmoHint')}</span>
+          className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.pnjAmmoLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.pnjAmmoHint')}</span>
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.reloadModeLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.reloadModeHint')}</span>
+        <span className="cs-toggle-label">{t('settings.reloadModeLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.reloadModeHint')}</span>
         <div style={{ display: 'flex', gap: 20, marginTop: 6 }}>
-          <label style={styles.toggleRow}>
+          <label className="cs-toggle-row">
             <input type="radio" name="reloadMode" value="magazine" checked={reloadMode === 'magazine'}
               onChange={() => handleReloadMode('magazine')}
-              style={styles.checkbox} />
-            <span style={styles.toggleLabel}>{t('settings.reloadModeChargeur')}</span>
+              className="cs-checkbox" />
+            <span className="cs-toggle-label">{t('settings.reloadModeChargeur')}</span>
           </label>
-          <label style={styles.toggleRow}>
+          <label className="cs-toggle-row">
             <input type="radio" name="reloadMode" value="topup" checked={reloadMode === 'topup'}
               onChange={() => handleReloadMode('topup')}
-              style={styles.checkbox} />
-            <span style={styles.toggleLabel}>{t('settings.reloadModeTopup')}</span>
+              className="cs-checkbox" />
+            <span className="cs-toggle-label">{t('settings.reloadModeTopup')}</span>
           </label>
         </div>
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.actionTimerLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.actionTimerHint')}</span>
+        <span className="cs-toggle-label">{t('settings.actionTimerLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.actionTimerHint')}</span>
         <div style={{ marginTop: 6 }}>
           <input type="number" min={0} value={actionTimerSec}
             onChange={e => {
               const val = parseInt(e.target.value, 10)
               handleActionTimerSec(isNaN(val) ? 0 : Math.max(0, val))
             }}
-            style={{ ...styles.numInput, width: '80px' }} />
-          <span style={{ ...styles.toggleHint, marginLeft: 8 }}>s</span>
+            className="cs-num-input" style={{ width: '80px' }} />
+          <span className="cs-toggle-hint" style={{ marginLeft: 8 }}>s</span>
         </div>
       </div>
 
-      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+      <label className="cs-toggle-row" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={shockAutoStun}
           onChange={e => handleShockAutoStun(e.target.checked)}
-          style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.shockAutoStunLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.shockAutoStunHint')}</span>
+          className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.shockAutoStunLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.shockAutoStunHint')}</span>
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.statusEffectsModeLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.statusEffectsModeHint')}</span>
+        <span className="cs-toggle-label">{t('settings.statusEffectsModeLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.statusEffectsModeHint')}</span>
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           {['off', 'icon_only', 'enforced'].map(mode => (
             <button
@@ -110,17 +109,17 @@ export default function SectionGameRules({ initialData, onChange }) {
         </div>
       </div>
 
-      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+      <label className="cs-toggle-row" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={playersEditStatuses}
           onChange={e => handlePlayersEditStatuses(e.target.checked)}
-          style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.playersEditStatusesLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.playersEditStatusesHint')}</span>
+          className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.playersEditStatusesLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.playersEditStatusesHint')}</span>
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.combatModifiersModeLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.combatModifiersModeHint')}</span>
+        <span className="cs-toggle-label">{t('settings.combatModifiersModeLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.combatModifiersModeHint')}</span>
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           {['auto', 'libre'].map(mode => (
             <button
@@ -137,17 +136,17 @@ export default function SectionGameRules({ initialData, onChange }) {
         </div>
       </div>
 
-      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+      <label className="cs-toggle-row" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={encumbranceEnabled}
           onChange={e => handleEncumbranceEnabled(e.target.checked)}
-          style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.encumbranceEnabledLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.encumbranceEnabledHint')}</span>
+          className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.encumbranceEnabledLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.encumbranceEnabledHint')}</span>
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.encumbranceMultiplierLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.encumbranceMultiplierHint')}</span>
+        <span className="cs-toggle-label">{t('settings.encumbranceMultiplierLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.encumbranceMultiplierHint')}</span>
         <div style={{ marginTop: 6 }}>
           <input type="number" min={0.5} step={0.5} value={encumbranceMultiplier}
             disabled={!encumbranceEnabled}
@@ -155,48 +154,48 @@ export default function SectionGameRules({ initialData, onChange }) {
               const val = parseFloat(e.target.value)
               handleEncumbranceMultiplier(isNaN(val) || val <= 0 ? 3 : val)
             }}
-            style={{ ...styles.numInput, width: '80px' }} />
+            className="cs-num-input" style={{ width: '80px' }} />
         </div>
       </div>
 
-      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+      <label className="cs-toggle-row" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={fatigueEnabled}
           onChange={e => handleFatigueEnabled(e.target.checked)}
-          style={styles.checkbox} />
-        <span style={styles.toggleLabel}>{t('settings.fatigueEnabledLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.fatigueEnabledHint')}</span>
+          className="cs-checkbox" />
+        <span className="cs-toggle-label">{t('settings.fatigueEnabledLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.fatigueEnabledHint')}</span>
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.calendarStartLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.calendarStartHint')}</span>
+        <span className="cs-toggle-label">{t('settings.calendarStartLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.calendarStartHint')}</span>
         <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
           <input type="number" min={1} max={31} value={calendarStartDay}
             onChange={e => {
               const val = parseInt(e.target.value, 10)
               handleCalendarStartDay(isNaN(val) ? 1 : Math.min(31, Math.max(1, val)))
             }}
-            style={{ ...styles.numInput, width: '60px' }} />
-          <span style={styles.toggleHint}>/</span>
+            className="cs-num-input" style={{ width: '60px' }} />
+          <span className="cs-toggle-hint">/</span>
           <input type="number" min={1} max={12} value={calendarStartMonth}
             onChange={e => {
               const val = parseInt(e.target.value, 10)
               handleCalendarStartMonth(isNaN(val) ? 1 : Math.min(12, Math.max(1, val)))
             }}
-            style={{ ...styles.numInput, width: '60px' }} />
-          <span style={styles.toggleHint}>/</span>
+            className="cs-num-input" style={{ width: '60px' }} />
+          <span className="cs-toggle-hint">/</span>
           <input type="number" min={1} max={9999} value={calendarStartYear}
             onChange={e => {
               const val = parseInt(e.target.value, 10)
               handleCalendarStartYear(isNaN(val) ? 1 : Math.min(9999, Math.max(1, val)))
             }}
-            style={{ ...styles.numInput, width: '80px' }} />
+            className="cs-num-input" style={{ width: '80px' }} />
         </div>
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.droneTurnModelGmLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.droneTurnModelHint')}</span>
+        <span className="cs-toggle-label">{t('settings.droneTurnModelGmLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.droneTurnModelHint')}</span>
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           {['classique', 'ordres_permanents'].map(mode => (
             <button
@@ -214,8 +213,8 @@ export default function SectionGameRules({ initialData, onChange }) {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <span style={styles.toggleLabel}>{t('settings.droneTurnModelPlayerLabel')}</span>
-        <span style={styles.toggleHint}>{t('settings.droneTurnModelHint')}</span>
+        <span className="cs-toggle-label">{t('settings.droneTurnModelPlayerLabel')}</span>
+        <span className="cs-toggle-hint">{t('settings.droneTurnModelHint')}</span>
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           {['classique', 'ordres_permanents'].map(mode => (
             <button

@@ -4962,3 +4962,164 @@ Convention :
   color: var(--combat-cell);
   font-size: 12px;
 }
+
+/* ═══ Réglages de campagne (client/src/components/campaignSettings/*) — OPT-W2.
+   Remplace l'objet JS sharedStyles.js (style={} visuel réinjecté partout) par des classes réelles ;
+   mêmes valeurs exactes, aucun changement de rendu. ═══ */
+.cs-section-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 20px 0;
+}
+.cs-toggle-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+.cs-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+.cs-toggle-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.cs-toggle-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cs-num-input {
+  width: 52px;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: center;
+}
+.cs-save-success { font-size: 13px; color: var(--color-success-soft); }
+.cs-save-error { font-size: 13px; color: var(--color-danger); }
+.cs-mini-th {
+  padding: 6px 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+.cs-mini-td {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.cs-mini-tr-active {
+  background-color: rgba(47,215,255,0.06);
+}
+.cs-placeholder-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+.cs-token-status-none {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.cs-token-status-set {
+  font-size: 13px;
+  color: var(--color-success-soft);
+  font-weight: 500;
+}
+/* Combinable avec cs-placeholder-text (message d'erreur affiché à la place d'un texte neutre). */
+.cs-text-danger { color: var(--color-danger); }
+
+/* ── Onglet Joueurs (SectionPlayers.jsx) — objet local `s` retiré, même geste qu'au-dessus. ── */
+.cs-roster-list { display: flex; flex-direction: column; gap: 12px; }
+.cs-roster-campaign-stats { font-size: 12px; color: var(--text-muted); margin: 0 0 16px 0; }
+.cs-roster-card {
+  display: flex; flex-direction: column; gap: 10px;
+  background-color: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: 8px; padding: 12px 14px;
+}
+.cs-roster-card-header { display: flex; align-items: center; gap: 8px; }
+.cs-roster-player-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.cs-roster-online-tag { font-size: 11px; color: var(--color-success-soft); }
+.cs-roster-role-badge { margin-left: auto; }
+.cs-roster-activity-row {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.cs-roster-sub-block { display: flex; flex-direction: column; gap: 6px; }
+.cs-roster-sub-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.cs-roster-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cs-roster-row-name { font-size: 13px; color: var(--text-primary); }
+.cs-roster-row-actions { display: flex; gap: 8px; margin-left: auto; }
+.cs-roster-row-btn { margin-left: auto; }
+.cs-roster-type-tag {
+  font-size: 10px; color: var(--text-muted); border: 1px solid var(--border-subtle);
+  border-radius: 4px; padding: 2px 6px;
+}
+.cs-roster-hidden-tag { font-size: 10px; color: var(--text-muted); font-style: italic; }
+
+/* ── Onglet Dés (SectionDice.jsx) — même geste. ── */
+.cs-dice-subtitle {
+  font-size: 12px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin: 0;
+}
+.cs-dice-option-label {
+  display: flex; align-items: center; font-size: 13px; color: var(--text-primary);
+  cursor: pointer; min-width: 220px;
+}
+.cs-dice-toggle-btn { flex: 0 0 auto; font-size: 11px; padding: 4px 10px; }
+.cs-dice-preview-box {
+  display: flex; align-items: center; gap: 16px; background-color: var(--bg-app);
+  border-radius: 8px; padding: 12px 16px; border: 1px solid var(--border-subtle);
+  align-self: flex-start;
+}
+.cs-dice-preview-success-label { font-size: 12px; color: var(--color-success-soft); font-weight: 500; min-width: 60px; }
+.cs-dice-preview-fail-label { font-size: 12px; color: var(--color-danger); font-weight: 500; min-width: 60px; }
+.cs-dice-preview-value { font-size: 18px; font-weight: 700; color: var(--text-primary); font-family: monospace; }
+.cs-dice-preview-empty { font-size: 18px; color: var(--text-muted); }
+.cs-dice-link-btn {
+  background: none; border: none; color: var(--color-primary); font-size: 12px;
+  cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px;
+  align-self: flex-start;
+}
+.cs-dice-expert-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cs-dice-expert-th {
+  padding: 8px 12px; color: var(--text-muted); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+.cs-dice-expert-tr { border-bottom: 1px solid var(--border-subtle); }
+.cs-dice-expert-td-die { padding: 10px 12px; font-weight: 600; color: var(--text-primary); font-family: monospace; font-size: 13px; }
+.cs-dice-expert-dash { color: var(--text-muted); font-size: 12px; }
+
+/* ── Page Réglages de campagne (CampaignSettingsPage.jsx) — même geste. ── */
+.cs-page-container { min-height: 100vh; display: flex; flex-direction: column; }
+.cs-page-loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.cs-page-loading-text { color: var(--text-muted); font-size: 14px; }
+.cs-page-header {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 16px;
+  padding: 0 32px; height: 56px; background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;
+}
+.cs-page-title { font-size: 16px; font-weight: 500; color: var(--text-primary); flex: 1; margin: 0; }
+.cs-page-header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.cs-page-body {
+  position: relative; z-index: 1; display: flex; flex: 1; max-width: 960px;
+  margin: 0 auto; width: 100%; padding: 32px; gap: 32px; box-sizing: border-box;
+}
+.cs-page-nav { display: flex; flex-direction: column; gap: 4px; width: 160px; flex-shrink: 0; padding-top: 4px; }
+.cs-page-content { flex: 1; display: flex; flex-direction: column; gap: 32px; }

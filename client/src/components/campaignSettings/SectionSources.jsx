@@ -8,7 +8,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
-import { sharedStyles as styles } from './sharedStyles'
 
 export default function SectionSources({ campaignId }) {
   const { t } = useTranslation()
@@ -54,27 +53,27 @@ export default function SectionSources({ campaignId }) {
     }
   }
 
-  if (loading) return <section className="card"><p style={styles.placeholderText}>{t('common.loading')}</p></section>
+  if (loading) return <section className="card"><p className="cs-placeholder-text">{t('common.loading')}</p></section>
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.sectionSources')}</h2>
-      <p style={{ ...styles.toggleHint, marginBottom: 16 }}>{t('settings.sourcesHint')}</p>
+      <h2 className="cs-section-title">{t('settings.sectionSources')}</h2>
+      <p className="cs-toggle-hint" style={{ marginBottom: 16 }}>{t('settings.sourcesHint')}</p>
 
-      {error && <p style={{ ...styles.saveError, marginBottom: 12 }}>{error}</p>}
+      {error && <p className="cs-save-error" style={{ marginBottom: 12 }}>{error}</p>}
 
       {sources.map(source => (
-        <label key={source.id} style={{ ...styles.toggleRow, marginTop: 12, opacity: source.is_core ? 0.8 : 1 }}>
+        <label key={source.id} className="cs-toggle-row" style={{ marginTop: 12, opacity: source.is_core ? 0.8 : 1 }}>
           <input
             type="checkbox"
             checked={source.enabled}
             disabled={source.is_core || busyId === source.id}
             onChange={() => toggleSource(source)}
-            style={styles.checkbox}
+            className="cs-checkbox"
           />
-          <span style={styles.toggleLabel}>{source.name}</span>
-          {source.is_core && <span style={styles.toggleHint}>({t('settings.sourcesCoreBadge')})</span>}
-          {source.description && <span style={styles.toggleHint}>{source.description}</span>}
+          <span className="cs-toggle-label">{source.name}</span>
+          {source.is_core && <span className="cs-toggle-hint">({t('settings.sourcesCoreBadge')})</span>}
+          {source.description && <span className="cs-toggle-hint">{source.description}</span>}
         </label>
       ))}
     </section>

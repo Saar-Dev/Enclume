@@ -1,7 +1,6 @@
 // client/src/components/campaignSettings/SectionCharacterSheet.jsx
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { sharedStyles as styles } from './sharedStyles'
 
 export default function SectionCharacterSheet({ initialData, onChange }) {
   const { t } = useTranslation()
@@ -74,12 +73,12 @@ export default function SectionCharacterSheet({ initialData, onChange }) {
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.sectionSheet')}</h2>
+      <h2 className="cs-section-title">{t('settings.sectionSheet')}</h2>
 
       {/* OPT-01 — Ambiance */}
       <div style={{ marginBottom: '24px' }}>
-        <span style={styles.toggleLabel}>{t('settings.ambianceLabel')}</span>
-        <p style={{ ...styles.toggleHint, marginTop: '4px', marginBottom: '12px' }}>
+        <span className="cs-toggle-label">{t('settings.ambianceLabel')}</span>
+        <p className="cs-toggle-hint" style={{ marginTop: '4px', marginBottom: '12px' }}>
           {t('settings.ambianceHint')}
         </p>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -98,26 +97,26 @@ export default function SectionCharacterSheet({ initialData, onChange }) {
         <table style={{ marginTop: '12px', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={styles.miniTh}>{t('settings.ambianceColAmbiance')}</th>
-              <th style={styles.miniTh}>{t('settings.ambianceColPoints')}</th>
-              <th style={styles.miniTh}>{t('settings.ambianceColChance')}</th>
+              <th className="cs-mini-th">{t('settings.ambianceColAmbiance')}</th>
+              <th className="cs-mini-th">{t('settings.ambianceColPoints')}</th>
+              <th className="cs-mini-th">{t('settings.ambianceColChance')}</th>
             </tr>
           </thead>
           <tbody>
-            <tr style={ambiance === 'REALISTE' ? styles.miniTrActive : {}}>
-              <td style={styles.miniTd}>{t('settings.ambianceRealiste')}</td>
-              <td style={styles.miniTd}>30</td>
-              <td style={styles.miniTd}>11</td>
+            <tr className={ambiance === 'REALISTE' ? 'cs-mini-tr-active' : ''}>
+              <td className="cs-mini-td">{t('settings.ambianceRealiste')}</td>
+              <td className="cs-mini-td">30</td>
+              <td className="cs-mini-td">11</td>
             </tr>
-            <tr style={ambiance === 'INTERMEDIAIRE' ? styles.miniTrActive : {}}>
-              <td style={styles.miniTd}>{t('settings.ambianceIntermediaire')}</td>
-              <td style={styles.miniTd}>38</td>
-              <td style={styles.miniTd}>13</td>
+            <tr className={ambiance === 'INTERMEDIAIRE' ? 'cs-mini-tr-active' : ''}>
+              <td className="cs-mini-td">{t('settings.ambianceIntermediaire')}</td>
+              <td className="cs-mini-td">38</td>
+              <td className="cs-mini-td">13</td>
             </tr>
-            <tr style={ambiance === 'HEROIQUE' ? styles.miniTrActive : {}}>
-              <td style={styles.miniTd}>{t('settings.ambianceHeroique')}</td>
-              <td style={styles.miniTd}>46</td>
-              <td style={styles.miniTd}>15</td>
+            <tr className={ambiance === 'HEROIQUE' ? 'cs-mini-tr-active' : ''}>
+              <td className="cs-mini-td">{t('settings.ambianceHeroique')}</td>
+              <td className="cs-mini-td">46</td>
+              <td className="cs-mini-td">15</td>
             </tr>
           </tbody>
         </table>
@@ -125,92 +124,92 @@ export default function SectionCharacterSheet({ initialData, onChange }) {
 
       {/* OPT-02 — Bonus/Malus féminin */}
       <div style={{ marginBottom: '24px' }}>
-        <label style={styles.toggleRow}>
-          <input type="checkbox" checked={femininBonus} onChange={e => handleFemininBonus(e.target.checked)} style={styles.checkbox} />
-          <span style={styles.toggleLabel}>{t('settings.femininBonusLabel')}</span>
+        <label className="cs-toggle-row">
+          <input type="checkbox" checked={femininBonus} onChange={e => handleFemininBonus(e.target.checked)} className="cs-checkbox" />
+          <span className="cs-toggle-label">{t('settings.femininBonusLabel')}</span>
         </label>
-        <p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.femininBonusHint')}</p>
+        <p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.femininBonusHint')}</p>
       </div>
 
       {/* OPT-03 — Mutations aléatoires */}
       <div style={{ marginBottom: '24px' }}>
-        <label style={styles.toggleRow}>
-          <input type="checkbox" checked={randomMutations} onChange={e => handleRandomMutations(e.target.checked)} style={styles.checkbox} />
-          <span style={styles.toggleLabel}>{t('settings.randomMutationsLabel')}</span>
+        <label className="cs-toggle-row">
+          <input type="checkbox" checked={randomMutations} onChange={e => handleRandomMutations(e.target.checked)} className="cs-checkbox" />
+          <span className="cs-toggle-label">{t('settings.randomMutationsLabel')}</span>
         </label>
-        <p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.randomMutationsHint')}</p>
+        <p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.randomMutationsHint')}</p>
       </div>
 
       {/* OPT-04 — Polaris latent et non maîtrisé */}
       <div style={{ marginBottom: '24px' }}>
-        <label style={styles.toggleRow}>
-          <input type="checkbox" checked={polarisLatent} onChange={e => handlePolarisLatent(e.target.checked)} style={styles.checkbox} />
-          <span style={styles.toggleLabel}>{t('settings.polarisLatentLabel')}</span>
+        <label className="cs-toggle-row">
+          <input type="checkbox" checked={polarisLatent} onChange={e => handlePolarisLatent(e.target.checked)} className="cs-checkbox" />
+          <span className="cs-toggle-label">{t('settings.polarisLatentLabel')}</span>
         </label>
-        <p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.polarisLatentHint')}</p>
+        <p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.polarisLatentHint')}</p>
       </div>
 	  
 	  {/* OPT-05 — Avantages professionnels aléatoires */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={randomProAdvantages} onChange={e => handleRandomProAdvantages(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.randomProAdvantagesLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={randomProAdvantages} onChange={e => handleRandomProAdvantages(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.randomProAdvantagesLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.randomProAdvantagesHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.randomProAdvantagesHint')}</p>
 	</div>
 	
 	{/* OPT-06 — Personnages expérimentés (Revers) */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={revers} onChange={e => handleRevers(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.reversLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={revers} onChange={e => handleRevers(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.reversLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.reversHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.reversHint')}</p>
 	</div>
 	
 	{/* OPT-07 — Compétences avec conditions requises */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={skillPrerequisites} onChange={e => handleSkillPrerequisites(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.skillPrerequisitesLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={skillPrerequisites} onChange={e => handleSkillPrerequisites(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.skillPrerequisitesLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillPrerequisitesHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillPrerequisitesHint')}</p>
 	</div>
 
 	{/* OPT-08 — Niveau maximum des Compétences */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={skillMaxLevel} onChange={e => handleSkillMaxLevel(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.skillMaxLevelLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={skillMaxLevel} onChange={e => handleSkillMaxLevel(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.skillMaxLevelLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillMaxLevelHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillMaxLevelHint')}</p>
 	</div>
 
 	{/* OPT-09 — Compétences à progression naturelle */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={skillNaturalProg} onChange={e => handleSkillNaturalProg(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.skillNaturalProgLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={skillNaturalProg} onChange={e => handleSkillNaturalProg(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.skillNaturalProgLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillNaturalProgHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.skillNaturalProgHint')}</p>
 	</div>
 
 	{/* OPT-10 — Personnages très jeunes */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={youngPenalty} onChange={e => handleYoungPenalty(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.youngPenaltyLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={youngPenalty} onChange={e => handleYoungPenalty(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.youngPenaltyLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.youngPenaltyHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.youngPenaltyHint')}</p>
 	</div>
 
 	{/* OPT-11 — Célébrité */}
 	<div style={{ marginBottom: '24px' }}>
-	<label style={styles.toggleRow}>
-    <input type="checkbox" checked={celebrity} onChange={e => handleCelebrity(e.target.checked)} style={styles.checkbox} />
-    <span style={styles.toggleLabel}>{t('settings.celebrityLabel')}</span>
+	<label className="cs-toggle-row">
+    <input type="checkbox" checked={celebrity} onChange={e => handleCelebrity(e.target.checked)} className="cs-checkbox" />
+    <span className="cs-toggle-label">{t('settings.celebrityLabel')}</span>
 	</label>
-	<p style={{ ...styles.toggleHint, marginTop: '4px', marginLeft: '25px' }}>{t('settings.celebrityHint')}</p>
+	<p className="cs-toggle-hint" style={{ marginTop: '4px', marginLeft: '25px' }}>{t('settings.celebrityHint')}</p>
 	</div>
 
     </section>

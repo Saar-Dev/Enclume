@@ -77,14 +77,14 @@ export default function CampaignSettingsPage() {
   }, [campaignId, formData])
 
   if (loading) return (
-    <div className="app-shell" style={s.loadingScreen}>
-      <p style={{ ...s.loadingText, position: 'relative', zIndex: 1 }}>{t('common.loading')}</p>
+    <div className="app-shell cs-page-loading-screen">
+      <p className="cs-page-loading-text" style={{ position: 'relative', zIndex: 1 }}>{t('common.loading')}</p>
     </div>
   )
 
   if (error) return (
-    <div className="app-shell" style={s.loadingScreen}>
-      <p style={{ color: 'var(--color-danger)', marginBottom: '16px', position: 'relative', zIndex: 1 }}>{error}</p>
+    <div className="app-shell cs-page-loading-screen">
+      <p className="cs-text-danger" style={{ marginBottom: '16px', position: 'relative', zIndex: 1 }}>{error}</p>
       <button className="btn-icon" style={{ position: 'relative', zIndex: 1 }} onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
     </div>
   )
@@ -100,21 +100,21 @@ export default function CampaignSettingsPage() {
   ]
 
   return (
-    <div className="app-shell" style={s.container}>
-      <div style={s.header}>
+    <div className="app-shell cs-page-container">
+      <div className="cs-page-header">
         <button className="btn-icon" onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
-        <h1 style={s.pageTitle}>{t('settings.pageTitle')}</h1>
-        <div style={s.headerRight}>
-          {saveStatus === 'saved' && <span style={s.saveSuccess}>{t('settings.saved')}</span>}
-          {saveStatus === 'error' && <span style={s.saveError}>{t('settings.errorSave')}</span>}
+        <h1 className="cs-page-title">{t('settings.pageTitle')}</h1>
+        <div className="cs-page-header-right">
+          {saveStatus === 'saved' && <span className="cs-save-success">{t('settings.saved')}</span>}
+          {saveStatus === 'error' && <span className="cs-save-error">{t('settings.errorSave')}</span>}
           <button className="btn" onClick={handleSave} disabled={saving}>
             {saving ? t('settings.saving') : t('common.save')}
           </button>
         </div>
       </div>
 
-      <div style={s.body}>
-        <nav style={s.nav}>
+      <div className="cs-page-body">
+        <nav className="cs-page-nav">
           {sections.map(({ key, label, enabled, danger }) => (
             <button
               key={key}
@@ -129,7 +129,7 @@ export default function CampaignSettingsPage() {
           ))}
         </nav>
 
-        <div style={s.content}>
+        <div className="cs-page-content">
           {activeSection === 'dice' && formData && (
             <SectionDice initialConfig={formData.dice_config} onChange={handleSectionChange} />
           )}
@@ -153,18 +153,4 @@ export default function CampaignSettingsPage() {
       </div>
     </div>
   )
-}
-
-const s = {
-  container: { minHeight: '100vh', display: 'flex', flexDirection: 'column' },
-  loadingScreen: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
-  loadingText: { color: 'var(--text-muted)', fontSize: '14px' },
-  header: { position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '16px', padding: '0 32px', height: '56px', backgroundColor: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 },
-  pageTitle: { fontSize: '16px', fontWeight: '500', color: 'var(--text-primary)', flex: 1, margin: 0 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 },
-  saveSuccess: { fontSize: '13px', color: 'var(--color-success-soft)' },
-  saveError: { fontSize: '13px', color: 'var(--color-danger)' },
-  body: { position: 'relative', zIndex: 1, display: 'flex', flex: 1, maxWidth: '960px', margin: '0 auto', width: '100%', padding: '32px', gap: '32px', boxSizing: 'border-box' },
-  nav: { display: 'flex', flexDirection: 'column', gap: '4px', width: '160px', flexShrink: 0, paddingTop: '4px' },
-  content: { flex: 1, display: 'flex', flexDirection: 'column', gap: '32px' },
 }

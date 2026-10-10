@@ -2,7 +2,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
-import { sharedStyles as styles } from './sharedStyles'
 
 // Une ligne de repli par type de personnage (migration 256, demande Saar 2026-08-20 — drone/exo
 // doivent avoir leur propre repli, comme l'humanoïde). Extrait en composant réutilisable dès la 2e
@@ -57,10 +56,10 @@ function DefaultTokenRow({ label, hint, campaignId, uploadPath, fieldName, value
 
   return (
     <div style={{ marginBottom: '16px' }}>
-      <p style={styles.toggleLabel}>{label}</p>
-      <p style={{ ...styles.toggleHint, marginBottom: '12px' }}>{hint}</p>
+      <p className="cs-toggle-label">{label}</p>
+      <p className="cs-toggle-hint" style={{ marginBottom: '12px' }}>{hint}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span style={glbUrl ? styles.tokenStatusSet : styles.tokenStatusNone}>
+        <span className={glbUrl ? 'cs-token-status-set' : 'cs-token-status-none'}>
           {glbUrl ? t('settings.defaultTokenSet') : t('settings.defaultTokenNone')}
         </span>
         <input ref={fileInputRef} type="file" accept=".glb" style={{ display: 'none' }} onChange={handleUpload} />
@@ -72,8 +71,8 @@ function DefaultTokenRow({ label, hint, campaignId, uploadPath, fieldName, value
             {t('settings.defaultTokenClear')}
           </button>
         )}
-        {status === 'saved' && <span style={styles.saveSuccess}>{t('settings.saved')}</span>}
-        {status === 'error' && <span style={styles.saveError}>{t('settings.errorSave')}</span>}
+        {status === 'saved' && <span className="cs-save-success">{t('settings.saved')}</span>}
+        {status === 'error' && <span className="cs-save-error">{t('settings.errorSave')}</span>}
       </div>
     </div>
   )
@@ -84,7 +83,7 @@ export default function SectionTokens({ initialData, campaignId, onChange }) {
 
   return (
     <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.sectionTokens')}</h2>
+      <h2 className="cs-section-title">{t('settings.sectionTokens')}</h2>
       <DefaultTokenRow
         label={t('settings.defaultTokenLabelHumanoid')}
         hint={t('settings.defaultTokenHint')}
