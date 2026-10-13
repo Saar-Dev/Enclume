@@ -88,7 +88,7 @@ function SessionContent({ campaignId }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const { tokens, setTokens, addToken, removeToken, selectedTokenId } = useTokenStore()
+  const { tokens, setTokens, addToken, removeToken, selectedTokenId, drivingTokenId } = useTokenStore()
   const { characters, isGm, setCharacters, setMembers } = useCharacterStore()
   const { battlemap, battlemaps, setBattlemap, setBattlemaps, setFolders } = useMapStore()
   const { setActiveCampaign, setPendingEntityId, addMessage } = useSessionStore()
@@ -593,14 +593,14 @@ function SessionContent({ campaignId }) {
   // Active le mode visée dans Canvas3D — le joueur choisit la destination.
   // Déclaré AVANT handleEntityClick — P4/P48 (handleEntityClick l'appelle).
   const handleEntityMove = useCallback((entity, interaction) => {
-    const actorToken = resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId, isGm })
+    const actorToken = resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId, preferredOwnedTokenId: drivingTokenId, isGm })
     if (!actorToken) {
       console.warn('[EntityMove] Aucun token acteur trouvé (ni possédé, ni sélectionné)')
       return
     }
     setMoveTarget({ entity, interaction, tokenId: actorToken.id })
     setRadialMenu(null)
-  }, [tokens, characters, user?.id, selectedTokenId, isGm])
+  }, [tokens, characters, user?.id, selectedTokenId, drivingTokenId, isGm])
 
   // ─── Clic entité — ouvre le radial menu ──────────────────────────────────
   // Si 1 seule interaction disponible → action directe sans radial.
@@ -1272,7 +1272,7 @@ function SessionContent({ campaignId }) {
         // Calculé ici — tokens/characters/sélection disponibles dans SessionPage. Résolution
         // partagée avec handleEntityMove et la caméra 3e personne (client/src/lib/actingToken.js) :
         // possédé → sélectionné → repli non-MJ. null si aucun des trois ne s'applique.
-        const actorToken = resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId, isGm })
+        const actorToken = resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId, preferredOwnedTokenId: drivingTokenId, isGm })
         return (
           <RadialMenu
             x={radialMenu.x}

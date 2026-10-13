@@ -10340,3 +10340,37 @@ inchangé depuis).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit (les deux correctifs de performance restent désirables même
 si retirés de cette clôture).
+
+## Session (Claude) — 2026-10-13 — SESSION-CAMERA-TOKEN-SELECTION-UNCLEAR : Tab bascule caméra + acteur entre mes tokens possédés
+
+Un joueur avec 2+ tokens possédés (PJ + drone/exo) n'avait aucun moyen de dire lequel il pilote :
+l'anneau de sélection (clic) existait mais ne faisait rien pour lui, puisque `followToken`
+(`Canvas3D.jsx`) ignorait volontairement `selectedTokenId` — choix explicite du 2026-09-17
+(« personne n'a demandé » de geste dédié de changement de caméra, cf. entrée de cette même date) —
+et que `resolveActingToken` (`actingToken.js`) prenait toujours le premier token possédé trouvé,
+sans jamais regarder lequel était sélectionné.
+
+**Décision de Saar** (après une revue UI/UX de 3 options — clic devient le geste de bascule, barre de
+portraits séparée, cycle clavier) : **Tab**, geste dédié et séparé du clic, pour ne pas défaire la
+décision de septembre (« un simple clic ne doit faire QUE sélectionner, pas bouger la caméra »). Tab
+bascule à la fois l'anneau, la caméra et l'acteur d'une interaction d'entité ; le clic continue à ne
+faire QUE sélectionner/viser un menu, comme avant.
+
+**Design** : deux états côté client délibérément séparés (`tokenStore.js`) — `selectedTokenId`
+(clic, inchangé dans son rôle) et un nouveau `drivingTokenId` (« qui je pilote », modifié
+uniquement par Tab). `resolveActingToken` (`actingToken.js`) gagne un paramètre
+`preferredOwnedTokenId` qui tranche parmi mes tokens possédés ; `selectedTokenId` garde son rôle
+d'origine (MJ sans token possédé qui sélectionne un PNJ pour agir). `followToken` (caméra 3e
+personne, `Canvas3D.jsx`) et les deux sites d'interaction d'entité (`SessionPage.jsx`) consomment
+tous les trois la même fonction, avec `drivingTokenId` en entrée — une seule autorité, pas de
+logique dupliquée entre caméra et interaction. Tab ignore les champs de saisie (chat,
+`SidebarChatTab.jsx`) et ne capte rien si le joueur n'a qu'un seul token possédé.
+
+**Validé en jeu réel par Saar (2026-10-13)**.
+
+**Testé** : `client/src/lib/actingToken.test.mjs` (13/13, logique pure) ; ESLint sur les 4 fichiers
+touchés (0 nouveau problème, diff exact avant/après par comparaison JSON) ; `npm run build` client
+propre.
+**Non testé** : rien d'identifié — validation en jeu faite par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit, aucune dépendance externe.

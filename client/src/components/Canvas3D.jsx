@@ -33,7 +33,7 @@ import {
   surfaceTextureIds,
 } from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
-import { resolveActingToken } from '../lib/actingToken.js'
+import { resolveActingToken, getOwnedTokens, getNextOwnedTokenId } from '../lib/actingToken.js'
 import { useDoubleClickTracker } from '../lib/doubleClickTracker.js'
 import { getEffectRegionColor } from '../lib/effectRegionColors.js'
 import { useCharacterStore } from '../stores/characterStore'
@@ -606,7 +606,7 @@ function Scene({
   )
 
   // Lecture des stores — pas de props pour ces données
-  const { tokens, updateToken, removeToken } = useTokenStore()
+  const { tokens, updateToken, removeToken, drivingTokenId } = useTokenStore()
   const { characters, isGm } = useCharacterStore()
   const { user } = useAuthStore()
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
@@ -638,12 +638,13 @@ function Scene({
   const tokensRef = useRef(tokens)
   tokensRef.current = tokens
 
-  // Ne considère jamais selectedTokenId — sélectionner un token (pour agir via lui sur une
-  // interaction d'entité) ne doit pas faire suivre la caméra à sa place ; suivre la caméra reste
-  // un geste séparé, non construit (personne ne l'a demandé), cf. docs/JOURNAL8.md 2026-09-17.
+  // Ne considère jamais selectedTokenId (clic/menu) — seul drivingTokenId (Tab, « qui je pilote »,
+  // SESSION-CAMERA-TOKEN-SELECTION-UNCLEAR 2026-10-13) peut faire suivre la caméra à un autre de
+  // mes tokens possédés ; cf. docs/JOURNAL8.md 2026-09-17 et le commentaire de tête de
+  // actingToken.js pour la raison de cette séparation.
   const followToken = useMemo(
-    () => resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId: null, isGm }),
-    [tokens, characters, user?.id, isGm]
+    () => resolveActingToken({ tokens, characters, userId: user?.id, selectedTokenId: null, preferredOwnedTokenId: drivingTokenId, isGm }),
+    [tokens, characters, user?.id, isGm, drivingTokenId]
   )
   // `phase` (useCombatStore, lu plus bas) : la 3e personne est une vue d'EXPLORATION, jamais
   // bornée au combat jusqu'ici — un joueur en combat ne voyait donc que la case juste devant lui
@@ -1910,7 +1911,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const { user } = useAuthStore()
   // Promu depuis un useState local le 2026-09-17 — accessible hors de Canvas3D
   // (client/src/lib/actingToken.js) pour résoudre le token acteur d'une interaction d'entité.
-  const { selectedTokenId, setSelectedTokenId } = useTokenStore()
+  // drivingTokenId (2026-10-13) : token piloté parmi mes tokens possédés, déplacé uniquement par
+  // Tab — voir le commentaire de tête de actingToken.js pour la séparation avec selectedTokenId.
+  const { tokens, selectedTokenId, setSelectedTokenId, drivingTokenId, setDrivingTokenId } = useTokenStore()
 
   // ─── Autorité unique « modes de visée » (PLAN_CLIC_3D_UNIFICATION.md §9.1) ──────────────────
   // Un seul tableau, ordonné (cible avant case, même priorité qu'aujourd'hui) — remplace 3 copies
@@ -2033,6 +2036,28 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [selectedTokenId, setSelectedTokenId])
+
+  // ─── Tab : bascule « qui je pilote » parmi mes tokens possédés ───────────────────────────────
+  // SESSION-CAMERA-TOKEN-SELECTION-UNCLEAR (2026-10-13) — geste dédié, séparé du clic (qui reste
+  // réservé à la sélection/menu, décision Saar 2026-09-17). Ne capte Tab que si j'ai 2+ tokens
+  // possédés (sinon rien à cycler, le Tab natif du navigateur reste disponible — ex. navigation MJ
+  // dans un panneau de formulaire) ET que la cible de l'événement n'est pas un champ de saisie
+  // (chat, SidebarChatTab.jsx — sinon Tab y deviendrait inutilisable pour son usage normal).
+  useEffect(() => {
+    const ownedTokens = getOwnedTokens({ tokens, characters, userId: user?.id })
+    if (ownedTokens.length < 2) return
+    const onKeyDown = (e) => {
+      if (e.key !== 'Tab') return
+      const targetTag = e.target?.tagName
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT' || e.target?.isContentEditable) return
+      e.preventDefault()
+      const nextId = getNextOwnedTokenId({ ownedTokens, currentId: drivingTokenId })
+      setDrivingTokenId(nextId)
+      setSelectedTokenId(nextId)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [tokens, characters, user?.id, drivingTokenId, setDrivingTokenId, setSelectedTokenId])
 
   const justSelectedRef = useRef(false)
 
