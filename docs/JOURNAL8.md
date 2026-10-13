@@ -10463,4 +10463,38 @@ la base locale (25/25, aucune régression) ; ESLint `CombatModifiersWindow.jsx` 
 `node --check` ; `npm run build` client propre.
 **Non testé** : rien d'identifié — validation en jeu faite par Saar.
 **Données** : aucune.
+
+## Session (Claude) — 2026-10-13 — SESSION-CAMERA-STUCK-NO-ARROW-KEYS : flèches directionnelles jamais câblées en caméra libre
+
+Ticket à deux symptômes rapportés ensemble ; un seul était un vrai bug.
+
+**« Caméra bloquée/centrée sur une cible indéterminée »** : comportement voulu, pas un bug — la 3e
+personne est active par défaut dès qu'un token est possédé (`Canvas3D.jsx`, commentaire de tête de
+`followToken`), sortie documentée via Échap (`freeCameraOverride`). Le flou sur « quelle cible » est
+l'objet déjà traité par [[SESSION-CAMERA-TOKEN-SELECTION-UNCLEAR]] (Tab, clos plus haut dans cette
+même session) — pas de second correctif pour le même symptôme.
+
+**« Les touches directionnelles ne la déplacent pas »** : bug réel. `Canvas3D.jsx` — l'effet qui
+appelle `orbitRef.current.listenToKeyEvents(window)` avait des deps `[]` (exécution unique au montage
+du composant `Scene`). `MapControls` (qui porte `orbitRef`) n'est monté que hors 3e personne ; au
+premier rendu, dès qu'un token est possédé, la 3e personne est active par défaut — `orbitRef.current`
+est encore `null`, l'effet sort sans câbler `listenToKeyEvents`, et comme les deps sont `[]` il ne se
+réexécute **jamais**, même après un Échap qui monte réellement `MapControls` plus tard. Les flèches
+restaient mortes à vie en caméra libre.
+
+**Fix** : deps changées en `[thirdPersonCameraActive]` — l'effet se réexécute à chaque bascule
+3e-personne ↔ libre, donc chaque fois que `MapControls` (re)monte. Vérifié que `MapControls`/
+`OrbitControls` (three.js) nettoie son propre listener `keydown` dans `dispose()` (appelé par drei au
+démontage), symétrique à `listenToKeyEvents()` — pas d'accumulation de listeners sur plusieurs
+allers-retours dans une session longue. Refs commitées par React avant les effets passifs du même
+render : pas de risque de lire un `orbitRef.current` encore `null` au moment où l'effet s'exécute
+après le montage réel.
+
+**Validé en jeu réel par Saar (2026-10-13)**.
+
+**Testé** : ESLint `Canvas3D.jsx` (diff JSON avant/après, 18/18 problèmes identiques, tous
+pré-existants et sans rapport, 0 nouveau) ; `npm run build` client propre ; scénario réel navigateur
+(Échap puis flèches directionnelles, plusieurs allers-retours 3e-personne ↔ libre) validé par Saar.
+**Non testé** : rien d'identifié — validation en jeu faite par Saar.
+**Données** : aucune.
 **Retour arrière** : `git revert` du commit.

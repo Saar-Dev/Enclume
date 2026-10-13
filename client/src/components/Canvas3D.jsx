@@ -1444,6 +1444,10 @@ function Scene({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isGm, selectedTokenId, removeToken])
 
+  // deps [thirdPersonCameraActive] (pas []) : MapControls (orbitRef) n'est monté qu'en caméra libre
+  // (ligne ~1496) — au premier rendu en 3e personne (cas par défaut dès qu'un token est possédé),
+  // orbitRef.current est encore null et un effet [] ne se réexécuterait jamais après le montage
+  // réel, laissant listenToKeyEvents jamais câblé (SESSION-CAMERA-STUCK-NO-ARROW-KEYS, 2026-10-13).
   useEffect(() => {
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
@@ -1453,7 +1457,7 @@ function Scene({
     }
     orbitRef.current.listenToKeyEvents(window)
     orbitRef.current.keyPanSpeed = 20
-  }, [])
+  }, [thirdPersonCameraActive])
 
   // Sprint 2.5 — centrage caméra sur le token actif en mode mouvement combat
   // combatCameraCenter : { x, z } coords DB (PE14) | null
