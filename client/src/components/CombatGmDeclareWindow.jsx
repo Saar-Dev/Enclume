@@ -839,6 +839,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           decl={decl}
           initial={initialStates}
           onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
+          weaponUnarmed={!resolvedGmPrimary}
           hidden={isHidden}
         />
       )}

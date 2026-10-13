@@ -283,6 +283,10 @@ export default function CombatExoActionWindow({
         initial={initialStates}
         onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
         axes={isProne ? ['position'] : ['position', 'vitesse', 'weapon']}
+        // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — une exo n'a pas d'arme "en main" (slots MG/MD/2M/Tr,
+        // shared/weaponSlots.js) : ses armes sont des systèmes montés (exo/weapons). Même ligne que
+        // le constat déjà fait plus bas dans ce fichier (exoDeclare.exoWeapons.length === 0).
+        weaponUnarmed={exoDeclare.exoWeapons.length === 0}
         onPositionClick={isProne ? handleStandUp : null}
         hidden={isHidden}
       />

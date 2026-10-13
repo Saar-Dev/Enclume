@@ -327,7 +327,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                           ? (
                             <div style={S.pnjStateRow}>
                               <StateChip compact defKey="position"  current={rEntry?.state_position  ?? 'standing'} onChange={v => handleSetPnjState(row.tokenId, 'position',  v)} />
-                              <StateChip compact defKey="weapon"    current={rEntry?.state_weapon    ?? 'drawn'}    onChange={v => handleSetPnjState(row.tokenId, 'weapon',    v)} />
+                              <StateChip compact defKey="weapon"    current={rEntry?.state_weapon    ?? 'drawn'}    onChange={v => handleSetPnjState(row.tokenId, 'weapon',    v)} unarmed={!eq?.weapon} />
                               <StateChip compact defKey="fire_mode" current={rEntry?.state_fire_mode ?? 'cc'}       onChange={v => handleSetPnjState(row.tokenId, 'fire_mode', v)} />
                             </div>
                           )

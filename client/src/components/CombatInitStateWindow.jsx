@@ -4,12 +4,19 @@ import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { STATE_DEFS } from './combatSections.js'
+import { useInventoryData } from '../lib/useInventoryData.js'
+import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 
-export function StateChip({ defKey, current, onChange, compact = false }) {
+export function StateChip({ defKey, current, onChange, compact = false, unarmed = false }) {
   const { t } = useTranslation('combat')
   const def = STATE_DEFS[defKey]
   const cur = def.states.find(s => s.k === current)
-  const curLabel = cur?.l ? t(cur.l) : current
+  // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — repli sur le libellé normal si la variante "sans arme"
+  // est absente (tous les defKey hors "weapon" n'en ont pas) : unarmed n'a alors aucun effet.
+  const labelKey = (unarmed && def.labelUnarmed) ? def.labelUnarmed : def.label
+  const curLabelKey = (unarmed && cur?.lUnarmed) ? cur.lUnarmed : cur?.l
+  const curShortKey = (unarmed && cur?.shortUnarmed) ? cur.shortUnarmed : cur?.short
+  const curLabel = curLabelKey ? t(curLabelKey) : current
   const handleClick = () => {
     const idx = def.states.findIndex(s => s.k === current)
     onChange(def.states[(idx + 1) % def.states.length].k)
@@ -18,16 +25,16 @@ export function StateChip({ defKey, current, onChange, compact = false }) {
     return (
       <span
         onClick={handleClick}
-        title={`${t(def.label)} : ${curLabel} (cliquer pour changer)`}
+        title={`${t(labelKey)} : ${curLabel} (cliquer pour changer)`}
         className="combat-chip-state"
       >
-        {cur?.short ? t(cur.short) : curLabel}
+        {curShortKey ? t(curShortKey) : curLabel}
       </span>
     )
   }
   return (
     <div onClick={handleClick} style={S.chip}>
-      <span style={S.chipLabel}>{t(def.label)}</span>
+      <span style={S.chipLabel}>{t(labelKey)}</span>
       <span style={S.chipValue}>{curLabel}</span>
     </div>
   )
@@ -37,6 +44,10 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
   const { t } = useTranslation('combat')
   const { roster } = useCombatStore()
   const entry = roster.find(e => e.token_id === playerToken?.id)
+  // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — même route/store que CombatActionWindow.jsx
+  // (GET /char-sheet/:id/inventory via useInventoryData, dédupliqué si déjà peuplé ailleurs).
+  const { items: initInventoryItems } = useInventoryData(playerToken?.character_id)
+  const hasAnyHandWeapon = !!resolveHandWeapons(flattenItemsBySlot(initInventoryItems)).primaryWeapon
 
   const [position,  setPosition]  = useState(entry?.state_position  ?? 'standing')
   const [weapon,    setWeapon]    = useState(entry?.state_weapon    ?? 'holstered')
@@ -62,7 +73,8 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
 
   if (confirmed) {
     const posLabelKey = STATE_DEFS.position.states.find(s => s.k === position)?.l
-    const wpnLabelKey = STATE_DEFS.weapon.states.find(s => s.k === weapon)?.l
+    const wpnState = STATE_DEFS.weapon.states.find(s => s.k === weapon)
+    const wpnLabelKey = (!hasAnyHandWeapon && wpnState?.lUnarmed) ? wpnState.lUnarmed : wpnState?.l
     const fmLabelKey  = STATE_DEFS.fire_mode.states.find(s => s.k === fireMode)?.l
     const posLabel = posLabelKey ? t(posLabelKey) : position
     const wpnLabel = wpnLabelKey ? t(wpnLabelKey) : weapon
@@ -80,7 +92,7 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
       <div className="combat-win-title" style={{ marginBottom: 10, cursor: 'grab', userSelect: 'none' }} onMouseDown={onHeaderMouseDown}>{t('initStateWindow.title')}</div>
       <div style={S.chips}>
         <StateChip defKey="position"  current={position}  onChange={setPosition}  />
-        <StateChip defKey="weapon"    current={weapon}    onChange={setWeapon}    />
+        <StateChip defKey="weapon"    current={weapon}    onChange={setWeapon}    unarmed={!hasAnyHandWeapon} />
         <StateChip defKey="fire_mode" current={fireMode}  onChange={setFireMode}  />
       </div>
       <button className="btn-tac-confirm" onClick={handleConfirm}>{t('initStateWindow.confirmButton')}</button>

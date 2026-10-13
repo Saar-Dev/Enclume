@@ -514,6 +514,11 @@ export default function CombatActionWindow({
   // --- derives assaut -------------------------------------------------------
   // shared/weaponSlots.js — inclut le deux-mains (2M) dans la priorité de sélection (Session 158).
   const { weaponMg, weaponMd, hasTwoWeapons, primaryWeapon: resolvedRangedPrimary } = resolveHandWeapons(assaultWeapons)
+  // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — "une arme en main, n'importe laquelle" (ni filtrée Tir
+  // ni filtrée CaC, contrairement à resolvedRangedPrimary/meleeWeaponMg ci-dessous) : autorité
+  // complète shared/weaponSlots.js, pour savoir si le statut "Rangée/Main sur l'arme/Au clair" a un
+  // sens ou doit se replier sur "Au repos/Sur le qui-vive/En garde".
+  const hasAnyHandWeapon = !!resolveHandWeapons(flattenItemsBySlot(allInventoryItems)).primaryWeapon
   // D5 : la liste d'armes (module 4) peut fixer explicitement l'arme de tir ; sinon primaire résolue
   // par les slots. Le dual-wield (weaponMg/weaponMd/hasTwoWeapons) reste piloté par l'équipement.
   const selectedWeapon = (selectedRangedWeaponId && assaultWeapons.find(w => w.id === selectedRangedWeaponId)) || resolvedRangedPrimary
@@ -1176,6 +1181,7 @@ export default function CombatActionWindow({
           initial={initialStates.current}
           onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
           weaponDisabled={weaponLocked}
+          weaponUnarmed={!hasAnyHandWeapon}
           hidden={isHidden}
         />
       )}

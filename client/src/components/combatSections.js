@@ -19,12 +19,21 @@ export const STATE_DEFS = {
     ],
     cost: STATE_TRANSITION_COST.position,
   },
+  // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — lUnarmed/shortUnarmed/labelUnarmed : libellés de repli
+  // quand le combattant n'a AUCUNE arme en main (shared/weaponSlots.js#resolveHandWeapons).
+  // Même mécanique, même k, même coût -- ça n'équipe jamais d'arme, juste un mot différent
+  // (décision Saar : "Au repos"/"Sur le qui-vive"/"En garde" plutôt que "Rangée"/"Main sur
+  // l'arme"/"Au clair"). Consommé par StateChip/CombatDeclareStateChip via leur prop `unarmed`.
   weapon: {
     label: 'states.weapon.label',
+    labelUnarmed: 'states.weaponUnarmed.label',
     states: [
-      { k: 'holstered', l: 'states.weapon.holstered.label', short: 'states.weapon.holstered.short' },
-      { k: 'ready',     l: 'states.weapon.ready.label',     short: 'states.weapon.ready.short'      },
-      { k: 'drawn',     l: 'states.weapon.drawn.label',     short: 'states.weapon.drawn.short'      },
+      { k: 'holstered', l: 'states.weapon.holstered.label', short: 'states.weapon.holstered.short',
+        lUnarmed: 'states.weaponUnarmed.holstered.label', shortUnarmed: 'states.weaponUnarmed.holstered.short' },
+      { k: 'ready',     l: 'states.weapon.ready.label',     short: 'states.weapon.ready.short',
+        lUnarmed: 'states.weaponUnarmed.ready.label',     shortUnarmed: 'states.weaponUnarmed.ready.short'     },
+      { k: 'drawn',     l: 'states.weapon.drawn.label',     short: 'states.weapon.drawn.short',
+        lUnarmed: 'states.weaponUnarmed.drawn.label',     shortUnarmed: 'states.weaponUnarmed.drawn.short'     },
     ],
     cost: STATE_TRANSITION_COST.weapon,
   },

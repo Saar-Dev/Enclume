@@ -33,6 +33,7 @@ export default function CombatDeclareStatePanel({
   onChange,                      // (axis, value) => void
   onPositionClick = null,        // exo à terre : tout clic sur Posture => tentative de se relever
   weaponDisabled = false,
+  weaponUnarmed = false,         // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — aucune arme en main
   hidden = false,
 }) {
   const { t } = useTranslation('combat')
@@ -68,6 +69,7 @@ export default function CombatDeclareStatePanel({
           initial={initial[axis]}
           glyph={GLYPHS[axis]?.[decl[axis]]}
           disabled={axis === 'weapon' && weaponDisabled}
+          unarmed={axis === 'weapon' && weaponUnarmed}
           onChange={
             axis === 'position' && onPositionClick
               ? onPositionClick

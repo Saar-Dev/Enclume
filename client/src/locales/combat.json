@@ -252,6 +252,12 @@
       "ready":     { "label": "Main sur l'arme", "short": "Main" },
       "drawn":     { "label": "Au clair",        "short": "Clair" }
     },
+    "weaponUnarmed": {
+      "label": "POSTURE",
+      "holstered": { "label": "Au repos",         "short": "Repos" },
+      "ready":     { "label": "Sur le qui-vive",  "short": "Qui-vive" },
+      "drawn":     { "label": "En garde",         "short": "Garde" }
+    },
     "fireMode": {
       "label": "MODE DE TIR",
       "cc": { "label": "Coup par coup", "short": "CC" },

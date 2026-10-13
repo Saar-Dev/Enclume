@@ -13,11 +13,15 @@ import { stateTransitionCost } from '../../../shared/combatIniCost.js'
 //   `glyph`    : nom d'un SVG `assets/status/*.svg` rendu en mask-image recoloree a l'accent famille.
 //                Optionnel — sans glyphe, seul le texte s'affiche (degradation).
 //   `disabled` : la puce ne cycle plus (ex. arme verrouillee pendant une attaque, cote PJ).
-export default function CombatDeclareStateChip({ stateKey, current, initial, onChange, availableKeys, glyph, disabled = false }) {
+export default function CombatDeclareStateChip({ stateKey, current, initial, onChange, availableKeys, glyph, disabled = false, unarmed = false }) {
   const { t } = useTranslation('combat')
   const def = STATE_DEFS[stateKey]
   const cur = def.states.find(s => s.k === current)
   const cost = stateTransitionCost(stateKey, initial, current)
+  // COMBAT-WEAPON-STATUS-GHOST-NO-WEAPON — voir combatSections.js ; repli sur le libellé normal si
+  // la variante "sans arme" est absente.
+  const labelKey = (unarmed && def.labelUnarmed) ? def.labelUnarmed : def.label
+  const curLabelKey = (unarmed && cur?.lUnarmed) ? cur.lUnarmed : cur?.l
 
   return (
     <button
@@ -34,8 +38,8 @@ export default function CombatDeclareStateChip({ stateKey, current, initial, onC
           aria-hidden="true"
         />
       )}
-      <span className="combat-state-chip__label">{t(def.label)}</span>
-      <span className="combat-state-chip__value">{cur?.l ? t(cur.l) : current}</span>
+      <span className="combat-state-chip__label">{t(labelKey)}</span>
+      <span className="combat-state-chip__value">{curLabelKey ? t(curLabelKey) : current}</span>
       {cost !== 0 && (
         <span className="combat-state-chip__cost" data-sign={cost > 0 ? 'pos' : 'neg'}>
           {cost > 0 ? `+${cost}` : cost}
