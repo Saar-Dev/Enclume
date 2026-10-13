@@ -39,6 +39,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-ticket-script-overwrite.js\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

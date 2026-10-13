@@ -31,6 +31,10 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
 - Scripts de création de tickets (`server/src/scripts/create_tickets_*.js`) : idempotents (clé `linked_bug_code`) et
   limités à `bug_tickets` — l'agent les lance LUI-MÊME (autorisation de Saar, 2026-09-25). Tout autre script qui écrit
   en base reste à lancer par Saar.
+- `server/src/scripts/{resolve,note}_ticket(s)_*.js` restent committés comme compte rendu historique de ce qui a
+  réellement été exécuté : jamais de `Write` sur un chemin déjà existant (bloqué par le hook
+  `guard-ticket-script-overwrite.js`, `.claude/settings.json`) — lire puis `Edit` pour une correction réelle, sinon
+  un nouveau fichier nommé distinctement (`..._v2.js`, `..._close.js`) pour une nouvelle clôture.
 - Avant livraison : `git diff --check`
 - Pas de linter serveur : `node --check` est le seul contrôle statique côté serveur
 
