@@ -169,7 +169,20 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (blockedStatusCode) {
           console.log(`[STUN2] PRECHECK token ${tokenId} assommé — auto-skip`)
           await forfeitToken(campaignId, tokenId, state.current_turn)
-          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: blockedStatusCode })
+          // STATUT-REFUS-MESSAGE-PNJ — un MJ qui fait agir un PNJ doit voir le nom du PNJ, pas « vous
+          // êtes » : isOwnToken=!isGm (un joueur ne déclare jamais que pour son propre token, un MJ
+          // peut déclarer pour n'importe quel PNJ).
+          let actorLabel
+          if (isGm) {
+            const blockedToken = await db('tokens').where({ id: tokenId }).first()
+            const blockedChar = blockedToken?.character_id
+              ? await db('characters').where({ id: blockedToken.character_id }).first()
+              : null
+            actorLabel = blockedChar?.name ?? blockedToken?.label
+          }
+          socket.emit(WS.COMBAT_DECLARE_ERROR, {
+            stunned: true, statusCode: blockedStatusCode, isOwnToken: !isGm, actorLabel,
+          })
           await advanceTimeline(io, campaignId, pendingMaps)
           return callback({ ok: false, stunned: true })
         }
@@ -376,7 +389,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (blockedStatusCode) {
           console.log(`[STUN2] CONFIRM token ${tokenId} assommé — pas auto-skipé`)
           await forfeitToken(campaignId, tokenId, state.current_turn)
-          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: blockedStatusCode })
+          // STATUT-REFUS-MESSAGE-PNJ — token/character déjà chargés ci-dessus (garde ownership).
+          socket.emit(WS.COMBAT_DECLARE_ERROR, {
+            stunned: true, statusCode: blockedStatusCode,
+            isOwnToken: !isGm, actorLabel: isGm ? (character.name ?? token.label) : undefined,
+          })
           await advanceTimeline(io, campaignId, pendingMaps)
           return
         }

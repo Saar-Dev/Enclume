@@ -210,13 +210,17 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
-    const onDeclareError = ({ message, username, stunned, statusCode }) => {
+    const onDeclareError = ({ message, username, stunned, statusCode, isOwnToken, actorLabel }) => {
       let text = message
       if (stunned) {
         // Libellé du statut lu dans `status.<code>` (mêmes clés que le panneau) — plus de branche par code :
         // stunned → « étourdi », unconscious → « inconscient », dead → « mort ».
         const statut = t(`status.${statusCode ?? 'stunned'}`).toLowerCase()
-        text = t('session.stun_blocked', { statut })
+        // STATUT-REFUS-MESSAGE-PNJ — « vous êtes X » n'a de sens que si c'est le joueur lui-même qui
+        // est bloqué ; un MJ qui déclare pour un PNJ doit voir le nom du PNJ, pas « vous ».
+        text = isOwnToken === false
+          ? t('session.stun_blocked_other', { statut, label: actorLabel ?? '?' })
+          : t('session.stun_blocked_self', { statut })
       }
       addMessage({
         id: `combat-error-${Date.now()}`,

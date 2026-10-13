@@ -10635,3 +10635,28 @@ affecté.
 distinct, confirmer que sa texture charge bien en mode jeu (pas seulement dans l'éditeur).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — STATUT-REFUS-MESSAGE-PNJ : le message de refus nomme le PNJ au lieu de dire « vous »
+
+Les deux gardes STUN2 (`socketCombatResolution.js`, filets de sécurité PRECHECK et CONFIRM — le
+moteur passe déjà les tokens bloqués avant d'ouvrir leur fenêtre, ces gardes ne se déclenchent que si
+le statut a été posé entre le choix du pas et le clic) composaient le message de refus avec « vous
+êtes {{statut}} » sans savoir si l'acteur bloqué était le joueur lui-même ou un PNJ que le MJ venait
+de faire agir.
+
+**Fix** : `isOwnToken` (`!isGm` — un joueur ne déclare jamais que pour son propre token, un MJ peut
+déclarer pour n'importe quel PNJ) et `actorLabel` (nom du personnage ou du token) ajoutés au payload
+`COMBAT_DECLARE_ERROR` des deux gardes. Côté client (`useCombatSocket.js`), nouvelle clé i18n
+`session.stun_blocked_other` (« Action impossible pour {{label}} — statut : {{statut}} », formulation
+neutre sans accord de genre) utilisée quand `isOwnToken === false` ; `session.stun_blocked_self`
+(ex-`stun_blocked`, texte inchangé) sinon.
+
+**Clôturé par décision de Saar (2026-10-13), sans scénario réel dédié** — course trop rare pour la
+provoquer volontairement en test.
+
+**Testé** : JSON valide, ESLint (diff JSON avant/après, 0 nouveau problème), build client propre,
+`node --check` serveur.
+**Non testé** : aucun test automatisé n'exerce ces deux filets (course rare entre le choix du pas et
+le clic, pas de scénario de repro simple).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
