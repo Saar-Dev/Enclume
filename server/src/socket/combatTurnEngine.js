@@ -123,6 +123,56 @@ export async function getDeclarationBlockedTokens(campaignId, tokenIds, settings
   for (const tokenId of pendingStunTokenIds) {
     if (!blocked.has(tokenId)) blocked.set(tokenId, 'stunned')
   }
+
+  // STATUT-EXO-PILOTE-PARITE (2026-10-13, décision de Saar) — une exo dont le pilote est bloqué
+  // (étourdi/inconscient/mort, ou un étourdissement EN ATTENTE) est bloquée elle aussi, même sans
+  // statut propre : sans pilote conscient, personne ne peut la faire agir. Deux requêtes groupées,
+  // jamais une par exo — cette fonction est appelée à chaque choix d'acteur du moteur de tour.
+  const pilotedExoRows = await db('tokens as t')
+    .join('characters as c', 't.character_id', 'c.id')
+    .join('exo_sheet as es', 'es.character_id', 'c.id')
+    .whereIn('t.id', tokenIds)
+    .where('c.type', 'exo')
+    .whereNotNull('es.pilot_character_id')
+    .select('t.id as exoTokenId', 'es.pilot_character_id as pilotCharacterId')
+
+  if (pilotedExoRows.length > 0) {
+    const pilotCharacterIds = [...new Set(pilotedExoRows.map(r => r.pilotCharacterId))]
+    const pilotTokens = await db('tokens as t')
+      .join('battlemaps as bm', 't.battlemap_id', 'bm.id')
+      .whereIn('t.character_id', pilotCharacterIds)
+      .where('bm.campaign_id', campaignId)
+      .select('t.id as tokenId', 't.character_id as characterId')
+    const characterIdByPilotTokenId = new Map(pilotTokens.map(r => [r.tokenId, r.characterId]))
+    const pilotTokenIds = pilotTokens.map(r => r.tokenId)
+
+    const pilotBlockedByCharacterId = new Map()
+    if (pilotTokenIds.length > 0) {
+      const pilotStatusRows = await db('token_statuses')
+        .whereIn('token_id', pilotTokenIds)
+        .whereIn('status_code', DECLARATION_BLOCKING_STATUS_CODES)
+        .select('token_id', 'status_code')
+      for (const row of pilotStatusRows) {
+        const characterId = characterIdByPilotTokenId.get(row.token_id)
+        if (!pilotBlockedByCharacterId.has(characterId)) pilotBlockedByCharacterId.set(characterId, row.status_code)
+      }
+      const pilotPendingStunIds = await db('combat_pending')
+        .where({ campaign_id: campaignId, type: 'stun' })
+        .whereIn('token_id', pilotTokenIds)
+        .pluck('token_id')
+      for (const tokenId of pilotPendingStunIds) {
+        const characterId = characterIdByPilotTokenId.get(tokenId)
+        if (!pilotBlockedByCharacterId.has(characterId)) pilotBlockedByCharacterId.set(characterId, 'stunned')
+      }
+    }
+
+    for (const { exoTokenId, pilotCharacterId } of pilotedExoRows) {
+      if (blocked.has(exoTokenId)) continue
+      const pilotStatus = pilotBlockedByCharacterId.get(pilotCharacterId)
+      if (pilotStatus) blocked.set(exoTokenId, pilotStatus)
+    }
+  }
+
   return blocked
 }
 

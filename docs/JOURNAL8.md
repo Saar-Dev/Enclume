@@ -10687,3 +10687,29 @@ régression) ; `shared/**/*.test.mjs` (947/947) ; ESLint (0 problème) ; `npm ru
 confirmer que les 2 cases s'affichent cochées avant qu'une 3ᵉ ne convertisse en Destruction.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — STATUT-EXO-PILOTE-PARITE : une exo au pilote inconscient/mort ne peut plus agir
+
+**Décision de Saar (2026-10-13)** : une exo-armure dont le pilote est inconscient ou mort ne peut
+plus agir — confirmé par le livre (l'équipement spécial « Autopilote » qui ramène l'exo à la base si
+le pilote est inconscient n'aurait aucun sens si c'était déjà le comportement par défaut).
+
+`getDeclarationBlockedTokens` (`combatTurnEngine.js`, autorité unique « ce token peut-il agir ? »)
+ne lisait que les statuts du token qui agit (l'exo elle-même) — un pilote étourdi ou mort sur son
+propre token (distinct de celui de l'exo) n'était donc jamais vu comme bloquant. Seule la Chance en
+tenait déjà compte (`resolveChanceRecipientCharacterId`).
+
+**Fix** : pour chaque token `exo` parmi ceux vérifiés, résolution groupée de son pilote
+(`exo_sheet.pilot_character_id`) et du ou des tokens de ce pilote sur la même carte ; si le pilote
+porte un statut bloquant (ou un étourdissement en attente), l'exo est marquée bloquée avec le même
+statut — même si elle n'en porte aucun elle-même. Deux requêtes groupées pour l'ensemble des tokens
+vérifiés, jamais une par exo (cette fonction est appelée à chaque choix d'acteur du moteur de tour).
+
+**Testé** : `node --env-file=.env --test server/src/socket/combatTurnEngine.test.mjs` (44/44, dont un
+nouveau test dédié — exo bloquée par un pilote étourdi, puis débloquée en l'absence de statut — aucune
+régression) ; `shared/**/*.test.mjs` (947/947) ; `node --check`. Aucun fichier client touché, pas de
+build nécessaire.
+**Non testé** : scénario réel navigateur — faire perdre connaissance au pilote d'une exo en combat,
+confirmer que l'exo n'est plus proposée à l'action.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

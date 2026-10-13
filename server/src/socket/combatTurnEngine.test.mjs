@@ -702,6 +702,33 @@ test('getDeclarationBlockedTokens — statut du registre + étourdissement en at
   } finally { await cleanup1c(fx) }
 })
 
+test('getDeclarationBlockedTokens — exo bloquée par son pilote étourdi (STATUT-EXO-PILOTE-PARITE), même sans statut propre', { skip }, async () => {
+  const fx = await createCombatFixture({ roster: [{ baseIni: 1, type: 'exo' }] })
+  try {
+    const [exoToken] = fx.roster.map(r => r.token.id)
+    const exoCharacterId = fx.roster[0].character.id
+    const [pilotCharacter] = await db('characters')
+      .insert({ campaign_id: fx.campaign.id, user_id: fx.gm.id, name: 'Pilote test', type: 'pj' })
+      .returning('*')
+    const [pilotToken] = await db('tokens')
+      .insert({ battlemap_id: fx.battlemap.id, character_id: pilotCharacter.id, label: 'Pilote' })
+      .returning('*')
+    await db('exo_sheet').insert({ character_id: exoCharacterId, pilot_character_id: pilotCharacter.id })
+
+    const beforeStun = await getDeclarationBlockedTokens(fx.campaign.id, [exoToken], { status_effects_mode: 'enforced' })
+    assert.equal(beforeStun.size, 0) // pilote conscient — exo non bloquée
+
+    await setStatus(pilotToken.id, 'stunned')
+    const afterStun = await getDeclarationBlockedTokens(fx.campaign.id, [exoToken], { status_effects_mode: 'enforced' })
+    assert.deepEqual([...afterStun.entries()], [[exoToken, 'stunned']])
+  } finally {
+    // cleanup1c → fx.cleanup() supprime tokens (battlemap_id, inclut le pilote) puis campaigns, dont
+    // la suppression cascade déjà characters (exo + pilote) et exo_sheet (FK ON DELETE CASCADE) —
+    // rien à nettoyer ici en plus.
+    await cleanup1c(fx)
+  }
+})
+
 test("advanceAnnouncementQueue (1c) — token mort à son slot : passé SANS fenêtre, slot suivant présenté, « X a été passé » émis", { skip }, async () => {
   const fx = await createCombatFixture({ phase: 'ANNOUNCEMENT', subPhase: null, roster: [
     { baseIni: 5, announced: false }, { baseIni: 10, announced: false }, { baseIni: 15, announced: false },
