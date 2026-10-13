@@ -10817,3 +10817,28 @@ supplémentaire, destruction directe) ; `shared/**/*.test.mjs` (947/947) ; `node
 un coup très grave, confirmer que l'intégrité affichée ne baisse qu'au coup grave.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — SESSION-CAMERA-KEYBOARD-SLOW-START : pan clavier fluide dès l'appui
+
+Le pan caméra au clavier (flèches, caméra libre) s'appuyait sur `MapControls.listenToKeyEvents(window)`
+— chaque pan ne se déclenche qu'à un événement `keydown`, donc au rythme de la répétition de touche du
+système d'exploitation : un saut initial, puis un temps mort (délai de répétition Windows, hors contrôle
+JS) avant la rafale continue. Ressenti signalé par Saar (2026-10-03) : ni précis (saut brut au premier
+appui), ni rapide (temps mort avant la continuité).
+
+**Fix** (`Canvas3D.jsx`) : abandon de `listenToKeyEvents`/`keyPanSpeed` natifs ; suivi touche-maintenue
+maison (`keydown`/`keyup`/`blur`, même garde « pas dans un champ de saisie » que le cycle de token par
+Tab) consommé dans un `useFrame` qui fait avancer la caméra à chaque image tant qu'une flèche est
+maintenue, vitesse constante (`ARROW_PAN_PIXELS_PER_SECOND = 600`) multipliée par le delta-temps —
+démarrage immédiat, plus de dépendance au comportement de répétition du système. Réutilise la méthode de
+pan interne de `MapControls` (`_pan`, celle que la librairie utilise elle-même pour les touches) plutôt
+que de dupliquer son calcul de projection caméra.
+
+**Testé** : `npm run build` client propre, ESLint ciblé (diff avant/après, 0 nouveau problème, y
+compris l'avertissement `exhaustive-deps` sur la ref de cleanup, corrigé en capturant la ref dans une
+variable locale de l'effet).
+**Non testé** : aucun test automatisé pertinent (comportement d'input clavier en temps réel) — scénario
+réel en jeu (maintenir chaque flèche, vérifier démarrage immédiat et absence d'interférence avec les
+champs de saisie) à valider par Saar avant clôture.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

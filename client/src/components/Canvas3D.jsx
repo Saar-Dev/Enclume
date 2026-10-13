@@ -595,6 +595,7 @@ function Scene({
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
+  const heldArrowKeysRef = useRef(new Set())
   const previousDisplayLevelRef = useRef(displayLevel)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
   const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
@@ -1447,7 +1448,7 @@ function Scene({
   // deps [thirdPersonCameraActive] (pas []) : MapControls (orbitRef) n'est monté qu'en caméra libre
   // (ligne ~1496) — au premier rendu en 3e personne (cas par défaut dès qu'un token est possédé),
   // orbitRef.current est encore null et un effet [] ne se réexécuterait jamais après le montage
-  // réel, laissant listenToKeyEvents jamais câblé (SESSION-CAMERA-STUCK-NO-ARROW-KEYS, 2026-10-13).
+  // réel, laissant les réglages jamais câblés (SESSION-CAMERA-STUCK-NO-ARROW-KEYS, 2026-10-13).
   useEffect(() => {
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
@@ -1455,9 +1456,61 @@ function Scene({
       MIDDLE: THREE.MOUSE.ROTATE,
       RIGHT: THREE.MOUSE.PAN,
     }
-    orbitRef.current.listenToKeyEvents(window)
-    orbitRef.current.keyPanSpeed = 20
   }, [thirdPersonCameraActive])
+
+  // Pan clavier (flèches) en caméra libre — suivi touche-maintenue + avance par image (useFrame
+  // ci-dessous), PAS listenToKeyEvents natif : celui-ci ne pan qu'au rythme de la répétition de
+  // touche du système (un saut, puis un temps mort contrôlé par Windows, puis une rafale), ressenti
+  // comme lent et imprécis au démarrage (SESSION-CAMERA-KEYBOARD-SLOW-START, 2026-10-13). Même garde
+  // « pas dans un champ de saisie » que le cycle de token par Tab (ligne ~2056).
+  useEffect(() => {
+    const heldKeys = heldArrowKeysRef.current
+    if (thirdPersonCameraActive) {
+      heldKeys.clear()
+      return undefined
+    }
+    const isTrackedKey = (key) => key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight'
+    const isTypingTarget = (target) => {
+      const tag = target?.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable
+    }
+    const onKeyDown = (e) => {
+      if (!isTrackedKey(e.key) || isTypingTarget(e.target)) return
+      e.preventDefault()
+      heldKeys.add(e.key)
+    }
+    const onKeyUp = (e) => {
+      if (!isTrackedKey(e.key)) return
+      heldKeys.delete(e.key)
+    }
+    const onBlur = () => heldKeys.clear()
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      heldKeys.clear()
+    }
+  }, [thirdPersonCameraActive])
+
+  const ARROW_PAN_PIXELS_PER_SECOND = 600
+
+  useFrame((_, delta) => {
+    const held = heldArrowKeysRef.current
+    if (held.size === 0 || !orbitRef.current) return
+    const step = ARROW_PAN_PIXELS_PER_SECOND * delta
+    let dx = 0
+    let dy = 0
+    if (held.has('ArrowUp')) dy += step
+    if (held.has('ArrowDown')) dy -= step
+    if (held.has('ArrowLeft')) dx += step
+    if (held.has('ArrowRight')) dx -= step
+    if (dx === 0 && dy === 0) return
+    orbitRef.current._pan(dx, dy)
+    orbitRef.current.update()
+  })
 
   // Sprint 2.5 — centrage caméra sur le token actif en mode mouvement combat
   // combatCameraCenter : { x, z } coords DB (PE14) | null
