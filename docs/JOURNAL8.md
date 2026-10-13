@@ -10713,3 +10713,33 @@ build nécessaire.
 confirmer que l'exo n'est plus proposée à l'action.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — TEXTUREPACKS-IMPORT-ERROR-OBJECT : messages d'erreur lisibles + export sans risque de plantage
+
+`TexturePacksPage.jsx` affichait l'erreur serveur brute (`err.response?.data?.error`) sur 6 sites
+(création, import, suppression de pack, ajout de fichier, suppression de fichier, édition de voxel) —
+or `errorHandler.js` renvoie un OBJET (`{ status, message, i18nKey? }`), jamais une chaîne : React
+rendait « [object Object] » au lieu du vrai message.
+
+**Fix** : les 6 sites utilisent désormais `extractErrorMessage(err, t)` (`client/src/lib/apiError.js`,
+créé plus tôt dans cette même session pour `GameTimeWidget.jsx`) — même correctif réutilisé une 3ᵉ
+fois (`WizardCreation.jsx` étant le 1er), pas une nouvelle copie de la logique. Les deux branches 409
+déjà personnalisées (pack utilisé, fichier en cours d'usage) restent inchangées, seul leur repli
+générique est corrigé.
+
+**Fix secondaire (serveur)** : `pack.name` peut venir d'un `manifest.json` importé (champ libre, non
+validé) et non plus seulement du formulaire de création (qui sanitize déjà espaces/casse) — un
+caractère de contrôle ou hors ASCII dans ce nom levait une exception Node sur l'en-tête
+`Content-Disposition` de l'export. Corrigé par un repli ASCII assaini (`filename=`) + le nom réel en
+UTF-8 (`filename*=UTF-8''`, RFC 5987, déjà compris par tous les navigateurs courants).
+
+**Hors périmètre** (déjà signalé par le ticket comme un chantier séparé) : plafond de taille du ZIP
+décompressé, transaction DB/MinIO à l'import — pas touché.
+
+**Testé** : ESLint (diff JSON avant/après, 0 nouveau problème) ; `npm run build` client propre ;
+`node --check` serveur.
+**Non testé** : aucun test automatisé n'existe pour cette page ou cette route. Scénario réel
+navigateur : provoquer un refus (ex. nom de pack déjà pris) et vérifier un message lisible ; exporter
+un pack dont le nom contient un caractère spécial et vérifier que le téléchargement ne plante plus.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
+import { extractErrorMessage } from '../lib/apiError.js'
 import { loadVoxelTextures } from '../lib/voxelTextures'
 import Voxel from '../components/Voxel'
 
@@ -166,7 +167,7 @@ export default function TexturePacksPage() {
       setPacks(prev => [...prev, res.data.pack])
       setShowCreate(false)
       setCreateForm({ name: '', label: '', description: '', tile_size: '128' })
-    } catch (err) { setCreateError(err.response?.data?.error || t('texturePacks.errorCreate')) }
+    } catch (err) { setCreateError(extractErrorMessage(err, t)) }
     finally { setCreating(false) }
   }, [createForm, t])
 
@@ -190,7 +191,7 @@ export default function TexturePacksPage() {
       const res = await api.post('/texture-packs/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setImportSuccess(t('texturePacks.importSuccess') + ` (${res.data.textureCount} voxels)`)
       await loadPacks()
-    } catch (err) { setImportError(err.response?.data?.error || t('texturePacks.importError')) }
+    } catch (err) { setImportError(extractErrorMessage(err, t)) }
     finally { setImporting(false); e.target.value = '' }
   }, [t, loadPacks])
 
@@ -203,7 +204,7 @@ export default function TexturePacksPage() {
       if (selectedPack?.id === packId) { setSelectedPack(null); setPackDetail(null); setPackFiles([]) }
       setDeleteConfirm(null)
     } catch (err) {
-      setError(err.response?.status === 409 ? t('texturePacks.deletePackUsed') : (err.response?.data?.error || t('common.error')))
+      setError(err.response?.status === 409 ? t('texturePacks.deletePackUsed') : extractErrorMessage(err, t))
       setDeleteConfirm(null)
     } finally { setDeleting(false) }
   }, [selectedPack, t])
@@ -216,7 +217,7 @@ export default function TexturePacksPage() {
       const formData = new FormData(); formData.append('file', file)
       const res = await api.post(`/texture-packs/${selectedPack.id}/files`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setPackFiles(prev => [...prev, res.data.file])
-    } catch (err) { setError(err.response?.data?.error || t('common.error')) }
+    } catch (err) { setError(extractErrorMessage(err, t)) }
     finally { setUploadingFile(false); e.target.value = '' }
   }, [selectedPack, t])
 
@@ -226,7 +227,7 @@ export default function TexturePacksPage() {
       await api.delete(`/texture-packs/${selectedPack.id}/files/${filePath}`)
       setPackFiles(prev => prev.filter(f => f.path !== filePath))
     } catch (err) {
-      setError(err.response?.status === 409 ? t('texturePacks.fileInUse') : (err.response?.data?.error || t('common.error')))
+      setError(err.response?.status === 409 ? t('texturePacks.fileInUse') : extractErrorMessage(err, t))
     }
   }, [selectedPack, t])
 
@@ -295,7 +296,7 @@ export default function TexturePacksPage() {
         setPackDetail(prev => ({ ...prev, textures: prev.textures.map(t => t.id === editingVoxel.id ? res.data.texture : t) }))
       }
       setEditingVoxel(null)
-    } catch (err) { setVoxelError(err.response?.data?.error || t('common.error')) }
+    } catch (err) { setVoxelError(extractErrorMessage(err, t)) }
     finally { setSavingVoxel(false) }
   }, [voxelForm, editingVoxel, selectedPack, t])
 

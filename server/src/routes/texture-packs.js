@@ -313,9 +313,16 @@ router.get('/:id/export', requireAuth, async (req, res, next) => {
       }
     }
 
+    // TEXTUREPACKS-IMPORT-ERROR-OBJECT — pack.name peut venir d'un manifest.json importé (champ libre,
+    // non validé à l'import), jamais seulement du formulaire de création (qui sanitize déjà espaces et
+    // casse). Un caractère de contrôle (retour chariot…) ou hors ASCII levait une exception Node sur ce
+    // header. `filename=` reste un repli ASCII sûr, `filename*=UTF-8''` (RFC 5987) porte le nom réel
+    // pour les navigateurs qui le comprennent déjà tous.
+    const safeAsciiName = pack.name.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')
     res.setHeader('Content-Type', 'application/zip')
     res.setHeader('Content-Length', stat.size)
-    res.setHeader('Content-Disposition', `attachment; filename="${pack.name}.zip"`)
+    res.setHeader('Content-Disposition',
+      `attachment; filename="${safeAsciiName}.zip"; filename*=UTF-8''${encodeURIComponent(pack.name)}.zip`)
 
     const stream = await minio.getObject(bucket, zipPath)
     stream.pipe(res)
