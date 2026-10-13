@@ -17,8 +17,16 @@ export function useCharacterSocket() {
   useEffect(() => {
     if (!socket) return
 
+    // COMBAT-WOUNDS-403-PNJ / PLAYER-CLIENT-403-PNJ-WOUNDS — ces 3 événements sont diffusés à toute la
+    // salle dès qu'un personnage (PJ ou PNJ) encaisse une blessure, même chez un client qui n'affiche
+    // la fiche de personne : un refetch sans condition déclenchait .../wounds pour des PNJ non
+    // possédés, 403 attendu (char-sheet.js, ni propriétaire ni MJ) mais requête qui n'avait pas à
+    // partir. Même garde que les handlers d'inventaire ci-dessous (inventoryByCharId) : on ne refetch
+    // que si ce characterId est déjà suivi par ce client (ArmorWoundPanel.jsx l'a déjà peuplé) ;
+    // updateCharacter reste inconditionnel (badge de sévérité léger, sans requête HTTP).
     const onWoundAdded = ({ characterId, worst_wound_severity }) => {
       updateCharacter({ id: characterId, worst_wound_severity })
+      if (useCharacterStore.getState().woundsByCharId[characterId] === undefined) return
       api.get(`/char-sheet/${characterId}/wounds`)
         .then(res => setWounds(characterId, res.data.wounds || []))
         .catch(() => {})
@@ -26,6 +34,7 @@ export function useCharacterSocket() {
     const onWoundUpdated = ({ characterId, worst_wound_severity }) => {
       if (!characterId) return
       updateCharacter({ id: characterId, worst_wound_severity })
+      if (useCharacterStore.getState().woundsByCharId[characterId] === undefined) return
       api.get(`/char-sheet/${characterId}/wounds`)
         .then(res => setWounds(characterId, res.data.wounds || []))
         .catch(() => {})
@@ -33,6 +42,7 @@ export function useCharacterSocket() {
     const onWoundRemoved = ({ characterId, worst_wound_severity }) => {
       if (!characterId) return
       updateCharacter({ id: characterId, worst_wound_severity })
+      if (useCharacterStore.getState().woundsByCharId[characterId] === undefined) return
       api.get(`/char-sheet/${characterId}/wounds`)
         .then(res => setWounds(characterId, res.data.wounds || []))
         .catch(() => {})

@@ -10526,3 +10526,33 @@ alors qu'une est déjà en attente de revue) et confirmer que le message appara�
 disparaît après 4 s.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — COMBAT-WOUNDS-403-PNJ / PLAYER-CLIENT-403-PNJ-WOUNDS : bruit 403 sur les blessures d'un PNJ non affiché
+
+Deux tickets, même cause racine — la piste d'origine de `COMBAT-WOUNDS-403-PNJ`
+(`CombatActionWindow.jsx` ~384-392, via `playerToken.character_id`) ne tenait plus : `playerToken` y
+est strictement filtré aux personnages du joueur (`playerChars = characters.filter(c => c.user_id
+=== user?.id)`), son `character_id` ne peut pas être un PNJ.
+
+**Vraie cause** : `client/src/lib/useCharacterSocket.js` — `onWoundAdded`/`onWoundUpdated`/
+`onWoundRemoved` (montés une fois pour toute la session) refaisaient sans condition un
+`GET /char-sheet/:id/wounds` à chaque événement `WOUND_*`, diffusé à toute la salle dès qu'un
+personnage (PJ ou PNJ) encaisse une blessure — même chez un client qui n'affiche la fiche de
+personne. Le serveur refuse à raison (`char-sheet.js:155-157`, ni propriétaire ni MJ ni pilote
+drone/exo) ; c'est la requête qui n'avait pas à partir. Explique aussi le « 3 fois d'affilée » :
+ajout + promotions de sévérité successives sur un même coup déclenchent plusieurs événements.
+
+**Fix** : même garde déjà en place pour l'inventaire dans ce fichier
+(`onInventoryAdded`/`onInventoryUpdated`, `inventoryByCharId[characterId] !== undefined`) et pour le
+fetch initial des blessures (`ArmorWoundPanel.jsx:30-33`, « un seul fetch si absent ») — le refetch
+`.../wounds` ne part désormais que si `woundsByCharId[characterId]` est déjà suivi par ce client.
+`updateCharacter` (badge de sévérité, sans requête HTTP) reste inconditionnel.
+
+**Testé** : vérifié qu'`ArmorWoundPanel.jsx` est l'unique lecteur de `woundsByCharId` dans tout
+`client/src` et porte déjà son propre fetch de repli — aucun risque de donnée jamais peuplée. ESLint
+(diff JSON avant/après, 0 nouveau problème) ; `npm run build` client propre.
+**Non testé** : scénario réel navigateur — aucun test automatisé possible (pur client, socket). À
+vérifier : un PNJ encaisse une blessure en combat, confirmer l'absence de 403 au journal serveur côté
+client n'affichant pas sa fiche.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
