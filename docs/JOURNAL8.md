@@ -10556,3 +10556,34 @@ vérifier : un PNJ encaisse une blessure en combat, confirmer l'absence de 403 a
 client n'affichant pas sa fiche.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — STATUT-STUN-PROMPT-ORPHELIN-MORT : fermeture de la fenêtre de durée d'étourdissement quand le personnage meurt
+
+Limite connue du chantier « Statut Mort » (2026-09-24) : si un joueur a une fenêtre « durée
+d'étourdissement » (`COMBAT_STUN_PROMPT`) ouverte quand son personnage est marqué « Mort »,
+`applyDeathConsequences` supprime la ligne `combat_pending` 'stun' et diffuse la mise à jour des
+statuts, mais aucun événement ne fermait la fenêtre côté client ; sa confirmation
+(`COMBAT_STUN_CONFIRM`) était ignorée faute de ligne. Sans conséquence sur la partie, mais la fenêtre
+restait affichée.
+
+**Pourquoi pas `TOKEN_STATUS_UPDATED` seul** (1ʳᵉ piste du ticket) : cet événement est déjà diffusé
+pour ce token par `applyDeathConsequences`, mais il arrive aussi pour tout autre changement de statut
+sans rapport sur le même token (ex. un cadavre qui prend feu) — s'en servir pour fermer le prompt
+aurait fermé à tort un prompt par ailleurs légitime dès le premier changement de statut suivant,
+même mort depuis longtemps.
+
+**Fix (2ᵉ piste du ticket)** : nouvel événement dédié `COMBAT_STUN_PROMPT_CANCEL` (`shared/events.js`),
+émis par `applyDeathConsequences` (`statusService.js`) uniquement pour les tokens dont la ligne
+`combat_pending` 'stun' vient d'être retirée (pas le `touched` complet, qui inclut aussi des tokens
+n'ayant perdu qu'un statut déjà appliqué, sans prompt ouvert). Client (`useCombatSocket.js`) : ferme
+`stunPayload` seulement si `tokenId` correspond exactement à celui du prompt actuellement affiché.
+
+**Testé** : `node --env-file=.env --test server/src/lib/deathStateService.test.mjs` (8/8, aucune
+régression — le mock `io` du test est un no-op, pas d'assertion cassée par le nouvel emit) ; ESLint
+(diff JSON avant/après, 0 nouveau problème) ; `npm run build` client propre ; `node --check` serveur.
+**Non testé** : scénario réel navigateur — aucun test automatisé possible pour la fermeture de
+fenêtre elle-même (comportement socket + composant React). À vérifier : ouvrir une fenêtre de durée
+d'étourdissement, faire mourir le personnage entre-temps (MJ), confirmer que la fenêtre se ferme
+d'elle-même côté joueur.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

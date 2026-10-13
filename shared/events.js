@@ -191,6 +191,7 @@ export const WS = {
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
   COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }
   COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ ou GM → serveur : lancer le D6 { tokenId }
+  COMBAT_STUN_PROMPT_CANCEL:     'combat:stun_prompt_cancel',      // serveur → room : prompt D6 annulé, ex. le personnage est mort entre-temps (STATUT-STUN-PROMPT-ORPHELIN-MORT) { tokenId }
   // Catastrophe automatique en combat (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — jet 1D10 RAW
   // "CATASTROPHES EN COMBAT" toujours filtré par une validation MJ avant application réelle.
   CATASTROPHE_PENDING:           'combat:catastrophe_pending',     // serveur → room (filtré MJ côté client) : nouvelle entrée en attente { id, tokenId, tableEntry, context, rolledAt }

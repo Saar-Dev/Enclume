@@ -76,6 +76,10 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onDamagePrompt        = (data) => { setDamageQueue(q => pushDamagePrompt(q, data)) }
     const onDamageResult        = (data) => { setDamageQueue(q => attachDamageResult(q, data)) }
     const onStunPrompt          = (data) => { setStunPayload(data) }
+    // STATUT-STUN-PROMPT-ORPHELIN-MORT — le personnage meurt entre-temps, sa ligne combat_pending
+    // 'stun' est retirée côté serveur (applyDeathConsequences) : fermer le prompt UNIQUEMENT s'il
+    // concerne ce token précis, jamais un autre prompt légitime encore ouvert sur un autre token.
+    const onStunPromptCancel    = ({ tokenId }) => { setStunPayload(p => (p?.tokenId === tokenId ? null : p)) }
     const onAttackPlayerResult  = (data) => { setAttackQueue(q => pushAttackResult(q, data)) }
     // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
     // exclusivité par EnvironmentalResultQueue.jsx (toujours monté, jamais gaté au mode combat, vraie
@@ -246,6 +250,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_DAMAGE_PROMPT,         onDamagePrompt)
     socket.on(WS.COMBAT_DAMAGE_RESULT,         onDamageResult)
     socket.on(WS.COMBAT_STUN_PROMPT,           onStunPrompt)
+    socket.on(WS.COMBAT_STUN_PROMPT_CANCEL,    onStunPromptCancel)
     socket.on(WS.COMBAT_ATTACK_PLAYER_RESULT,  onAttackPlayerResult)
     socket.on(WS.COMBAT_ATTACK_RESULT,         onAttackResult)
     socket.on(WS.COMBAT_STARTED,               onCombatStarted)
@@ -271,6 +276,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_DAMAGE_PROMPT,        onDamagePrompt)
       socket.off(WS.COMBAT_DAMAGE_RESULT,        onDamageResult)
       socket.off(WS.COMBAT_STUN_PROMPT,          onStunPrompt)
+      socket.off(WS.COMBAT_STUN_PROMPT_CANCEL,   onStunPromptCancel)
       socket.off(WS.COMBAT_ATTACK_PLAYER_RESULT, onAttackPlayerResult)
       socket.off(WS.COMBAT_ATTACK_RESULT,        onAttackResult)
       socket.off(WS.COMBAT_STARTED,              onCombatStarted)

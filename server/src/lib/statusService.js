@@ -95,6 +95,14 @@ export async function applyDeathConsequences(io, db, campaignId, characterId) {
 
   const touched = [...new Set([...removed.map(r => r.token_id), ...pendingRemoved.map(r => r.token_id)])]
   for (const tokenId of touched) await emitTokenStatusUpdated(io, db, campaignId, tokenId)
+  // STATUT-STUN-PROMPT-ORPHELIN-MORT — un joueur peut avoir une fenêtre « durée d'étourdissement »
+  // (COMBAT_STUN_PROMPT) ouverte sur CE token précis au moment où son personnage meurt ; la ligne
+  // combat_pending qu'elle attend de confirmer vient d'être supprimée ci-dessus, sans quoi sa
+  // confirmation (COMBAT_STUN_CONFIRM) serait silencieusement ignorée faute de ligne. TOKEN_STATUS_UPDATED
+  // seul ne suffit pas à fermer cette fenêtre côté client : il peut aussi arriver pour un changement de
+  // statut sans rapport (le token est mort depuis longtemps), à tort fermer un prompt par ailleurs
+  // légitime. Signal dédié, ciblé sur les seuls tokens dont la ligne en attente vient d'être retirée.
+  for (const { token_id: tokenId } of pendingRemoved) io.to(campaignId).emit(WS.COMBAT_STUN_PROMPT_CANCEL, { tokenId })
   console.log(`[DBG] applyDeathConsequences — personnage:${characterId} : ${removed.length} statut(s) retiré(s) [${removed.map(r => r.status_code).join(', ')}], ${pendingRemoved.length} étourdissement(s) en attente supprimé(s)`)
   return touched
 }
