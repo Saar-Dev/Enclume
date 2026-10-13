@@ -12,6 +12,7 @@
 import {
   EXO_AVARIE_TABLE, EXO_AVARIE_SEVERITY_ORDER, EXO_AVARIE_COLUMN_BY_SEVERITY as COLUMN_BY_SEVERITY,
 } from '../../../shared/exoConstants.js'
+import { isWoundLineFull } from '../../../shared/woundConstants.js'
 import { WS } from '../../../shared/events.js'
 import { resolveExoContext } from './combatantContextService.js'
 import { calcExoDegatsNets } from './charStats.js'
@@ -41,12 +42,13 @@ function nextAvarieSeverity(severity) {
 // les colonnes à écrire, jamais n'écrit elle-même. `exoSheet` n'a besoin que des colonnes avaries_*
 // lues (mutation locale `{ ...exoSheet, [column]: 0 }` pour la récursion, jamais l'objet DB original).
 //
-// Ligne déjà à maxCount-1 : cette Avarie COMPLÉTERAIT la ligne → promotion au lieu d'être posée
-// (REGLEARMURE.md:335-337 "quand une ligne est complète alors qu'on doit noter une Avarie de cette
-// gravité, on coche une case dans le niveau supérieur et on efface la ligne complète" — même
-// interprétation que resolveWoundInsertion:47, "currentCount >= maxCount - 1" : le nombre de cases
-// réellement stocké ne atteint jamais maxCount en pratique, la dernière déclenche toujours la
-// promotion à sa place).
+// Ligne déjà PLEINE (toutes ses cases cochées, `isWoundLineFull`) : c'est CETTE Avarie, la suivante,
+// qui convertit — jamais celle qui remplit la dernière case (REGLEARMURE.md:335-337 "quand une ligne
+// est complète alors qu'on doit noter une Avarie de cette gravité, on coche une case dans le niveau
+// supérieur et on efface la ligne complète" ; même fonction partagée que resolveWoundInsertion,
+// woundUtils.js, EXO-AVARIE-LINE-CONVENTION 2026-10-13 — avant ce correctif, `currentCount >=
+// maxCount - 1` convertissait une Avarie trop tôt, la ligne n'atteignait jamais réellement maxCount
+// cases cochées).
 //
 // Perte d'ITG Structure sur la transition 0→1 uniquement (REGLEARMURE.md:344-353 : "cette perte
 // intervient bien dès qu'un de ces seuils est atteint, et non à chaque Avarie reçue dans l'un d'eux"),
@@ -67,7 +69,7 @@ function resolveAvarieIncrement(exoSheet, severity) {
   const currentCount = exoSheet[column] ?? 0
   const next = nextAvarieSeverity(severity)
 
-  if (next && currentCount >= table.maxCount - 1) {
+  if (next && isWoundLineFull(currentCount, table.maxCount)) {
     const cascaded = resolveAvarieIncrement({ ...exoSheet, [column]: 0 }, next)
     return { ...cascaded, updates: { ...cascaded.updates, [column]: 0 } }
   }

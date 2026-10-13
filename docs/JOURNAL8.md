@@ -10660,3 +10660,30 @@ provoquer volontairement en test.
 le clic, pas de scénario de repro simple).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — EXO-AVARIE-LINE-CONVENTION : le compteur d'Avaries des exo-armures remplit enfin sa ligne avant de convertir
+
+`exoAvarieService.js` convertissait une Avarie dès que `currentCount >= maxCount - 1` : la dernière
+case d'une ligne n'était jamais réellement cochée, la case suivante déclenchait tout de suite la
+promotion au palier supérieur. Effet visible sur la ligne Catastrophique (2 cases) : elle ne se
+remplissait jamais, la 2ᵉ Avarie convertissait directement en Destruction. Le compteur de Blessures
+des personnages avait déjà basculé sur la lecture littérale du livre (« quand une ligne est complète
+*et* qu'on doit noter une Avarie de cette gravité, on convertit » — Lot A, décision de Saar : le
+livre fait autorité) ; celui des exo-armures était resté sur l'ancienne lecture.
+
+**Fix** : `resolveAvarieIncrement` utilise désormais `isWoundLineFull` (`shared/woundConstants.js`,
+même fonction partagée que `resolveWoundInsertion`, aucune seconde copie de la règle) au lieu de
+`currentCount >= maxCount - 1`. Une ligne se remplit maintenant réellement jusqu'à `maxCount` cases
+avant que l'Avarie suivante ne convertisse — touche tous les paliers (légère/moyenne 5 cases,
+grave 4, critique 3, catastrophique 2), pas seulement l'exemple cité par le ticket. Rien à changer
+côté affichage (`ExoAvariesPanel.jsx` rendait déjà `maxCount` cases, il ne les voyait simplement
+jamais toutes se remplir).
+
+**Testé** : `node --env-file=.env --test server/src/lib/exoAvarieService.test.mjs` (22/22 — 2 tests
+réécrits pour la nouvelle frontière réelle, légère 5ᵉ/6ᵉ et catastrophique 2ᵉ/3ᵉ Avarie, aucune
+régression) ; `shared/**/*.test.mjs` (947/947) ; ESLint (0 problème) ; `npm run build` client propre ;
+`node --check`.
+**Non testé** : scénario réel navigateur — infliger 2 Avaries catastrophiques à une exo-armure,
+confirmer que les 2 cases s'affichent cochées avant qu'une 3ᵉ ne convertisse en Destruction.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

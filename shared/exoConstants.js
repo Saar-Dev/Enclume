@@ -77,9 +77,10 @@ export const EXO_PRONE_RECOVERY_TABLE = {
 // 2026-08-19 (PLAN_EXOARMURE.md §11.2). Seuils identiques par coïncidence à la table de sévérité des
 // Blessures humaines (LdB p.114, 5/10/15/20/25/30) — deux tables RAW indépendantes, jamais partagées
 // (voir server/src/lib/exoAvarieService.js, severityForExoDamage).
-// `maxCount` : nombre de cases de la ligne — la case qui COMPLÈTERAIT la ligne déclenche la promotion
-// au lieu d'être posée (même interprétation que resolveWoundInsertion, woundUtils.js:47, "currentCount
-// >= maxCount - 1" → jamais réellement maxCount cases cochées en pratique).
+// `maxCount` : nombre de cases de la ligne, réellement toutes cochées avant conversion — c'est
+// l'Avarie SUIVANTE (ligne déjà pleine, `isWoundLineFull`) qui convertit, jamais celle qui remplit la
+// dernière case (même fonction partagée que resolveWoundInsertion, woundUtils.js — EXO-AVARIE-LINE-
+// CONVENTION 2026-10-13, ancienne lecture `currentCount >= maxCount - 1` corrigée).
 // `incidentModifier` : ajouté au 1D10 du jet d'incident (Lot 5a, pas consommé par le Lot 4 — transcrit
 // ici pour n'avoir qu'une seule source RAW de cette table).
 // `itgLossStructure` : perte définitive d'ITG Structure, sur la transition 0→1 du compteur concerné

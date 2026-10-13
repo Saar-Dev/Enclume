@@ -116,12 +116,26 @@ test('applyExoAvarie — 4 Avaries légères successives : simple incrément, pa
   } finally { await cleanup(fx) }
 })
 
-test('applyExoAvarie — 5e Avarie légère : promotion — légère effacée, moyenne à 1', { skip }, async () => {
+test('applyExoAvarie — 5e Avarie légère : ligne pleine (maxCount=5), pas encore de promotion', { skip }, async () => {
   const fx = await createExoFixture()
   try {
     const io = createFakeIo()
     let result
     for (let i = 0; i < 5; i++) {
+      result = await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'legere' })
+    }
+    assert.equal(result.exoSheet.avaries_legeres, 5)
+    assert.equal(result.exoSheet.avaries_moyennes, 0)
+    assert.equal(result.finalSeverity, 'legere')
+  } finally { await cleanup(fx) }
+})
+
+test('applyExoAvarie — 6e Avarie légère : ligne légère déjà pleine → promotion, moyenne à 1', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    let result
+    for (let i = 0; i < 6; i++) {
       result = await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'legere' })
     }
     assert.equal(result.exoSheet.avaries_legeres, 0)
@@ -153,7 +167,7 @@ test('applyExoAvarie — deuxième Avarie critique : aucune perte d\'ITG supplé
   } finally { await cleanup(fx) }
 })
 
-test('applyExoAvarie — débordement Catastrophique (maxCount=2) : cascade vers Destruction', { skip }, async () => {
+test('applyExoAvarie — débordement Catastrophique (maxCount=2) : la 3e (ligne pleine) cascade vers Destruction', { skip }, async () => {
   const fx = await createExoFixture()
   try {
     const io = createFakeIo()
@@ -161,15 +175,22 @@ test('applyExoAvarie — débordement Catastrophique (maxCount=2) : cascade vers
     const r1 = await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'catastrophique' })
     assert.equal(r1.exoSheet.avaries_catastrophiques, 1)
     assert.equal(r1.exoSheet.itg_structure_current, 19)
-    // 2e Avarie catastrophique : maxCount-1=1 déjà atteint → cette Avarie COMPLÉTERAIT la ligne →
-    // cascade vers Destruction (pas de compteur), perte -2 ITG (17, pas -1), ligne catastrophique
-    // effacée.
+    // 2e Avarie catastrophique : ligne pas encore pleine (1 < maxCount=2) → se pose normalement,
+    // compteur à 2 (ligne désormais pleine), aucune perte d'ITG supplémentaire (pas une transition 0→1).
     const r2 = await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'catastrophique' })
-    assert.equal(r2.exoSheet.avaries_catastrophiques, 0)
-    assert.equal(r2.exoSheet.itg_structure_current, 17)
-    assert.equal(r2.finalSeverity, 'destruction')
-    assert.equal(r2.destroyed, true)
-    assert.equal(r2.itgLoss, 2)
+    assert.equal(r2.exoSheet.avaries_catastrophiques, 2)
+    assert.equal(r2.exoSheet.itg_structure_current, 19)
+    assert.equal(r2.finalSeverity, 'catastrophique')
+    assert.equal(r2.destroyed, false)
+    assert.equal(r2.itgLoss, 0)
+    // 3e Avarie catastrophique : ligne déjà pleine (2 >= maxCount=2) → cascade vers Destruction (pas
+    // de compteur), perte -2 ITG (17), ligne catastrophique effacée.
+    const r3 = await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'catastrophique' })
+    assert.equal(r3.exoSheet.avaries_catastrophiques, 0)
+    assert.equal(r3.exoSheet.itg_structure_current, 17)
+    assert.equal(r3.finalSeverity, 'destruction')
+    assert.equal(r3.destroyed, true)
+    assert.equal(r3.itgLoss, 2)
   } finally { await cleanup(fx) }
 })
 
