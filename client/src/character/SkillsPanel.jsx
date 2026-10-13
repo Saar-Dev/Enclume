@@ -69,6 +69,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'rea
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { effectiveRequirements, isBlockedByIdentityChain } from '../../../shared/skillRequirements.js'
+import { createSearchMatcher } from '../../../shared/textSearch.js'
 import SkillInfoPopover, { SkillInfoButton } from '../components/SkillInfoPopover.jsx'
 import SkillPurchaseConfirmWindow from '../components/SkillPurchaseConfirmWindow.jsx'
 
@@ -289,6 +290,28 @@ export default function SkillsPanel({
 
     return result
   }, [refSkills, isVisible])
+
+  // ─── Recherche (CHARSHEET-SKILL-SEARCH) — filtre families par libellé de compétence,
+  // jamais par famille/groupe (demande précise du ticket). createSearchMatcher retourne déjà
+  // `true` pour une requête vide, donc families ressort inchangé quand la recherche est vide.
+  const [searchQuery, setSearchQuery] = useState('')
+  const filteredFamilies = useMemo(() => {
+    const matchesQuery = createSearchMatcher(searchQuery)
+    const result = new Map()
+    families.forEach((blocks, family) => {
+      const filteredBlocks = blocks
+        .map(block => {
+          if (block.type === 'skill') {
+            return matchesQuery(block.skill.label) ? block : null
+          }
+          const children = block.children.filter(child => matchesQuery(child.label))
+          return children.length > 0 ? { ...block, children } : null
+        })
+        .filter(Boolean)
+      result.set(family, filteredBlocks)
+    })
+    return result
+  }, [families, searchQuery])
 
   // ─── Accordéon ────────────────────────────────────────────────────────────
   const [collapsedFamilies, setCollapsedFamilies] = useState(
@@ -517,10 +540,21 @@ export default function SkillsPanel({
     <>
     <div style={s.panel}>
 
-      {Array.from(families.entries()).map(([family, blocks]) => {
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={t('skillsPanel.searchPlaceholder')}
+        style={s.searchInput}
+      />
+
+      {Array.from(filteredFamilies.entries()).map(([family, blocks]) => {
         if (blocks.length === 0) return null
 
-        const isCollapsed = collapsedFamilies.has(family)
+        // Une recherche active déplie toujours la famille — jamais une mutation de
+        // collapsedFamilies, juste un repli ignoré à l'affichage (CHARSHEET-SKILL-SEARCH) : revient
+        // à l'état replié/déplié précédent dès que la recherche est vidée, sans rien à restaurer.
+        const isCollapsed = searchQuery ? false : collapsedFamilies.has(family)
 
         return (
           <div key={family} style={s.family}>
@@ -608,6 +642,12 @@ const s = {
     fontSize: '12px',
     textAlign: 'center',
     padding: '16px',
+  },
+  // Mêmes valeurs que InventoryPanel.jsx#searchInput — cohérence visuelle entre les deux panneaux.
+  searchInput: {
+    width: '100%', background: '#16162a', border: '1px solid #2a2a3e',
+    borderRadius: 4, padding: '4px 8px', color: '#c0c0d0', fontSize: 12,
+    outline: 'none', boxSizing: 'border-box',
   },
 
   // Famille

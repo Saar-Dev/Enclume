@@ -1079,6 +1079,7 @@
   },
   "skillsPanel": {
     "empty": "Catalogue de compétences non chargé.",
+    "searchPlaceholder": "Rechercher une compétence...",
     "colName": "Compétence",
     "colAttrs": "Attributs",
     "colBase": "Base",

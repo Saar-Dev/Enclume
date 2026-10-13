@@ -10374,3 +10374,28 @@ propre.
 **Non testé** : rien d'identifié — validation en jeu faite par Saar.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit, aucune dépendance externe.
+
+## Session (Claude) — 2026-10-13 — CHARSHEET-SKILL-SEARCH : champ de recherche dans la liste des compétences
+
+Liste des compétences (`SkillsPanel.jsx`) longue (jusqu'à ~249 entrées du catalogue `ref_skills`,
+regroupées par famille/accordéon) — un beta-testeur remonte trop de défilement pour trouver une
+compétence précise.
+
+**Correctif** : réutilisation de l'autorité unique de recherche tolérante (`shared/textSearch.js`
+`createSearchMatcher`, déjà utilisée par `InventoryPanel.jsx`/`EquipmentCatalogPage.jsx`), jamais un
+filtre maison. Nouveau `useMemo` `filteredFamilies` qui filtre les blocs `skill`/`group` de la
+structure `families` déjà existante par libellé de compétence (jamais par nom de famille/groupe,
+scope volontairement limité à la demande du ticket) ; une famille/groupe sans enfant restant
+disparaît (garde de rendu déjà en place, rien à ajouter). Pendant une recherche active, le repli
+accordéon (`collapsedFamilies`) est ignoré à l'affichage sans être muté — revient à l'état précédent
+dès que le champ est vidé, sans rien à restaurer. Champ de recherche au même style que
+`InventoryPanel.jsx` (cohérence visuelle entre panneaux). `createSearchMatcher('')` renvoie déjà
+`true` pour tout — comportement strictement inchangé quand le champ est vide.
+
+**Validé en jeu réel par Saar (2026-10-13)**.
+
+**Testé** : validation JSON de `fr.json` ; ESLint sur `SkillsPanel.jsx` (0 nouveau problème, les 2
+restants confirmés pré-existants via `git stash`) ; `npm run build` client propre.
+**Non testé** : rien d'identifié — validation en jeu faite par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
