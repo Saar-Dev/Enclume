@@ -10428,3 +10428,39 @@ dans cette ligne.
 **Non testé** : rien d'identifié — validation en jeu faite par Saar.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — Zone d'effet (AOE) : modificateurs situationnels par cible nettoyés (taille + allure)
+
+Ticket déjà à moitié traité (commit `ddef667e`, 2026-09-15, D7) : seule la lecture de
+`confirmedModifiers.taille` avait été retirée côté serveur (`runAoePhaseA`), pas l'allure, et aucun
+des deux volets n'avait été nettoyé côté client — d'où l'impression de « déjà débattu » sans ticket
+clos.
+
+**Fix A (serveur, autorité)** : `socketCombatAoe.js` — `situationMods` filtre désormais les clés
+`cible_*` dans `runAoePhaseA`, même filtre déjà en place pour le jet de lancer de grenade
+(`throwerSituation`) dont le commentaire renvoyait explicitement à ce ticket. Avant ce correctif, la
+fenêtre AOE pré-remplissait `cible_immobile` (+3) dès que `target_token_id` était null (détection
+client « pas de mouvement trouvé » pour un token qui n'existe pas), et rien côté serveur ne
+corrigeait cette valeur pour l'AOE (la réécriture autoritaire de `socketCombatResolution.js` exclut
+explicitement l'AOE par design, même raison que la taille).
+
+**Fix B (client, cohérence)** : `CombatModifiersWindow.jsx` — sections Allure cible ET Taille
+masquées en zone d'effet (même garde `!isAoeAction` déjà utilisée pour Portée), et leur contribution
+neutralisée dans le total affiché (`cibleAllureMod`/`tailleModComp` à 0) pour que l'aperçu ne mente
+jamais sur ce que le serveur calcule réellement. La Taille souffrait du même défaut que l'Allure mais
+sans conséquence silencieuse jusqu'ici (défaut neutre `moyenne`, mod 0) — nettoyée par cohérence avec
+le titre du ticket.
+
+**Hors périmètre, délibérément non touché** : la détection `isAoeAction` (3ᵉ volet du ticket d'origine)
+semble déjà correcte — `buildDeclarePayload.js` n'attache le champ `aoe` que si le joueur a
+explicitement visé une direction/un point, jamais simplement parce que l'arme porte un profil AOE.
+Aucune repro trouvée pour l'affirmation contraire du ticket ; laissé en l'état.
+
+**Validé en jeu réel par Saar (2026-10-13)**.
+
+**Testé** : `shared/**/*.test.mjs` (947/947) ; `server/src/socket/socketCombatAoe.test.mjs` ciblé avec
+la base locale (25/25, aucune régression) ; ESLint `CombatModifiersWindow.jsx` (0 nouveau problème) ;
+`node --check` ; `npm run build` client propre.
+**Non testé** : rien d'identifié — validation en jeu faite par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

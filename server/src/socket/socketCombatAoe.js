@@ -111,7 +111,10 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
     }
   }
   const skillTotal = ctxTireur?.skillTotal ?? 0
-  const situationMods = confirmedModifiers?.situation ?? []
+  // Clés `cible_*` écartées — pas de cible unique à un jet de zone (même raison que l'absence de
+  // modificateur de taille, D7, et même filtre déjà appliqué au jet de lancer de grenade
+  // ci-dessous, `throwerSituation`) — AOE-SITUATIONAL-MODS-CLEANUP, 2026-10-13.
+  const situationMods = (confirmedModifiers?.situation ?? []).filter(k => !k.startsWith('cible_'))
   const rollResult = await resolveAoeAttackRoll({
     skillTotal, skillMastery: ctxTireur?.mastery ?? 0,
     contributions: [

@@ -250,10 +250,14 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
   const porteeModComp   = PORTEES.find(p => p.key === effectivePortee)?.mod ?? 0
   const tireurAllureMod = tireurAllureDef?.mod ?? 0
-  const cibleAllureMod  = cibleAllureDef?.mod ?? 0
+  // isAoeAction : aucune cible unique, aucun modificateur par cible n'a de sens (AOE-SITUATIONAL-
+  // MODS-CLEANUP, 2026-10-13 — même décision que le retrait côté serveur, runAoePhaseA/D7). Les
+  // 2 sections correspondantes sont masquées plus bas ; neutralisé ici aussi pour que le total
+  // affiché ne mente jamais sur ce que le serveur va réellement calculer.
+  const cibleAllureMod  = isAoeAction ? 0 : (cibleAllureDef?.mod ?? 0)
   const couvertureMod   = couvertures.reduce((sum, k) => sum + (COUVERTURES.find(c => c.key === k)?.mod ?? 0), 0)
   const obscuriteMod    = obscurites.reduce((sum, k) => sum + (OBSCURITES.find(o => o.key === k)?.mod ?? 0), 0)
-  const tailleModComp   = TAILLES.find(t => t.key === taille)?.mod ?? 0
+  const tailleModComp   = isAoeAction ? 0 : (TAILLES.find(t => t.key === taille)?.mod ?? 0)
   // Usure & Intégrité (PLAN_USURE&INTEGRITE.md §7.1.b/G1) — modificateur d'état de l'arme, affiché
   // AVANT le jet. Le serveur reste l'autorité sur la valeur réellement appliquée.
   const itgWeaponMod = weaponSkill?.hasIntegrity && weaponSkill.integrityCurrent >= 1
@@ -265,7 +269,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   // consultée par hasTirImpossible ET handleLancer, jamais deux logiques divergentes.
   const currentSituation = [
     ...(tireurAllureDef?.sitKey ? [tireurAllureDef.sitKey] : []),
-    ...(cibleAllureDef?.sitKey  ? [cibleAllureDef.sitKey]  : []),
+    ...(!isAoeAction && cibleAllureDef?.sitKey ? [cibleAllureDef.sitKey] : []),
     ...couvertures,
     ...obscurites,
   ]
@@ -477,7 +481,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             )}
           </div>
 
-          {/* Allure cible — même traitement que tireur ci-dessus. */}
+          {/* Allure cible — masquée en zone d'effet : pas de cible unique, aucun modificateur par
+              cible n'a de sens (AOE-SITUATIONAL-MODS-CLEANUP, 2026-10-13), même raison que Portée
+              ci-dessus. Un sélecteur ici inviterait à choisir une valeur ignorée par le serveur. */}
+          {!isAoeAction && (
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('modifiers.cibleAllureSection')}</div>
             {modifiersEditable && !gmReadOnlyInOversight ? (
@@ -497,6 +504,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
               </div>
             )}
           </div>
+          )}
 
           {/* Couverture — case à cocher, confirmation libre (jamais d'autorité serveur à corriger,
               contrairement à Portée/Taille). gmOversightOnly : aucune donnée à recaper (le MJ ne
@@ -549,7 +557,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
               mode libre : <select> neutre pour tous. gmOversightOnly (MJ supervise un PJ qui résout
               lui-même, COMBAT-RANGE-PLAYER-EDITABLE) : le select MJ émet la surcharge au lieu d'un
               state local, sinon (MJ résout lui-même un PNJ/drone/exo, ou joueur en mode libre)
-              comportement inchangé. */}
+              comportement inchangé. Masquée en zone d'effet (AOE-SITUATIONAL-MODS-CLEANUP,
+              2026-10-13) : déjà ignorée côté serveur depuis D7 (runAoePhaseA), même raison que
+              Portée/Allure cible ci-dessus — rester affichée inviterait un MJ à la modifier pour
+              rien, le total resterait alors incohérent avec le jet réel. */}
+          {!isAoeAction && (
           <div className="combat-float-section">
             <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
             {modifiersEditable ? (
@@ -569,6 +581,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
               </div>
             )}
           </div>
+          )}
 
         </div>
       )}
