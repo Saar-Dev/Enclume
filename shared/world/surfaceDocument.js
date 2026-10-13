@@ -585,9 +585,12 @@ export function prepareSurfaceData(input, { battlemapId = null, reseedWorldIds =
   })
 }
 
-export function collectSurfaceTextureIds(input) {
-  const surface = normalizeSurfaceDataDocument(input)
-  const ids = new Set()
+// SURFACE-TEXTURE-COLLECTORS-DIVERGE — règle de « quels champs sont des textures » partagée entre ce
+// fichier (serveur + export de carte, via normalizeSurfaceDataDocument) et client/src/lib/surfaceData.js
+// (via son propre normalizeSurfaceData, surfaceCore.js — deux normaliseurs distincts, hors périmètre de
+// ce ticket, mais qui produisent la même forme pour ces champs texture). `surface` est déjà normalisé
+// par l'appelant ; cette fonction ne fait que la marche, pour ne jamais exister en deux copies.
+export function addSurfaceTextureIds(surface, ids) {
   const add = value => {
     if (value != null && value !== '') ids.add(value)
   }
@@ -608,5 +611,11 @@ export function collectSurfaceTextureIds(input) {
       add(profile.interiorTex)
     }
   }
+}
+
+export function collectSurfaceTextureIds(input) {
+  const surface = normalizeSurfaceDataDocument(input)
+  const ids = new Set()
+  addSurfaceTextureIds(surface, ids)
   return Object.freeze([...ids])
 }

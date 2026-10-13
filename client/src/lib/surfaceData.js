@@ -23,7 +23,7 @@ import {
   roomVolumeContainsPoint,
 } from '../../../shared/world/roomGeometry.js'
 
-import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
+import { SURFACE_DATA_VERSION, addSurfaceTextureIds } from '../../../shared/world/surfaceDocument.js'
 import { formatLevel, sameLevel } from './surfaceUtils.js'
 import {
   surfaceBlockingForTool,
@@ -210,29 +210,7 @@ export function computeSurfaceGridExtent(data, { min = 20, max = 50, margin = 4 
 export function surfaceTextureIds(data) {
   const surface = normalizeSurfaceData(data)
   const ids = new Set()
-  for (const floor of Object.values(surface.floors)) {
-    if (floor?.tex) ids.add(floor.tex)
-    if (floor?.topTex) ids.add(floor.topTex)
-    if (floor?.bottomTex) ids.add(floor.bottomTex)
-  }
-  for (const wall of Object.values(surface.walls)) {
-    if (wall?.frontTex) ids.add(wall.frontTex)
-    if (wall?.backTex) ids.add(wall.backTex)
-    if (wall?.topTex) ids.add(wall.topTex)
-  }
-  for (const ceiling of Object.values(surface.ceilings)) {
-    if (ceiling?.tex) ids.add(ceiling.tex)
-    if (ceiling?.topTex) ids.add(ceiling.topTex)
-    if (ceiling?.bottomTex) ids.add(ceiling.bottomTex)
-  }
-  for (const stair of Object.values(surface.stairs)) {
-    if (stair?.tex) ids.add(stair.tex)
-  }
-  for (const room of Object.values(surface.rooms)) {
-    if (room?.floorTex) ids.add(room.floorTex)
-    if (room?.ceilingTex) ids.add(room.ceilingTex)
-    if (room?.wallInteriorTex) ids.add(room.wallInteriorTex)
-  }
+  addSurfaceTextureIds(surface, ids)
   return [...ids]
 }
 

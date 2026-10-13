@@ -10608,3 +10608,30 @@ Esquive/Parade dans ce projet) non touché, hors périmètre.
 pertinent. À vérifier : un Tir qui rate sa cible, confirmer le nouveau texte côté joueur visé.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — SURFACE-TEXTURE-COLLECTORS-DIVERGE : textures de profils d'apparence de mur enfin collectées côté client
+
+`shared/world/surfaceDocument.js#collectSurfaceTextureIds` (serveur + export de carte) et
+`client/src/lib/surfaceData.js#surfaceTextureIds` étaient deux copies quasi identiques de la même
+règle « quels champs sont des textures » — la copie client n'avait pas la boucle
+`room.wallAppearanceProfiles[].interiorTex` : une texture référencée uniquement par un profil
+d'apparence de mur n'était jamais chargée en mode jeu (`Canvas3D.jsx:2089`, effet « Chargement des
+voxel_textures nécessaires »).
+
+**Pas d'unification des deux normaliseurs** (`normalizeSurfaceDataDocument` partagé vs
+`normalizeSurfaceData` client, `surfaceCore.js`) — chantier à part, hors périmètre, les deux
+produisent déjà la même forme pour les champs texture. **Fix** : la marche elle-même (« quels champs
+lire ») extraite dans une fonction pure partagée `addSurfaceTextureIds(surface, ids)`
+(`shared/world/surfaceDocument.js`), appelée par les deux après leur propre normalisation —
+`collectSurfaceTextureIds` (serveur, inchangé côté appelants) et `surfaceTextureIds` (client,
+désormais 4 lignes au lieu de 25, `wallAppearanceProfiles` inclus). Le 3ᵉ consommateur cité par le
+ticket (export de carte, `battlemapWorldPersistence.js`) utilisait déjà la version partagée, pas
+affecté.
+
+**Testé** : `node --test shared/world/surfaceDocument.test.mjs` (19/19, dont un cas
+`wallAppearanceProfiles` déjà existant pour `collectSurfaceTextureIds`, aucune régression) ; ESLint
+(0 problème) ; `npm run build` client propre ; `node --check` partagé.
+**Non testé** : scénario réel navigateur — poser un mur avec un profil d'apparence intérieure
+distinct, confirmer que sa texture charge bien en mode jeu (pas seulement dans l'éditeur).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
