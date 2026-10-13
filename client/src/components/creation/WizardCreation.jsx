@@ -20,19 +20,7 @@ import StepTutorial from './StepTutorial'
 import WizardStepErrorBoundary from './WizardStepErrorBoundary.jsx'
 import { SocketProvider } from '../../lib/SocketContext.jsx'
 import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
-
-// i18nKey optionnel (AppError.js, errorHandler.js) : mêmes clés que WIZARD_ERROR côté socket
-// (namespace `creation`, `wizard.errors.*`) — résolu ici en priorité, fallback sur le message brut
-// serveur pour toutes les AppError non encore migrées (docs/EN_COURS.md, 2026-08-12). Factorisé une
-// seule fois : les 4 sites d'appel (advanceStep, advanceStep6, openPeek, handleTerminate) avaient ce
-// bloc dupliqué à l'identique.
-const extractErrorMessage = (err, t) => {
-  const i18nKey = err.response?.data?.error?.i18nKey
-  if (i18nKey) return t(i18nKey)
-  return err.response?.data?.error?.message
-    || err.response?.data?.message
-    || `Erreur ${err.response?.status ?? 'réseau'}`
-}
+import { extractErrorMessage } from '../../lib/apiError.js'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')

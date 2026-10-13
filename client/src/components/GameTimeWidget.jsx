@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { extractErrorMessage } from '../lib/apiError.js'
 import { useCampaignStore } from '../stores/campaignStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { projectGameTime, floorDiv, MINUTES_PER_DAY, DAYS_PER_MONTH, DAYS_PER_YEAR } from '../../../shared/gameTime.js'
@@ -37,6 +38,9 @@ export default function GameTimeWidget({ campaignId }) {
   const [openMenu, setOpenMenu] = useState(null) // null | 'year'|'month'|'day'|'hour'|'minute'
   const [editingUnit, setEditingUnit] = useState(null) // idem, édition inline exclusive du menu
   const [editValue, setEditValue] = useState('')
+  const [error, setError] = useState(null) // GAMETIME-WIDGET-SWALLOWS-ERRORS — refus serveur, transitoire
+  const errorTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(errorTimerRef.current), [])
 
   useEffect(() => {
     if (!openMenu) return
@@ -70,7 +74,9 @@ export default function GameTimeWidget({ campaignId }) {
     try {
       await api.post(`/campaigns/${campaignId}/game-time/request-advance`, { minutes: deltaMinutes })
     } catch (err) {
-      console.error('[GameTimeWidget] adjust:', err.message)
+      clearTimeout(errorTimerRef.current)
+      setError(extractErrorMessage(err, t))
+      errorTimerRef.current = setTimeout(() => setError(null), 4000)
     } finally {
       setSubmitting(false)
     }
@@ -154,6 +160,7 @@ export default function GameTimeWidget({ campaignId }) {
           </div>
         ))}
       </div>
+      {error && <div className="gametime-error">{error}</div>}
     </div>
   )
 }

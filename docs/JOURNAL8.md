@@ -10498,3 +10498,31 @@ pré-existants et sans rapport, 0 nouveau) ; `npm run build` client propre ; sc�
 **Non testé** : rien d'identifié — validation en jeu faite par Saar.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — GAMETIME-WIDGET-SWALLOWS-ERRORS : refus serveur affiché dans le widget d'horloge
+
+`GameTimeWidget.jsx` (`adjust`) n'écrivait un refus serveur (`POST game-time/request-advance`, ex.
+409 « avance déjà en attente », bornes dépassées) que dans `console.error` — un MJ qui cliquait sur
+un bouton refusé ne voyait rien, le clic paraissait sans effet.
+
+**Fix** : même patron que l'erreur transitoire de `DroneWindow.jsx` (`ordersError` /
+`ordersErrorTimerRef`, auto-disparition après 4 s, cleanup au démontage) — `error` affiché sous la
+pastille horloge (`.gametime-error`, `var(--color-danger-soft)`, pas de hex inventé) au lieu du seul
+`console.error`.
+
+**Extraction** : `extractErrorMessage(err, t)` (résolution `i18nKey` serveur sinon message brut,
+convention `docs/EN_COURS.md` 2026-08-12) n'existait que dans `WizardCreation.jsx` (4 sites internes)
+— déplacée dans `client/src/lib/apiError.js` (nouveau) pour ne pas dupliquer cette même logique dans
+un second composant ; `WizardCreation.jsx` importe désormais depuis ce fichier, comportement
+inchangé. Note posée dans le nouvel utilitaire : l'appelant doit passer un `t` lié au namespace de
+l'`i18nKey` que sa route peut renvoyer — vérifié que `gameTimeService.js` n'en pose aucun à ce jour,
+donc aucun risque actuel, juste une responsabilité documentée pour un futur appelant.
+
+**Testé** : ESLint (diff JSON avant/après sur les 3 fichiers touchés, 0 nouveau problème) ; `npm run
+build` client propre.
+**Non testé** : scénario réel navigateur — aucun test automatisé possible (pas de suite de tests
+composant React dans ce projet). À vérifier : déclencher un refus serveur (ex. redemander une avance
+alors qu'une est déjà en attente de revue) et confirmer que le message apparaît sous l'horloge puis
+disparaît après 4 s.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
