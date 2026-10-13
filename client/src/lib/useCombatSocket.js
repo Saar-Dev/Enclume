@@ -210,8 +210,10 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
-    const onDeclareError = ({ message, username, stunned, statusCode, isOwnToken, actorLabel }) => {
-      let text = message
+    const onDeclareError = ({ message, i18nKey, params, username, stunned, statusCode, isOwnToken, actorLabel }) => {
+      // COMBAT-STALE-CONFIRM-MESSAGE-I18N — repli sur `message` brut pour tous les sites serveur pas
+      // encore migrés vers i18nKey (dette ancienne et répandue sur cet événement, hors périmètre ici).
+      let text = i18nKey ? t(i18nKey, params) : message
       if (stunned) {
         // Libellé du statut lu dans `status.<code>` (mêmes clés que le panneau) — plus de branche par code :
         // stunned → « étourdi », unconscious → « inconscient », dead → « mort ».

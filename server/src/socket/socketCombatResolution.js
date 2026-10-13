@@ -344,11 +344,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         // fenêtre reste ouverte côté client mais ne peut plus rien confirmer (retour Saar : « fenêtre
         // de modificateur non validable, Tour planté »). Message explicite plutôt qu'un no-op muet.
         const nextLabel = step ? (await db('tokens').where({ id: step.tokenId }).first())?.label ?? 'quelqu\'un d\'autre' : null
-        socket.emit(WS.COMBAT_DECLARE_ERROR, {
-          message: nextLabel
-            ? `L'ordre a changé entre-temps — c'est maintenant au tour de ${nextLabel}. Cette fenêtre n'est plus d'actualité, fermez-la.`
-            : 'Ce Tour est déjà terminé pour cette action — rien à confirmer.',
-        })
+        // COMBAT-STALE-CONFIRM-MESSAGE-I18N — i18nKey + params plutôt qu'un texte français codé en
+        // dur (.claude/rules/i18n.md) ; reformulé en clair après retour Saar (« incompréhension »).
+        socket.emit(WS.COMBAT_DECLARE_ERROR, nextLabel
+          ? { i18nKey: 'session.staleConfirmNextTurn', params: { label: nextLabel } }
+          : { i18nKey: 'session.staleConfirmTurnOver' })
         return
       }
 

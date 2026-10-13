@@ -10765,3 +10765,30 @@ confirmer le libellé « Évanoui » dans l'écran de revue MJ et la présence (
 panneau de statuts.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — COMBAT-STALE-CONFIRM-MESSAGE-I18N : message de course clarifié
+
+Quand une fenêtre de modificateurs confirme une action pour un token qui n'est plus le pas courant de
+l'échelle (course légitime : un personnage en délai a agi entre-temps, réordonnant l'échelle), le
+message affiché — « L'ordre a changé entre-temps — c'est maintenant au tour de X. Cette fenêtre n'est
+plus d'actualité, fermez-la. » — a été signalé incompréhensible par Saar. Le texte était en plus codé
+en dur côté serveur (`socketCombatResolution.js`), ce qui enfreint la règle i18n du projet.
+
+**Fix** : reformulé en clair (« Le tour est passé à X pendant que vous prépariez votre action — cette
+fenêtre ne sert plus à rien, vous pouvez la fermer. ») et déplacé vers deux clés i18n dédiées
+(`session.staleConfirmNextTurn`/`staleConfirmTurnOver`). `useCombatSocket.js` (`onDeclareError`)
+résout désormais `i18nKey`+`params` en priorité, avec repli sur `message` brut pour les très nombreux
+autres sites de `COMBAT_DECLARE_ERROR` (constaté : des dizaines, dans `socketCombatAnnouncement.js`
+et ailleurs) — dette ancienne et répandue sur cet événement, pas migrée ici, hors périmètre de ce
+ticket qui ne visait que le message signalé.
+
+**Hors périmètre** (question annexe du ticket) : pourquoi la fenêtre de modificateurs ne se ferme-t-elle
+pas automatiquement dans ce cas — pas investigué, amélioration séparée.
+
+**Testé** : JSON valide, ESLint (diff JSON avant/après, 0 nouveau problème), `node --check` serveur,
+`npm run build` client propre.
+**Non testé** : aucun test automatisé n'exerce cette course (nécessite un personnage en délai qui agit
+entre l'ouverture de la fenêtre et la confirmation — scénario réel multi-clients). Scénario réel si
+l'occasion se présente.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
