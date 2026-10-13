@@ -10792,3 +10792,28 @@ entre l'ouverture de la fenêtre et la confirmation — scénario réel multi-cl
 l'occasion se présente.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — DRONE-INTEGRITY-LOSS-PER-HIT-RAW : l'intégrité d'un drone ne baisse plus à chaque touche
+
+`resolveDroneIntegrityLoss` (`socketCombatHelpers.js`) décrémentait l'intégrité d'un drone de 1 à
+**chaque** touche, même sous 5 de dégâts nets (aucune case de blessure cochée) — commentaire d'origine
+« LdB p.82-88 : 1 hit = 1 case = integrite -= 1 ». **Décision de Saar (2026-10-13)** : aligner le
+drone sur l'exo-armure, dont le RAW est explicite (`REGLEARMURE.md:341-353`, règle générique reprise
+par les drones `REGLEDRONE.md:48-50`) : la perte d'Intégrité n'arrive que sur la **première** Avarie
+du palier le plus grave avant destruction, jamais sur un coup léger/moyen/grave/critique, jamais sur
+une 2ᵉ Avarie du même palier.
+
+**Fix** : la case de blessure (« légère » → « mortelle ») continue de se cocher normalement à chaque
+touche (RAW inchangé, `damages` reflète les dégâts réels comme un personnage) ; l'Intégrité, elle, ne
+baisse que si ce coup est le premier à atteindre « mortelle » (capturé avant la pose de la case) ou si
+le drone est détruit (≥ 30 dégâts nets, inchangé). Conséquence vérifiée : l'Intégrité alimente la
+Résistance aux dommages du drone (`charStats.js#calcDroneRD`) — elle restera désormais plus haute plus
+longtemps, cohérent avec l'objectif (un drone ne devait pas devenir fragile après trois égratignures).
+
+**Testé** : nouveau fichier `server/src/socket/socketCombatHelpers.droneIntegrity.test.mjs` (4/4, DB
+réelle — coup léger sans perte, 1ʳᵉ Avarie mortelle avec perte, 2ᵉ Avarie mortelle sans perte
+supplémentaire, destruction directe) ; `shared/**/*.test.mjs` (947/947) ; `node --check`.
+**Non testé** : scénario réel navigateur/en jeu — infliger plusieurs touches légères à un drone puis
+un coup très grave, confirmer que l'intégrité affichée ne baisse qu'au coup grave.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

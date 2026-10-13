@@ -4189,6 +4189,13 @@ export async function resolveDroneIntegrityLoss(io, campaignId, characterId, tok
   // Gravité : table RAW partagée (shared/woundConstants.js) ; seule la destruction (≥ 30) est propre au drone.
   const severity = degatsNets >= DRONE_DESTROYED_DAMAGE ? 'detruit' : woundSeverityForDamage(degatsNets)
 
+  // DRONE-INTEGRITY-LOSS-PER-HIT-RAW (2026-10-13, décision de Saar : alignement sur l'exo-armure) —
+  // capturé AVANT la pose de la case : ce coup est-il le PREMIER à atteindre « mortelle » ? Même règle
+  // que exoAvarieService.js (REGLEARMURE.md:341-353, reprise par les drones REGLEDRONE.md:48-50) :
+  // seule la première Avarie du palier le plus grave coûte un point d'Intégrité, pas les suivantes au
+  // même palier, et jamais un coup léger/moyen/grave/critique.
+  const mortelleWasEmpty = severity === 'mortelle' && !damages.mortelle?.some(Boolean)
+
   if (severity && severity !== 'detruit' && Array.isArray(damages[severity])) {
     const idx = damages[severity].indexOf(false)
     if (idx !== -1) {
@@ -4198,8 +4205,11 @@ export async function resolveDroneIntegrityLoss(io, campaignId, characterId, tok
     // B4 : si idx === -1 (toutes cases pleines pour ce niveau), décrémentation quand même — sprint futur
   }
 
-  // LdB p.82-88 : 1 hit = 1 case = integrite -= 1. 'detruit' → integrite = 0 immédiatement.
-  const newIntegrite = severity === 'detruit' ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
+  const newIntegrite = severity === 'detruit'
+    ? 0
+    : mortelleWasEmpty
+      ? Math.max(0, droneSheet.integrite_actuelle - 1)
+      : droneSheet.integrite_actuelle
   const detruit = newIntegrite <= 0
 
   if (detruit) damages.detruit = true
