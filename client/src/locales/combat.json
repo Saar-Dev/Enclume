@@ -607,7 +607,7 @@
     "player": {
       "lethallyHit": "Vous êtes mortellement touché",
       "hit": "Vous êtes touché",
-      "dodged": "Vous esquivez le tir",
+      "missed": "Le tir vous manque",
       "byPrefix": "par ",
       "fromPrefix": "de "
     }

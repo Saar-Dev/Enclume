@@ -10587,3 +10587,24 @@ d'étourdissement, faire mourir le personnage entre-temps (MJ), confirmer que la
 d'elle-même côté joueur.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — COMBAT-DODGE-NOTIFICATION-WORDING : un Tir raté n'est plus présenté comme une esquive
+
+`CombatResultPanels.jsx` (`CombatResultPlayer`) affichait « Vous esquivez le tir » au joueur visé
+par un Tir raté — vérifié au RAW (`REGLECACARTMARTIAUX.md:292`, `REGLEDRONE.md:99/238`) : « Esquive »
+n'existe que comme Technique martiale CaC (Retraite) ou programme de drone « au contact », jamais
+comme action active contre un Tir à distance. Un Tir raté est un échec du jet de l'attaquant, pas une
+action défensive du joueur visé — le message laissait croire à tort qu'esquiver un tir est possible.
+
+**Fix** : texte remplacé par « Le tir vous manque » (passif, même voix que les clés sœurs
+`player.hit`/`player.lethallyHit`, aucune n'impliquant une action du joueur). Clé renommée
+`resultPanels.player.dodged` → `resultPanels.player.missed` (le nom portait la même méprise que le
+texte), alignée sur `resultPanels.gm.missed` déjà existant pour la vue MJ du même événement. Site
+d'usage unique mis à jour (`CombatResultPanels.jsx:369`) ; `melee.dodged` (CaC, vrai jet d'opposition
+Esquive/Parade dans ce projet) non touché, hors périmètre.
+
+**Testé** : JSON valide, ESLint (0 problème), `npm run build` client propre.
+**Non testé** : scénario réel navigateur — texte + nom de clé seulement, pas de test automatisé
+pertinent. À vérifier : un Tir qui rate sa cible, confirmer le nouveau texte côté joueur visé.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

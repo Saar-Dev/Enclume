@@ -366,7 +366,7 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
       <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: isSuccess ? accent : C.text, letterSpacing: '0.01em', lineHeight: 1.2 }}>
         {isSuccess
           ? (severity === 'mort_subite' ? t('resultPanels.player.lethallyHit') : t('resultPanels.player.hit'))
-          : t('resultPanels.player.dodged')
+          : t('resultPanels.player.missed')
         }
       </div>
 
