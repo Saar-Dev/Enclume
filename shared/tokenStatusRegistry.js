@@ -84,7 +84,9 @@ export const TOKEN_STATUS_REGISTRY = [
     blocksDeclaration: true, defenseless: true, clearedAtCombatEnd: true, incompatibleWithDeath: true },
   { code: 'blinded',       category: 'sens',      manualToggle: true,  inPanel: true,
     defenseless: true, incompatibleWithDeath: true },
-  { code: 'evanoui',       category: 'sens',                                   incompatibleWithDeath: true },
+  // inPanel sans manualToggle (même patron que burning/acid/decompression) : affiché quand actif,
+  // jamais cliquable — posé uniquement par la Fatigue, jamais à la main (STATUT-EVANOUI-I18N-PANEL).
+  { code: 'evanoui',       category: 'sens',                      inPanel: true, incompatibleWithDeath: true },
   { code: 'hypothermia',   category: 'chronique', manualToggle: true,  inPanel: true, gmOnly: true, incompatibleWithDeath: true },
   { code: 'infected',      category: 'chronique', manualToggle: true,  inPanel: true },
   { code: 'poisoned',      category: 'chronique', manualToggle: true,  inPanel: true },

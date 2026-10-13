@@ -18,6 +18,8 @@ import { ENVIRONMENTAL_HAZARD_REGISTRY } from './environmentalHazardRegistry.js'
 // (devenu mécanique, breathHoldService.js — une bascule nue poserait une ligne malformée, cf.
 // shared/tokenStatusRegistry.js) ; `breath_hold` ajouté, hors bascule/panneau (catégorie dédiée
 // `respiration`, visuel dédié TokenPresentation.jsx:BreathHoldIndicator).
+// Mis à jour 2026-10-13 (STATUT-EVANOUI-I18N-PANEL) : `evanoui` entre au panneau (affiché quand actif,
+// jamais cliquable — même patron que burning/acid/decompression, pas de `manualToggle`).
 const AVANT = {
   // socketToken.js — VALID_STATUS_CODES
   basculeManuelle: [
@@ -29,7 +31,7 @@ const AVANT = {
   panneau: [
     ['grappled', 'entrave'], ['restrained', 'entrave'], ['off_balance', 'entrave'],
     ['burning', 'dot'], ['acid', 'dot'], ['asphyxia', 'dot'], ['decompression', 'dot'], ['electrocuted', 'dot'],
-    ['stunned', 'sens'], ['unconscious', 'sens'], ['blinded', 'sens'],
+    ['stunned', 'sens'], ['unconscious', 'sens'], ['blinded', 'sens'], ['evanoui', 'sens'],
     ['hypothermia', 'chronique'], ['infected', 'chronique'], ['poisoned', 'chronique'], ['irradiated', 'chronique'],
     ['dead', 'mort'],
   ],

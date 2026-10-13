@@ -1184,6 +1184,7 @@
     "infected":      "Infecté",
     "poisoned":      "Empoisonné",
     "irradiated":    "Irradié",
+    "evanoui":       "Évanoui",
     "dead":          "Mort"
   },
   "entityPanel": {

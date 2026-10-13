@@ -10743,3 +10743,25 @@ navigateur : provoquer un refus (ex. nom de pack déjà pris) et vérifier un me
 un pack dont le nom contient un caractère spécial et vérifier que le téléchargement ne plante plus.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — STATUT-EVANOUI-I18N-PANEL : « Évanoui » enfin traduit, visible au panneau MJ
+
+Le code `evanoui` (posé par la Fatigue, palier « À bout de force ») figure au registre
+(`shared/tokenStatusRegistry.js`) mais n'avait ni clé `status.evanoui` dans `fr.json` ni entrée de
+panneau — `WoundReviewCard.jsx` (liste des statuts actifs d'un personnage, écran de revue MJ)
+affichait le code brut à défaut de traduction (`defaultValue: code`). L'icône SVG existait déjà
+(`client/public/assets/status/evanoui.svg`).
+
+**Fix** : clé `status.evanoui` = « Évanoui » ajoutée à `fr.json`. `inPanel: true` ajouté au registre
+— sans `manualToggle`, même patron déjà établi pour les statuts purement automatiques (burning/acid/
+decompression) : affiché quand actif dans le panneau MJ, jamais cliquable (`isActionable` l'exclut
+déjà automatiquement, dérivé du registre, rien à changer dans `TokenStatusPanel.jsx`).
+
+**Testé** : `shared/tokenStatusRegistry.test.mjs` (23/23, instantané `AVANT.panneau` mis à jour
+volontairement dans ce même commit — convention documentée en tête du fichier) ; `shared/**/*.test.mjs`
+(947/947) ; JSON valide ; `node --check` ; `npm run build` client propre.
+**Non testé** : scénario réel navigateur — faire tomber un personnage à « À bout de force » (Fatigue),
+confirmer le libellé « Évanoui » dans l'écran de revue MJ et la présence (non cliquable) dans le
+panneau de statuts.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
