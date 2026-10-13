@@ -420,9 +420,23 @@ export default function SkillsPanel({
         {/* Nom */}
         <td style={{ ...s.td, textAlign: 'left' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '3px', paddingLeft: skill.parent ? '14px' : '0' }}>
+            {/* Palette alignée sur les tokens déjà établis du projet (index.css:109-125, famille
+                --*-session-* déjà réutilisée par ce panneau pour ses fonds) au lieu de hex inventés
+                localement — rouge/vert déjà la signification "malus"/"bonus" partout ailleurs dans
+                l'app (ex. badges de ticket), or déjà la signification "particulier/réservé" (ex.
+                priorité de ticket medium). (X) non débloquée : or uniquement en mode Progression
+                (seul contexte où l'action "débloquer" est possible — décision Saar 2026-10-13). */}
             <span style={{
               fontSize: '11px',
-              color: locked ? '#6a6a80' : isDiff ? '#e08888' : isPN ? '#88c8a0' : '#b0b0c8',
+              color: locked
+                ? 'var(--text-session-lo)'
+                : isDiff
+                ? 'var(--color-danger-soft)'
+                : isPN
+                ? 'var(--color-success-soft)'
+                : (isX && progressionMode)
+                ? 'var(--color-gold-muted)'
+                : 'var(--text-session-hi)',
               flex: 1,
               minWidth: 0,
             }}>

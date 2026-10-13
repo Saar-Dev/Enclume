@@ -10399,3 +10399,32 @@ restants confirmés pré-existants via `git stash`) ; `npm run build` client pro
 **Non testé** : rien d'identifié — validation en jeu faite par Saar.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-13 — CHARSHEET-SKILLX-COLOR : compétences (X) colorées en mode Progression + palette alignée sur les tokens du projet
+
+Les compétences `(X)` non apprises restaient affichées dans la couleur neutre des compétences
+normales, contrairement à `(-3)` (rouge) et Progression Naturelle (vert), déjà distinguées. Demande
+de Saar : une 4ᵉ couleur pour `(X)`, visible uniquement en mode Progression (seul contexte où
+l'action « débloquer » est possible — hors Progression, une compétence non débloquée reste affichée
+(décision déjà actée, non remise en cause ici, cf. commentaire `SkillsPanel.jsx` « retour Saar
+2026-10-04 »), mais la marquer visuellement n'a pas de sens puisqu'aucune action n'est disponible
+dessus dans ce mode).
+
+**Relecture complète demandée par Saar sur l'ensemble du dégradé de couleurs** (jugé « amateur,
+moche, pas clair » dans sa forme précédente) : `SkillsPanel.jsx` inventait ses 4 couleurs en hex
+local (`#e08888`, `#88c8a0`, `#6a6a80`, `#b0b0c8`) au lieu de réutiliser la palette de tokens déjà
+établie du projet (`index.css:109-125`, famille `--*-session-*`, déjà réutilisée par ce même panneau
+pour ses fonds). Remplacé par les tokens existants : `--text-session-hi` (normale),
+`--color-danger-soft` (malus `(-3)`, même rouge que les badges de ticket ailleurs dans l'app),
+`--color-success-soft` (PN, même vert), `--text-session-lo` (verrouillée, le plus éteint),
+`--color-gold-muted` (`(X)` non débloquée, mode Progression — même or que la priorité « medium » des
+tickets, déjà associé à « particulier/réservé » dans le reste du projet). Plus aucun hex inventé
+dans cette ligne.
+
+**Validé en jeu réel par Saar (2026-10-13)**.
+
+**Testé** : ESLint sur `SkillsPanel.jsx` (0 nouveau problème, les 2 restants confirmés pré-existants) ;
+`npm run build` client propre.
+**Non testé** : rien d'identifié — validation en jeu faite par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
