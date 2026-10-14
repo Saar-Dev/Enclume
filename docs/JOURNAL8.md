@@ -11044,3 +11044,85 @@ livre tranchait déjà).
 **Non testé** : sans objet.
 **Données** : aucune.
 **Retour arrière** : sans objet (aucun code modifié).
+
+---
+
+## Session (Claude) — 2026-10-14 — Purge Voxel : chantier clos (6 lots)
+
+Détail complet dans `docs/Old/PLAN_PURGE_VOXEL.md` (archivé ce jour). Résumé : l'ancien format de carte
+voxel (`voxel_data`, édité case par case, remplacé depuis longtemps par Surface/Salle/Mur) ne laissait
+plus que des reliquats inertes — garde-fous stricts de Saar dès le début (§0 du plan : aucune donnée
+supprimée sans accord explicite colonne par colonne, rien d'irréversible sans accord).
+
+**Lot 1** (2026-09-30, `3c44b792`) : isolement du code mort d'`Editor3D.jsx` dans `legacyVoxel/`, sans
+suppression. **Lot 2** (`562aa219`) : pipeline de sauvegarde voxel retiré (route serveur, refs client) —
+preuve par lecture que `isDirty` n'était plus jamais mis à `true` nulle part (ticket
+`VOXEL-SAVE-INERT1`). **Lot 3** (`7aaba0da`) : repli de rendu sur carte sans `surface_data` retiré
+(`CulledVoxelScene`/`DungeonTerrainScene`, toujours sur `voxels = {}` — aucune carte à voxels
+n'existe) ; `calcEntityPos` réduit au seul fallback plan Y=0 réellement actif ; 5 fichiers + 1 dépendance
+npm supprimés. **Lot 4** (`7ac47943`) : catalogue `voxel_textures` → `surface_textures` (base, API,
+fichiers) — catalogue réellement utilisé par `surface_data`, jamais confondu avec le format mort ;
+1 doublon serveur mort et 1 page orpheline supprimés en route. **Lot 5** (`0b26088f`) : colonnes
+`voxel_data`/`voxel_revision`/`voxel_scale` supprimées de `battlemaps` (migration 388), accord
+explicite de Saar, sans sauvegarde (demande explicite, garde-fou levé par lui pour cette étape précise).
+**Lot 6** (`3f84ddd4`) : 9 documents `SYSTEME/` + 1 règle Claude corrigés (plusieurs décrivaient encore
+un pipeline double voxel+surface disparu depuis le Lot 2) ; trouvaille en route :
+`createReliefGeometryFromQuadData` + 4 helpers (`reliefGeometry.js`) orphelins depuis le Lot 3, jamais
+vérifiés à l'époque, retirés.
+
+**Clôture transverse** (même session, après coup — trois manques identifiés en analyse à charge sur le
+chantier déjà clos) : aide contextuelle (`SidebarHelpModal.jsx`, mode édition) corrigée — affichait
+encore « Poser/Effacer un voxel » et des raccourcis décrivant des contrôles disparus depuis le
+2026-08-26 (avant même ce chantier) ; ticket `VOXEL-SAVE-INERT1` fermé ; ligne ROADMAP retirée et plan
+archivé (convention du projet pour un chantier totalement clos).
+
+**Leçon de méthode retenue** : le mot « voxel » porte deux sens dans ce code — le format de carte mort
+et un adjectif de forme cubique/bloc toujours vivant (`Voxel.jsx`, `usage_hint`, `appearance`) — ne
+jamais classer par le mot seul. Deuxième leçon : toute écriture de fichier de migration est une action
+en production immédiate dès que le serveur de Saar tourne (nodemon), jamais une étape préparable à
+tête reposée — nettoyer le code avant d'écrire la migration, jamais l'inverse.
+
+**Testé** : `node --check`/`eslint` à chaque lot (comparés ligne à ligne au lint d'avant lot depuis
+l'incident du Lot 4, pas seulement au total), `node --test` sur les fichiers concernés
+(`battlemapWorldPersistence.test.mjs`, `battlemaps.duplicateEntities.test.mjs`), `npm run build` client
+propre à chaque lot, requêtes directes en base confirmant chaque état de schéma.
+**Non testé** : navigateur — Lots 2/3 confirmés par Saar ; Lot 4 sans objet (Atelier non câblé pour
+l'import, coquille vide, confirmé par Saar) ; la route `/duplicate` (Lot 5, retrait de 2 champs de
+l'INSERT) n'a aucune couverture automatisée directe et n'a pas été exercée en navigateur — risque jugé
+faible (les colonnes n'existant plus, une erreur serait immédiate et bruyante, pas silencieuse) mais
+non vérifié.
+**Données** : 2 migrations (386 renommage table/colonne/séquence, 388 suppression de 3 colonnes),
+toutes deux appliquées localement.
+**Retour arrière** : `down()` de chaque migration restaure la structure (386 : renomme en sens inverse ;
+388 : recrée les 3 colonnes avec leurs types/défauts d'origine, vide — aucune donnée n'existait à
+perdre, vérifié avant suppression).
+
+## Session (Claude) — 2026-10-14 — WIZ44 : diviser un empilement en deux piles (split)
+
+Premier jet faux (corrigé en cours de route, Saar) : j'avais compris le ticket comme « ajouter un
+bouton pour changer la quantité » (+/- puis juste -), alors que la vraie demande était de pouvoir
+**diviser une pile en deux** (ex. 5 grenades dans le Sac → en détacher 2 pour les déplacer ailleurs
+sans toucher aux 3 restantes). Le ticket pointait vers la capacité serveur déjà existante
+(`DELETE .../inventory/:itemId` accepte `{quantity}`, décrément partiel) comme indice de faisabilité,
+pas comme la fonctionnalité elle-même. Changements erronés annulés avant de recommencer
+(déplacement de `inventoryRules.js` vers `shared/` inclus — pas nécessaire pour split : un
+empilement, `quantity > 1`, est par construction déjà stackable).
+
+**Fix** : nouvelle route `POST .../inventory/:itemId/split { quantity }` → `inventoryService.splitItem`
+(nouvelle fonction) : dans une transaction, décrémente la ligne source et insère une NOUVELLE ligne
+(même `container`, même `equipment_id`) avec la quantité détachée — jamais un achat (pas de prix,
+aucun débit). Refuse si la quantité détachée est ≥ à la quantité totale (la source garde toujours au
+moins 1 ; détacher la totalité est déjà un déplacement, pas une division — fait par glisser-déposer
+existant). Côté écran (`InventoryPanel.jsx`) : bouton « Diviser » visible seulement si l'objet est en
+plusieurs exemplaires, ouvre un petit champ numérique inline (même style que le reste de la ligne) ;
+la validation crée la nouvelle pile dans le MÊME emplacement, que le joueur déplace ensuite
+normalement par glisser-déposer — aucune nouvelle logique de déplacement, tout est réutilisé.
+
+**Testé** : JSON valide, `node --check` sur les 3 fichiers serveur touchés, 3 nouveaux tests ciblés
+DB réelle dans `inventoryService.test.mjs` (division simple, refus si quantité ≥ totale, refus si
+quantité ≤ 0 — 37/37 sur l'ensemble du fichier, aucune régression), ESLint ciblé (0 nouveau problème),
+`npm run build` client propre.
+**Non testé** : rendu visuel réel (diviser une pile, puis glisser la nouvelle pile vers un autre
+emplacement) — à valider par Saar.
+**Données** : aucune migration (route + logique applicative uniquement).
+**Retour arrière** : `git revert` du commit.

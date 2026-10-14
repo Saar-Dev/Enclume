@@ -26,9 +26,7 @@ export default function SidebarHelpModal({ mode, open, onClose }) {
         {mode === 'edit' && (
           <>
             <div className="sidebar-help-section">{t('sidebar.helpSectionEdit')}</div>
-            <div className="sidebar-help-row"><kbd className="sidebar-kbd">Clic gauche</kbd><span>{t('sidebar.helpVoxelPlace')}</span></div>
-            <div className="sidebar-help-row"><kbd className="sidebar-kbd">Clic droit</kbd><span>{t('sidebar.helpVoxelErase')}</span></div>
-            <div className="sidebar-help-row"><kbd className="sidebar-kbd">R</kbd><span>{t('sidebar.helpVoxelRotate')}</span></div>
+            <div className="sidebar-help-row"><kbd className="sidebar-kbd">R</kbd><span>{t('sidebar.helpEntityRotate')}</span></div>
             <div className="sidebar-help-row"><kbd className="sidebar-kbd">1</kbd><span>{t('sidebar.helpGeoCube')}</span></div>
             <div className="sidebar-help-row"><kbd className="sidebar-kbd">2</kbd><span>{t('sidebar.helpGeoDalleB')}</span></div>
             <div className="sidebar-help-row"><kbd className="sidebar-kbd">3</kbd><span>{t('sidebar.helpGeoDalleH')}</span></div>
