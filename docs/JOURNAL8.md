@@ -10940,3 +10940,24 @@ changement d'affichage pur, aucune logique métier ni écriture en base modifié
 **Non testé** : rendu visuel réel en jeu (déclencher un étourdissement/une inconscience).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — CHANCE-PNJ-WINDOW-UNCLEAR : le titre « Catastrophe » n'apparaît plus sur un simple choix de Chance
+
+`CatastropheChoiceQueue.jsx` affichait toujours `t('catastrophePopup')` (« Catastrophe ») en titre,
+même pour une carte sans Catastrophe réelle (`catastrophe === null`) — cas d'un simple choix de
+Chance « Éviter la zone d'effet » (grenade à portée longue/extrême, `aoe_avoidance`). Vécu par Saar
+(2026-09-24, grenade à fragmentation) : fenêtre titrée « Catastrophe — Jean Val-Jean » pour un choix
+qui n'avait rien d'une Catastrophe. Trouvé en même temps : `chance.gmQueue.title` (« Catastrophe —
+Chance (PNJ)) existait dans `combat.json` pour ce cas précis mais n'était câblé nulle part dans le
+code (texte mort).
+
+**Fix** : nouvelle clé top-level `chancePopup` (« Chance », sœur de `catastrophePopup` déjà existant)
+à la place de la clé morte (supprimée) ; le titre choisit entre les deux selon que `catastrophe` est
+renseigné ou non. Hors périmètre (vérifié RAW par le ticket) : le lanceur de grenade apparaissant
+comme sa propre cible est un comportement correct, pas touché.
+
+**Testé** : JSON valide, ESLint ciblé (copie temporaire hors index git — session parallèle active sur
+le même worktree, `git stash` évité —, 0 nouveau problème), `npm run build` client propre.
+**Non testé** : rendu visuel réel en jeu.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

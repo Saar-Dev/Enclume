@@ -698,6 +698,7 @@
     "catastrophique": "Catastrophique"
   },
   "catastrophePopup": "Catastrophe",
+  "chancePopup": "Chance",
   "catastrophe": {
     "overridePlaceholder": "Reprendre la main…",
     "applyOverride": "Appliquer",
@@ -918,9 +919,6 @@
       "deathNoChance": "{{label}} n'a pas assez de Chance pour éviter la mort (3 points doivent rester).",
       "overflowNoRescue": "{{label}} : la ligne du compteur a débordé, cette blessure ne se rachète pas avec la Chance.",
       "dies": "{{label}} meurt."
-    },
-    "gmQueue": {
-      "title": "Catastrophe — Chance (PNJ)"
     }
   },
   "diceLabels": {

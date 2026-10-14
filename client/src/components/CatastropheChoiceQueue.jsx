@@ -123,7 +123,7 @@ export default function CatastropheChoiceQueue({ socket }) {
     <div className="catastrophe-review-overlay">
       <div className="catastrophe-review-card">
         <div className="catastrophe-review-title">
-          {t('catastrophePopup')} — {tokenLabel ?? characterLabel}
+          {catastrophe ? t('catastrophePopup') : t('chancePopup')} — {tokenLabel ?? characterLabel}
         </div>
 
         {entry && (
