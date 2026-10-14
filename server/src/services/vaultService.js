@@ -5,6 +5,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { getOrCreateVault } from './vaultCoreService.js'
+import { TEST_BLOCKING_SEVERITIES } from '../../../shared/woundConstants.js'
 
 // ─── Registre par type de compagnon (PLAN_VAULT.md "Registre par type de compagnon") ───────────
 // Groupe A (pj/pnj) : arbre char_sheet, deux niveaux d'indirection. La plupart des tables sont
@@ -65,6 +66,24 @@ async function cloneExoSheet(trx, { sourceCharacterId, newCharacterId }) {
     avaries_catastrophiques: 0,
     pilot_character_id: null,
   })
+}
+
+// WOUND-VAULT-NO-CAMPAIGN (décision Saar 2026-10-14, version 2) — un personnage transféré au Coffre
+// n'emporte que les blessures qui ne guérissent jamais seules (mortelle/mort_subite,
+// TEST_BLOCKING_SEVERITIES, shared/woundConstants.js — pas une nouvelle liste inventée) ; les autres
+// sont tenues pour guéries « à la main » avant le transfert. Évite la cause racine du ticket :
+// character_wounds clonée tel quel programmerait une échéance avec campaignId NULL
+// (game_echeances.campaign_id NOT NULL) via le pipeline normal d'écriture — mais ici on COPIE la
+// ligne directement (comme cloneRows), jamais via insertWoundRow/initializeWoundHealingEcheance :
+// ce n'est pas une nouvelle blessure qui survient, c'est une ligne déjà existante qui change de
+// personnage. game_echeances n'est de toute façon jamais cloné (EXCLUDED_TABLES) : rien à régler là.
+async function cloneWoundsToVault(trx, { oldCharSheetId, newCharSheetId }) {
+  const rows = await trx('character_wounds')
+    .where({ char_sheet_id: oldCharSheetId })
+    .whereIn('severity', TEST_BLOCKING_SEVERITIES)
+  if (rows.length === 0) return []
+  const cloned = rows.map(({ id, ...rest }) => ({ ...rest, char_sheet_id: newCharSheetId }))
+  return trx('character_wounds').insert(cloned).returning('*')
 }
 
 // VAULT-REGISTRY-DRIFT1 — char_inventory_slots a deux FK réelles (char_inventory_id ET
@@ -271,6 +290,13 @@ export async function cloneCharacterDeep(sourceCharacterId, { campaignId, vaultI
       const [newSheet] = await cloneRows(trx, 'char_sheet', 'character_id', sourceCharacterId, newChar.id)
       newSheetId = newSheet.id
       for (const table of entry.charSheetKeyed) {
+        // WOUND-VAULT-NO-CAMPAIGN : vers le Coffre (jamais vers une campagne, cf. cloneWoundsToVault
+        // ci-dessus), character_wounds sort de la copie générique — seules les blessures qui ne
+        // guérissent jamais seules survivent au transfert.
+        if (table === 'character_wounds' && vaultId) {
+          await cloneWoundsToVault(trx, { oldCharSheetId: sourceSheet.id, newCharSheetId: newSheetId })
+          continue
+        }
         await cloneRows(trx, table, 'char_sheet_id', sourceSheet.id, newSheetId)
       }
     }

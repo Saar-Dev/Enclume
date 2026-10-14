@@ -125,6 +125,35 @@ test('applyWound hors combat (aucune ligne combat_roster) : no-op silencieux', {
   }
 })
 
+// WOUND-VAULT-NO-CAMPAIGN — POST /:characterId/wounds reste accessible à un personnage du Coffre
+// (req.isVaultOwner, char-sheet.js) : campaignId NULL ne doit plus faire planter l'échéance de
+// guérison (game_echeances.campaign_id NOT NULL) ni répondre à tort « Ligne pleine ».
+test('applyWound pour un personnage du Coffre (campaignId null) réussit, sans échéance de guérison', { skip }, async () => {
+  const [user] = await db('users')
+    .insert({ email: `wound-svc-vault-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wound-svc-vault' })
+    .returning('*')
+  const [vault] = await db('vaults').insert({ user_id: user.id }).returning('*')
+  const [character] = await db('characters')
+    .insert({ vault_id: vault.id, user_id: user.id, name: 'Perso du Coffre', type: 'pj' })
+    .returning('*')
+  const [charSheet] = await db('char_sheet').insert({ character_id: character.id }).returning('*')
+  try {
+    const result = await applyWound(fakeIo, db, null, {
+      charSheetId: charSheet.id, characterId: character.id, localisation: 'corps', severity: 'grave',
+    })
+    assert.ok(result, 'la blessure est appliquée (pas la fausse "Ligne pleine" du bug d\'origine)')
+    assert.equal(result.wound.severity, 'grave')
+
+    const echeances = await db('game_echeances').where({ character_id: character.id })
+    assert.equal(echeances.length, 0, 'aucune échéance : rien ne peut être programmé hors campagne')
+  } finally {
+    await db('char_sheet').where({ id: charSheet.id }).del()
+    await db('characters').where({ id: character.id }).del()
+    await db('vaults').where({ id: vault.id }).del()
+    await db('users').where({ id: user.id }).del()
+  }
+})
+
 // ─── finishWoundSeverityChoice — dépense + réduction atomiques ─────────────────────────────────
 
 test('resolveChanceChoice("reduce_1") dépense 1 point de Chance et réduit la Blessure d\'un degré', { skip }, async () => {

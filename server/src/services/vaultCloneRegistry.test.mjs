@@ -90,6 +90,39 @@ test('cloneCharacterDeep(pj) réussit et clone char_inventory + char_inventory_s
   }
 })
 
+// WOUND-VAULT-NO-CAMPAIGN (décision Saar 2026-10-14, version 2) — character_wounds sort du clonage
+// générique vers le Coffre : seules les blessures qui ne guérissent jamais seules (mortelle/
+// mort_subite, TEST_BLOCKING_SEVERITIES) survivent au transfert, le reste est tenu pour guéri à la
+// main avant le départ.
+test('cloneCharacterDeep(pj -> coffre) ne clone que les blessures mortelle/mort_subite', { skip }, async () => {
+  const user = await createUser('wounds')
+  try {
+    const vault = await createVault(user.id)
+    const [character] = await db('characters').insert({
+      vault_id: vault.id, user_id: user.id, name: 'Test PJ blessé', color: '#4A90D9', type: 'pj', visible: false,
+    }).returning('*')
+    const [sheet] = await db('char_sheet').insert({ character_id: character.id }).returning('*')
+
+    await db('character_wounds').insert([
+      { char_sheet_id: sheet.id, location: 'corps', severity: 'moyenne' },
+      { char_sheet_id: sheet.id, location: 'jambe_gauche', severity: 'critique' },
+      { char_sheet_id: sheet.id, location: 'tete', severity: 'mortelle' },
+      { char_sheet_id: sheet.id, location: 'bras_droit', severity: 'mort_subite' },
+    ])
+
+    const clone = await cloneCharacterDeep(character.id, { vaultId: vault.id })
+    const clonedSheet = await db('char_sheet').where({ character_id: clone.id }).first()
+    const clonedWounds = await db('character_wounds').where({ char_sheet_id: clonedSheet.id })
+
+    assert.deepEqual(clonedWounds.map(w => w.severity).sort(), ['mort_subite', 'mortelle'],
+      'seules les blessures qui ne guérissent jamais seules survivent au transfert vers le Coffre')
+
+    await db('char_sheet').where({ id: sheet.id }).del()
+  } finally {
+    await cleanup(user)
+  }
+})
+
 test('cloneCharacterDeep(drone) réussit toujours (non-régression) et remet l\'intégrité à neuf', { skip }, async () => {
   const user = await createUser('drone')
   try {

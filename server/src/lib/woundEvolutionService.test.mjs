@@ -88,6 +88,19 @@ test('initializeWoundHealingEcheance : Mort (Tête ou Corps) -> toujours aucune 
   }), /ROLLBACK_WES_TEST/)
 })
 
+// WOUND-VAULT-NO-CAMPAIGN — un personnage sans campagne (Coffre, campaign_id NULL) n'a pas d'horloge
+// de jeu où programmer une échéance (game_echeances.campaign_id NOT NULL) ; sans cette garde,
+// POST /:characterId/wounds plantait pour un personnage du Coffre et répondait à tort « Ligne pleine ».
+test('initializeWoundHealingEcheance : campaignId null (personnage du Coffre) -> aucune échéance, jamais un crash', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { character, charSheet } = await createFixture(trx)
+    const wound = await createWound(trx, charSheet.id, { severity: 'grave', occurredAt: 1000 })
+    const result = await initializeWoundHealingEcheance(trx, { campaignId: null, characterId: character.id, wound })
+    assert.equal(result, null)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
 // WOUND-PNJ-ECHEANCES-FLOOD (décision Saar 2026-10-14) — REGLEBLESSURES.md:207-224 : un PNJ mineur
 // n'a besoin que de sa pire gravité, pas d'un suivi détaillé case par case. `pnj_healing_mode`
 // (campaignSettingsService.js) a 'simple' pour défaut réel ; `detaille` retrouve le comportement PJ.

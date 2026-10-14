@@ -11236,6 +11236,45 @@ blessés) — à valider par Saar.
 **Données** : aucune migration (option JSONB `campaigns.settings`, mergée avec défaut côté lecture).
 **Retour arrière** : `git revert` du commit (aucune donnée persistée à restaurer).
 
+## Session (Claude) — 2026-10-14 — WOUND-VAULT-NO-CAMPAIGN : un personnage du Coffre garde ses blessures non guérissables, perd les autres au transfert
+
+Décision Saar (2026-10-14), version 2 préférée : « on ne sauvegarde jamais les blessures d'un
+personnage lors de son transfert vers le Coffre (exception des blessures mortelles qui ne guérissent
+pas) ». Cause racine du ticket d'origine (2026-09-25) : `POST /:characterId/wounds` accepte le
+propriétaire d'un personnage du Coffre (`req.isVaultOwner`, `campaign_id` NULL) ; `applyWound`
+programmait alors l'échéance de guérison avec `campaignId = null`, mais `game_echeances.campaign_id`
+est NOT NULL — la transaction échouait, `applyWound` retournait `null`, et la route répondait à tort
+400 « Ligne pleine — gravité maximale atteinte » (message réservé à un tout autre cas, `WoundLineFullError`).
+
+**Fix, deux volets** :
+1. **Transfert vers le Coffre** (`vaultService.js`, `cloneCharacterDeep`/`cloneToVault`) :
+   `character_wounds` sort de la boucle générique `charSheetKeyed` quand la destination est un
+   Coffre (`vaultId`) — nouvelle fonction `cloneWoundsToVault`, même patron que les exceptions déjà
+   en place (`cloneInventoryWithSlots`, `cloneExoSheet`). Seules les blessures `mortelle`/`mort_subite`
+   (déjà regroupées comme « ne guérissent jamais seules » par `TEST_BLOCKING_SEVERITIES`,
+   `shared/woundConstants.js` — pas une nouvelle liste inventée) survivent au clonage. Direction
+   Coffre→campagne (`approveImport`) non touchée : rien à filtrer, ce qui n'a pas été copié n'a pas à
+   être restauré. `game_echeances` n'est de toute façon jamais cloné (`EXCLUDED_TABLES`), aucune
+   échéance fantôme à craindre des deux côtés.
+2. **Garde défensive, au-delà du transfert lui-même** : `initializeWoundHealingEcheance`
+   (`woundHealingSchedule.js`, même fonction que WOUND-PNJ-ECHEANCES-FLOOD ci-dessus) retourne
+   maintenant `null` immédiatement si `campaignId` est absent — ferme directement le crash
+   originellement rapporté, pour le cas où la route reste exercée sur un personnage du Coffre malgré
+   le point 1 (confiance en profondeur, pas en remplacement).
+
+**Testé** : `node --check` sur les 5 fichiers touchés. Individuellement : `vaultCloneRegistry.test.mjs`
+5/5 (nouveau test : clone pj→Coffre avec 4 blessures de gravités différentes, seules mortelle/
+mort_subite survivent), `woundEvolutionService.test.mjs` 55/55 (nouveau test direct sur la garde
+`campaignId` null), `woundService.test.mjs` 55/55 (nouveau test de bout en bout : `applyWound` sur un
+personnage du Coffre réussit, sans échéance, où il plantait avant), `woundUtils.test.mjs` 57/57,
+`woundReviewBatchService.test.mjs` 16/16, `woundReviewService.test.mjs` 14/14 — aucune régression sur
+le pipeline blessures. `shared/**/*.test.mjs` 949/949. Résidu de fixtures vérifié par lecture directe
+en base après coup : aucun. `git diff --check` propre.
+**Non testé** : rendu visuel réel (transférer un personnage blessé vers le Coffre, tenter d'ajouter
+une blessure à un personnage du Coffre depuis la fiche).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit.
+
 ## Session (Claude) — 2026-10-14 — Grenades : `grenade_stun` (reprise 1) + correctif Choc perdu si la grenade consommée avant résolution (GRENADE-STUN-CHOC-SNAPSHOT)
 
 Reprise du chantier grenades gelé depuis 2026-09-09 (`PLAN_GRENADES.md` §6) — premier des 4 types « à

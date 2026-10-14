@@ -54,6 +54,13 @@ export function getHealingRetrySchedule(severity, location) {
 // pas « jamais retirée » : seule une Mort (Tête/Corps) n'a aucune échéance, getWoundHealing = null ET severity !== 'legere').
 // Un Membre détruit a la sienne (3 semaines, soins constants) comme n'importe quelle ligne WOUND_HEALING.
 export async function initializeWoundHealingEcheance(trx, { campaignId, characterId, wound }) {
+  // WOUND-VAULT-NO-CAMPAIGN : un personnage du Coffre (campaign_id NULL) n'a pas d'horloge de jeu où
+  // programmer une échéance (game_echeances.campaign_id NOT NULL) — la case reste posée, guérison à
+  // la main. Garde défensive au-delà du transfert lui-même (cloneWoundsToVault, vaultService.js) :
+  // POST /:characterId/wounds reste accessible à un personnage du Coffre (req.isVaultOwner,
+  // char-sheet.js) et plantait ici sans elle, affiché à tort comme « Ligne pleine ».
+  if (!campaignId) return null
+
   // WOUND-PNJ-ECHEANCES-FLOOD (décision Saar 2026-10-14) : un PNJ en mode `simple` (défaut,
   // campaignSettingsService.js) n'a pas d'échéance de guérison programmée — la case reste posée,
   // gérée à la main par le MJ. `pj`/`drone`/`exo` ne passent jamais par `character_wounds`
