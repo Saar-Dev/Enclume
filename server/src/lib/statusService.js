@@ -218,7 +218,7 @@ async function _applyAutoStun(io, db, campaignId, targetTokenId, outcome, userId
     mechanicalTotal: d6Raw,
     diffLabel:    outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
     chancesDeReussite: stunDuration,
-    isSuccess: true,
+    cardType: 'duration', // jet de durée, pas de réussite/échec — pas de badge (STUN-DURATION-CARD-SUCCESS-BADGE)
   })
   await applyStunWithDuration(io, db, campaignId, targetTokenId, outcome, stunDuration, currentTurn)
 }

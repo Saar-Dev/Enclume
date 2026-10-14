@@ -736,7 +736,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       mechanicalTotal: d6Raw,
       diffLabel:    pending.outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
       chancesDeReussite: stunDuration,
-      isSuccess: true,
+      cardType: 'duration', // jet de durée, pas de réussite/échec — pas de badge (STUN-DURATION-CARD-SUCCESS-BADGE)
     })
     await statusService.applyStunWithDuration(
       io, db, pending.campaignId, tokenId, pending.outcome, stunDuration, pending.currentTurn

@@ -10918,3 +10918,25 @@ build` client propre.
 **Non testé** : rendu visuel réel dans l'Encyclopédie — à valider par Saar.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — STUN-DURATION-CARD-SUCCESS-BADGE : plus de badge « succès » sur le jet de durée d'étourdissement
+
+Le jet « Durée d'étourdissement » (1d6, détermine combien de temps dure l'état — pas un jet de
+réussite/échec) émettait `isSuccess: true` codé en dur sur `WS.DICE_RESULT`, repris sans condition par
+le rendu générique « Skillcheck » de `MessageRendererRegistry.jsx` (badge + teinte verte). Même défaut
+à l'identique à **deux émetteurs** du même jet : `statusService.js#_applyAutoStun` (D6 auto serveur) et
+`socketCombatResolution.js` (D6 lancé par le joueur, `COMBAT_STUN_CONFIRM`) — corrigés ensemble (même
+diagnostic, même correctif, pas deux tickets).
+
+**Fix** : `cardType: 'duration'` sur les deux émissions (au lieu de `isSuccess: true`) ; le rendu
+« Skillcheck » n'applique plus la teinte verte/rouge ni le badge réussite/échec quand
+`cardType === 'duration'` — seuls le nom du jet et le résultat du dé restent affichés. Aucun autre
+type de carte touché (vérifié : aucun autre émetteur n'utilise `cardType: 'duration'`).
+
+**Testé** : `node --check` sur les 2 fichiers serveur, ESLint ciblé sur le composant client (diff
+avant/après via une copie temporaire hors index git — session parallèle active sur le même worktree,
+`git stash` évité —, 0 nouveau problème), `npm run build` client propre. Pas de test DB ciblé écrit :
+changement d'affichage pur, aucune logique métier ni écriture en base modifiée.
+**Non testé** : rendu visuel réel en jeu (déclencher un étourdissement/une inconscience).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

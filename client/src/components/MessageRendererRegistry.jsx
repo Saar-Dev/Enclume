@@ -307,8 +307,11 @@ function renderDice(msg, ctx) {
     }
 
     // ── Skillcheck ──────────────────────────────────────────
+    // cardType 'duration' (ex. durée d'étourdissement, 1d6) : un jet qui détermine une VALEUR, pas une
+    // réussite/échec — aucun sens à un badge ou une teinte verte/rouge (STUN-DURATION-CARD-SUCCESS-BADGE).
+    const hasOutcome = msg.cardType !== 'duration'
     return (
-      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
+      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...(hasOutcome ? successStyle : {}) }}>
         {/* En-tête : icône + nom + heure */}
         <div style={styles.diceHeader}>
           <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
@@ -341,12 +344,14 @@ function renderDice(msg, ctx) {
               seuil: msg.chancesDeReussite,
             })}
         </div>
-        {/* Badge résultat */}
-        <div style={{ paddingLeft: '2px' }}>
-          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(ctx.tCombat, msg.mr, msg.cardType)}>
-            {msg.isSuccess ? ctx.t('sidebar.entityActionSuccess') : ctx.t('sidebar.entityActionFail')}
-          </span>
-        </div>
+        {/* Badge résultat — absent pour un jet de valeur (cardType 'duration') */}
+        {hasOutcome && (
+          <div style={{ paddingLeft: '2px' }}>
+            <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(ctx.tCombat, msg.mr, msg.cardType)}>
+              {msg.isSuccess ? ctx.t('sidebar.entityActionSuccess') : ctx.t('sidebar.entityActionFail')}
+            </span>
+          </div>
+        )}
       </div>
     )
   }
