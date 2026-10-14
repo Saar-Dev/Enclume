@@ -51,6 +51,16 @@ function slotOptionsForItem(item) {
   return locs.filter(l => VALID_SLOTS.includes(l))
 }
 
+// Facette filtre catalogue « prise en main » (WIZ41) — même parsing que slotOptionsForItem, réutilisé
+// plutôt que relire ref_location séparément. 'M' (une main, MG/MD) / '2M' (deux mains) / null (une
+// armure ou tout objet non équipable en main, exclu de la facette).
+function handsCategoryForItem(item) {
+  const slots = slotOptionsForItem(item)
+  if (slots.includes('2M')) return '2M'
+  if (slots.includes('MG') || slots.includes('MD')) return 'M'
+  return null
+}
+
 // Libellé affiché (clé i18n namespace charSheet) pour chaque code container — le code lui-même
 // (`item.container`, envoyé tel quel à l'API) ne change jamais, seul l'affichage passe par t().
 const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'inventoryPanel.container.Ceinture', Coffre: 'inventoryPanel.container.Coffre' }
@@ -82,6 +92,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const [filterCategory, setFilterCategory] = useState('')
   const [filterRarity,   setFilterRarity]   = useState('')
   const [filterMaxWeight, setFilterMaxWeight] = useState('')
+  const [filterHands,    setFilterHands]    = useState('') // '' | 'M' (une main) | '2M' (deux mains) — WIZ41
   const [catalogPage,    setCatalogPage]    = useState(1)
   const [dismissedSuggestions, setDismissedSuggestions] = useState(() => new Set())
   const [selectedRef,   setSelectedRef]   = useState(null)  // item ref_equipment sélectionné
@@ -249,6 +260,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
     setFilterCategory('')
     setFilterRarity('')
     setFilterMaxWeight('')
+    setFilterHands('')
     setCatalogPage(1)
     setAddQty(1)
     setAddContainer(currentAvailableContainers[0] || 'Coffre')
@@ -310,9 +322,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
       if (filterCategory && i.category !== filterCategory) return false
       if (filterRarity && i.rarity !== filterRarity) return false
       if (maxWeight != null && !isNaN(maxWeight) && (i.weight == null || i.weight > maxWeight)) return false
+      if (filterHands && handsCategoryForItem(i) !== filterHands) return false
       return true
     })
-  }, [catalog, searchQuery, filterFamily, filterCategory, filterRarity, filterMaxWeight])
+  }, [catalog, searchQuery, filterFamily, filterCategory, filterRarity, filterMaxWeight, filterHands])
 
   // Suggestions « ce qui manque » (shared/itemSuggestions.js) — proposées avant toute recherche ; une
   // suggestion ignorée reste masquée jusqu'à la fermeture du panneau de la fiche.
@@ -321,7 +334,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
     [items, catalog, dismissedSuggestions],
   )
   const showSuggestions = suggestions.length > 0 && !searchQuery.trim()
-    && !filterFamily && !filterCategory && !filterRarity && filterMaxWeight === ''
+    && !filterFamily && !filterCategory && !filterRarity && filterMaxWeight === '' && !filterHands
 
   const catalogPageCount = Math.max(1, Math.ceil(filteredCatalog.length / CATALOG_PAGE_SIZE))
   const pagedCatalog = useMemo(() => {
@@ -560,6 +573,11 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                     <select value={filterRarity} onChange={e => handleFilterChange(setFilterRarity)(e.target.value)} style={s.selectSmall}>
                       <option value="">{t('inventoryPanel.filterAllRarity')}</option>
                       {catalogRarities.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <select value={filterHands} onChange={e => handleFilterChange(setFilterHands)(e.target.value)} style={s.selectSmall}>
+                      <option value="">{t('inventoryPanel.filterAllHands')}</option>
+                      <option value="M">{t('inventoryPanel.filterHandsOne')}</option>
+                      <option value="2M">{t('inventoryPanel.filterHandsTwo')}</option>
                     </select>
                     <input
                       type="number"

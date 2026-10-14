@@ -11003,3 +11003,24 @@ nouveau).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit (ou `git checkout` du fichier depuis l'historique si
 besoin de le ressusciter).
+
+## Session (Claude) — 2026-10-14 — WIZ41 : filtre catalogue « prise en main » (une main / deux mains)
+
+`InventoryPanel.jsx` (catalogue MJ/joueur, utilisé à la fois dans la fiche personnage et l'Étape 6
+« Matériel » de la création) filtrait déjà par famille, catégorie, rareté et poids max, mais rien ne
+permettait de trouver une arme par nombre de mains requis (ex. distinguer une arme de poing d'un
+fusil). La donnée existait déjà : `slotOptionsForItem` (dérivée de `ref_location`) classe chaque objet
+en une-main (`MG`/`MD`) ou deux-mains (`2M`) pour le menu d'équipement, jamais exposée comme filtre.
+
+**Fix** : nouveau filtre `filterHands` (Toute prise en main / Une main / Deux mains), classification
+via `handsCategoryForItem` (nouvelle petite fonction, réutilise `slotOptionsForItem` plutôt que de
+reparser `ref_location` une deuxième fois) — les armures et objets non équipables en main sont
+exclus de la facette (aucune des deux valeurs ne leur correspond). Même menu que les 3 filtres
+existants, même convention (`handleFilterChange`, reset à l'ouverture du catalogue).
+
+**Testé** : JSON valide (`charSheet.json`), ESLint ciblé (copie temporaire hors index git — session
+parallèle active sur le même worktree —, 0 nouveau problème), `npm run build` client propre.
+**Non testé** : rendu visuel réel (ouvrir le catalogue, filtrer par prise en main) — à valider par
+Saar, en fiche personnage ou à l'Étape 6 de création.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
