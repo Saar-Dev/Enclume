@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { AOE_MECHANISM_REGISTRY, findAoeMechanismEntry } from './registry.js'
 
 test('findAoeMechanismEntry — les mécanismes câblés sont enregistrés, chacun avec les 6 hooks', () => {
-  for (const key of ['shotgun_spread', 'flamethrower', 'grenade_frag', 'grenade_energy']) {
+  for (const key of ['shotgun_spread', 'flamethrower', 'grenade_frag', 'grenade_energy', 'grenade_stun']) {
     const entry = findAoeMechanismEntry(key)
     assert.ok(entry, `entrée "${key}" absente du registre`)
     assert.equal(entry.key, key)
@@ -23,14 +23,14 @@ test('findAoeMechanismEntry — mécanisme inconnu → undefined, jamais un thro
   assert.equal(findAoeMechanismEntry(undefined), undefined)
 })
 
-test('AOE_MECHANISM_REGISTRY — 4 entrées, clés uniques (fusil à pompe + lance-flammes + grenade frag + grenade énergie)', () => {
-  assert.equal(AOE_MECHANISM_REGISTRY.length, 4)
+test('AOE_MECHANISM_REGISTRY — 5 entrées, clés uniques (fusil à pompe + lance-flammes + grenade frag + grenade énergie + grenade assommante)', () => {
+  assert.equal(AOE_MECHANISM_REGISTRY.length, 5)
   const keys = AOE_MECHANISM_REGISTRY.map(e => e.key)
   assert.equal(new Set(keys).size, keys.length)
 })
 
 test('capacités de flux — les grenades cercle s\'écartent des défauts (needsWeaponRange/decrementsAmmo/losSource/rollsPhaseA), les cônes/rayons non', () => {
-  for (const key of ['grenade_frag', 'grenade_energy']) {
+  for (const key of ['grenade_frag', 'grenade_energy', 'grenade_stun']) {
     const g = findAoeMechanismEntry(key)
     assert.equal(g.needsWeaponRange, false, `${key} : amplitude depuis le mécanisme, pas ref_range`)
     assert.equal(g.decrementsAmmo, false, `${key} : consommée au lancer, pas à l'explosion`)

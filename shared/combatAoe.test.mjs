@@ -108,6 +108,7 @@ test('AOE_MECHANICS / isKnownAoeMechanic — les mécanismes câblés à ce jour
   assert.equal(isKnownAoeMechanic('flamethrower'), true)
   assert.equal(isKnownAoeMechanic('grenade_frag'), true)
   assert.equal(isKnownAoeMechanic('grenade_energy'), true)
+  assert.equal(isKnownAoeMechanic('grenade_stun'), true)
   assert.equal(isKnownAoeMechanic('suppression'), false)
   assert.throws(() => AOE_MECHANICS.push('x'))
 })

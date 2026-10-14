@@ -28,6 +28,7 @@ export const AOE_MECHANICS = Object.freeze([
   'flamethrower',   // lance-flammes — cône, feu continu, pas de dégression par portée
   'grenade_frag',   // grenade à fragmentation — cercle sur point d'impact, dégression par palier (PLAN_GRENADES.md §7)
   'grenade_energy', // grenade à énergie — cercle rayon fixe, champ d'énergie uniforme (Segment 3-bis, PLAN_GRENADES.md §6)
+  'grenade_stun',   // grenade assommante — cercle rayon fixe, champ uniforme + Choc (Segment 3-bis, PLAN_GRENADES.md §6)
 ])
 
 // isKnownAoeMechanic — garde du dispatch serveur (voir commentaire ci-dessus).

@@ -60,6 +60,28 @@ export function buildWeaponShockDsl({ shock, shockMechanism, reducedByArmor }) {
   }
 }
 
+// ─── fetchEquipmentShockDsl — repli catalogue (ticket GRENADE-STUN-CHOC-SNAPSHOT) ──────────────────
+// Une grenade lancée par un tireur humanoïde est retirée de `char_inventory` AVANT la résolution des
+// dégâts (`consumeThrownGrenade`, minuterie ET percussion — socketCombatAoe.js). Si c'était le dernier
+// exemplaire de la pile, la ligne est supprimée : `getEffectiveWeaponDamage(db, weaponInvId)` ne la
+// retrouve plus, renvoie `null`, et `effectiveDamage.choc` disparaît avec elle — silencieusement, sans
+// erreur. `shock`/`shock_mechanism`/`shock_reduced_by_armor` vivent sur `ref_equipment` (le catalogue),
+// jamais sur `char_inventory` (l'instance) : une ligne catalogue n'est jamais supprimée en combat, donc
+// la relire par `equipment_id` (déjà posé par `aoe.weaponSnapshot`, qu'il s'agisse de la minuterie ou de
+// la percussion) donne EXACTEMENT le même résultat que si la ligne d'inventaire existait encore — aucune
+// munition ni aucun mod n'altère le Choc d'arme aujourd'hui (vérifié : `_fetchWeaponAndAmmo` ci-dessus ne
+// lit ces 3 colonnes que depuis `ref_equipment`). Patron Foundry VTT dnd5e (`Activity#use` clone l'item
+// AVANT toute consommation, "to work with throughout the rest of the process") — ici la donnée dont on a
+// besoin est déjà immuable (catalogue), donc une relecture tardive est équivalente à un snapshot anticipé.
+// `null` si la ligne catalogue elle-même a disparu (jamais en pratique) — jamais un throw.
+export async function fetchEquipmentShockDsl(db, equipmentId) {
+  if (!equipmentId) return null
+  const row = await db('ref_equipment').where({ id: equipmentId })
+    .select('shock', 'shock_mechanism', 'shock_reduced_by_armor').first()
+  if (!row) return null
+  return buildWeaponShockDsl({ shock: row.shock, shockMechanism: row.shock_mechanism, reducedByArmor: row.shock_reduced_by_armor })
+}
+
 // ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A+C1 (docs/PLAN_ARMES_DSL.md) ─────────────
 // Point de résolution unique du dégât effectif d'une arme à munitions : fetch arme + munition
 // chargée (current_ammo) en une passe, parse le DSL de la munition, lance les dés réels. Réutilisé

@@ -27,6 +27,7 @@ import { shotgunSpreadMechanism } from './shotgunSpread.js'
 import { flamethrowerMechanism } from './flamethrower.js'
 import { grenadeFragMechanism } from './grenadeFrag.js'
 import { grenadeEnergyMechanism } from './grenadeEnergy.js'
+import { grenadeStunMechanism } from './grenadeStun.js'
 
 export const AOE_MECHANISM_REGISTRY = [
   { key: 'shotgun_spread', ...shotgunSpreadMechanism },
@@ -36,6 +37,9 @@ export const AOE_MECHANISM_REGISTRY = [
   // grenade à énergie (PLAN_GRENADES.md §6, Segment 3-bis) — champ d'énergie uniforme, rayon fixe,
   // pas de dégression / Choc / statut. Squelette cercle partagé : circleGrenade.js.
   { key: 'grenade_energy', ...grenadeEnergyMechanism },
+  // grenade assommante (PLAN_GRENADES.md §6, Segment 3-bis, reprise 1) — champ uniforme, rayon fixe,
+  // comme grenade_energy ; le Choc (2D10) est résolu par le tronc (socketCombatAoe.js), pas ici.
+  { key: 'grenade_stun', ...grenadeStunMechanism },
 ]
 
 // mechanic inconnu → undefined, jamais une erreur ici — le tronc décide seul du message d'erreur

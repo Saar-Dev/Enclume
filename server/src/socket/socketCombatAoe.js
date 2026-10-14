@@ -976,6 +976,13 @@ async function finalizeAoeResolution(io, campaignId, {
   const shooterChocDsl = !isHumanoidShooter && weapon.equipment_id ? damageService.buildWeaponShockDsl({
     shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
   }) : null
+  // Repli Choc humanoïde (ticket GRENADE-STUN-CHOC-SNAPSHOT, damageService.js#fetchEquipmentShockDsl) —
+  // une grenade consommée (ligne ci-dessous, `getEffectiveWeaponDamage` par cible) peut avoir perdu sa
+  // ligne `char_inventory` avant cette résolution : `effectiveDamage` devient alors `null` et
+  // `effectiveDamage.choc` avec lui. Relu directement sur le catalogue (`ref_equipment`, jamais
+  // supprimé) — jamais pour exo/drone, déjà couverts par `shooterChocDsl` ci-dessus.
+  const weaponCatalogChocDsl = isHumanoidShooter && weapon.equipment_id
+    ? await damageService.fetchEquipmentShockDsl(db, weapon.equipment_id) : null
   // Drone protecteur qui a attrapé la grenade au lancer (persisté avec l'action, relu ici même au Tour+1) : LUI SEUL
   // absorbe la moitié des dommages (RAW « Drone bouclier », Q-A) ; les autres cibles de la zone, protégé compris,
   // prennent les dégâts normaux. Appliqué ICI, une fois, de façon générique — jamais dans un mécanisme du registre.
@@ -998,7 +1005,7 @@ async function finalizeAoeResolution(io, campaignId, {
       degautsBruts = halved
     }
     perTargetInputs.push({
-      hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl,
+      hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl: shooterChocDsl ?? weaponCatalogChocDsl,
       locationsCount: computed.locationsCount, armorReductionFactor: computed.armorReductionFactor,
     })
   }
