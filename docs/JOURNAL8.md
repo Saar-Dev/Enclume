@@ -11324,6 +11324,28 @@ confirmé par le ticket d'origine).
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit (fonctions pures/lecture, aucune donnée persistée).
 
+## Session (Claude) — 2026-10-14 — ENCYCLOPEDIE-ITALIC-QUOTES-UNREADABLE : citation de chapitre illisible
+
+Signalé par Saar (2026-10-03). [VÉRIFIÉ par lecture] `.encyclo-callout-quote .encyclo-callout-body
+.encyclo-paragraph` (`client/src/components/encyclopedia/encyclopedia.css:559-564`) combinait
+`font-family: var(--font-hand)` (Caveat, une police manuscrite déjà inclinée) avec `font-style:
+italic`. Seuls les poids 400/600 de Caveat sont chargés (`client/src/index.css:8-9`,
+`@fontsource/caveat`), aucune variante italique n'existe : le navigateur appliquait donc un oblique
+synthétique par-dessus une police déjà cursive, déformant les lettres — pas un problème de contraste
+de couleur (`--text-secondary`, déjà utilisée ailleurs dans le même fichier sans plainte). Seule
+occurrence de `--font-hand` dans tout le client (vérifié par recherche globale) — aucune autre règle
+concernée.
+
+**Fix** : retrait de `font-style: italic` sur cette seule règle ; `font-family`/`font-size`/`color`
+inchangés.
+
+**Testé** : `npm run build` client propre (seuls les avertissements préexistants sur la taille des
+chunks, sans rapport). `git diff --check` propre.
+**Non testé** : rendu visuel réel (ouvrir un chapitre de l'Encyclopédie avec une citation d'ouverture)
+— à valider par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit (CSS seul).
+
 ## Session (Claude) — 2026-10-14 — Grenades : `grenade_stun` (reprise 1) + correctif Choc perdu si la grenade consommée avant résolution (GRENADE-STUN-CHOC-SNAPSHOT)
 
 Reprise du chantier grenades gelé depuis 2026-09-09 (`PLAN_GRENADES.md` §6) — premier des 4 types « à

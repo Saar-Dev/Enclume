@@ -557,10 +557,14 @@
 }
 
 .encyclo-callout-quote .encyclo-callout-body .encyclo-paragraph {
+  /* ENCYCLOPEDIE-ITALIC-QUOTES-UNREADABLE — Caveat est déjà une police manuscrite inclinée ; seuls
+     les poids 400/600 sont chargés (client/src/index.css, @fontsource/caveat), aucune variante
+     italique n'existe. `font-style: italic` forçait donc le navigateur à appliquer un oblique
+     synthétique PAR-DESSUS une police déjà cursive, déformant les lettres au point de les rendre
+     illisibles — jamais un problème de contraste de couleur. */
   font-family: var(--font-hand);
   font-size: 16px;
   color: var(--text-secondary);
-  font-style: italic;
 }
 
 /* ── Blocs : tableau sourcé ───────────────────────────── */
