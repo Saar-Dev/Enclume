@@ -24,9 +24,10 @@
 > lance-flammes clos (PJ/PNJ/exo/drone), socle AOE data-driven + registre de mécanismes. **Grenades :
 > frag + lancer/dispersion + explosion différée T+1 + marqueur 3D + mode percussion/minuterie clos et
 > validés** ; squelette 3-bis (`circleGrenade.js`) + grenade à énergie livrés. **Chantier grenades gelé
-> au 2026-09-09** à un point de pause propre (`docs/PLANS/PLAN_GRENADES.md` §6) — reprise : 4 types « à
-> statut » prêts (`grenade_stun`/`flashbang`/`concussion`/`sonic`), puis les types « à zone »
-> (incendiaire, gaz, capsules) qui attendent la fondation ci-dessous. **Usure & Intégrité du matériel
+> au 2026-09-09** à un point de pause propre (`docs/PLANS/PLAN_GRENADES.md` §6) — reprise « à statut » :
+> **`grenade_stun` codé + testé (2026-10-14, migration 389), validation en beta test à venir** ;
+> restent `flashbang`/`concussion`/`sonic`, puis les types « à zone » (incendiaire, gaz, capsules) qui
+> attendent la fondation ci-dessous. **Usure & Intégrité du matériel
 > V1 (L0→L7) : clos, validé jeu réel et poussé le 2026-09-10** (`docs/JOURNAL8.md` — schéma, primitive
 > partagée, modificateur/panne d'arme en combat, réparation par échéance + carte d'action chat + pop-up
 > ITG) ; reste le Lot 2 différé (L8 pièces détachées → chantier Chance ; L9 entrées #2/#8 de la table

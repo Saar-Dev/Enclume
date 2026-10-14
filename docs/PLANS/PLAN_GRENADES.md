@@ -283,7 +283,7 @@ nouvelle infra de différé.
 | Mécanisme | Grenades / capsules | Concern nouveau vs `grenade_frag` | État |
 |---|---|---|---|
 | `grenade_energy` | grenade à énergie | rayon fixe uniforme (Ø 5 → r 2,5 m), 6D10, pas de dégression/Choc/statut | ✅ **3-bis/1** (migration 328, validé jeu réel) |
-| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) | prêt — reprise 1 |
+| `grenade_stun` | grenade assommante | Choc 2D10 (rayon fixe, pas de dégression) | ✅ **reprise 1** (migration 389, codé + testé 2026-10-14, **validation en beta test à venir**) |
 | `grenade_flashbang` | grenade étourdissante | **zéro dé de dégât** — statut « étourdi » 1D6 Tours + Test de Réaction d'anticipation | prêt — reprise 2 |
 | `grenade_concussion` | grenade à concussion | échec Test de Choc → **doubler** la durée d'étourdissement (`statusService`) | prêt — reprise 3 |
 | `grenade_sonic` | grenade sonique | **dégression du Choc** (le tronc ne sait pas dégresser un `chocDsl`) — le seul dur | prêt — reprise 4 |
@@ -291,10 +291,25 @@ nouvelle infra de différé.
 | capsules (napalm/gaz/fumigène/explosive/acide) | — | + livraison lance-capsules (hors v1, §3) | ⛔ bloqué — fondation zones + livraison |
 | gaz / fumigène | — | nuage volumétrique | → `PLAN_NUAGE.md` (+ fondation zones) |
 
-Chacun (des 4 « prêts ») = une entrée de registre (`grenade<X>.js` sur le squelette `circleGrenade.js`) +
-une ligne de migration (**≥ 329**, cf. collision 328 ci-dessous), pipeline inchangé.
+Chacun (des 3 restants : flashbang/concussion/sonic) = une entrée de registre (`grenade<X>.js` sur le
+squelette `circleGrenade.js`) + une ligne de migration (**≥ 390**), pipeline inchangé.
 **Écart RAW noté** (`grenade_energy`, 3g) : un « champ d'énergie » est-il arrêté par une armure
 physique ? RAW silencieux → `armorReductionFactor: 1` par défaut, à confirmer.
+
+**`grenade_stun` — trouvaille 2026-10-14, corrigée avant de coder** : `grenade_stun` est la première
+grenade à porter un Choc catégorie 1/2 (`ref_equipment.shock`). Lecture intégrale du tronc
+(`socketCombatAoe.js`) a montré qu'une grenade lancée par un tireur humanoïde perd sa ligne
+`char_inventory` AVANT la résolution des dégâts (`consumeThrownGrenade`, minuterie **et** percussion) —
+`getEffectiveWeaponDamage` renvoie alors `null` et `effectiveDamage.choc` disparaît silencieusement
+avec elle (invisible jusqu'ici : aucune grenade existante ne portait de Choc). Recherche de prior art
+(Foundry VTT dnd5e, `Activity#use` — clone l'item AVANT toute consommation, « to work with throughout
+the rest of the process ») : confirme que la bonne réponse est de ne jamais dépendre d'une ligne qui
+peut disparaître, pas d'inventer un 2ᵉ pipeline. Ici la donnée (`shock`/`shock_mechanism`/
+`shock_reduced_by_armor`) vit sur `ref_equipment` (catalogue, jamais supprimé en combat) — repli ajouté
+dans `damageService.js#fetchEquipmentShockDsl`, branché dans `socketCombatAoe.js#finalizeAoeResolution`
+(`weaponCatalogChocDsl`, humanoïde seulement, exo/drone déjà couverts ailleurs). Détail : `docs/SYSTEME/
+DOMMAGES.md` §2. **Bonus** : chaque reprise suivante (flashbang/concussion/sonic) bénéficie du correctif
+sans rien refaire.
 
 > **Collision migration 328** (2026-09-09) : `328_characters_clear_size_category.js` (chantier Mode
 > modificateurs) et `328_ref_equipment_grenade_energy_aoe_profile.js` (celle-ci) coexistent sur

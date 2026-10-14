@@ -11191,3 +11191,50 @@ fixtures vérifié par lecture directe en base après coup : aucun. `git diff --
 combat) — à valider par Saar avant de clore le ticket en `resolved`.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit (aucune donnée persistée à restaurer, fonction pure).
+
+## Session (Claude) — 2026-10-14 — Grenades : `grenade_stun` (reprise 1) + correctif Choc perdu si la grenade consommée avant résolution (GRENADE-STUN-CHOC-SNAPSHOT)
+
+Reprise du chantier grenades gelé depuis 2026-09-09 (`PLAN_GRENADES.md` §6) — premier des 4 types « à
+statut » (`grenade_stun` → `flashbang` → `concussion` → `sonic`). Mécanisme `grenade_stun` (cercle
+rayon fixe 2,5 m, dégât uniforme 1D6, mirroir exact de `grenade_energy`) + migration **389** sur
+« Grenade assommante » (`aoe_profile` + `shock_mechanism:'pure'` + `range: GRENADE_THROW_RANGE`,
+3 colonnes posées ensemble, idempotentes).
+
+**Trouvaille avant tout code, lecture intégrale du tronc** : `grenade_stun` est la première grenade à
+porter un Choc catégorie 1/2 (`shock`). Une grenade lancée par un tireur humanoïde perd sa ligne
+`char_inventory` AVANT la résolution des dégâts (`consumeThrownGrenade`, minuterie **et** percussion) —
+`damageService.getEffectiveWeaponDamage` renvoie alors `null` et `effectiveDamage.choc` disparaît
+silencieusement avec elle. Invisible jusqu'ici : aucune grenade déjà livrée (`grenade_frag`,
+`grenade_energy`) ne porte de Choc. Dépend de la taille de la pile au moment du lancer (la ligne
+survit si `quantity > 1`, disparaît sinon) — un bug non déterministe selon l'inventaire du joueur,
+pas un cas limite négligeable.
+
+**Recherche de prior art avant de concevoir le correctif** (Foundry VTT dnd5e, `module/documents/
+activity/mixin.mjs#use()`, branche `6.1.x`) : `Activity#use` clone l'item AVANT toute consommation
+« to work with throughout the rest of the process » — confirme que la bonne réponse est de ne jamais
+dépendre d'une ligne qui peut disparaître. Ici la donnée (`shock`/`shock_mechanism`/
+`shock_reduced_by_armor`) vit sur `ref_equipment` (catalogue, jamais supprimé en combat) : repli par
+re-lecture directe plutôt que par un snapshot anticipé (équivalent, prouvé par lecture — aucune
+munition/mod n'altère ces 3 colonnes par instance aujourd'hui).
+
+**Fix** : `damageService.js#fetchEquipmentShockDsl(db, equipmentId)` (neuf) + branche
+`weaponCatalogChocDsl` dans `socketCombatAoe.js#finalizeAoeResolution`, additive, humanoïde
+seulement (exo/drone déjà couverts par `shooterChocDsl`, branche intacte) — zéro changement sur la
+ligne de précédence existante (`resolveAoeTargetDamage`, un seul Choc par cible). Détail :
+`docs/SYSTEME/DOMMAGES.md` §2. Bénéfice : les 3 reprises suivantes (flashbang/concussion/sonic)
+héritent du correctif sans rien refaire.
+
+**Testé** : `node --check` sur les 6 fichiers serveur/shared touchés. `node --test` (purs, sans base)
+56/56 — `grenadeStun.test.mjs` (neuf), `registry.test.mjs`/`combatAoe.test.mjs` étendus (5 mécanismes),
+non-régression `grenade_frag`/`grenade_energy`. `node --env-file=.env --test` (base locale, lancé par
+l'agent, autorisation 2026-09-25) 5/5 — round-trip + idempotence colonne par colonne de la migration
+389, `fetchEquipmentShockDsl` contre la ligne réelle du Lance-flammes (seule arme déjà câblée avec
+`shock_mechanism:'pure'`). Aucun résidu (migration testée en transaction annulée, `damageService.
+test.mjs` lecture seule). `git diff --check` propre.
+**Non testé** : aucun scénario réel en jeu — reporté par Saar à la prochaine session de beta test
+(lancer la dernière grenade assommante d'une pile, minuterie et percussion, confirmer l'étourdissement ;
+non-régression fusil à pompe/lance-flammes/exo/drone, le tronc ayant bougé de façon additive).
+**Données** : migration 389, non encore appliquée (nodemon ne tournait pas pendant la session) —
+s'applique au prochain démarrage serveur.
+**Retour arrière** : migration additive (`down()` remet les 3 colonnes à `null`) ; reste du diff =
+fichiers neufs/additifs, `git revert` du commit suffit.

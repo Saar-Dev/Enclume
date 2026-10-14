@@ -1,3 +1,8 @@
+## v268 — 2026-10-14 — Combat : grenade assommante (beta test)
+
+### Combat
+- [add] La grenade assommante est maintenant une vraie arme de zone : elle assomme (Choc) toutes les cibles dans un rayon de 2,5 m autour du point d'impact, en plus de ses dégâts physiques. Mêmes options de détonation que les autres grenades (minuterie ou percussion).
+
 ## v267 — 2026-10-08 — Configuration de campagne : onglet Sources de contenu
 
 ### Configuration de campagne

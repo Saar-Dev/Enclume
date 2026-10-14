@@ -46,6 +46,17 @@ confirmation en jeu par Saar avant absorption complète ici et retrait de `PLAN_
 tant que ce test n'est pas fait, ce plan reste la référence pour le détail catégories 1/2, pas encore
 dupliqué ici.
 
+**Repli catalogue pour une arme consommée avant résolution** (ticket GRENADE-STUN-CHOC-SNAPSHOT,
+2026-10-14, `docs/PLANS/PLAN_GRENADES.md` §6) : pour une grenade AOE lancée par un tireur humanoïde,
+`char_inventory` peut avoir été vidée (consommée au lancer) avant que `damageService.resolveTargetHit`
+ne soit appelé — `getEffectiveWeaponDamage` renvoie alors `null` et perd le `chocDsl` catégorie 1/2
+avec lui. `damageService.fetchEquipmentShockDsl(db, equipmentId)` relit `shock`/`shock_mechanism`/
+`shock_reduced_by_armor` directement sur `ref_equipment` (le catalogue, jamais supprimé en combat) —
+utilisé en repli par `socketCombatAoe.js#finalizeAoeResolution` (`weaponCatalogChocDsl`) uniquement
+quand la ligne d'inventaire a disparu. Même résultat que `buildWeaponShockDsl` sur la ligne vivante
+(aucune munition ni mod n'altère ces 3 colonnes par instance aujourd'hui) — pas un 3ᵉ chemin de
+résolution, juste une 2ᵉ source possible pour le même `chocDsl` catégories 1/2.
+
 ---
 
 ## 3. Le point d'autorité unique — `resolveShockTest`, deux portes d'entrée
