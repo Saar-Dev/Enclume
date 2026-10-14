@@ -1004,7 +1004,6 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
       await syncBattlemapTextureUsage(
         trx,
         req.params.id,
-        current.voxel_data || {},
         prepared.surfaceData,
       )
     })
@@ -1085,7 +1084,6 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     await syncBattlemapTextureUsage(
       trx,
       duplicatedId,
-      battlemap.voxel_data || {},
       duplicatedSurface,
     )
 

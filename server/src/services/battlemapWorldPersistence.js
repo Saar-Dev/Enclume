@@ -11,20 +11,14 @@ function addTextureId(ids, value) {
   ids.add(value)
 }
 
-export function collectVoxelTextureIds(voxelData) {
+export function collectBattlemapTextureIds(surfaceData) {
   const ids = new Set()
-  for (const voxel of Object.values(voxelData || {})) addTextureId(ids, voxel?.tex)
-  return Object.freeze([...ids])
-}
-
-export function collectBattlemapTextureIds(voxelData, surfaceData) {
-  const ids = new Set(collectVoxelTextureIds(voxelData))
   for (const textureId of collectSurfaceTextureIds(surfaceData || {})) addTextureId(ids, textureId)
   return Object.freeze([...ids])
 }
 
-export async function syncBattlemapTextureUsage(trx, battlemapId, voxelData, surfaceData) {
-  const textureIds = collectBattlemapTextureIds(voxelData, surfaceData)
+export async function syncBattlemapTextureUsage(trx, battlemapId, surfaceData) {
+  const textureIds = collectBattlemapTextureIds(surfaceData)
   await trx('battlemap_texture_usage').where({ battlemap_id: battlemapId }).delete()
   if (textureIds.length === 0) return textureIds
 

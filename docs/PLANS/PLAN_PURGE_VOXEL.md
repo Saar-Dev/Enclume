@@ -255,7 +255,31 @@ Patrons pros appliqués, cherchés avant d'écrire ce plan (pas codé de zéro) 
 
 **Lot 1 — isolement, CLOS** (§7, 2026-09-30, commit `3c44b792`).
 
-**Lot 2 — CODÉ le 2026-10-14, ⚠️ clos partiel (validation navigateur de Saar manquante, pas commité).**
+**Lot 2 — CLOS le 2026-10-14** (confirmation navigateur de Saar, commit `562aa219`).
+
+**Lot 3 — CODÉ le 2026-10-14, ⚠️ clos partiel (validation navigateur de Saar manquante, pas commité).**
+Fichiers touchés : `Canvas3D.jsx` (branche `<CulledVoxelScene>` statiquement morte retirée sans filet ;
+`<DungeonTerrainScene>` remplacé par un rendu vide explicite — le `<Grid>` déjà rendu avant suffit, prouvé
+au §9 ; `colTopSurface`/`getVoxelSurfaceTop` retirés, `y` du marqueur fantôme simplifié en `0.05` direct ;
+état `voxels`/init depuis `battlemap.voxel_data` retiré ; fusion `voxelTexIds` dans le chargement de
+textures simplifiée en `surfaceTexIds` seul) ; `Editor3D.jsx` (même branche de repli retirée ; `calcEntityPos`
+réduit au seul fallback plan Y=0 prouvé actif, `columnTops` et l'import `fast-voxel-raycast` retirés ;
+prop `voxels` retirée d'`EntityEditorScene` ; hook `useLegacyVoxelState` plus appelé) ; suppression de
+`client/src/legacyVoxel/useLegacyVoxelState.js` (dossier entier, devenu orphelin, conformément à la
+prédiction du Lot 1 §7), `CulledVoxelScene.jsx`, `DungeonTerrainScene.jsx`, `buildCulledMesh.js`,
+`buildDungeonTerrainMesh.js` (plus aucun appelant, vérifié) ; dépendance npm `fast-voxel-raycast` retirée
+(`client/package.json`) ; `battlemapWorldPersistence.js` (`collectVoxelTextureIds` retiré,
+`collectBattlemapTextureIds`/`syncBattlemapTextureUsage` n'acceptent plus de `voxelData`) et les 2 appelants
+dans `battlemaps.js` (`/surface`, `/duplicate`) mis à jour en conséquence ; test correspondant mis à jour.
+Testé : `node --check` propre ; `eslint` ciblé sur `Canvas3D.jsx`/`Editor3D.jsx` — **comparé ligne à ligne
+avec la version HEAD d'avant ce lot** (pas une simple lecture du compte total, qui aurait pu induire en
+erreur par un décalage de numéros de ligne) : zéro nouvelle erreur/warning introduite, un pré-existant
+(`voxelsRef.current = voxels`, catégorie `react-hooks/refs`) authentiquement supprimé ; `node --test
+battlemapWorldPersistence.test.mjs` 3/3 vert ; `npm run build` client propre (bundle légèrement plus léger).
+Non testé : comportement réel en navigateur — carte neuve sans salles dessinées (MJ et joueur), et la
+prévisualisation de déplacement en combat (marqueur fantôme). Aucune régression attendue (code retiré
+prouvé sans effet observable, §9), mais dû comme pour tout ce chantier (§0). Hors périmètre, pas touché :
+`Voxel.jsx` (catégorie C, partagé avec `VoxelBuilderTab.jsx`).
 Fichiers touchés : route `PUT /:id/voxels` retirée (`server/src/routes/battlemaps.js`) ; `voxel_revision`
 retiré de `BATTLEMAP_DOCUMENT_REVISION_COLUMNS` (`battlemapWorldPersistence.js` + test correspondant) ;
 `saveVoxelsFireAndForget`/`voxelSaveQueueRef`/`voxelSaveRevisionRef`/`isDirty`/`voxelsRef` retirés de
@@ -322,6 +346,19 @@ deux côtés avant de coder.
   n'est affecté) ; `lib/voxelTextures.js` → `lib/surfaceTextures.js` ; client :  `VoxelBuilderTab.jsx` (nom sans
   « voxel »), `Editor3D.jsx`, `Canvas3D.jsx`, `MaterialGeneratorTab.jsx`, `EntityBuilderTab.jsx` ; vérifier les
   clés i18n visibles utilisateur avant clôture (`client/src/locales/*.json`, règle `.claude/rules/i18n.md`).
+- `[VÉRIFIÉ]` 2026-10-14, 3ᵉ analyse à charge : `server/src/lib/voxelTextures.js` est un **doublon complet
+  et mort** de `server/src/routes/voxel-textures.js` (même CRUD GET/POST/PUT/DELETE, même table) — zéro
+  importeur nulle part (`server/src/index.js` ne monte que `routes/voxel-textures.js`). À supprimer dans ce
+  lot, pas à renommer (sinon le doublon survit sous un nom à jour, pire qu'avant).
+- `[VÉRIFIÉ]` La recherche exhaustive (tout le dépôt, pas juste client/server/src) trouve aussi
+  `docs/SYSTEME/CHARACTER.md`, `ENTITES.md`, `ASSETS.md`, `TRADE.md` mentionnant `voxel_textures` — pas vus
+  aux 2 passes précédentes. Ajoutés au périmètre du Lot 6 (doc), pas traités ici.
+- **Question ouverte, pas tranchée moi-même** : renommer la table/les routes implique-t-il de renommer le
+  **chemin d'API public** (`/api/voxel-textures` → `/api/surface-textures`) ? Ça cascade sur tous les appels
+  client (`VoxelBuilderTab.jsx`, `Canvas3D.jsx`, `Editor3D.jsx`, `MaterialGeneratorTab.jsx`,
+  `EntityBuilderTab.jsx`, `texture-packs.js`) en plus du renommage DB. Premier lot de ce chantier avec une
+  vraie migration de schéma (table existante, pas juste du code) — je demande confirmation avant de
+  l'exécuter plutôt que de l'enchaîner silencieusement.
 - `[VÉRIFIÉ]` `TexturePacksPage.jsx` est une **page orpheline** : aucun import nulle part dans `client/src`
   (remplacée par `WorkshopPage.jsx`, jamais retirée), référence pourtant `voxel-textures` abondamment. Sans
   rapport direct avec la purge voxel — question séparée pour Saar : la supprimer dans ce lot (mécanique, bas

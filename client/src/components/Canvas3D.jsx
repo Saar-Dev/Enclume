@@ -12,8 +12,6 @@ import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
-import CulledVoxelScene from './CulledVoxelScene.jsx'
-import DungeonTerrainScene from './DungeonTerrainScene.jsx'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
 import Skydome from './Skydome.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
@@ -46,7 +44,6 @@ import { useCombatStore } from '../stores/combatStore'
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
 const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
-const USE_DIORAMA_TERRAIN = true
 
 // Marqueur de grenade armée (docs/PLANS/PLAN_GRENADES.md §3d-3) — asset client fixe, servi comme les
 // dés depuis client/public/models/. La plus grande dimension du modèle est normalisée à
@@ -89,13 +86,6 @@ function tokenFeetPoint(token) {
     y: (Number(token?.pos_z) || 0) + legacyOffset,
     z: (Number(token?.pos_y) || 0) + legacyOffset,
   }
-}
-
-// Hauteur réelle du sommet d'un voxel en Three.js Y selon sa géométrie.
-// Utilisée pour poser les tokens exactement sur la surface (pas dans le vide).
-function getVoxelSurfaceTop(v) {
-  if (v.geo === 'slab_bottom') return v.y + 0.5  // dalle basse : sommet à mi-case
-  return v.y + 1.0                                 // cube, slab_top, autres : sommet en haut de case
 }
 
 // ─── Disque combat actif ─────────────────────────────────────────────────────
@@ -439,7 +429,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 }
 
 // ─── Scène principale ─────────────────────────────────────────────────────────
-// Lecture seule voxels + tokens + entités + WS listeners.
+// Lecture seule tokens + entités + WS listeners.
 // La logique d'édition (pose, suppression, rotation) est dans Editor3D.
 function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) {
   const { camera, gl } = useThree()
@@ -563,7 +553,7 @@ function findWorldSupportHit(raycaster, scene) {
 }
 
 function Scene({
-  voxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
+  surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
@@ -752,11 +742,8 @@ function Scene({
   // suivante ne parte.
   const previewAbortRef = useRef(null)
 
-  const voxelsRef = useRef(voxels)
-  voxelsRef.current = voxels
-
   // ─── LOS v2 — service complet (client/src/lib/useCameraLOS.js) ──────────
-  // Déclaré après voxelsRef et tokensRef (TDZ — déclarations const non hoistées)
+  // Déclaré après tokensRef (TDZ — déclarations const non hoistées)
   const { losLine, onTokenClick, onPointerUp, clearLine } = useCameraLOS(
     losMode, orbitRef, tokensRef, battlemapId, onLosResult, onLosCancel
   )
@@ -988,18 +975,6 @@ function Scene({
       if (error?.response?.status !== 409) console.error('Erreur preview déplacement monde :', error)
     }
   }, [battlemapId])
-
-  // Index colonne → hauteur réelle de surface (Three.js Y). Reconstruit uniquement quand voxels change.
-  // O(1) par lookup vs O(N) par frame pour le getColumnTopY précédent.
-  const colTopSurface = useMemo(() => {
-    const map = {}
-    for (const v of Object.values(voxels)) {
-      const key = `${v.x}:${v.z}`
-      const surf = getVoxelSurfaceTop(v)
-      if (map[key] === undefined || surf > map[key]) map[key] = surf
-    }
-    return map
-  }, [voxels])
 
   // Précédence unique du survol de déplacement ambiant et/ou du clic-attaque ambiant — un seul point
   // de vérité (COMBAT-DEPLACEMENT-HOVER, 2026-07-31), consulté par handlePointerMove/handlePointerUp
@@ -1567,7 +1542,7 @@ function Scene({
         fadeDistance={80}
       />
 
-      {hasSurfaceContent(surfaceData) ? (
+      {hasSurfaceContent(surfaceData) && (
         <SurfaceDungeonScene
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
@@ -1579,11 +1554,10 @@ function Scene({
           onConnectorSelect={onSurfaceConnectorSelect}
           aimModeActive={aimModeActive}
         />
-      ) : USE_DIORAMA_TERRAIN ? (
-        <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
-      ) : (
-        <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
       )}
+      {/* Carte sans surface_data (pas encore dessinée) : rien à afficher ici, la <Grid> ci-dessus
+          suffit de repère visuel — l'ancien repli voxel ne produisait déjà aucune géométrie
+          (voxel_data toujours vide, voir PLAN_PURGE_VOXEL.md Lot 3). */}
 
       {(runtimeEffectRegions || []).map(region => {
         const bounds = region?.bounds
@@ -1637,7 +1611,7 @@ function Scene({
         )
       })()}
 
-      {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
+      {/* ── Entités interactables — entre le décor de salle et les tokens ─── */}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
@@ -1673,7 +1647,7 @@ function Scene({
       {/* PE14 : ghostPos.x = pos_x base, ghostPos.z = pos_y base (profondeur)  */}
       {moveTarget && ghostPos && (() => {
         const color = dotResult > 0 ? '#2563eb' : dotResult < 0 ? '#f97316' : '#ef4444'
-        const y = (colTopSurface[`${ghostPos.x}:${ghostPos.z}`] ?? 0) + 0.05
+        const y = 0.05
         return (
           <group position={[ghostPos.x + 0.5, y, ghostPos.z + 0.5]}>
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -2011,7 +1985,6 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   // 2026-08-07 : "curseur_case ne laisse jamais sa place").
   const hoveringTokenRef = useRef(false)
 
-  const [voxels, setVoxels] = useState({})
   // SURFACE-RENDER-IDENTITY-CHURN (ticket 9f6c2a6e) — sans ce useMemo, normalizeSurfaceData()
   // (surfaceCore.js) reconstruit un objet neuf (rooms/room via Object.fromEntries+spread) à CHAQUE
   // rendu de Canvas3D, quel qu'en soit le déclencheur (store de tokens, phase de combat, survol…).
@@ -2120,27 +2093,13 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
   const blueprintIds = [...new Set(entities.map(e => e.blueprint_id))].sort().join(',')
 
-  // ─── Initialisation voxels depuis battlemap.voxel_data ────────────────────
-  useEffect(() => {
-    if (!battlemap?.voxel_data) return
-    const map = {}
-    for (const [key, val] of Object.entries(battlemap.voxel_data)) {
-      const [x, y, z] = key.split(':').map(Number)
-      map[key] = { x, y, z, tex: val.tex, geo: val.geo, r: val.r }
-    }
-    setVoxels(map)
-  }, [battlemap?.id, battlemap?.voxel_data])
-
   // ─── Chargement des voxel_textures nécessaires ───────────────────────────
   useEffect(() => {
     const loadBlocks = async () => {
       setBlocksReady(false)
 
-      const voxelTexIds = battlemap?.voxel_data
-        ? [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
-        : []
       const surfaceTexIds = surfaceTextureIds(battlemap?.surface_data)
-      const textureIds = [...new Set([...voxelTexIds, ...surfaceTexIds])]
+      const textureIds = [...new Set(surfaceTexIds)]
 
       if (textureIds.length === 0) {
         setTextureMaterials({})
@@ -2206,7 +2165,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
     loadBlocks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battlemap?.id, battlemap?.voxel_data, battlemap?.surface_data, blueprintIds])
+  }, [battlemap?.id, battlemap?.surface_data, blueprintIds])
 
   const selectedSurfaceConnector = useMemo(() => {
     const id = surfaceConnectorPanel?.connectorId
@@ -2286,7 +2245,6 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
       <Skydome preset="ocean_floor" />
       {blocksReady && (
         <Scene
-          voxels={voxels}
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}

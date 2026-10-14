@@ -16,15 +16,12 @@ test('les écritures documentaires demandent explicitement toutes les révisions
   ])
 })
 
-test('les usages texture réunissent voxels et surfaces sans s’effacer mutuellement', () => {
-  const ids = collectBattlemapTextureIds(
-    { '0:0:0': { tex: 4 }, '1:0:0': { tex: 4 } },
-    {
-      rooms: { roomA: { minX: 0, maxX: 0, minZ: 0, maxZ: 0, floorTex: 7 } },
-      floors: {}, walls: {}, ceilings: {}, stairs: {}, connectors: {},
-    },
-  )
-  assert.deepEqual(new Set(ids), new Set([4, 7]))
+test('les usages texture collectent les ids référencés par surface_data', () => {
+  const ids = collectBattlemapTextureIds({
+    rooms: { roomA: { minX: 0, maxX: 0, minZ: 0, maxZ: 0, floorTex: 7 } },
+    floors: {}, walls: {}, ceilings: {}, stairs: {}, connectors: {},
+  })
+  assert.deepEqual(new Set(ids), new Set([7]))
 })
 
 test('les révisions documentaires sont validées et comparées indépendamment', () => {

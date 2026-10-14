@@ -3,13 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { Canvas, useThree } from '@react-three/fiber'
 import { MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
-import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import { useSurfacePanels } from '../lib/useSurfacePanels.js'
-import { useLegacyVoxelState } from '../legacyVoxel/useLegacyVoxelState.js'
 import { useSurfaceDocument } from '../lib/useSurfaceDocument.js'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
@@ -17,7 +15,6 @@ import SurfaceRoomPanel from './SurfaceRoomPanel.jsx'
 import SurfaceWallPanel from './SurfaceWallPanel.jsx'
 import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
-import CulledVoxelScene from './CulledVoxelScene.jsx'
 import Skydome from './Skydome.jsx'
 import GhostEntityBounds from './entityTools/GhostEntityBounds.jsx'
 import TileSnapHighlight from './entityTools/TileSnapHighlight.jsx'
@@ -56,7 +53,6 @@ const blueprintPlacementMode = (blueprint) => (
 
 // ─── Scène éditeur entités ────────────────────────────────────────────────────
 function EntityEditorScene({
-  voxels,
   surfaceData,
   textureMaterials,
   entityTextureMaterials,
@@ -145,19 +141,9 @@ function EntityEditorScene({
     })
   }, [displayLevel, surfaceData])
 
-  const columnTops = useMemo(() => {
-    const tops = {}
-    for (const voxel of Object.values(voxels)) {
-      const key = `${voxel.x}:${voxel.z}`
-      const top = voxel.y + (voxel.geo === 'slab_bottom' ? 0.5 : 1)
-      if (tops[key] === undefined || top > tops[key]) tops[key] = top
-    }
-    return tops
-  }, [voxels])
-
   // Empilement — sommet des entités posées (mode free uniquement) par case de grille, même logique
-  // que columnTops/displayedFloorSupports : la hauteur de pose est celle de ce qu'il y a en dessous,
-  // que ce soit le sol, un voxel ou une autre entité (patron pro confirmé — Unity/Unreal surface
+  // que displayedFloorSupports : la hauteur de pose est celle de ce qu'il y a en dessous, que ce
+  // soit le sol ou une autre entité (patron pro confirmé — Unity/Unreal surface
   // snapping font un raycast vers le bas sans distinguer sol et objet). Liste par case (pas un max
   // déjà réduit) pour pouvoir exclure l'entité en cours de déplacement à la lecture, sans recalculer
   // toute la carte à chaque mousemove. pos_z est la BASE de l'entité (GhostEntityBounds positionne
@@ -189,9 +175,9 @@ function EntityEditorScene({
 
       // Cases FINES (SURFACE_FINE, même granularité que le placement lui-même — snap(value) =
       // Math.round(value*SURFACE_FINE)/SURFACE_FINE ailleurs dans ce fichier), pas la case entière
-      // de columnTops/displayedFloorSupports. Une case entière faisait déclencher l'empilement
-      // jusqu'à ~1 unité (4 pas de la grille fine affichée) du bord réel d'un objet — imprécision
-      // confirmée en jeu (2026-09-16), pas seulement une limite en dessous du sol/voxel.
+      // de displayedFloorSupports. Une case entière faisait déclencher l'empilement jusqu'à ~1 unité
+      // (4 pas de la grille fine affichée) du bord réel d'un objet — imprécision confirmée en jeu
+      // (2026-09-16).
       const cxMax = Math.floor(maxX * SURFACE_FINE - 1e-6)
       const czMax = Math.floor(maxZ * SURFACE_FINE - 1e-6)
       for (let cx = Math.floor(minX * SURFACE_FINE); cx <= cxMax; cx++) {
@@ -207,7 +193,7 @@ function EntityEditorScene({
   }, [entities, blueprints, displayLevel])
 
   // cellX/cellZ ici sont des cases FINES (déjà multipliées par SURFACE_FINE par l'appelant),
-  // cohérentes avec la clé construite ci-dessus — jamais les cases entières de columnTops.
+  // cohérentes avec la clé construite ci-dessus.
   const entityTopSupportAt = useCallback((fineCellX, fineCellZ, excludeEntityId) => {
     const list = entityTopSupportsByCell.get(`${fineCellX}:${fineCellZ}`)
     if (!list) return -Infinity
@@ -219,6 +205,9 @@ function EntityEditorScene({
     return max
   }, [entityTopSupportsByCell])
 
+  // PLAN_PURGE_VOXEL.md Lot 3 : ne gardait plus que ce fallback — le raycast voxel qui précédait
+  // (lib fast-voxel-raycast) ne pouvait plus jamais trouver de hit (voxels toujours {}, prédicat
+  // (x,y,z) => !!voxels[...] donc toujours false), prouvé par lecture avant retrait, pas supposé.
   const calcEntityPos = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
@@ -227,36 +216,15 @@ function EntityEditorScene({
     )
     raycaster.setFromCamera(mouse, camera)
 
-    // Traversée directe de la grille : coût proportionnel à la longueur du rayon,
-    // jamais au nombre de triangles de la carte fusionnée.
-    const hitPos = [0, 0, 0]
-    const hitNorm = [0, 0, 0]
-    const origin = raycaster.ray.origin
-    const direction = raycaster.ray.direction
-    const hit = raycastVoxels(
-      (x, y, z) => !!voxels[`${x}:${y}:${z}`],
-      [origin.x, origin.y, origin.z],
-      [direction.x, direction.y, direction.z],
-      100,
-      hitPos,
-      hitNorm
-    )
-    if (hit) {
-      const x = Math.floor(hitPos[0] - hitNorm[0] * 0.01)
-      const z = Math.floor(hitPos[2] - hitNorm[2] * 0.01)
-      if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
-      return { x, y: columnTops[`${x}:${z}`] ?? 0, z }
-    }
-
-    // Fallback — intersection avec le sol Y=0
+    // Intersection avec le sol Y=0
     const target = new THREE.Vector3()
-    const hit2 = raycaster.ray.intersectPlane(groundPlane, target)
-    if (!hit2) return null
+    const hit = raycaster.ray.intersectPlane(groundPlane, target)
+    if (!hit) return null
     const x = Math.round(target.x)
     const z = Math.round(target.z)
     if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
     return { x, y: 0, z }
-  }, [camera, gl, voxels, columnTops])
+  }, [camera, gl])
 
   const calcPreciseEntityPos = useCallback((clientX, clientY, blueprint, rotation = 0, excludeEntityId = null) => {
     if (!blueprint) return null
@@ -393,10 +361,8 @@ function EntityEditorScene({
       } else {
         centerX = target.x
         centerZ = target.z
-        const cellX = Math.floor(centerX)
-        const cellZ = Math.floor(centerZ)
         supportY = Math.max(
-          columnTops[`${cellX}:${cellZ}`] ?? supportY,
+          supportY,
           entityTopSupportAt(Math.floor(centerX * SURFACE_FINE), Math.floor(centerZ * SURFACE_FINE), excludeEntityId),
         )
       }
@@ -424,7 +390,7 @@ function EntityEditorScene({
       r: rotation,
       placement: { mode: 'free', level: displayLevel },
     }
-  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, entityTopSupportAt, gl, surfaceData, tileSnapEnabled])
+  }, [calcEntityPos, camera, displayLevel, displayedFloorSupports, displayedWallSupports, entityTopSupportAt, gl, surfaceData, tileSnapEnabled])
 
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -689,7 +655,7 @@ function EntityEditorScene({
       <Grid args={[visibleGridSize, visibleGridSize * SURFACE_FINE]} position={[0, levelToY(displayLevel) + 0.02, 0]}
         cellColor="#233044" sectionColor="#233044" fadeDistance={45}
       />
-      {hasSurfaceContent(surfaceData) ? (
+      {hasSurfaceContent(surfaceData) && (
         <SurfaceDungeonScene
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
@@ -699,9 +665,10 @@ function EntityEditorScene({
           onCameraRoomIdChange={setCameraVolumeRoomId}
           wallOcclusionEnabled={false}
         />
-      ) : (
-        <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
       )}
+      {/* Carte sans surface_data (pas encore dessinée) : rien à afficher ici, les deux <Grid>
+          ci-dessus suffisent de repère visuel — l'ancien repli voxel ne produisait déjà aucune
+          géométrie (voxel_data toujours vide, voir PLAN_PURGE_VOXEL.md Lot 3). */}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
@@ -740,7 +707,7 @@ function EntityEditorScene({
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Editor3D — mode édition GM.
-// Gère : chargement blocs, voxels, save, raccourcis clavier sélection palette.
+// Gère : chargement blocs, save surface, raccourcis clavier sélection palette.
 // Props :
 //   socket                  — pour émettre les événements temps réel (entités, effets runtime…)
 //   activeMaterial          — { texId, geo, r } | null — texture+géométrie actifs (depuis SessionPage)
@@ -781,8 +748,6 @@ export default function Editor3D({
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
-  const { voxels } = useLegacyVoxelState(battlemap)
-
   const {
     surfaceData,
     surfaceDataRef,
@@ -807,9 +772,8 @@ export default function Editor3D({
   } = useWorldRuntimeSync(battlemap?.id, socket)
 
   // ─── Chargement voxel_textures — TOUTES les textures (palette complète) ──
-  // Editor3D charge toutes les textures non-deprecated pour la palette,
-  // contrairement à Canvas3D qui charge seulement les IDs présents dans voxel_data.
-  // Un seul chargement couvre à la fois la palette et les voxels existants.
+  // Editor3D charge toutes les textures non-deprecated pour la palette de l'atelier,
+  // contrairement à Canvas3D qui ne charge que les IDs présents dans surface_data.
   useEffect(() => {
     const loadBlocks = async () => {
       setBlocksReady(false)
@@ -874,8 +838,6 @@ export default function Editor3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blueprintIds])
 
-  // ─── save() async — pour les saves explicites futures (undo/redo) ────────
-  // Payload format : { "x:y:z": { tex, geo, r } } — P_voxel_save_payload
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
   useEffect(() => {
     saveTimer.current = setInterval(() => {
@@ -1104,7 +1066,6 @@ export default function Editor3D({
         {blocksReady && activeEditorTab === 'entity' && (
           <EntityEditorScene
             key={activeBlueprint?.id || 'no-blueprint'}
-            voxels={voxels}
             surfaceData={surfaceData}
             textureMaterials={textureMaterials}
             entityTextureMaterials={entityTextureMaterials}
