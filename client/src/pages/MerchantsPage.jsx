@@ -184,6 +184,15 @@ export default function MerchantsPage() {
     }))
   }, [catalogTree])
 
+  // MARCHAND-CHECKALL-BUTTON — même geste bulk que setAllFamilies ci-dessus, appliqué à
+  // allowed_char_ids. 'ALL' coche chaque personnage explicitement (fin fonctionnellement identique
+  // à une liste vide — "liste vide = tous autorisés", playersAll — mais visible et réversible
+  // personnage par personnage sans repartir de zéro) ; 'NONE' vide la liste (retour à "tous
+  // autorisés" implicite, pas un vrai verrouillage — aucun mode "aucun autorisé" n'existe ici).
+  const setAllPlayers = useCallback((mode) => {
+    setForm(f => ({ ...f, allowed_char_ids: mode === 'ALL' ? characters.map(c => c.id) : [] }))
+  }, [characters])
+
   // ─── Badge tri-state ─────────────────────────────────────────────────────────
   function RuleBadge({ mode, inherited }) {
     if (!mode) {
@@ -385,6 +394,22 @@ export default function MerchantsPage() {
               {activeTab === 'players' && (
                 <div style={S.tabContent}>
                   <p style={S.muted}>{t('trade.merchants.playersAll')}</p>
+                  {characters.length > 0 && (
+                    <div style={S.bulkRow}>
+                      <button
+                        style={S.btnGhost}
+                        onClick={() => setAllPlayers('ALL')}
+                      >
+                        {t('trade.merchants.playersCheckAll')}
+                      </button>
+                      <button
+                        style={S.btnGhost}
+                        onClick={() => setAllPlayers('NONE')}
+                      >
+                        {t('trade.merchants.playersUncheckAll')}
+                      </button>
+                    </div>
+                  )}
                   {characters.length === 0 && <p style={S.muted}>{t('trade.merchants.playersNone')}</p>}
                   {characters.map(char => (
                     <label key={char.id} style={S.checkRow}>

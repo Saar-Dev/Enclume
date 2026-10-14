@@ -11126,3 +11126,22 @@ quantité ≤ 0 — 37/37 sur l'ensemble du fichier, aucune régression), ESLint
 emplacement) — à valider par Saar.
 **Données** : aucune migration (route + logique applicative uniquement).
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — MARCHAND-CHECKALL-BUTTON : « Tout cocher » sur l'onglet Joueurs d'un Marchand
+
+L'écran MJ de configuration d'un Marchand (`MerchantsPage.jsx`) a deux onglets à liste cochable :
+« Catalogue » (déjà équipé de boutons bulk `setAllFamilies` — « Tout inclure »/« Tout exclure ») et
+« Joueurs autorisés » (une case par personnage, aucun bulk). Même manque, même solution.
+
+**Fix** : `setAllPlayers(mode)`, même patron que `setAllFamilies` — `'ALL'` coche chaque personnage
+(`allowed_char_ids` = tous les ids), `'NONE'` vide la liste. Les deux états sont fonctionnellement
+identiques pour l'accès marchand (« liste vide = tous autorisés », `playersAll`) mais `'ALL'` rend
+l'autorisation explicite et réversible personnage par personnage sans repartir d'une liste vide.
+Boutons « Tout cocher »/« Tout décocher » ajoutés au même endroit que les boutons `catalogIncludeAll`/
+`catalogExcludeAll` de l'onglet Catalogue.
+
+**Testé** : JSON valide, ESLint ciblé (copie temporaire hors index git — session parallèle sur le
+même worktree —, 0 nouveau problème), `npm run build` client propre.
+**Non testé** : rendu visuel réel (ouvrir la fiche MJ d'un Marchand, onglet Joueurs).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
