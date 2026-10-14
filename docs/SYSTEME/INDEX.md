@@ -63,7 +63,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 |----------|----------------|--------|
 | `SYSTEME/MOTEUR_MONDE.md` | Compilation, navigation, collision, LOS, WorldSnapshot | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/SURFACES_SALLES.md` | Éditeur de surface, salles, murs, connecteurs, profils, eau | 🔎 Analysé en profondeur (2026-08-26) |
-| `SYSTEME/VOXELS.md` | Conventions de coordonnées 3D (PE14, PE34), pièges voxels | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/VOXELS.md` | Rendu d'un bloc texturé isolé (`Voxel.jsx`), catalogue — format de carte voxel mort/retiré (PLAN_PURGE_VOXEL.md) | 🔎 Réécrit (2026-10-14, Lot 6) |
 
 ### 3.2 Combat
 | Document | Responsabilité | Statut |

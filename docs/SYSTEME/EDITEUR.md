@@ -7,7 +7,7 @@ SYSTEME/EDITEUR.md — Infrastructure commune de l'éditeur de monde
     (worldRuntimeStore.js, useWorldRuntimeSync) et l'exclusivité mutuelle Editor3D/Canvas3D confirmés
     contre le code. Ticket bug_tickets/AUDIT-SYSTEME résolu le même jour : EditorScene (code mort,
     jamais rendue) supprimée, P12 retiré (§9.1) — voir aussi VOXELS.md/CONVENTIONS.md.
-    Lire pour : comprendre le socle commun à tous les modes d'édition (surface, entité, voxel).
+    Lire pour : comprendre le socle commun à tous les modes d'édition (surface, entité).
 
 Documents associés :
 
@@ -38,8 +38,10 @@ SessionPage
 
 EditorScene (édition voxel interactive legacy) a été **supprimée** (ticket `bug_tickets`/
 `AUDIT-SYSTEME`, résolu 2026-08-26) : la fonction n'était déjà plus rendue nulle part dans l'arbre JSX
-— code mort pur, aucune perte fonctionnelle. L'affichage en lecture seule des voxels d'une carte sans
-`surface_data` (cartes non migrées) reste assuré par `CulledVoxelScene`, rendu dans `EntityEditorScene`.
+— code mort pur, aucune perte fonctionnelle. **Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 3)** :
+`CulledVoxelScene` (qui affichait en lecture seule les voxels d'une carte sans `surface_data`) a été
+retirée à son tour — prouvée toujours vide (aucune carte à voxels n'existe) depuis longtemps. Une carte
+sans `surface_data` n'affiche plus rien de particulier dans `EntityEditorScene` au-delà de la grille.
 
 Editor3D ne décrit pas lui-même le comportement des outils ; il fournit l'infrastructure
 partagée : sauvegarde, undo/redo, chargement des textures, effets runtime, panneaux flottants.
@@ -61,51 +63,52 @@ différents, sans `key` de stabilisation, que React démonte/remonte à chaque b
 pour cette raison que le `useEffect` de cleanup décrit en §4.4 déclenche la sauvegarde « au basculement
 vers le mode jeu » — un composant qui resterait monté n'aurait pas besoin de ce cleanup. Aucun état
 interne d'Editor3D (undo/redo, files de sauvegarde) ne survit donc à un aller-retour édition → jeu ;
-seul l'état persisté côté serveur (surface_data, voxel_data) survit.
+seul l'état persisté côté serveur (surface_data) survit.
 3. Onglets de l'éditeur
 
 Deux onglets structurent l'édition :
 Onglet	Rôle	Composant de scène
-Monde (activeEditorTab === 'world')	Édition des surfaces et des voxels	SurfaceEditorScene
+Monde (activeEditorTab === 'world')	Édition des surfaces	SurfaceEditorScene
 Entités (activeEditorTab === 'entity')	Pose et manipulation des entités libres	EntityEditorScene
 
 Le changement d'onglet ne démonte pas la scène non active ; il conditionne simplement le rendu
 dans le Canvas. L'état de chaque scène est conservé.
 4. Sauvegarde automatique
-4.1 Files d'attente
 
-Deux files d'attente sérialisent les sauvegardes pour éviter les conflits :
+**Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 2)** : ce §4 décrivait à l'origine deux pipelines
+parallèles (voxel + surface). Le pipeline voxel (`voxelSaveQueueRef`/`voxelSaveRevisionRef`/`isDirty`,
+route `PUT /battlemaps/:id/voxels`) a été retiré — ticket `VOXEL-SAVE-INERT1` : plus aucun chemin
+d'interface ne pouvait le déclencher depuis la suppression d'`EditorScene`. Seul le pipeline surface
+subsiste, décrit ci-dessous.
+4.1 File d'attente
+
+Une file d'attente sérialise les sauvegardes pour éviter les conflits :
 javascript
 
-voxelSaveQueueRef   // file pour les voxels
 surfaceSaveQueueRef // file pour les surfaces
 
 Chaque file est une promesse chaînée (.catch(() => {}).then(...)) qui garantit l'ordre des
 requêtes PUT.
 4.2 Révisions
 
-Deux compteurs de révision locaux protègent contre les conflits d'écriture :
+Un compteur de révision local protège contre les conflits d'écriture :
 javascript
 
-voxelSaveRevisionRef   // incrémenté avant chaque sauvegarde voxel
 surfaceSaveRevisionRef // incrémenté avant chaque sauvegarde surface
 
-Ces révisions sont comparées à battlemapRef.current.voxel_revision et
-battlemapRef.current.surface_revision pour éviter d'écraser une version plus récente.
+Cette révision est comparée à battlemapRef.current.surface_revision pour éviter d'écraser une
+version plus récente.
 4.3 Auto-save périodique
 
-Un setInterval de 60 secondes déclenche la sauvegarde si isDirty (voxels) ou
-isSurfaceDirty (surfaces) est à true.
+Un setInterval de 60 secondes déclenche la sauvegarde si isSurfaceDirty (surfaces) est à true.
 4.4 Sauvegarde au démontage
 
-Un useEffect avec cleanup sauvegarde les deux documents lorsque le composant est démonté
-(changement de carte, basculement vers le mode jeu). La sauvegarde utilise saveFireAndForget
+Un useEffect avec cleanup sauvegarde le document surface lorsque le composant est démonté
+(changement de carte, basculement vers le mode jeu). La sauvegarde utilise saveSurfaceFireAndForget
 pour ne pas bloquer le démontage React.
 4.5 Format des données
 
-    Voxels : objet { "x:y:z": { tex, geo, r } } — conforme à la convention PE14.
-
-    Surfaces : surface_data v12, normalisé par normalizeSurfaceData avant envoi.
+Surfaces : surface_data v12, normalisé par normalizeSurfaceData avant envoi.
 
 4.6 Réconciliation après erreur
 
@@ -140,17 +143,17 @@ L'état des piles (surfaceUndoDepth, surfaceRedoDepth) est remonté au parent vi
 onSurfaceUndoStateChange et onSurfaceRedoStateChange. La barre latérale utilise ces flags
 pour activer/désactiver les boutons Annuler et Refaire.
 6. Chargement des textures
-6.1 Textures voxel (textureMaterials)
+6.1 Textures de la palette (textureMaterials)
 
-Au montage, Editor3D charge toutes les textures non-deprecated via GET /voxel-textures, puis
-les convertit avec loadVoxelTextures. Le flag blocksReady passe à true une fois le
+Au montage, Editor3D charge toutes les textures non-deprecated via GET /surface-textures, puis
+les convertit avec loadSurfaceTextures. Le flag blocksReady passe à true une fois le
 chargement terminé, même si aucune texture n'existe (P26). Les scènes ne sont rendues qu'après
 blocksReady === true.
 6.2 Textures d'entités (entityTextureMaterials)
 
 Un useEffect observe les blueprints des entités présentes sur la carte. Pour chaque blueprint
 avec pack_id et geometry.faces, un fakeTexObj est construit et chargé via
-loadVoxelTextures. Le résultat est structuré par blueprint et par état visuel :
+loadSurfaceTextures. Le résultat est structuré par blueprint et par état visuel :
 javascript
 
 entityTextureMaterials = {
@@ -221,7 +224,7 @@ P54	Vérifier knex_migrations avant tout appel manuel à up()/down()
 Code	Description
 P26	blocksReady = true même si 0 textures chargées
 PEF5	Blueprint sans pack_id → skip + rendu magenta (debug)
-PEF6	Chargements textures voxels et entités séparés
+PEF6	Chargements textures surface et entités séparés
 9.4 Convention PE14
 text
 
@@ -238,6 +241,6 @@ client/src/components/Sidebar.jsx	Barre latérale (onglets, outils, palette)
 client/src/components/SurfaceEditorScene.jsx	Scène d'édition des surfaces
 client/src/lib/surfaceData.js	Logique métier des surfaces
 client/src/lib/surfacePersistence.js	Persistance du document surface
-client/src/lib/voxelTextures.js	Chargement des textures
+client/src/lib/surfaceTextures.js	Chargement des textures
 shared/world/surfaceDocument.js	Validation serveur du document surface
 shared/world/entityTransform.js	Normalisation de l'échelle des entités

@@ -144,9 +144,11 @@ distance de règle passe toujours par `WorldMetrics` et utilise les trois axes.
 
 ### 2.6 Index des textures `[RÉSOLU — PHASE 1]`
 
-Les deux routes appellent désormais `syncBattlemapTextureUsage(...)` dans leur transaction. L'index
-est recalculé comme l'union de `voxel_data` et `surface_data` ; sauvegarder une représentation ne
-peut plus effacer les usages de l'autre.
+Les deux routes (`/surface`, `/duplicate`) appellent `syncBattlemapTextureUsage(...)` dans leur
+transaction. **Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 3)** : l'index ne recalcule plus
+l'union avec `voxel_data` — `collectVoxelTextureIds` a été retiré, la contribution voxel était
+toujours vide (aucune carte à voxels n'existe). L'index reflète uniquement les textures référencées
+par `surface_data`.
 
 ### 2.7 Socle partagé et compilation `[EXISTANT — PHASES 0 ET 1]`
 
@@ -189,17 +191,20 @@ voir ailleurs dans ce document), créés directement dans `3_battlemaps.js` (cor
 "migration 152" pointe aujourd'hui vers `ref_backgrounds_constraints.js`, sans rapport) :
 
 - `world_revision` change après toute modification d'une source physique ;
-- `surface_revision` protège uniquement les éditions de `surface_data` ;
-- `voxel_revision` protège uniquement les éditions de `voxel_data`.
+- `surface_revision` protège uniquement les éditions de `surface_data`.
 
-Cette séparation est obligatoire tant que l'éditeur sauvegarde les deux documents via deux requêtes
-distinctes. Utiliser seulement `world_revision` pour l'optimistic locking ferait entrer en conflit
-les deux autosauvegardes d'un même éditeur. Chaque route verrouille la ligne `battlemaps`, compare sa
-révision documentaire, met à jour données/révisions/index texture dans une seule transaction, puis
-invalide ou remplit le cache du snapshot.
+**Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 2)** : `voxel_revision` existait pour protéger les
+éditions de `voxel_data` via une deuxième autosauvegarde parallèle (route `PUT /battlemaps/:id/voxels`)
+— ce pipeline a été retiré (ticket `VOXEL-SAVE-INERT1`, plus aucun chemin d'interface ne pouvait le
+déclencher). Seule une autosauvegarde (surface) subsiste désormais, donc seul `surface_revision` sert
+réellement à l'optimistic locking documentaire ; la colonne `voxel_revision` reste en base, inerte,
+jusqu'à sa suppression définitive (Lot 5 du même plan). Chaque route verrouille la ligne `battlemaps`,
+compare sa révision documentaire, met à jour données/révisions/index texture dans une seule
+transaction, puis invalide ou remplit le cache du snapshot.
 
-La réponse d'écriture doit contenir les trois colonnes de révision demandées à PostgreSQL ; elles
-sont passées à Knex sous forme de tableau, jamais comme arguments positionnels ambigus. Sur un
+La réponse d'écriture doit contenir les colonnes de révision demandées à PostgreSQL (`id`,
+`world_revision`, `surface_revision`) ; elles sont passées à Knex sous forme de tableau, jamais comme
+arguments positionnels ambigus. Sur un
 conflit `surface_revision`, l'éditeur compare le document courant du serveur à la dernière base qu'il
 a effectivement reçue. Il peut reprendre automatiquement une réponse perdue, mais refuse d'écraser
 une modification concurrente réelle. `boundaryArcs` est inclus dans ce round-trip au même titre que
@@ -234,6 +239,26 @@ révision par battlemap et ne sont donc jamais mises en cache : elles restent lu
 - `POST /api/tokens/:id/teleport` est le bypass MJ explicite ;
 - les créations de token se calent sur le support stable libre le plus proche à 1,25 unité monde ;
 - le client raycaste les meshes marqués `worldSupport` et ne choisit jamais une case vide.
+
+**Rendu client — `tokenFeetPoint()`** (`Canvas3D.jsx`, relocalisé depuis `VOXELS.md` §PE34 le
+2026-10-14, PLAN_PURGE_VOXEL.md Lot 6 — convention vivante, mal rangée sous « voxel » par accident
+historique) :
+```javascript
+function tokenFeetPoint(token) {
+  const legacyOffset = token?.position_space === 'world-feet' ? 0 : 0.5
+  return {
+    x: (Number(token?.pos_x) || 0) + legacyOffset,
+    y: (Number(token?.pos_z) || 0) + legacyOffset,   // altitude Three.js
+    z: (Number(token?.pos_y) || 0) + legacyOffset,
+  }
+}
+```
+Seule source consommée pour positionner le groupe Three.js d'un token. Token canonique
+(`position_space === 'world-feet'`, toute nouvelle position) : `feetY = token.pos_z` — `pos_z` stocke
+déjà l'altitude réelle des pieds en mètres, aucun décalage. Token historique (`legacy-cell`, jamais
+replacé par un MJ) : `feetY = token.pos_z + 0.5` — ancienne convention case, conservée en lecture
+jusqu'à migration explicite. Les overlays (anneau de sélection, disque actif) sont des enfants du
+groupe token en coordonnées locales, ils ne recalculent jamais cette formule.
 
 La compatibilité des anciennes cartes n'est pas un objectif. Leurs données peuvent rester présentes
 pour des comparaisons, mais ne doivent provoquer ni adaptateur approximatif ni double moteur.

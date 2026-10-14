@@ -39,7 +39,7 @@ Gère la fiche personnage Polaris et tous les modules joueur associés (compéte
 
 Les tables suivantes appartiennent au domaine **VTT** et sont documentées dans `docs/ASBUILT.md` et `docs/SYSTEME/` :
 
-`users` · `campaigns` · `campaign_members` · `battlemaps` · `tokens` · `characters` · `dice_rolls` · `player_locations` · `documents` · `walls` · `zones` · `texture_packs` · `texture_pack_categories` · `voxel_textures` · `battlemap_texture_usage`
+`users` · `campaigns` · `campaign_members` · `battlemaps` · `tokens` · `characters` · `dice_rolls` · `player_locations` · `documents` · `walls` · `zones` · `texture_packs` · `texture_pack_categories` · `surface_textures` · `battlemap_texture_usage`
 
 Le seul point de contact avec le domaine VTT est :
 ```

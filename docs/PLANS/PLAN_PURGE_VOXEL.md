@@ -449,8 +449,31 @@ considéré CLOS, pas partiel.
   par grep sur `VOXELS.md` dans tout `docs/`, pas par relecture visuelle seule.
 - Hors périmètre : `docs/Old/PLAN_VOXELS.md` (archive historique, ne se corrige jamais).
 
+**Lot 6 — CLOS le 2026-10-14.** `VOXELS.md` réécrit (garde P22/P26/P32, encore utiles pour `Voxel.jsx` ;
+PE14/PE34 relocalisés vers `ENTITES.md`/`MOTEUR_MONDE.md` avec leur formule complète ; le reste — format
+`voxel_data`, P17 — condensé en un historique court). `CONVENTIONS.md` §18-19 : 6 pointeurs corrigés (P17
+retiré, P22/PEF6 renommés, PE14/PE34 redirigés). `EDITEUR.md`, `MOTEUR_MONDE.md`, `SURFACES_SALLES.md` :
+sections décrivant le pipeline double (voxel+surface) corrigées pour refléter le pipeline unique actuel.
+`ASSETS.md`, `ENTITES.md`, `MATERIAUX.md`, `CHARACTER.md` : table/route/fichier renommés, mécanisme
+`voxel_data[key].tex` (mort) retiré de l'exemple. `.claude/rules/voxels.md` : `paths:` réduit à `Voxel.jsx`
+(les fichiers qu'il visait sous `*voxel*.js`/`voxelTextures*` sont renommés ou supprimés), contenu recentré
+sur le rendu de bloc texturé. **Trouvaille en cours de route** : `createReliefGeometryFromQuadData` et ses
+4 helpers exclusifs (`reliefGeometry.js`) étaient devenus orphelins après la suppression de
+`CulledVoxelScene`/`DungeonTerrainScene` au Lot 3 — retirés ici (vérifié : `applyProceduralReliefToGeometry`,
+sans appelant lui aussi, est un cas distinct et sans rapport, laissé en l'état, hors périmètre). `TRADE.md`,
+`COMBAT_FLUX.md`, `ARCHITECTURE_SOCKET.md` : mentions laissées telles quelles, exactes comme récits
+historiques d'un système déjà disparu avant ce chantier. Testé : `eslint`/`node --check` propres sur
+`reliefGeometry.js`, `npm run build` propre. Pas de script/commande dédiée pour « tester » de la
+documentation — relecture croisée seule.
+
 ## Historique
 
+- **2026-10-14 — Lot 6 clos** : documentation corrigée (`VOXELS.md` réécrit, `CONVENTIONS.md`/`EDITEUR.md`/
+  `MOTEUR_MONDE.md`/`SURFACES_SALLES.md`/`ASSETS.md`/`ENTITES.md`/`MATERIAUX.md`/`CHARACTER.md`/
+  `.claude/rules/voxels.md` mis à jour) ; trouvaille en route : `createReliefGeometryFromQuadData` et ses
+  helpers (`reliefGeometry.js`) étaient orphelins depuis le Lot 3, retirés. Ne reste que le Lot 5
+  (migration destructive des colonnes `battlemaps`, après sauvegarde vérifiée — accord explicite de Saar
+  requis avant exécution).
 - **2026-10-14 — Lot 4 codé et clos** : renommage complet `voxel_textures`→`surface_textures` (base, API,
   fichiers), doublon mort supprimé, page orpheline supprimée, `VoxelBuilderTab.jsx` délibérément pas renommé
   (vocabulaire de domaine légitime découvert en route). Incident nodemon/migration auto-appliquée documenté

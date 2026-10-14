@@ -170,8 +170,7 @@ jamais écraser cet état.
 - la clé de collection historique reste une clé de compatibilité, jamais l'identité runtime ;
 - `PUT /api/battlemaps/:id/surface` valide le document complet avant écriture et retourne la version
   normalisée avec ses UUID ;
-- `surface_revision` détecte une sauvegarde fondée sur une ancienne version de Surface sans entrer
-  en conflit avec une sauvegarde voxel ;
+- `surface_revision` détecte une sauvegarde fondée sur une ancienne version de Surface ;
 - `world_revision` invalide tous les snapshots dès qu'une source physique change ;
 - `GET /api/battlemaps/:id/world-snapshot` fournit le snapshot compilé correspondant à cette
   révision ;
@@ -179,11 +178,13 @@ jamais écraser cet état.
   ascenseur restent indépendants.
 
 Les erreurs HTTP de sauvegarde ne sont plus assimilées à un succès par l'éditeur. Les requêtes sont
-sérialisées par document et les compteurs renvoyés par le serveur restent monotones même si les
-réponses voxel et Surface arrivent dans un ordre différent.
+sérialisées par document et les compteurs renvoyés par le serveur restent monotones.
 
-Depuis le correctif de persistance v8, la route retourne explicitement `world_revision`,
-`surface_revision` et `voxel_revision` avec le document Surface réellement écrit. Si une réponse a
+**Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 2)** : il n'existe plus qu'un seul document
+sauvegardé (Surface) — le pipeline parallèle voxel (`voxel_revision`, route `PUT /:id/voxels`) a été
+retiré, plus aucun chemin d'interface ne pouvait le déclencher. Depuis le correctif de persistance v8,
+la route retourne explicitement `world_revision` et `surface_revision` avec le document Surface
+réellement écrit. Si une réponse a
 été perdue et que la révision locale est devenue obsolète, le client relit la carte et ne rebase sa
 sauvegarde que si le document serveur est encore identique à sa dernière base connue. Une vraie
 édition concurrente n'est jamais écrasée silencieusement et produit une alerte visible dans

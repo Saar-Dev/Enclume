@@ -12,7 +12,7 @@
 
 ## §18 — Conventions non-négociables
 
-- **UUID partout** — jamais `increments()` (sauf `voxel_textures.id` — P22)
+- **UUID partout** — jamais `increments()` (sauf `surface_textures.id`, ex-`voxel_textures.id` — P22)
 - **`threeToDb(tx, ty, tz)`** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
 - **`WS.CONSTANTE` toujours** — jamais de chaîne en dur dans `socket.emit/on`
 - **`knexfile.cjs`** en CommonJS — CLI Knex ne supporte pas ES Modules
@@ -59,10 +59,10 @@
 | ~~P12~~ | Retiré (2026-08-26) — décrivait un guard dans le handler serveur `VOXEL_ADD`. Ticket `bug_tickets`/`AUDIT-SYSTEME` résolu : code mort supprimé des deux côtés (`EditorScene` n'était jamais rendu), plus aucune trace de l'événement | VOXELS.md |
 | P13 | `updated_at = db.fn.now()` après guard Object.keys | CONVENTIONS.md |
 | P14 | `updated_at` jamais dans le JWT | CORE.md |
-| P17 | Séparateur voxel = `":"` NON NÉGOCIABLE | VOXELS.md |
+| ~~P17~~ | Retiré (2026-10-14) — décrivait le séparateur `":"` du format `voxel_data`, mort (`PLAN_PURGE_VOXEL.md` Lots 1-3, plus aucun code ne lit/écrit ce format) | VOXELS.md |
 | P19 | URL MinIO à nom fixe (`glb_url`, `portrait_url`) avec `?v=timestamp` obligatoire | ASSETS.md |
 | P20 | `mat.clone()` avant mutation matériau Three.js | CONVENTIONS.md |
-| P22 | `voxel_textures.id` = integer (exception UUID) | VOXELS.md |
+| P22 | `surface_textures.id` = integer (exception UUID, ex-`voxel_textures.id`) | VOXELS.md |
 | P26 | `blocksReady = true` même si 0 textures | VOXELS.md |
 | P32 | Ordre faces BoxGeometry : east(0), west(1), top(2), bottom(3), south(4), north(5) | VOXELS.md |
 | P33 | `side` = alias lecture seule — jamais écrire | CONVENTIONS.md |
@@ -98,7 +98,7 @@
 | PE11 | fallback `states[0]` si `current_state_id` invalide | ENTITES.md |
 | PE12 | `clearTimeout pendingEntityActions` à la résolution | ENTITES.md |
 | PE13 | touche R = ghost OU entité sous curseur | ENTITES.md |
-| PE14 | `pos_y` base = Z Three.js, `pos_z` base = Y Three.js | VOXELS.md |
+| PE14 | `pos_y` base = Z Three.js, `pos_z` base = Y Three.js | ENTITES.md |
 | PE16 | `e.code` pour Alt | REACT.md |
 | PE17 | `usage_hint` = hint de tri, jamais exclusif | CONVENTIONS.md |
 | PE18 | `blueprint.pack_id` nullable — guard obligatoire | ASSETS.md |
@@ -110,14 +110,14 @@
 | PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` | ENTITES.md |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) | ENTITES.md |
 | PE29 | Acteur step-by-step vérifié à `pos_z+1` (espace de marche) | ENTITES.md |
-| PE34 | Corrigé 2026-08-26 — périmé depuis le 2026-08-01 : plus d'offset fixe. `feetY = pos_z` si `position_space='world-feet'` (défaut actuel), `pos_z + 0.5` seulement pour un token `legacy-cell` jamais replacé | VOXELS.md |
+| PE34 | Corrigé 2026-08-26 — périmé depuis le 2026-08-01 : plus d'offset fixe. `feetY = pos_z` si `position_space='world-feet'` (défaut actuel), `pos_z + 0.5` seulement pour un token `legacy-cell` jamais replacé | MOTEUR_MONDE.md |
 | PC41 | Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'` | CONVENTIONS.md |
 | PEF1 | `pack_id` obligatoire sur blueprint | ASSETS.md |
 | PEF2 | fakeTexObj : `{ id, pack_id, faces }` | ASSETS.md |
 | PEF3 | `entityTextureMaterials` indexé par `blueprint.id` UUID | ASSETS.md |
 | PEF4 | `face_overrides` = chemins PNG | ASSETS.md |
 | PEF5 | blueprint sans `pack_id` → skip + magenta | ASSETS.md |
-| PEF6 | Canvas3D : chargements voxels et entités séparés | ASSETS.md |
+| PEF6 | Canvas3D : chargements textures surface et entités séparés | ASSETS.md |
 | PI1 | Container 'Sac' : dispo seulement si ≥1 item `ref_location='D'` — `isContainerAvailable()` | BLESSURES.md |
 | PI2 | Équipement `slot≠null` → container 'Sac' obligatoire — 400 si indispo | BLESSURES.md |
 | PI3 | Items équipés comptés dans poids — seul `container='Coffre'` exclut | BLESSURES.md |

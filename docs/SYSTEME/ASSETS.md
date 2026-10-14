@@ -4,7 +4,7 @@
 > `server/src/index.js:99`), `syncBuiltinModels()` au démarrage et redirect `/texture-packs` →
 > `/workshop` (`App.jsx`) confirmés exacts. Aucune correction nécessaire.
 > Source : SYSTEME.md §5–§6–§9
-> Lire pour : uploads MinIO, textures voxel/entité, WorkshopPage, chemins assets
+> Lire pour : uploads MinIO, textures surface/entité, WorkshopPage, chemins assets
 > Guide de fabrication GLB : `CREATION_OBJETS_3D.md`
 
 ---
@@ -17,15 +17,16 @@
 ### Onglets
 ```
 Textures    → PNG bruts uploadés dans le pack
-Matériaux   → VoxelBuilderTab — voxel_textures (géométrie + faces PNG)
+Matériaux   → VoxelBuilderTab — surface_textures (géométrie + faces PNG, ex-voxel_textures,
+              PLAN_PURGE_VOXEL.md Lot 4 — Atelier actuellement non câblé pour l'import, coquille vide)
 Éléments interactifs → EntityBuilderTab — entity_blueprints (apparence + comportement)
 ```
 
 ### Workflow GM
 ```
 1. Uploader PNG (onglet Textures)
-2A. Créer un Matériau → voxel_textures.faces = { all: "uuid.png" }
-    Utilisé sur la carte : voxel_data[key].tex = voxel_textures.id
+2A. Créer un Matériau → surface_textures.faces = { all: "uuid.png" }
+    Utilisé sur un mur/sol/plafond : surface_data référence surface_textures.id (floorTex/ceilingTex/…)
 2B. Créer un Élément interactif → blueprint.geometry.faces = { east: "uuid.png", ... }
     Les deux partent du même PNG brut — aucune dépendance entre eux.
 ```
@@ -89,7 +90,7 @@ entityTextureMaterials = {
 | PEF3 | entityTextureMaterials indexé par `blueprint.id` UUID — jamais par faceId |
 | PEF4 | face_overrides états = même format chemin PNG |
 | PEF5 | Blueprints sans pack_id → skip + rendu magenta (debug) |
-| PEF6 | Canvas3D : deux zones séparées — voxels via `/voxel-textures?ids=`, entités via fakeTexObjs |
+| PEF6 | Canvas3D : deux zones séparées — surfaces via `/surface-textures?ids=`, entités via fakeTexObjs |
 
 ---
 

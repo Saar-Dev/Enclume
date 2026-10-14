@@ -129,13 +129,15 @@ Toutes les interactions ont lieu dans EntityEditorScene (client/src/components/E
     (seule affordance visuelle du toggle, pas de bouton dans une barre d'outils).
 
     Depuis Lot A, point 2 (2026-09-16) : la hauteur de pose est celle du sommet le plus haut sous le
-    curseur — sol/voxel (comportement d'origine) ou une autre entité déjà posée en mode free sur le
-    même étage. Aucun raycast 3D contre les meshes : recherche par case de grille, même patron que
-    columnTops/displayedFloorSupports (footprint ajusté par la rotation et l'échelle de l'entité).
+    curseur — le sol (`displayedFloorSupports`) ou une autre entité déjà posée en mode free sur le
+    même étage. Aucun raycast 3D contre les meshes : recherche par case de grille (footprint ajusté
+    par la rotation et l'échelle de l'entité). **Mise à jour 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 3)** :
+    le repli sur un ancien support « voxel » (`columnTops`) a été retiré — prouvé toujours vide
+    (aucune carte à voxels n'existe), il ne faisait jamais rien d'observable depuis longtemps.
     Les entités murales ne comptent jamais comme support. **Granularité fine (SURFACE_FINE, quart
-    de case) pour la recherche de support entité**, pas la case entière du sol/voxel — une case
-    entière déclenchait l'empilement jusqu'à ~1 unité du bord réel d'un objet (imprécision confirmée
-    en jeu), corrigé pour matcher la précision déjà utilisée par le placement lui-même.
+    de case) pour la recherche de support entité**, pas la case entière du sol — une case entière
+    déclenchait l'empilement jusqu'à ~1 unité du bord réel d'un objet (imprécision confirmée en jeu),
+    corrigé pour matcher la précision déjà utilisée par le placement lui-même.
 
     Au clic gauche, POST /api/battlemaps/:id/entities crée l'entité.
 
@@ -241,7 +243,7 @@ GLB	Le blueprint possède glb_url	Modèle 3D chargé via useGLTF, avec slots cou
 Boîte texturée	Le blueprint possède geometry.faces	Boîte avec 6 faces texturées (PNG par face)
 5.2 Textures par face
 
-Les textures sont chargées via loadVoxelTextures et structurées dans entityTextureMaterials :
+Les textures sont chargées via loadSurfaceTextures et structurées dans entityTextureMaterials :
 javascript
 
 entityTextureMaterials = {
@@ -367,7 +369,7 @@ PEF2	fakeTexObj conforme : { id, pack_id, faces } — faces = chemins PNG
 PEF3	entityTextureMaterials indexé par blueprint.id UUID
 PEF4	face_overrides = mêmes chemins PNG que faces
 PEF5	Blueprint sans pack_id → skip + rendu magenta (debug)
-PEF6	Chargements textures voxels et entités séparés dans Canvas3D
+PEF6	Chargements textures surface et entités séparés dans Canvas3D
 8.3 Distinction entité / connecteur
 
 Ne jamais confondre une entité libre avec un connecteur. Les connecteurs :
@@ -398,7 +400,7 @@ client/src/components/EntityMesh.jsx	Rendu d'une entité (GLB ou boîte texturé
 client/src/stores/entityStore.js	Store Zustand
 server/src/routes/entities.js	API REST CRUD
 shared/world/entityTransform.js	Validation et normalisation de l'échelle
-client/src/lib/voxelTextures.js	Chargement des textures
+client/src/lib/surfaceTextures.js	Chargement des textures
 client/src/lib/modelMaterialSlots.js	Gestion des slots couleur
 
 10. Interactions runtime (Ouvrir/Fermer/Déplacer)

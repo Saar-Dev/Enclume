@@ -107,17 +107,9 @@ function displacementFor(profile, u, v, scale = DEFAULT_RELIEF_SCALE) {
   return clamp((height - 0.5) * scale, -0.12, 0.12)
 }
 
-function fract(value) {
-  return ((Number(value) || 0) % 1 + 1) % 1
-}
-
 function edgeFade(ur, vr) {
   const edge = Math.min(ur, 1 - ur, vr, 1 - vr)
   return clamp(edge * 10, 0, 1)
-}
-
-function textureTileEdgeFade(u, v) {
-  return edgeFade(fract(u), fract(v))
 }
 
 function pushVertex(positions, normal, x, y, z, displacement) {
@@ -212,7 +204,9 @@ function addReliefFace({
   // dans SurfaceDungeonScene.jsx) depuis le chantier perf motifs (Saar, 2026-10-03) — cette face
   // reste subdivisee quand `displace` est vrai (pour donner des sommets au vertex shader) mais ne
   // calcule plus aucun bruit elle-meme ; `displacementFor`/`sampleProceduralMaterialHeight` restent
-  // utilises par le chemin voxel (createReliefGeometryFromQuadData), non touche par ce chantier.
+  // utilises par applyProceduralReliefToGeometry (sans appelant actuel, hors perimetre de ce
+  // chantier). Le chemin voxel (createReliefGeometryFromQuadData) a ete retire — PLAN_PURGE_VOXEL.md
+  // Lot 3/6 : plus aucun appelant depuis la suppression de CulledVoxelScene/DungeonTerrainScene.
   for (let v = 0; v <= segV; v += 1) {
     const vr = v / segV
     for (let u = 0; u <= segU; u += 1) {
@@ -299,124 +293,6 @@ export function createReliefBoxGeometry({
   for (const group of groups) {
     geometry.addGroup(group.start, group.count, group.materialIndex)
   }
-  geometry.computeVertexNormals()
-  geometry.computeBoundingSphere()
-  return geometry
-}
-
-function getVec3(array, index) {
-  const offset = index * 3
-  return [array[offset], array[offset + 1], array[offset + 2]]
-}
-
-function getVec2(array, index) {
-  const offset = index * 2
-  return [array[offset], array[offset + 1]]
-}
-
-function sub(a, b) {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-function len(v) {
-  return Math.hypot(v[0], v[1], v[2])
-}
-
-function addSubdividedQuad({
-  outPositions,
-  outUvs,
-  outIndices,
-  a,
-  b,
-  c,
-  normal,
-  uvA,
-  uvB,
-  uvC,
-  profile,
-  segmentsPerUnit,
-  maxSegments,
-}) {
-  const axisU = sub(b, a)
-  const axisV = sub(c, a)
-  const uvU = [uvB[0] - uvA[0], uvB[1] - uvA[1]]
-  const uvV = [uvC[0] - uvA[0], uvC[1] - uvA[1]]
-  const segU = clamp(Math.ceil(len(axisU) * segmentsPerUnit), 2, maxSegments)
-  const segV = clamp(Math.ceil(len(axisV) * segmentsPerUnit), 2, maxSegments)
-  const baseIndex = outPositions.length / 3
-
-  for (let v = 0; v <= segV; v += 1) {
-    const vr = v / segV
-    for (let u = 0; u <= segU; u += 1) {
-      const ur = u / segU
-      const uCoord = uvA[0] + uvU[0] * ur + uvV[0] * vr
-      const vCoord = uvA[1] + uvU[1] * ur + uvV[1] * vr
-      const rawDisplacement = displacementFor(profile, uCoord, vCoord)
-      const positiveFade = textureTileEdgeFade(uCoord, vCoord)
-      const displacement = rawDisplacement > 0 ? rawDisplacement * positiveFade : rawDisplacement
-      pushVertex(
-        outPositions,
-        normal,
-        a[0] + axisU[0] * ur + axisV[0] * vr,
-        a[1] + axisU[1] * ur + axisV[1] * vr,
-        a[2] + axisU[2] * ur + axisV[2] * vr,
-        displacement,
-      )
-      outUvs.push(uCoord, vCoord)
-    }
-  }
-
-  for (let v = 0; v < segV; v += 1) {
-    for (let u = 0; u < segU; u += 1) {
-      const i = baseIndex + v * (segU + 1) + u
-      const right = i + 1
-      const up = i + segU + 1
-      const diagonal = up + 1
-      outIndices.push(i, right, up, up, right, diagonal)
-    }
-  }
-}
-
-export function createReliefGeometryFromQuadData({
-  positions,
-  normals,
-  uvs,
-  indices,
-  profile,
-  segmentsPerUnit = 12,
-  maxSegments = 32,
-}) {
-  if (!isRealReliefProfile(profile)) return null
-
-  const outPositions = []
-  const outUvs = []
-  const outIndices = []
-
-  for (let i = 0; i < indices.length; i += 6) {
-    const ia = indices[i]
-    const ib = indices[i + 1]
-    const ic = indices[i + 2]
-    addSubdividedQuad({
-      outPositions,
-      outUvs,
-      outIndices,
-      a: getVec3(positions, ia),
-      b: getVec3(positions, ib),
-      c: getVec3(positions, ic),
-      normal: getVec3(normals, ia),
-      uvA: getVec2(uvs, ia),
-      uvB: getVec2(uvs, ib),
-      uvC: getVec2(uvs, ic),
-      profile,
-      segmentsPerUnit,
-      maxSegments,
-    })
-  }
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(outPositions), 3))
-  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(outUvs), 2))
-  geometry.setIndex(outIndices)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
   return geometry

@@ -66,7 +66,12 @@ valeur par défaut, par-dessus toute vraie couleur posée — deux autorités su
 [VÉRIFIÉ] — Editor3D.jsx (passage d'activeMaterial aux scènes), surfaceData.js (fonctions applyRoomSelection, applyRoomToolUpdate, materialOrTextureForTool), SurfaceDungeonScene.jsx (rendu).
 2.1 Propagation de la palette aux outils de surface
 
-activeMaterial est défini dans le composant parent (Editor3D.jsx) et passé à la fois à EditorScene (mode voxel) et à SurfaceEditorScene (mode surface). Dans le mode surface, il est utilisé comme fallbackTexId dans les appels à applyRoomSelection, applyFloorSelection, applyCeilingSelection, etc. C'est ainsi que la texture sélectionnée dans la palette voxel peut devenir la texture d'une surface.
+activeMaterial est défini dans le composant parent (Editor3D.jsx) et passé à SurfaceEditorScene. Il
+est utilisé comme fallbackTexId dans les appels à applyRoomSelection, applyFloorSelection,
+applyCeilingSelection, etc. C'est ainsi que la texture sélectionnée dans la palette du catalogue
+(`surface_textures`, ex-`voxel_textures` — PLAN_PURGE_VOXEL.md Lot 4) peut devenir la texture d'une
+surface. **Corrigé 2026-10-14** : la mention d'un « mode voxel »/`EditorScene` ici était déjà périmée
+avant ce lot — `EditorScene` n'existe plus depuis l'audit 2026-08-26 (voir `EDITEUR.md` §1).
 
 [VÉRIFIÉ] — Editor3D.jsx : activeMaterial est passé en prop à SurfaceEditorScene. surfaceData.js : fallbackTexId dans materialOrTextureForTool.
 
@@ -169,7 +174,7 @@ Le matériau final est un THREE.MeshStandardMaterial avec :
 
     roughness et metalness : déduits de la matière choisie via pbrForProcedural
 
-Relief géométrique (realRelief: true, §3) — depuis le chantier perf motifs (2026-10-03) : proceduralMaterialAt (SurfaceDungeonScene.jsx) construit en plus reliefFaceMaterial, un clone du matériau avec displacementMap (= heightCanvas), displacementScale et displacementBias (= DEFAULT_RELIEF_SCALE, reliefGeometry.js) — uniquement quand isRealReliefProfile(descriptor) est vrai, sinon reliefFaceMaterial vaut le matériau plat. Les composants de SurfaceDungeonScene.jsx (FloorTile, CeilingTile, WallSegment, RoomSlab, StairSegment) l'appliquent exclusivement à la face que désigne leur faceMask vers ReliefBoxGeometry — jamais aux faces voisines qui partagent le même matériau (embouts de mur, côtés d'un sol…), qui ne sont pas subdivisées et se déformeraient de travers sous un displacementMap. La géométrie elle-même (createReliefBoxGeometry/addReliefFace, reliefGeometry.js) ne déplace plus aucun sommet par calcul CPU : elle garde seulement la subdivision nécessaire pour donner des sommets au vertex shader. Le chemin voxel legacy (createReliefGeometryFromQuadData, non utilisé par SurfaceDungeonScene.jsx) garde l'ancien calcul CPU par sommet, volontairement non touché (chantier purge voxel en cours, jamais mélangé à un lot fonctionnel).
+Relief géométrique (realRelief: true, §3) — depuis le chantier perf motifs (2026-10-03) : proceduralMaterialAt (SurfaceDungeonScene.jsx) construit en plus reliefFaceMaterial, un clone du matériau avec displacementMap (= heightCanvas), displacementScale et displacementBias (= DEFAULT_RELIEF_SCALE, reliefGeometry.js) — uniquement quand isRealReliefProfile(descriptor) est vrai, sinon reliefFaceMaterial vaut le matériau plat. Les composants de SurfaceDungeonScene.jsx (FloorTile, CeilingTile, WallSegment, RoomSlab, StairSegment) l'appliquent exclusivement à la face que désigne leur faceMask vers ReliefBoxGeometry — jamais aux faces voisines qui partagent le même matériau (embouts de mur, côtés d'un sol…), qui ne sont pas subdivisées et se déformeraient de travers sous un displacementMap. La géométrie elle-même (createReliefBoxGeometry/addReliefFace, reliefGeometry.js) ne déplace plus aucun sommet par calcul CPU : elle garde seulement la subdivision nécessaire pour donner des sommets au vertex shader. **Retiré 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 6)** : le chemin voxel legacy (createReliefGeometryFromQuadData et ses helpers exclusifs) a été supprimé — plus aucun appelant depuis le retrait de CulledVoxelScene/DungeonTerrainScene (Lot 3). `applyProceduralReliefToGeometry` (même fichier) reste sans appelant actuel, sans rapport avec le voxel, hors périmètre de ce chantier.
 
 [VÉRIFIÉ] — reliefGeometry.js, ReliefBoxGeometry.jsx, SurfaceDungeonScene.jsx (proceduralMaterialAt + les 5 composants cités) ; client/src/lib/reliefGeometry.test.mjs couvre la non-régression (une face à relief actif reste exactement sur la boîte, sans déplacement CPU).
 
@@ -202,7 +207,11 @@ Caractéristiques importantes du cache :
 5. Système de textures d'images
 5.1 Chargement
 
-Les textures d'images sont chargées via loadVoxelTextures depuis l'API /api/voxel-textures. Chaque texture est un objet contenant :
+**Renommé 2026-10-14 (PLAN_PURGE_VOXEL.md Lot 4)** : `voxel_textures`/`voxel-textures` sont devenus
+`surface_textures`/`surface-textures` partout (table, route, fichiers) — catalogue réellement utilisé
+par `surface_data`, jamais par une carte voxel (morte, retirée).
+
+Les textures d'images sont chargées via loadSurfaceTextures depuis l'API /api/surface-textures. Chaque texture est un objet contenant :
 
     pack_id : identifiant du pack de textures
 
@@ -212,20 +221,24 @@ Les textures d'images sont chargées via loadVoxelTextures depuis l'API /api/vox
 
 La fonction charge chaque PNG via THREE.TextureLoader et crée un tableau de 6 MeshStandardMaterial (un par face), avec gestion optionnelle des normal maps (convention : <face>_normal).
 
-[VÉRIFIÉ] — client/src/lib/voxelTextures.js, fonction loadVoxelTextures.
+[VÉRIFIÉ] — client/src/lib/surfaceTextures.js, fonction loadSurfaceTextures.
 5.2 Lien avec les surfaces
 
-Le rendu des surfaces peut utiliser ces textures via materialAt(textureMaterials, wall.frontTex, FACE.south). Cependant, le mécanisme qui définit interiorTex n'est pas exposé dans l'interface. La palette de textures visible dans l'éditeur alimente activeMaterial pour le mode voxel, et ce activeMaterial est propagé aux outils de surface comme fallbackTexId.
+Le rendu des surfaces peut utiliser ces textures via materialAt(textureMaterials, wall.frontTex, FACE.south). Cependant, le mécanisme qui définit interiorTex n'est pas exposé dans l'interface. La palette de textures visible dans l'éditeur alimente activeMaterial, propagé aux outils de surface comme fallbackTexId (§2.1).
 
 Corrigé (audit 2026-08-26) — voir §2.1 ci-dessus : le chaînon est `SurfaceEditorPanel.jsx`, via SessionPage.jsx → Sidebar.jsx.
-5.3 Distinction textures voxel / textures surface
+5.3 Distinction textures « voxel » (forme bloc) / textures surface
 
-La table voxel_textures et l'API associée ne font pas de distinction entre les textures destinées aux voxels et celles destinées aux surfaces. Une texture chargée pour un voxel peut techniquement être utilisée sur un mur. Cependant, rien dans l'interface ne permet de choisir une texture pour une surface.
+La table `surface_textures` (`usage_hint` : `'voxel' | 'entity' | 'both' | null` — hint de tri, jamais
+exclusif, PE17) et l'API associée ne font pas de distinction stricte entre les textures destinées à un
+rendu en bloc (`Voxel.jsx`, forme cubique) et celles destinées aux surfaces. Une texture créée pour
+l'un peut techniquement être utilisée sur l'autre. Cependant, rien dans l'interface ne permet de
+choisir explicitement une texture pour une surface.
 
-[VÉRIFIÉ] — texture-pack.js et voxelTextures.js : aucune notion de type de surface.
+[VÉRIFIÉ] — texture-packs.js et surfaceTextures.js : aucune notion de type de surface imposée.
 5.4 Stockage
 
-Les textures sont stockées dans MinIO sous le chemin textures/<pack_id>/<fichier>.png. Les métadonnées sont dans la table voxel_textures. Les packs sont gérés via l'API REST texture-pack.js (CRUD, import/export ZIP).
+Les textures sont stockées dans MinIO sous le chemin textures/<pack_id>/<fichier>.png. Les métadonnées sont dans la table surface_textures. Les packs sont gérés via l'API REST texture-packs.js (CRUD, import/export ZIP).
 
 [VÉRIFIÉ] — texture-pack.js, routes API.
 6. Persistance
@@ -268,9 +281,9 @@ Les anciens champs floorTopTex, floorBottomTex, wallExteriorTex, etc. sont expli
 8. Fichiers de référence
 Fichier	Rôle
 client/src/lib/proceduralMaterials.js	Générateur procédural
-client/src/lib/reliefGeometry.js	Géométrie de relief (boîte subdivisée pour le displacement GPU ; chemin voxel legacy à part)
+client/src/lib/reliefGeometry.js	Géométrie de relief (boîte subdivisée pour le displacement GPU ; chemin voxel legacy retiré, Lot 6)
 client/src/components/ReliefBoxGeometry.jsx	Composant R3F, cache de géométrie par profil/dimensions
-client/src/lib/voxelTextures.js	Chargement des textures depuis l'API
+client/src/lib/surfaceTextures.js	Chargement des textures depuis l'API
 client/src/lib/surfaceData.js	Logique métier des surfaces
 client/src/lib/surfaceMaterial.js	Normalisation d'un profil de matériau
 client/src/components/SurfaceDungeonScene.jsx	Rendu des murs, sols, plafonds
