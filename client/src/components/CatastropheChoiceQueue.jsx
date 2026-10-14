@@ -145,7 +145,7 @@ export default function CatastropheChoiceQueue({ socket }) {
                 ))}
               </select>
               <button
-                className="btn-ghost"
+                className="btn btn-ghost"
                 disabled={!overrideEntry}
                 onClick={() => resolveCatastrophe(Number(overrideEntry))}
               >
@@ -165,7 +165,7 @@ export default function CatastropheChoiceQueue({ socket }) {
                 // différentes partageant seulement la ressource Chance (décision §12, 2026-09-12),
                 // jamais le même couple de boutons.
                 <>
-                  <button className="btn-ghost" onClick={() => resolveChance('attempt')}>
+                  <button className="btn btn-ghost" onClick={() => resolveChance('attempt')}>
                     {t('chance.choiceCard.attemptButton')}
                   </button>
                   <button className="btn btn-gold" onClick={() => resolveChance('force')}>
@@ -174,7 +174,7 @@ export default function CatastropheChoiceQueue({ socket }) {
                 </>
               ) : (
                 <>
-                  <button className="btn-ghost" onClick={() => resolveChance('reroll')}>
+                  <button className="btn btn-ghost" onClick={() => resolveChance('reroll')}>
                     {t('chance.choiceCard.rerollButton')}
                   </button>
                   <button className="btn btn-gold" onClick={() => resolveChance('gain_point')}>

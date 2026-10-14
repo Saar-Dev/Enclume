@@ -117,7 +117,7 @@ export default function ExoSettingsPanel({ character, isGm, isOwner, onClose, te
           </div>
         )}
         {canEdit && (
-          <label className="btn-ghost" style={{ alignSelf: 'flex-start', opacity: portraitUploading ? 0.5 : 1, pointerEvents: portraitUploading ? 'none' : 'auto' }}>
+          <label className="btn btn-ghost" style={{ alignSelf: 'flex-start', opacity: portraitUploading ? 0.5 : 1, pointerEvents: portraitUploading ? 'none' : 'auto' }}>
             {portraitUploading ? t('character.portraitUploading') : t('character.portraitUpload')}
             <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handlePortraitUpload} />
           </label>
@@ -180,7 +180,7 @@ export default function ExoSettingsPanel({ character, isGm, isOwner, onClose, te
 
       {/* Upload GLB */}
       {isGm && (
-        <label className="btn-ghost" style={{ alignSelf: 'flex-start', opacity: glbUploading ? 0.5 : 1, pointerEvents: glbUploading ? 'none' : 'auto' }}>
+        <label className="btn btn-ghost" style={{ alignSelf: 'flex-start', opacity: glbUploading ? 0.5 : 1, pointerEvents: glbUploading ? 'none' : 'auto' }}>
           {glbUploading ? t('character.glbUploading') : t('character.glbUpload')}
           <input type="file" accept=".glb" style={{ display: 'none' }} onChange={handleGlbUpload} />
         </label>
@@ -188,7 +188,7 @@ export default function ExoSettingsPanel({ character, isGm, isOwner, onClose, te
 
       {/* Envoi vers le Coffre */}
       {isOwner && (
-        <button className="btn-ghost" onClick={handleSendToVault} disabled={sendingToVault} style={{ alignSelf: 'flex-start', opacity: sendingToVault ? 0.5 : 1 }}>
+        <button className="btn btn-ghost" onClick={handleSendToVault} disabled={sendingToVault} style={{ alignSelf: 'flex-start', opacity: sendingToVault ? 0.5 : 1 }}>
           {sendingToVault ? t('common.loading') : t('character.sendToVault')}
         </button>
       )}

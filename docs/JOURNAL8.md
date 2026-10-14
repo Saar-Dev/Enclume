@@ -10842,3 +10842,28 @@ réel en jeu (maintenir chaque flèche, vérifier démarrage immédiat et absenc
 champs de saisie) à valider par Saar avant clôture.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — WEAPON-MOD-BUTTON-CONTRAST : bouton « Modification d'arme » lisible + 9 boutons `btn-ghost` orphelins de leur style retrouvés au passage
+
+Le bouton « Modification d'arme » (`WeaponPanel.jsx`, onglet Armes de la fiche personnage) avait un
+style fait main : texte `#5a5a7a` (gris-violet sombre) sur fond quasi identique, police 11px — peu
+lisible, signalé par Saar le 2026-10-03. **Fix** : remplacé par le bouton standard du projet
+(`className="btn btn-ghost"`, déjà la convention partout ailleurs dans la fiche personnage), qui porte
+un texte bien plus clair (`var(--text-secondary)`, gris-bleu clair) et un padding plus généreux ; le
+style local ne garde plus que la mise en page (largeur 100 %, alignement du texte).
+
+**Trouvaille en vérifiant le CSS `.btn.btn-ghost` (sélecteur composé — exige LES DEUX classes)** :
+9 boutons dans 4 autres fichiers portaient `className="btn-ghost"` **sans** `"btn"`, donc ne recevaient
+aucun style de cette règle (rendu brut du navigateur) — `DroneSheet.jsx` (bouton « jeter » cargo),
+`DroneWindow.jsx` (×3 : envoi au Coffre, suppression d'arme, annuler le choix d'arme),
+`ExoSettingsPanel.jsx` (×3 : upload portrait, upload GLB, envoi au Coffre), `CatastropheChoiceQueue.jsx`
+(×2 : forcer l'override Catastrophe, Chance — tenter/rejouer). Même diagnostic, même correctif que le
+bouton du ticket (classe `btn` manquante) — corrigés dans ce même commit plutôt qu'un ticket séparé
+(remarque de Saar : un correctif identique ne justifie pas un ticket à part).
+
+**Testé** : ESLint ciblé sur les 5 fichiers touchés (diff avant/après, 0 nouveau problème), `npm run
+build` client propre.
+**Non testé** : rendu visuel réel des 10 boutons (contraste, taille) — à valider par Saar en jeu/
+navigateur.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.

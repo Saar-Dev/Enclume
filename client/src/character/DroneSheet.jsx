@@ -460,7 +460,7 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
                     <span style={{ color: '#8888a8', flexShrink: 0 }}>{weight}</span>
                     {canDrop && (
                       <button
-                        className="btn-ghost"
+                        className="btn btn-ghost"
                         style={{ fontSize: '10px', padding: '1px 6px', flexShrink: 0 }}
                         title={t('drone.cargoDropTitle')}
                         onClick={async () => {

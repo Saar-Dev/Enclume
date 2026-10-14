@@ -528,7 +528,7 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
         </div>
         <div style={{ ...s.col, justifyContent: 'center' }}>
           {canEdit && (
-            <button onClick={onOpenModing} style={s.modingBtn}>
+            <button onClick={onOpenModing} className="btn btn-ghost" style={s.modingBtn}>
               {t('inventoryPanel.modingButton')}
             </button>
           )}
@@ -556,8 +556,6 @@ const s = {
     cursor: 'no-drop',
   },
   modingBtn: {
-    background: 'none', border: '1px solid #2a2a3e', borderRadius: 4,
-    color: '#5a5a7a', cursor: 'pointer', fontSize: 11, padding: '4px 10px',
     width: '100%', textAlign: 'left',
   },
 

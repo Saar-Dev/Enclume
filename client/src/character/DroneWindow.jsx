@@ -538,7 +538,7 @@ function SettingsTab({ character, isGm, isOwner, members, removeCharacter, updat
       {/* Envoi vers le Coffre */}
       {isOwner && (
         <button
-          className="btn-ghost"
+          className="btn btn-ghost"
           onClick={handleSendToVault}
           disabled={sendingToVault}
           style={{ alignSelf: 'flex-start', marginTop: '8px', opacity: sendingToVault ? 0.5 : 1 }}
@@ -632,7 +632,7 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
               </span>
             )}
             {isGm && (
-              <button className="btn-ghost" style={{ fontSize: '11px', padding: '2px 8px' }} onClick={() => handleDelete(w.id)}>
+              <button className="btn btn-ghost" style={{ fontSize: '11px', padding: '2px 8px' }} onClick={() => handleDelete(w.id)}>
                 {t('drone.deleteWeapon')}
               </button>
             )}
@@ -704,7 +704,7 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
               </button>
             ))}
           </div>
-          <button className="btn-ghost" onClick={() => setShowPicker(false)} style={{ marginTop: '8px', fontSize: '11px' }}>
+          <button className="btn btn-ghost" onClick={() => setShowPicker(false)} style={{ marginTop: '8px', fontSize: '11px' }}>
             {t('drone.cancel') || 'Annuler'}
           </button>
         </div>
