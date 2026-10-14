@@ -10961,3 +10961,18 @@ le même worktree, `git stash` évité —, 0 nouveau problème), `npm run build
 **Non testé** : rendu visuel réel en jeu.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — Ticket Step7/PC non dépensés : déjà résolu, jamais refermé
+
+Ticket sans `linked_bug_code` (« Step7 : pas de pop-up de confirmation si des Points de Création
+restent non dépensés à la finalisation », remonté par Saar le 2026-09-13). En l'explorant : déjà
+implémenté et committé le 2026-09-24 (`acfbabe9`, « Wizard Step 7 : fenêtre de confirmation… ») —
+`WizardFinalizeConfirm.jsx` (Revenir / Terminer quand même, fermable par Échap) câblée dans
+`WizardCreation.jsx`, en production depuis 3 semaines. Le ticket avait simplement été oublié dans la
+base. Saar confirme avoir déjà vu cette fenêtre fonctionner en jeu — clôturé directement en résolu,
+aucun code touché aujourd'hui.
+
+**Testé** : rien ce jour (code déjà en production depuis 3 semaines).
+**Non testé** : sans objet.
+**Données** : aucune.
+**Retour arrière** : sans objet (aucun code modifié).
