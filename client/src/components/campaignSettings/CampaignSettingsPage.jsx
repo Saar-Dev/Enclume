@@ -120,7 +120,7 @@ export default function CampaignSettingsPage() {
               key={key}
               className={danger ? 'btn-toggle btn-toggle-danger' : 'btn-toggle'}
               data-active={activeSection === key}
-              style={{ flex: '0 0 auto', textAlign: 'left', opacity: !enabled ? 0.5 : 1 }}
+              style={{ flex: '0 0 auto', textAlign: 'left' }}
               onClick={() => enabled && setActiveSection(key)}
               disabled={!enabled}
             >

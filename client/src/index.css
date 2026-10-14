@@ -978,6 +978,10 @@ Convention :
   border-color: var(--color-primary);
   color: var(--wiz-white);
 }
+.btn-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 /* Variante « zone dangereuse » — onglet rouge, standard des sections destructrices
    (même palette que .btn.btn-danger). */
 .btn-toggle.btn-toggle-danger {
@@ -4983,6 +4987,7 @@ Convention :
   gap: 10px;
   cursor: pointer;
 }
+.cs-toggle-row[data-core="true"] { opacity: 0.8; }
 .cs-checkbox {
   width: 15px;
   height: 15px;
@@ -5108,6 +5113,7 @@ Convention :
   text-align: left;
 }
 .cs-dice-expert-tr { border-bottom: 1px solid var(--border-subtle); }
+.cs-dice-expert-tr[data-active="false"] { opacity: 0.4; }
 .cs-dice-expert-td-die { padding: 10px 12px; font-weight: 600; color: var(--text-primary); font-family: monospace; font-size: 13px; }
 .cs-dice-expert-dash { color: var(--text-muted); font-size: 12px; }
 

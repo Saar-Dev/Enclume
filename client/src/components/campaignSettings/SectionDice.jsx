@@ -228,7 +228,7 @@ export default function SectionDice({ initialConfig, onChange }) {
                       const row = expertRows[die]
                       const faces = DICE_FACES[die]
                       return (
-                        <tr key={die} className="cs-dice-expert-tr" style={{ opacity: row.active ? 1 : 0.4 }}>
+                        <tr key={die} className="cs-dice-expert-tr" data-active={row.active}>
                           <td className="cs-dice-expert-td-die">{DICE_LABELS[die]}</td>
                           <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                             <input type="checkbox" checked={row.active} onChange={e => updateExpertRow(die, 'active', e.target.checked)} className="cs-checkbox" />

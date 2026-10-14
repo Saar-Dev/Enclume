@@ -63,7 +63,7 @@ export default function SectionSources({ campaignId }) {
       {error && <p className="cs-save-error" style={{ marginBottom: 12 }}>{error}</p>}
 
       {sources.map(source => (
-        <label key={source.id} className="cs-toggle-row" style={{ marginTop: 12, opacity: source.is_core ? 0.8 : 1 }}>
+        <label key={source.id} className="cs-toggle-row" data-core={source.is_core} style={{ marginTop: 12 }}>
           <input
             type="checkbox"
             checked={source.enabled}

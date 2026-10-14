@@ -10867,3 +10867,33 @@ build` client propre.
 navigateur.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — OPT-W2 : valeurs visuelles dynamiques sorties du `style={}` des réglages de campagne
+
+Périmètre réel bien plus petit qu'estimé au plan initial : sur les ~90 `style={{...}}` des 7 fichiers
+`client/src/components/campaignSettings/*`, l'immense majorité n'est que de la mise en page (marge,
+`display:flex`, largeur, `position`/`zIndex`) — autorisée inline par la convention PC47 (`react.md`).
+Seules **3 occurrences** portaient une vraie valeur visuelle (une opacité calculée depuis l'état),
+exactement le cas que la convention désigne (« une valeur visuelle dynamique passe par une CSS custom
+property/un attribut, jamais une valeur en dur dans `style={}` »).
+
+**Fix**, même patron pour les 3 — réutilisation de la convention `data-active`/`[data-active="true"]`
+déjà en usage dans ces mêmes fichiers pour les boutons segmentés (`.btn-toggle`), plutôt qu'invention
+d'un nouveau mécanisme :
+- `CampaignSettingsPage.jsx` (nav de section désactivée) : opacité retirée du `style={}`, nouvelle
+  règle générique `.btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }` (symétrique de
+  `.btn:disabled` déjà existant) — s'applique via l'attribut HTML natif `disabled`, déjà posé.
+- `SectionDice.jsx` (ligne de dé expert inactive) : `style={{ opacity: ... }}` → `data-active={row.active}`
+  + `.cs-dice-expert-tr[data-active="false"] { opacity: 0.4; }`.
+- `SectionSources.jsx` (source de règles « de base », non désactivable) : `style={{ opacity: ... }}` →
+  `data-core={source.is_core}` + `.cs-toggle-row[data-core="true"] { opacity: 0.8; }` (règle scopée à
+  l'attribut, la classe `.cs-toggle-row` de base — partagée par des dizaines d'usages — reste
+  inchangée).
+
+**Testé** : ESLint ciblé sur les 3 fichiers JSX touchés (diff avant/après, 0 nouveau problème), `npm
+run build` client propre.
+**Non testé** : rendu visuel réel (les 3 cas sont rares à déclencher — case de dé désactivée, section
+de nav désactivée actuellement jamais le cas en pratique, source cœur) — à valider par Saar si
+l'occasion se présente.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
