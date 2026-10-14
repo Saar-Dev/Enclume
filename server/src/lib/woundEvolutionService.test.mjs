@@ -27,8 +27,11 @@ async function createFixture(trx, { resolvedMinutes = 1000 } = {}) {
       game_time_minutes: resolvedMinutes, game_time_resolved_minutes: resolvedMinutes,
     })
     .returning('*')
+  // type: 'pj' explicite — ce fichier teste le mécanisme générique de programmation d'échéance, pas
+  // la distinction PJ/PNJ (WOUND-PNJ-ECHEANCES-FLOOD, woundHealingSchedule.test.mjs/woundReview*
+  // couvrent ce gate) ; `characters.type` a 'pnj' pour défaut en base, jamais ce qu'on veut tester ici.
   const [character] = await trx('characters')
-    .insert({ campaign_id: campaign.id, name: 'Perso test' })
+    .insert({ campaign_id: campaign.id, name: 'Perso test', type: 'pj' })
     .returning('*')
   const [charSheet] = await trx('char_sheet')
     .insert({ character_id: character.id })
@@ -81,6 +84,35 @@ test('initializeWoundHealingEcheance : Mort (Tête ou Corps) -> toujours aucune 
     assert.equal(result, null)
     const echeances = await trx('game_echeances').where({ campaign_id: campaign.id })
     assert.equal(echeances.length, 0)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+// WOUND-PNJ-ECHEANCES-FLOOD (décision Saar 2026-10-14) — REGLEBLESSURES.md:207-224 : un PNJ mineur
+// n'a besoin que de sa pire gravité, pas d'un suivi détaillé case par case. `pnj_healing_mode`
+// (campaignSettingsService.js) a 'simple' pour défaut réel ; `detaille` retrouve le comportement PJ.
+test('initializeWoundHealingEcheance : PNJ en mode "simple" (défaut) -> aucune échéance', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    await trx('characters').where({ id: character.id }).update({ type: 'pnj' })
+    const wound = await createWound(trx, charSheet.id, { severity: 'grave', occurredAt: 1000 })
+    const result = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+    assert.equal(result, null, 'PNJ, mode simple (défaut de campagne) : pas d\'échéance')
+    const echeances = await trx('game_echeances').where({ campaign_id: campaign.id })
+    assert.equal(echeances.length, 0)
+    throw new Error('ROLLBACK_WES_TEST')
+  }), /ROLLBACK_WES_TEST/)
+})
+
+test('initializeWoundHealingEcheance : PNJ en mode "detaille" -> échéance identique à un PJ', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { campaign, character, charSheet } = await createFixture(trx)
+    await trx('characters').where({ id: character.id }).update({ type: 'pnj' })
+    await trx('campaigns').where({ id: campaign.id }).update({ settings: JSON.stringify({ pnj_healing_mode: 'detaille' }) })
+    const wound = await createWound(trx, charSheet.id, { severity: 'grave', occurredAt: 1000 })
+    const echeance = await initializeWoundHealingEcheance(trx, { campaignId: campaign.id, characterId: character.id, wound })
+    assert.equal(echeance.condition_type, 'wound_healing_check')
+    assert.deepEqual(echeance.payload, { woundId: wound.id })
     throw new Error('ROLLBACK_WES_TEST')
   }), /ROLLBACK_WES_TEST/)
 })

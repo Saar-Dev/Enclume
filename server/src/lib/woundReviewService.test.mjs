@@ -117,7 +117,11 @@ test('getPendingRollsForPlayer : ne retourne jamais un wound_healing_check (jama
 async function createCardsFixture() {
   const [gm] = await db('users').insert({ email: `wrc-gm-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wrc-gm' }).returning('*')
   const [player] = await db('users').insert({ email: `wrc-pl-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wrc-player' }).returning('*')
-  const [campaign] = await db('campaigns').insert({ gm_id: gm.id, name: 'Campagne test cartes', invite_code: `WRC-${Date.now()}-${Math.random()}` }).returning('*')
+  // settings.pnj_healing_mode: 'detaille' — Aaron (PNJ) sert ici à tester l'ordre joueurs/PNJ sur
+  // l'écran de revue, pas le mode par défaut (WOUND-PNJ-ECHEANCES-FLOOD, défaut réel 'simple' depuis
+  // 2026-10-14, couvert séparément ci-dessous) ; sans ce réglage, Aaron n'aurait plus d'échéance et
+  // `woundInReview` échouerait sur `inserted.echeance.id` (null).
+  const [campaign] = await db('campaigns').insert({ gm_id: gm.id, name: 'Campagne test cartes', invite_code: `WRC-${Date.now()}-${Math.random()}`, settings: { pnj_healing_mode: 'detaille' } }).returning('*')
   const [other] = await db('campaigns').insert({ gm_id: gm.id, name: 'Autre campagne test cartes', invite_code: `WRC2-${Date.now()}-${Math.random()}` }).returning('*')
   const makeCharacter = async (inCampaign, name, type, userId = null) => {
     const [character] = await db('characters').insert({ campaign_id: inCampaign.id, user_id: userId, name, type }).returning('*')
@@ -194,6 +198,32 @@ test('getReviewCardsForGm : une carte par personnage, joueurs avant PNJ, un bloc
     assert.equal(pjCard.state.testBlocked, true)
   } finally {
     await cleanupCards(f)
+  }
+})
+
+// WOUND-PNJ-ECHEANCES-FLOOD — défaut réel `pnj_healing_mode: 'simple'` (campaignSettingsService.js,
+// aucun réglage de campagne explicite ici, contrairement à createCardsFixture ci-dessus) : la case
+// de blessure d'un PNJ reste posée, mais sans échéance de guérison — l'écran de revue, construit à
+// partir des échéances dues, n'en est donc plus du tout encombré (RAW REGLEBLESSURES.md:207-224).
+test('getReviewCardsForGm : un PNJ en mode par défaut ("simple") n\'a pas d\'échéance et n\'encombre pas l\'écran de revue', { skip }, async () => {
+  const [gm] = await db('users').insert({ email: `wrc-simple-gm-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wrc-simple-gm' }).returning('*')
+  const [campaign] = await db('campaigns').insert({ gm_id: gm.id, name: 'Campagne test PNJ simple', invite_code: `WRCS-${Date.now()}-${Math.random()}` }).returning('*')
+  const [character] = await db('characters').insert({ campaign_id: campaign.id, name: 'Garde PNJ', type: 'pnj' }).returning('*')
+  const [sheet] = await db('char_sheet').insert({ character_id: character.id }).returning('*')
+  const schedule = { campaignId: campaign.id, characterId: character.id }
+  try {
+    const inserted = await db.transaction(trx => resolveWoundInsertion(trx, sheet.id, 'corps', 'grave', schedule))
+    assert.equal(inserted.echeance, null, 'pas d\'échéance programmée pour un PNJ en mode simple')
+
+    const woundRow = await db('character_wounds').where({ char_sheet_id: sheet.id }).first()
+    assert.ok(woundRow, 'la case de blessure reste posée, seule l\'échéance est absente')
+
+    const { cards, summary } = await getReviewCardsForGm(campaign.id)
+    assert.deepEqual(cards, [], 'aucune échéance à revoir : le PNJ n\'apparaît pas sur l\'écran')
+    assert.equal(summary.answerableCount, 0)
+  } finally {
+    await db('campaigns').where({ id: campaign.id }).del()
+    await db('users').where({ id: gm.id }).del()
   }
 })
 

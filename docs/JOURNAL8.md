@@ -11192,6 +11192,50 @@ combat) — à valider par Saar avant de clore le ticket en `resolved`.
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit (aucune donnée persistée à restaurer, fonction pure).
 
+## Session (Claude) — 2026-10-14 — WOUND-PNJ-ECHEANCES-FLOOD : guérison simplifiée des PNJ mineurs (option de campagne)
+
+Constat [VÉRIFIÉ en base, 2026-09-25] : 77 des 99 échéances `wound_healing_check` locales appartenaient
+à des PNJ. RAW (REGLEBLESSURES.md:207-224, « simplifier la gestion des blessures des PNJ (optionnel) »)
+réserve le suivi détaillé case par case aux PJ et à leurs adversaires les plus marquants ; les autres
+PNJ n'ont besoin que de leur pire gravité. Décision Saar (2026-10-14) : deux modes de campagne, défaut
+« PNJ guérison simple ».
+
+**Fix** : `pnj_healing_mode` (`campaignSettingsService.js`, enum `simple`/`detaille`, défaut `simple`)
++ gate dans `initializeWoundHealingEcheance` (`woundHealingSchedule.js`, SEUL créateur d'échéance de
+guérison) : si le personnage est un `pnj` et que le mode de sa campagne est `simple`, aucune échéance
+n'est programmée — la case de blessure reste posée (gravité visible), le MJ la retire à la main.
+`pj`/`drone`/`exo` ne passent jamais par `character_wounds` (COMPANION_REGISTRY, `vaultService.js`),
+seul `pnj` avait besoin d'être distingué ici.
+
+**Trouvaille en analyse à charge, avant tout code** : `characters.type` a **'pnj' comme défaut réel en
+base** (vérifié par requête directe, pas supposé). Plusieurs fixtures de test ne précisaient jamais
+`type` et dépendaient donc implicitement de ce défaut sans le savoir — mon gate les aurait cassées en
+silence. Périmètre complet audité par lecture (6 fichiers de test touchant ce pipeline) avant de coder :
+- `woundEvolutionService.test.mjs` / `woundUtils.test.mjs` : fixture générique, `type` jamais précisé
+  → `type: 'pj'` ajouté explicitement (ces fichiers testent le mécanisme, pas la distinction PJ/PNJ).
+- `woundReviewBatchService.test.mjs` (« Bob ») / `woundReviewService.test.mjs` (« Aaron ») : PNJ
+  explicite, utilisé pour tester la résolution par lot et l'ordre joueurs/PNJ à l'écran — pas le
+  défaut. `settings: { pnj_healing_mode: 'detaille' }` ajouté à leur fixture de campagne pour préserver
+  leur intention d'origine sans la réécrire.
+- `woundService.test.mjs` / `effectLineResolverService.test.mjs` : déjà `type: 'pj'` explicite, non
+  concernés.
+
+**Nouveaux tests** : 2 tests directs sur `initializeWoundHealingEcheance` (PNJ + mode simple → aucune
+échéance ; PNJ + mode détaillé → échéance identique à un PJ) dans `woundEvolutionService.test.mjs` ;
+1 test de bout en bout dans `woundReviewService.test.mjs` confirmant qu'un PNJ en mode par défaut
+n'apparaît plus sur l'écran de revue du MJ (le symptôme même du ticket).
+
+**Testé** : `node --check` sur les 6 fichiers touchés. Chaque fichier de test individuellement :
+`campaignSettingsService.test.mjs` 6/6, `woundEvolutionService.test.mjs` 54/54, `woundUtils.test.mjs`
+57/57, `woundReviewBatchService.test.mjs` 16/16, `woundReviewService.test.mjs` 14/14,
+`woundService.test.mjs` 54/54 — 201/201 au total, lancés par l'agent contre la base locale
+(autorisation du 2026-09-25). `shared/**/*.test.mjs` 949/949, aucune régression. Résidu de fixtures
+vérifié par lecture directe en base après coup : aucun. `git diff --check` propre.
+**Non testé** : rendu visuel réel (écran de revue des guérisons du MJ, campagne avec plusieurs PNJ
+blessés) — à valider par Saar.
+**Données** : aucune migration (option JSONB `campaigns.settings`, mergée avec défaut côté lecture).
+**Retour arrière** : `git revert` du commit (aucune donnée persistée à restaurer).
+
 ## Session (Claude) — 2026-10-14 — Grenades : `grenade_stun` (reprise 1) + correctif Choc perdu si la grenade consommée avant résolution (GRENADE-STUN-CHOC-SNAPSHOT)
 
 Reprise du chantier grenades gelé depuis 2026-09-09 (`PLAN_GRENADES.md` §6) — premier des 4 types « à

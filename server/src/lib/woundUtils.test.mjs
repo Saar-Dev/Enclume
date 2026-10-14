@@ -75,8 +75,10 @@ async function createFixture(trx, { resolvedMinutes = 1000 } = {}) {
       game_time_minutes: resolvedMinutes, game_time_resolved_minutes: resolvedMinutes,
     })
     .returning('*')
+  // type: 'pj' explicite — ce fichier teste resolveWoundInsertion/placeWound génériquement, pas la
+  // distinction PJ/PNJ (WOUND-PNJ-ECHEANCES-FLOOD) ; `characters.type` a 'pnj' pour défaut en base.
   const [character] = await trx('characters')
-    .insert({ campaign_id: campaign.id, name: 'Perso test' })
+    .insert({ campaign_id: campaign.id, name: 'Perso test', type: 'pj' })
     .returning('*')
   const [charSheet] = await trx('char_sheet')
     .insert({ character_id: character.id })

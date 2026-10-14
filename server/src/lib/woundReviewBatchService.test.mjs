@@ -23,7 +23,11 @@ const resolvedEvents = (emitted) => eventsOf(emitted, WS.GAME_ECHEANCE_RESOLVED)
 
 async function createFixture() {
   const [gm] = await db('users').insert({ email: `wrb-gm-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'wrb-gm' }).returning('*')
-  const [campaign] = await db('campaigns').insert({ gm_id: gm.id, name: 'Campagne test lot groupé', invite_code: `WRB-${Date.now()}-${Math.random()}` }).returning('*')
+  // settings.pnj_healing_mode: 'detaille' — Bob (PNJ) est utilisé ici pour tester la résolution par
+  // lot générique (guérison/infection), pas la distinction PJ/PNJ (WOUND-PNJ-ECHEANCES-FLOOD, défaut
+  // réel 'simple' depuis 2026-10-14) ; sans ce réglage explicite, ses blessures n'auraient plus
+  // d'échéance à résoudre et `woundInReview` échouerait sur `inserted.echeance.id` (null).
+  const [campaign] = await db('campaigns').insert({ gm_id: gm.id, name: 'Campagne test lot groupé', invite_code: `WRB-${Date.now()}-${Math.random()}`, settings: { pnj_healing_mode: 'detaille' } }).returning('*')
   const [other] = await db('campaigns').insert({ gm_id: gm.id, name: 'Autre campagne test lot groupé', invite_code: `WRB2-${Date.now()}-${Math.random()}` }).returning('*')
   const makeCharacter = async (inCampaign, name, type = 'pj') => {
     const [character] = await db('characters').insert({ campaign_id: inCampaign.id, name, type }).returning('*')

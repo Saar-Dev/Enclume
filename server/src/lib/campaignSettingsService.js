@@ -76,6 +76,13 @@ export const SETTINGS_SCHEMA = {
   drone_turn_model_gm:     { type: 'string', default: 'classique', enum: ['classique', 'ordres_permanents'] },
   drone_turn_model_player: { type: 'string', default: 'classique', enum: ['classique', 'ordres_permanents'] },
   drone_targeting_mode:    { type: 'string', default: 'assigne',   enum: ['assigne', 'spatial'] },
+  // Guérison des PNJ (WOUND-PNJ-ECHEANCES-FLOOD, REGLEBLESSURES.md:207-224 « simplifier la gestion
+  // des blessures des PNJ (optionnel) » — le RAW réserve le suivi détaillé, case par case, aux PJ et
+  // à leurs adversaires les plus marquants ; les autres PNJ n'ont besoin que de leur pire gravité).
+  // `simple` (défaut, décision Saar 2026-10-14) : aucune échéance de guérison programmée pour un PNJ
+  // — la case reste posée (gravité visible), le MJ la retire à la main, l'écran de revue des
+  // guérisons n'en est plus encombré. `detaille` : comportement historique, identique à un PJ.
+  pnj_healing_mode: { type: 'string', default: 'simple', enum: ['simple', 'detaille'] },
 }
 
 /**

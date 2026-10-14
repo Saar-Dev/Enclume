@@ -5,6 +5,7 @@
 import { getWoundHealing, getHealingTotalTests, findInfectionTarget, SOINS_CONSTANTS_INTERVAL_MINUTES } from '../../../shared/woundConstants.js'
 import { MINUTES_PER_DAY } from '../../../shared/gameTime.js'
 import { createEcheance } from './echeanceService.js'
+import { getCampaignSettings } from './campaignSettingsService.js'
 
 // « Vivante » = pas encore terminée, annulée ni en erreur. Deux formes d'échéance de blessure : la GUÉRISON appartient à une CASE (`payload.woundId`,
 // chaque blessure a sa période — REGLEBLESSURES.md:393-395) ; l'INFECTION appartient à une LOCALISATION d'un personnage (`payload.location` — le livre
@@ -53,6 +54,16 @@ export function getHealingRetrySchedule(severity, location) {
 // pas « jamais retirée » : seule une Mort (Tête/Corps) n'a aucune échéance, getWoundHealing = null ET severity !== 'legere').
 // Un Membre détruit a la sienne (3 semaines, soins constants) comme n'importe quelle ligne WOUND_HEALING.
 export async function initializeWoundHealingEcheance(trx, { campaignId, characterId, wound }) {
+  // WOUND-PNJ-ECHEANCES-FLOOD (décision Saar 2026-10-14) : un PNJ en mode `simple` (défaut,
+  // campaignSettingsService.js) n'a pas d'échéance de guérison programmée — la case reste posée,
+  // gérée à la main par le MJ. `pj`/`drone`/`exo` ne passent jamais par `character_wounds`
+  // (COMPANION_REGISTRY, vaultService.js), seul `pnj` a besoin d'être distingué ici.
+  const character = await trx('characters').where({ id: characterId }).first('type')
+  if (character?.type === 'pnj') {
+    const settings = await getCampaignSettings(trx, campaignId)
+    if (settings.pnj_healing_mode === 'simple') return null
+  }
+
   const healing = getWoundHealing(wound.severity, wound.location)
   if (!healing) {
     if (wound.severity !== 'legere') return null
