@@ -23,7 +23,7 @@ import charactersRouter, { actionsRouter as charactersActionsRouter } from './ro
 import assetsRouter from './routes/assets.js'
 import usersRouter from './routes/users.js'
 import diceRouter from './routes/dice.js'
-import voxelTexturesRouter from './routes/voxel-textures.js'
+import surfaceTexturesRouter from './routes/surface-textures.js'
 import texturePacksRouter from './routes/texture-packs.js'
 import charSheetRouter from './routes/character/char-sheet.js'
 import charRefRouter from './routes/character/ref.js'
@@ -122,7 +122,7 @@ app.use('/api/battlemaps/:id/tokens', tokensRouter)
 app.use('/api/tokens', tokensRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/dice', diceRouter)
-app.use('/api/voxel-textures', voxelTexturesRouter)
+app.use('/api/surface-textures', surfaceTexturesRouter)
 app.use('/api/texture-packs', texturePacksRouter)
 app.use('/api/char-sheet', charSheetRouter)
 app.use('/api/char-ref', charRefRouter)

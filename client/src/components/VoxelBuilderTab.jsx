@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Canvas, useFrame } from '@react-three/fiber'
 import api from '../lib/api'
-import { loadVoxelTextures } from '../lib/voxelTextures'
+import { loadSurfaceTextures } from '../lib/surfaceTextures'
 import Voxel from '../components/Voxel'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ function VoxelPreview({ faces, packId, geometry }) {
       return
     }
     const fakeTex = [{ id: 0, pack_id: packId, pack_name: '', label: 'preview', faces }]
-    loadVoxelTextures(fakeTex).then(result => setMaterials(result[0] || null))
+    loadSurfaceTextures(fakeTex).then(result => setMaterials(result[0] || null))
   }, [faces, packId])
 
   if (!materials) {
@@ -124,7 +124,7 @@ export default function VoxelBuilderTab({
 
   const handleDeprecateVoxel = useCallback(async (voxel) => {
     try {
-      const res = await api.put(`/voxel-textures/${voxel.id}`, { deprecated: !voxel.deprecated })
+      const res = await api.put(`/surface-textures/${voxel.id}`, { deprecated: !voxel.deprecated })
       setPackDetail(prev => ({ ...prev, textures: prev.textures.map(t => t.id === voxel.id ? res.data.texture : t) }))
       setEditingVoxel(prev => prev && prev !== 'new' && prev.id === voxel.id ? res.data.texture : prev)
     } catch { /* erreur remontée au shell si nécessaire */ }
@@ -138,7 +138,7 @@ export default function VoxelBuilderTab({
     setSavingVoxel(true); setVoxelError(null)
     try {
       if (editingVoxel === 'new') {
-        const res = await api.post('/voxel-textures/from-paths', {
+        const res = await api.post('/surface-textures/from-paths', {
           pack_id: selectedPack.id,
           label: voxelForm.label.trim(),
           faces: voxelForm.faces,
@@ -147,7 +147,7 @@ export default function VoxelBuilderTab({
         setPackDetail(prev => ({ ...prev, textures: [...(prev?.textures || []), res.data.texture] }))
         setPacks(prev => prev.map(p => p.id === selectedPack.id ? { ...p, texture_count: Number(p.texture_count) + 1 } : p))
       } else {
-        const res = await api.put(`/voxel-textures/${editingVoxel.id}`, {
+        const res = await api.put(`/surface-textures/${editingVoxel.id}`, {
           label: voxelForm.label.trim(),
           allowed_geometries: JSON.stringify(voxelForm.allowed_geometries),
         })

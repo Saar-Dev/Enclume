@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Canvas, useFrame } from '@react-three/fiber'
 import api from '../lib/api'
-import { loadVoxelTextures } from '../lib/voxelTextures'
+import { loadSurfaceTextures } from '../lib/surfaceTextures'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 // Faces entité — labels via fr.json builder.faces.*
@@ -54,7 +54,7 @@ function EntityPreview({ faces, packId, width, height, depth }) {
     if (!packId || !hasAnyFace) return undefined
     let cancelled = false
     const fakeTex = [{ id: 0, pack_id: packId, pack_name: '', label: 'preview', faces }]
-    loadVoxelTextures(fakeTex).then(result => {
+    loadSurfaceTextures(fakeTex).then(result => {
       if (!cancelled) setMaterials(result[0] || null)
     })
     return () => { cancelled = true }

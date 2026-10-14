@@ -9,7 +9,7 @@ import axios from 'axios'
 import api from '../lib/api.js'
 import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { WS } from '../../../shared/events.js'
-import { loadVoxelTextures } from '../lib/voxelTextures.js'
+import { loadSurfaceTextures } from '../lib/surfaceTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
@@ -2093,7 +2093,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
   const blueprintIds = [...new Set(entities.map(e => e.blueprint_id))].sort().join(',')
 
-  // ─── Chargement des voxel_textures nécessaires ───────────────────────────
+  // ─── Chargement des surface_textures nécessaires ─────────────────────────
   useEffect(() => {
     const loadBlocks = async () => {
       setBlocksReady(false)
@@ -2105,11 +2105,11 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         setTextureMaterials({})
       } else {
         try {
-          const { data } = await api.get(`/voxel-textures?ids=${textureIds.join(',')}`)
-          const loaded = await loadVoxelTextures(data.textures)
+          const { data } = await api.get(`/surface-textures?ids=${textureIds.join(',')}`)
+          const loaded = await loadSurfaceTextures(data.textures)
           setTextureMaterials(loaded)
         } catch (err) {
-          console.error('[Canvas3D] Erreur chargement voxel_textures :', err)
+          console.error('[Canvas3D] Erreur chargement surface_textures :', err)
         }
       }
 
@@ -2138,7 +2138,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
       if (fakeTexObjs.length > 0) {
         try {
-          const flat = await loadVoxelTextures(fakeTexObjs)
+          const flat = await loadSurfaceTextures(fakeTexObjs)
           const structured = {}
           for (const entity of entities) {
             const bp = entity.blueprint

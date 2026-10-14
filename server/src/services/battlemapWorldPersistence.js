@@ -24,7 +24,7 @@ export async function syncBattlemapTextureUsage(trx, battlemapId, surfaceData) {
 
   await trx('battlemap_texture_usage').insert(textureIds.map(textureId => ({
     battlemap_id: battlemapId,
-    voxel_texture_id: textureId,
+    surface_texture_id: textureId,
   })))
   return textureIds
 }

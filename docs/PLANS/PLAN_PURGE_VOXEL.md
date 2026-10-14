@@ -353,12 +353,66 @@ deux côtés avant de coder.
 - `[VÉRIFIÉ]` La recherche exhaustive (tout le dépôt, pas juste client/server/src) trouve aussi
   `docs/SYSTEME/CHARACTER.md`, `ENTITES.md`, `ASSETS.md`, `TRADE.md` mentionnant `voxel_textures` — pas vus
   aux 2 passes précédentes. Ajoutés au périmètre du Lot 6 (doc), pas traités ici.
-- **Question ouverte, pas tranchée moi-même** : renommer la table/les routes implique-t-il de renommer le
-  **chemin d'API public** (`/api/voxel-textures` → `/api/surface-textures`) ? Ça cascade sur tous les appels
-  client (`VoxelBuilderTab.jsx`, `Canvas3D.jsx`, `Editor3D.jsx`, `MaterialGeneratorTab.jsx`,
-  `EntityBuilderTab.jsx`, `texture-packs.js`) en plus du renommage DB. Premier lot de ce chantier avec une
-  vraie migration de schéma (table existante, pas juste du code) — je demande confirmation avant de
-  l'exécuter plutôt que de l'enchaîner silencieusement.
+- **Décidé par Claude (délégation explicite de Saar) : renommage complet et cohérent** — base, chemin d'API
+  (`/api/voxel-textures` → `/api/surface-textures`), fichiers serveur et client, pas seulement la colonne.
+
+## Lot 4 — CLOS le 2026-10-14 (migration déjà appliquée, détail ci-dessous)
+
+**Incident opérationnel, résolu** : en écrivant la migration 386, `nodemon` (le serveur de Saar tournait
+réellement — nécessaire pour ses tests navigateur des Lots 2-3) l'a auto-appliquée immédiatement, avant que
+le code consommateur ne soit mis à jour — exactement le piège documenté par `.claude/rules/migrations.md`
+(« écrire un fichier sous `server/` auto-applique les migrations en attente »), que j'avais lu mais pas
+anticipé pour UNE migration en particulier pendant que je rédigeais le reste du Lot. Fenêtre d'inconsistance
+brève (quelques minutes), corrigée en enchaînant immédiatement la mise à jour de tout le code serveur/client
+plutôt que de revenir en arrière. **Leçon retenue** : sur ce chantier, considérer TOUTE écriture de fichier
+de migration comme une action en production immédiate, pas une étape qu'on peut préparer puis tester à
+tête reposée.
+
+**Deuxième ajustement en route** : la séquence `voxel_textures_id_seq` associée à la table ne se renomme pas
+automatiquement avec `RENAME TABLE` — ajoutée à la migration 386 par une édition suivante, mais celle-ci
+avait déjà été auto-appliquée sans cette ligne (nodemon ne rejoue jamais une migration déjà dans
+`knex_migrations`, correctement — rejouer `up()` aurait été l'erreur documentée par le garde-fou des
+migrations). Migration 387 séparée créée pour ce seul renommage cosmétique, 386 corrigée pour refléter ce
+qui s'est réellement exécuté (pas ce qui était prévu).
+
+**Correction de périmètre, pas une indécision** : en lisant `EntityBuilderTab.jsx` pour la mise à jour des
+imports, découverte que `appearance: 'voxel'` (apparence d'entité : bloc texturé vs modèle GLB, avec clés
+i18n `builder.appearanceVoxel`/`appearanceGlb` bien vivantes) et `usage_hint: 'voxel'` (déjà vu au Lot 4)
+sont un vocabulaire de domaine **retenu et légitime** (« voxel » = forme cubique/bloc), distinct du format de
+carte voxel mort. **`VoxelBuilderTab.jsx` n'est donc PAS renommé** — contrairement à ce qui était annoncé
+plus haut dans ce document : son nom reste cohérent avec ce vocabulaire retenu. Seuls les imports/chemins
+d'API qu'il consomme (fichier lib déplacé, route renommée) sont mis à jour.
+
+**Fichiers touchés** :
+- Migrations `386_rename_voxel_textures_to_surface_textures.js` / `387_surface_textures_id_seq_rename.js`.
+- `server/src/lib/voxelTextures.js` **supprimé** : doublon complet et mort de `routes/voxel-textures.js`,
+  zéro importeur (trouvaille de cette 3ᵉ passe).
+- `server/src/routes/voxel-textures.js` → `server/src/routes/surface-textures.js` (contenu : table/colonnes
+  renommées, chemins d'API dans les commentaires).
+- `server/src/routes/texture-packs.js` : toutes les références à la table renommées (liste, détail, création,
+  suppression, export/import ZIP, fichiers).
+- `server/src/index.js` : import + montage de route (`/api/surface-textures`).
+- `server/src/services/battlemapWorldPersistence.js` : colonne d'insertion renommée.
+- Client : `lib/voxelTextures.js` → `lib/surfaceTextures.js` (fonction `loadVoxelTextures` →
+  `loadSurfaceTextures`) ; importeurs mis à jour (`Canvas3D.jsx`, `Editor3D.jsx`, `VoxelBuilderTab.jsx` —
+  pas renommé, voir plus haut —, `MaterialGeneratorTab.jsx`, `EntityBuilderTab.jsx`).
+- `client/src/pages/TexturePacksPage.jsx` **supprimé** : page orpheline confirmée (zéro import nulle part),
+  remplacée par `WorkshopPage.jsx` depuis longtemps sans avoir été retirée.
+- **Volontairement non touché** : `usage_hint`/`appearance` valeur `'voxel'` (vocabulaire de domaine
+  légitime, pas le format de carte) ; toute la documentation (`VOXELS.md`, `CONVENTIONS.md`, etc. — Lot 6,
+  séparé).
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés ; `eslint` ciblé sur tous les fichiers
+client touchés — comparé ligne à ligne, zéro nouvelle erreur/warning ; `node --test
+battlemapWorldPersistence.test.mjs` 3/3 vert ; `npm run build` client propre ; requête directe en base
+confirmant le schéma final (table `surface_textures`, colonne `surface_texture_id`, séquence
+`surface_textures_id_seq`) cohérent avec le code. Recherche exhaustive finale (tout le dépôt) : zéro
+référence vivante restante à `voxel_textures`/`voxel-textures`/`loadVoxelTextures` hors migrations déjà
+appliquées (jamais retouchées) et scripts de ticket historiques (jamais réécrits, règle du projet).
+**Navigateur non pertinent ici** (information de Saar, 2026-10-14) : l'Atelier actuel n'est pas câblé pour
+l'import de textures — coquille vide gardée pour une remise en service future, indépendamment de ce lot.
+Aucun comportement réel à valider visuellement ; les vérifications automatisées ci-dessus font foi. Lot
+considéré CLOS, pas partiel.
 - `[VÉRIFIÉ]` `TexturePacksPage.jsx` est une **page orpheline** : aucun import nulle part dans `client/src`
   (remplacée par `WorkshopPage.jsx`, jamais retirée), référence pourtant `voxel-textures` abondamment. Sans
   rapport direct avec la purge voxel — question séparée pour Saar : la supprimer dans ce lot (mécanique, bas
@@ -397,6 +451,10 @@ deux côtés avant de coder.
 
 ## Historique
 
+- **2026-10-14 — Lot 4 codé et clos** : renommage complet `voxel_textures`→`surface_textures` (base, API,
+  fichiers), doublon mort supprimé, page orpheline supprimée, `VoxelBuilderTab.jsx` délibérément pas renommé
+  (vocabulaire de domaine légitime découvert en route). Incident nodemon/migration auto-appliquée documenté
+  et corrigé. Reste Lot 5 (colonnes `battlemaps`) et Lot 6 (documentation).
 - **2026-10-13 (2ᵉ analyse à charge, sur demande de Saar)** — Lot 4 (renommage catalogue) incomplet au premier
   passage : ne listait que 2 fichiers client / 2 serveur. Recherche exhaustive trouve 7 fichiers client, 3
   serveur — dont `routes/texture-packs.js` (~15 références, export/import ZIP) entièrement oublié. Vérifié que

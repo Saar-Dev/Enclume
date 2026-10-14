@@ -76,7 +76,7 @@ async function rebuildPackZip(packId) {
     .where({ pack_id: packId })
     .orderBy('sort_order')
 
-  const textures = await db('voxel_textures')
+  const textures = await db('surface_textures') // ex-voxel_textures (PLAN_PURGE_VOXEL.md Lot 4)
     .where({ pack_id: packId, deprecated: false })
     .orderBy('sort_order')
 
@@ -139,11 +139,11 @@ async function rebuildPackZip(packId) {
 }
 
 // ─── GET /api/texture-packs ───────────────────────────────────────────────────
-// Liste des packs avec nombre de textures (voxel_textures, pas block_types — P42)
+// Liste des packs avec nombre de textures (surface_textures, pas block_types — P42)
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const packs = await db('texture_packs')
-      .leftJoin('voxel_textures', 'texture_packs.id', 'voxel_textures.pack_id')
+      .leftJoin('surface_textures', 'texture_packs.id', 'surface_textures.pack_id')
       .select(
         'texture_packs.id',
         'texture_packs.name',
@@ -152,7 +152,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         'texture_packs.tile_size',
         'texture_packs.created_by',
         'texture_packs.created_at',
-        db.raw('count(voxel_textures.id) as texture_count'),
+        db.raw('count(surface_textures.id) as texture_count'),
       )
       .groupBy('texture_packs.id')
       .orderBy('texture_packs.created_at', 'asc')
@@ -164,7 +164,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 })
 
 // ─── GET /api/texture-packs/:id ───────────────────────────────────────────────
-// Détail pack + catégories + textures (voxel_textures, pas block_types — P42)
+// Détail pack + catégories + textures (surface_textures, pas block_types — P42)
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const pack = await db('texture_packs').where({ id: req.params.id }).first()
@@ -174,7 +174,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       .where({ pack_id: req.params.id })
       .orderBy('sort_order')
 
-    const textures = await db('voxel_textures')
+    const textures = await db('surface_textures')
       .where({ pack_id: req.params.id })
       .orderBy('sort_order')
 
@@ -187,7 +187,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 // ─── POST /api/texture-packs ──────────────────────────────────────────────────
 // Crée un nouveau pack de textures.
 // Le pack UUID est généré par Knex (defaultTo knex.fn.uuid()).
-// Aucun fichier à l'upload — le pack démarre vide, textures ajoutées via POST /voxel-textures.
+// Aucun fichier à l'upload — le pack démarre vide, textures ajoutées via POST /surface-textures.
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     const { name, label, description, tile_size } = req.body
@@ -259,11 +259,11 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!pack) throw new AppError(404, 'Pack introuvable')
     if (pack.created_by && pack.created_by !== req.user.id) throw new AppError(403, 'Accès réservé au créateur du pack')
 
-    // Guard 409 — P42 : battlemap_texture_usage JOIN voxel_textures (jamais block_types)
+    // Guard 409 — P42 : battlemap_texture_usage JOIN surface_textures (jamais block_types)
     const usedTextures = await db('battlemap_texture_usage')
-      .join('voxel_textures', 'battlemap_texture_usage.voxel_texture_id', 'voxel_textures.id')
-      .where({ 'voxel_textures.pack_id': req.params.id })
-      .select('battlemap_texture_usage.battlemap_id', 'voxel_textures.id as texture_id')
+      .join('surface_textures', 'battlemap_texture_usage.surface_texture_id', 'surface_textures.id')
+      .where({ 'surface_textures.pack_id': req.params.id })
+      .select('battlemap_texture_usage.battlemap_id', 'surface_textures.id as texture_id')
 
     if (usedTextures.length > 0) {
       return res.status(409).json({
@@ -280,7 +280,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       await minio.removeObject(bucket, objectName)
     }
 
-    // Supprimer en base (cascade : voxel_textures + texture_pack_categories via FK)
+    // Supprimer en base (cascade : surface_textures + texture_pack_categories via FK)
     await db('texture_packs').where({ id: req.params.id }).delete()
 
     res.json({ ok: true })
@@ -428,8 +428,8 @@ router.post('/import', requireAuth, multerZip.single('zip'), async (req, res, ne
       }
     }
 
-    // 4. INSERT voxel_textures avec remapping localId → ID global
-    const idMapping = {} // localId → voxel_texture_id global
+    // 4. INSERT surface_textures avec remapping localId → ID global
+    const idMapping = {} // localId → surface_texture_id global
     for (const tex of manifest.textures) {
       // Résoudre alias 'side' → faces nommées (P33 — alias lecture uniquement)
       const rawFaces = { ...tex.faces }
@@ -443,7 +443,7 @@ router.post('/import', requireAuth, multerZip.single('zip'), async (req, res, ne
 
       const categoryDbId = tex.category ? (categoryIdMap[tex.category] || null) : null
 
-      const [inserted] = await db('voxel_textures').insert({
+      const [inserted] = await db('surface_textures').insert({
         pack_id:            newPackId,
         category_id:        categoryDbId,
         label:              tex.label,
@@ -472,7 +472,7 @@ router.post('/import', requireAuth, multerZip.single('zip'), async (req, res, ne
 // ─── GET /api/texture-packs/:id/files ────────────────────────────────────────
 // Liste tous les PNG bruts du pack dans MinIO.
 // Retourne pour chaque PNG : { path, url, inUse }
-// inUse = true si le chemin apparaît dans les faces d'au moins une voxel_texture du pack.
+// inUse = true si le chemin apparaît dans les faces d'au moins une surface_texture du pack.
 router.get('/:id/files', requireAuth, async (req, res, next) => {
   try {
     const pack = await db('texture_packs').where({ id: req.params.id }).first()
@@ -488,10 +488,10 @@ router.get('/:id/files', requireAuth, async (req, res, next) => {
       name.endsWith('.png') && !name.includes('pack_archive')
     )
 
-    // Collecter tous les chemins de faces utilisés dans les voxel_textures du pack
-    const voxelTextures = await db('voxel_textures').where({ pack_id: req.params.id })
+    // Collecter tous les chemins de faces utilisés dans les surface_textures du pack
+    const surfaceTextures = await db('surface_textures').where({ pack_id: req.params.id })
     const usedPaths = new Set()
-    for (const vt of voxelTextures) {
+    for (const vt of surfaceTextures) {
       const faces = vt.faces || {}
       for (const facePath of Object.values(faces)) {
         if (typeof facePath === 'string') usedPaths.add(facePath)
@@ -514,8 +514,8 @@ router.get('/:id/files', requireAuth, async (req, res, next) => {
 })
 
 // ─── POST /api/texture-packs/:id/files ───────────────────────────────────────
-// Upload un PNG dans le pack (sans créer de voxel_texture).
-// Le PNG devient disponible dans la bibliothèque du constructeur de voxel.
+// Upload un PNG dans le pack (sans créer de surface_texture).
+// Le PNG devient disponible dans la bibliothèque du constructeur de textures.
 // Ownership : créateur du pack uniquement.
 // MinIO AVANT base (P25) — ici pas de base, uniquement MinIO.
 router.post('/:id/files', requireAuth, multerUpload.single('file'), async (req, res, next) => {
@@ -552,7 +552,7 @@ router.post('/:id/files', requireAuth, multerUpload.single('file'), async (req, 
 
 // ─── DELETE /api/texture-packs/:id/files/*filePath ───────────────────────────
 // Supprime un PNG du pack dans MinIO.
-// 409 si le PNG est utilisé dans les faces d'au moins une voxel_texture du pack.
+// 409 si le PNG est utilisé dans les faces d'au moins une surface_texture du pack.
 // Ownership : créateur du pack uniquement.
 router.delete('/:id/files/*filePath', requireAuth, async (req, res, next) => {
   try {
@@ -566,16 +566,16 @@ router.delete('/:id/files/*filePath', requireAuth, async (req, res, next) => {
     // Guard path traversal
     assertSafePath(relativePath)
 
-    // Guard 409 — vérifier si ce PNG est utilisé dans les faces d'une voxel_texture
-    const voxelTextures = await db('voxel_textures').where({ pack_id: req.params.id })
-    const isUsed = voxelTextures.some(vt => {
+    // Guard 409 — vérifier si ce PNG est utilisé dans les faces d'une surface_texture
+    const surfaceTextures = await db('surface_textures').where({ pack_id: req.params.id })
+    const isUsed = surfaceTextures.some(vt => {
       const faces = vt.faces || {}
       return Object.values(faces).includes(relativePath)
     })
 
     if (isUsed) {
       return res.status(409).json({
-        error: 'Ce fichier est utilisé par un voxel — supprimez ou modifiez le voxel d\'abord',
+        error: 'Ce fichier est utilisé par une texture — supprimez ou modifiez la texture d\'abord',
       })
     }
 

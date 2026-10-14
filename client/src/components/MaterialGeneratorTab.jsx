@@ -172,7 +172,7 @@ export default function MaterialGeneratorTab({
       const safeName = form.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'materiau'
       const albedoFile = await uploadGeneratedFile(preview.albedoDataUrl, `${safeName}.png`)
       const normalFile = await uploadGeneratedFile(preview.normalDataUrl, `${safeName}-normal.png`)
-      const res = await api.post('/voxel-textures/from-paths', {
+      const res = await api.post('/surface-textures/from-paths', {
         pack_id: selectedPackId,
         label: form.label.trim(),
         faces: {

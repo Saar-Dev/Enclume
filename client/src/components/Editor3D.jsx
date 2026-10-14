@@ -5,7 +5,7 @@ import { MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
-import { loadVoxelTextures } from '../lib/voxelTextures.js'
+import { loadSurfaceTextures } from '../lib/surfaceTextures.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import { useSurfacePanels } from '../lib/useSurfacePanels.js'
 import { useSurfaceDocument } from '../lib/useSurfaceDocument.js'
@@ -771,19 +771,19 @@ export default function Editor3D({
     refreshWorldEffects: refreshRuntimeEffects,
   } = useWorldRuntimeSync(battlemap?.id, socket)
 
-  // ─── Chargement voxel_textures — TOUTES les textures (palette complète) ──
+  // ─── Chargement surface_textures — TOUTES les textures (palette complète) ──
   // Editor3D charge toutes les textures non-deprecated pour la palette de l'atelier,
   // contrairement à Canvas3D qui ne charge que les IDs présents dans surface_data.
   useEffect(() => {
     const loadBlocks = async () => {
       setBlocksReady(false)
       try {
-        const { data } = await api.get('/voxel-textures')
+        const { data } = await api.get('/surface-textures')
         onBlocksLoaded?.(data.textures)
-        const loaded = await loadVoxelTextures(data.textures)
+        const loaded = await loadSurfaceTextures(data.textures)
         setTextureMaterials(loaded)
       } catch (err) {
-        console.error('[Editor3D] Erreur chargement voxel_textures :', err)
+        console.error('[Editor3D] Erreur chargement surface_textures :', err)
       } finally {
         setBlocksReady(true)
       }
@@ -816,7 +816,7 @@ export default function Editor3D({
       }
       if (fakeTexObjs.length === 0) { setEntityTextureMaterials({}); return }
       try {
-        const flat = await loadVoxelTextures(fakeTexObjs)
+        const flat = await loadSurfaceTextures(fakeTexObjs)
         const structured = {}
         for (const entity of entities) {
           const bp = entity.blueprint

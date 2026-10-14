@@ -32,7 +32,7 @@ function proceduralReliefForFaces(faces) {
   return meta
 }
 
-// Charge les textures pour un tableau de voxel_textures retourne par /api/voxel-textures.
+// Charge les textures pour un tableau de surface_textures retourne par /api/surface-textures.
 // Retourne : { [texId]: { faceMaterials: THREE.MeshStandardMaterial[] } }
 //
 // Ordre faces BoxGeometry Three.js :
@@ -41,7 +41,7 @@ function proceduralReliefForFaces(faces) {
 //   4 = south (+Z)   5 = north (-Z)
 //
 // Normal maps optionnelles : <face>_normal > all_normal.
-export async function loadVoxelTextures(textures) {
+export async function loadSurfaceTextures(textures) {
   const loader = new THREE.TextureLoader()
 
   // WORLD-COMPILE-SUPERLINEAR (suite) — la boucle externe sur les textures était séquentielle (un
@@ -70,7 +70,7 @@ export async function loadVoxelTextures(textures) {
           textureCache[cacheKey] = texture
           resolve(texture)
         }, undefined, () => {
-          console.warn(`[voxelTextures] Texture manquante : ${packId}/${path}`)
+          console.warn(`[surfaceTextures] Texture manquante : ${packId}/${path}`)
           resolve(null)
         })
       })
@@ -88,7 +88,7 @@ export async function loadVoxelTextures(textures) {
         })
       }
 
-      console.warn(`[voxelTextures] Texture ${tex.id} (${tex.label}) : face sans texture -> magenta`)
+      console.warn(`[surfaceTextures] Texture ${tex.id} (${tex.label}) : face sans texture -> magenta`)
       return new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.8 })
     }
 
