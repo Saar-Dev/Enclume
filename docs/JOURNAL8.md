@@ -11275,6 +11275,55 @@ une blessure à un personnage du Coffre depuis la fiche).
 **Données** : aucune migration.
 **Retour arrière** : `git revert` du commit.
 
+## Session (Claude) — 2026-10-14 — EXOARM-MULTIADV1 : multi-adversaires dupliqué, exo-armure invisible des deux côtés (rework, pas un patch)
+
+Le ticket décrivait un symptôme (`character.type === 'pj' ? 'pnj' : 'pj'` traite toute exo comme
+« pj » par défaut de code) sur une seule des deux occurrences. Analyse à charge demandée par Saar
+avant de coder (« quel est le bug ? ») a trouvé la cause réelle, plus large que la ligne citée :
+
+1. **Côté attaquant** (`resolveMeleeAction`) : cette occurrence du ternaire est **du code mort pour
+   `exo`** — le dispatcher (`socketCombatResolution.js:633-657`) détourne tout attaquant exo vers
+   `resolveExoMeleeAction`, une fonction séparée ; `character.type` y est toujours `'pj'`/`'pnj'`.
+2. **Côté défenseur** (`finalizeMeleeAttack`) : occurrence réellement vivante — une exo-armure PEUT
+   être la cible d'une attaque CaC. Mais corriger seulement cette ligne n'aurait rien changé
+   d'observable : `countAdversaires` compare chaque token du roster via `t.char_type`, lu brut sur
+   `characters.type` — jamais résolu via le pilote. Une exo dans le roster vaut toujours `'exo'`,
+   qui ne matche jamais `'pj'` ni `'pnj'`, quel que soit le réglage du côté courant. Une exo-armure
+   était donc invisible au décompte multi-adversaires **des deux côtés de la comparaison**, pas
+   seulement celui nommé par le ticket.
+3. **Duplication trouvée en creusant** : la requête roster + le ternaire étaient recopiés
+   **intégralement deux fois** (attaquant et défenseur, ~25 lignes chacune, dans le même fichier) —
+   aucune autorité unique pour « quel est le type effectif de combat de ce token ».
+
+Décision Saar : rework, pas un patch (priorités du projet — qualité de l'architecture avant la
+rapidité, rework une fonctionnalité si ça la renforce).
+
+**Fix** : nouvelle fonction unique `resolveMultiAdversaryMalus` (`socketCombatHelpers.js`, à côté de
+`countAdversaires`/`multiAdversaryMalus` qu'elle orchestre) :
+- Type effectif du combattant courant via `resolveCombatantIdentity` (`combatantContextService.js`,
+  déjà l'autorité établie — pilote pour une exo, repli `'pnj'` sans pilote — réutilisée, jamais
+  redupliquée).
+- Type effectif de CHAQUE token du roster résolu en SQL (`LEFT JOIN exo_sheet` + pilote,
+  `CASE WHEN c.type='exo' THEN COALESCE(pilot.type,'pnj') ELSE c.type END`) — même sémantique que
+  `resolveCombatantIdentity`, exprimée en SQL pour éviter un aller-retour par token.
+- Les deux blocs dupliqués (requête + ternaire) supprimés aux deux sites, remplacés par un seul
+  appel. Côté défenseur, la requête roster n'est plus exécutée inconditionnellement : elle ne l'est
+  plus que si `measurement.status === 'ok'` (le reste du code l'ignorait déjà dans ce cas — correction
+  secondaire, pas un nouveau comportement).
+
+**Testé** : `node --check`. Nouveau fichier `socketCombatHelpers.multiAdversary.test.mjs` (aucune
+couverture n'existait avant sur ce mécanisme) : 2 tests contre la base locale — attaquant PJ entouré
+de 2 PNJ + 1 exo pilotée par un PNJ + 1 exo sans pilote (malus plafond, -10) sans compter l'allié PJ
+ni l'exo pilotée par un PJ ; défenseur PNJ face à une exo pilotée par un PJ (comptée comme ennemie,
+invisible avant ce correctif) + 1 PJ (malus -5). `socketCombatHandWeaponAbsence.test.mjs` 55/55 avec
+`combatantContextService.test.mjs`/`socketCombatHelpers.droneIntegrity.test.mjs` (non-régression sur
+`resolveMeleeAction`). `shared/**/*.test.mjs` 949/949. Résidu de fixtures vérifié en base : aucun.
+`git diff --check` propre.
+**Non testé** : scénario réel navigateur (CaC impliquant une exo-armure, aucune en jeu à ce jour —
+confirmé par le ticket d'origine).
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit (fonctions pures/lecture, aucune donnée persistée).
+
 ## Session (Claude) — 2026-10-14 — Grenades : `grenade_stun` (reprise 1) + correctif Choc perdu si la grenade consommée avant résolution (GRENADE-STUN-CHOC-SNAPSHOT)
 
 Reprise du chantier grenades gelé depuis 2026-09-09 (`PLAN_GRENADES.md` §6) — premier des 4 types « à

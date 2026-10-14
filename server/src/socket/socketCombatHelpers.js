@@ -1049,6 +1049,40 @@ export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType, m
   return count
 }
 
+// EXOARM-MULTIADV1 — autorité unique du malus multi-adversaires, remplace deux copies quasi
+// identiques (requête roster + ternaire de type d'ennemi) qui vivaient séparément côté attaquant
+// (resolveMeleeAction) et défenseur (finalizeMeleeAttack). Les deux copies lisaient
+// `characters.type` brut — jamais le type effectif d'une exo-armure (celui de son pilote,
+// resolveCombatantIdentity/combatantContextService.js, repli 'pnj' sans pilote). Résolu ici aux DEUX
+// bouts de la comparaison : `character` (le combattant courant, via resolveCombatantIdentity,
+// réutilisée telle quelle) ET chaque token du roster compté en face (via le même repli, exprimé en
+// SQL — LEFT JOIN exo_sheet + pilote — pour éviter un aller-retour par token).
+export async function resolveMultiAdversaryMalus(campaignId, { character, tokenPos, excludeTokenId, metrics }) {
+  const { effectiveType } = await resolveCombatantIdentity(db, character)
+  const enemyType = effectiveType === 'pj' ? 'pnj' : 'pj'
+
+  const rosterTokens = await db('tokens as t')
+    .join('combat_roster as cr', 'cr.token_id', 't.id')
+    .join('characters as c', 'c.id', 't.character_id')
+    .leftJoin('exo_sheet as es', 'es.character_id', 'c.id')
+    .leftJoin('characters as pilot', 'pilot.id', 'es.pilot_character_id')
+    .leftJoin('char_inventory_slots as cis',
+      db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
+    .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
+    .leftJoin('ref_equipment as re',
+      db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
+    .where('cr.campaign_id', campaignId)
+    .where('cr.status', 'active')
+    .groupBy('t.id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type', 'pilot.type')
+    .select(
+      't.id as token_id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space',
+      db.raw(`CASE WHEN c.type = 'exo' THEN COALESCE(pilot.type, 'pnj') ELSE c.type END as char_type`),
+      db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
+    )
+
+  return multiAdversaryMalus(countAdversaires(tokenPos, rosterTokens, excludeTokenId, enemyType, metrics))
+}
+
 // ─── DEF5 — Cible sans défense ───────────────────────────────────────────────
 // REGLESYSCOMBAT.md:1052-1058 : « Si un personnage ne peut pas voir son assaillant, ou s'il n'a pas
 // conscience de l'attaque, il ne peut pas se défendre de manière active. Inutile dans ce cas de
@@ -1574,30 +1608,14 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       return { suspend: false, emissions }
     }
 
-    const [woundsAttaquant, rosterTokens, settings, targetShield] = await Promise.all([
+    const [woundsAttaquant, multiMalusAttaquant, settings, targetShield] = await Promise.all([
       db('character_wounds').where({ char_sheet_id: ctx.sheetId }),
-      // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
-      // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
-      db('tokens as t')
-        .join('combat_roster as cr', 'cr.token_id', 't.id')
-        .join('characters as c', 'c.id', 't.character_id')
-        .leftJoin('char_inventory_slots as cis',
-          db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
-        .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
-        .leftJoin('ref_equipment as re',
-          db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
-        .where('cr.campaign_id', campaignId)
-        .where('cr.status', 'active')
-        .groupBy('t.id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type')
-        .select(
-          't.id as token_id',
-          't.pos_x',
-          't.pos_y',
-          't.pos_z',
-          't.position_space',
-          'c.type as char_type',
-          db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
-        ),
+      // EXOARM-MULTIADV1 — autorité unique multi-adversaires (resolveMultiAdversaryMalus,
+      // socketCombatHelpers.js) : résout le type effectif de l'attaquant ET de chaque token du
+      // roster compté en face (pilote pour une exo), plus de requête/ternaire dupliqués ici.
+      resolveMultiAdversaryMalus(campaignId, {
+        character, tokenPos: myTokenPos, excludeTokenId: action.token_id, metrics: measurement.metrics,
+      }),
       getCampaignSettings(db, campaignId),
       // Bouclier de la CIBLE (docs/PLAN_BOUCLIER.md Lot B) — malus au Test d'attaque de l'attaquant,
       // dérivé automatiquement de l'équipement de la cible, jamais un choix MJ (§3.3). Doit être connu
@@ -1641,12 +1659,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const combatModeAtk  = rosterAttaquant?.state_combat_mode ?? 'normal'
     const attackModeBonus = (combatModeAtk === 'offensif' || combatModeAtk === 'charge') ? 3 : 0
     const combatModeBonus = combatModeAtk === 'charge' ? 3 : 0   // +3 dégâts Charge
-
-    // Multi-adversaires : malus si l'attaquant est lui-même entouré d'ennemis
-    const atkEnemyType = character.type === 'pj' ? 'pnj' : 'pj'
-    const multiMalusAttaquant = multiAdversaryMalus(
-      countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType, measurement.metrics)
-    )
 
     // CaC 4b — malus attaque multiple (LdB p.218), fonction partagée avec le Tir Multi (voir
     // computeMultiAttackMalus, docs/PLAN_TIRMULTI.md).
@@ -1830,32 +1842,20 @@ async function finalizeMeleeAttack(io, campaignId, {
 
   const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
 
-  // Positions/roster re-fetchés frais (état du monde au moment de la finalisation, pas du jet —
-  // même principe que tous les autres finalize de ce chantier) — nécessaires pour
-  // multiMalusDefenseur et la taille de la cible ci-dessous.
+  // Position re-fetchée fraîche (état du monde au moment de la finalisation, pas du jet — même
+  // principe que tous les autres finalize de ce chantier) — nécessaire pour multiMalusDefenseur et
+  // la taille de la cible ci-dessous.
   const measurement = await measureBattlemapTokenDistance({
     sourceTokenId: action.token_id, targetTokenId,
   })
-  const rosterTokens = await db('tokens as t')
-    .join('combat_roster as cr', 'cr.token_id', 't.id')
-    .join('characters as c', 'c.id', 't.character_id')
-    .leftJoin('char_inventory_slots as cis',
-      db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
-    .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
-    .leftJoin('ref_equipment as re',
-      db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
-    .where('cr.campaign_id', campaignId)
-    .where('cr.status', 'active')
-    .groupBy('t.id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type')
-    .select(
-      't.id as token_id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type as char_type',
-      db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
-    )
 
-  // Multi-adversaires : malus si le défenseur est entouré d'ennemis (positions post-déplacement)
-  const defEnemyType = defenderCharacter.type === 'pj' ? 'pnj' : 'pj'
+  // EXOARM-MULTIADV1 — autorité unique multi-adversaires (resolveMultiAdversaryMalus,
+  // socketCombatHelpers.js) : résout le type effectif du défenseur ET de chaque token du roster
+  // compté en face (pilote pour une exo), plus de requête/ternaire dupliqués ici.
   const multiMalusDefenseur = measurement.status === 'ok'
-    ? multiAdversaryMalus(countAdversaires(measurement.targetToken, rosterTokens, targetTokenId, defEnemyType, measurement.metrics))
+    ? await resolveMultiAdversaryMalus(campaignId, {
+        character: defenderCharacter, tokenPos: measurement.targetToken, excludeTokenId: targetTokenId, metrics: measurement.metrics,
+      })
     : 0
 
   // DEF5 — recalculé frais (état du personnage a pu changer pendant l'attente du choix : étourdi,
