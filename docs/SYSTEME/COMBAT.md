@@ -7,7 +7,7 @@
 > autre écart trouvé au-delà des migrations déjà corrigées plus tôt dans la session.
 > Source : SYSTEME.md §17
 > Lire pour : COMBAT_ACTION_CONFIRM, resolveAssaultAction, charStats.js, state_character
-> Règles LdB complètes (actions, déplacements, CaC, tir) : voir `docs/SYSTEME/REGLES_LdB.md`
+> Règles LdB complètes (actions, déplacements, CaC, tir) : voir `docs/REGLES/REGLESYSCOMBAT.md`
 > Effet mécanique des mods d'armes (Lunette, ATI, Mémoire, Projecteur...) : voir `docs/SYSTEME/MODING.md`
 
 ---

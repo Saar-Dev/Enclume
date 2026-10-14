@@ -315,7 +315,7 @@ Comas (détail dans le livre, lignes 273-290) : « Coma léger » — Test de Ch
 - **Autres sources de dommages physiques** (acide, chutes, feu, froid, noyade, dommages étourdissants et assommants…) : chapitre distinct du livre (`REGLEBLESSURES.md` ~507 et suivantes) ; elles **produisent** des blessures mais leurs règles propres ne sont pas ici.
 - **Localisation des dommages et jet de Dommages** : chapitre Combat (`REGLESYSCOMBAT.md`).
 - **Armures et protections**, **exo-armures** (avaries), **drones** (intégrité) : autres systèmes.
-- **Résolution des Tests** (marges, Catastrophes, réussites critiques) : `REGLES_LdB.md` / règles de Tests.
+- **Résolution des Tests** (marges, Catastrophes, réussites critiques) : `REGLESYSCOMBAT.md` / règles de Tests.
 - **Réanimation** au-delà de la mention du 4.6.
 
 ---

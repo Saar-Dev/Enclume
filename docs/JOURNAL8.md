@@ -10976,3 +10976,30 @@ aucun code touché aujourd'hui.
 **Non testé** : sans objet.
 **Données** : aucune.
 **Retour arrière** : sans objet (aucun code modifié).
+
+## Session (Claude) — 2026-10-14 — DOC2 : suppression de REGLES_LdB.md (doublon confirmé de REGLESYSCOMBAT.md)
+
+Vérification ligne-à-ligne demandée par la dette `[DOC2]` (déjà relocalisé dans `docs/REGLES/` en
+août, bandeau d'avertissement déjà posé — seule la vérification + suppression restait à faire).
+Comparaison intégrale déléguée à un agent de lecture (923 lignes vs 1783 lignes) : **100% du contenu
+de `REGLES_LdB.md` (toutes sections, Actions → Tir instinctif, pages ~217-228) est une copie verbatim
+— mêmes chiffres, mêmes exemples — d'une portion de `REGLESYSCOMBAT.md`, qui est la version plus
+complète et officielle** (couvre en plus Initiative/Surprise, Dommages/Localisation/Protections, et
+plusieurs règles avancées absentes du premier fichier). Aucune différence de contenu, aucun passage
+unique trouvé — décision de Saar : suppression pure et simple, sans migration.
+
+**Fichier supprimé** : `docs/REGLES/REGLES_LdB.md`. Références mortes corrigées : `docs/SYSTEME/
+COMBAT.md` et `docs/MANUELS/MANUEL_BLESSURES.md` (pointaient vers le fichier supprimé, repointées
+vers `REGLESYSCOMBAT.md`) ; `server/src/services/movementBudgetService.js` (citation RAW vivante
+`REGLES_LdB.md:286-292` → ligne équivalente retrouvée et vérifiée dans `REGLESYSCOMBAT.md:773-780`,
+même texte). Laissés intacts (historique figé, jamais réécrit) : `docs/Old/*`,
+`server/src/db/migrations/310_bug_tickets_seed.js`, `server/src/scripts/importEnCoursDettes.js`.
+
+**Testé** : `node --check` sur `movementBudgetService.js`, test ciblé `movementBudgetService.test.mjs`
+(4/4, DB réelle — comportement inchangé, seul un commentaire modifié), recherche exhaustive de
+références mortes au fichier supprimé dans tout le dépôt (hors archives).
+**Non testé** : sans objet (suppression de documentation + citation, aucun comportement runtime
+nouveau).
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit (ou `git checkout` du fichier depuis l'historique si
+besoin de le ressusciter).

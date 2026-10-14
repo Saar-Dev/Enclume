@@ -75,7 +75,7 @@ export async function getCharacterMovementBudget(characterId, gait) {
     mutationEffects,
   )
   const allures = calcAllures(coordination, athleticsTotal)
-  // RAW REGLES_LdB.md:286-292 — l'Allure rapide est déjà "la vitesse d'un personnage qui court tout
+  // RAW REGLESYSCOMBAT.md:773-780 — l'Allure rapide est déjà "la vitesse d'un personnage qui court tout
   // en étant chargé et/ou encombré" ; l'Allure maximale exige explicitement d'être "sans être
   // encombré d'aucune manière". ini_penalty (inventoryService.js) est déjà l'autorité unique de
   // "ce personnage est chargé" (poids porté > FOR × multiplier, 0 si encumbrance_enabled=false pour
