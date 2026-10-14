@@ -11392,3 +11392,26 @@ non-régression fusil à pompe/lance-flammes/exo/drone, le tronc ayant bougé de
 s'applique au prochain démarrage serveur.
 **Retour arrière** : migration additive (`down()` remet les 3 colonnes à `null`) ; reste du diff =
 fichiers neufs/additifs, `git revert` du commit suffit.
+
+## Session (Claude) — 2026-10-14 — Ticket périmé : « 19 lignes Programmes legacy » déjà nettoyées ailleurs
+
+Audit des tickets `bug_tickets` contre `git log --all` (voir plus haut, session de clôture
+2026-10-14) : le ticket « Catalogue — 19 lignes "Programmes" legacy jamais référencées, doublons de
+la famille Logiciels » décrivait un nettoyage jamais réalisé. [VÉRIFIÉ par requête] aucune des 19
+lignes nommées n'existe plus dans `ref_equipment` (0/19 trouvées par nom exact), et plus aucune
+ligne `family` contenant `'informatique'` + `category='Programmes'` n'existe du tout — le nettoyage
+a déjà eu lieu (vraisemblablement via le chantier Informatique, couches 1-2, postérieur à ce
+ticket), jamais reflété sur le ticket. Les 12 FK réelles vers `ref_equipment` (`char_inventory`,
+`char_inventory_mods`, `drone_programs`, `drone_weapons`, `exo_programs`, `exo_systems`,
+`exo_weapons`, `ref_equipment_ammo_compat` ×2, `ref_equipment_skill_assoc`,
+`ref_equipment_skills`, `ref_exo_template_equipment`) sont sans objet puisque les lignes
+elles-mêmes n'existent plus. Rien à coder.
+
+**Fix** : aucun — `server/src/scripts/resolve_ticket_catalogue_programmes_legacy.js` (statut →
+`resolved`, lancé le 2026-10-14).
+
+**Testé** : requêtes directes en base (comptage par nom exact + par `family`/`category`), script de
+clôture exécuté sans erreur.
+**Non testé** : sans objet (pas de code applicatif modifié).
+**Données** : écriture dans `bug_tickets` uniquement (statut, `admin_notes`).
+**Retour arrière** : sans objet (aucun code applicatif touché).
