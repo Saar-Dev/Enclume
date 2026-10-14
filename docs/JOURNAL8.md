@@ -11415,3 +11415,48 @@ clôture exécuté sans erreur.
 **Non testé** : sans objet (pas de code applicatif modifié).
 **Données** : écriture dans `bug_tickets` uniquement (statut, `admin_notes`).
 **Retour arrière** : sans objet (aucun code applicatif touché).
+
+## Session (Claude) — 2026-10-14 — Audit complet des 118 scripts de clôture + régularisation de 3 clôtures ad hoc + 3 clôtures oubliées
+
+Suite de l'audit du soir (sessions précédentes : 72/118 scripts vérifiés automatiquement, 23 jamais
+exécutés trouvés et lancés). Reprise méthodique des **118 scripts** `server/src/scripts/
+{note,resolve}_ticket(s)_*.js` un par un (extraction du/des ticket(s) ciblé(s) + vérification directe
+en base de chacun), couvrant cette fois la totalité, y compris les formes non standard (recherche
+par `title`, par `cluster_label`, par `id` en dur, scripts à plusieurs tickets).
+
+**3 scripts réellement jamais exécutés, trouvés et lancés** :
+- `resolve_ticket_wiz38_close.js` (WIZ38) — décision de Saar du 2026-10-10 (clore sans nouveau test,
+  correctif confirmé par relecture) jamais appliquée en base ; le ticket était resté `in_progress`
+  avec une note de 2026-08-22. → `resolved`.
+- `resolve_ticket_wizard_step7_pc_remaining_confirm.js` — ticket encore `new`, notes vides, alors que
+  la fenêtre de confirmation (`WizardFinalizeConfirm.jsx`) tourne en prod depuis le commit `acfbabe9`
+  (2026-09-24). → `resolved`.
+- `note_ticket_9f6c2a6e_20261008_render_identity_and_socket.js` (WORLD-COMPILE-SUPERLINEAR) — les
+  trouvailles de la session du 2026-10-07/08 (plafonds/sols/portes recalculés pour rien + connexion
+  Socket.IO en StrictMode) n'avaient jamais été ajoutées à ce ticket, pourtant déjà volumineux
+  (11 250 caractères de notes). Note complétée, statut inchangé (`resolved`).
+
+**3 tickets fermés par une écriture directe en base (SQL ad hoc, hors script versionné) le
+2026-10-06, contraire à AGENTS.md § Clôture** : `GRENADE-ACCEPTS-WEAPON-MODS`,
+`GRENADE-STACK-BY-TYPE`, `STATUT-BADGES-LIMITE-3` — chacun avait déjà son script `note_tickets_
+20261006_*.js` prêt dans le dépôt (détail causal complet, tests listés) mais écrivant `in_progress`
+(validation en jeu non encore faite à l'écriture du script). Saar confirme (2026-10-14) avoir
+validé les trois en jeu réel le 2026-10-06, d'où la clôture directe à l'époque, mais sans passer par
+le script prévu. **Régularisé** : les 3 scripts modifiés (statut laissé `resolved`, inchangé par le
+script ; note de confirmation "validé en jeu réel par Saar le 2026-10-06, confirmé de vive voix le
+2026-10-14" ajoutée au-dessus du détail causal déjà rédigé) puis exécutés — la note complète est
+maintenant tracée en base, plus seulement la mention courte d'origine.
+
+**Fix** : aucun correctif applicatif — uniquement des écritures `bug_tickets` (statut, `admin_notes`)
+et la correction des 3 scripts `note_tickets_20261006_*.js` cités ci-dessus.
+
+**Testé** : `node --check` sur les 6 scripts touchés (3 modifiés + 3 exécutés tels quels), exécution
+réelle des 6 contre la base locale, vérification finale par requête directe (les 5 `linked_bug_code`
++ 1 `id` concernés sont tous `resolved` avec une note non vide en base).
+**Non testé** : sans objet (pas de code applicatif modifié).
+**Données** : écriture dans `bug_tickets` uniquement (statut, `admin_notes`, `updated_at`,
+`reviewed_by`/`reviewed_at` pour les 2 clôtures neuves).
+**Retour arrière** : `git revert` du commit pour les 3 scripts modifiés ; pour les écritures en
+base, ré-exécuter une version antérieure du script n'aurait aucun effet (idempotence par `MARKER` —
+seule une correction manuelle de `bug_tickets` annulerait l'écriture, non applicable ici puisque le
+contenu ajouté est factuellement correct).

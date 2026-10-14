@@ -1,7 +1,10 @@
 // Script à usage unique — note le correctif codé pour STATUT-BADGES-LIMITE-3 (session de correction
-// de bugs du 2026-10-06) : statut reste 'in_progress' (pas 'resolved'), la validation en jeu par
-// Saar reste à faire (AGENTS.md § Clôture — fermer un comportement visuel exige sa validation).
-// Idempotent (skip si déjà noté). Lancement manuel, local, depuis la racine :
+// de bugs du 2026-10-06). Régularisation du 2026-10-14 : Saar confirme avoir validé ce correctif en
+// jeu réel le 2026-10-06 mais avait clos le ticket par une écriture directe en base (note courte,
+// pas de script versionné — contraire à AGENTS.md § Clôture) au lieu de ce script-ci, jamais exécuté
+// jusqu'ici. Statut déjà 'resolved' en base : ce script n'y touche pas, il complète seulement la
+// note (idempotent, skip si déjà noté).
+// Lancement manuel, local, depuis la racine :
 //   node --env-file=.env server/src/scripts/note_tickets_20261006_statut_badges_limite3.js
 
 import db from '../db/knex.js'
@@ -24,8 +27,9 @@ TokenPresentation.jsx délègue entièrement, ne connaît plus aucune règle de 
 
 Testé : shared/tokenStatusRegistry.test.mjs étendu à 23/23 (4 statuts ou moins = aucune troncature ;
 dead en dernière position d'origine reste visible ; sans statut critique, troncature identique à
-l'ancien comportement ; stunned reste visible aussi) ; eslint ciblé (0 erreur). Non testé : affichage
-réel en navigateur (token avec plusieurs statuts empilés) — à faire par Saar avant de clore.
+l'ancien comportement ; stunned reste visible aussi) ; eslint ciblé (0 erreur). Validé en jeu réel
+par Saar le 2026-10-06 (token avec plusieurs statuts empilés) — confirmé de vive voix le 2026-10-14,
+régularisé ici faute de script à l'époque.
 Détail complet : docs/JOURNAL8.md (2026-10-06).`
 
 async function run() {
@@ -33,11 +37,10 @@ async function run() {
   if (!ticket) { console.log('[SKIP] STATUT-BADGES-LIMITE-3 — ticket introuvable'); return }
   if ((ticket.admin_notes || '').includes(MARKER)) { console.log('[SKIP] STATUT-BADGES-LIMITE-3 — déjà noté'); return }
   await db('bug_tickets').where({ id: ticket.id }).update({
-    status: 'in_progress',
     admin_notes: `${ticket.admin_notes || ''}\n${NOTE}`.trim(),
     updated_at: db.fn.now(),
   })
-  console.log('[OK] STATUT-BADGES-LIMITE-3 — note ajoutée, statut -> in_progress')
+  console.log('[OK] STATUT-BADGES-LIMITE-3 — note causale ajoutée (statut déjà resolved, inchangé)')
 }
 
 run().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1) })

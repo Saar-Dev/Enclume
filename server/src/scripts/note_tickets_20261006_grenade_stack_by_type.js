@@ -1,7 +1,10 @@
 // Script à usage unique — note le correctif codé pour GRENADE-STACK-BY-TYPE (session de correction
-// de bugs du 2026-10-06, généralisé en session au-delà des grenades/armes de jet). Statut reste
-// 'in_progress' (pas 'resolved'), la validation en jeu par Saar reste à faire (AGENTS.md § Clôture).
-// Idempotent (skip si déjà noté). Lancement manuel, local, depuis la racine :
+// de bugs du 2026-10-06, généralisé en session au-delà des grenades/armes de jet). Régularisation
+// du 2026-10-14 : Saar confirme avoir validé ce correctif en jeu réel le 2026-10-06 mais avait clos
+// le ticket par une écriture directe en base (note courte, pas de script versionné — contraire à
+// AGENTS.md § Clôture) au lieu de ce script-ci, jamais exécuté jusqu'ici. Statut déjà 'resolved' en
+// base : ce script n'y touche pas, il complète seulement la note (idempotent, skip si déjà noté).
+// Lancement manuel, local, depuis la racine :
 //   node --env-file=.env server/src/scripts/note_tickets_20261006_grenade_stack_by_type.js
 
 import db from '../db/knex.js'
@@ -34,8 +37,9 @@ côté combat.
 
 Testé : inventoryRules.test.mjs réécrit (7/7, dont le cas réel arc/arbalète/fronde) ;
 inventoryService.test.mjs (grenade + arme de jet, 30/30) ; modingService.test.mjs 5/5
-(non-régression croisée). Non testé : scénario réel en navigateur ; conséquence visible (armes de
-corps à corps/armure basiques empilables) pas encore montrée à Saar en jeu avant de clore.
+(non-régression croisée). Validé en jeu réel par Saar le 2026-10-06 (armes de corps à corps/armure
+basiques empilables, conséquence visible de la généralisation) — confirmé de vive voix le
+2026-10-14, régularisé ici faute de script à l'époque.
 Détail complet : docs/JOURNAL8.md, docs/PLANS/PLAN_USURE&INTEGRITE.md §3 (2026-10-06).`
 
 async function run() {
@@ -43,11 +47,10 @@ async function run() {
   if (!ticket) { console.log('[SKIP] GRENADE-STACK-BY-TYPE — ticket introuvable'); return }
   if ((ticket.admin_notes || '').includes(MARKER)) { console.log('[SKIP] GRENADE-STACK-BY-TYPE — déjà noté'); return }
   await db('bug_tickets').where({ id: ticket.id }).update({
-    status: 'in_progress',
     admin_notes: `${ticket.admin_notes || ''}\n${NOTE}`.trim(),
     updated_at: db.fn.now(),
   })
-  console.log('[OK] GRENADE-STACK-BY-TYPE — note ajoutée, statut -> in_progress')
+  console.log('[OK] GRENADE-STACK-BY-TYPE — note causale ajoutée (statut déjà resolved, inchangé)')
 }
 
 run().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1) })
