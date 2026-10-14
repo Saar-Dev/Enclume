@@ -170,7 +170,7 @@ router.get('/', requireAuth, async (req, res) => {
     .where({ campaign_id: req.params.id })
     .select(
       'id', 'name', 'folder_id', 'image_url', 'grid_size', 'grid_enabled', 'scale_label',
-      'world_revision', 'surface_revision', 'voxel_revision', 'created_at',
+      'world_revision', 'surface_revision', 'created_at',
       // render_mode — docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) : sans lui, l'entrée "Paramètres" du menu
       // contextuel de carte (`mapContextMenu.bm.render_mode === '2d'`) n'apparaissait jamais, cette
       // liste ne l'a jamais sélectionné depuis son introduction (Lot 1, migration 207).
@@ -1075,8 +1075,6 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
         grid_offset_x: battlemap.grid_offset_x,
         grid_offset_y: battlemap.grid_offset_y,
         render_mode: battlemap.render_mode,
-        voxel_scale: battlemap.voxel_scale,
-        voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
         surface_data: JSON.stringify(duplicatedSurface),
       })
       .returning('*')

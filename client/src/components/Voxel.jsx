@@ -1,16 +1,16 @@
 // ─── Voxel individuel ─────────────────────────────────────────────────────────
-// Composant partagé entre Canvas3D (lecture) et Editor3D (édition).
+// Rendu d'un bloc texturé isolé — aperçu 3D du catalogue (VoxelBuilderTab.jsx, seul importeur depuis
+// PLAN_PURGE_VOXEL.md Lot 3 : le rendu de carte voxel dans Canvas3D/Editor3D a été retiré).
 //
 // Props :
 //   position         : [x, y, z] — coordonnées brutes (pas de +0.5 ici, fait dans le rendu)
 //   textureMaterials : { faceMaterials } — issu de textureMaterials[v.tex]
-//   geometry         : string depuis voxel_data.geo — 'cube'|'slab_bottom'|'slab_top'|'slope'|'wedge'
+//   geometry         : string — 'cube'|'slab_bottom'|'slab_top'|'slope'|'wedge' (allowed_geometries
+//                      de l'entrée catalogue édité dans VoxelBuilderTab.jsx)
 //   rotation         : 0/1/2/3 — quarts de tour axe Y
 //
 // P23 : bounding box cubique invisible pour raycasting uniforme,
 //        quelle que soit la géométrie visuelle réelle.
-//
-// P31 : geometry vient de voxel_data, pas de textureMaterials.
 //
 // Géométries supportées V1 :
 //   cube        → BoxGeometry 1×1×1

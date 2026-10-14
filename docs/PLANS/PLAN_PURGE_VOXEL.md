@@ -431,6 +431,28 @@ considéré CLOS, pas partiel.
   l'appliquer seul — `.claude/rules/migrations.md`).
 - Hors périmètre : toute autre colonne de `battlemaps`.
 
+**Lot 5 — CLOS le 2026-10-14.** Accord explicite de Saar, sans sauvegarde préalable (garde-fou §0 levé
+par lui pour cette étape précise — « Go lot 5. Accord explicite pour supprimer ces lignes. Pas de
+save. »). Migration 388 : `DROP COLUMN voxel_data/voxel_revision/voxel_scale` sur `battlemaps`
+(appliquée immédiatement par nodemon, serveur de Saar en marche). Code nettoyé AVANT l'écriture de la
+migration (ordre volontaire, pour qu'aucun code ne référence une colonne absente même un instant) :
+`battlemaps.js` — `voxel_revision` retiré du `SELECT` de la liste des cartes ; `voxel_scale`/`voxel_data`
+retirés de l'INSERT de `/duplicate`. `Voxel.jsx` : commentaire d'en-tête corrigé (ne décrivait plus la
+réalité depuis le Lot 3 — plus importé par Canvas3D/Editor3D, seul VoxelBuilderTab.jsx le fait ;
+`geometry` ne vient plus de `voxel_data.geo`, mort, mais de l'entrée catalogue éditée). Vérifié avant
+d'écrire la migration : recherche exhaustive (`client/src`, `server/src`, `shared/`) — zéro référence
+vivante aux 3 colonnes hors scripts de ticket historiques (jamais réécrits) et commentaires inertes
+(`shared/events.js`, `CombatModifiersWindow.jsx` — constante déjà hardcodée à 1.0, sans rapport avec la
+colonne). Testé après coup : requête directe en base confirmant le schéma (3 colonnes absentes,
+21 colonnes restantes cohérentes) ; `node --check`/`eslint` propres ; `node --test
+battlemapWorldPersistence.test.mjs` 3/3 vert ; `npm run build` client propre. Test archivé laissé en
+l'état (`migrations_archive/250_battlemaps_voxel_data_drop_default.test.mjs` — échec attendu, convention
+du projet, jamais corrigé).
+
+**CHANTIER CLOS — les 6 lots sont terminés.** Plus aucune trace vivante du format de carte voxel ; le
+catalogue de textures (ex-voxel_textures) est renommé et conservé ; la documentation technique reflète
+l'état réel du code.
+
 **Lot 6 — documentation (relocaliser avant de supprimer, trouvé au §10bis.4)**
 - `docs/SYSTEME/VOXELS.md` : séparer son contenu avant de le retirer — PE14 (conversion base↔Three.js, toutes
   entités/tokens) et PE34 (`tokenFeetPoint`, altitude des pieds d'un token) sont des conventions **vivantes**,
@@ -468,6 +490,9 @@ documentation — relecture croisée seule.
 
 ## Historique
 
+- **2026-10-14 — Lot 5 clos, CHANTIER TERMINÉ** : accord explicite de Saar, migration 388 appliquée
+  (colonnes `voxel_data`/`voxel_revision`/`voxel_scale` supprimées de `battlemaps`), code résiduel
+  nettoyé avant l'écriture de la migration. Les 6 lots de ce plan sont clos.
 - **2026-10-14 — Lot 6 clos** : documentation corrigée (`VOXELS.md` réécrit, `CONVENTIONS.md`/`EDITEUR.md`/
   `MOTEUR_MONDE.md`/`SURFACES_SALLES.md`/`ASSETS.md`/`ENTITES.md`/`MATERIAUX.md`/`CHARACTER.md`/
   `.claude/rules/voxels.md` mis à jour) ; trouvaille en route : `createReliefGeometryFromQuadData` et ses
