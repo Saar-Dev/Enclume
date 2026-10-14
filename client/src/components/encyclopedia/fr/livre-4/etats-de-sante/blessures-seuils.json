@@ -66,12 +66,13 @@
       "caption": "Compteur de blessures (fiche de personnage)",
       "headers": [
         [
-          { "label": "Localisation" },
-          { "label": "Légère" },
-          { "label": "Moyenne" },
-          { "label": "Grave" },
-          { "label": "Critique" },
-          { "label": "Mortelle" }
+          { "label": "Gravité" },
+          { "label": "Tête" },
+          { "label": "Corps" },
+          { "label": "Bras droit" },
+          { "label": "Bras gauche" },
+          { "label": "Jambe droite" },
+          { "label": "Jambe gauche" }
         ]
       ]
     },

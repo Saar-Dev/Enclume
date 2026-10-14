@@ -10897,3 +10897,24 @@ de nav désactivée actuellement jamais le cas en pratique, source cœur) — à
 l'occasion se présente.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — ENCYCLO-COMPTEUR-HEADERS : en-têtes du tableau « Compteur de blessures » corrigés
+
+Le tableau `COMPTEUR_BLESSURES_TABLE` (`dataSources.js#transformCompteurBlessures`) produit 1 ligne
+par gravité et 1 colonne par localisation (`WOUND_LOCATIONS`, 6 entrées) + 1 colonne de libellé = 7
+colonnes. Son en-tête déclaré dans `blessures-seuils.json` portait les noms des 5 gravités
+(« Localisation, Légère, Moyenne, Grave, Critique, Mortelle ») — doublement faux : les noms
+correspondaient à l'axe des LIGNES, pas des colonnes, et il n'y en avait que 6 pour 7 colonnes réelles
+(`DataTableBlock.jsx` ne valide pas la correspondance, elle se contente d'empiler les `<th>` reçus) —
+l'en-tête entier était donc décalé d'une case en plus d'être mal nommé.
+
+**Fix** : en-tête réécrit avec les 6 localisations RAW dans l'ordre de `WOUND_LOCATIONS`
+(`shared/woundConstants.js`), labels repris du domaine `localisation` déjà existant
+(`terms.json`) : Gravité, Tête, Corps, Bras droit, Bras gauche, Jambe droite, Jambe gauche.
+
+**Testé** : `node -e "JSON.parse(...)"` (syntaxe), `tools/validate-encyclopedia.mjs` (0 erreur sur ce
+fichier — 2 erreurs préexistantes et sans rapport subsistent ailleurs, hors périmètre), `npm run
+build` client propre.
+**Non testé** : rendu visuel réel dans l'Encyclopédie — à valider par Saar.
+**Données** : aucune.
+**Retour arrière** : `git revert` du commit.
