@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem, quickEquip } from './inventoryService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem, quickEquip, splitItem } from './inventoryService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/inventoryService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -567,6 +567,46 @@ test('quickEquip — arme has_integrity équipée par le MJ : ITG 15/15', { skip
     const item = await quickEquip(fx.owner.id, fx.weaponIntegrityRef.id, 'MG')
     assert.equal(item.integrity_current, 15)
     assert.equal(item.integrity_max, 15)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// splitItem (WIZ44) — diviser un empilement en deux lignes, même container, sans jamais toucher au
+// poids total (juste réparti) ni redéclencher un débit (un split n'est jamais un achat).
+test('splitItem — 5 munitions, détache 2 : la ligne source tombe à 3, une nouvelle ligne de 2 apparaît, même container', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item: stack } = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 5 }, true, true)
+    const { sourceItem, newItem } = await splitItem(fx.owner.id, stack.id, 2)
+    assert.equal(sourceItem.id, stack.id)
+    assert.equal(sourceItem.quantity, 3)
+    assert.notEqual(newItem.id, stack.id)
+    assert.equal(newItem.quantity, 2)
+    assert.equal(newItem.container, 'Coffre')
+    assert.equal(newItem.equipment_id, fx.stackableRef.id)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('splitItem — détacher la quantité totale (5 sur 5) : refusé, la source doit garder au moins 1', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item: stack } = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 5 }, true, true)
+    await assert.rejects(() => splitItem(fx.owner.id, stack.id, 5), AppError)
+    const unchanged = await db('char_inventory').where({ id: stack.id }).first()
+    assert.equal(unchanged.quantity, 5)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('splitItem — quantité nulle ou négative : refusé', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item: stack } = await addItem(fx.owner.id, { equipment_id: fx.stackableRef.id, container: 'Coffre', quantity: 5 }, true, true)
+    await assert.rejects(() => splitItem(fx.owner.id, stack.id, 0), AppError)
   } finally {
     await cleanup(fx)
   }

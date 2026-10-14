@@ -7,7 +7,7 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, splitItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest } from '../lib/inventoryMutations.js'
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import IntegrityPopover from './IntegrityPopover.jsx'
@@ -136,6 +136,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
       console.error('Erreur suppression item :', err)
     }
   }, [characterId])
+
+  // WIZ44 — pass-through brut (même patron que handleSetIntegrity) : ItemRow gère son propre état
+  // d'ouverture/saisie et affiche l'erreur serveur localement (quantité invalide, par ex.).
+  const handleSplit = useCallback((itemId, quantity) => splitItem(characterId, itemId, quantity), [characterId])
 
   // PLAN_USURE&INTEGRITE.md §6 — édition d'ITG (MJ ou propriétaire). L'IntegritySegment gère son
   // propre message d'erreur inline ; on relaie juste le rejet pour qu'il l'attrape.
@@ -406,6 +410,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 onSendToVault={handleSendToVault}
                 onEquip={handleEquip}
                 onDelete={handleDelete}
+                onSplit={handleSplit}
                 onValidate={handleValidate}
                 onOpenIntegrityPopover={openItgPopover}
                 onOpenInfoPopover={setInfoPopover}
@@ -447,6 +452,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               onSendToVault={handleSendToVault}
               onEquip={handleEquip}
               onDelete={handleDelete}
+              onSplit={handleSplit}
               onOpenIntegrityPopover={openItgPopover}
               onOpenInfoPopover={setInfoPopover}
             />
@@ -725,9 +731,35 @@ function IntegritySegment({ item, onOpen }) {
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate, onOpenIntegrityPopover, onOpenInfoPopover }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onSplit, onValidate, onOpenIntegrityPopover, onOpenInfoPopover }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
+
+  // WIZ44 — « Diviser » : état local au formulaire, jamais partagé entre lignes. Un empilement se
+  // détache en une nouvelle ligne (même container) ; le déplacement se fait ensuite normalement par
+  // glisser-déposer, comme n'importe quel autre objet (aucune logique de destination ici).
+  const [splitOpen, setSplitOpen] = useState(false)
+  const [splitQty, setSplitQty] = useState('')
+  const [splitError, setSplitError] = useState(null)
+  const [splitting, setSplitting] = useState(false)
+  const handleConfirmSplit = async () => {
+    const n = parseInt(splitQty, 10)
+    if (!Number.isInteger(n) || n < 1 || n >= item.quantity) {
+      setSplitError(t('inventoryPanel.splitInvalid', { max: item.quantity - 1 }))
+      return
+    }
+    setSplitting(true)
+    setSplitError(null)
+    try {
+      await onSplit(item.id, n)
+      setSplitOpen(false)
+      setSplitQty('')
+    } catch (err) {
+      setSplitError(err.response?.data?.error?.message || t('inventoryPanel.splitError'))
+    } finally {
+      setSplitting(false)
+    }
+  }
 
   // Même filtre que WeaponPanel.jsx (`availableWeapons`) — les colonnes ref_damage_h/ref_shock
   // existent sur toute la table ref_equipment, pas seulement les armes ; ne pas afficher le badge
@@ -830,6 +862,28 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
               {t('inventoryPanel.sendToVaultButton')}
             </button>
           )}
+          {item.quantity > 1 && (
+            splitOpen ? (
+              <span style={s.splitForm}>
+                <input
+                  type="number"
+                  min={1}
+                  max={item.quantity - 1}
+                  value={splitQty}
+                  onChange={e => setSplitQty(e.target.value)}
+                  style={s.qtyInput}
+                  autoFocus
+                />
+                <button onClick={handleConfirmSplit} disabled={splitting} style={s.deleteBtn} title={t('inventoryPanel.splitConfirmTooltip')}>✓</button>
+                <button onClick={() => { setSplitOpen(false); setSplitQty(''); setSplitError(null) }} style={s.deleteBtn} title={t('common.cancel')}>✕</button>
+                {splitError && <span style={s.splitErrorText}>{splitError}</span>}
+              </span>
+            ) : (
+              <button onClick={() => setSplitOpen(true)} style={s.takeToSacBtn} title={t('inventoryPanel.splitTooltip')}>
+                {t('inventoryPanel.splitButton')}
+              </button>
+            )
+          )}
           <button
             onClick={() => { if (window.confirm(t('inventoryPanel.deleteConfirm', { name }))) onDelete(item.id) }}
             style={s.deleteBtn}
@@ -887,6 +941,9 @@ const s = {
     background: 'rgba(91,141,238,0.1)', border: '1px solid rgba(91,141,238,0.3)', borderRadius: 4,
     color: '#5b8dee', cursor: 'pointer', fontSize: 10, padding: '1px 6px', flexShrink: 0, whiteSpace: 'nowrap',
   },
+  // WIZ44 — formulaire inline « Diviser », apparaît à la place du bouton le temps de la saisie.
+  splitForm: { display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 },
+  splitErrorText: { color: '#e05c5c', fontSize: 10, whiteSpace: 'nowrap' },
   validateBtn: {
     background: 'rgba(90,200,120,0.12)', border: '1px solid rgba(90,200,120,0.35)', borderRadius: 4,
     color: '#5ac878', cursor: 'pointer', fontSize: 10, padding: '1px 6px', flexShrink: 0, whiteSpace: 'nowrap',

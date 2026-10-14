@@ -1294,6 +1294,21 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/split ───────────────
+// WIZ44 — détache `quantity` exemplaires vers une nouvelle ligne (même container) ; le joueur la
+// déplace ensuite par glisser-déposer comme n'importe quel autre objet (PUT .../inventory/:itemId).
+router.post('/:characterId/inventory/:itemId/split', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+    const { quantity } = req.body
+    const { sourceItem, newItem } = await inventoryService.splitItem(characterId, itemId, quantity)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: sourceItem })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_ADDED, { characterId, item: newItem })
+    res.status(201).json({ sourceItem, newItem })
+  } catch (err) { next(err) }
+})
+
 // ─── POST /api/char-sheet/:characterId/inventory/:itemId/reload ──────────────
 // Recharge une arme : définit current_ammo + ammo_remaining, décrémente l'inventaire munitions.
 // Body : { ammo_item_id: uuid }  ← char_inventory.id de la munition à charger

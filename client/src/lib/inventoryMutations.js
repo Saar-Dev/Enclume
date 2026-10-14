@@ -30,6 +30,17 @@ export async function setItemContainer(characterId, itemId, container) {
   return res.data.item
 }
 
+// WIZ44 — divise un empilement (quantity > 1) en deux lignes dans le même container : `sourceItem`
+// garde le reste, `newItem` est la portion détachée, qui se déplace ensuite normalement par
+// setItemContainer/drag & drop, exactement comme n'importe quel autre objet.
+export async function splitItem(characterId, itemId, quantity) {
+  const res = await api.post(`/char-sheet/${characterId}/inventory/${itemId}/split`, { quantity })
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.sourceItem)
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.newItem)
+  refreshDerivedTotals(characterId) // poids total inchangé, seulement réparti entre les deux lignes
+  return res.data
+}
+
 export async function deleteItem(characterId, itemId) {
   await api.delete(`/char-sheet/${characterId}/inventory/${itemId}`)
   useCharacterStore.getState().removeInventoryItem(characterId, itemId)

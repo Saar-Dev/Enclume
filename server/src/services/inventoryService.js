@@ -1084,3 +1084,40 @@ export async function removeItem(characterId, itemId, qtyToRemove, trxOrDb = db)
   await q('char_inventory').where({ id: itemId }).del()
   return { deleted: true, item: null, itemId }
 }
+
+// POST /:characterId/inventory/:itemId/split (WIZ44) — détache splitQuantity exemplaires d'un
+// empilement vers une NOUVELLE ligne, même container. Jamais un achat (pas de prix, pas de
+// chargeAtAdd) : l'objet existe déjà, on ne fait que le répartir sur deux lignes pour que l'une des
+// deux se déplace ensuite normalement par glisser-déposer (setItemContainer existant), sans jamais
+// toucher au total porté (même poids, juste réparti). Un empilement (quantity > 1) est par
+// construction toujours `canStack` (seule la validation déjà en place sur quantity le permet) — pas
+// de second contrôle de stackabilité ici.
+export async function splitItem(characterId, itemId, splitQuantity) {
+  if (!Number.isInteger(splitQuantity) || splitQuantity < 1) {
+    throw new AppError(400, 'quantity doit être un entier positif')
+  }
+  const { sourceId, newId } = await db.transaction(async (trx) => {
+    const existing = await trx('char_inventory').where({ id: itemId, character_id: characterId }).first()
+    if (!existing) throw new AppError(404, 'Item not found')
+    if (splitQuantity >= existing.quantity) {
+      throw new AppError(400, 'La quantité détachée doit rester inférieure à la quantité totale')
+    }
+    await trx('char_inventory').where({ id: itemId })
+      .update({ quantity: existing.quantity - splitQuantity, updated_at: db.fn.now() })
+    const [newRow] = await trx('char_inventory').insert({
+      character_id:    characterId,
+      equipment_id:    existing.equipment_id,
+      container:       existing.container,
+      quantity:        splitQuantity,
+      validated_by_gm: existing.validated_by_gm,
+      custom_name:     existing.custom_name,
+      custom_desc:     existing.custom_desc,
+      notes:           existing.notes,
+      custom_props:    existing.custom_props,
+    }).returning('*')
+    return { sourceId: existing.id, newId: newRow.id }
+  })
+  const sourceItem = await getItemWithRef(sourceId)
+  const newItem = await getItemWithRef(newId)
+  return { sourceItem, newItem }
+}
