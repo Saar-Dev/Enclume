@@ -3,6 +3,7 @@ import { calcAttributeNA, calcSkillTotal } from '../lib/charStats.js'
 import { calcAllures } from '../../../shared/polarisUtils.js'
 import { getMutationEffects } from './mutationService.js'
 import { getInventory } from './inventoryService.js'
+import { integrityFactor } from '../../../shared/exoStats.js'
 
 // Levée quand un acteur EXISTE mais que sa capacité de déplacement ne peut pas être déterminée à
 // partir de sa configuration actuelle — cas réparable côté fiche par le MJ/joueur (drone sans
@@ -110,7 +111,7 @@ async function getExoMovementBudget(characterId, gait) {
   const exo = await db('exo_sheet')
     .where({ character_id: characterId })
     .select(
-      'category', 'pilot_character_id',
+      'category', 'pilot_character_id', 'itg_exosquelette_current',
       'base_speed_underwater', 'base_speed_surface',
       'underwater_movement_mode', 'surface_movement_mode',
     )
@@ -135,10 +136,24 @@ async function getExoMovementBudget(characterId, gait) {
       return getCharacterMovementBudget(exo.pilot_character_id, gait)
     }
     if (mode === 'vit' && speed != null) {
+      // EXOARM-VIT-PALIERS1 — paliers d'Intégrité Exosquelette (REGLEARMURE.md:566-568), même table
+      // que l'EXF/BLD (integrityFactor, shared/exoStats.js — jamais dupliquée). Appliquée APRÈS
+      // calcAllures, jamais sur `speed` en amont : `speed` alimente calcAllureMoy, une table par
+      // palier conçue pour un attribut humain (COO) — calcAllureMoy(0) vaut 6, pas 0, donc réduire
+      // l'entrée produirait une fausse Allure à Exosquelette détruit au lieu d'une armure immobile.
+      // Patron Lancer/Foundry VTT (recherche externe PLAN_EXOARMURE.md §4, vérifiée à nouveau sur
+      // Eranziel/foundryvtt-lancer) : un modificateur de statut se compose sur la valeur dérivée déjà
+      // calculée, jamais sur un attribut intermédiaire en amont d'une formule — même principe déjà
+      // appliqué ici à l'encombrement humain (ligne ~84) ; une seule façon de poser un modificateur
+      // sur une Allure dans ce fichier.
       const allures = calcAllures(speed, speed)
+      const factor = integrityFactor(exo.itg_exosquelette_current)
+      const reduced = Object.fromEntries(
+        Object.entries(allures).map(([key, value]) => [key, Math.floor(value * factor)]),
+      )
       return Object.freeze({
-        ...selectMovementBudget(allures, gait),
-        allures: Object.freeze({ ...allures }),
+        ...selectMovementBudget(reduced, gait),
+        allures: Object.freeze(reduced),
         source: 'server-exo-rules',
       })
     }

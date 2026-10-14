@@ -11145,3 +11145,49 @@ même worktree —, 0 nouveau problème), `npm run build` client propre.
 **Non testé** : rendu visuel réel (ouvrir la fiche MJ d'un Marchand, onglet Joueurs).
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — EXOARM-VIT-PALIERS1 : Vitesse d'exo-armure jamais réduite par les paliers d'Intégrité Exosquelette
+
+Trouvaille ouverte en ticket séparé pendant `PLAN_EXOARMURE.md` §7.1 (2026-08-14, confirmée par Saar) :
+`getExoMovementBudget` (`movementBudgetService.js`) lisait `base_speed_surface`/`base_speed_underwater`
+tels quels, sans jamais appliquer la réduction de Vitesse due aux paliers d'Intégrité Exosquelette
+(REGLEARMURE.md:566-568 : 6-10 → ×2/3, 1-5 → ×1/2, 0- → détruite) — alors que `computeExoStats`
+(`shared/exoStats.js`) applique déjà cette même table à l'Exo-Force et au Blindage. Deux pièges
+apparents, résolus par lecture plutôt que par décision arbitraire :
+- Clause Générateur « si l'armure est équipée d'un propulseur dorsal, sa Vitesse est réduite »
+  (REGLEARMURE.md:589-590,595-596) : ne concerne **pas** `base_speed_*`. RAW p.249
+  (cité `PLAN_EXOARMURE.md:756-758`) : seul le déplacement naturel compte pour le mouvement de
+  combat, le propulseur dorsal étant une mécanique d'évasion narrative distincte, stockée dans
+  `speeds_extra` et volontairement non consommée par cette fonction. Rien à coder côté Générateur.
+- Mode `'pilot'` (ex. Armure Explora à terre, délègue au corps du pilote) : non touché par
+  l'Exosquelette de la combinaison, cohérent avec le RAW (« le pilote peut utiliser les systèmes qui
+  ne dépendent pas de l'exosquelette »).
+
+**Erreur de conception trouvée en analyse à charge avant tout code** : le premier jet réduisait
+l'attribut `speed` **avant** `calcAllures(speed, speed)`. Faux — `calcAllures` passe par
+`calcAllureMoy`, une table par palier conçue pour un attribut humain (COO), pas une formule linéaire ;
+`calcAllureMoy(0)` vaut 6, pas 0. Un Exosquelette détruit (facteur ×0) aurait donc produit une fausse
+Allure moyenne de 6 m au lieu d'une armure immobile. Recherche externe (patron déjà validé dans ce
+projet contre Lancer RPG/Foundry VTT, `PLAN_EXOARMURE.md §4` ; relu à nouveau sur le code source réel
+de `Eranziel/foundryvtt-lancer`, `lancer-actor.ts`) : un modificateur de statut se compose sur la
+valeur dérivée déjà calculée, jamais sur un attribut intermédiaire en amont d'une formule — même
+principe déjà appliqué dans ce fichier à l'encombrement humain (`ini_penalty`, quelques lignes plus
+haut).
+
+**Fix** : `integrityFactor` (interne à `shared/exoStats.js`) exportée et réutilisée telle quelle
+(aucune formule dupliquée). Dans `getExoMovementBudget`, branche `mode === 'vit'` : les 4 Allures
+calculées par `calcAllures` sont multipliées par `integrityFactor(exo.itg_exosquelette_current)` et
+arrondies au niveau inférieur, APRÈS le calcul. Exosquelette détruit → les 4 Allures tombent
+naturellement à 0 (même doctrine que le drone sans Vitesse, déjà testé : 0 est une Allure valide, pas
+une `MovementBudgetError`) — aucun cas spécial à ajouter.
+
+**Testé** : `node --check` sur les 4 fichiers touchés. `shared/exoStats.test.mjs` 20/20 (2 nouveaux
+tests sur `integrityFactor`, bornes exactes). `shared/**/*.test.mjs` 949/949, aucune régression.
+`movementBudgetService.test.mjs` lancé par l'agent contre la base locale (autorisation du
+2026-09-25) : 8/8, dont 4 nouveaux tests d'intégration (fixture `exo_sheet` réelle, pas de template —
+Lot B copie déjà la base sur la fiche) couvrant les 3 paliers RAW + Exosquelette détruit. Résidu de
+fixtures vérifié par lecture directe en base après coup : aucun. `git diff --check` propre.
+**Non testé** : scénario réel navigateur (survol de déplacement d'une exo-armure endommagée en
+combat) — à valider par Saar avant de clore le ticket en `resolved`.
+**Données** : aucune migration.
+**Retour arrière** : `git revert` du commit (aucune donnée persistée à restaurer, fonction pure).

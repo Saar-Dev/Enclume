@@ -23,10 +23,12 @@
 import { EXO_RD_TABLE } from './exoConstants.js'
 
 // Palier Structure (Blindage) et palier Exosquelette (premier facteur EXF) partagent les mêmes
-// seuils/facteurs (REGLEARMURE.md:565-570 et :617-619) — une seule fonction pour les deux.
+// seuils/facteurs (REGLEARMURE.md:565-570 et :617-619) — une seule fonction pour les deux. Même
+// palier Exosquelette que la Vitesse de déplacement naturel (REGLEARMURE.md:567-568) — exportée pour
+// être réutilisée telle quelle par movementBudgetService.js (EXOARM-VIT-PALIERS1), jamais dupliquée.
 // itg_*_current est NOT NULL en base (migration 233) — le repli sur 0 (palier "détruit", le plus
 // défavorable) ne couvre qu'un appelant malformé, jamais une ligne exo_sheet réelle.
-function integrityFactor(itg) {
+export function integrityFactor(itg) {
   const value = itg ?? 0
   if (value >= 11) return 1
   if (value >= 6) return 2 / 3

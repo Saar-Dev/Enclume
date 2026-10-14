@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computeExoStats } from './exoStats.js'
+import { computeExoStats, integrityFactor } from './exoStats.js'
 
 // Base éditable (PLAN_EXOARMURE.md §13.3, Lot B) — category/base_exoforce/base_blindage vivent
 // directement sur exo_sheet depuis ce Lot, plus sur un `template` joint séparément. Fixture fusionnée
@@ -124,6 +124,24 @@ test('computeExoStats — bornes exactes Générateur (6 vs 5, 1 vs 0)', () => {
   assert.equal(computeExoStats({ ...baseExoSheet, itg_generator_current: 5 }).exf, 34)
   assert.equal(computeExoStats({ ...baseExoSheet, itg_generator_current: 1 }).exf, 34)
   assert.equal(computeExoStats({ ...baseExoSheet, itg_generator_current: 0 }).exf, 0)
+})
+
+// integrityFactor exportée pour EXOARM-VIT-PALIERS1 (movementBudgetService.js, réduction de Vitesse
+// Exosquelette) — mêmes bornes que les tests computeExoStats ci-dessus, vérifiées directement sur la
+// fonction plutôt que via son effet sur l'EXF.
+test('integrityFactor — bornes exactes (11 vs 10, 6 vs 5, 1 vs 0)', () => {
+  assert.equal(integrityFactor(11), 1)
+  assert.equal(integrityFactor(10), 2 / 3)
+  assert.equal(integrityFactor(6), 2 / 3)
+  assert.equal(integrityFactor(5), 1 / 2)
+  assert.equal(integrityFactor(1), 1 / 2)
+  assert.equal(integrityFactor(0), 0)
+  assert.equal(integrityFactor(-3), 0)
+})
+
+test('integrityFactor — repli sur 0 (appelant malformé, jamais une ligne exo_sheet réelle)', () => {
+  assert.equal(integrityFactor(null), 0)
+  assert.equal(integrityFactor(undefined), 0)
 })
 
 test('computeExoStats — RD reprise telle quelle de EXO_RD_TABLE selon la catégorie', () => {
