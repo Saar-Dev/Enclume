@@ -11024,3 +11024,23 @@ parallèle active sur le même worktree —, 0 nouveau problème), `npm run buil
 Saar, en fiche personnage ou à l'Étape 6 de création.
 **Données** : aucune.
 **Retour arrière** : `git revert` du commit.
+
+## Session (Claude) — 2026-10-14 — WOUND-SURVIVAL-MINUTES-HOURS : fausse alerte, pas une contradiction RAW
+
+Le ticket soupçonnait une contradiction entre « minutes » (`REGLEBLESSURES.md:247-248`, survie d'une
+blessure mortelle/membre détruit) et « heures » (`REGLEBLESSURES.md:470-485`, sous-section Infection).
+Lecture directe : ce sont deux mécaniques distinctes, déjà séparées par le livre lui-même — une
+blessure **jamais stabilisée** tue en quelques minutes (= Constitution) ; une blessure **stabilisée
+puis infectée** par manque de soins continus tue en quelques heures (= Constitution, moitié sur
+échec). Le code garde déjà les heures pour l'infection (décision 2026-07-30), correct. Le délai en
+minutes n'est pas modélisé, mais c'est le périmètre exact d'un autre ticket déjà ouvert,
+`WOUND-STABILIZATION-UNMODELED` — pas un oubli de celui-ci.
+
+**Fix** : aucun, décision de Saar : clôturer directement, pas de décision de règle à prendre (le
+livre tranchait déjà).
+
+**Testé** : lecture du RAW (`REGLEBLESSURES.md`), vérification croisée du ticket
+`WOUND-STABILIZATION-UNMODELED` (bien ouvert, pas orphelin).
+**Non testé** : sans objet.
+**Données** : aucune.
+**Retour arrière** : sans objet (aucun code modifié).
