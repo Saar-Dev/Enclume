@@ -13,7 +13,6 @@ test('les écritures documentaires demandent explicitement toutes les révisions
     'id',
     'world_revision',
     'surface_revision',
-    'voxel_revision',
   ])
 })
 

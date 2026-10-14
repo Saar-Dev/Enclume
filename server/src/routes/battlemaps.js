@@ -932,57 +932,6 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ success: true })
 })
 
-// PUT /api/battlemaps/:id/voxels — mettre à jour les données voxel
-router.put('/:id/voxels', requireAuth, async (req, res, next) => {
-  try {
-    const { voxel_data, voxel_revision } = req.body
-    if (!voxel_data || typeof voxel_data !== 'object' || Array.isArray(voxel_data)) {
-      throw new AppError(400, 'voxel_data must be an object')
-    }
-
-    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
-    if (!battlemap) throw new AppError(404, 'Battlemap not found')
-
-    const member = await db('campaign_members')
-      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
-      .first()
-    if (!member) throw new AppError(403, 'GM only')
-
-    const expectedRevision = parseExpectedRevision(voxel_revision, 'voxel_revision')
-    let updated
-    await db.transaction(async trx => {
-      const current = await trx('battlemaps').where({ id: req.params.id }).forUpdate().first()
-      if (!current) throw new AppError(404, 'Battlemap not found')
-      if (hasRevisionConflict(current.voxel_revision, expectedRevision)) {
-        throw new AppError(409, 'Voxel data changed since the editor loaded it')
-      }
-
-      ;[updated] = await trx('battlemaps')
-        .where({ id: req.params.id })
-        .update({
-          voxel_data: JSON.stringify(voxel_data),
-          voxel_revision: Number(current.voxel_revision || 0) + 1,
-          world_revision: Number(current.world_revision || 0) + 1,
-          updated_at: trx.fn.now(),
-        })
-        .returning(BATTLEMAP_DOCUMENT_REVISION_COLUMNS)
-
-      await syncBattlemapTextureUsage(
-        trx,
-        req.params.id,
-        voxel_data,
-        current.surface_data || {},
-      )
-    })
-
-    invalidateBattlemapWorld(req.params.id)
-    notifyMapUpdated(req.app.get('io'), battlemap)
-    res.json({ ok: true, ...updated })
-  } catch (err) {
-    next(err)
-  }
-})
-
 // PUT /api/battlemaps/:id/surface — mettre à jour les surfaces du nouveau moteur
 router.put('/:id/surface', requireAuth, async (req, res, next) => {
   try {

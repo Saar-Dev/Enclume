@@ -781,7 +781,7 @@ export default function Editor3D({
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
-  const { voxels, voxelsRef, saveVoxelsFireAndForget } = useLegacyVoxelState(battlemap, battlemapRef, setBattlemap)
+  const { voxels } = useLegacyVoxelState(battlemap)
 
   const {
     surfaceData,
@@ -879,22 +879,20 @@ export default function Editor3D({
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
   useEffect(() => {
     saveTimer.current = setInterval(() => {
-      saveVoxelsFireAndForget(voxelsRef.current)
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }, 60000)
     return () => clearInterval(saveTimer.current)
-  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef, surfaceDataRef])
+  }, [saveSurfaceFireAndForget, surfaceDataRef])
 
   // ─── Save au démontage (toggle retour mode jeu) ──────────────────────────
-  // Utilise saveVoxelsFireAndForget — le cleanup useEffect ne peut pas await une Promise.
-  // battlemap.id en dépendance (pas saveVoxelsFireAndForget) pour éviter une re-exécution
+  // Le cleanup useEffect ne peut pas await une Promise, d'où le fire-and-forget.
+  // battlemap.id en dépendance (pas saveSurfaceFireAndForget) pour éviter une re-exécution
   // au changement de battlemap qui démonterait/remonterait inutilement.
   useEffect(() => {
     return () => {
-      saveVoxelsFireAndForget(voxelsRef.current)
       saveSurfaceFireAndForget(surfaceDataRef.current)
     }
-  }, [saveVoxelsFireAndForget, saveSurfaceFireAndForget, voxelsRef, surfaceDataRef])
+  }, [saveSurfaceFireAndForget, surfaceDataRef])
 
   const handleRuntimeEffectCreate = useCallback(async input => {
     if (!battlemap?.id) return
