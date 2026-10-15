@@ -53,6 +53,14 @@ const VERIFIED = [
   },
 ]
 
+VERIFIED.push({
+  code: 'GRENADE-COORD-MODS',
+  note: 'Vérifié par lecture (socketCombatAoe.js:400, shared/combatRange.js:187) + tests : node --env-file=.env --test shared/combatRange.test.mjs migrations/385_...test.mjs relancé, 18/18 verts dont GRENADE_THROW_RANGE et resolveGrenadeBand. Difficulté dérivée de la distance réelle, portée Javelot reprise au catalogue (migration 385).',
+}, {
+  code: 'CHANCE-PNJ-WINDOW-UNCLEAR',
+  note: "Vérifié par lecture : CatastropheChoiceQueue.jsx:126 affiche désormais catastrophe ? t('catastrophePopup') : t('chancePopup') — titre correct pour les deux cas, fix toujours en place.",
+})
+
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
 const VERIFIED_BY_CLUSTER = [
   {
