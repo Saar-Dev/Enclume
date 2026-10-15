@@ -892,13 +892,25 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
 // PLAN_DECALS.md) : un décor déjà posé se gère depuis le panneau du mur qui le porte (liste +
 // suppression), jamais par un clic direct sur son image dans la scène — pas besoin de raycast ici.
 const DECOR_DISABLE_RAYCAST = () => null
+// Reclé par (texture, couleur) : une teinte (`material.color`, convention Three.js/Godot/Phaser/
+// Unity — multiplie avec la texture) doit avoir son propre matériau, jamais mutée sur un matériau
+// partagé par tous les décors de la même image (sinon teindre un décor teindrait tous les autres).
+// Même structure imbriquée que `opacityMaterialCache` ci-dessus (Map externe par base, Map interne
+// par variante), déjà le patron de ce fichier pour ce même besoin.
 const decalMaterialCache = new Map()
 
-function decalMaterialFor(texture) {
+function decalMaterialFor(texture, color) {
   if (!texture) return null
-  if (decalMaterialCache.has(texture)) return decalMaterialCache.get(texture)
+  let variants = decalMaterialCache.get(texture)
+  if (!variants) {
+    variants = new Map()
+    decalMaterialCache.set(texture, variants)
+  }
+  const key = color || '#ffffff'
+  if (variants.has(key)) return variants.get(key)
   const material = new THREE.MeshStandardMaterial({
     map: texture,
+    color: key,
     transparent: true,
     roughness: 0.9,
     metalness: 0,
@@ -910,7 +922,7 @@ function decalMaterialFor(texture) {
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4,
   })
-  decalMaterialCache.set(texture, material)
+  variants.set(key, material)
   return material
 }
 
@@ -934,7 +946,10 @@ export function WallDecorationPlane({ decoration, panel, catalogEntry, opacity =
     return geo
   }, [decoration.widthM, decoration.heightM, decoration.mirror])
   useEffect(() => () => geometry.dispose(), [geometry])
-  const baseMaterial = useMemo(() => decalMaterialFor(catalogEntry?.texture), [catalogEntry])
+  const baseMaterial = useMemo(
+    () => decalMaterialFor(catalogEntry?.texture, decoration.color),
+    [catalogEntry, decoration.color],
+  )
   const material = baseMaterial && opacity < 0.999 ? withOpacity([baseMaterial], opacity)[0] : baseMaterial
 
   if (!placement || !material) return null

@@ -50,7 +50,7 @@ const APPEARANCE_ENTRY = Object.freeze({ id: S, edgeKeys: A, interiorTex: R, int
 const DECORATION_ENTRY = Object.freeze({
   id: S, assetId: S, sourceEdgeKeys: A,
   anchorX: N, anchorZ: N, tangentX: N, tangentZ: N, normalX: N, normalZ: N, rotationY: N,
-  widthM: N, heightM: N, mirror: B,
+  widthM: N, heightM: N, mirror: B, color: S,
 })
 const DECORATION_REQUIRED = Object.freeze([
   'anchorX', 'anchorZ', 'tangentX', 'tangentZ', 'normalX', 'normalZ', 'rotationY', 'widthM', 'heightM',

@@ -11,11 +11,13 @@ import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 import { DEFAULT_DECAL_HEIGHT_M } from '../lib/surfaceTools/computeDecalPlacement.js'
 
 const PANEL_W = 310
+const DEFAULT_DECAL_COLOR = '#ffffff'
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i
 
 // Position fixe, colonne de droite — voir le commentaire équivalent dans SurfaceRoomPanel.jsx
 // (§12.9/§12.10, PLAN_WORLD_BUILDER_REWORK.md). `dockRight` : idem, largeur de sidebar + marge (§13).
 export default function SurfaceWallPanel({
-  room, tool, onPatch, onAppearanceChange, decalAssets = [], onDecalRemove, onClose, dockRight = 16,
+  room, tool, onPatch, onAppearanceChange, decalAssets = [], onDecalRemove, onDecalMove, onClose, dockRight = 16,
 }) {
   const { t } = useTranslation('builder')
   const [confirmDeleteWalls, setConfirmDeleteWalls] = useState(false)
@@ -70,16 +72,20 @@ export default function SurfaceWallPanel({
     if (!decalGroups[key]) decalGroups[key] = { label: asset.category || t('surfaceWallPanel.decorationCategoryFallback'), assets: [] }
     decalGroups[key].assets.push(asset)
   }
+  // Outil tampon (patron Tiled/Godot GoPlacer, confirmé par recherche, PLAN_DECALS.md « Révision
+  // 2026-10-15 » §A) : choisir une vignette active directement le mode de pose, pas une action
+  // séparée derrière un second bouton. Désactivé si la sélection de mur n'est pas exactement un seul
+  // tronçon (ambigu pour poser) — les vignettes sont alors visuellement désactivées plus bas, jamais
+  // un clic silencieux sans effet.
+  const canPlaceDecal = selectedRuns.length === 1
   const selectDecalAsset = asset => onPatch?.({
     decalAssetId: asset.id,
     decalWidthM: DEFAULT_DECAL_HEIGHT_M * (Number(asset.ratio) || 1),
     decalHeightM: DEFAULT_DECAL_HEIGHT_M,
     roomArcError: null,
+    ...(canPlaceDecal ? { mode: 'decal', connectorWallEdgeKeys: [...selectedKeys] } : {}),
   })
-  const startDecalPlacement = () => onPatch?.({
-    mode: 'decal',
-    connectorWallEdgeKeys: [...selectedKeys],
-  })
+  const decalColor = HEX_COLOR_RE.test(String(tool.decalColor || '')) ? tool.decalColor : DEFAULT_DECAL_COLOR
 
   return (
     <div
@@ -212,13 +218,22 @@ export default function SurfaceWallPanel({
                 return (
                   <div key={decoration.id} style={S.existingDecalRow}>
                     <span style={S.existingDecalLabel}>{asset?.label || decoration.assetId}</span>
-                    <button
-                      type="button"
-                      onClick={() => onDecalRemove?.(decoration.id)}
-                      style={{ ...S.button, ...S.danger, ...S.existingDecalDeleteBtn }}
-                    >
-                      {t('surfaceWallPanel.deleteDecalButton')}
-                    </button>
+                    <div style={S.existingDecalActions}>
+                      <button
+                        type="button"
+                        onClick={() => onDecalMove?.(decoration)}
+                        style={{ ...S.button, ...S.existingDecalDeleteBtn }}
+                      >
+                        {t('surfaceWallPanel.moveDecalButton')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDecalRemove?.(decoration.id)}
+                        style={{ ...S.button, ...S.danger, ...S.existingDecalDeleteBtn }}
+                      >
+                        {t('surfaceWallPanel.deleteDecalButton')}
+                      </button>
+                    </div>
                   </div>
                 )
               })}
@@ -234,6 +249,7 @@ export default function SurfaceWallPanel({
                     key={asset.id}
                     type="button"
                     title={asset.label}
+                    disabled={!canPlaceDecal}
                     onClick={() => selectDecalAsset(asset)}
                     style={{
                       ...S.decalThumb,
@@ -241,12 +257,30 @@ export default function SurfaceWallPanel({
                         ? `url(${import.meta.env.VITE_API_URL}/api/assets/${asset.image_url})`
                         : 'none',
                       ...(tool.decalAssetId === asset.id ? S.decalThumbActive : {}),
+                      ...(!canPlaceDecal ? S.decalThumbDisabled : {}),
                     }}
                   />
                 ))}
               </div>
             </div>
           ))}
+          {!canPlaceDecal && <p style={S.hint}>{t('surfaceWallPanel.addDecalHint')}</p>}
+
+          <label style={S.colorField}>
+            <span style={S.label}>{t('surfaceWallPanel.decalColorLabel')}</span>
+            <input
+              type="color"
+              value={decalColor}
+              onChange={event => onPatch?.({ decalColor: event.target.value })}
+              style={S.colorInput}
+            />
+            <input
+              type="text"
+              value={tool.decalColor || decalColor}
+              onChange={event => onPatch?.({ decalColor: event.target.value })}
+              style={S.input}
+            />
+          </label>
 
           <label style={S.checkboxField}>
             <input
@@ -256,16 +290,6 @@ export default function SurfaceWallPanel({
             />
             <span style={S.label}>{t('surfaceWallPanel.decalMirrorLabel')}</span>
           </label>
-
-          <button
-            type="button"
-            disabled={selectedRuns.length !== 1 || !tool.decalAssetId}
-            onClick={startDecalPlacement}
-            style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 || !tool.decalAssetId ? S.disabled : {}) }}
-          >
-            {t('surfaceWallPanel.addDecalButton')}
-          </button>
-          {(selectedRuns.length !== 1 || !tool.decalAssetId) && <p style={S.hint}>{t('surfaceWallPanel.addDecalHint')}</p>}
         </FloatingPanelSection>
 
         <FloatingPanelSection title={t('surfaceWallPanel.shapeSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.shape">
@@ -370,8 +394,13 @@ const S = {
   decalGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '5px' },
   decalThumb: { aspectRatio: '1', border: '2px solid transparent', borderRadius: '5px', background: '#151525 center/cover no-repeat', cursor: 'pointer' },
   decalThumbActive: { borderColor: '#ea580c' },
+  decalThumbDisabled: { opacity: 0.38, cursor: 'not-allowed' },
   checkboxField: { display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' },
+  colorField: { display: 'grid', gridTemplateColumns: '1fr 34px 90px', alignItems: 'center', gap: '6px' },
+  colorInput: { width: '34px', height: '30px', padding: '2px', background: '#0a0a14', border: '1px solid #1e1e2e', borderRadius: '4px' },
+  input: { minWidth: 0, background: '#0a0a14', border: '1px solid #1e1e2e', borderRadius: '5px', padding: '7px 8px', color: '#cbd5e1', fontSize: '11px', outline: 'none' },
   existingDecalRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' },
+  existingDecalActions: { display: 'flex', gap: '4px', flexShrink: 0 },
   existingDecalLabel: { fontSize: '10px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   existingDecalDeleteBtn: { minHeight: '26px', padding: '2px 8px', flexShrink: 0 },
 }

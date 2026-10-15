@@ -39,6 +39,20 @@ test('computeDecalPlacement pose un décor avec la taille par défaut quand l’
   assert.equal(posed.widthM, DEFAULT_DECAL_HEIGHT_M)
   assert.equal(posed.heightM, DEFAULT_DECAL_HEIGHT_M)
   assert.equal(posed.mirror, false)
+  assert.equal(posed.color, null)
+})
+
+test('computeDecalPlacement propage la teinte fournie par l’outil', () => {
+  const baseRoom = room('roomA', 0)
+  const surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const wallPoint = northWallPoint(baseRoom, surface)
+
+  const result = computeDecalPlacement(surface, wallPoint, {
+    selectedRoomId: 'roomA', level: 0, decalAssetId: ASSET_ID, decalColor: '#ff0000',
+  })
+  assert.equal(result.error, null)
+  const posed = result.surfaceData.rooms.roomA.wallDecorations[0]
+  assert.equal(posed.color, '#ff0000')
 })
 
 test('computeDecalPlacement respecte la largeur/hauteur/miroir fournis par l’outil', () => {

@@ -18,6 +18,7 @@ export function computeDecalPlacement(surfaceData, wallPoint, tool) {
     widthM: Number(tool?.decalWidthM) || DEFAULT_DECAL_HEIGHT_M,
     heightM: Number(tool?.decalHeightM) || DEFAULT_DECAL_HEIGHT_M,
     mirror: !!tool?.decalMirror,
+    color: tool?.decalColor || null,
   }
   return addRoomWallDecoration(surfaceData, decoration.roomId, decoration)
 }

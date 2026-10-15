@@ -16,6 +16,7 @@ export default function DecalPreview({ drag, surfaceData, surfaceTool, catalogEn
     widthM: Number(surfaceTool?.decalWidthM) || DEFAULT_DECAL_HEIGHT_M,
     heightM: Number(surfaceTool?.decalHeightM) || DEFAULT_DECAL_HEIGHT_M,
     mirror: !!surfaceTool?.decalMirror,
+    color: surfaceTool?.decalColor || null,
   }
   const surface = normalizeSurfaceData(surfaceData)
   const panel = findWallDecorationPanel(roomsWallSegments(surface.rooms), decoration)

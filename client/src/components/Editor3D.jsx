@@ -1033,6 +1033,29 @@ export default function Editor3D({
     }
   }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
 
+  // Déplacer = retrait immédiat + retour en mode pose pré-rempli, pas un échange atomique (option 1,
+  // retenue après analyse à charge, PLAN_DECALS.md « Révision 2026-10-15 » §C/§V) : le filet de
+  // sécurité existant (Annuler/Refaire sur l'éditeur de surface) couvre le cas où l'utilisateur
+  // change d'avis en plein déplacement, sans faire traverser une exclusion de chevauchement à
+  // travers 3 fonctions pour un risque déjà couvert autrement.
+  const handleDecalMove = useCallback(decoration => {
+    const result = removeRoomWallDecoration(surfaceDataRef.current, surfaceTool?.selectedRoomId, decoration.id)
+    if (result.surfaceData !== surfaceDataRef.current) {
+      handleSurfaceDataChange(result.surfaceData, `decal-move-remove:${decoration.id}`)
+    }
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'decal',
+      connectorWallEdgeKeys: decoration.sourceEdgeKeys || [],
+      decalAssetId: decoration.assetId,
+      decalWidthM: decoration.widthM,
+      decalHeightM: decoration.heightM,
+      decalMirror: decoration.mirror,
+      decalColor: decoration.color,
+      roomArcError: result.error || null,
+    })
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
+
   useEffect(() => {
     const roomId = surfaceTool?.selectedRoomId
     if (!roomId) return
@@ -1193,6 +1216,7 @@ export default function Editor3D({
           onAppearanceChange={handleSurfaceWallAppearanceChange}
           decalAssets={decalAssets}
           onDecalRemove={handleDecalRemove}
+          onDecalMove={handleDecalMove}
           onClose={closeSurfaceWallPanel}
           dockRight={sidebarWidth + 16}
         />

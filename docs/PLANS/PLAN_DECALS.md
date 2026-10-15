@@ -340,11 +340,36 @@ variante dérivée d'un matériau de base, mise en cache séparément), pas à r
 
 ### Statut
 
-**V1 confirmé par Saar : mur seul, pas de sol** (§B reporté v2). Rien de codé pour cette révision —
-cadrage présenté à Saar, analyse à charge faite (JOURNALANALYSE.md, §U-X, 2026-10-15), **pause
-demandée par Saar après cette analyse** — code à reprendre dans une session suivante : champ
-`color` ajouté au schéma du décor (retouche mineure du Lot 1, pas une réécriture), fusion
-sélection/pose + repositionnement (reprise du Lot 3), teinte + cache reclé (reprise du Lot 2).
+**V1 confirmé par Saar : mur seul, pas de sol** (§B reporté v2). **Codé (2026-10-15)**, après une
+seconde analyse à charge sur le code réel (pas seulement le plan) juste avant de coder — §U/§W/§X
+confirmés mécaniques, §V confirmé sans risque réel (voir Historique) :
+- Champ `color` (hex) ajouté à `DECORATION_ENTRY` (`shared/world/surfaceFieldTypes.js`), optionnel,
+  propagé par `computeDecalPlacement.js` et le fantôme de pose (`DecalPreview.jsx`).
+- `SurfaceWallPanel.jsx` : `selectDecalAsset`/`startDecalPlacement` fusionnés en une seule action
+  (clic sur une vignette → mode pose direct, plus de bouton intermédiaire), vignettes désactivées
+  si la sélection de mur n'est pas exactement un seul tronçon ; sélecteur de teinte (même patron que
+  `SurfaceMaterialEditor.jsx`) ; bouton « Déplacer » sur un décor déjà posé, à côté du bouton
+  supprimer existant.
+- `SurfaceDungeonScene.jsx` : `decalMaterialCache` reclé par `(texture, couleur)` (Map imbriquée,
+  patron `opacityMaterialCache`), `material.color` appliqué à la pose du matériau (jamais par
+  mutation d'un matériau partagé).
+- `Editor3D.jsx` : nouveau `handleDecalMove` (retrait immédiat du décor + réentrée en mode pose
+  pré-rempli avec son image/teinte/miroir — option 1 de §V, le filet Annuler/Refaire existant couvre
+  le risque d'hésitation en cours de déplacement, aucune modification de
+  `wallDecorationsOverlap`/`addRoomWallDecoration` nécessaire, vérifié par lecture avant de coder).
+
+**Testé** : `node --check` sur les fichiers serveur/shared touchés (propre) ; JSON de locale valide ;
+82 tests purs (`computeDecalPlacement.test.mjs` + 1 nouveau scénario teinte, `surfaceFieldTypes.test.mjs`
+dont la dérive de types, `surfaceData.test.mjs`) tous au vert, aucune régression ; ESLint ciblé sur les
+4 fichiers `.jsx` touchés (0 erreur, seuls des avertissements préexistants et sans rapport sur
+`Editor3D.jsx`) ; build client propre. **Non testé : ⚠️ clos partiel** — comme chaque lot précédent de
+ce chantier, jamais vu dans un vrai navigateur (ni serveur ni navigateur lancés par l'agent). Reste à
+vérifier par Saar : le clic sur une vignette pose directement (plus de bouton caché), la teinte
+s'applique visuellement sans déteindre les autres décors de la même image, le bouton Déplacer retire
+puis repositionne correctement (et qu'un Ctrl+Z en cours de déplacement récupère bien l'ancien décor).
+
+**Données** : aucune (code seul, le champ `color` vit dans `surface_data` JSON, aucune migration).
+**Retour arrière** : `git revert`/retrait des fichiers listés ci-dessus — aucune donnée persistée.
 
 ## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15) — conception dépassée, voir « Révision 2026-10-15 » ci-dessus**
 
@@ -664,3 +689,9 @@ tri : `assets_source/decals/README.md`.
   réutilisant exactement ce mécanisme déjà existant (champ `image_url` relatif + 1 ligne de
   middleware déjà écrit ailleurs) — aucune nouvelle route créée. Repéré uniquement parce que Saar a
   pu tester en vrai : aucune vérification possible côté agent avant (ni serveur ni navigateur).
+- **2026-10-15 (révision recodée, après seconde analyse à charge)** — Avant de coder, code réel
+  revérifié ligne par ligne (pas seulement le plan) : aucune dérive depuis l'analyse précédente,
+  §V confirmé sans risque de collision avec soi-même (lu directement dans `wallDecorationsOverlap`),
+  §U/§W/§X confirmés mécaniques. Outil tampon (vignette → pose directe), teinte (reclé du cache
+  matériau) et repositionnement (« Déplacer ») codés et testés techniquement (82 tests purs, lint,
+  build). Reste la validation visuelle de Saar, comme pour chaque lot précédent.
