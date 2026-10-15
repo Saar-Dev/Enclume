@@ -1,6 +1,6 @@
 # SYSTEME/COMBAT_FLUX.md — Déroulement complet d'un tour de combat
 
-> Dernière mise à jour : 2026-10-08 (COMBAT-SURPRISE-NO-ACTION-WINDOW, voir note d'audit plus bas)
+> Dernière mise à jour : 2026-10-15 (COMBAT-FLUX-DOC-STALE-TIMELINE, voir note d'audit plus bas)
 > — mise à jour précédente 2026-08-28 (audit reset fin de tour : §11/§13/§14 alignés sur INI4 +
 > PLAN_CHARACTER_STATES §0.2 — `initiative` remise à `base_ini`, `state_position` non réinitialisé)
 > Sources : `socketCombatState.js`, `socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`, `statusService.js`, `combatFSM.js`
@@ -39,6 +39,19 @@
 > ANNOUNCEMENT : un reconnectant reçoit désormais `COMBAT_SLOT_ADVANCED` pour le slot autoritaire
 > au lieu de laisser le repli client (base_ini ASC, ignorant la Surprise) deviner seul. La table
 > `COMBAT_SURPRISE_RESULT` ci-dessous est mise à jour en conséquence (branche Succès).
+>
+> **Corrigé (2026-10-15) — COMBAT-FLUX-DOC-STALE-TIMELINE.** §7 (« CaC 4b ») et §8 point [12]
+> citaient encore `remainingMeleeActions`/« `resolveMeleeAction` récursif », mécanisme retiré lors du
+> passage à la résolution par échelle (`combat_timeline_entries`/`advanceTimeline`, même refonte que
+> §4/§5/§11 ci-dessus, `docs/Old/PLAN_COMBAT_TIMELINE.md`). Une série d'attaques multiples (CaC, Tir
+> Multi) devient autant d'entrées d'échelle séparées (`declaration_group_id`,
+> `buildTimelineEntries`/`computeSeriesPositions`, `combatTurnEngine.js`) — jamais un tableau porté
+> par l'action elle-même. `resolveMeleeAction` ne résout qu'UNE entrée et retourne (`{ suspend,
+> emissions }`) ; c'est l'appelant (`COMBAT_ACTION_CONFIRM`, `socketCombatResolution.js`, ou
+> `confirmMeleeDefense`, `socketCombatHelpers.js`) qui appelle `advanceTimeline()` juste après tout
+> retour non suspendu — celle-ci enchaîne naturellement sur l'attaque suivante de la même série via
+> `pickNextTimelineStep`, exactement comme sur n'importe quel autre pas de l'échelle (confirmé par
+> COMBAT-MULTI-ATTACK-ROUND-BROKEN, deux relectures indépendantes du code réel, 2026-10-04/15).
 
 ---
 
@@ -496,7 +509,10 @@ Si hit :
   resolveShockTest() → shockResult
   Si shockResult.outcome ≠ 'ok' → applyStun()
 
-CaC 4b : remainingMeleeActions.length > 0 → resolveMeleeAction récursif
+CaC 4b : return { suspend:false, emissions } — l'appelant (COMBAT_ACTION_CONFIRM) appelle
+         advanceTimeline() juste après, qui enchaîne sur l'attaque suivante de la même série
+         (declaration_group_id) via pickNextTimelineStep, jamais une récursion ici (voir note
+         d'audit COMBAT-FLUX-DOC-STALE-TIMELINE en tête de document)
 ```
 
 #### Cible Drone
@@ -540,7 +556,8 @@ return { suspend: true }
 [11] Si hit :
      Attaquant PJ  → INSERT pending 'damage' + AWAITING_DAMAGE + COMBAT_DAMAGE_PROMPT
      Attaquant PNJ → damageService.resolveTargetHit() auto + applyStun si choc
-[12] Attaque suivante (remainingMeleeActions) ou advanceSlot
+[12] advanceTimeline() (confirmMeleeDefense) — enchaîne sur l'attaque suivante de la même série
+     (declaration_group_id) ou le prochain pas de l'échelle, comme [CaC 4b] ci-dessus
 ```
 
 ---
