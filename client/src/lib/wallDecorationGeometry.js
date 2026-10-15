@@ -50,7 +50,15 @@ export function wallDecorationPlacement(decoration, panel) {
   const normalZ = Number(decoration.normalZ) * sign
   const offset = wallThickness / 2 + DECOR_SURFACE_MARGIN_M
   const half = Math.max(0.05, Number(decoration.heightM) / 2 || 0.25)
-  const centerOffset = Math.max(half, Math.min(DECOR_EYE_HEIGHT_M, wallHeight - half))
+  // Hauteur choisie à la pose (Saar, 2026-10-15 : position libre, pas une hauteur imposée) —
+  // `anchorY` absent OU explicitement `null` (décor posé avant ce changement, ou aperçu sans point
+  // réel — `makeWallDecorationFromWallPoint` pose `null`, jamais `undefined`, dans ce cas) retombe
+  // sur la hauteur des yeux par défaut. `Number.isFinite` SANS conversion au préalable : `Number(null)`
+  // vaut 0 (un vrai nombre, piège classique JS), ce qui aurait silencieusement forcé tous les décors
+  // sans hauteur choisie au ras du sol au lieu du repli attendu — à vérifier sur `decoration.anchorY`
+  // tel quel, jamais sur une version déjà convertie par `Number(...)`.
+  const rawCenter = Number.isFinite(decoration.anchorY) ? Number(decoration.anchorY) : DECOR_EYE_HEIGHT_M
+  const centerOffset = Math.max(half, Math.min(rawCenter, wallHeight - half))
 
   return {
     position: [

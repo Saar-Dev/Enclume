@@ -76,6 +76,34 @@ test('wallDecorationPlacement plafonne la hauteur de pose sur un mur bas (jamais
   assert.ok(Math.abs(centerOffset - (0.6 - half)) < 1e-6, `centerOffset attendu ${0.6 - half}, obtenu ${centerOffset}`)
 })
 
+test('wallDecorationPlacement utilise anchorY (position libre) quand il est fourni, au lieu de la hauteur des yeux', () => {
+  const { panel, decoration } = poseNorthWallDecoration(room('roomA', 0))
+  const atKnee = { ...decoration, anchorY: 0.4 }
+  const placement = wallDecorationPlacement(atKnee, panel)
+  const half = decoration.heightM / 2
+  const centerOffset = placement.position[1] - Number(decoration.y)
+  assert.ok(Math.abs(centerOffset - 0.4) < 1e-6, `centerOffset attendu 0.4, obtenu ${centerOffset}`)
+  assert.ok(centerOffset !== DECOR_EYE_HEIGHT_M - half + half, 'ne doit plus retomber sur la hauteur des yeux par défaut')
+})
+
+test('wallDecorationPlacement plafonne anchorY à la hauteur réelle du mur, ne le laisse jamais dépasser', () => {
+  const { panel, decoration } = poseNorthWallDecoration(room('roomA', 0))
+  const tooHigh = { ...decoration, anchorY: 10 }
+  const lowPanel = { ...panel, height: 0.6 }
+  const placement = wallDecorationPlacement(tooHigh, lowPanel)
+  const half = decoration.heightM / 2
+  const centerOffset = placement.position[1] - Number(decoration.y)
+  assert.ok(Math.abs(centerOffset - (0.6 - half)) < 1e-6, `centerOffset attendu ${0.6 - half}, obtenu ${centerOffset}`)
+})
+
+test('wallDecorationPlacement retombe sur la hauteur des yeux quand anchorY est null (décor posé avant la position libre)', () => {
+  const { panel, decoration } = poseNorthWallDecoration(room('roomA', 0))
+  const legacy = { ...decoration, anchorY: null }
+  const placement = wallDecorationPlacement(legacy, panel)
+  const centerOffset = placement.position[1] - Number(decoration.y)
+  assert.ok(Math.abs(centerOffset - DECOR_EYE_HEIGHT_M) < 1e-6)
+})
+
 test('wallDecorationPlacement inverse le sens de la normale selon interiorNormalSignsByRoom', () => {
   const { panel, decoration } = poseNorthWallDecoration(room('roomA', 0))
   const sameSidePanel = { ...panel, interiorNormalSignsByRoom: { roomA: 1 } }

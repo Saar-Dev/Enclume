@@ -336,10 +336,21 @@ export function makeWallDecorationFromWallPoint(surfaceData, wallPoint, tool = {
   const normalX = -tangentZ
   const normalZ = tangentX
 
+  // Hauteur de pose libre (Saar, 2026-10-15) : dérivée du point de clic réel sur le mur
+  // (`wallPoint.fy`, ajouté à `getSelectedDoorWallPoint`), jamais une constante — plafonnée à la
+  // hauteur réelle de CE panneau (même formule que `getWallRenderBox`, surfaceGeometry.js, pas
+  // dupliquée ailleurs). `null` si l'appelant ne fournit pas `fy` (aperçu avant premier survol,
+  // ou tout appelant futur qui n'a pas ce point) — le rendu retombe alors sur la hauteur par défaut.
+  const wallHeight = Math.max(0.5, Number(panel.height) || 2.5)
+  const anchorY = Number.isFinite(Number(wallPoint?.fy))
+    ? Math.max(0, Math.min(Number(wallPoint.fy) - Number(panel.y || 0), wallHeight))
+    : null
+
   return {
     sourceEdgeKeys: [...new Set(panel.sourceEdgeKeys || [])],
     anchorX: anchorFx / SURFACE_FINE,
     anchorZ: anchorFz / SURFACE_FINE,
+    anchorY,
     tangentX,
     tangentZ,
     normalX,

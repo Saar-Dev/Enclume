@@ -593,17 +593,25 @@ tri : `assets_source/decals/README.md`.
 
 **Correction du 2026-10-15 (fond noir opaque trouvé par Saar au test réel, pas un vrai canal alpha)** :
 vérifié pixel par pixel (pas seulement le type PNG déclaré, qui annonçait un canal alpha partout sans
-que les valeurs réelles en profitent) — `military_navy` (100 fichiers, `JRO_Military_Alphas`) est un
-DOUBLON EXACT de `military_white` (100 fichiers, `JRO_Military_Decals`) : mêmes dessins, mais navy a
-toujours un fond noir opaque là où white est déjà correctement transparent → navy déprécié en base
-(script ci-dessous), aucune image retouchée. `signage` (121 fichiers) avait le même défaut sur 119
-images, sans doublon à côté cette fois → corrigées en place (remplissage du fond depuis les 4 coins,
-jamais un retrait de couleur global — plusieurs icônes ont du texte/des détails noirs qui font partie
-du dessin, un retrait global les aurait effacés aussi ; vérifié visuellement sur plus d'une dizaine
-d'échantillons variés avant d'appliquer au lot entier). Originaux sauvegardés dans
-`assets_source/decals/signage_originals_backup_20261015/`. Catalogue réel après correction : 121
-signage + 100 military_white visibles, 100 military_navy dépréciés (invisibles, pas supprimés).
-Script (ré-upload MinIO + dépréciation, à lancer par Saar) :
+que les valeurs réelles en profitent). Deux défauts distincts, pas un simple doublon comme conclu une
+première fois :
+- `military_navy` (100 fichiers, `JRO_Military_Alphas`) : fond noir opaque, mais encre déjà blanche
+  (vérifié : max RGB 255 partout) — corrigé EN PLACE (fond retiré par remplissage depuis les 4 coins,
+  jamais un retrait de couleur global, qui aurait aussi effacé les plaques/textes noirs qui font
+  partie du dessin de certaines icônes).
+- `military_white` (100 fichiers, `JRO_Military_Decals`) : fond déjà transparent, MAIS encre plafonnée
+  à ~16 % de luminosité partout — jamais blanche malgré son nom. **Conséquence directe sur la teinte**
+  (Saar, 2026-10-15 : « icône toujours noir ») : la teinte se multiplie avec la texture (§D) — une
+  encre déjà presque noire reste noire quelle que soit la couleur choisie, la multiplication ne peut
+  jamais éclaircir. Pas réparable par un simple retrait de fond → **déprécié**, remplacé par
+  `military_navy` (corrigé ci-dessus) comme version affichée de ces mêmes 100 dessins.
+- `signage` (121 fichiers) : même défaut de fond sur 119 images, encre déjà blanche (vérifiée) →
+  corrigé en place par la même méthode.
+
+Originaux sauvegardés dans `assets_source/decals/{signage,military_navy}_originals_backup_20261015/`.
+Catalogue réel après correction : 121 signage + 100 military (navy, corrigé) visibles, 100 military
+(white) déprécié (invisible, pas supprimé). Script idempotent (ré-upload MinIO + dépréciation, à
+lancer par Saar, corrige aussi l'état s'il avait déjà lancé une version antérieure de ce script) :
 `server/src/scripts/fix_decal_assets_catalog_20261015.js`.
 
 **Supprimé (pas pertinent pour des décors muraux 3D)** :
@@ -719,3 +727,35 @@ Script (ré-upload MinIO + dépréciation, à lancer par Saar) :
 - **2026-10-15 (fonds noirs du catalogue, signalé par Saar puis vérifié pixel par pixel)** — voir
   correction détaillée dans « Catalogue réel » ci-dessus. Script de correction écrit, pas encore
   lancé (à lancer par Saar).
+- **2026-10-15 (second test de Saar — le panneau se fermait encore, à un autre moment)** — le premier
+  correctif (Échap) ne couvrait que l'entrée en mode pose. Trouvé en lisant le code du clic de pose
+  lui-même (`SurfaceEditorScene.jsx`) : `connectorWallEdgeKeys` est remis à vide après CHAQUE pose
+  réussie, exprès (pour ne pas limiter le décor suivant au même mur) — mais ma condition de maintien
+  du panneau dépendait justement de ce champ, donc le panneau se refermait dès le premier clic de
+  pose, pas seulement à l'activation du mode. Corrigé : la condition pour un décor ne dépend plus que
+  du mode (`'decal'`), jamais de `connectorWallEdgeKeys` — contrairement à la porte, qui n'a rien à
+  perdre dans son panneau une fois l'outil activé (un seul bouton, pas de palette à l'intérieur).
+- **2026-10-15 (teinte invisible et encre faible en palette — même cause racine que le pack military,
+  trouvée en creusant le signalement de Saar)** — vérifié : l'encre de `military_white` plafonne à
+  ~16 % de luminosité (voir « Catalogue réel »), donc `material.color * texture` (teinte
+  multiplicative, §D) ne peut jamais l'éclaircir, quelle que soit la couleur choisie. Corrigé par le
+  changement de pack (navy corrigé remplace white) ci-dessus — pas un bug de la teinte elle-même,
+  déjà vérifiée mécaniquement correcte.
+- **2026-10-15 (position de pose libre en hauteur, pas seulement le long du mur)** — Saar avait validé
+  « position libre » plus tôt dans ce chantier, mais la hauteur de pose restait une constante
+  (`DECOR_EYE_HEIGHT_M`, Lot 2), jamais dérivée du point de clic réel — trouvaille de Saar au test
+  (« on oblige à une hauteur préconvenue »), pas prévue au cadrage initial. Corrigé : le point 3D
+  réel du clic sur le mur (`hit.y`, déjà calculé par `getSelectedDoorWallPoint` mais jusque-là jeté)
+  est conservé et stocké comme nouveau champ optionnel `anchorY` (hauteur depuis le pied du mur,
+  plafonnée à la hauteur réelle du panneau, même formule que `getWallRenderBox`) — absent sur un
+  décor posé avant ce changement, retombe alors sur l'ancienne constante, aucune régression visuelle
+  sur l'existant. 5 nouveaux scénarios de test (valeur fournie, plafond, repli sur l'ancienne
+  constante). Piège trouvé et corrigé en écrivant les tests : `Number(null)` vaut `0` en JavaScript
+  (pas `NaN`), un premier essai du repli testait `Number.isFinite(Number(decoration.anchorY))` et
+  prenait silencieusement 0 mètre (ras du sol) pour un décor sans hauteur choisie — corrigé en testant
+  `decoration.anchorY` directement, sans conversion préalable.
+- **2026-10-15 (nuancier du sélecteur de couleur « moche », signalé par Saar)** — c'est la fenêtre de
+  sélection native du navigateur/Windows (`<input type="color">`), pas un élément stylé par
+  l'application — son apparence n'est pas modifiable en CSS, aucune limite de ce projet. Signalé à
+  Saar ; remplacer ce contrôle par un nuancier personnalisé serait un composant à part entière, pas
+  encore demandé.

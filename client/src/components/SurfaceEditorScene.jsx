@@ -294,10 +294,14 @@ export default function SurfaceEditorScene({
         distance,
         fx: (x0 + dx * clampedAlong) * SURFACE_FINE,
         fz: (z0 + dz * clampedAlong) * SURFACE_FINE,
+        // Hauteur réelle du point de clic sur le plan du mur — ignorée par les portes (hauteur fixée
+        // par leur modèle), utilisée par les décors pour une pose libre en hauteur (Saar, 2026-10-15 :
+        // « le placement n'est que sur l'axe horizontal... on oblige à une hauteur préconvenue »).
+        fy: hit.y,
       }
     }
 
-    return best ? { fx: best.fx, fz: best.fz, sticky: true } : null
+    return best ? { fx: best.fx, fz: best.fz, fy: best.fy, sticky: true } : null
   }, [roomWallPanels, setPointerRay, surfaceTool])
 
   const findConnectorAtWorldPoint = useCallback((point, level) => {

@@ -49,7 +49,7 @@ const ELEVATION_PROFILE = Object.freeze({ type: S, depth: N, direction: N })
 const APPEARANCE_ENTRY = Object.freeze({ id: S, edgeKeys: A, interiorTex: R, interiorMaterial: O })
 const DECORATION_ENTRY = Object.freeze({
   id: S, assetId: S, sourceEdgeKeys: A,
-  anchorX: N, anchorZ: N, tangentX: N, tangentZ: N, normalX: N, normalZ: N, rotationY: N,
+  anchorX: N, anchorZ: N, anchorY: N, tangentX: N, tangentZ: N, normalX: N, normalZ: N, rotationY: N,
   widthM: N, heightM: N, mirror: B, color: S,
 })
 const DECORATION_REQUIRED = Object.freeze([

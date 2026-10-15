@@ -159,13 +159,13 @@ export function useSurfacePanels({ surfaceData, surfaceDataRef, surfaceTool, onS
       && surfaceTool?.connectorType === 'door'
       && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
     // Même exception que la porte ci-dessus, pour le même motif : poser un décor (mode 'decal',
-    // PLAN_DECALS.md) reste ancré au mur déjà sélectionné dans ce panneau — le fermer au moment même
-    // où l'outil tampon s'active (clic sur une vignette) cachait la section Décoration pendant toute
-    // la pose, et comme rien ne la rouvrait au retour en 'select' (Échap), ça ressemblait à une
-    // sortie complète du panneau alors que la sélection de mur, elle, n'avait jamais bougé (bug
-    // trouvé par Saar, 2026-10-15).
+    // PLAN_DECALS.md) reste ancré au mur déjà sélectionné dans ce panneau. Contrairement à la porte,
+    // PAS de condition sur `connectorWallEdgeKeys` ici : ce champ est remis à vide après CHAQUE pose
+    // réussie, exprès, pour ne pas limiter le décor suivant au même mur si l'outil tampon reste actif
+    // (SurfaceEditorScene.jsx, même règle que les connecteurs) — une condition dessus fermait donc le
+    // panneau au premier clic de pose, pas seulement à l'entrée du mode (bug trouvé par Saar,
+    // 2026-10-15, en deux temps : d'abord à l'ouverture de la palette, puis après un clic de pose).
     const placingDecalOnSelectedWall = surfaceTool?.mode === 'decal'
-      && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
     // Remodeler (§13.4, PLAN_WORLD_BUILDER_REWORK.md) est un sous-outil du panneau Salle, pas un
     // mode de sidebar indépendant : le panneau doit rester ouvert pendant qu'on peint les cases,
     // même principe que l'exception porte ci-dessus (toujours la même salle sélectionnée).
