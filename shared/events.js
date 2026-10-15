@@ -162,6 +162,11 @@ export const WS = {
   // sur les colonnes du roster), pas un nouvel événement d'affichage dédié.
   COMBAT_DRONE_SET_ORDERS:   'combat:drone_set_orders',    // MJ ou propriétaire du drone → serveur : { tokenId, targetTokenId, droneWeaponInvId }
   COMBAT_DRONE_ORDERS_ERROR: 'combat:drone_orders_error',  // serveur → socket : erreur de validation { message }
+  // COMBAT-DRONES-ONLY-LOOP — ce Tour ne compte plus aucun acteur humain (tous les participants
+  // actifs sont des drones `ordres_permanents`) : rien n'arrête alors le défilement des Tours à part
+  // COMBAT_END (MJ) — émis une seule fois par combat (combat_state.autonomous_notice_sent),
+  // combatTurnEngine.js#prefillAutonomousDroneOrders. Pas de payload : texte fixe côté client (t()).
+  COMBAT_AUTONOMOUS_DRONES_ONLY: 'combat:autonomous_drones_only', // serveur → room
   // Résolution (Sprint 3/4)
   COMBAT_ACTION_WINDOW:  'combat:action_window',    // serveur → socket joueur actif
   COMBAT_ACTION_CONFIRM: 'combat:action_confirm',   // joueur/GM → serveur

@@ -324,6 +324,15 @@ export async function advanceAnnouncementQueue(io, campaignId, pendingMaps) {
   io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextSlot.token_id })
 }
 
+// COMBAT-DRONES-ONLY-LOOP (pure) : faut-il avertir le MJ que ce Tour ne compte plus aucun acteur
+// humain (tous les participants actifs du roster sont des drones `ordres_permanents` pré-remplis) ?
+// Une seule fois par combat (`alreadyNotified`, combat_state.autonomous_notice_sent) — sinon chaque
+// Tour suivant, tant que la situation persiste, spammerait le même avertissement. `pendingDroneCount`
+// doit être strictement positif : un roster vide (0 actif) n'a rien à signaler.
+export function shouldNotifyAutonomousDronesOnly(activeRosterCount, pendingDroneCount, alreadyNotified) {
+  return !alreadyNotified && pendingDroneCount > 0 && pendingDroneCount === activeRosterCount
+}
+
 // ─── Helper — pré-remplir les drones en ordres permanents (Sprint 2d, docs/PLANS/PLAN_DRONE.md) ───
 // RAW : un drone autonome « réagit immédiatement », il ne « choisit » jamais de passer son tour — donc
 // il ne rejoint JAMAIS la file des non-annoncés (§4 « Décision de fond — pourquoi un drone n'a jamais
@@ -359,6 +368,19 @@ export async function prefillAutonomousDroneOrders(io, campaignId, turnNumber) {
     d.user_id != null ? state.drone_turn_model_player === 'ordres_permanents' : state.drone_turn_model_gm === 'ordres_permanents'
   ))
   if (pendingDrones.length === 0) return
+
+  // COMBAT-DRONES-ONLY-LOOP — voir shouldNotifyAutonomousDronesOnly ci-dessus. Le MJ reste seul
+  // décisionnaire (aucune pause/fin automatique, même principe que gmOverride ailleurs dans le
+  // combat) : ceci ne fait qu'informer, une seule fois par combat.
+  if (!state.autonomous_notice_sent) {
+    const [{ count: activeRosterCount }] = await db('combat_roster')
+      .where({ campaign_id: campaignId, status: 'active' })
+      .count('* as count')
+    if (shouldNotifyAutonomousDronesOnly(parseInt(activeRosterCount, 10), pendingDrones.length, state.autonomous_notice_sent)) {
+      await db('combat_state').where({ campaign_id: campaignId }).update({ autonomous_notice_sent: true, updated_at: db.fn.now() })
+      io.to(campaignId).emit(WS.COMBAT_AUTONOMOUS_DRONES_ONLY)
+    }
+  }
 
   const tokenIds = pendingDrones.map(d => d.token_id)
   await db('combat_roster')

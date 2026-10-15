@@ -8,7 +8,7 @@ import {
   pickNextTimelineStep, buildTimelineEntries, endTurn,
   advanceTimeline, registerAutonomousStepResolver,
   findNextAnnounceSlot, advanceAnnouncementQueue, prefillAutonomousDroneOrders,
-  getDeclarationBlockedTokens, hasActionableToken,
+  getDeclarationBlockedTokens, hasActionableToken, shouldNotifyAutonomousDronesOnly,
 } from './combatTurnEngine.js'
 
 // Lancement : node --env-file=server/.env --test server/src/socket/combatTurnEngine.test.mjs
@@ -675,6 +675,15 @@ test("hasActionableToken (pur) — vrai s'il reste un acteur non bloqué, faux s
   assert.equal(hasActionableToken(['a', 'b'], new Map([['a', 'dead'], ['b', 'stunned']])), false)
   assert.equal(hasActionableToken([], new Map()), false)
   assert.equal(hasActionableToken(['a'], new Set()), true)
+})
+
+// COMBAT-DRONES-ONLY-LOOP
+test('shouldNotifyAutonomousDronesOnly (pur) — seulement si 100% du roster actif est drone ET pas déjà notifié', () => {
+  assert.equal(shouldNotifyAutonomousDronesOnly(2, 2, false), true, 'tout le roster est drone, jamais notifié')
+  assert.equal(shouldNotifyAutonomousDronesOnly(2, 1, false), false, 'un acteur humain reste (1 drone sur 2)')
+  assert.equal(shouldNotifyAutonomousDronesOnly(2, 2, true), false, 'déjà notifié pour ce combat')
+  assert.equal(shouldNotifyAutonomousDronesOnly(0, 0, false), false, 'roster vide — rien à signaler')
+  assert.equal(shouldNotifyAutonomousDronesOnly(3, 3, false), true, 'trois drones, aucun humain')
 })
 
 // Pose un statut bloquant sur un token de la fixture (nettoyé par `cleanup1c`).

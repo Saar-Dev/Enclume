@@ -11572,3 +11572,44 @@ symétrique dans les deux sens).
 **Retour arrière** : `git revert` du commit (migration additive sans donnée tierce dépendante) +
 rollback migration si nécessaire (`down()` direct, jamais la CLI brute, voir `.claude/rules/
 migrations.md`).
+
+## Session (Dev) — 2026-10-15 — COMBAT-DRONES-ONLY-LOOP : avertissement MJ, pas de blocage automatique
+
+Ticket : un combat composé uniquement de drones en `ordres_permanents` peut voir ses Tours défiler
+sans fin (`endTurn` → `prefillAutonomousDroneOrders` → `advanceAnnouncementQueue` →
+`startResolutionPhase` → `advanceTimeline` → `endTurn`...), sans qu'aucun humain ne soit jamais
+sollicité.
+
+**Analyse (avant tout code)** : `docs/Old/PLAN_DRONE.md:258-260` documente que le saut ANNONCE→
+RÉSOLUTION pour UN Tour entièrement autonome est **intentionnel** (« cas limite réel... scénario de
+non-régression à tester explicitement ») — pas touché ici. Le vrai trou : rien ne signale jamais au
+MJ qu'un combat est devenu entièrement autonome, alors que `combat_actions`/`combat_timeline_entries`
+ne sont vidées qu'à `COMBAT_END` (jamais entre deux Tours) — ces tables grossissent sans borne tant
+que ça tourne. `COMBAT_END` reste valide depuis toutes les phases (`combatFSM.js`), le MJ peut
+toujours arrêter le combat — mais personne ne l'avertit qu'il devrait y penser.
+
+**Fix** (portée volontairement minimale — aucune pause/fin automatique, le MJ reste seul
+décisionnaire, même principe que `gmOverride` ailleurs dans le combat) :
+- Migration 394 (`combat_state.autonomous_notice_sent`, additive, même patron que 392/346) — mémorise
+  qu'un combat a déjà reçu l'avertissement (une seule fois ; `combat_state` est recréée à chaque
+  `COMBAT_START`, pas de reset explicite nécessaire).
+- `combatTurnEngine.js` : fonction pure testée `shouldNotifyAutonomousDronesOnly(activeRosterCount,
+  pendingDroneCount, alreadyNotified)` — vrai seulement si 100% du roster actif est drone autonome
+  ET jamais encore notifié. Appelée dans `prefillAutonomousDroneOrders` (les deux points d'entrée,
+  `COMBAT_ANNOUNCE_START` et `endTurn`, en bénéficient automatiquement).
+- `shared/events.js` : `WS.COMBAT_AUTONOMOUS_DRONES_ONLY` (serveur → room, sans payload).
+- Client : `useCombatSocket.js` (même patron que `onTurnSkipped` — message système ajouté au chat
+  via `addMessage`/`t()`), clé `session.autonomousDronesOnly` (`fr.json`).
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés (0 erreur), `eslint` client (0
+erreur, 1 warning préexistant sans rapport), `npm run build` client (succès), `fr.json` validé
+(`JSON.parse`). `node --env-file=.env --test combatTurnEngine.test.mjs` (base locale, lancé par
+l'agent) 45/45 — dont le nouveau test pur `shouldNotifyAutonomousDronesOnly` (5 cas : 100% drones,
+humain restant, déjà notifié, roster vide, 3 drones) et zéro régression sur les 4 tests existants de
+`prefillAutonomousDroneOrders`. Migration 394 appliquée (serveur de Saar, auto-appliquée à
+l'écriture du fichier) et vérifiée (`knex_migrations`).
+**Non testé** : scénario réel navigateur (combat avec uniquement des drones `ordres_permanents`,
+message affiché une seule fois dans le chat, pas de doublon au Tour suivant) — testable par Saar
+seul (aucun second client requis, donc hors périmètre de `docs/BETATEST.md`), à faire avant clôture.
+**Données** : migration 394 (additive, `down()` = DROP COLUMN).
+**Retour arrière** : `git revert` du commit (migration additive sans donnée tierce dépendante).

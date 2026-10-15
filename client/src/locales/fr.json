@@ -236,6 +236,7 @@
     "mortallyWoundedNoTest": "Blessure mortelle — aucune action de Test possible",
     "actionOutOfRange": "Trop loin pour interagir",
     "tokenSkipped": "{{label}} a été passé",
+    "autonomousDronesOnly": "Ce combat ne compte plus que des drones autonomes — pensez à le terminer si ce n'est plus utile.",
     "initiativeLost": "{{label}} — Initiative insuffisante, action perdue ce Tour",
     "actionCarriedOver": "{{label}} — Initiative ≤ 0 : Action reportée au Tour suivant (agit en premier)",
     "aoeNoTargets": "{{label}} — tir en zone : personne dans la zone d'effet",

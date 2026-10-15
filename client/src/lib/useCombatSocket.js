@@ -210,6 +210,15 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
+    // COMBAT-DRONES-ONLY-LOOP — texte fixe (pas de params), même patron que onTurnSkipped ci-dessus.
+    const onAutonomousDronesOnly = () => {
+      addMessage({
+        id: `combat-autonomous-drones-only-${Date.now()}`,
+        system: true,
+        text: t('session.autonomousDronesOnly'),
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
     const onDeclareError = ({ message, i18nKey, params, username, stunned, statusCode, isOwnToken, actorLabel }) => {
       // COMBAT-STALE-CONFIRM-MESSAGE-I18N — repli sur `message` brut pour tous les sites serveur pas
       // encore migrés vers i18nKey (dette ancienne et répandue sur cet événement, hors périmètre ici).
@@ -269,6 +278,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_ACTION_DECLARED,       onActionDeclared)
     socket.on(WS.COMBAT_SLOT_ADVANCED,         onSlotAdvanced)
     socket.on(WS.COMBAT_TURN_SKIPPED,          onTurnSkipped)
+    socket.on(WS.COMBAT_AUTONOMOUS_DRONES_ONLY, onAutonomousDronesOnly)
     socket.on(WS.COMBAT_DECLARE_ERROR,         onDeclareError)
     socket.on(WS.COMBAT_RESOLVE_MOVE_BLOCKED,  onResolveMoveBlocked)
     socket.on(WS.COMBAT_TIMELINE_UPDATED,      onTimelineUpdated)
@@ -295,6 +305,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_ACTION_DECLARED,      onActionDeclared)
       socket.off(WS.COMBAT_SLOT_ADVANCED,        onSlotAdvanced)
       socket.off(WS.COMBAT_TURN_SKIPPED,         onTurnSkipped)
+      socket.off(WS.COMBAT_AUTONOMOUS_DRONES_ONLY, onAutonomousDronesOnly)
       socket.off(WS.COMBAT_DECLARE_ERROR,        onDeclareError)
       socket.off(WS.COMBAT_RESOLVE_MOVE_BLOCKED, onResolveMoveBlocked)
       socket.off(WS.COMBAT_TIMELINE_UPDATED,     onTimelineUpdated)
