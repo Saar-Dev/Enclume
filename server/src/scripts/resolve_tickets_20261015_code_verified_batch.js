@@ -104,6 +104,12 @@ VERIFIED.push({
 }, {
   code: 'CHARSHEET-XP-SYNC-PJMJ',
   note: "Vérifié bout en bout : char-sheet.js émet CHAR_XP_UPDATED (3 sites) via notifyCharSheetEvent, CharacterSheet.jsx:747 l'écoute (onXpUpdated). Même patron pour les 10 autres champs de ce commit (identité, archétype, attributs, compétences, Chance, avantages, mutations) — vérifié pour XP comme échantillon représentatif.",
+}, {
+  code: 'SURFACE-TEXTURE-COLLECTORS-DIVERGE',
+  note: "Vérifié par lecture : addSurfaceTextureIds (shared/world/surfaceDocument.js:641) bien appelée par les deux côtés (surfaceDocument.js:667 et client/src/lib/surfaceData.js:216) — plus deux copies divergentes. node --test surfaceData.test.mjs relancé : 61/61 verts.",
+}, {
+  code: 'ASSETS-ROUTE-NO-AUTH',
+  note: "Vérifié par lecture : assets.js:49-51 — if (!getAuthenticatedUser(req) && !verifyAssetToken(filePath, req.query.t)) throw new AppError(401, ...) — refus réel, pas un commentaire. Jeton signé par chemin exact (asset_route_signing.md décrit l'architecture), pas un cookie (incompatible GLTFLoader/TextureLoader cross-origin, vérifié en commit).",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
