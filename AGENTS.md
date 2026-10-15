@@ -148,6 +148,13 @@ Toute clôture indique :
 Les validations techniques automatisables s'enchaînent sans pause ; fermer un comportement
 visuel ou une règle de jeu exige une validation de Saar.
 
+Un ticket qui vient de recevoir un correctif codé et passé par toutes les validations
+automatisables ne reste jamais `in_progress` sans suite explicite (amendé 2026-10-15, Saar :
+« pense à CLOTURER le ticket ») : le compte-rendu propose la clôture (ou clôture directement si
+Saar confirme dans le même tour), jamais un simple rapport d'état qui laisse la décision en
+suspens. Même logique que les scripts de clôture ci-dessus : une étape de clôture identifiée mais
+non actionnée est une erreur, pas une étape normale en attente.
+
 Validation proportionnée au risque : typo / 1 fichier → `node --check` + tests ciblés du
 module ; multi-fichiers d'un même invariant → + tests transverses du domaine ; migration /
 combat / monde → + scénario réel concerné + build client.
