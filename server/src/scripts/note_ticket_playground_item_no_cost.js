@@ -1,7 +1,7 @@
-// Script à usage unique — note le correctif codé pour le ticket sans linked_bug_code "Playground :
-// le joueur peut créer un item catalogue sans coût (même pouvoir que Wizard Step6)" (session du
-// 2026-10-15). Statut reste 'in_progress' (pas 'resolved') : scénario réel navigateur non testé, la
-// validation en jeu par Saar reste à faire (AGENTS.md § Clôture).
+// Script à usage unique — clôture le ticket sans linked_bug_code "Playground : le joueur peut créer
+// un item catalogue sans coût (même pouvoir que Wizard Step6)" (session du 2026-10-15). Saar a
+// validé le scénario réel navigateur (bouton visible MJ only sur une fiche PJ, absent sur une fiche
+// PNJ, bascule effective) le jour même — clôturé en 'resolved' directement.
 // Idempotent (skip si déjà noté). Lancement manuel, local, depuis la racine :
 //   node --env-file=.env server/src/scripts/note_ticket_playground_item_no_cost.js
 
@@ -36,21 +36,24 @@ socket client en miroir du patron sols existant ; bouton .btn-toggle MJ only (is
 isPj, character.type === 'pj' passé par CharacterWindow.jsx).
 
 Testé : eslint/node --check (0 erreur), build client (succès), node --env-file=.env --test
-inventoryService.test.mjs 43/43 (6 tests neufs, zéro régression). Non testé : scénario réel
-navigateur (bouton visible MJ only sur une fiche PJ, absent sur une fiche PNJ, bascule effective,
-achat réel avec/sans le mode achat gratuit) — à faire par Saar avant de clore. Détail complet :
-docs/JOURNAL8.md (2026-10-15).`
+inventoryService.test.mjs 43/43 (6 tests neufs, zéro régression). Validé en jeu réel par Saar le
+2026-10-15 (bouton visible MJ only sur une fiche PJ, absent sur une fiche PNJ, bascule effective).
+Détail complet : docs/JOURNAL8.md (2026-10-15).`
 
 async function run() {
   const ticket = await db('bug_tickets').where({ title: TITLE }).first()
   if (!ticket) { console.log('[SKIP] ticket introuvable (titre exact)'); return }
   if ((ticket.admin_notes || '').includes(MARKER)) { console.log('[SKIP] déjà noté'); return }
+  const admin = await db('users').where({ role: 'admin' }).first('id')
+  if (!admin) throw new Error('Aucun compte admin trouvé.')
   await db('bug_tickets').where({ id: ticket.id }).update({
-    status: 'in_progress',
+    status: 'resolved',
+    reviewed_by: admin.id,
+    reviewed_at: db.fn.now(),
     admin_notes: `${ticket.admin_notes || ''}\n${NOTE}`.trim(),
     updated_at: db.fn.now(),
   })
-  console.log(`[OK] ticket (id=${ticket.id}) — note ajoutée, statut -> in_progress`)
+  console.log(`[OK] ticket (id=${ticket.id}) — note ajoutée, statut -> resolved`)
 }
 
 run().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1) })
