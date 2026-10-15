@@ -110,6 +110,9 @@ VERIFIED.push({
 }, {
   code: 'ASSETS-ROUTE-NO-AUTH',
   note: "Vérifié par lecture : assets.js:49-51 — if (!getAuthenticatedUser(req) && !verifyAssetToken(filePath, req.query.t)) throw new AppError(401, ...) — refus réel, pas un commentaire. Jeton signé par chemin exact (asset_route_signing.md décrit l'architecture), pas un cookie (incompatible GLTFLoader/TextureLoader cross-origin, vérifié en commit).",
+}, {
+  code: 'CONNECTOR-MODEL-URL-ABSOLUTE',
+  note: "Vérifié par lecture (surfaceDocument.js:439-443, regex protocole/protocol-relative) + node --test surfaceDocument.test.mjs relancé : 19/19 verts dont le test dédié exact.",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
