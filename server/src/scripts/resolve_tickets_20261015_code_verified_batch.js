@@ -74,6 +74,12 @@ VERIFIED.push({
 }, {
   code: 'DRONE-INTEGRITY-LOSS-PER-HIT-RAW',
   note: 'node --env-file=.env --test socketCombatHelpers.droneIntegrity.test.mjs relancé : 4/4 verts, dont le scénario RAW exact (coup léger sans perte, 1ère Avarie mortelle -1, 2e Avarie mortelle sans perte supplémentaire, destruction).',
+}, {
+  code: 'STATUT-EVANOUI-I18N-PANEL',
+  note: "Vérifié : fr.json contient status.evanoui='Évanoui' ; tokenStatusRegistry.js:89 porte inPanel:true pour 'evanoui'. node --test tokenStatusRegistry.test.mjs relancé : 23/23 verts.",
+}, {
+  code: 'STATUT-STUN-PROMPT-ORPHELIN-MORT',
+  note: 'Vérifié par lecture, pas de test automatisé disponible (statusService.js sans fichier .test.mjs) : statusService.js:105 émet COMBAT_STUN_PROMPT_CANCEL({tokenId}) pour chaque ligne combat_pending retirée ; useCombatSocket.js onStunPromptCancel ferme le prompt uniquement si p.tokenId === tokenId — code cohérent, logique simple et bien ciblée.',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
