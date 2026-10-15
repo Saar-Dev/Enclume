@@ -13,7 +13,7 @@ export function useCharacterSocket() {
   const removeInventoryItem = useCharacterStore(s => s.removeInventoryItem)
   const setSols = useCharacterStore(s => s.setSols)
   const setGauge = useCharacterStore(s => s.setGauge)
-  const setPicsouMode = useCharacterStore(s => s.setPicsouMode)
+  const setFreePurchaseMode = useCharacterStore(s => s.setFreePurchaseMode)
 
   useEffect(() => {
     if (!socket) return
@@ -83,10 +83,10 @@ export function useCharacterSocket() {
     const onGaugeUpdated = ({ characterId, categoryKey, value }) => {
       if (characterId) setGauge(characterId, categoryKey, value)
     }
-    // Mode Picsou (ticket "Playground : objet catalogue sans coût", 2026-10-15) — écriture directe,
+    // Mode achat gratuit (ticket "Playground : objet catalogue sans coût", 2026-10-15) — écriture directe,
     // même patron que onSolsUpdated.
-    const onPicsouModeUpdated = ({ characterId, picsou_mode }) => {
-      if (characterId) setPicsouMode(characterId, picsou_mode)
+    const onFreePurchaseModeUpdated = ({ characterId, free_purchase_mode }) => {
+      if (characterId) setFreePurchaseMode(characterId, free_purchase_mode)
     }
 
     socket.on(WS.WOUND_ADDED,       onWoundAdded)
@@ -97,7 +97,7 @@ export function useCharacterSocket() {
     socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
     socket.on(WS.SOLS_UPDATED,      onSolsUpdated)
     socket.on(WS.GAUGE_UPDATED,     onGaugeUpdated)
-    socket.on(WS.CHAR_PICSOU_MODE_UPDATED, onPicsouModeUpdated)
+    socket.on(WS.CHAR_FREE_PURCHASE_MODE_UPDATED, onFreePurchaseModeUpdated)
 
     return () => {
       socket.off(WS.WOUND_ADDED,       onWoundAdded)
@@ -108,10 +108,10 @@ export function useCharacterSocket() {
       socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
       socket.off(WS.SOLS_UPDATED,      onSolsUpdated)
       socket.off(WS.GAUGE_UPDATED,     onGaugeUpdated)
-      socket.off(WS.CHAR_PICSOU_MODE_UPDATED, onPicsouModeUpdated)
+      socket.off(WS.CHAR_FREE_PURCHASE_MODE_UPDATED, onFreePurchaseModeUpdated)
     }
   }, [socket])
   // [socket] uniquement — updateCharacter, setWounds, upsertInventoryItem, removeInventoryItem, setSols,
-  // setGauge, setPicsouMode (actions Zustand) sont des références stables, non listées dans les deps
+  // setGauge, setFreePurchaseMode (actions Zustand) sont des références stables, non listées dans les deps
   // (même pattern que useTokenSocket).
 }

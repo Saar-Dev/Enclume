@@ -71,9 +71,9 @@ export const useCharacterStore = create((set) => ({
   iniPenaltyByCharId: {},
   solsByCharId: {},
   handPrefByCharId: {},
-  // Mode Picsou (argent illimité/achat gratuit, bascule MJ only) — même autorité séparée que sols
-  // (WS.CHAR_PICSOU_MODE_UPDATED dédié).
-  picsouModeByCharId: {},
+  // Mode achat gratuit (bascule MJ only, jamais sur une fiche PNJ) — même autorité séparée que sols
+  // (WS.CHAR_FREE_PURCHASE_MODE_UPDATED dédié).
+  freePurchaseModeByCharId: {},
   // Course fetch-vs-subscribe (§3.4 point 1) : incrémenté à chaque écriture (fetch complet appliqué,
   // upsert/remove incrémental). Un fetch capture l'epoch avant de partir (getState().inventoryFetchEpoch)
   // et le repasse à setInventory ; si l'epoch a bougé entre-temps (upsert WS ou mutation locale plus
@@ -82,7 +82,7 @@ export const useCharacterStore = create((set) => ({
 
   // Remplacement complet — premier chargement d'un characterId. `epoch`, si fourni, doit correspondre
   // à inventoryFetchEpoch[charId] au moment du set ; sinon (fetch périmé) l'appel est ignoré.
-  setInventory: (charId, items, { threshold, sols, iniPenalty, handPref, picsouMode, epoch } = {}) => set((state) => {
+  setInventory: (charId, items, { threshold, sols, iniPenalty, handPref, freePurchaseMode, epoch } = {}) => set((state) => {
     const currentEpoch = state.inventoryFetchEpoch[charId] ?? 0
     if (epoch !== undefined && epoch !== currentEpoch) {
       return state
@@ -101,9 +101,9 @@ export const useCharacterStore = create((set) => ({
       handPrefByCharId: handPref === undefined
         ? state.handPrefByCharId
         : { ...state.handPrefByCharId, [charId]: handPref },
-      picsouModeByCharId: picsouMode === undefined
-        ? state.picsouModeByCharId
-        : { ...state.picsouModeByCharId, [charId]: picsouMode },
+      freePurchaseModeByCharId: freePurchaseMode === undefined
+        ? state.freePurchaseModeByCharId
+        : { ...state.freePurchaseModeByCharId, [charId]: freePurchaseMode },
       inventoryFetchEpoch: { ...state.inventoryFetchEpoch, [charId]: currentEpoch + 1 },
     }
   }),
@@ -155,9 +155,9 @@ export const useCharacterStore = create((set) => ({
     solsByCharId: { ...state.solsByCharId, [charId]: sols },
   })),
 
-  // Handler WS CHAR_PICSOU_MODE_UPDATED, ou réponse HTTP de la bascule MJ only.
-  setPicsouMode: (charId, picsouMode) => set((state) => ({
-    picsouModeByCharId: { ...state.picsouModeByCharId, [charId]: picsouMode },
+  // Handler WS CHAR_FREE_PURCHASE_MODE_UPDATED, ou réponse HTTP de la bascule MJ only.
+  setFreePurchaseMode: (charId, freePurchaseMode) => set((state) => ({
+    freePurchaseModeByCharId: { ...state.freePurchaseModeByCharId, [charId]: freePurchaseMode },
   })),
 
   // PLAN_WIZARD_MATERIEL_GAUGES.md §6 — { [categoryKey]: value }, pas de tableau : une jauge est

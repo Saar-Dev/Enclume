@@ -11507,7 +11507,7 @@ validation manuelle de Saar, ticket laissé `in_progress`.
 **Données** : aucune (changement client pur, aucune migration, aucun nouvel événement).
 **Retour arrière** : `git revert` du commit (fichiers client uniquement).
 
-## Session (Claude) — 2026-10-15 — Mode Picsou : le joueur créait un objet catalogue sans coût en session, hors Wizard
+## Session (Claude) — 2026-10-15 — Mode achat gratuit : le joueur créait un objet catalogue sans coût en session, hors Wizard
 
 Ticket "Playground : le joueur peut créer un item catalogue sans coût (même pouvoir que Wizard
 Step6)" (Saar, 2026-08-23, jamais diagnostiqué jusqu'ici). [VÉRIFIÉ par lecture] `InventoryPanel.jsx`
@@ -11522,14 +11522,19 @@ jamais lu comme condition d'usage/équipement nulle part — un objet en attente
 fonctionnel, payé ou non, dès sa création.
 
 Décision de Saar (le plus simple) : pas de blocage strict MJ-only ni de débit automatique silencieux
-— un bouton MJ only sur `InventoryPanel.jsx`, « mode Picsou » (argent illimité/achat gratuit), par
-personnage joueur.
+— un bouton MJ only sur `InventoryPanel.jsx`, visible seulement sur une fiche PJ (jamais PNJ), mode
+« achat gratuit » (argent illimité/achat gratuit) par personnage joueur. Nom provisoire « mode
+Picsou » proposé en cours de session, remplacé par « mode achat gratuit » sur demande de Saar (plus
+sérieux et explicite) — renommé partout (colonne, événement, fonctions, i18n), pas seulement le texte
+du bouton.
 
 **Fix** :
-- Migration 392 (`char_sheet.picsou_mode boolean not null default false`, additive, même patron que
-  346).
-- `inventoryService.js` : `_chargeSols` (autorité unique du débit, 4 appelants) devient Picsou-aware
-  — lu sous le même verrou que le solde, aucun débit ni refus "Sols insuffisants" si actif.
+- Migration 392 (`char_sheet.picsou_mode`, additive, même patron que 346) puis migration 393 (même
+  session, jamais poussée) : renomme la colonne en `free_purchase_mode` — 392 reste inchangée
+  (jamais de correction empilée sur une migration déjà appliquée, `.claude/rules/migrations.md`).
+- `inventoryService.js` : `_chargeSols` (autorité unique du débit, 4 appelants) lit désormais
+  `free_purchase_mode` sous le même verrou que le solde — aucun débit ni refus "Sols insuffisants"
+  si actif.
 - **Le vrai trou comblé** : nouvelle fonction testée `resolveAutoValidate({ isGm, campaignId,
   characterId })`, appelée par la route à la place du calcul en dur — étend `autoValidate` à "le
   personnage est verrouillé (`wizard_locked_at` posé) ET en campagne". Analyse à charge qui a payé :
@@ -11539,10 +11544,14 @@ personnage joueur.
   branche de validation). Corrigé en étendant `autoValidate` lui-même : un achat payé en session est
   donc aussi auto-validé, plus de revue MJ en attente pour lui — cohérent, un MJ qui active l'argent
   illimité pour un joueur lui fait déjà confiance pour prendre ce qu'il veut.
-- Nouvelle route `PUT /char-sheet/:id/picsou-mode` (MJ only), événement `WS.CHAR_PICSOU_MODE_UPDATED`.
-- Client : `picsouModeByCharId`/`setPicsouMode` (characterStore.js, même patron que sols),
-  `useInventoryData`/`inventoryDataSync.js` (même bundle que sols), `useCharacterSocket.js` (écoute
-  l'événement), bouton `.btn-toggle` MJ only (`isGm && !inWizard`) sur `InventoryPanel.jsx`.
+- Nouvelle route `PUT /char-sheet/:id/free-purchase-mode` (MJ only), événement
+  `WS.CHAR_FREE_PURCHASE_MODE_UPDATED`.
+- Client : `freePurchaseModeByCharId`/`setFreePurchaseMode` (characterStore.js, même patron que
+  sols), `useInventoryData`/`inventoryDataSync.js` (même bundle que sols), `useCharacterSocket.js`
+  (écoute l'événement), bouton `.btn-toggle` MJ only (`isGm && !inWizard && isPj`) sur
+  `InventoryPanel.jsx` — `isPj` passé par `CharacterWindow.jsx` (`character.type === 'pj'`, seul
+  appelant en session réelle ; `CharacterPrintView.jsx` et `StepMaterielEtBiens.jsx` restent exclus
+  par `isGm`/`inWizard` sans changement).
 - Aucun objet déjà en attente avant ce correctif n'est affecté (comportement de validation MJ
   inchangé pour eux) ; Wizard Step6 inchangé (flux "confiance" intact, jamais verrouillé donc jamais
   concerné par `resolveAutoValidate`).
@@ -11550,13 +11559,16 @@ personnage joueur.
 **Testé** : `eslint`/`node --check` sur tous les fichiers touchés (0 erreur), `npm run build` client
 (succès). `node --env-file=.env --test inventoryService.test.mjs` (base locale, lancé par l'agent,
 autorisation 2026-09-25) 43/43 — dont 6 tests neufs (`resolveAutoValidate` MJ/Coffre-native/joueur
-verrouillé/joueur non verrouillé, `addItem` verrouillé+sols suffisants, `addItem` Picsou+sols
-insuffisants) et zéro régression sur les 37 tests préexistants (dont les 3 cas Coffre-native/MJ/
-joueur-non-verrouillé déjà couverts, comportement inchangé confirmé). Migration 392 appliquée (serveur
-de Saar relancé en cours de session) et vérifiée (`information_schema.columns`, `knex_migrations`).
-**Non testé** : scénario réel navigateur (bouton visible MJ only, bascule effective, achat réel en
-session avec/sans Picsou) — à faire par Saar avant de clore. Détail complet ci-dessus.
-**Données** : migration 392 (additive, `down()` = DROP COLUMN).
+verrouillé/joueur non verrouillé, `addItem` verrouillé+sols suffisants, `addItem` mode achat
+gratuit+sols insuffisants) et zéro régression sur les 37 tests préexistants (dont les 3 cas
+Coffre-native/MJ/joueur-non-verrouillé déjà couverts, comportement inchangé confirmé). Migrations
+392 puis 393 appliquées (serveur de Saar relancé en cours de session, auto-appliquées à l'écriture
+du fichier) et vérifiées (`information_schema.columns`, `knex_migrations`).
+**Non testé** : scénario réel navigateur (bouton visible MJ only sur une fiche PJ, absent sur une
+fiche PNJ, bascule effective, achat réel avec/sans le mode achat gratuit) — à faire par Saar avant
+de clore. Détail complet ci-dessus.
+**Données** : migration 392 (additive, `down()` = DROP COLUMN) puis 393 (renomme la colonne,
+symétrique dans les deux sens).
 **Retour arrière** : `git revert` du commit (migration additive sans donnée tierce dépendante) +
 rollback migration si nécessaire (`down()` direct, jamais la CLI brute, voir `.claude/rules/
 migrations.md`).

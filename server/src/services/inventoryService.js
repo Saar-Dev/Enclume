@@ -23,13 +23,13 @@ import { initialMagazineOnEquip } from '../../../shared/ammoRules.js'
 // `forUpdate` + vérif AVANT décrément, même patron que tradeService.js#executeBuy (seul autre point
 // du projet qui débite déjà des Sols) — jamais de décrément optimiste suivi d'un rollback, toujours
 // lire le solde sous verrou d'abord.
-// Mode Picsou (char_sheet.picsou_mode, bascule MJ only) : lu sous le même verrou que le solde — si
+// Mode achat gratuit (char_sheet.free_purchase_mode, bascule MJ only) : lu sous le même verrou que le solde — si
 // actif, aucun débit ni refus "Sols insuffisants". Autorité unique : les 4 appelants (ajout simple/
 // stack/multi, validation MJ) en profitent sans rien changer de leur côté.
 async function _chargeSols(trx, characterId, amount) {
   if (amount <= 0) return
-  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first('sols', 'picsou_mode')
-  if (sheet?.picsou_mode) return
+  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first('sols', 'free_purchase_mode')
+  if (sheet?.free_purchase_mode) return
   if (!sheet || sheet.sols < amount) {
     throw new AppError(400, `Sols insuffisants (requis : ${amount}, disponible : ${sheet?.sols ?? 0})`)
   }
@@ -363,7 +363,7 @@ export async function resolveAmmoInit(equipmentId, slot, executor = db) {
 // GET /:characterId/inventory
 export async function getInventory(characterId, campaignId) {
   const sheet = await db('char_sheet').where({ character_id: characterId }).first()
-  if (!sheet) return { items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0, picsou_mode: false }
+  if (!sheet) return { items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0, free_purchase_mode: false }
 
   // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), pas la valeur brute
   // — corrige PI4 (docs/PLAN_MUTATION2.md Lot 1). encumbrance_enabled/multiplier : options de
@@ -515,7 +515,7 @@ export async function getInventory(characterId, campaignId) {
     ini_penalty:  iniPenalty,
     threshold,
     hand_pref:    identity?.hand_pref || 'R',
-    picsou_mode:  sheet.picsou_mode,
+    free_purchase_mode:  sheet.free_purchase_mode,
   }
 }
 

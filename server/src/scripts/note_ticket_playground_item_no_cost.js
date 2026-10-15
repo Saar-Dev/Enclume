@@ -21,21 +21,25 @@ req.isGm/campaign_id==null — rien ne distinguait un personnage encore en créa
 verrouillé et lancé en session. validated_by_gm n'est jamais lu comme condition d'usage/équipement
 nulle part : un objet en attente est déjà pleinement fonctionnel, payé ou non.
 
-Décision de Saar (le plus simple) : bouton MJ only sur InventoryPanel.jsx, mode Picsou (argent
-illimité/achat gratuit), par personnage joueur — pas de blocage strict ni de débit silencieux.
+Décision de Saar (le plus simple) : bouton MJ only sur InventoryPanel.jsx, visible seulement sur une
+fiche PJ (jamais PNJ), mode « achat gratuit » (argent illimité/achat gratuit) par personnage joueur —
+pas de blocage strict ni de débit silencieux.
 
-Corrigé : migration 392 (char_sheet.picsou_mode, additive) ; _chargeSols (inventoryService.js,
-autorité unique du débit) devient Picsou-aware ; nouvelle fonction testée resolveAutoValidate
+Corrigé : migration 392+393 (char_sheet.free_purchase_mode, additive — 393 renomme la colonne du nom
+provisoire picsou_mode vers un nom plus sérieux, même session) ; _chargeSols (inventoryService.js,
+autorité unique du débit) lit désormais ce réglage ; nouvelle fonction testée resolveAutoValidate
 étend autoValidate à "personnage verrouillé (wizard_locked_at posé) ET en campagne" — un achat payé
 en session est donc aussi auto-validé (plus de double débit possible par construction, voir
 JOURNAL8.md pour l'erreur de plan initiale corrigée en analyse à charge) ; nouvelle route PUT
-/char-sheet/:id/picsou-mode (MJ only) + événement CHAR_PICSOU_MODE_UPDATED ; store/hook/socket client
-en miroir du patron sols existant ; bouton .btn-toggle MJ only (isGm && !inWizard).
+/char-sheet/:id/free-purchase-mode (MJ only) + événement CHAR_FREE_PURCHASE_MODE_UPDATED ; store/hook/
+socket client en miroir du patron sols existant ; bouton .btn-toggle MJ only (isGm && !inWizard &&
+isPj, character.type === 'pj' passé par CharacterWindow.jsx).
 
 Testé : eslint/node --check (0 erreur), build client (succès), node --env-file=.env --test
 inventoryService.test.mjs 43/43 (6 tests neufs, zéro régression). Non testé : scénario réel
-navigateur (bouton visible MJ only, bascule effective, achat réel avec/sans Picsou) — à faire par
-Saar avant de clore. Détail complet : docs/JOURNAL8.md (2026-10-15).`
+navigateur (bouton visible MJ only sur une fiche PJ, absent sur une fiche PNJ, bascule effective,
+achat réel avec/sans le mode achat gratuit) — à faire par Saar avant de clore. Détail complet :
+docs/JOURNAL8.md (2026-10-15).`
 
 async function run() {
   const ticket = await db('bug_tickets').where({ title: TITLE }).first()

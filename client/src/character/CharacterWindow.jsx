@@ -482,6 +482,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               canEdit={effectiveIsGm || effectiveIsOwner}
               isGm={effectiveIsGm}
               hasCampaign={hasCampaign}
+              isPj={character.type === 'pj'}
             />
             <GaugesPanel characterId={character.id} isGm={effectiveIsGm} />
             <DragOverlay>

@@ -28,7 +28,7 @@ export function populateInventory(characterId) {
         sols:       res.data.sols ?? 0,
         iniPenalty: res.data.ini_penalty ?? 0,
         handPref:   res.data.hand_pref || 'R',
-        picsouMode: res.data.picsou_mode ?? false,
+        freePurchaseMode: res.data.free_purchase_mode ?? false,
         epoch,
       })
     })

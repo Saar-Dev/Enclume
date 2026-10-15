@@ -14,7 +14,7 @@ export function useInventoryData(characterId) {
   const iniPenalty = useCharacterStore(s => s.iniPenaltyByCharId[characterId] ?? 0)
   const sols       = useCharacterStore(s => s.solsByCharId[characterId] ?? 0)
   const handPref   = useCharacterStore(s => s.handPrefByCharId[characterId] ?? 'R')
-  const picsouMode = useCharacterStore(s => s.picsouModeByCharId[characterId] ?? false)
+  const freePurchaseMode = useCharacterStore(s => s.freePurchaseModeByCharId[characterId] ?? false)
 
   useEffect(() => {
     if (!characterId || items !== undefined) return
@@ -33,7 +33,7 @@ export function useInventoryData(characterId) {
     iniPenalty,
     sols,
     handPref,
-    picsouMode,
+    freePurchaseMode,
     loading: items === undefined,
   }
 }

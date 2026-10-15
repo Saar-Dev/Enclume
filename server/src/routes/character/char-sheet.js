@@ -1265,28 +1265,28 @@ router.post('/:characterId/inventory', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// ─── PUT /api/char-sheet/:characterId/picsou-mode ─────────────────────────────
-// Mode Picsou (argent illimité/achat gratuit) — bascule MJ only, par personnage joueur. Ticket
-// "Playground : objet catalogue sans coût" (2026-10-15) : addItem/_chargeSols (inventoryService.js)
-// lisent déjà cette colonne, aucun autre changement nécessaire ici.
-router.put('/:characterId/picsou-mode', async (req, res, next) => {
+// ─── PUT /api/char-sheet/:characterId/free-purchase-mode ─────────────────────────────
+// Mode achat gratuit — bascule MJ only, par personnage joueur (jamais sur une fiche PNJ, filtré
+// côté client). Ticket "Playground : objet catalogue sans coût" (2026-10-15) : addItem/_chargeSols
+// (inventoryService.js) lisent déjà cette colonne, aucun autre changement nécessaire ici.
+router.put('/:characterId/free-purchase-mode', async (req, res, next) => {
   try {
     if (!req.isGm) throw new AppError(403, 'GM uniquement')
-    const { picsou_mode } = req.body
-    if (typeof picsou_mode !== 'boolean') throw new AppError(400, 'picsou_mode doit être un booléen')
+    const { free_purchase_mode } = req.body
+    if (typeof free_purchase_mode !== 'boolean') throw new AppError(400, 'free_purchase_mode doit être un booléen')
 
     const characterId = req.params.characterId
     const [updated] = await db('char_sheet')
       .where({ character_id: characterId })
-      .update({ picsou_mode, updated_at: db.fn.now() })
-      .returning('picsou_mode')
+      .update({ free_purchase_mode, updated_at: db.fn.now() })
+      .returning('free_purchase_mode')
     if (!updated) throw new AppError(404, 'Sheet not found — create it first')
 
-    await notifyCharSheetEvent(req.app.get('io'), characterId, req.character.campaign_id, WS.CHAR_PICSOU_MODE_UPDATED, {
-      picsou_mode: updated.picsou_mode,
+    await notifyCharSheetEvent(req.app.get('io'), characterId, req.character.campaign_id, WS.CHAR_FREE_PURCHASE_MODE_UPDATED, {
+      free_purchase_mode: updated.free_purchase_mode,
     })
 
-    res.json({ picsou_mode: updated.picsou_mode })
+    res.json({ free_purchase_mode: updated.free_purchase_mode })
   } catch (err) { next(err) }
 })
 

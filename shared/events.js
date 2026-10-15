@@ -130,8 +130,8 @@ export const WS = {
   // Signal seul (pas de payload de valeur) — le client rappelle son propre mécanisme de rechargement
   // déjà existant (CharacterSheet.jsx::handleMutationsChanged, 2 endpoints légers), jamais dupliqué ici.
   CHAR_MUTATIONS_UPDATED:     'char-sheet:mutations_updated',      // { characterId }
-  // Mode Picsou (argent illimité/achat gratuit) — bascule MJ only, PUT /char-sheet/:id/picsou-mode.
-  CHAR_PICSOU_MODE_UPDATED:   'char-sheet:picsou_mode_updated',    // { characterId, picsou_mode }
+  // Mode achat gratuit — bascule MJ only, PUT /char-sheet/:id/free-purchase-mode.
+  CHAR_FREE_PURCHASE_MODE_UPDATED:   'char-sheet:free_purchase_mode_updated',    // { characterId, free_purchase_mode }
 
   // Combat (Chantier 11 — Sprint 1+)
   // Démarrage / arrêt

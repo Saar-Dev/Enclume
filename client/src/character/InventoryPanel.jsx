@@ -7,7 +7,7 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, splitItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest, setPicsouMode } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, splitItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest, setFreePurchaseMode } from '../lib/inventoryMutations.js'
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import IntegrityPopover from './IntegrityPopover.jsx'
@@ -75,27 +75,27 @@ const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'i
 // matériel de départ en Wizard Step 7 (seul appelant à passer true, StepMaterielEtBiens.jsx) — sur
 // la fiche permanente (campagne, Coffre standalone) ou en export PDF, `validated_by_gm` reste
 // pertinent en base mais n'a pas à être exposé (décision Saar, ticket "Inventaire validé").
-export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign = true, inWizard = false }) {
+export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign = true, inWizard = false, isPj = false }) {
   const { t } = useTranslation('charSheet')
   // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
   // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
-  const { items, loading, picsouMode } = useInventoryData(characterId)
+  const { items, loading, freePurchaseMode } = useInventoryData(characterId)
   const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
   const [equipError, setEquipError] = useState(null)
-  const [picsouPending, setPicsouPending] = useState(false)
+  const [freePurchasePending, setFreePurchasePending] = useState(false)
 
-  // Mode Picsou (ticket "Playground : objet catalogue sans coût", 2026-10-15) — MJ only, hors
+  // Mode achat gratuit (ticket "Playground : objet catalogue sans coût", 2026-10-15) — MJ only, hors
   // Wizard (Step6 reste gratuit/confiance quel que soit ce réglage, cf. addItem côté serveur).
-  const handleTogglePicsouMode = useCallback(async () => {
-    setPicsouPending(true)
+  const handleToggleFreePurchaseMode = useCallback(async () => {
+    setFreePurchasePending(true)
     try {
-      await setPicsouMode(characterId, !picsouMode)
+      await setFreePurchaseMode(characterId, !freePurchaseMode)
     } catch (err) {
-      console.error('Erreur bascule mode Picsou :', err)
+      console.error('Erreur bascule mode achat gratuit :', err)
     } finally {
-      setPicsouPending(false)
+      setFreePurchasePending(false)
     }
-  }, [characterId, picsouMode])
+  }, [characterId, freePurchaseMode])
 
   // ── Catalogue GM ──────────────────────────────────────────────────────────
   const [addOpen,       setAddOpen]       = useState(false)
@@ -476,18 +476,19 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
         )}
       </div>
 
-      {/* Mode Picsou — MJ only, hors Wizard (ticket "Playground : objet catalogue sans coût",
-          2026-10-15). Step6 reste gratuit/confiance quel que soit ce réglage (addItem côté serveur
-          ne le regarde que pour un personnage déjà verrouillé, en campagne). */}
-      {isGm && !inWizard && (
+      {/* Mode achat gratuit — MJ only, hors Wizard, PJ uniquement (ticket "Playground : objet catalogue
+          sans coût", 2026-10-15 ; demande Saar : jamais sur une fiche PNJ). Step6 reste gratuit/
+          confiance quel que soit ce réglage (addItem côté serveur ne le regarde que pour un
+          personnage déjà verrouillé, en campagne). */}
+      {isGm && !inWizard && isPj && (
         <button
           type="button"
-          className={`btn btn-toggle${picsouMode ? ' active' : ''}`}
-          onClick={handleTogglePicsouMode}
-          disabled={picsouPending}
+          className={`btn btn-toggle${freePurchaseMode ? ' active' : ''}`}
+          onClick={handleToggleFreePurchaseMode}
+          disabled={freePurchasePending}
           style={{ width: '100%', marginTop: 12 }}
         >
-          {picsouMode ? t('inventoryPanel.picsouModeOn') : t('inventoryPanel.picsouModeOff')}
+          {freePurchaseMode ? t('inventoryPanel.freePurchaseModeOn') : t('inventoryPanel.freePurchaseModeOff')}
         </button>
       )}
 

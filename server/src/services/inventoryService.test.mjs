@@ -306,16 +306,16 @@ test('addItem — joueur, personnage verrouillé (autoValidate=true via resolveA
   }
 })
 
-test('addItem — mode Picsou actif, sols insuffisants : aucun débit, aucun refus, auto-validé', { skip }, async () => {
+test('addItem — mode achat gratuit actif, sols insuffisants : aucun débit, aucun refus, auto-validé', { skip }, async () => {
   const fx = await createFixture()
   try {
     await db('char_sheet').where({ character_id: fx.owner.id })
-      .update({ wizard_locked_at: db.fn.now(), sols: fx.pricedRef.price - 1, picsou_mode: true })
+      .update({ wizard_locked_at: db.fn.now(), sols: fx.pricedRef.price - 1, free_purchase_mode: true })
     const autoValidate = await resolveAutoValidate({ isGm: false, campaignId: fx.campaign.id, characterId: fx.owner.id })
     const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, autoValidate, false)
     assert.equal(item.validated_by_gm, true)
     const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
-    assert.equal(after.sols, fx.pricedRef.price - 1, 'mode Picsou — aucun débit malgré des sols insuffisants')
+    assert.equal(after.sols, fx.pricedRef.price - 1, 'mode achat gratuit — aucun débit malgré des sols insuffisants')
   } finally {
     await cleanup(fx)
   }

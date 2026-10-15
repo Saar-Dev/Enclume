@@ -55,14 +55,14 @@ export async function validateItem(characterId, itemId) {
   return res.data.item
 }
 
-// Mode Picsou (argent illimité/achat gratuit, ticket "Playground : objet catalogue sans coût",
-// 2026-10-15) — MJ only côté serveur (char-sheet.js rejette si !req.isGm). Pas d'écriture inventaire
-// ici : la route renvoie { picsou_mode }, écrit directement dans picsouModeByCharId (même patron
+// Mode achat gratuit (ticket "Playground : objet catalogue sans coût", 2026-10-15) — MJ only côté
+// serveur (char-sheet.js rejette si !req.isGm). Pas d'écriture inventaire
+// ici : la route renvoie { free_purchase_mode }, écrit directement dans freePurchaseModeByCharId (même patron
 // que setSols/onSolsUpdated, pas upsertInventoryItem — ce n'est pas un objet d'inventaire).
-export async function setPicsouMode(characterId, picsouMode) {
-  const res = await api.put(`/char-sheet/${characterId}/picsou-mode`, { picsou_mode: picsouMode })
-  useCharacterStore.getState().setPicsouMode(characterId, res.data.picsou_mode)
-  return res.data.picsou_mode
+export async function setFreePurchaseMode(characterId, freePurchaseMode) {
+  const res = await api.put(`/char-sheet/${characterId}/free-purchase-mode`, { free_purchase_mode: freePurchaseMode })
+  useCharacterStore.getState().setFreePurchaseMode(characterId, res.data.free_purchase_mode)
+  return res.data.free_purchase_mode
 }
 
 // PLAN_USURE&INTEGRITE.md §6 — édition d'ITG (MJ ou propriétaire, D3). La route PUT route les 3
