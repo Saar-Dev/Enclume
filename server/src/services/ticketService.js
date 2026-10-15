@@ -111,6 +111,13 @@ export async function updateTicket(actorId, id, patch) {
     update.title = patch.title.trim()
   }
 
+  if (patch.description !== undefined) {
+    if (!patch.description?.trim()) {
+      throw new AppError(400, 'description ne peut pas être vide')
+    }
+    update.description = patch.description.trim()
+  }
+
   if (patch.cluster_label !== undefined) update.cluster_label = patch.cluster_label || null
   if (patch.linked_bug_code !== undefined) update.linked_bug_code = patch.linked_bug_code || null
   if (patch.admin_notes !== undefined) update.admin_notes = patch.admin_notes || null

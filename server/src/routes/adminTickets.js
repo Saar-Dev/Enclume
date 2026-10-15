@@ -24,9 +24,9 @@ router.get('/', requireAuth, requireAdmin, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { title, status, priority, cluster_label, linked_bug_code, admin_notes } = req.body
+    const { title, description, status, priority, cluster_label, linked_bug_code, admin_notes } = req.body
     const ticket = await updateTicket(req.user.id, req.params.id, {
-      title, status, priority, cluster_label, linked_bug_code, admin_notes,
+      title, description, status, priority, cluster_label, linked_bug_code, admin_notes,
     })
     res.json({ ticket })
   } catch (err) { next(err) }

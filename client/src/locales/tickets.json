@@ -69,6 +69,12 @@
       "critical": "Critique"
     },
     "priorityPlaceholder": "Priorité (non posée)",
+    "categoryBadge": {
+      "bug": "Bug",
+      "balance": "Déséquilibre",
+      "suggestion": "Suggestion",
+      "other": "Autre"
+    },
     "clusterLabel": "Cluster",
     "clusterLabelEditPlaceholder": "Libellé de cluster (ex. Cluster N)",
     "linkedBugCode": "Code lié",
@@ -76,7 +82,7 @@
     "reportedBy": "Signalé par",
     "stats": {
       "open": "ouverts",
-      "closed": "résolus",
+      "closed": "fermés",
       "total": "total"
     },
     "bulk": {

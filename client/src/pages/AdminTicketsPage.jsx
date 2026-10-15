@@ -1,15 +1,70 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 
 const ORIGINS = ['player', 'gm', 'admin', 'log']
 const STATUSES = ['new', 'triaged', 'in_progress', 'suspended', 'resolved', 'wont_fix', 'duplicate']
+// Miroir de CLOSED_STATUSES (ticketService.js, non importable côté client) — sert uniquement à
+// détailler l'agrégat "fermés" de la topbar en survol, jamais à filtrer (le serveur reste l'autorité
+// du filtrage, cf. activeOnly côté load()).
+const CLOSED_STATUSES = ['resolved', 'wont_fix', 'duplicate']
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 // Miroir de ReportTicketPage.jsx (CATEGORY_KEYS/DOMAIN_KEYS) — même patron que ORIGINS/STATUSES/
 // PRIORITIES ci-dessus, `domain` n'a pas de CHECK serveur (TICKETS.md §5) donc rien à valider ici.
 const CATEGORY_KEYS = ['bug', 'balance', 'suggestion', 'other']
 const DOMAIN_KEYS = ['monde', 'combat', 'personnage', 'wizard', 'marchands', 'editeur', 'infrastructure', 'autre']
+
+// L'agrégat "fermés" de la topbar (stats.closed) additionne resolved + wont_fix + duplicate
+// (CLOSED_STATUSES côté serveur) — affiché en texte visible (pas un tooltip survol, trop lent et
+// ça cachait justement la réponse à la question que Saar posait) pour ne pas laisser croire que ce
+// chiffre ne compte que les tickets au statut "Résolu" (revue UX, 2026-10-15).
+function closedBreakdown(stats, tt) {
+  if (!stats?.byStatus) return null
+  return CLOSED_STATUSES
+    .map(s => `${tt(`admin.statusLabels.${s}`)} ${stats.byStatus[s] || 0}`)
+    .join(' · ')
+}
+
+// Un ticket sans priorité n'a pas encore été triagé (TICKETS.md §1 : jamais saisie par le
+// rapporteur) — il doit remonter avant tout ticket déjà priorisé, pas se retrouver noyé sous les
+// priorités "basse" : sinon un signalement tout juste reçu passe inaperçu sous le poids des vieux
+// tickets "basse priorité" déjà traités une fois (méthodologie de triage, TICKETS.md §4 phase 1).
+const PRIORITY_RANK = { critical: 1, high: 2, medium: 3, low: 4 }
+function sortForTriage(items) {
+  return [...items].sort((a, b) => {
+    const rankA = a.priority ? (PRIORITY_RANK[a.priority] ?? 9) : 0
+    const rankB = b.priority ? (PRIORITY_RANK[b.priority] ?? 9) : 0
+    if (rankA !== rankB) return rankA - rankB
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
+}
+
+// Teintes réutilisées telles quelles depuis le vocabulaire .badge existant (index.css,
+// .badge-fail/.badge-success : même triplet texte-soft + fond 12% + bordure 45%) — appliquées ici
+// aux <select> statut/priorité pour qu'une urgence se voie sans lire le texte du menu déroulant.
+const TONE_STYLE = {
+  success: { color: 'var(--color-success-soft)', background: 'rgba(76,175,119,0.12)', borderColor: 'rgba(76,175,119,0.45)' },
+  warning: { color: 'var(--color-warning-soft)', background: 'rgba(224,160,80,0.12)', borderColor: 'rgba(224,160,80,0.45)' },
+  danger: { color: 'var(--color-danger-soft)', background: 'rgba(224,91,91,0.12)', borderColor: 'rgba(224,91,91,0.45)' },
+  gold: { color: 'var(--color-gold)', background: 'rgba(245,197,66,0.12)', borderColor: 'rgba(245,197,66,0.45)' },
+  muted: { color: 'var(--text-muted)', background: 'transparent', borderColor: 'var(--border-subtle)' },
+}
+function statusTone(status) {
+  if (CLOSED_STATUSES.includes(status)) return 'success'
+  if (status === 'suspended') return 'muted'
+  return 'warning'
+}
+const PRIORITY_TONE = { critical: 'danger', high: 'warning', medium: 'gold', low: 'muted' }
+
+// Redimensionne un textarea à son contenu — un titre ou une description ne doivent jamais se
+// cacher derrière un ascenseur interne invisible (constat Saar : un tooltip lent n'est pas une
+// solution, et un textarea à hauteur fixe aurait recréé le même problème autrement).
+function autoGrow(el) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
 
 // PLAN_TICKETS.md Lot 1 — écran de triage admin. `cluster_label` est un texte libre édité inline
 // (décision Saar §4.1 : "juste organiser des filtres", pas de table de référence séparée) — filtrer
@@ -120,7 +175,7 @@ export default function AdminTicketsPage() {
   }
 
   const groups = ORIGINS
-    .map(origin => ({ origin, items: tickets.filter(ticket => ticket.origin === origin) }))
+    .map(origin => ({ origin, items: sortForTriage(tickets.filter(ticket => ticket.origin === origin)) }))
     .filter(group => group.items.length > 0)
 
   return (
@@ -132,7 +187,10 @@ export default function AdminTicketsPage() {
         {stats && (
           <div style={S.statsBar}>
             <span style={S.statItem}><b style={S.statOpen}>{stats.open}</b> {tt('admin.stats.open')}</span>
-            <span style={S.statItem}><b style={S.statClosed}>{stats.closed}</b> {tt('admin.stats.closed')}</span>
+            <span style={S.statItem}>
+              <b style={S.statClosed}>{stats.closed}</b> {tt('admin.stats.closed')}
+              {closedBreakdown(stats, tt) && <span style={S.statDetail}> ({closedBreakdown(stats, tt)})</span>}
+            </span>
             <span style={S.statItem}>{stats.total} {tt('admin.stats.total')}</span>
           </div>
         )}
@@ -257,13 +315,28 @@ function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
   const [clusterDraft, setClusterDraft] = useState(ticket.cluster_label || '')
   const [codeDraft, setCodeDraft] = useState(ticket.linked_bug_code || '')
   const [titleDraft, setTitleDraft] = useState(ticket.title)
+  const [descriptionDraft, setDescriptionDraft] = useState(ticket.description)
+
+  const titleRef = useRef(null)
+  const descriptionRef = useRef(null)
+  // Taille initiale au montage : un titre/description déjà multi-lignes ne doit pas s'afficher
+  // compressé tant que l'utilisateur n'a pas encore tapé un caractère dedans.
+  useEffect(() => { autoGrow(titleRef.current) }, [])
+  useEffect(() => { autoGrow(descriptionRef.current) }, [])
+
+  // `domain` n'a pas de CHECK serveur (TICKETS.md §5) : les tickets importés de l'ancien
+  // BUGIDENTIFIE.md portent du texte libre multi-valeurs hors DOMAIN_KEYS. Ne traduire que les
+  // valeurs connues, sinon afficher la valeur brute — jamais une clé i18n non résolue à l'écran.
+  const domainLabel = ticket.domain
+    ? (DOMAIN_KEYS.includes(ticket.domain) ? tt(`form.domainOptions.${ticket.domain}`) : ticket.domain)
+    : null
 
   return (
     <div style={S.row}>
       <input type="checkbox" checked={selected} onChange={onToggleSelect} style={S.rowCheckbox} />
       <div className={`ticket-priority-chip${ticket.priority ? ` priority-${ticket.priority}` : ''}`} />
       <div style={S.rowMain}>
-        <div style={S.rowTop}>
+        <div style={S.rowHeader}>
           <input
             style={S.codeInput}
             value={codeDraft}
@@ -273,29 +346,43 @@ function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
             onChange={e => setCodeDraft(e.target.value)}
             onBlur={() => { if (codeDraft !== (ticket.linked_bug_code || '')) onPatch({ linked_bug_code: codeDraft }) }}
           />
-          <input
+          <textarea
+            ref={titleRef}
             className="ticket-title-input"
             style={S.rowTitleInput}
             value={titleDraft}
             disabled={saving}
-            onChange={e => setTitleDraft(e.target.value)}
+            rows={1}
+            onChange={e => { setTitleDraft(e.target.value); autoGrow(e.target) }}
             onBlur={() => { if (titleDraft.trim() && titleDraft !== ticket.title) onPatch({ title: titleDraft }) }}
           />
-          <span className="badge">{tt(`form.categoryOptions.${ticket.category}`)}</span>
-          {ticket.domain && <span className="badge">{tt(`form.domainOptions.${ticket.domain}`)}</span>}
         </div>
-        <p style={S.rowDescription}>{ticket.description}</p>
-        <div style={S.rowMeta}>
+
+        <div style={S.rowBadges}>
+          <span className="badge">{tt(`admin.categoryBadge.${ticket.category}`)}</span>
+          {domainLabel && <span className="badge">{domainLabel}</span>}
           {ticket.reporter_username && (
             <span style={S.muted}>{tt('admin.reportedBy')} : {ticket.reporter_username}</span>
           )}
-          <span style={S.muted}>{new Date(ticket.created_at).toLocaleString('fr-FR')}</span>
+          <span style={S.muted}>
+            {new Date(ticket.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+          </span>
         </div>
+
+        <textarea
+          ref={descriptionRef}
+          style={S.rowDescription}
+          value={descriptionDraft}
+          disabled={saving}
+          rows={2}
+          onChange={e => { setDescriptionDraft(e.target.value); autoGrow(e.target) }}
+          onBlur={() => { if (descriptionDraft.trim() && descriptionDraft !== ticket.description) onPatch({ description: descriptionDraft }) }}
+        />
       </div>
 
       <div style={S.rowActions}>
         <select
-          style={S.select}
+          style={{ ...S.select, width: '100%', ...TONE_STYLE[statusTone(ticket.status)] }}
           value={ticket.status}
           disabled={saving}
           onChange={e => onPatch({ status: e.target.value })}
@@ -304,7 +391,7 @@ function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
         </select>
 
         <select
-          style={S.select}
+          style={{ ...S.select, width: '100%', ...TONE_STYLE[ticket.priority ? PRIORITY_TONE[ticket.priority] : 'muted'] }}
           value={ticket.priority || ''}
           disabled={saving}
           onChange={e => onPatch({ priority: e.target.value || null })}
@@ -314,7 +401,7 @@ function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
         </select>
 
         <input
-          style={S.select}
+          style={{ ...S.select, width: '100%' }}
           value={clusterDraft}
           disabled={saving}
           placeholder={tt('admin.clusterLabelEditPlaceholder')}
@@ -438,6 +525,7 @@ const S = {
   statItem: { fontSize: '12px', color: 'var(--text-secondary)' },
   statOpen: { color: 'var(--color-warning)' },
   statClosed: { color: 'var(--color-success)' },
+  statDetail: { color: 'var(--text-muted)' },
 
   body: { flex: 1, maxWidth: '900px', width: '100%', margin: '0 auto', padding: '24px' },
   muted: { color: 'var(--text-muted)', fontSize: '12px' },
@@ -456,12 +544,23 @@ const S = {
   list: { display: 'flex', flexDirection: 'column', gap: '8px' },
   row: { display: 'flex', alignItems: 'flex-start', gap: '16px', backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px 14px', flexWrap: 'wrap' },
   rowCheckbox: { marginTop: '4px', flexShrink: 0 },
-  rowMain: { flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '4px' },
-  rowTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+  rowMain: { flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '6px' },
+  // Code + titre sur leur propre ligne pleine largeur : le titre n'est plus en concurrence
+  // d'espace avec les badges catégorie/domaine (cause de la troncature brute constatée par Saar).
+  // alignItems:flex-start (pas center) car le titre peut grandir sur plusieurs lignes (autoGrow) —
+  // le code doit rester ancré en haut, pas se centrer verticalement contre un titre plus haut que lui.
+  rowHeader: { display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%' },
   codeInput: { width: '84px', flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-primary)', background: 'var(--color-primary-muted)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '3px 6px' },
-  rowTitleInput: { flex: 1, minWidth: '160px', fontSize: '14px', color: 'var(--text-primary)', fontWeight: '600', background: 'transparent', border: '1px solid transparent', borderRadius: '4px', padding: '2px 4px' },
-  rowDescription: { fontSize: '13px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap' },
-  rowMeta: { display: 'flex', gap: '12px', marginTop: '4px' },
+  // Textarea (pas input) : un titre long doit passer à la ligne, jamais se tronquer ni dépendre
+  // d'un tooltip au survol. autoGrow() porte la hauteur, resize:none car c'est l'utilisateur qui
+  // tape, pas lui qui dimensionne.
+  rowTitleInput: { flex: 1, minWidth: 0, fontSize: '14px', color: 'var(--text-primary)', fontWeight: '600', fontFamily: 'inherit', background: 'transparent', border: '1px solid transparent', borderRadius: '4px', padding: '2px 4px', resize: 'none', overflow: 'hidden', lineHeight: '1.3' },
+  rowBadges: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+  // Idem description : texte intégral toujours visible, éditable en direct comme le titre
+  // (jusqu'ici seule exception — incohérence relevée par Saar).
+  rowDescription: { width: '100%', boxSizing: 'border-box', fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'inherit', background: 'transparent', border: '1px solid transparent', borderRadius: '4px', padding: '2px 4px', margin: 0, resize: 'none', overflow: 'hidden', lineHeight: '1.4' },
 
-  rowActions: { display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0, width: '200px' },
+  // Colonne à droite plutôt qu'une rangée horizontale (demande Saar, 2026-10-15) : statut/priorité/
+  // cluster prenaient trop de largeur côte à côte au détriment du titre/de la description.
+  rowActions: { display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0, width: '140px' },
 }
