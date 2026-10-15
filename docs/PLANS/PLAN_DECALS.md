@@ -230,7 +230,7 @@ deux n'existe encore, rien à tester avant eux.
 migration, aucune écriture en base.
 **Retour arrière** : revert des 5 fichiers (pas de migration, pas de donnée persistée à nettoyer).
 
-## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15)**
+## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15) — validation visuelle bloquée tant que le Lot 3 n'existe pas**
 
 **Objectif** : afficher chaque `room.wallDecorations[]` comme une image plate collée sur la face
 intérieure du mur qu'elle référence, toujours visible au-dessus du matériau/motif du mur, sans
@@ -319,33 +319,118 @@ cas simple — une salle seule a déjà `interiorNormalSignsByRoom = 1`, aucune 
 et le scénario §P, panneaux ambigus post-découpe-porte départagés par position réelle, pas supposé) ;
 les 61 scénarios de `surfaceData.test.mjs` et les 949 tests purs de `shared/` toujours verts (aucune
 régression). **Non testé : ⚠️ clos partiel** — rendu jamais vu dans un navigateur réel (ni serveur ni
-navigateur lancés par l'agent, AGENTS.md) : reste à vérifier par Saar en jeu — un décor réellement
-visible à l'écran, dans le bon sens, devant le matériau/motif du mur, sur mur droit ET courbe,
-miroir correct, et la route `GET /api/decal-assets` qui répond pour de vrai (jamais exercée avant
-ce lot, §L) — **la validation visuelle par Saar reste la clôture réelle de ce lot**, pas cette
-clôture technique.
+navigateur lancés par l'agent, AGENTS.md). **Bloqué, pas seulement « pas encore fait » :** aucun
+décor ne peut exister dans une carte réelle avant le Lot 3 (l'outil de pose) — ce lot ne peut donc
+pas être validé visuellement avant que le Lot 3 existe. La route `GET /api/decal-assets` (jamais
+exercée avant ce lot, §L) et le rendu réel (sens de l'image, miroir, ordre d'affichage, mur droit ET
+courbe) ne seront vérifiables qu'une fois le Lot 3 posable — **la validation visuelle par Saar
+reste la clôture réelle de ce lot, mais elle n'est atteignable qu'après le Lot 3**, pas avant.
 
 **Données** : aucune (lecture seule, aucune écriture en base ni migration).
 
 **Retour arrière** : `git revert`/retrait des fichiers listés ci-dessus — aucune donnée persistée,
 aucun risque.
 
-## Lot 3 — Outil d'édition
+## Lot 3 — Outil d'édition — **CLOS, partiel ⚠️ (2026-10-15) — validation visuelle réelle en attente**
 
-**Objectif** : poser, sélectionner, déplacer le long du mur, supprimer, tourner/mettre en miroir un
-décor, depuis l'éditeur.
+**Objectif** : poser un décor sur un mur déjà sélectionné, le supprimer. Débloque la validation
+visuelle du Lot 2 (premier moyen réel de faire exister un décor dans une carte).
 
-**Fichiers** : s'implante dans la structure déjà décomposée de l'éditeur (Phase 2/6 de
-`PLAN_EDITEUR_CARTE.md`, close) — jamais rajouté dans un monolithe. Emplacement exact (panneau de
-mur existant vs nouveau panneau dédié) : question UI/UX à trancher au moment de ce lot, pas
-supposée ici.
+**Emplacement — tranché, pas une question ouverte** : le panneau du mur sélectionné
+(`SurfaceWallPanel.jsx`) a déjà exactement ce patron pour les portes — une section « Ouvertures »
+avec un bouton désactivé tant que plusieurs tronçons de mur sont sélectionnés, qui bascule l'outil
+en mode pose (`startDoorPlacement` : `onPatch({ mode: 'connector', connectorType: 'door',
+connectorWallEdgeKeys: [...selectedKeys] })`). Un décor suit le même précédent — nouvelle section
+« Décoration » dans ce même panneau, un nouveau mode d'outil (`mode: 'decal'`), jamais un panneau
+séparé.
 
-**Workflow** : catégorie → vignette du catalogue (Lot 0) → survol du mur sélectionné → aperçu →
-clic → placement. Décor déjà posé : sélectionné par clic, même langage visuel que mur/connecteur
-(`.claude/rules/world.md`/`SURFACES_SALLES.md`) → suppression/rotation/miroir dans le panneau.
+**Catalogue de vignettes — précédent direct trouvé** : `SurfaceEditorPanel.jsx` a déjà une palette
+de vignettes groupées par catégorie pour choisir une texture de mur (bloc `showTexturePalette`,
+grille de boutons avec l'image en fond, bordure active). Même composant visuel pour choisir un
+décor (catégorie `signage`/`military` du Lot 0 → vignette → sélection), pas une nouvelle UI de
+palette inventée.
 
-**Hors périmètre de ce lot** : glisser-déposer libre, bibliothèque de favoris, recherche texte dans
-le catalogue — à n'envisager que si le catalogue grossit réellement au-delà du contenu initial.
+**Pose (clic dans la scène)** : `SurfaceEditorScene.jsx` a déjà une fonction générique de
+résolution du point de clic sur un mur contraint à une sélection (`getSelectedDoorWallPoint`) —
+**vérifié en la lisant intégralement jusqu'à son dernier `return` (§S, JOURNALANALYSE.md
+2026-10-15)**, rien dedans n'est spécifique à une porte (elle filtre par salle/arêtes sélectionnées,
+pas par type de connecteur) : réutilisée telle quelle pour `mode === 'decal'`, pas dupliquée. La pose elle-même
+passe par un nouveau fichier pur, même patron que `computeConnectorPlacement.js`
+(`tool.connectorType === 'door' ? applyDoorConnector(...) : ...`) : `computeDecalPlacement.js`
+appelle `makeWallDecorationFromWallPoint` puis `addRoomWallDecoration` (Lot 1, déjà écrits) et
+retourne `{ surfaceData, error }` — l'erreur (mur déjà porteur d'une porte, chevauchement, salle
+disparue : messages déjà rédigés au Lot 1) s'affiche dans le même champ que les erreurs de mur déjà
+existantes (`roomArcError`, déjà lu par `SurfaceWallPanel.jsx`).
+
+**Sélection d'un décor déjà posé, pour le supprimer — simplifié au moment de coder, par rapport au
+cadrage §Q** : le cadrage prévoyait de réactiver le raycast du quad pour un clic direct sur l'image,
+comme pour un connecteur (`handleConnectorPointerSelect`). En écrivant le code, plus simple et tout
+aussi complet : un décor est de toute façon ancré à un seul tronçon de mur déjà identifié par
+`sourceEdgeKeys` — pas besoin de cliquer l'image elle-même pour le retrouver. La section
+« Décoration » du panneau du mur sélectionné liste directement les décors dont `sourceEdgeKeys`
+recoupe la sélection courante (simple filtre sur la donnée, zéro raycast), chacun avec son bouton
+supprimer (`removeRoomWallDecoration`, déjà écrit au Lot 1). Le raycast du quad reste désactivé
+(Lot 2, inchangé) — pas de régression de l'invariant « apparence pure, jamais une collision », et
+une dépendance en moins (pas de nouveau gestionnaire de clic 3D à maintenir).
+
+**Aperçu avant le clic — ajouté après analyse à charge (§R), absent du premier cadrage** : la pose
+d'une porte affiche déjà un fantôme semi-transparent qui suit la souris avant le clic
+(`ConnectorPreview.jsx`, recalculé en direct depuis `makeDoorConnectorFromWallPoint`). Sans
+l'équivalent pour un décor, la pose serait un clic à l'aveugle — régression d'UX silencieuse par
+rapport à l'outil porte existant. Nouveau composant du même patron (`DecalPreview.jsx`) : appelle
+`makeWallDecorationFromWallPoint` sur le point survolé, réutilise le calcul de placement du Lot 2
+(`wallDecorationPlacement`), rendu à opacité réduite.
+
+**Taille par défaut** : `width_px`/`height_px` du catalogue (Lot 0) donnent un ratio réel — hauteur
+fixe par défaut (à définir à l'implémentation, probablement proche de la hauteur de pose du Lot 2,
+~0,5 m) et largeur dérivée du ratio, pas une saisie manuelle en v1.
+
+**Miroir** : une case à cocher dans la section, appliquée au moment de la pose (champ `mirror` déjà
+dans le schéma du Lot 1, déjà consommé par le rendu du Lot 2) — pas un bouton à retrouver après
+coup sur un décor déjà posé (voir hors périmètre).
+
+**Hors périmètre de ce lot** : déplacer un décor déjà posé le long du mur (glisser-déposer),
+rotation arbitraire (seul le miroir, à la pose, est permis), redimensionnement après pose,
+bibliothèque de favoris, recherche texte dans le catalogue — à n'envisager que si le catalogue
+grossit réellement au-delà du contenu initial.
+
+**Fichiers livrés** :
+- `client/src/lib/surfaceTools/computeDecalPlacement.js` (nouveau) : partie pure de la pose, même
+  patron que `computeConnectorPlacement.js`.
+- `client/src/lib/surfaceTools/computeDecalPlacement.test.mjs` (nouveau) : 5 scénarios réels (pose
+  mur droit/courbe, taille par défaut vs fournie, échec sans mur sous le curseur, erreur propagée du
+  Lot 1).
+- `client/src/components/surfaceTools/DecalPreview.jsx` (nouveau) : fantôme de pose, même patron
+  que `ConnectorPreview.jsx`.
+- `client/src/components/SurfaceDungeonScene.jsx` : `WallDecorationPlane` exporté (réutilisé par
+  l'aperçu) et prend un prop `opacity` (clonage via `withOpacity`, jamais une mutation du matériau
+  partagé) ; renfort `polygonOffset` sur le matériau du décor (recherche faite, cf. échange avec
+  Saar 2026-10-15).
+- `client/src/components/SurfaceEditorScene.jsx` : nouveau mode d'outil `decal` câblé partout où
+  `connector`/porte l'était déjà (mousedown/mousemove/mouseup, aperçu au survol, commit via
+  `computeDecalPlacement`).
+- `client/src/components/SurfaceWallPanel.jsx` : nouvelle section « Décoration » — liste des décors
+  du mur sélectionné + suppression, palette à vignettes groupées par catégorie, case miroir, bouton
+  de pose.
+- `client/src/components/Editor3D.jsx` : catalogue brut des décors conservé (`decalAssets`, en plus
+  de `decalAssetCatalog` déjà chargé au Lot 2) pour alimenter la palette ; `handleDecalRemove`.
+- `client/src/locales/builder.json` : nouvelles clés `surfaceWallPanel.decoration*`/`addDecal*`
+  (namespace déjà utilisé par ce panneau, ajoutées avant leur premier usage JSX).
+
+**Testé** : `node --check`/lint ciblé sur les 10 fichiers touchés (propre, zéro nouvelle erreur par
+rapport à la branche avant ce lot — comparé explicitement) ; build client (`npm run build`,
+propre) ; les 5 scénarios de `computeDecalPlacement.test.mjs` ; les 71 scénarios de
+`surfaceData.test.mjs`/`wallDecorationGeometry.test.mjs` et les 949 tests purs de `shared/` toujours
+verts (aucune régression). **Non testé : ⚠️ clos partiel** — comme le Lot 2, jamais vu dans un vrai
+navigateur (ni serveur ni navigateur lancés par l'agent). C'est maintenant possible en principe
+(l'outil de pose existe), reste à vérifier par Saar : poser un décor en vrai, le voir au bon endroit
+et dans le bon sens (Lot 2), le supprimer depuis le panneau, et la route catalogue qui répond
+réellement (§L, jamais exercée).
+
+**Données** : aucune (code client seul, aucune migration ni écriture serveur nouvelle).
+
+**Retour arrière** : `git revert`/retrait des fichiers listés — aucune donnée persistée, aucun
+risque.
 
 ## Catalogue réel — tri du pack acheté (2026-10-14, licence confirmée OK par Saar)
 

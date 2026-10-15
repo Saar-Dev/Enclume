@@ -624,3 +624,68 @@ filer. **K** n'est pas une erreur de ce cadrage — c'est une correction assumé
 j'avais écrite la veille, sur la base d'une information qui a changé depuis (le Lot 1 a corrigé
 l'ancrage qui rendait cette conclusion vraie à l'époque). Rien ici n'invalide le choix du quad :
 au contraire, la revue le renforce (un seul point d'ancrage, déjà exact, suffit).
+
+## 2026-10-15 (suite) — Analyse à charge du cadrage détaillé du Lot 3 (outil d'édition)
+
+Revue critique du cadrage Lot 3 que je viens d'écrire, après exploration du code réel de l'éditeur
+(`SurfaceEditorScene.jsx`, `SurfaceWallPanel.jsx`, `SurfaceEditorPanel.jsx`,
+`surfaceTools/ConnectorPreview.jsx`, `surfaceTools/computeConnectorPlacement.js`,
+`surfaceTools/resolveSelectHit.js`). Deux points corrigés, un point confirmé par lecture complète
+(pas partielle).
+
+### Q. La sélection d'un connecteur existant a DEUX mécanismes, pas un seul — j'en avais décrit un et
+mal nommé l'autre
+
+Le cadrage affirmait « la sélection d'un connecteur existant raycaste contre son vrai mesh ». En
+lisant `findConnectorAtWorldPoint` en entier (`SurfaceEditorScene.jsx` ~l.301-356) : **c'est faux**
+pour ce chemin précis — c'est un test géométrique pur contre les coordonnées stockées du connecteur
+(boîte min/max calculée depuis `connector.x0/x1/z0/z1`), aucun raycast contre un mesh. Ce chemin est
+le filet de secours utilisé par le clic générique en mode Sélection (`resolveSelectHit`), pour un
+clic qui tombe près du connecteur sans le toucher pile.
+
+**Un second mécanisme existe en plus**, trouvé juste après : `handleConnectorPointerSelect`
+(~l.358-376) est un gestionnaire posé directement sur le mesh rendu du connecteur (pointerDown React
+Three Fiber) — celui-là exige bien que le mesh accepte le raycast. `skipNextCanvasMouseDownRef` évite
+que le clic soit traité une seconde fois par le gestionnaire générique.
+
+**Conséquence pour le Lot 3** : réactiver le raycast du quad (déjà anticipé au Lot 2) reste la bonne
+décision, mais pour reproduire le mécanisme PRINCIPAL (clic direct sur le mesh, comme
+`handleConnectorPointerSelect`), pas un filet de secours géométrique — ce second mécanisme (comme
+`findConnectorAtWorldPoint`) n'est pas nécessaire pour une v1 : un décor est un quad plat, visible,
+facile à cliquer pile, contrairement à une porte dont la zone cliquable peut être plus ambiguë près
+d'un mur épais.
+
+### R. Angle mort réel : rien dans le cadrage ne prévoyait d'aperçu avant le clic
+
+En cherchant comment la pose d'une porte affiche un fantôme semi-transparent qui suit la souris
+avant le clic (`ConnectorPreview.jsx`, lu en entier) : ce composant recalcule la géométrie en direct
+depuis `makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)` et rend un
+`ConnectorSegment` à opacité réduite. **Le cadrage Lot 3 ne prévoyait rien d'équivalent pour un
+décor** — sans aperçu, poser un décor serait un clic à l'aveugle, moins confortable que l'outil
+porte existant, régression d'UX silencieuse si je ne la corrige pas maintenant. Correctif à ajouter
+au plan : un composant `DecalPreview.jsx` du même patron, qui appelle
+`makeWallDecorationFromWallPoint` sur le point survolé et réutilise le rendu du Lot 2
+(`wallDecorationPlacement`) à opacité réduite.
+
+### S. Vérifié par lecture complète (pas partielle, leçon du Lot 1 appliquée) : `getSelectedDoorWallPoint`
+n'a rien de spécifique à une porte
+
+Le cadrage affirmait pouvoir réutiliser cette fonction telle quelle pour un décor. Lue intégralement
+cette fois (`SurfaceEditorScene.jsx` l.246-299, jusqu'à son dernier `return`) : elle filtre par
+salle/arêtes sélectionnées et raycaste contre le plan du mur, sans aucune branche conditionnée par un
+type de connecteur. L'affirmation du cadrage est confirmée, pas seulement plausible.
+
+### T. Vérifié : `tool.selectedRoomId` est garanti déjà posé quand le panneau Mur est visible
+
+`handleRoomWallPointerSelect` (~l.378-380) refuse de sélectionner un mur si `selectedRoomId` n'est
+pas déjà renseigné — la sélection d'un mur suppose toujours une salle déjà sélectionnée avant. La
+résolution de `roomId` par `makeWallDecorationFromWallPoint` (qui retombe sur `selectedRoomId`) aura
+donc toujours une valeur utilisable au moment où le bouton de pose du Lot 3 est cliquable.
+
+### Verdict (Lot 3)
+
+Deux corrections ajoutées au plan avant de coder : **Q** (réactivation du raycast = reproduire le
+clic direct sur le mesh du connecteur, pas son filet de secours géométrique — inutile en v1) et **R**
+(aperçu avant clic, absent du premier cadrage, ajouté comme composant à part entière plutôt que comme
+détail mineur). **S** et **T** confirment deux affirmations du cadrage par lecture complète, pas
+supposées — aucune ne nécessite de changement.

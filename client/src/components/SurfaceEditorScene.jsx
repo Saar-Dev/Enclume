@@ -33,6 +33,7 @@ import { getToolWallThicknessFine } from '../lib/surfaceGeometry.js'
 import { applyToolMode } from '../lib/surfaceTools/applyToolMode.js'
 import { buildEffectVolumePayload } from '../lib/surfaceTools/buildEffectVolumePayload.js'
 import { computeConnectorPlacement } from '../lib/surfaceTools/computeConnectorPlacement.js'
+import { computeDecalPlacement } from '../lib/surfaceTools/computeDecalPlacement.js'
 import { resolveSelectHit } from '../lib/surfaceTools/resolveSelectHit.js'
 import { resolveReshapeRoomCellMode } from '../lib/surfaceTools/resolveReshapeRoomCellMode.js'
 import PaintableRoomWalls from './surfaceTools/PaintableRoomWalls.jsx'
@@ -45,6 +46,7 @@ import StairPreview from './surfaceTools/StairPreview.jsx'
 import EffectVolumePreview from './surfaceTools/EffectVolumePreview.jsx'
 import RoomFootprintPaintPreview from './surfaceTools/RoomFootprintPaintPreview.jsx'
 import ConnectorPreview from './surfaceTools/ConnectorPreview.jsx'
+import DecalPreview from './surfaceTools/DecalPreview.jsx'
 import SelectedRoomOverlay from './surfaceTools/RoomSelectionOverlay.jsx'
 import RoomWallSelectionOverlay from './surfaceTools/RoomWallSelectionOverlay.jsx'
 import RoomArcPreview from './surfaceTools/RoomArcPreview.jsx'
@@ -509,13 +511,14 @@ export default function SurfaceEditorScene({
       // (voxel) faute de branche dédiée en mouseup.
       if (mode === 'paint-wall') return
       const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
-      const start = placesDoor
+      const placesDecal = mode === 'decal'
+      const start = placesDoor || placesDecal
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
           ? getWallPoint(e.clientX, e.clientY)
           : getFloorCell(e.clientX, e.clientY)
       if (!start) {
-        if (placesDoor) {
+        if (placesDoor || placesDecal) {
           e.preventDefault()
           e.stopPropagation()
         }
@@ -538,15 +541,16 @@ export default function SurfaceEditorScene({
 
     const handleMouseMove = (e) => {
       if (!dragRef.current) {
-        if (surfaceTool?.mode === 'connector') {
-          const placesDoor = surfaceTool?.connectorType === 'door'
-          const point = placesDoor
+        if (surfaceTool?.mode === 'connector' || surfaceTool?.mode === 'decal') {
+          const placesDoor = surfaceTool?.mode === 'connector' && surfaceTool?.connectorType === 'door'
+          const placesDecal = surfaceTool?.mode === 'decal'
+          const point = placesDoor || placesDecal
             ? getSelectedDoorWallPoint(e.clientX, e.clientY)
             : getFloorCell(e.clientX, e.clientY)
           setHoverPreview(prev => {
             if (!point) return prev ? null : prev
-            const next = { mode: 'connector', start: point, end: point }
-            const same = placesDoor
+            const next = { mode: surfaceTool.mode, start: point, end: point }
+            const same = (placesDoor || placesDecal)
               ? prev?.end?.fx === point.fx && prev?.end?.fz === point.fz
               : prev?.end?.x === point.x && prev?.end?.z === point.z
             return same ? prev : next
@@ -560,14 +564,15 @@ export default function SurfaceEditorScene({
       if ((e.buttons & 2) !== 0 && cancelDrag(e)) return
       const mode = dragRef.current.mode
       const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
-      const end = placesDoor
+      const placesDecal = mode === 'decal'
+      const end = placesDoor || placesDecal
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
           ? getWallPoint(e.clientX, e.clientY)
           : getFloorCell(e.clientX, e.clientY)
       if (!end) return
       const previousEnd = dragRef.current.end
-      const usesFinePoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
+      const usesFinePoint = mode === 'wall' || placesDoor || placesDecal
       const unchanged = usesFinePoint
         ? previousEnd.fx === end.fx && previousEnd.fz === end.fz
         : previousEnd.x === end.x && previousEnd.z === end.z
@@ -585,7 +590,8 @@ export default function SurfaceEditorScene({
 
       const mode = currentDrag.mode
       const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
-      const end = placesDoor
+      const placesDecal = mode === 'decal'
+      const end = placesDoor || placesDecal
         ? (getSelectedDoorWallPoint(e.clientX, e.clientY) || currentDrag.end)
         : mode === 'wall'
           ? (getWallPoint(e.clientX, e.clientY) || currentDrag.end)
@@ -688,6 +694,25 @@ export default function SurfaceEditorScene({
         // ça, une 2e porte resterait invisiblement limitée au mur de la 1re alors que le geste
         // persiste maintenant — un risque qui n'existait pas quand le mode repassait en Sélection.
         onSurfaceDataChange(nextData)
+        onSurfaceToolChange?.({ ...surfaceTool, roomArcError: null, connectorWallEdgeKeys: [] })
+        setHoverPreview(null)
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
+      if (mode === 'decal') {
+        const result = computeDecalPlacement(surfaceData, finalDrag.end, surfaceTool)
+        if (result.error) {
+          onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        // Même règle que Connecteur ci-dessus (§12.9) : reste en mode « Décor » après une pose
+        // réussie, `connectorWallEdgeKeys` remis à vide pour ne pas limiter le prochain décor au
+        // même mur si le geste persiste.
+        onSurfaceDataChange(result.surfaceData)
         onSurfaceToolChange?.({ ...surfaceTool, roomArcError: null, connectorWallEdgeKeys: [] })
         setHoverPreview(null)
         e.preventDefault()
@@ -827,6 +852,11 @@ export default function SurfaceEditorScene({
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
       ? hoverPreview
       : null
+  const decalPreview = drag?.mode === 'decal'
+    ? drag
+    : surfaceTool?.mode === 'decal' && hoverPreview?.mode === 'decal'
+      ? hoverPreview
+      : null
   const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
     && surfaceTool?.connectorType === 'door'
     && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
@@ -954,6 +984,14 @@ export default function SurfaceEditorScene({
       )}
       {connectorPreview && (
         <ConnectorPreview drag={connectorPreview} surfaceData={surfaceData} surfaceTool={surfaceTool} />
+      )}
+      {decalPreview && (
+        <DecalPreview
+          drag={decalPreview}
+          surfaceData={surfaceData}
+          surfaceTool={surfaceTool}
+          catalogEntry={decalAssetCatalog?.[surfaceTool?.decalAssetId]}
+        />
       )}
     </>
   )

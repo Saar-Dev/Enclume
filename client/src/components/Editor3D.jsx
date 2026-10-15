@@ -37,6 +37,7 @@ import {
   normalizeSurfaceData,
   parseFloorKey,
   removeRoomBoundaryArcs,
+  removeRoomWallDecoration,
   roomsWallSegments,
   SURFACE_FINE,
   yToLevel,
@@ -743,6 +744,7 @@ export default function Editor3D({
 
   const [textureMaterials, setTextureMaterials] = useState({})
   const [decalAssetCatalog, setDecalAssetCatalog] = useState({})
+  const [decalAssets, setDecalAssets] = useState([])
   const [blocksReady, setBlocksReady] = useState(false)
 
   const saveTimer = useRef(null)
@@ -802,6 +804,10 @@ export default function Editor3D({
     const loadDecals = async () => {
       try {
         const { data } = await api.get('/decal-assets')
+        // Catalogue brut (url/category/label/ratio) conservé pour la palette à vignettes de
+        // SurfaceWallPanel.jsx (2D, pas besoin d'une THREE.Texture déjà chargée) — distinct de
+        // `decalAssetCatalog` ci-dessous (texture + ratio) consommé par le rendu 3D.
+        setDecalAssets(data.assets || [])
         const loaded = await loadDecalAssets(data.assets)
         setDecalAssetCatalog(loaded)
       } catch (err) {
@@ -1017,6 +1023,16 @@ export default function Editor3D({
     }
   }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
 
+  const handleDecalRemove = useCallback(decorationId => {
+    const result = removeRoomWallDecoration(surfaceDataRef.current, surfaceTool?.selectedRoomId, decorationId)
+    if (result.surfaceData !== surfaceDataRef.current) {
+      handleSurfaceDataChange(result.surfaceData, `decal-remove:${decorationId}`)
+    }
+    if (result.error) {
+      onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
+    }
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool, surfaceDataRef])
+
   useEffect(() => {
     const roomId = surfaceTool?.selectedRoomId
     if (!roomId) return
@@ -1175,6 +1191,8 @@ export default function Editor3D({
           tool={surfaceTool}
           onPatch={handleSurfaceSelectionToolPatch}
           onAppearanceChange={handleSurfaceWallAppearanceChange}
+          decalAssets={decalAssets}
+          onDecalRemove={handleDecalRemove}
           onClose={closeSurfaceWallPanel}
           dockRight={sidebarWidth + 16}
         />

@@ -8,12 +8,15 @@ import {
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
+import { DEFAULT_DECAL_HEIGHT_M } from '../lib/surfaceTools/computeDecalPlacement.js'
 
 const PANEL_W = 310
 
 // Position fixe, colonne de droite — voir le commentaire équivalent dans SurfaceRoomPanel.jsx
 // (§12.9/§12.10, PLAN_WORLD_BUILDER_REWORK.md). `dockRight` : idem, largeur de sidebar + marge (§13).
-export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChange, onClose, dockRight = 16 }) {
+export default function SurfaceWallPanel({
+  room, tool, onPatch, onAppearanceChange, decalAssets = [], onDecalRemove, onClose, dockRight = 16,
+}) {
   const { t } = useTranslation('builder')
   const [confirmDeleteWalls, setConfirmDeleteWalls] = useState(false)
   if (!room || !tool?.selectedRoomWallCount) return null
@@ -52,6 +55,29 @@ export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChan
   const startDoorPlacement = () => onPatch?.({
     mode: 'connector',
     connectorType: 'door',
+    connectorWallEdgeKeys: [...selectedKeys],
+  })
+
+  // Décors déjà posés sur le(s) mur(s) actuellement sélectionné(s) — pas de sélection par clic sur
+  // l'image elle-même (Lot 2 désactive volontairement son raycast) : un décor se gère depuis le
+  // panneau du mur qui le porte, même esprit que les sections Apparence/Profil vertical ci-dessus.
+  const existingDecals = (room.wallDecorations || [])
+    .filter(decoration => (decoration.sourceEdgeKeys || []).some(key => selectedKeySet.has(String(key))))
+  const decalGroups = {}
+  for (const asset of decalAssets) {
+    if (asset.deprecated) continue
+    const key = asset.category || '__divers__'
+    if (!decalGroups[key]) decalGroups[key] = { label: asset.category || t('surfaceWallPanel.decorationCategoryFallback'), assets: [] }
+    decalGroups[key].assets.push(asset)
+  }
+  const selectDecalAsset = asset => onPatch?.({
+    decalAssetId: asset.id,
+    decalWidthM: DEFAULT_DECAL_HEIGHT_M * (Number(asset.ratio) || 1),
+    decalHeightM: DEFAULT_DECAL_HEIGHT_M,
+    roomArcError: null,
+  })
+  const startDecalPlacement = () => onPatch?.({
+    mode: 'decal',
     connectorWallEdgeKeys: [...selectedKeys],
   })
 
@@ -177,6 +203,69 @@ export default function SurfaceWallPanel({ room, tool, onPatch, onAppearanceChan
           {selectedRuns.length !== 1 && <p style={S.hint}>{t('surfaceWallPanel.addDoorHint')}</p>}
         </FloatingPanelSection>
 
+        <FloatingPanelSection title={t('surfaceWallPanel.decorationSection')} storageKey="enclume.surfaceWallPanel.section.decoration">
+          {existingDecals.length > 0 && (
+            <div style={S.field}>
+              <span style={S.label}>{t('surfaceWallPanel.existingDecalsLabel')}</span>
+              {existingDecals.map(decoration => {
+                const asset = decalAssets.find(entry => entry.id === decoration.assetId)
+                return (
+                  <div key={decoration.id} style={S.existingDecalRow}>
+                    <span style={S.existingDecalLabel}>{asset?.label || decoration.assetId}</span>
+                    <button
+                      type="button"
+                      onClick={() => onDecalRemove?.(decoration.id)}
+                      style={{ ...S.button, ...S.danger, ...S.existingDecalDeleteBtn }}
+                    >
+                      {t('surfaceWallPanel.deleteDecalButton')}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {Object.entries(decalGroups).map(([catKey, group]) => (
+            <div key={catKey} style={S.field}>
+              <span style={S.label}>{group.label}</span>
+              <div style={S.decalGrid}>
+                {group.assets.map(asset => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    title={asset.label}
+                    onClick={() => selectDecalAsset(asset)}
+                    style={{
+                      ...S.decalThumb,
+                      backgroundImage: asset.url ? `url(${asset.url})` : 'none',
+                      ...(tool.decalAssetId === asset.id ? S.decalThumbActive : {}),
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <label style={S.checkboxField}>
+            <input
+              type="checkbox"
+              checked={!!tool.decalMirror}
+              onChange={event => onPatch?.({ decalMirror: event.target.checked })}
+            />
+            <span style={S.label}>{t('surfaceWallPanel.decalMirrorLabel')}</span>
+          </label>
+
+          <button
+            type="button"
+            disabled={selectedRuns.length !== 1 || !tool.decalAssetId}
+            onClick={startDecalPlacement}
+            style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 || !tool.decalAssetId ? S.disabled : {}) }}
+          >
+            {t('surfaceWallPanel.addDecalButton')}
+          </button>
+          {(selectedRuns.length !== 1 || !tool.decalAssetId) && <p style={S.hint}>{t('surfaceWallPanel.addDecalHint')}</p>}
+        </FloatingPanelSection>
+
         <FloatingPanelSection title={t('surfaceWallPanel.shapeSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.shape">
           {count >= 2 && (
             <label style={S.field}>
@@ -276,4 +365,11 @@ const S = {
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
   disabled: { opacity: 0.38, cursor: 'not-allowed' },
   error: { margin: 0, padding: '7px 8px', borderRadius: '5px', background: 'rgba(127, 29, 29, 0.24)', color: '#fda4af', fontSize: '11px' },
+  decalGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '5px' },
+  decalThumb: { aspectRatio: '1', border: '2px solid transparent', borderRadius: '5px', background: '#151525 center/cover no-repeat', cursor: 'pointer' },
+  decalThumbActive: { borderColor: '#ea580c' },
+  checkboxField: { display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' },
+  existingDecalRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' },
+  existingDecalLabel: { fontSize: '10px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  existingDecalDeleteBtn: { minHeight: '26px', padding: '2px 8px', flexShrink: 0 },
 }

@@ -888,8 +888,9 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
 
 // Un décor est une apparence pure (`.claude/rules/world.md` : « une apparence 3D n'implique jamais
 // une collision »). Raycast désactivé pour ne jamais s'interposer dans la sélection d'un mur/
-// connecteur ni dans un raycast de déplacement — Lot 3 le réactivera explicitement s'il ajoute une
-// sélection du décor lui-même.
+// connecteur ni dans un raycast de déplacement. Décision confirmée au Lot 3 (outil d'édition,
+// PLAN_DECALS.md) : un décor déjà posé se gère depuis le panneau du mur qui le porte (liste +
+// suppression), jamais par un clic direct sur son image dans la scène — pas besoin de raycast ici.
 const DECOR_DISABLE_RAYCAST = () => null
 const decalMaterialCache = new Map()
 
@@ -902,12 +903,21 @@ function decalMaterialFor(texture) {
     roughness: 0.9,
     metalness: 0,
     side: THREE.FrontSide,
+    // Renfort contre un effet de scintillement à certains angles (z-fighting) en plus du décalage
+    // physique déjà appliqué par `wallDecorationPlacement` — recherche faite (doc Three.js/forums,
+    // Saar 2026-10-15) : les deux techniques se complètent, l'une n'exempte pas l'autre.
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
   })
   decalMaterialCache.set(texture, material)
   return material
 }
 
-function WallDecorationPlane({ decoration, panel, catalogEntry }) {
+// `opacity` : jamais appliqué en mutant le matériau partagé (clone systématique via `withOpacity`,
+// déjà utilisé pour l'estompage des murs occultés) — un décor non posé encore (aperçu de pose,
+// Lot 3) partage la même texture/le même matériau de base que les décors déjà posés du même asset.
+export function WallDecorationPlane({ decoration, panel, catalogEntry, opacity = 1 }) {
   const placement = useMemo(
     () => wallDecorationPlacement(decoration, panel),
     [decoration, panel],
@@ -924,7 +934,8 @@ function WallDecorationPlane({ decoration, panel, catalogEntry }) {
     return geo
   }, [decoration.widthM, decoration.heightM, decoration.mirror])
   useEffect(() => () => geometry.dispose(), [geometry])
-  const material = useMemo(() => decalMaterialFor(catalogEntry?.texture), [catalogEntry])
+  const baseMaterial = useMemo(() => decalMaterialFor(catalogEntry?.texture), [catalogEntry])
+  const material = baseMaterial && opacity < 0.999 ? withOpacity([baseMaterial], opacity)[0] : baseMaterial
 
   if (!placement || !material) return null
 
