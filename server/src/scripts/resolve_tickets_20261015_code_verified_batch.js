@@ -59,6 +59,12 @@ VERIFIED.push({
 }, {
   code: 'CHANCE-PNJ-WINDOW-UNCLEAR',
   note: "Vérifié par lecture : CatastropheChoiceQueue.jsx:126 affiche désormais catastrophe ? t('catastrophePopup') : t('chancePopup') — titre correct pour les deux cas, fix toujours en place.",
+}, {
+  code: 'COMBAT-STALE-CONFIRM-MESSAGE-I18N',
+  note: "Vérifié bout en bout : socketCombatResolution.js:350-351 émet i18nKey 'session.staleConfirmNextTurn'/'staleConfirmTurnOver' ; useCombatSocket.js résout t(i18nKey, params) en priorité ; node -e JSON.parse confirme j.session.staleConfirmNextTurn/TurnOver bien présents et en clair dans fr.json.",
+}, {
+  code: 'STUN-DURATION-CARD-SUCCESS-BADGE',
+  note: "Vérifié par lecture : MessageRendererRegistry.jsx:312/314/348 — hasOutcome = msg.cardType !== 'duration' masque bien le badge et la teinte succès/échec pour une carte de valeur (durée d'étourdissement), fix toujours en place.",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
