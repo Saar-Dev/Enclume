@@ -25,6 +25,7 @@ import usersRouter from './routes/users.js'
 import diceRouter from './routes/dice.js'
 import surfaceTexturesRouter from './routes/surface-textures.js'
 import texturePacksRouter from './routes/texture-packs.js'
+import decalAssetsRouter from './routes/decal-assets.js'
 import charSheetRouter from './routes/character/char-sheet.js'
 import charRefRouter from './routes/character/ref.js'
 import entityBlueprintsRouter from './routes/entity-blueprints.js'
@@ -124,6 +125,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/dice', diceRouter)
 app.use('/api/surface-textures', surfaceTexturesRouter)
 app.use('/api/texture-packs', texturePacksRouter)
+app.use('/api/decal-assets', decalAssetsRouter)
 app.use('/api/char-sheet', charSheetRouter)
 app.use('/api/char-ref', charRefRouter)
 app.use('/api/entity-blueprints', entityBlueprintsRouter)

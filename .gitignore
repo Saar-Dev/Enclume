@@ -21,6 +21,10 @@ npm-debug.log*
 # Sauvegardes DB locales (pg_dump, jamais commit — trop volumineux, données de campagne)
 /backups/
 
+# Assets sources achetés en attente d'import (MinIO via Lot 0, PLANS/PLAN_DECALS.md) —
+# jamais commit, trop volumineux ; la version qui compte vit en base une fois importée
+/assets_source/
+
 # Système
 .DS_Store
 *.suo
