@@ -116,6 +116,12 @@ VERIFIED.push({
 }, {
   code: 'ENCYCLO-COMPTEUR-HEADERS',
   note: "Vérifié : blessures-seuils.json contient bien les en-têtes corrigés (Gravité + 6 localisations : Tête/Corps/Bras droit/Bras gauche/Jambe droite/Jambe gauche), JSON valide (node -e JSON.parse).",
+}, {
+  code: 'WIZ9',
+  note: "Vérifié : campaignSettingsService.js:15 skill_prerequisites default:true (conforme LdB p.190). node --env-file=.env --test campaignSettingsService.test.mjs relancé : 6/6 verts. Mécanisme d'achat (POST /skills/buy, calcSkillTotal) déjà diagnostiqué sain par Saar lui-même avant ce fix — le seul vrai défaut était le réglage par défaut.",
+}, {
+  code: 'OPT-W2',
+  note: 'Vérifié : grep style={{ sur les 8 fichiers campaignSettings/*.jsx — plus aucune valeur visuelle en dur, seul un overflowX (layout légitime) reste. Corrigé en 2 passes (4fccbe89 puis dfe1f8e4, dernières valeurs d\'opacité dynamiques).',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
