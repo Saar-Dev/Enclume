@@ -86,6 +86,12 @@ VERIFIED.push({
 }, {
   code: 'WOUND-PNJ-ECHEANCES-FLOOD',
   note: 'Correctif de cette même session (2026-10-14) : pnj_healing_mode (défaut simple) dans campaignSettingsService.js:85, gate woundHealingSchedule.js:71 — déjà couvert par 6 tests dédiés (createFixture étendue) au moment du correctif, relus et confirmés en place.',
+}, {
+  code: 'EXO-AVARIE-LINE-CONVENTION',
+  note: 'Vérifié par lecture (exoAvarieService.js:72, isWoundLineFull réutilisée, même autorité que le compteur de Blessures Lot A — pas une 2e copie de règle) + node --env-file=.env --test exoAvarieService.test.mjs relancé : 22/22 verts.',
+}, {
+  code: 'COMBAT-DECLARATION-REFUSED-NO-MESSAGE',
+  note: 'Commit 642f252a : audit des 12 refus silencieux de COMBAT_ACTION_DECLARE, message ajouté à chacun + aux 2 catch globaux muets. node --env-file=.env --test socketCombatAnnouncementDeclareErrors.test.mjs relancé : 2/2 verts (double déclaration, mauvais propriétaire).',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
