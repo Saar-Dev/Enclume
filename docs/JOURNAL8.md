@@ -11506,3 +11506,57 @@ mettent à jour en direct après une permutation/un lancer de grenade/un quick-e
 validation manuelle de Saar, ticket laissé `in_progress`.
 **Données** : aucune (changement client pur, aucune migration, aucun nouvel événement).
 **Retour arrière** : `git revert` du commit (fichiers client uniquement).
+
+## Session (Claude) — 2026-10-15 — Mode Picsou : le joueur créait un objet catalogue sans coût en session, hors Wizard
+
+Ticket "Playground : le joueur peut créer un item catalogue sans coût (même pouvoir que Wizard
+Step6)" (Saar, 2026-08-23, jamais diagnostiqué jusqu'ici). [VÉRIFIÉ par lecture] `InventoryPanel.jsx`
+est le même composant en Wizard Step6 (`inWizard=true`, flux "confiance" explicitement décidé,
+`docs/Old/PLAN_WIZARD_MATERIEL_GAUGES.md §0` — ajout libre, MJ valide ou supprime, aucun vrai blocage)
+et sur la fiche permanente en session (`inWizard=false`). Côté serveur, `POST /char-sheet/:id/
+inventory` dérivait `autoValidate` (donc `chargeAtAdd`) uniquement de `req.isGm`/`campaign_id==null`
+— rien ne distinguait un personnage encore en création d'un personnage verrouillé et lancé en
+session : le droit illimité pensé pour construire une liste de départ sous l'œil du MJ continuait de
+s'appliquer tel quel une fois en jeu réel. Confirmé par lecture complète : `validated_by_gm` n'est
+jamais lu comme condition d'usage/équipement nulle part — un objet en attente est déjà pleinement
+fonctionnel, payé ou non, dès sa création.
+
+Décision de Saar (le plus simple) : pas de blocage strict MJ-only ni de débit automatique silencieux
+— un bouton MJ only sur `InventoryPanel.jsx`, « mode Picsou » (argent illimité/achat gratuit), par
+personnage joueur.
+
+**Fix** :
+- Migration 392 (`char_sheet.picsou_mode boolean not null default false`, additive, même patron que
+  346).
+- `inventoryService.js` : `_chargeSols` (autorité unique du débit, 4 appelants) devient Picsou-aware
+  — lu sous le même verrou que le solde, aucun débit ni refus "Sols insuffisants" si actif.
+- **Le vrai trou comblé** : nouvelle fonction testée `resolveAutoValidate({ isGm, campaignId,
+  characterId })`, appelée par la route à la place du calcul en dur — étend `autoValidate` à "le
+  personnage est verrouillé (`wizard_locked_at` posé) ET en campagne". Analyse à charge qui a payé :
+  mon premier plan rendait `chargeAtAdd` vrai sans toucher `autoValidate`, ce qui aurait fait payer
+  l'objet DEUX fois (à l'ajout, puis à la validation MJ — le code existant garantit par construction
+  qu'un objet facturé à l'ajout démarre toujours `validated_by_gm: true`, jamais repassé par la
+  branche de validation). Corrigé en étendant `autoValidate` lui-même : un achat payé en session est
+  donc aussi auto-validé, plus de revue MJ en attente pour lui — cohérent, un MJ qui active l'argent
+  illimité pour un joueur lui fait déjà confiance pour prendre ce qu'il veut.
+- Nouvelle route `PUT /char-sheet/:id/picsou-mode` (MJ only), événement `WS.CHAR_PICSOU_MODE_UPDATED`.
+- Client : `picsouModeByCharId`/`setPicsouMode` (characterStore.js, même patron que sols),
+  `useInventoryData`/`inventoryDataSync.js` (même bundle que sols), `useCharacterSocket.js` (écoute
+  l'événement), bouton `.btn-toggle` MJ only (`isGm && !inWizard`) sur `InventoryPanel.jsx`.
+- Aucun objet déjà en attente avant ce correctif n'est affecté (comportement de validation MJ
+  inchangé pour eux) ; Wizard Step6 inchangé (flux "confiance" intact, jamais verrouillé donc jamais
+  concerné par `resolveAutoValidate`).
+
+**Testé** : `eslint`/`node --check` sur tous les fichiers touchés (0 erreur), `npm run build` client
+(succès). `node --env-file=.env --test inventoryService.test.mjs` (base locale, lancé par l'agent,
+autorisation 2026-09-25) 43/43 — dont 6 tests neufs (`resolveAutoValidate` MJ/Coffre-native/joueur
+verrouillé/joueur non verrouillé, `addItem` verrouillé+sols suffisants, `addItem` Picsou+sols
+insuffisants) et zéro régression sur les 37 tests préexistants (dont les 3 cas Coffre-native/MJ/
+joueur-non-verrouillé déjà couverts, comportement inchangé confirmé). Migration 392 appliquée (serveur
+de Saar relancé en cours de session) et vérifiée (`information_schema.columns`, `knex_migrations`).
+**Non testé** : scénario réel navigateur (bouton visible MJ only, bascule effective, achat réel en
+session avec/sans Picsou) — à faire par Saar avant de clore. Détail complet ci-dessus.
+**Données** : migration 392 (additive, `down()` = DROP COLUMN).
+**Retour arrière** : `git revert` du commit (migration additive sans donnée tierce dépendante) +
+rollback migration si nécessaire (`down()` direct, jamais la CLI brute, voir `.claude/rules/
+migrations.md`).

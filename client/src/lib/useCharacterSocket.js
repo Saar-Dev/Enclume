@@ -13,6 +13,7 @@ export function useCharacterSocket() {
   const removeInventoryItem = useCharacterStore(s => s.removeInventoryItem)
   const setSols = useCharacterStore(s => s.setSols)
   const setGauge = useCharacterStore(s => s.setGauge)
+  const setPicsouMode = useCharacterStore(s => s.setPicsouMode)
 
   useEffect(() => {
     if (!socket) return
@@ -82,6 +83,11 @@ export function useCharacterSocket() {
     const onGaugeUpdated = ({ characterId, categoryKey, value }) => {
       if (characterId) setGauge(characterId, categoryKey, value)
     }
+    // Mode Picsou (ticket "Playground : objet catalogue sans coût", 2026-10-15) — écriture directe,
+    // même patron que onSolsUpdated.
+    const onPicsouModeUpdated = ({ characterId, picsou_mode }) => {
+      if (characterId) setPicsouMode(characterId, picsou_mode)
+    }
 
     socket.on(WS.WOUND_ADDED,       onWoundAdded)
     socket.on(WS.WOUND_UPDATED,     onWoundUpdated)
@@ -91,6 +97,7 @@ export function useCharacterSocket() {
     socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
     socket.on(WS.SOLS_UPDATED,      onSolsUpdated)
     socket.on(WS.GAUGE_UPDATED,     onGaugeUpdated)
+    socket.on(WS.CHAR_PICSOU_MODE_UPDATED, onPicsouModeUpdated)
 
     return () => {
       socket.off(WS.WOUND_ADDED,       onWoundAdded)
@@ -101,9 +108,10 @@ export function useCharacterSocket() {
       socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
       socket.off(WS.SOLS_UPDATED,      onSolsUpdated)
       socket.off(WS.GAUGE_UPDATED,     onGaugeUpdated)
+      socket.off(WS.CHAR_PICSOU_MODE_UPDATED, onPicsouModeUpdated)
     }
   }, [socket])
   // [socket] uniquement — updateCharacter, setWounds, upsertInventoryItem, removeInventoryItem, setSols,
-  // setGauge (actions Zustand) sont des références stables, non listées dans les deps (même pattern que
-  // useTokenSocket).
+  // setGauge, setPicsouMode (actions Zustand) sont des références stables, non listées dans les deps
+  // (même pattern que useTokenSocket).
 }

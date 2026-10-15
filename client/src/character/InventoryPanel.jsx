@@ -7,7 +7,7 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem, splitItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, splitItem, validateItem, setItemIntegrity, rollItemOccasionIntegrity, intensiveUseTest, requestRepair, cancelRepairRequest, setPicsouMode } from '../lib/inventoryMutations.js'
 import { getIntegrityTier, getIntegrityModifier, INTEGRITY_TIER_COLORS } from '../../../shared/integrityRules.js'
 import IntegrityIcon from './IntegrityIcon.jsx'
 import IntegrityPopover from './IntegrityPopover.jsx'
@@ -79,9 +79,23 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const { t } = useTranslation('charSheet')
   // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
   // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
-  const { items, loading } = useInventoryData(characterId)
+  const { items, loading, picsouMode } = useInventoryData(characterId)
   const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
   const [equipError, setEquipError] = useState(null)
+  const [picsouPending, setPicsouPending] = useState(false)
+
+  // Mode Picsou (ticket "Playground : objet catalogue sans coût", 2026-10-15) — MJ only, hors
+  // Wizard (Step6 reste gratuit/confiance quel que soit ce réglage, cf. addItem côté serveur).
+  const handleTogglePicsouMode = useCallback(async () => {
+    setPicsouPending(true)
+    try {
+      await setPicsouMode(characterId, !picsouMode)
+    } catch (err) {
+      console.error('Erreur bascule mode Picsou :', err)
+    } finally {
+      setPicsouPending(false)
+    }
+  }, [characterId, picsouMode])
 
   // ── Catalogue GM ──────────────────────────────────────────────────────────
   const [addOpen,       setAddOpen]       = useState(false)
@@ -461,6 +475,21 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
           <p style={s.emptyContainerMsg}>{t('inventoryPanel.emptyVaultMessage')}</p>
         )}
       </div>
+
+      {/* Mode Picsou — MJ only, hors Wizard (ticket "Playground : objet catalogue sans coût",
+          2026-10-15). Step6 reste gratuit/confiance quel que soit ce réglage (addItem côté serveur
+          ne le regarde que pour un personnage déjà verrouillé, en campagne). */}
+      {isGm && !inWizard && (
+        <button
+          type="button"
+          className={`btn btn-toggle${picsouMode ? ' active' : ''}`}
+          onClick={handleTogglePicsouMode}
+          disabled={picsouPending}
+          style={{ width: '100%', marginTop: 12 }}
+        >
+          {picsouMode ? t('inventoryPanel.picsouModeOn') : t('inventoryPanel.picsouModeOff')}
+        </button>
+      )}
 
       {/* ── Bloc "Ajouter" — owner ou MJ (PLAN_WIZARD_MATERIEL_GAUGES.md §0.1/§4 : le joueur a
           les mêmes droits d'ajout que le MJ, seule la validation par item reste MJ only) ──── */}

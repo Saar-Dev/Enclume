@@ -1237,12 +1237,11 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
 router.post('/:characterId/inventory', async (req, res, next) => {
   try {
     const characterId = req.params.characterId
-    // PLAN_WIZARD_MATERIEL_GAUGES.md §3 — validated_by_gm dérivé serveur (req.isGm), jamais lu du
-    // payload : un item ajouté par le joueur part en attente, un item ajouté par le MJ (ou fusionné
-    // sur un stack par le MJ) part directement validé. Personnage Coffre-native (campaign_id NULL) :
-    // aucun MJ ne peut jamais rejoindre pour valider — auto-validé, sinon l'objet resterait bloqué
-    // en attente pour toujours (Saar, décision explicite : pas de validation MJ hors campagne).
-    const autoValidate = req.isGm || req.character.campaign_id == null
+    // PLAN_WIZARD_MATERIEL_GAUGES.md §3 / ticket "Playground : objet catalogue sans coût"
+    // (2026-10-15) — décision testée, voir inventoryService.js#resolveAutoValidate.
+    const autoValidate = await inventoryService.resolveAutoValidate({
+      isGm: req.isGm, campaignId: req.character.campaign_id, characterId,
+    })
     if (req.body.equipment_id) {
       const ref = await db('ref_equipment').where({ id: req.body.equipment_id }).select('source_id').first()
       if (ref) await assertSourceActive(db, req.character.campaign_id, ref.source_id)
@@ -1263,6 +1262,31 @@ router.post('/:characterId/inventory', async (req, res, next) => {
 
     emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_ADDED, { characterId, item: result.item })
     res.status(201).json({ item: result.item })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/char-sheet/:characterId/picsou-mode ─────────────────────────────
+// Mode Picsou (argent illimité/achat gratuit) — bascule MJ only, par personnage joueur. Ticket
+// "Playground : objet catalogue sans coût" (2026-10-15) : addItem/_chargeSols (inventoryService.js)
+// lisent déjà cette colonne, aucun autre changement nécessaire ici.
+router.put('/:characterId/picsou-mode', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    const { picsou_mode } = req.body
+    if (typeof picsou_mode !== 'boolean') throw new AppError(400, 'picsou_mode doit être un booléen')
+
+    const characterId = req.params.characterId
+    const [updated] = await db('char_sheet')
+      .where({ character_id: characterId })
+      .update({ picsou_mode, updated_at: db.fn.now() })
+      .returning('picsou_mode')
+    if (!updated) throw new AppError(404, 'Sheet not found — create it first')
+
+    await notifyCharSheetEvent(req.app.get('io'), characterId, req.character.campaign_id, WS.CHAR_PICSOU_MODE_UPDATED, {
+      picsou_mode: updated.picsou_mode,
+    })
+
+    res.json({ picsou_mode: updated.picsou_mode })
   } catch (err) { next(err) }
 })
 

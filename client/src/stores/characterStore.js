@@ -71,6 +71,9 @@ export const useCharacterStore = create((set) => ({
   iniPenaltyByCharId: {},
   solsByCharId: {},
   handPrefByCharId: {},
+  // Mode Picsou (argent illimité/achat gratuit, bascule MJ only) — même autorité séparée que sols
+  // (WS.CHAR_PICSOU_MODE_UPDATED dédié).
+  picsouModeByCharId: {},
   // Course fetch-vs-subscribe (§3.4 point 1) : incrémenté à chaque écriture (fetch complet appliqué,
   // upsert/remove incrémental). Un fetch capture l'epoch avant de partir (getState().inventoryFetchEpoch)
   // et le repasse à setInventory ; si l'epoch a bougé entre-temps (upsert WS ou mutation locale plus
@@ -79,7 +82,7 @@ export const useCharacterStore = create((set) => ({
 
   // Remplacement complet — premier chargement d'un characterId. `epoch`, si fourni, doit correspondre
   // à inventoryFetchEpoch[charId] au moment du set ; sinon (fetch périmé) l'appel est ignoré.
-  setInventory: (charId, items, { threshold, sols, iniPenalty, handPref, epoch } = {}) => set((state) => {
+  setInventory: (charId, items, { threshold, sols, iniPenalty, handPref, picsouMode, epoch } = {}) => set((state) => {
     const currentEpoch = state.inventoryFetchEpoch[charId] ?? 0
     if (epoch !== undefined && epoch !== currentEpoch) {
       return state
@@ -98,6 +101,9 @@ export const useCharacterStore = create((set) => ({
       handPrefByCharId: handPref === undefined
         ? state.handPrefByCharId
         : { ...state.handPrefByCharId, [charId]: handPref },
+      picsouModeByCharId: picsouMode === undefined
+        ? state.picsouModeByCharId
+        : { ...state.picsouModeByCharId, [charId]: picsouMode },
       inventoryFetchEpoch: { ...state.inventoryFetchEpoch, [charId]: currentEpoch + 1 },
     }
   }),
@@ -147,6 +153,11 @@ export const useCharacterStore = create((set) => ({
   // Handler WS SOLS_UPDATED, ou réponse HTTP d'une mutation locale des sols.
   setSols: (charId, sols) => set((state) => ({
     solsByCharId: { ...state.solsByCharId, [charId]: sols },
+  })),
+
+  // Handler WS CHAR_PICSOU_MODE_UPDATED, ou réponse HTTP de la bascule MJ only.
+  setPicsouMode: (charId, picsouMode) => set((state) => ({
+    picsouModeByCharId: { ...state.picsouModeByCharId, [charId]: picsouMode },
   })),
 
   // PLAN_WIZARD_MATERIEL_GAUGES.md §6 — { [categoryKey]: value }, pas de tableau : une jauge est

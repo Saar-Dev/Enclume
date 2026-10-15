@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem, quickEquip, splitItem } from './inventoryService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem, quickEquip, splitItem, resolveAutoValidate } from './inventoryService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/inventoryService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -243,6 +243,79 @@ test('addItem — ajout joueur en campagne (autoValidate=false) : jamais débit�
     assert.equal(item.validated_by_gm, false)
     const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
     assert.equal(after.sols, before.sols, 'en attente de validation MJ — débit différé, pas ici')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// Ticket "Playground : objet catalogue sans coût" (2026-10-15) — resolveAutoValidate décide
+// autoValidate pour POST /:characterId/inventory (char-sheet.js).
+test('resolveAutoValidate — MJ : toujours vrai, même personnage non verrouillé', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const result = await resolveAutoValidate({ isGm: true, campaignId: fx.campaign.id, characterId: fx.owner.id })
+    assert.equal(result, true)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveAutoValidate — Coffre-native (campaignId null) : toujours vrai', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const result = await resolveAutoValidate({ isGm: false, campaignId: null, characterId: fx.owner.id })
+    assert.equal(result, true)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveAutoValidate — joueur, en campagne, personnage NON verrouillé (encore en Wizard) : faux', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const result = await resolveAutoValidate({ isGm: false, campaignId: fx.campaign.id, characterId: fx.owner.id })
+    assert.equal(result, false)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveAutoValidate — joueur, en campagne, personnage VERROUILLÉ (en jeu réel) : vrai', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await db('char_sheet').where({ character_id: fx.owner.id }).update({ wizard_locked_at: db.fn.now() })
+    const result = await resolveAutoValidate({ isGm: false, campaignId: fx.campaign.id, characterId: fx.owner.id })
+    assert.equal(result, true)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — joueur, personnage verrouillé (autoValidate=true via resolveAutoValidate), sols suffisants : débite le prix, auto-validé', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await db('char_sheet').where({ character_id: fx.owner.id }).update({ wizard_locked_at: db.fn.now() })
+    const autoValidate = await resolveAutoValidate({ isGm: false, campaignId: fx.campaign.id, characterId: fx.owner.id })
+    const before = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, autoValidate, false)
+    assert.equal(item.validated_by_gm, true)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, before.sols - fx.pricedRef.price)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — mode Picsou actif, sols insuffisants : aucun débit, aucun refus, auto-validé', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await db('char_sheet').where({ character_id: fx.owner.id })
+      .update({ wizard_locked_at: db.fn.now(), sols: fx.pricedRef.price - 1, picsou_mode: true })
+    const autoValidate = await resolveAutoValidate({ isGm: false, campaignId: fx.campaign.id, characterId: fx.owner.id })
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, autoValidate, false)
+    assert.equal(item.validated_by_gm, true)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, fx.pricedRef.price - 1, 'mode Picsou — aucun débit malgré des sols insuffisants')
   } finally {
     await cleanup(fx)
   }

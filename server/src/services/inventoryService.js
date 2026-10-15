@@ -23,9 +23,13 @@ import { initialMagazineOnEquip } from '../../../shared/ammoRules.js'
 // `forUpdate` + vérif AVANT décrément, même patron que tradeService.js#executeBuy (seul autre point
 // du projet qui débite déjà des Sols) — jamais de décrément optimiste suivi d'un rollback, toujours
 // lire le solde sous verrou d'abord.
+// Mode Picsou (char_sheet.picsou_mode, bascule MJ only) : lu sous le même verrou que le solde — si
+// actif, aucun débit ni refus "Sols insuffisants". Autorité unique : les 4 appelants (ajout simple/
+// stack/multi, validation MJ) en profitent sans rien changer de leur côté.
 async function _chargeSols(trx, characterId, amount) {
   if (amount <= 0) return
-  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first('sols')
+  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first('sols', 'picsou_mode')
+  if (sheet?.picsou_mode) return
   if (!sheet || sheet.sols < amount) {
     throw new AppError(400, `Sols insuffisants (requis : ${amount}, disponible : ${sheet?.sols ?? 0})`)
   }
@@ -359,7 +363,7 @@ export async function resolveAmmoInit(equipmentId, slot, executor = db) {
 // GET /:characterId/inventory
 export async function getInventory(characterId, campaignId) {
   const sheet = await db('char_sheet').where({ character_id: characterId }).first()
-  if (!sheet) return { items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0 }
+  if (!sheet) return { items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0, picsou_mode: false }
 
   // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), pas la valeur brute
   // — corrige PI4 (docs/PLAN_MUTATION2.md Lot 1). encumbrance_enabled/multiplier : options de
@@ -511,6 +515,7 @@ export async function getInventory(characterId, campaignId) {
     ini_penalty:  iniPenalty,
     threshold,
     hand_pref:    identity?.hand_pref || 'R',
+    picsou_mode:  sheet.picsou_mode,
   }
 }
 
@@ -542,15 +547,30 @@ export async function quickEquip(characterId, equipment_id, slot) {
   return getItemWithRef(inserted.id)
 }
 
+// Dérive autoValidate pour POST /:characterId/inventory (PLAN_WIZARD_MATERIEL_GAUGES.md §3 + ticket
+// "Playground : objet catalogue sans coût", 2026-10-15) — jamais lu du payload client. Vrai si :
+// - le MJ ajoute l'item (geste privilégié, jamais débité — voir addItem#chargeAtAdd) ;
+// - il n'y a pas de MJ à attendre (personnage Coffre-native, sans campagne) ;
+// - le personnage est verrouillé (wizard_locked_at posé) ET en campagne : ce n'est plus un brouillon
+//   de création (flux "confiance" du Wizard Step6, gratuit, en attente — inchangé) mais un achat réel
+//   en session, auto-validé pour la même raison que le Coffre-native : addItem#chargeAtAdd (dérivé de
+//   cette même valeur) ne débite JAMAIS un objet qui va encore passer par la validation MJ (évite un
+//   double débit, voir le commentaire sur chargeOnValidate dans updateItem) — tout ce qui doit être
+//   payé ici doit aussi être auto-validé ici, pas de troisième état.
+export async function resolveAutoValidate({ isGm, campaignId, characterId }) {
+  if (isGm || campaignId == null) return true
+  const sheet = await db('char_sheet').where({ character_id: characterId }).first('wizard_locked_at')
+  return sheet?.wizard_locked_at != null
+}
+
 // POST /:characterId/inventory
 // Retourne { type: 'stack'|'single'|'multi', item, items } — la route choisit l'event socket et
 // la forme de réponse HTTP à partir de `type`, sans dupliquer la logique métier.
 // autoValidate : dérive validated_by_gm (PLAN_WIZARD_MATERIEL_GAUGES.md §3) — jamais lu du payload
-// client. Vrai si le MJ ajoute l'item, ou s'il n'y a pas de MJ à attendre (personnage Coffre-native,
-// sans campagne — aucun MJ ne peut jamais rejoindre pour valider, char-sheet.js calcule ce cas au
-// call site). Un item ajouté par le MJ (ou fusionné sur un stack par le MJ) part directement validé ;
-// un ajout joueur, même sur un stack déjà validé, remet la ligne fusionnée en attente (le statut
-// reflète toujours le rôle du dernier auteur, jamais un statut hérité d'un ajout précédent).
+// client, calculé par resolveAutoValidate() ci-dessus. Un item ajouté par le MJ (ou fusionné sur un
+// stack par le MJ) part directement validé ; un ajout joueur, même sur un stack déjà validé, remet la
+// ligne fusionnée en attente (le statut reflète toujours le rôle du dernier auteur, jamais un statut
+// hérité d'un ajout précédent).
 // isGm : distinct d'autoValidate (INV2, docs/EN_COURS.md) — autoValidate peut être vrai pour une
 // raison qui n'a rien à voir avec un privilège MJ (Coffre-native). Sert uniquement à décider si le
 // débit de Sols a lieu ici (voir chargeAtAdd ci-dessous) ; ne change rien à validated_by_gm.
