@@ -122,6 +122,12 @@ VERIFIED.push({
 }, {
   code: 'OPT-W2',
   note: 'Vérifié : grep style={{ sur les 8 fichiers campaignSettings/*.jsx — plus aucune valeur visuelle en dur, seul un overflowX (layout légitime) reste. Corrigé en 2 passes (4fccbe89 puis dfe1f8e4, dernières valeurs d\'opacité dynamiques).',
+}, {
+  code: 'WIZ4',
+  note: 'Vérifié par lecture : Step4Experience.jsx:344-350 — handleRemoveCareer clampe bien highestSubStep à SUB_STEPS.CAREERS quand careers devient vide, exactement comme décrit dans la note existante. Portée volontairement limitée à ce cas précis (filet serveur couvre le reste).',
+}, {
+  code: 'WIZ41',
+  note: "Vérifié par lecture : InventoryPanel.jsx:57 handsCategoryForItem + filterHands (ligne 109/343/613-616) toujours en place — non affecté par mes propres modifications de cette session (mode achat gratuit) sur ce même fichier.",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
