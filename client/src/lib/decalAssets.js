@@ -10,7 +10,11 @@ export async function loadDecalAssets(assets) {
   const loader = new THREE.TextureLoader()
 
   const entries = await Promise.all((assets || []).map(async (asset) => {
-    const url = asset?.url
+    // `image_url` : chemin relatif signé (`decal-assets.js`, ASSET_URL_FIELDS) — jamais une URL déjà
+    // construite. Même reconstruction que `modelGlbUrl`/`connectorAssetUrl` (SurfaceDungeonScene.jsx) :
+    // obligatoire pour THREE.TextureLoader, qui n'envoie jamais le cookie de session dès que le port
+    // client/serveur diffère (dev et Kiwi) — un jeton signé dans l'URL est la seule voie fiable.
+    const url = asset?.image_url ? `${import.meta.env.VITE_API_URL}/api/assets/${asset.image_url}` : null
     if (!url) return [asset?.id, null]
     if (decalTextureCache[url]) return [asset.id, decalTextureCache[url]]
 

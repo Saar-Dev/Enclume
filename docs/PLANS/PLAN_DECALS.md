@@ -121,8 +121,14 @@ l'import lui-même (« 321 créés, 0 déjà présents ») ; **vérifié en lect
 coup** : 321 lignes en base réparties exactement comme attendu (121 signage, 100+100 militaire),
 dimensions cohérentes (2048/2049×2048), et un fichier MinIO réellement présent et lisible (taille et
 type corrects) — pas seulement le message de succès du script pris pour argent comptant. **Non
-testé** : la route HTTP `GET /api/decal-assets` elle-même (jamais de serveur lancé par l'agent) —
-reste à vérifier au moment du Lot 3 (premier consommateur réel), pas bloquant avant.
+testé à la clôture de ce lot** : la route HTTP `GET /api/decal-assets` elle-même (jamais de serveur
+lancé par l'agent) — reste à vérifier au moment du Lot 3 (premier consommateur réel), pas bloquant
+avant. **Mise à jour 2026-10-15, testée par Saar au Lot 3** : la route répondait mais son champ
+`url` pointait une adresse MinIO directe (`getFileUrl`), jamais servie par l'application — contraire
+à la convention déjà en place pour tout le reste des assets (`/api/assets/*filePath`, jeton signé
+car `THREE.TextureLoader` n'envoie jamais le cookie de session entre deux ports différents). Vignettes
+et rendu 3D restaient vides. Corrigé (`image_url` relatif + `signAssetFieldsMiddleware`, même
+patron que `modelGlbUrl`) — détail dans l'Historique.
 **Données** : 321 lignes créées dans `decal_assets` (nouvelle table, aucune donnée de jeu existante
 touchée) + 321 fichiers dans MinIO (`decals/<uuid>.png`). **Retour arrière** : `down()` des deux
 migrations (testé) ; les fichiers MinIO resteraient orphelins après un rollback, à nettoyer
@@ -513,3 +519,38 @@ tri : `assets_source/decals/README.md`.
   mais sa justification était fausse (« confirmé identiques en lisant jusqu'au bout ») — corrigée :
   c'est une simplification choisie parce qu'un décor ne découpe jamais le mur, pas un patron déjà
   utilisé ailleurs tel quel. État des lieux et Lot 1 réécrits en conséquence avant tout code.
+- **2026-10-15 (Lot 1 clos)** — `room.wallDecorations[]`, ancrage géométrique
+  (`makeWallDecorationFromWallPoint`), réconciliation (suppression/fusion de mur, effacement de
+  case) codés et testés (10 scénarios). Dette consciente notée : vérification faite par un script
+  scratch, jamais portée en test permanent.
+- **2026-10-15 (dette réglée)** — Les 10 scénarios du Lot 1 portés dans
+  `client/src/lib/surfaceData.test.mjs` (tests permanents), avant de reprendre le code.
+- **2026-10-15 (analyse à charge du cadrage Lot 2)** — `THREE.DecalGeometry` écarté au profit d'un
+  quad orienté (§K-O, `JOURNALANALYSE.md`) ; deux oublis techniques trouvés et corrigés avant le
+  code : hauteur de pose plafonnée à la hauteur réelle du mur, matériau éclairé
+  (`MeshStandardMaterial`) plutôt que `MeshBasicMaterial`.
+- **2026-10-15 (Lot 2 codé)** — Rendu 3D livré et testé (5 scénarios, dont le risque réel de panneau
+  ambigu après découpe par porte, §P). Demande de validation visuelle envoyée à Saar par erreur :
+  aucun décor ne pouvait encore exister dans une vraie carte (pas d'outil de pose) — corrigé,
+  reporté sur le Lot 3.
+- **2026-10-15 (recherche avant le Lot 3, demande explicite de Saar)** — Documentation officielle et
+  forums consultés avant de coder l'outil d'édition : confirment le choix déjà fait (raycast
+  désactivable, piège réel documenté sur le miroir d'une texture partagée, quad plat adapté à un
+  décor mural). Renfort `polygonOffset` ajouté en conséquence.
+- **2026-10-15 (analyse à charge du cadrage Lot 3)** — Deux corrections avant le code (§Q-R,
+  `JOURNALANALYSE.md`) : aperçu de pose absent du premier cadrage, ajouté ; mécanisme de sélection
+  d'un connecteur mal caractérisé (deux mécanismes distincts, pas un). En codant, simplification
+  trouvée par rapport au cadrage corrigé : un décor se gère depuis la liste du panneau Mur, jamais
+  par un clic direct sur son image — le raycast du quad reste désactivé, inchangé depuis le Lot 2.
+- **2026-10-15 (Lot 3 codé, chantier code-complet)** — Outil de pose/suppression livré et testé (5
+  scénarios). Les 4 lots sont désormais tous écrits ; le chantier reste clos partiel ⚠️, rien vu
+  dans un vrai navigateur.
+- **2026-10-15 (bug trouvé par Saar au premier essai réel)** — Vignettes du catalogue et rendu 3D
+  tous deux vides malgré un code par ailleurs fonctionnel (sélection, tooltip). Cause : la route du
+  Lot 0 renvoyait une adresse MinIO directe (`getFileUrl`), jamais servie par l'application — toutes
+  les autres images du projet (GLB, portraits, textures) passent par une route de proxy dédiée
+  (`/api/assets/*filePath`) avec un jeton signé dans l'URL, nécessaire car `THREE.TextureLoader`
+  n'envoie jamais le cookie de session entre deux ports différents (dev et Kiwi). Corrigé en
+  réutilisant exactement ce mécanisme déjà existant (champ `image_url` relatif + 1 ligne de
+  middleware déjà écrit ailleurs) — aucune nouvelle route créée. Repéré uniquement parce que Saar a
+  pu tester en vrai : aucune vérification possible côté agent avant (ni serveur ni navigateur).

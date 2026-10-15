@@ -237,7 +237,9 @@ export default function SurfaceWallPanel({
                     onClick={() => selectDecalAsset(asset)}
                     style={{
                       ...S.decalThumb,
-                      backgroundImage: asset.url ? `url(${asset.url})` : 'none',
+                      backgroundImage: asset.image_url
+                        ? `url(${import.meta.env.VITE_API_URL}/api/assets/${asset.image_url})`
+                        : 'none',
                       ...(tool.decalAssetId === asset.id ? S.decalThumbActive : {}),
                     }}
                   />
