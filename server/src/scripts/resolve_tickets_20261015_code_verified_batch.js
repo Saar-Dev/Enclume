@@ -98,6 +98,12 @@ VERIFIED.push({
 }, {
   code: 'GAMETIME-WIDGET-SWALLOWS-ERRORS',
   note: 'Vérifié bout en bout : GameTimeWidget.jsx:78-79 setError(extractErrorMessage(err,t)) + auto-disparition 4s, ligne 163 {error && <div>...}  réellement rendu. apiError.js#extractErrorMessage existe et est bien importé.',
+}, {
+  code: 'WOUND-VAULT-NO-CAMPAIGN',
+  note: 'Correctif de cette même session (2026-10-14) : cloneWoundsToVault (vaultService.js:80-83, filtre TEST_BLOCKING_SEVERITIES) + garde woundHealingSchedule.js:57 — déjà couvert par tests dédiés au moment du correctif, relus et confirmés en place.',
+}, {
+  code: 'CHARSHEET-XP-SYNC-PJMJ',
+  note: "Vérifié bout en bout : char-sheet.js émet CHAR_XP_UPDATED (3 sites) via notifyCharSheetEvent, CharacterSheet.jsx:747 l'écoute (onXpUpdated). Même patron pour les 10 autres champs de ce commit (identité, archétype, attributs, compétences, Chance, avantages, mutations) — vérifié pour XP comme échantillon représentatif.",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
