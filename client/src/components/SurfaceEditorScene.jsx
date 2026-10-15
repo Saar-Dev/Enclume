@@ -98,6 +98,7 @@ export default function SurfaceEditorScene({
   surfaceData,
   onSurfaceDataChange,
   textureMaterials,
+  decalAssetCatalog,
   activeMaterial,
   surfaceTool,
   onSurfaceToolChange,
@@ -860,6 +861,7 @@ export default function SurfaceEditorScene({
       <SurfaceDungeonScene
         surfaceData={surfaceData}
         textureMaterials={textureMaterials}
+        decalAssetCatalog={decalAssetCatalog}
         ceilingOpacity={0.35}
         displayLevel={displayLevel}
         cameraControlsRef={orbitRef}

@@ -10,6 +10,7 @@ import api from '../lib/api.js'
 import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { WS } from '../../../shared/events.js'
 import { loadSurfaceTextures } from '../lib/surfaceTextures.js'
+import { loadDecalAssets } from '../lib/decalAssets.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
@@ -553,7 +554,7 @@ function findWorldSupportHit(raycaster, scene) {
 }
 
 function Scene({
-  surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
+  surfaceData, textureMaterials, decalAssetCatalog, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
@@ -1546,6 +1547,7 @@ function Scene({
         <SurfaceDungeonScene
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
+          decalAssetCatalog={decalAssetCatalog}
           displayLevel={displayLevel}
           cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
           onCameraRoomIdChange={setCameraVolumeRoomId}
@@ -2000,6 +2002,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     [battlemap?.surface_data],
   )
   const [textureMaterials, setTextureMaterials] = useState({})
+  const [decalAssetCatalog, setDecalAssetCatalog] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
@@ -2167,6 +2170,22 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battlemap?.id, battlemap?.surface_data, blueprintIds])
 
+  // ─── Chargement du catalogue de décors (PLAN_DECALS.md Lot 2) — catalogue complet non filtré,
+  // même choix qu'Editor3D (le catalogue reste petit, pas de route `?ids=` côté decal-assets).
+  // Route jamais exercée en vrai avant (Lot 0, JOURNALANALYSE.md §L) — à surveiller ici en premier.
+  useEffect(() => {
+    const loadDecals = async () => {
+      try {
+        const { data } = await api.get('/decal-assets')
+        const loaded = await loadDecalAssets(data.assets)
+        setDecalAssetCatalog(loaded)
+      } catch (err) {
+        console.error('[Canvas3D] Erreur chargement decal-assets :', err)
+      }
+    }
+    loadDecals()
+  }, [battlemap?.id])
+
   const selectedSurfaceConnector = useMemo(() => {
     const id = surfaceConnectorPanel?.connectorId
     const connector = id ? surfaceData.connectors?.[id] : null
@@ -2247,6 +2266,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         <Scene
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
+          decalAssetCatalog={decalAssetCatalog}
           entityTextureMaterials={entityTextureMaterials}
           runtimeEffectRegions={worldEffects.regions}
           runtimeFeatureStates={connectorRuntimeStates}

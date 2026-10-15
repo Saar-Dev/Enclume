@@ -14,6 +14,7 @@ import { isRealReliefProfile, DEFAULT_RELIEF_SCALE } from '../lib/reliefGeometry
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
+import { findWallDecorationPanel, wallDecorationPlacement } from '../lib/wallDecorationGeometry.js'
 import {
   multiPolygonContours,
   intersectMultiPolygons,
@@ -875,6 +876,66 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
         />
       )}
     </>
+  )
+}
+
+// ----- Décors muraux (PLAN_DECALS.md Lot 2) -----
+// Un décor n'est jamais THREE.DecalGeometry (analyse à charge 2026-10-15, JOURNALANALYSE.md §K) :
+// son ancrage (anchorX/Z, tangentX/Z, normalX/Z) est déjà le point exact du mur porteur (Lot 1,
+// même mur droit ou courbe) — un simple quad orienté suffit, pas de projection sur le maillage réel.
+// `findWallDecorationPanel`/`wallDecorationPlacement` : géométrie pure, testée indépendamment dans
+// `client/src/lib/wallDecorationGeometry.js` (pas de JSX/Three.js à mocker pour les tester).
+
+// Un décor est une apparence pure (`.claude/rules/world.md` : « une apparence 3D n'implique jamais
+// une collision »). Raycast désactivé pour ne jamais s'interposer dans la sélection d'un mur/
+// connecteur ni dans un raycast de déplacement — Lot 3 le réactivera explicitement s'il ajoute une
+// sélection du décor lui-même.
+const DECOR_DISABLE_RAYCAST = () => null
+const decalMaterialCache = new Map()
+
+function decalMaterialFor(texture) {
+  if (!texture) return null
+  if (decalMaterialCache.has(texture)) return decalMaterialCache.get(texture)
+  const material = new THREE.MeshStandardMaterial({
+    map: texture,
+    transparent: true,
+    roughness: 0.9,
+    metalness: 0,
+    side: THREE.FrontSide,
+  })
+  decalMaterialCache.set(texture, material)
+  return material
+}
+
+function WallDecorationPlane({ decoration, panel, catalogEntry }) {
+  const placement = useMemo(
+    () => wallDecorationPlacement(decoration, panel),
+    [decoration, panel],
+  )
+  const geometry = useMemo(() => {
+    const widthM = Math.max(0.05, Number(decoration.widthM) || 0.5)
+    const heightM = Math.max(0.05, Number(decoration.heightM) || 0.5)
+    const geo = new THREE.PlaneGeometry(widthM, heightM)
+    if (decoration.mirror) {
+      const uv = geo.attributes.uv
+      for (let i = 0; i < uv.count; i += 1) uv.setX(i, 1 - uv.getX(i))
+      uv.needsUpdate = true
+    }
+    return geo
+  }, [decoration.widthM, decoration.heightM, decoration.mirror])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  const material = useMemo(() => decalMaterialFor(catalogEntry?.texture), [catalogEntry])
+
+  if (!placement || !material) return null
+
+  return (
+    <mesh
+      position={placement.position}
+      rotation={[0, placement.rotationY, 0]}
+      geometry={geometry}
+      material={material}
+      raycast={DECOR_DISABLE_RAYCAST}
+    />
   )
 }
 
@@ -2104,6 +2165,7 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
 function SurfaceDungeonScene({
   surfaceData,
   textureMaterials,
+  decalAssetCatalog = {},
   ceilingOpacity = 0.18,
   displayLevel = null,
   showDetails = true,
@@ -2275,6 +2337,22 @@ function SurfaceDungeonScene({
           showDetails={showDetails}
         />
       ) : null)}
+      {Object.values(surface.rooms).flatMap(room => (
+        (room.wallDecorations || []).map(decoration => {
+          const panel = findWallDecorationPanel(roomWallSegments, decoration)
+          if (!panel || !roomWallIsVisible(panel)) return null
+          const catalogEntry = decalAssetCatalog?.[decoration.assetId]
+          if (!catalogEntry?.texture) return null
+          return (
+            <WallDecorationPlane
+              key={decoration.id}
+              decoration={decoration}
+              panel={panel}
+              catalogEntry={catalogEntry}
+            />
+          )
+        })
+      ))}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
         const belongsToCameraVolume = cameraVolumeRoomId && floor?.clipRoomId === cameraVolumeRoomId

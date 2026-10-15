@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { loadSurfaceTextures } from '../lib/surfaceTextures.js'
+import { loadDecalAssets } from '../lib/decalAssets.js'
 import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import { useSurfacePanels } from '../lib/useSurfacePanels.js'
 import { useSurfaceDocument } from '../lib/useSurfaceDocument.js'
@@ -55,6 +56,7 @@ const blueprintPlacementMode = (blueprint) => (
 function EntityEditorScene({
   surfaceData,
   textureMaterials,
+  decalAssetCatalog,
   entityTextureMaterials,
   socket,
   battlemapId,
@@ -659,6 +661,7 @@ function EntityEditorScene({
         <SurfaceDungeonScene
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
+          decalAssetCatalog={decalAssetCatalog}
           ceilingOpacity={0.35}
           displayLevel={displayLevel}
           cameraControlsRef={orbitRef}
@@ -739,6 +742,7 @@ export default function Editor3D({
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [textureMaterials, setTextureMaterials] = useState({})
+  const [decalAssetCatalog, setDecalAssetCatalog] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
   const saveTimer = useRef(null)
@@ -789,6 +793,22 @@ export default function Editor3D({
       }
     }
     loadBlocks()
+  }, [battlemap?.id])
+
+  // ─── Chargement du catalogue de décors (PLAN_DECALS.md Lot 2) — même patron que les
+  // surface_textures ci-dessus : palette complète pour l'éditeur, non filtrée. Route jamais
+  // exercée en vrai avant (Lot 0, JOURNALANALYSE.md §L) — à surveiller ici en premier.
+  useEffect(() => {
+    const loadDecals = async () => {
+      try {
+        const { data } = await api.get('/decal-assets')
+        const loaded = await loadDecalAssets(data.assets)
+        setDecalAssetCatalog(loaded)
+      } catch (err) {
+        console.error('[Editor3D] Erreur chargement decal-assets :', err)
+      }
+    }
+    loadDecals()
   }, [battlemap?.id])
 
   // ─── Chargement entityTextureMaterials — même pattern que Canvas3D ────────
@@ -1068,6 +1088,7 @@ export default function Editor3D({
             key={activeBlueprint?.id || 'no-blueprint'}
             surfaceData={surfaceData}
             textureMaterials={textureMaterials}
+            decalAssetCatalog={decalAssetCatalog}
             entityTextureMaterials={entityTextureMaterials}
             socket={socket}
             battlemapId={battlemap?.id}
@@ -1083,6 +1104,7 @@ export default function Editor3D({
             surfaceData={surfaceData}
             onSurfaceDataChange={handleSurfaceDataChange}
             textureMaterials={textureMaterials}
+            decalAssetCatalog={decalAssetCatalog}
             activeMaterial={activeMaterial}
             surfaceTool={surfaceTool}
             onSurfaceToolChange={onSurfaceToolChange}

@@ -230,35 +230,105 @@ deux n'existe encore, rien à tester avant eux.
 migration, aucune écriture en base.
 **Retour arrière** : revert des 5 fichiers (pas de migration, pas de donnée persistée à nettoyer).
 
-## Lot 2 — Rendu 3D
+## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15)**
 
-**Objectif** : afficher un décor sur le mur qu'il référence, sans toucher au mesh ni au matériau du
-mur lui-même.
+**Objectif** : afficher chaque `room.wallDecorations[]` comme une image plate collée sur la face
+intérieure du mur qu'elle référence, toujours visible au-dessus du matériau/motif du mur, sans
+jamais toucher au mesh ni au matériau du mur lui-même, sans collider ni occluder.
 
-**Fichiers** :
-- `client/src/components/SurfaceDungeonScene.jsx` : nouveau composant de rendu qui lit
-  `room.wallDecorations[]`, au même niveau que `WallSegment` lit déjà `wallAppearanceProfiles`.
-- mur plan (cas par défaut) : quad simple en léger décalage vers l'intérieur de la salle (sens déjà
-  porté par `interiorNormalSign`, dérivé par salle), matériau = texture du décor (alpha
-  transparent) — jamais une seconde couche ajoutée au matériau du mur lui-même.
-- mur courbe ou profilé : `THREE.DecalGeometry` (addon officiel three.js), projeté sur le maillage
-  réel du mur, recalculé à chaque changement du `WorldSnapshot` — jamais stocké en coordonnées
-  Three.js indépendantes (le rendu ne redéfinit jamais le modèle canonique).
-- chargement de texture : réutiliser le loader déjà utilisé par `surfaceTextures.js`
-  (`THREE.TextureLoader`), pas un nouveau mécanisme de chargement.
-- **ordre d'affichage imposé (décision de Saar, 2026-10-14)** : un décor se dessine toujours
-  au-dessus du matériau procédural ET du motif du mur qui le porte — jamais caché derrière, quel que
-  soit l'ordre dans lequel les composants se rendent. En pratique : le décalage vers l'intérieur
-  (léger offset positif) suffit pour le quad plan ; pour `DecalGeometry`, vérifier à l'implémentation
-  que l'ordre de rendu (`renderOrder` Three.js) ou le `polygonOffset` place bien le décor devant,
-  jamais un test au cas par cas découvert en jeu.
+**Révision du 2026-10-15 (cadrage initial du 2026-09-16 vérifié contre le code réel)** —
+`THREE.DecalGeometry` est **écarté**, au profit d'un simple quad orienté pour mur droit ET mur
+courbe. `DecalGeometry` est bien disponible (three 0.183.2, présent via `@react-three/fiber` ;
+`three/addons/geometries/DecalGeometry.js`, lu en entier) mais son usage réel exige une référence
+au Mesh Three.js déjà construit du mur (sa géométrie réelle, sa `matrixWorld`) pour projeter puis
+découper le décor dessus, et porte un risque de distorsion documenté par les auteurs **autour des
+coins** — alors qu'un décor est par construction toujours ancré à un seul panneau, jamais à cheval
+sur un coin (`wallDecorationsOverlap`, Lot 1). Un décor étant toujours petit devant le rayon d'un
+mur courbe (salle de taille normale), un quad plat donne un résultat visuellement équivalent sans
+avoir à retrouver l'objet Mesh réel dans la scène ni relancer un calcul de projection à chaque
+changement du monde. Simplification réelle, pas une impasse technique.
+
+**Position et orientation du quad** :
+- Position de base = `anchorX/anchorZ` (déjà stocké), décalée vers l'intérieur de la salle d'une
+  demi-épaisseur de mur + une petite marge — pour toucher la face intérieure sans s'enfoncer dans
+  le mur ni flotter devant.
+- Axe horizontal du quad = `tangentX/Z` (déjà stocké).
+- **Point non vu au cadrage précédent** : le sens de `normalX/Z` stocké n'est qu'une rotation à 90°
+  de la tangente — il ne garantit pas de regarder vers l'intérieur de la salle propriétaire du
+  décor. Au rendu, corriger ce sens avec `interiorNormalSignsByRoom[decoration.roomId]` (calcul
+  déjà fait ailleurs — `roomWalls.js`, `cameraCutaway.js` — pour savoir quelle face d'un mur est
+  « dedans » pour une salle donnée). Sans cette correction, une partie des décors se retrouverait
+  orientée vers l'extérieur, invisible depuis la salle qui les porte.
+- Ordre d'affichage devant le matériau/motif : obtenu naturellement par le décalage physique vers
+  l'intérieur (profondeur réelle, pas un artifice `renderOrder`/`polygonOffset`).
+- `mirror` : inversion simple de la coordonnée horizontale de la texture du quad.
+
+**Point ouvert non résolu par le Lot 1, à trancher maintenant (mon avis, pas une règle de jeu)** :
+la donnée posée au Lot 1 ne garde aucune hauteur de pose sur le mur (seulement sa position le long
+du mur, `anchorX/Z`). Proposition : une hauteur fixe depuis le sol (hauteur réelle d'un panneau,
+~1,5 m), identique quelle que soit la hauteur de la salle — plutôt qu'un centrage sur toute la
+hauteur du mur, qui donnerait des panneaux absurdement hauts dans une salle à plusieurs étages.
+Aucune modification du schéma `wallDecorations` nécessaire (constante de rendu, pas une donnée
+posée) ; à confirmer par Saar avant de coder. **Corrigé après analyse à charge (§M,
+JOURNALANALYSE.md 2026-10-15)** : `getWallRenderBox` autorise un mur aussi bas que 0,5 m
+(`Math.max(0.5, wall.height || 2.5)`) — la hauteur de pose doit être plafonnée à la hauteur réelle
+du mur porteur moins une marge, jamais utilisée comme constante brute.
+
+**Matériau du quad (ajouté après analyse à charge, §N)** : `MeshStandardMaterial` (carte couleur +
+transparence), la même famille que le matériau du mur (`proceduralMaterialAt`,
+`MeshStandardMaterial`, réagit à l'éclairage de la scène) — jamais `MeshBasicMaterial`, qui resterait
+à luminosité fixe quelle que soit la lumière de la salle, visuellement incohérent avec le mur juste
+derrière.
+
+**Chargement des images** : même mécanisme que les textures de mur déjà en place (`GET
+/surface-textures` suivi d'un chargeur dédié, dans `client/src/components/Editor3D.jsx` et
+`client/src/components/Canvas3D.jsx`) — nouvel appel `GET /decal-assets` (déjà en place depuis le
+Lot 0) suivi d'un chargement de texture, câblé aux deux mêmes endroits, pas un troisième mécanisme.
+
+**Fichiers livrés** :
+- `client/src/lib/wallDecorationGeometry.js` (nouveau) : géométrie pure (pas de JSX/Three.js) —
+  `findWallDecorationPanel` (retrouve le panneau de mur réel porteur d'un décor, départagé par
+  position quand plusieurs panneaux post-découpe-porte partagent les mêmes `sourceEdgeKeys`, §P) et
+  `wallDecorationPlacement` (position + rotation du quad, hauteur plafonnée à la hauteur réelle du
+  mur §M, sens de la normale corrigé par `interiorNormalSignsByRoom` §N). Séparé du rendu pour rester
+  testable par `node --test` (un `.jsx` ne se charge pas dans ce harnais).
+- `client/src/lib/wallDecorationGeometry.test.mjs` (nouveau) : 5 scénarios réels, dont le scénario §P
+  (panneaux post-découpe-porte ambigus par clé, départagés par position).
+- `client/src/lib/decalAssets.js` (nouveau) : chargement des images du catalogue en textures
+  Three.js, même patron que `surfaceTextures.js` (cache par URL).
+- `client/src/components/SurfaceDungeonScene.jsx` : nouveau composant `WallDecorationPlane`, lu à
+  côté de `WallSegment` (qui lit déjà `wallAppearanceProfiles`) ; matériau `MeshStandardMaterial`
+  partagé par texture (§N) ; raycast désactivé (apparence pure, jamais une collision/sélection).
+- `client/src/components/Editor3D.jsx` et `client/src/components/Canvas3D.jsx` : chargement du
+  catalogue de décors (`GET /decal-assets`, catalogue complet non filtré), même emplacement que le
+  chargement des `surface_textures`, transmis en prop `decalAssetCatalog` jusqu'à
+  `SurfaceDungeonScene` (via `EntityEditorScene`/`SurfaceEditorScene`/`Scene`).
 
 **Invariant** : un décor n'ajoute jamais de collider ni d'occluder ; une apparence 3D n'implique
 jamais une collision (`.claude/rules/world.md`) ; un décor est toujours visible au-dessus du
-matériau et du motif du mur.
+matériau et du motif du mur (décalage physique vers l'intérieur, pas un artifice de rendu).
 
-**Hors périmètre de ce lot** : découpe dynamique d'un décor par une porte posée après coup — déjà
-empêché à la pose (Lot 1), pas un cas à gérer au rendu.
+**Limite connue et acceptée (§O)** : un quad plat s'écarte légèrement de la vraie courbe sur un mur
+à très faible rayon — négligeable pour un décor (~0,5 m) sur une salle de taille normale, jamais
+observé dans ce projet à ce jour ; pas une correction à faire maintenant.
+
+**Testé** : `node --check`/lint ciblé (propre, zéro nouvelle erreur — comparé au lint de la branche
+avant ce lot) sur les 7 fichiers touchés ; build client (`npm run build`, propre) ; les 5 scénarios
+de `wallDecorationGeometry.test.mjs` (dont le sens de la normale vérifié **empiriquement** pour le
+cas simple — une salle seule a déjà `interiorNormalSignsByRoom = 1`, aucune inversion nécessaire —
+et le scénario §P, panneaux ambigus post-découpe-porte départagés par position réelle, pas supposé) ;
+les 61 scénarios de `surfaceData.test.mjs` et les 949 tests purs de `shared/` toujours verts (aucune
+régression). **Non testé : ⚠️ clos partiel** — rendu jamais vu dans un navigateur réel (ni serveur ni
+navigateur lancés par l'agent, AGENTS.md) : reste à vérifier par Saar en jeu — un décor réellement
+visible à l'écran, dans le bon sens, devant le matériau/motif du mur, sur mur droit ET courbe,
+miroir correct, et la route `GET /api/decal-assets` qui répond pour de vrai (jamais exercée avant
+ce lot, §L) — **la validation visuelle par Saar reste la clôture réelle de ce lot**, pas cette
+clôture technique.
+
+**Données** : aucune (lecture seule, aucune écriture en base ni migration).
+
+**Retour arrière** : `git revert`/retrait des fichiers listés ci-dessus — aucune donnée persistée,
+aucun risque.
 
 ## Lot 3 — Outil d'édition
 

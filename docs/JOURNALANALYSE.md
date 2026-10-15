@@ -533,3 +533,94 @@ I est une précision de portée, pas un changement de conception. Point J est co
 reste une vraie question ouverte pour Saar** (§H, bloquer ou pas l'effacement d'une case sous un
 décor) — à poser, pas à trancher seul : ni une règle de jeu ni une vraie décision d'architecture, mais
 un choix d'ergonomie MJ que je ne peux pas deviner.
+
+## 2026-10-15 — Analyse à charge du cadrage détaillé du Lot 2 (rendu 3D)
+
+Revue critique demandée par Saar sur le cadrage Lot 2 que je viens d'écrire (quad orienté au lieu de
+`DecalGeometry`, correction de sens par `interiorNormalSignsByRoom`, hauteur fixe ~1,5 m, chargement
+calqué sur `textureMaterials`). Code réellement lu pour cette revue :
+`client/src/lib/surfaceGeometry.js` (`getWallRenderBox`, `getWallThicknessFine`), le module
+`DecalGeometry.js` de `three` en entier (déjà fait pour écrire le cadrage), `Editor3D.jsx`/
+`Canvas3D.jsx` (chargement de `textureMaterials`), `server/src/routes/decal-assets.js` et sa section
+de clôture du Lot 0 plus haut dans ce même plan.
+
+### K. Contradiction avec ma propre conclusion de la veille (§Verdict ci-dessus) — assumée, pas oubliée
+
+Le verdict du 2026-10-14 affirmait que le rendu « a besoin de `DecalGeometry` plutôt que d'un simple
+quad » à cause d'un mauvais ancrage sur mur courbe (point G). **Ce qui a changé** : le point G a
+justement été corrigé au Lot 1 (CLOS) — l'ancrage d'un décor sur un mur courbe est maintenant calculé
+exactement sur le point réel du cercle (`makeWallDecorationFromWallPoint`, `connectors.js`), pas sur
+la corde approximative d'un panneau tessellé. Une fois l'ancrage exact obtenu, le besoin d'une vraie
+projection boîte-sur-maillage (`DecalGeometry`) tombe : c'est justement ce que cet outil apporte de
+plus qu'un quad (coller sur une surface dont on ne connaît pas la position exacte) — ici, on la
+connaît déjà. La conclusion de la veille n'était pas fausse dans son contexte (elle visait le défaut
+d'ancrage, pas le choix de rendu en soi) mais la phrase elle-même, lue isolément, est maintenant
+trompeuse. Je la laisse dans le journal (trace d'investigation, pas réécrite) et ce paragraphe sert de
+correctif explicite.
+
+### L. La route HTTP `GET /api/decal-assets` n'a jamais tourné en vrai
+
+**[VÉRIFIÉ]** — relu la clôture du Lot 0 ci-dessus : « Non testé : la route HTTP `GET
+/api/decal-assets` elle-même (jamais de serveur lancé par l'agent) ». Le cadrage Lot 2 que je viens
+d'écrire suppose silencieusement, dans « Chargement des images », que cette route répond déjà
+correctement — elle n'a encore jamais répondu à une vraie requête. Risque concret : une erreur de
+montage de route (ordre des routes statiques/paramétrées, `.claude/rules/core.md`), un champ
+manquant dans la réponse (`url`/`ratio`), ou un problème d'auth (`requireAuth`) ne serait découvert
+qu'au moment de coder le Lot 2 — pas bloquant pour écrire le code, mais la première vérification
+réelle (Saar démarre le serveur, un appel réel à la route) doit arriver tôt dans le Lot 2, pas être
+reportée après tout le reste.
+
+### M. Hauteur fixe ~1,5 m — angle mort trouvé en vérifiant `getWallRenderBox`
+
+**[VÉRIFIÉ]** — `getWallRenderBox` (`surfaceGeometry.js:88`) calcule la hauteur réelle d'un mur par
+`Math.max(0.5, Number(wall.height) || 2.5)` : une salle peut légitimement avoir un mur de 0,5 m de
+haut (volume bas, mezzanine, passage réduit). Mon cadrage proposait une hauteur fixe de 1,5 m
+« identique quelle que soit la hauteur de la salle » sans jamais vérifier qu'elle rentre dans le mur
+réel — sur un mur bas, le décor dépasserait du plafond. **Correctif à ajouter au plan avant de
+coder** : plafonner la hauteur de pose à la hauteur réelle du mur (déjà disponible via
+`getWallRenderBox`) moins une marge, jamais une constante utilisée sans contrôle. Simple à corriger
+(un `Math.min`), mais absent du cadrage initial — pas une évidence à laisser de côté.
+
+### N. Matériau du quad — incohérence de lumière non tranchée au cadrage
+
+**[HYPOTHÈSE confirmée par lecture]** — le mur réel (`WallSegment`/`proceduralMaterialAt`,
+`SurfaceDungeonScene.jsx`) utilise `MeshStandardMaterial` (réagit à l'éclairage de la scène :
+torches, lumière colorée, pénombre). Le cadrage Lot 2 ne tranchait pas le type de matériau du quad.
+Un `MeshBasicMaterial` (non éclairé) resterait à la même luminosité quelle que soit la lumière de la
+salle, visuellement incohérent avec le mur juste derrière (un décor plein jour sur un mur dans le
+noir). Décision à ajouter au plan : le quad du décor utilise aussi `MeshStandardMaterial` (carte
+couleur + transparence), même famille que le mur — cohérence d'éclairage, coût de performance
+négligeable au vu du nombre de décors attendus sur une carte réelle.
+
+### O. Limite acceptée, pas un défaut caché : mur très fortement courbé
+
+**[HYPOTHÈSE, pas vérifiée empiriquement]** — un quad plat colle exactement au point d'ancrage mais
+s'écarte légèrement de la vraie courbe sur les bords du décor (la flèche d'un cercle). Négligeable
+pour un décor de l'ordre de 0,5 m sur un mur de salle de taille normale (rayon de plusieurs mètres) ;
+deviendrait visible sur un mur à très faible rayon (ex. une tourelle étroite). Aucun précédent dans
+ce projet de mur courbe à rayon aussi serré observé en explorant le code — limite connue et
+documentée dans le plan, pas une impasse technique à corriger maintenant ni un risque caché.
+
+### P. Scénario de test manquant, pas juste une hypothèse à accepter
+
+**[À VÉRIFIER PAR UN TEST RÉEL, pas une relecture]** — le cadrage suppose qu'un décor retrouve
+toujours son panneau de mur porteur par `sourceEdgeKeys` pour lire `interiorNormalSignsByRoom`, y
+compris après qu'une porte soit posée plus tard sur une AUTRE partie du même mur (ce qui redécoupe
+les panneaux via `cutWallsForDoorConnectors`). Lecture du code : plausible (le découpage se fait par
+clé de case, stable), mais seule l'analyse à charge du 2026-10-14 sur un sujet voisin (§P, portes) a
+montré qu'une lecture « jusqu'au bout » peut rater une différence réelle. Ce scénario doit être un
+des cas testés au moment du code (comme les 10 scénarios du Lot 1), pas seulement une supposition
+qui tient à la lecture.
+
+### Verdict (Lot 2)
+
+Deux points changent le texte du plan avant de coder : **M** (plafonner la hauteur à la hauteur
+réelle du mur) et **N** (matériau éclairé, pas basique) — je les intègre directement dans
+`PLAN_DECALS.md` ci-dessus, ce ne sont pas des questions pour Saar, juste des oublis techniques du
+premier passage. **L** n'est pas bloquant mais fixe une vérification à ne pas reporter (la route
+HTTP réelle, dès que le serveur tourne). **O** est une limite assumée, à signaler une fois à Saar,
+pas à corriger. **P** devient un scénario de test explicite du Lot 2, pas une hypothèse qu'on laisse
+filer. **K** n'est pas une erreur de ce cadrage — c'est une correction assumée d'une conclusion que
+j'avais écrite la veille, sur la base d'une information qui a changé depuis (le Lot 1 a corrigé
+l'ancrage qui rendait cette conclusion vraie à l'époque). Rien ici n'invalide le choix du quad :
+au contraire, la revue le renforce (un seul point d'ancrage, déjà exact, suffit).
