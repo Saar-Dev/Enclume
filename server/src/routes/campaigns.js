@@ -8,7 +8,7 @@ import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
 import { SETTINGS_SCHEMA, mergeWithDefaults } from '../lib/campaignSettingsService.js'
-import { adjustGameTime, requestGameTimeAdvance, confirmPendingAdvance, cancelPendingAdvance } from '../lib/gameTimeService.js'
+import { requestGameTimeAdvance, confirmPendingAdvance, cancelPendingAdvance } from '../lib/gameTimeService.js'
 import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { getReviewCardsForGm, getPendingRollsForPlayer } from '../lib/woundReviewService.js'
 import { resolveHealingChoices, resolveInfectionModes } from '../lib/woundReviewBatchService.js'
@@ -319,24 +319,14 @@ async function processGameTimeEffects(io, campaignId, effects = []) {
   }
 }
 
-// POST /api/campaigns/:id/game-time/adjust — ajuste l'horloge de campagne (docs/PLAN_FATIGUE_DOMMAGES.md §7)
-// GM uniquement. minutes : entier signé non nul (positif = avance, négatif = recul).
-// game_time_resolved_minutes ne quitte jamais le serveur (invariant de non-fuite) — ni ici, ni sur GET /:id.
-router.post('/:id/game-time/adjust', requireAuth, requireRole('gm'), async (req, res) => {
-  const { minutes } = req.body
-  const { displayedAfter, effects } = await adjustGameTime(req.params.id, minutes)
-  await processGameTimeEffects(req.app.get('io'), req.params.id, effects)
-  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
-    campaignId: req.params.id,
-    gameTimeMinutes: displayedAfter,
-  })
-  res.json({ gameTimeMinutes: displayedAfter })
-})
-
-// docs/PLAN_BLESSURES_GUERISON.md §6.1 (Lot 2, premier consommateur interactif) — remplace
-// progressivement l'usage de /game-time/adjust par le widget une fois le client migré ; laissé en
-// place tel quel pour l'instant (fonctionnel, testé, aucune raison de casser un appelant existant
-// avant que le client soit prêt).
+// TIME-ADJUST-ROUTE-LEGACY (2026-10-15) — POST /game-time/adjust (ajustement direct, sans revue)
+// retirée : remplacée par /request-advance + /confirm-advance ci-dessous (docs/PLAN_BLESSURES_
+// GUERISON.md §6.1), plus aucun appelant client depuis (vérifié, grep exhaustif). La route directe
+// pouvait avancer l'horloge sans jamais passer par l'écran de revue MJ (healing-choices/infection-
+// modes), laissant des échéances interactives dues sans que personne ne les voie. `adjustGameTime`
+// (gameTimeService.js) reste un primitif interne légitime, utilisé tel quel par coldExposureService.js/
+// echeanceService.js/fatigueService.js — seule cette route HTTP qui l'exposait directement au MJ a
+// disparu.
 // POST /api/campaigns/:id/game-time/request-advance — GM uniquement, body { minutes }.
 router.post('/:id/game-time/request-advance', requireAuth, requireRole('gm'), async (req, res) => {
   const { minutes } = req.body

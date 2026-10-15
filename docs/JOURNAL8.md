@@ -11613,3 +11613,24 @@ message affiché une seule fois dans le chat, pas de doublon au Tour suivant) �
 seul (aucun second client requis, donc hors périmètre de `docs/BETATEST.md`), à faire avant clôture.
 **Données** : migration 394 (additive, `down()` = DROP COLUMN).
 **Retour arrière** : `git revert` du commit (migration additive sans donnée tierce dépendante).
+
+## Session (Dev) — 2026-10-15 — TIME-ADJUST-ROUTE-LEGACY : route morte retirée
+
+`POST /api/campaigns/:id/game-time/adjust` ajustait l'horloge de campagne directement, sans jamais
+passer par l'écran de revue MJ (healing-choices/infection-modes) — remplacée depuis par
+`/request-advance` + `/confirm-advance` (`docs/PLAN_BLESSURES_GUERISON.md §6.1`), laissée en place
+« au cas où ». [VÉRIFIÉ] zéro appelant côté client (grep exhaustif `client/src`), zéro test dédié.
+
+**Fix** : route retirée de `server/src/routes/campaigns.js` (import `adjustGameTime` retiré avec
+elle — devenu mort dans ce fichier). `adjustGameTime` (`gameTimeService.js`) reste un primitif
+interne légitime, toujours utilisé par `coldExposureService.js`/`echeanceService.js`/
+`fatigueService.js` — seule la route HTTP qui l'exposait directement au MJ, en contournant la revue,
+a disparu. Cause racine supprimée plutôt que documentée : rien ne pouvait plus jamais appeler cette
+route pour laisser une échéance interactive due sans revue.
+
+**Testé** : `node --check server/src/routes/campaigns.js` (0 erreur). `node --env-file=.env --test
+gameTimeService.test.mjs` (base locale, lancé par l'agent) 16/16 — zéro régression (la route
+retirée n'avait aucun test dédié).
+**Non testé** : aucun — pure suppression de code mort, pas de scénario réel à dérouler.
+**Données** : aucune (pas de migration, pas d'effet runtime).
+**Retour arrière** : `git revert` du commit.
