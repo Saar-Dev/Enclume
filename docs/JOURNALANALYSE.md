@@ -324,3 +324,212 @@ documents utilisent un lien »), pas par une fusion de contenu :
 **Rien encore écrit dans les deux fichiers `docs/PLANS/*.md` réels — décision actée ici, exécution en
 attente du feu vert de Saar** (CLAUDE.md §6.7 : modifier 2 documents de référence + VOCABULARY.md est un
 changement de scope réel, pas une clarification cosmétique).
+
+## 2026-10-14 — Reprise : analyse à charge de PLAN_DECALS.md contre le code réel actuel
+
+Contexte : les étapes 1-8 ci-dessus datent du 2026-08-25/26, avant le rework complet de l'éditeur
+(World Builder v2, peindre/effacer des cases, purge voxel). Saar redemande aujourd'hui une analyse à
+charge du même plan, « PREND TON TEMPS » répété deux fois. Lu intégralement avant de commencer :
+`docs/PLANS/PLAN_DECALS.md`, `docs/PLANS/PLAN_EDITEUR_CARTE.md` (orchestration, Phase 4), `docs/SYSTEME/
+SURFACES_SALLES.md`, `docs/SYSTEME/MATERIAUX.md` (les deux à jour au 2026-10-14, vérifiés fidèles au code
+par leurs propres audits de compréhension), puis le code réel.
+
+### A. Le blocage G-décals (identité de mur) est en fait déjà levé, PLAN_EDITEUR_CARTE.md ne l'affirme
+pas aussi clairement que ROADMAP.md
+
+`ROADMAP.md` §2 ligne « Décorations murales » dit encore littéralement : « 4b (spec + code) attend que
+la Phase 1 (forme des salles) fixe comment l'identité d'un mur/d'une arête survit à une modification de
+forme ». Or `PLAN_EDITEUR_CARTE.md` §3 (« G-décals ») et §4.1 montrent que Plan B (peindre/effacer des
+cases, livré et validé en jeu le 2026-09-28) a réglé la question PAR L'APPROCHE, pas par un mécanisme
+d'identité stable : aucun mur n'a d'id persistant dans Enclume (confirmé — `roomBoundaryEdgeKey`,
+`shared/world/roomGeometry.js:56`, dérive toujours la clé des coordonnées), mais Plan B ne fait jamais
+« glisser » un mur d'une position à une autre, donc le risque que l'identité change silencieusement sous
+un décal déjà posé ne se produit plus pour CE geste précis. **Verdict : la porte G-décals est franchie.**
+Le ROADMAP.md n'est pas faux mais formule la condition d'une façon qui laisse croire à un blocage actif,
+alors que la condition est remplie depuis le 2026-09-28 — à corriger dans le ROADMAP si Saar valide cette
+lecture.
+
+### B. Le patron d'ancrage recommandé (Étape 8 ci-dessus, `wallDecorations[]` façon
+`wallAppearanceProfiles[]`) a un coût d'implémentation précis, maintenant connu ligne par ligne
+
+Vérifié dans `client/src/lib/surfaceRooms.js` : `wallAppearanceProfiles`/`wallElevationProfiles` sont
+réconciliés (purgés par arête retenue, fonction partagée `prunedByRetainedEdges`) à exactement
+**2 endroits** — fusion de deux salles (`mergeRooms`, ~l.744-757) et peinture/effacement de cases
+(`paintRoomFootprintCells`, ~l.974-975) — plus un **3ᵉ endroit qui RECONSTRUIT une entrée pour les
+arêtes sélectionnées** (`applyRoomWallAppearance`, ~l.1130-1141, logique différente : remplace l'apparence
+des arêtes choisies, pas une purge). Si un futur `wallDecorations[]` suit exactement ce patron, il faudra
+répéter la même ligne de purge aux mêmes 2-3 endroits — travail CONNU, borné, pas une inconnue
+architecturale.
+
+**Trouvaille en chemin, indépendante de PLAN_DECALS** : un 4ᵉ endroit où une arête change de statut —
+`deleteRoomBoundaryWalls`, branche « mur ouvert vers l'extérieur » (~l.698-718) — ne fait PAS cette purge
+(contrairement à sa branche sœur « fusion de salles », ~l.730+, qui la fait). Une apparence de mur posée
+puis le mur supprimé vers l'extérieur laisse une entrée orpheline dans le document, qui pourrait
+ressusciter si la même arête redevient un mur plein plus tard. Ticketé : `WALL-APPEARANCE-ORPHAN-ON-
+EXTERIOR-OPEN` (créé 2026-10-14, priorité basse, non bloquant pour décals — mais si on copie le patron
+sans corriger, le même trou existera pour les décals dès le premier jour).
+
+### C. Le catalogue d'assets à réutiliser (Étape 4 ci-dessus) a changé de nature depuis 2026-08-25 — la
+recommandation de l'Étape 8 est partiellement obsolète
+
+L'Étape 8 recommandait de référencer « Lot 1 §4 de RW_MATERIAUX (import PBR, `POST /api/surface-
+materials/import`, stockage MinIO, nouvelle table) » comme autorité du catalogue d'assets image.
+**Vérifié : cette route n'existe pas** (`grep` sur `server/src/routes/` — aucune trace de
+`surface-materials`/import PBR) et `PLAN_RW_MATERIAUX.md` lui-même est maintenant archivé
+(`docs/Old/PLAN_RW_MATERIAUX.md`) : la suite réelle du rework matériaux (Phase 3 de
+`PLAN_EDITEUR_CARTE.md`, R1 fait et validé le 2026-09-27, commit `8962c8c`) a pris une route entièrement
+différente — des presets de matière procédurale ajoutés directement dans le générateur
+(`proceduralMaterials.js`), **aucun pipeline d'import d'image PBR jamais construit**. `docs/SYSTEME/
+MATERIAUX.md` §7 confirme explicitement cette limite actuelle : « pas de lien entre les packs de
+textures et les surfaces », « pas d'enrichissement d'une texture de base ».
+
+Ce qui EXISTE réellement et pourrait servir de socle de stockage (coffre, pas la fiche de données) :
+`surface_textures` (ex-`voxel_textures`, renommé 2026-10-14) + `texture-pack.js` (CRUD, MinIO, import/
+export ZIP) — mais sa fiche de donnée décrit une texture carrelée sur **6 faces d'un cube**
+(`faces: {east, west, top, bottom, south, north}`), pensée pour un matériau de mur/sol répété à
+l'infini, pas pour une image unique détourée (alpha), posée à une taille et une position précises comme
+l'exige un décal. **Conclusion vérifiée, pas supposée** : réutiliser le COFFRE (bucket MinIO, conventions
+de chemin, CRUD de packs) est pertinent ; réutiliser la FICHE `faces` 6-faces ne l'est pas — un décal a
+besoin de sa propre table/forme de données (image + alpha + dimensions réelles), même si elle emprunte le
+même mécanisme de stockage. Le point 5 de « Documentation dont j'ai besoin » de `PLAN_DECALS.md` («
+réutiliser l'infrastructure existante plutôt qu'en créer une parallèle ») reste vrai au niveau du stockage
+mais pas au niveau du schéma — nuance absente du plan actuel.
+
+### D. Les « Questions ouvertes » de PLAN_DECALS.md sont déjà en grande partie répondues par le code/les
+docs actuels, mais le document lui-même n'a jamais été mis à jour pour le dire
+
+1. « UV existants ou projection indépendante ? » — Répondu par `docs/SYSTEME/SURFACES_SALLES.md` : les UV
+   de mur suivent des coordonnées monde signées (continues le long d'un mur droit OU d'un arc), pas une
+   répétition par petit panneau. Et répondu une seconde fois, différemment, par la décision de rendu déjà
+   écrite au §4bis du plan lui-même (quad plaqué en mur plan, `DecalGeometry` en mur courbe) : avec
+   `DecalGeometry`, la question de l'UV du MUR ne se pose plus pour le décal (il se projette sur le maillage
+   réel, pas sur un système d'UV à maintenir). **Le plan répond à sa propre question deux fois dans deux
+   sections différentes sans jamais le dire explicitement** — à nettoyer.
+2. « UV continu ou reconstruit par panneau sur un mur courbe ? » — Répondu : continu (« ses UV avancent
+   selon la longueur de l'arc », confirmé ligne à ligne par l'audit de compréhension 2026-08-26 du même
+   document). Sans incidence sur le décal pour la même raison que le point 1.
+3. « Le renderer accepte-t-il déjà plusieurs couches de matériau sur un mur ? » — Non vérifié formellement
+   dans le rendu (`WallSegment`, `SurfaceDungeonScene.jsx`), MAIS la question devient sans objet si on suit
+   la décision déjà actée au §4bis : un décal est un quad/mesh séparé posé en léger décalage devant le mur,
+   jamais une seconde couche DANS le matériau du mur lui-même. Cette question peut être retirée de la liste,
+   pas creusée davantage.
+4. « Traverser une porte / être découpé ? » — Toujours ouverte, légitimement : aucun précédent dans le code
+   actuel pour une découpe automatique d'un objet décoratif par une ouverture. Piste la plus simple et déjà
+   dans le patron existant : interdire la pose d'un décal sur une case de mur qui porte une porte (le même
+   calcul `doorOnCell`/`boundaryEdgesTouchingCell` que `classifyRoomFootprintCells` utilise déjà pour
+   refuser d'effacer une case de mur portant une porte, `surfaceRooms.js` ~l.899-901) — réutiliser, pas
+   réinventer.
+5. « Que devient un décal si le mur est fusionné/scindé/supprimé ? » — Répondu précisément par B. ci-dessus.
+
+### E. Alternative d'ancrage jamais évaluée par le plan : le patron des entités posées sur un mur
+
+`entities.state.placement.wallId` (table `entities`, PAS `surface_data` — mécanisme déjà utilisé pour
+ancrer un objet 3D libre à un mur, dérivé des coordonnées du panneau de mur, `roomWalls.js`
+`roomsWallSegments`, voir `PLAN_EDITEUR_CARTE.md` §4.4) est un second patron d'ancrage mural déjà vivant
+dans le code, distinct du patron `edgeKeys` de `wallAppearanceProfiles`. Le plan actuel ni la recommandation
+de l'Étape 8 ne le mentionnent comme alternative pesée puis écartée. **Avis (pas encore tranché)** : le
+patron `wallAppearanceProfiles` reste le bon choix pour un décal — c'est de la pure apparence comme lui,
+pas un objet physique sélectionnable/déplaçable comme une entité — mais le document gagnerait à dire
+explicitement pourquoi l'autre patron existant a été écarté, plutôt que de ne jamais le citer.
+
+### F. Ce que je NE recommande PAS de faire maintenant
+
+Aucun point ci-dessus n'est bloquant pour écrire un cadrage détaillé de PLAN_DECALS.md (Phase 4b). Aucun
+n'exige de code. Le point C (catalogue d'assets) est le seul qui change réellement une recommandation
+précédente (Étape 8) ; les autres sont des précisions/confirmations. Rien n'indique qu'il faille revoir la
+séparation décal-objet / motif-surface déjà tranchée aux Étapes 3/7/8 — elle tient toujours face au code
+actuel.
+
+## 2026-10-14 (suite) — Analyse à charge du cadrage détaillé écrit (Lots L0-L3)
+
+Cadrage détaillé rédigé dans `PLAN_DECALS.md` (Lots L0-L3, voir ce fichier). Relecture critique
+demandée par Saar (« PREND TON TEMPS », deux fois). Un vrai défaut architectural trouvé dans Lot 1 —
+pas une confirmation, une correction.
+
+### G. Lot 1 a copié le mauvais patron existant pour l'ancrage géométrique
+
+Le Lot 1 tel qu'écrit calque l'ancrage d'un décor sur `wallAppearanceProfiles[]` (`{id, edgeKeys[],
+...}`). **[VÉRIFIÉ par lecture]** : `wallAppearanceProfiles` est pensé pour peindre UNE RÉGION (un
+ensemble non ordonné de cases de mur, toutes coloriées pareil) — il ne porte ni position précise, ni
+orientation, ni taille propre, parce qu'il n'en a pas besoin (la couleur couvre toute la case).
+
+Un décor a l'exigence inverse : une position exacte, une orientation, une taille, et doit fonctionner
+aussi bien sur un mur droit que sur un mur courbe. **Ce problème est déjà résolu dans le code, mais
+par un autre mécanisme que celui que j'ai cité** : le connecteur de porte. `shared/world/
+surfaceFieldTypes.js:59` et `shared/world/surfaceDocument.js:402` (`DOOR_SEGMENT_REQUIRED`) montrent
+qu'une porte stocke `anchorX, anchorZ, tangentX, tangentZ, normalX, normalZ, rotationY, curveOffset,
+curveId` **en plus** de `sourceEdgeKeys` (`surfaceFieldTypes.js:53`) — `sourceEdgeKeys` ne sert que de
+référence de stabilité/traçabilité, PAS à calculer la position. La position/orientation réelles
+viennent de l'ancre + tangente + normale + décalage curviligne, qui fonctionnent identiquement sur un
+mur droit ou un arc. La fonction qui calcule cette ancre à la pose existe déjà et est nommée :
+`makeDoorConnectorFromWallPoint` (`client/src/lib/connectors.js:129`), appelée depuis un rayon 3D
+lancé contre le mur sélectionné (même geste que celui prévu pour poser un décor, Lot 3).
+
+**Conclusion : un décor doit reprendre le patron géométrique de la porte (ancre + tangente/normale +
+`curveOffset` + `sourceEdgeKeys` comme référence de stabilité), pas celui de `wallAppearanceProfiles`.**
+Le champ `offset (0-1 ou mètres, à trancher)` que j'avais laissé ouvert dans Lot 1 n'a plus lieu
+d'être tranché arbitrairement : `curveOffset` est déjà la convention existante, à reprendre telle
+quelle. Ça ne change rien à la DÉCISION (toujours `room.wallDecorations[]`, toujours hors de
+`surface_data.connectors` — un décor n'a ni état runtime ni règle de collision, `.claude/rules/
+world.md` réserve `connectors` à ça) : seule la FORME des champs géométriques change, pour reprendre
+un mécanisme déjà prouvé plutôt que d'en inventer un neuf à moitié spécifié.
+
+### H. Conséquence sur la purge (réconciliation à la suppression/fusion d'un mur)
+
+Le Lot 1 prévoyait de purger `wallDecorations` avec `prunedByRetainedEdges` (le même outil que
+`wallAppearanceProfiles`), dans `mergeRooms` et `paintRoomFootprintCells`. **Ce outil est fait pour
+RÉDUIRE une région** (garder les cases encore valides, perdre les autres) — il n'a pas de sens pour un
+objet ponctuel : un décor ne peut pas être « réduit », il est entier ou il n'existe plus.
+
+**[VÉRIFIÉ par lecture]** : les portes suivent déjà une règle différente et plus simple, cohérente
+avec un ancrage ponctuel — suppression totale, jamais de recadrage partiel. `deleteRoomBoundaryWalls`
+calcule `removedDoorIds` une seule fois (`doorConnectorTouchesBoundaryEdges`, ~l.694) et l'applique
+identiquement dans SES DEUX branches : mur ouvert vers l'extérieur (~l.703-704) ET fusion de deux
+salles (~l.800-801). Un décor doit suivre exactement la même règle : si son mur d'ancrage disparaît
+(fusion ou ouverture vers l'extérieur), le décor est supprimé en entier — jamais réduit. Plus simple à
+coder que ce que Lot 1 prévoyait (une seule fonction de suppression à réutiliser, pas un nouvel usage
+de `prunedByRetainedEdges`).
+
+**Point non tranché, trouvé en creusant cette différence** : pour l'outil « peindre/effacer des
+cases », les portes suivent une TROISIÈME règle, encore différente — `classifyRoomFootprintCells` en
+mode « effacer » **refuse carrément d'effacer une case qui porte une porte** (`doorOnCell`,
+~l.899-901), elle ne la supprime jamais silencieusement. Aucun précédent dans le code n'indique quoi
+faire pour un décor sur ce chemin précis : bloquer l'effacement de la case (comme une porte, plus
+protecteur) ou laisser effacer et supprimer le décor en silence (plus simple, cohérent avec « c'est
+juste de la déco, pas une porte qui bloquerait le jeu »). **Question réelle pour Saar, pas une
+évidence à trancher seul** — une porte est fonctionnelle (bloquer protège un objet qui a un coût de
+pose), un décor est cosmétique (bloquer pourrait juste agacer un MJ qui veut repeindre un mur).
+
+### I. Portée du contrôle « pas de superposition »
+
+Confirmé en relisant `.claude/rules/world.md` (« chaque panneau de mur physique peut recevoir deux
+contributions intérieures ») : un mur partagé par deux salles a UNE apparence par salle, de chaque
+côté. Le contrôle de superposition de Saar (« pas de superposition de décals ») ne doit donc comparer
+que les décors de LA MÊME salle sur LE MÊME mur — deux décors posés par deux salles voisines sur les
+deux faces d'un même mur physique ne se superposent pas visuellement, ne doivent pas se bloquer l'un
+l'autre. À écrire explicitement dans le Lot 1, pas supposé implicitement.
+
+**Deuxième précision, par analogie avec les portes** : une porte ne traverse jamais un coin (toujours
+posée sur un seul tronçon de mur droit ou un seul arc, jamais à cheval sur deux). Un décor devrait
+suivre la même contrainte — ne jamais chevaucher un coin — plutôt que d'être une question ouverte
+silencieuse.
+
+### J. Point mineur — Lot 0, le mot « seed »
+
+`NNN_decal_assets_seed.js` suggère un seed Knex classique (petites données de référence, SQL pur).
+Le contenu réel à importer (321 images) doit aussi être uploadé vers MinIO (un service externe) — un
+seed Knex ne doit pas faire d'appel réseau vers MinIO (hors de son rôle). Le bon patron est un script
+one-shot (`server/src/scripts/import_decal_assets_*.js`), même famille que les scripts d'import de
+`texture-pack.js`, pas un fichier de migration/seed. Détail d'implémentation, pas une erreur
+d'architecture — à corriger dans le texte du Lot 0.
+
+### Verdict
+
+Point G (ancrage géométrique) est une vraie correction de fond — le Lot 1 tel qu'écrit aurait marché
+« à peu près » sur un mur droit mais aurait mal géré un mur courbe (la vraie raison pour laquelle le
+rendu, Lot 2, a besoin de `DecalGeometry` plutôt que d'un simple quad). Point H en découle directement
+(même ancrage ponctuel ⇒ même règle de suppression que les portes, pas un recadrage de région). Point
+I est une précision de portée, pas un changement de conception. Point J est cosmétique. **Un point
+reste une vraie question ouverte pour Saar** (§H, bloquer ou pas l'effacement d'une case sous un
+décor) — à poser, pas à trancher seul : ni une règle de jeu ni une vraie décision d'architecture, mais
+un choix d'ergonomie MJ que je ne peux pas deviner.
