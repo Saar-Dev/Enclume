@@ -47,6 +47,18 @@ const VERIFIED = [
     code: 'TEST_CRITIQUE-LOT3',
     note: 'Vérifié : CriticalEffectOverlay.jsx existe et reste importé/rendu dans SessionPage.jsx:680. Le plan docs/Old/PLAN_TEST_CRITIQUE.md (archivé par Saar lui-même) dit explicitement en §11 "si confirmé, clôturer le chantier entier (archiver...)" — l\'archivage réel vers docs/Old/ est la preuve que la validation en jeu a eu lieu.',
   },
+  {
+    code: 'WIZ46',
+    note: 'Vérifié par lecture + test : creationService.js:852 filtre bien .whereIn(\'source\', [\'chosen\', \'random\']) avant le .del() de STEP3. node --env-file=.env --test creationRoundTrip.test.mjs relancé : 3/3, dont "resubmit Step3 seul ne doit pas effacer une mutation Revers" — symptôme exact du ticket, testé et vert.',
+  },
+]
+
+// Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
+const VERIFIED_BY_CLUSTER = [
+  {
+    cluster: 'AUDIT-SYSTEME',
+    note: "Vérifié par lecture : VOXEL_ADD/REMOVE/UPDATE absents de shared/events.js et de tout le client (grep 0 résultat, code mort bien supprimé des deux côtés). MAP_SWITCH a un vrai handler serveur (socketBattlemap.js:13-25, relai room) et un listener client (useEntitySocket.js:139, charge la nouvelle carte) — bouclé de bout en bout. MAP_VIEWPORT confirmé absent de tout client/src (0 résultat) — rien à corriger.",
+  },
 ]
 
 async function run() {
@@ -63,6 +75,18 @@ async function run() {
       updated_at: db.fn.now(),
     })
     console.log(`[OK] ${code} -> resolved`)
+  }
+
+  for (const { cluster, note } of VERIFIED_BY_CLUSTER) {
+    const t = await db('bug_tickets').where({ cluster_label: cluster }).first()
+    if (!t) { console.log(`[SKIP] cluster=${cluster} — introuvable`); continue }
+    if ((t.admin_notes || '').includes(MARKER)) { console.log(`[SKIP] cluster=${cluster} — déjà clos`); continue }
+    await db('bug_tickets').where({ id: t.id }).update({
+      status: 'resolved', reviewed_by: admin.id, reviewed_at: db.fn.now(),
+      admin_notes: `${t.admin_notes || ''}\n\n${MARKER}\n${note}`.trim(),
+      updated_at: db.fn.now(),
+    })
+    console.log(`[OK] cluster=${cluster} -> resolved`)
   }
 }
 
