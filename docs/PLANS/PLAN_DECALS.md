@@ -591,6 +591,21 @@ tri : `assets_source/decals/README.md`.
   doublon de format comme signage/PNG supprimé plus bas) : les deux variantes sont gardées comme
   deux choix visuels. Catégorie prévue `military`.
 
+**Correction du 2026-10-15 (fond noir opaque trouvé par Saar au test réel, pas un vrai canal alpha)** :
+vérifié pixel par pixel (pas seulement le type PNG déclaré, qui annonçait un canal alpha partout sans
+que les valeurs réelles en profitent) — `military_navy` (100 fichiers, `JRO_Military_Alphas`) est un
+DOUBLON EXACT de `military_white` (100 fichiers, `JRO_Military_Decals`) : mêmes dessins, mais navy a
+toujours un fond noir opaque là où white est déjà correctement transparent → navy déprécié en base
+(script ci-dessous), aucune image retouchée. `signage` (121 fichiers) avait le même défaut sur 119
+images, sans doublon à côté cette fois → corrigées en place (remplissage du fond depuis les 4 coins,
+jamais un retrait de couleur global — plusieurs icônes ont du texte/des détails noirs qui font partie
+du dessin, un retrait global les aurait effacés aussi ; vérifié visuellement sur plus d'une dizaine
+d'échantillons variés avant d'appliquer au lot entier). Originaux sauvegardés dans
+`assets_source/decals/signage_originals_backup_20261015/`. Catalogue réel après correction : 121
+signage + 100 military_white visibles, 100 military_navy dépréciés (invisibles, pas supprimés).
+Script (ré-upload MinIO + dépréciation, à lancer par Saar) :
+`server/src/scripts/fix_decal_assets_catalog_20261015.js`.
+
 **Supprimé (pas pertinent pour des décors muraux 3D)** :
 - `UI&HUD_Decals/` — éléments d'interface à l'écran (HUD de jeu vidéo : bandeaux, journaux de
   commande), pas des objets à poser sur un mur. Texte anglais incrusté dans l'image en plus.
@@ -695,3 +710,12 @@ tri : `assets_source/decals/README.md`.
   §U/§W/§X confirmés mécaniques. Outil tampon (vignette → pose directe), teinte (reclé du cache
   matériau) et repositionnement (« Déplacer ») codés et testés techniquement (82 tests purs, lint,
   build). Reste la validation visuelle de Saar, comme pour chaque lot précédent.
+- **2026-10-15 (premier test visuel de Saar, deux bugs réels trouvés)** — (1) Le panneau Mur se
+  fermait dès le clic sur une vignette (oubli d'une exception déjà posée pour les portes dans
+  `useSurfacePanels.js`), donnant l'impression qu'Échap « sortait complètement » alors qu'Échap
+  lui-même fonctionnait — corrigé en ajoutant la même exception que pour la pose d'une porte, Échap
+  revient maintenant à la palette en un seul appui, comme pour tout le reste de l'éditeur. (2) La
+  teinte était affichée tout en bas, sous les 321 vignettes — remontée au-dessus de la palette.
+- **2026-10-15 (fonds noirs du catalogue, signalé par Saar puis vérifié pixel par pixel)** — voir
+  correction détaillée dans « Catalogue réel » ci-dessus. Script de correction écrit, pas encore
+  lancé (à lancer par Saar).
