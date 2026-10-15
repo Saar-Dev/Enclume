@@ -113,6 +113,9 @@ VERIFIED.push({
 }, {
   code: 'CONNECTOR-MODEL-URL-ABSOLUTE',
   note: "Vérifié par lecture (surfaceDocument.js:439-443, regex protocole/protocol-relative) + node --test surfaceDocument.test.mjs relancé : 19/19 verts dont le test dédié exact.",
+}, {
+  code: 'ENCYCLO-COMPTEUR-HEADERS',
+  note: "Vérifié : blessures-seuils.json contient bien les en-têtes corrigés (Gravité + 6 localisations : Tête/Corps/Bras droit/Bras gauche/Jambe droite/Jambe gauche), JSON valide (node -e JSON.parse).",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
