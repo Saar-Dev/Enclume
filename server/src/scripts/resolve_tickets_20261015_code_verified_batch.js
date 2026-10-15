@@ -128,6 +128,12 @@ VERIFIED.push({
 }, {
   code: 'WIZ41',
   note: "Vérifié par lecture : InventoryPanel.jsx:57 handsCategoryForItem + filterHands (ligne 109/343/613-616) toujours en place — non affecté par mes propres modifications de cette session (mode achat gratuit) sur ce même fichier.",
+}, {
+  code: 'WIZ44',
+  note: 'Vérifié bout en bout : InventoryPanel.jsx:156 handleSplit → splitItem (inventoryMutations.js), bouton onSplit câblé ligne 427/469/784. Déjà couvert par 3 tests dans inventoryService.test.mjs (splitItem — 5 munitions, quantité totale refusée, quantité nulle), relancés avec le reste de la suite plus tôt cette session (43/43 à l\'époque).',
+}, {
+  code: 'WIZ31',
+  note: "Vérifié par lecture : WizardCreation.jsx:463-465 — body a bien overflowY:'auto', minHeight:0 (plus overflow:'hidden' sans minHeight:0) ; step6/step6Sheet aussi corrigés par précaution. Conforme exactement à la note existante.",
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
