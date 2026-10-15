@@ -28,13 +28,22 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
   (le résultat suffit dans la clôture). Échec, test interrompu ou risque de résidu (ligne de fixture non
   nettoyée) : rapport à Saar — test, cause, lignes concernées (vérifiées par lecture de la base) — avant
   toute suite. Jamais `npm test` complet, jamais le serveur (voir ci-dessous).
-- Scripts de création de tickets (`server/src/scripts/create_tickets_*.js`) : idempotents (clé `linked_bug_code`) et
-  limités à `bug_tickets` — l'agent les lance LUI-MÊME (autorisation de Saar, 2026-09-25). Tout autre script qui écrit
-  en base reste à lancer par Saar.
+- Scripts de création ET de clôture de tickets (`create_tickets_*.js`, `{resolve,note}_ticket(s)_*.js`) :
+  idempotents (clé `linked_bug_code` ou marqueur en note) et limités à `bug_tickets` — l'agent les lance
+  LUI-MÊME, **toujours, dans le même tour que leur écriture** (autorisation de Saar, 2026-09-25, étendue
+  2026-10-15 après des dizaines de scripts de clôture écrits puis jamais lancés, cause de tickets rouverts
+  et rediagnostiqués en boucle par chaque nouvel agent). Un script de clôture écrit sans être exécuté dans
+  le même tour est une erreur, pas une étape normale en attente. Tout autre script qui écrit en base reste
+  à lancer par Saar.
 - `server/src/scripts/{resolve,note}_ticket(s)_*.js` restent committés comme compte rendu historique de ce qui a
   réellement été exécuté : jamais de `Write` sur un chemin déjà existant (bloqué par le hook
   `guard-ticket-script-overwrite.js`, `.claude/settings.json`) — lire puis `Edit` pour une correction réelle, sinon
   un nouveau fichier nommé distinctement (`..._v2.js`, `..._close.js`) pour une nouvelle clôture.
+- **Avant de choisir un ticket à traiter** : `node --env-file=.env server/src/scripts/audit_stale_tickets.mjs`
+  (lecture seule, l'agent le lance lui-même) — détecte les tickets déjà corrigés en code mais pas reflétés
+  en base. Un ticket qui y apparaît n'est pas un bug à diagnostiquer : c'est une clôture à régulariser
+  (script `note`/`resolve_ticket_*.js`, lancé immédiatement, voir ci-dessus). Sauter cette vérification et
+  rediagnostiquer un bug déjà corrigé est exactement l'erreur récurrente que cet outil existe pour éviter.
 - Avant livraison : `git diff --check`
 - Pas de linter serveur : `node --check` est le seul contrôle statique côté serveur
 
