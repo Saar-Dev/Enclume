@@ -257,6 +257,101 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
   }
 }
 
+// ----- Décor mural -----
+//
+// Patron géométrique inspiré des deux branches de makeDoorConnectorFromWallPoint ci-dessus, sans les
+// copier telles quelles : un décor ne découpe jamais le mesh du mur (apparence pure,
+// .claude/rules/world.md), il n'a donc besoin ni du format de découpe d'un mur droit (x0/x1/z0/z1)
+// ni de curveId/curveOffset (servent uniquement à worldCompiler.js pour découper un trou dans un mur
+// arrondi, doorMatchesWall/splitWallPiece) — seulement de la position et de l'orientation réelles,
+// qui se calculent de la même façon sur un mur droit ou un arc. docs/PLANS/PLAN_DECALS.md Lot 1.
+export function makeWallDecorationFromWallPoint(surfaceData, wallPoint, tool = {}) {
+  if (!wallPoint) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const level = getToolLevel(tool)
+  const y = levelToY(level)
+  const selectedRoomId = tool?.selectedRoomId || null
+  const allowedWallEdgeKeys = new Set((tool?.connectorWallEdgeKeys || []).map(String))
+  let best = null
+
+  for (const panel of roomsWallSegments(surface.rooms)) {
+    if (!sameLevel(panel.y, y)) continue
+    if (selectedRoomId && !panel.roomIds?.includes(selectedRoomId)) continue
+    if (allowedWallEdgeKeys.size > 0
+      && !(panel.sourceEdgeKeys || []).some(key => allowedWallEdgeKeys.has(String(key)))) continue
+    const projection = wallPointDistanceToPanel(wallPoint, panel)
+    if (!projection || projection.distance > SURFACE_FINE * 0.5) continue
+    if (best && projection.distance >= best.distance) continue
+    best = { panel, ...projection }
+  }
+
+  if (!best?.panel) return null
+  const panel = best.panel
+
+  let tangentX
+  let tangentZ
+  let anchorFx
+  let anchorFz
+
+  if (panel.axis === 'segment') {
+    const curveOffset = Number.isFinite(Number(panel.curveOffset0)) && Number.isFinite(Number(panel.curveOffset1))
+      ? Number(panel.curveOffset0) + (Number(panel.curveOffset1) - Number(panel.curveOffset0)) * best.t
+      : null
+    const hasCanonicalArc = curveOffset !== null
+      && Number.isFinite(Number(panel.curveLength))
+      && Number(panel.curveLength) > 1e-8
+      && [panel.curveCenterX, panel.curveCenterZ, panel.curveRadius, panel.curveStartAngle, panel.curveSweep]
+        .every(value => Number.isFinite(Number(value)))
+    if (hasCanonicalArc) {
+      // Tangente exacte sur le cercle au point d'ancrage — même calcul que la porte, jamais
+      // approximé par la corde du petit segment de tessellation (best.panel n'est qu'un chemin
+      // tessellé de l'arc canonique, pas l'arc lui-même).
+      const curveAngle = Number(panel.curveStartAngle) + Number(panel.curveSweep) * (curveOffset / Number(panel.curveLength))
+      const sweepSign = Math.sign(Number(panel.curveSweep)) || 1
+      tangentX = -Math.sin(curveAngle) * sweepSign
+      tangentZ = Math.cos(curveAngle) * sweepSign
+      anchorFx = (Number(panel.curveCenterX) + Math.cos(curveAngle) * Number(panel.curveRadius)) * SURFACE_FINE
+      anchorFz = (Number(panel.curveCenterZ) + Math.sin(curveAngle) * Number(panel.curveRadius)) * SURFACE_FINE
+    } else {
+      const dx = Number(panel.x1) - Number(panel.x0)
+      const dz = Number(panel.z1) - Number(panel.z0)
+      const length = Math.hypot(dx, dz) || 1
+      tangentX = dx / length
+      tangentZ = dz / length
+      anchorFx = best.projectedFx
+      anchorFz = best.projectedFz
+    }
+  } else {
+    // axis 'x' ou 'z' — mur droit (le seul cas hors arc aujourd'hui, Tier A : murs toujours à 90°).
+    tangentX = panel.axis === 'x' ? 1 : 0
+    tangentZ = panel.axis === 'z' ? 1 : 0
+    anchorFx = best.projectedFx
+    anchorFz = best.projectedFz
+  }
+
+  // Pas de normalisation mod π ici (contrairement à normalizeDoorRotation, propre aux portes) : un
+  // décor directionnel (flèche, pictogramme) a un sens visuel réel sur 360°, pas seulement 180° —
+  // le collapser perdrait l'information. atan2 donne déjà une valeur unique et stable.
+  const rotationY = -Math.atan2(tangentZ, tangentX)
+  const normalX = -tangentZ
+  const normalZ = tangentX
+
+  return {
+    sourceEdgeKeys: [...new Set(panel.sourceEdgeKeys || [])],
+    anchorX: anchorFx / SURFACE_FINE,
+    anchorZ: anchorFz / SURFACE_FINE,
+    tangentX,
+    tangentZ,
+    normalX,
+    normalZ,
+    rotationY,
+    level,
+    y: panel.y,
+    roomId: selectedRoomId || panel.roomIds?.[0] || null,
+    roomIds: panel.roomIds || [],
+  }
+}
+
 export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const connector = makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool)
   if (!connector) return surfaceData

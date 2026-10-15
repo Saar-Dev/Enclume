@@ -97,6 +97,8 @@ export {
   paintRoomWallRoom,
   classifyRoomFootprintCells,
   paintRoomFootprintCells,
+  addRoomWallDecoration,
+  removeRoomWallDecoration,
 } from './surfaceRooms.js'
 export {
   makeStairFromSelection,
@@ -114,6 +116,7 @@ export {
   applyElevatorConnector,
   makeLadderConnectorFromCell,
   applyLadderConnector,
+  makeWallDecorationFromWallPoint,
 } from './connectors.js'
 export { roomsWallSegments, addMissingWalls, roomsWallRenderPaths } from './roomWalls.js'
 export {

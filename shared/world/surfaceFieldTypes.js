@@ -37,7 +37,7 @@ const ROOM = Object.freeze({
   blocksSight: B, blocksWater: B, blocksMovement: B, wallEnabled: B, floorEnabled: B, ceilingEnabled: B,
   floorTex: R, ceilingTex: R, wallInteriorTex: R,
   floorMaterial: O, ceilingMaterial: O, wallInteriorMaterial: O,
-  cells: A, boundaryArcs: A, wallElevationProfiles: A, wallAppearanceProfiles: A,
+  cells: A, boundaryArcs: A, wallElevationProfiles: A, wallAppearanceProfiles: A, wallDecorations: A,
   openWallEdgeKeys: A, geometryClipRoomIds: A, verticalProfile: O,
 })
 const ROOM_REQUIRED = Object.freeze(['minX', 'maxX', 'minZ', 'maxZ'])
@@ -47,6 +47,14 @@ const POINT = Object.freeze({ x: N, z: N })
 const ELEVATION_ENTRY = Object.freeze({ id: S, edgeKeys: A, profile: O })
 const ELEVATION_PROFILE = Object.freeze({ type: S, depth: N, direction: N })
 const APPEARANCE_ENTRY = Object.freeze({ id: S, edgeKeys: A, interiorTex: R, interiorMaterial: O })
+const DECORATION_ENTRY = Object.freeze({
+  id: S, assetId: S, sourceEdgeKeys: A,
+  anchorX: N, anchorZ: N, tangentX: N, tangentZ: N, normalX: N, normalZ: N, rotationY: N,
+  widthM: N, heightM: N, mirror: B,
+})
+const DECORATION_REQUIRED = Object.freeze([
+  'anchorX', 'anchorZ', 'tangentX', 'tangentZ', 'normalX', 'normalZ', 'rotationY', 'widthM', 'heightM',
+])
 const SLICE = Object.freeze({ offset: N, footprint: A, wallPaths: A })
 const WALL_PATH = Object.freeze({
   axis: S, x0: N, z0: N, x1: N, z1: N, centerX: N, centerZ: N, radius: N, startAngle: N, sweep: N,
@@ -78,8 +86,8 @@ const TOP_LEVEL = Object.freeze({ version: N, fine: N, storyHeight: N, metersPer
 
 // Table exposée (test de dérive) : toutes les tables de champs, à plat.
 export const SURFACE_FIELD_TABLES = Object.freeze({
-  TOP_LEVEL, ROOM, MATERIAL, ARC, POINT, ELEVATION_ENTRY, ELEVATION_PROFILE, APPEARANCE_ENTRY, SLICE, WALL_PATH,
-  CONNECTOR, FLOOR, CEILING, WALL, STAIR,
+  TOP_LEVEL, ROOM, MATERIAL, ARC, POINT, ELEVATION_ENTRY, ELEVATION_PROFILE, APPEARANCE_ENTRY,
+  DECORATION_ENTRY, SLICE, WALL_PATH, CONNECTOR, FLOOR, CEILING, WALL, STAIR,
 })
 
 function matches(type, value) {
@@ -156,6 +164,13 @@ function checkRoom(id, room, collector) {
       const entryPath = `${path}.wallAppearanceProfiles[${index}]`
       checkItem(entry, APPEARANCE_ENTRY, [], entryPath, collector)
       checkMaterial(entry, 'interiorMaterial', entryPath, collector)
+    })
+  }
+  if (Array.isArray(room.wallDecorations)) {
+    room.wallDecorations.forEach((entry, index) => {
+      if (collector.isFull || !isPlainObject(entry)) return
+      const entryPath = `${path}.wallDecorations[${index}]`
+      checkItem(entry, DECORATION_ENTRY, DECORATION_REQUIRED, entryPath, collector)
     })
   }
   const slices = room.verticalProfile?.slices

@@ -290,6 +290,54 @@ function validateFeature(collection, id, item, errors) {
         })
       }
     }
+    // wallDecorations — ancre géométrique façon connecteur (position/orientation réelles), pas le
+    // patron d'edgeKeys seul de wallAppearanceProfiles : un décor n'a aucune raison de recouper une
+    // région, il désigne un point précis. sourceEdgeKeys reste une référence de stabilité (pour la
+    // réconciliation à la fusion/suppression d'un mur, client/src/lib/surfaceRooms.js), jamais pour
+    // calculer la position. Ni curveId ni curveOffset : un décor ne découpe jamais le mesh du mur
+    // (apparence pure, .claude/rules/world.md), contrairement à une porte sur arc.
+    if (item.wallDecorations != null) {
+      if (!Array.isArray(item.wallDecorations)) {
+        errors.push(`${path}.wallDecorations doit être un tableau`)
+      } else {
+        const decorationIds = new Set()
+        item.wallDecorations.forEach((entry, index) => {
+          const entryPath = `${path}.wallDecorations.${index}`
+          if (!isPlainObject(entry)) {
+            errors.push(`${entryPath} doit être un objet`)
+            return
+          }
+          if (typeof entry.id !== 'string' || !entry.id.trim()) {
+            errors.push(`${entryPath}.id est obligatoire`)
+          } else if (decorationIds.has(entry.id)) {
+            errors.push(`${path}.wallDecorations contient deux fois ${entry.id}`)
+          } else {
+            decorationIds.add(entry.id)
+          }
+          if (typeof entry.assetId !== 'string' || !UUID_RE.test(entry.assetId)) {
+            errors.push(`${entryPath}.assetId doit être un UUID`)
+          }
+          if (!Array.isArray(entry.sourceEdgeKeys) || entry.sourceEdgeKeys.length === 0) {
+            errors.push(`${entryPath}.sourceEdgeKeys doit être un tableau non vide`)
+          } else if (entry.sourceEdgeKeys.some(key => typeof key !== 'string' || !key)) {
+            errors.push(`${entryPath}.sourceEdgeKeys doit contenir des clés non vides`)
+          }
+          validateFiniteFields(entry, [
+            'anchorX', 'anchorZ', 'tangentX', 'tangentZ', 'normalX', 'normalZ', 'rotationY',
+            'widthM', 'heightM',
+          ], entryPath, errors)
+          if (Number.isFinite(Number(entry.widthM)) && Number(entry.widthM) <= 0) {
+            errors.push(`${entryPath}.widthM doit être strictement positif`)
+          }
+          if (Number.isFinite(Number(entry.heightM)) && Number(entry.heightM) <= 0) {
+            errors.push(`${entryPath}.heightM doit être strictement positif`)
+          }
+          if (entry.mirror != null && typeof entry.mirror !== 'boolean') {
+            errors.push(`${entryPath}.mirror doit être un booléen`)
+          }
+        })
+      }
+    }
     if (item.boundaryArcs != null) {
       if (!Array.isArray(item.boundaryArcs)) {
         errors.push(`${path}.boundaryArcs doit être un tableau`)

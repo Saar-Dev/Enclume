@@ -210,6 +210,7 @@ function checkRoom(id, room, limits, collector, runningCells) {
     collector.add('too_many_arcs', { path, limit: limits.maxArcsPerRoom, actual: room.boundaryArcs.length })
   }
   const profileCount = arrayLength(room.wallElevationProfiles) + arrayLength(room.wallAppearanceProfiles)
+    + arrayLength(room.wallDecorations)
   if (profileCount > limits.maxProfilesPerRoom) {
     collector.add('too_many_profiles', { path, limit: limits.maxProfilesPerRoom, actual: profileCount })
   }

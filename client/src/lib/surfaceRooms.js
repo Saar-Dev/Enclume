@@ -702,12 +702,30 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     ])]
     const connectors = Object.fromEntries(Object.entries(next.connectors || {})
       .filter(([id]) => !removedDoorIds.has(id)))
+    // Correctif WALL-APPEARANCE-ORPHAN-ON-EXTERIOR-OPEN (trouvé 2026-10-14, docs/JOURNALANALYSE.md) :
+    // cette branche ne touchait ni wallAppearanceProfiles ni wallElevationProfiles alors que sa
+    // sœur (fusion de salles, ownerIds.length === 2, plus bas) les purge déjà — une apparence posée
+    // sur un mur ouvert vers l'extérieur restait orpheline en base, prête à ressusciter si la même
+    // arête redevenait un jour un mur plein. Les cases ne changent pas ici : la seule différence
+    // entre « encore un mur » et « ouvert » est `selectedKeys`, retiré du jeu d'arêtes retenues.
+    const survivingEdgeKeys = new Set(
+      roomBoundaryEdges(selectedRoom).map(edge => edge.key).filter(key => !validation.selected.has(key)),
+    )
+    const wallElevationProfiles = prunedByRetainedEdges(selectedRoom.wallElevationProfiles, survivingEdgeKeys)
+    const wallAppearanceProfiles = prunedByRetainedEdges(selectedRoom.wallAppearanceProfiles, survivingEdgeKeys)
+    const wallDecorations = wallDecorationsSurvivingEdges(selectedRoom.wallDecorations, survivingEdgeKeys)
     return {
       surfaceData: {
         ...next,
         rooms: {
           ...next.rooms,
-          [roomId]: { ...selectedRoom, openWallEdgeKeys },
+          [roomId]: {
+            ...selectedRoom,
+            openWallEdgeKeys,
+            wallElevationProfiles,
+            wallAppearanceProfiles,
+            wallDecorations,
+          },
         },
         connectors,
       },
@@ -755,6 +773,13 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !validation.selected.has(key))
     return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
   })
+  // Un décor est un point, pas une région : pas de recadrage partiel, il disparaît entièrement s'il
+  // référence une des arêtes supprimées par la fusion — jamais dédupliqué par id comme les tableaux
+  // ci-dessus, simple concaténation des survivants des deux salles.
+  const wallDecorations = [
+    ...(selectedRoom.wallDecorations || []),
+    ...(absorbedRoom.wallDecorations || []),
+  ].filter(entry => (entry?.sourceEdgeKeys || []).every(key => !validation.selected.has(String(key))))
   const maximumHeightLevels = Math.max(getRoomHeightLevels(selectedRoom), getRoomHeightLevels(absorbedRoom))
   const mergedGeometryRoom = roomWithFootprint({
     ...selectedRoom,
@@ -766,6 +791,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     geometryClipRoomIds,
     wallElevationProfiles,
     wallAppearanceProfiles,
+    wallDecorations,
   }, roomId, mergedCells, true)
   const verticalProfile = buildMergedRoomVerticalProfile({
     mergedRoom: { id: roomId, ...mergedGeometryRoom },
@@ -837,6 +863,18 @@ function prunedByRetainedEdges(entries, edgeKeySet) {
     const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => edgeKeySet.has(key))
     return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
   })
+}
+
+// Un décor (room.wallDecorations[]) est un point ancré sur UN panneau de mur, jamais une région —
+// contrairement à wallAppearanceProfiles/wallElevationProfiles, il ne peut pas être « recadré » sur
+// un sous-ensemble d'arêtes retenues (prunedByRetainedEdges ci-dessus ne s'applique pas). S'il perd
+// ne serait-ce qu'une de ses arêtes d'ancrage, il disparaît entièrement — même règle que les portes
+// (doorConnectorTouchesBoundaryEdges, ci-dessous), appliquée ici par clé stockée plutôt que par
+// recalcul géométrique. docs/PLANS/PLAN_DECALS.md Lot 1 (§H de l'analyse à charge du 2026-10-14).
+function wallDecorationsSurvivingEdges(decorations, edgeKeySet) {
+  return (decorations || []).filter(entry => (
+    (entry?.sourceEdgeKeys || []).every(key => edgeKeySet.has(String(key)))
+  ))
 }
 
 function dedupeRoomCells(cells) {
@@ -973,6 +1011,11 @@ export function paintRoomFootprintCells(surfaceData, roomId, cells, mode) {
     ...nextRoom,
     wallElevationProfiles: prunedByRetainedEdges(nextRoom.wallElevationProfiles, nextEdgeKeySet),
     wallAppearanceProfiles: prunedByRetainedEdges(nextRoom.wallAppearanceProfiles, nextEdgeKeySet),
+    // Un décor disparaît entièrement si son mur d'ancrage disparaît (jamais recadré) — y compris
+    // quand on efface sa case avec cet outil : décision de Saar (2026-10-14, « Effacer tout,
+    // option 2 »), contrairement à une porte qui bloque l'effacement de sa case
+    // (classifyRoomFootprintCells, voir plus haut) ; un décor ne bloque rien.
+    wallDecorations: wallDecorationsSurvivingEdges(nextRoom.wallDecorations, nextEdgeKeySet),
   }
 
   return {
@@ -1240,6 +1283,80 @@ export function paintRoomWallRoom(surfaceData, roomId, tool, { clearOverrides = 
     error: null,
     roomId,
     clearedOverrides: clearOverrides && (selectedRoom.wallAppearanceProfiles || []).length > 0,
+  }
+}
+
+// ===================================================================
+// API publique — décors muraux (PLAN_DECALS.md Lot 1)
+// ===================================================================
+
+// Deux décors du même mur (au moins une arête source partagée) se chevauchent-ils ? Projection sur
+// l'axe tangent partagé — transitoire, jamais stocké (le schéma ne porte aucun champ d'offset
+// curviligne, voir docs/PLANS/PLAN_DECALS.md Lot 1 et l'État des lieux du même plan). Un décor qui
+// ne partage aucune arête avec l'autre ne peut jamais le chevaucher par construction (chacun est
+// ancré à un seul panneau, jamais à cheval sur un coin).
+function wallDecorationsOverlap(a, b) {
+  const edgesA = new Set((a?.sourceEdgeKeys || []).map(String))
+  const sharesWall = (b?.sourceEdgeKeys || []).some(key => edgesA.has(String(key)))
+  if (!sharesWall) return false
+  const alongA = Number(a.anchorX) * Number(a.tangentX) + Number(a.anchorZ) * Number(a.tangentZ)
+  const alongB = Number(b.anchorX) * Number(b.tangentX) + Number(b.anchorZ) * Number(b.tangentZ)
+  if (![alongA, alongB].every(Number.isFinite)) return true // donnée incomplète : refuser par prudence
+  const halfSpan = (Number(a.widthM) + Number(b.widthM)) / 2
+  return Math.abs(alongA - alongB) < halfSpan
+}
+
+// Pose un décor sur le mur identifié par `decoration.sourceEdgeKeys` (sortie de
+// makeWallDecorationFromWallPoint, client/src/lib/connectors.js, complétée par l'appelant avec
+// assetId/widthM/heightM/mirror). Deux refus possibles, tous deux décidés par Saar (2026-10-14) :
+// un mur qui porte déjà une porte, ou un emplacement déjà occupé par un autre décor du même mur.
+export function addRoomWallDecoration(surfaceData, roomId, decoration) {
+  const next = normalizeSurfaceData(surfaceData)
+  const room = next.rooms?.[roomId]
+  if (!room) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+
+  const sourceEdgeKeys = [...new Set((decoration?.sourceEdgeKeys || []).map(String))]
+  if (sourceEdgeKeys.length === 0) return { surfaceData, error: 'Décor sans mur d’ancrage.' }
+  if (typeof decoration?.assetId !== 'string' || !decoration.assetId) {
+    return { surfaceData, error: 'Choisis une image de décor avant de poser.' }
+  }
+
+  const candidateEdges = roomBoundaryEdges(room).filter(edge => sourceEdgeKeys.includes(edge.key))
+  const doors = Object.values(next.connectors || {})
+  const doorOnWall = doors.some(connector => doorConnectorTouchesBoundaryEdges(connector, room, candidateEdges))
+  if (doorOnWall) return { surfaceData, error: 'Ce mur porte déjà une porte — choisis un autre emplacement.' }
+
+  const candidate = { ...decoration, sourceEdgeKeys }
+  const existing = room.wallDecorations || []
+  if (existing.some(entry => wallDecorationsOverlap(entry, candidate))) {
+    return { surfaceData, error: 'Un autre décor occupe déjà cet emplacement sur ce mur.' }
+  }
+
+  const id = `decoration:${roomId}:${sourceEdgeKeys.slice().sort().join('|')}:` +
+    `${Math.abs(hashString(`${candidate.assetId}:${candidate.anchorX}:${candidate.anchorZ}:${candidate.tangentX}:${candidate.tangentZ}`))}`
+  const wallDecorations = [...existing, { ...candidate, id }]
+
+  return {
+    surfaceData: { ...next, rooms: { ...next.rooms, [roomId]: { ...room, wallDecorations } } },
+    error: null,
+    roomId,
+    decorationId: id,
+  }
+}
+
+export function removeRoomWallDecoration(surfaceData, roomId, decorationId) {
+  const next = normalizeSurfaceData(surfaceData)
+  const room = next.rooms?.[roomId]
+  if (!room) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+  const before = room.wallDecorations || []
+  const wallDecorations = before.filter(entry => entry.id !== decorationId)
+  if (wallDecorations.length === before.length) {
+    return { surfaceData, error: 'Ce décor n’existe plus.' }
+  }
+  return {
+    surfaceData: { ...next, rooms: { ...next.rooms, [roomId]: { ...room, wallDecorations } } },
+    error: null,
+    roomId,
   }
 }
 
