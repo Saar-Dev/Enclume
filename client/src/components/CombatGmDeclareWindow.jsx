@@ -44,6 +44,7 @@ import { getGrabConflictReasons } from '../../../shared/combatGrabItem.js'
 import { flattenItemsBySlot } from '../../../shared/weaponSlots.js'
 import { applyDeclaredSwap, swapWarning, heldItemsWithoutActionRow } from '../lib/declaredSwap.js'
 import { pnjHandEquipment } from '../lib/pnjHandEquipment.js'
+import { useCombatEquipmentSnapshot } from '../lib/useCombatEquipmentSnapshot.js'
 import CombatSwapPanel from './CombatSwapPanel.jsx'
 
 // ---------------------------------------------------------------------------
@@ -61,7 +62,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
   )
 
-  const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, weaponMg, weaponMd, armorPieces }
+  // COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE : équipement en main par token, autorité unique partagée
+  // avec CombatRosterWindow.jsx (useCombatEquipmentSnapshot.js) — vivant, plus un instantané figé au
+  // chargement de la carte. `rosterCharacterIds` filtre les événements INVENTORY_* sans rapport avec
+  // ce combat (ex. un joueur qui achète pendant que cette fenêtre reste ouverte).
+  const rosterCharacterIds = useMemo(
+    () => new Set(roster.map(r => tokens.find(tk => tk.id === r.token_id)?.character_id).filter(Boolean)),
+    [roster, tokens],
+  )
+  const equipment = useCombatEquipmentSnapshot(battlemapId, rosterCharacterIds)
   const [rosterOpen,   setRosterOpen]   = useState(
     () => localStorage.getItem('gm-roster-open') !== 'false'
   )
@@ -205,14 +214,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
   // <CombatDeclareErrorBanner>. Plus de socket.on local (REACT.md P57, module 3).
 
-  // ── Fetch équipement combat ──────────────────────────────────────────────
-  useEffect(() => {
-    if (!battlemapId) return
-    api.get(`/battlemaps/${battlemapId}/combat-equipment`)
-      .then(r => setEquipment(r.data.equipment ?? {}))
-      .catch(() => {})
-  }, [battlemapId])
-
   // ── Fetch inventaire du PNJ actif — liste « Prendre en main » (humanoïde PNJ seulement) ───────────────
   // Recharge à chaque nouveau Tour (has_announced true→false) : un objet pris au Tour précédent est alors en main.
   const grabCharacterId = (() => {
@@ -231,8 +232,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // Inventaire EFFECTIF du PNJ actif : la permutation choisie l'a projeté (aperçu, jamais l'autorité — le serveur relit l'inventaire
   // réel à la résolution). Les armes en main du PNJ en sont DÉRIVÉES (`pnjHandEquipment`, mêmes règles que la route
-  // /combat-equipment) : toujours fraîches (rechargées à chaque Tour) alors que /combat-equipment est un instantané par carte. Tant
-  // que l'inventaire n'est pas chargé (ou en erreur), la fenêtre garde l'instantané du serveur.
+  // /combat-equipment) : rechargées à chaque Tour, sans attendre le round-trip réseau de `equipment` (lui-même désormais vivant,
+  // voir useCombatEquipmentSnapshot). Tant que l'inventaire n'est pas chargé (ou en erreur), la fenêtre garde `equipment`.
   const effectivePnjItems = useMemo(
     () => (grabCharacterId && pnjInventory.characterId === grabCharacterId && Array.isArray(pnjInventory.items))
       ? applyDeclaredSwap(pnjInventory.items, swap).items

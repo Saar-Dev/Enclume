@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useDraggable } from '../lib/useDraggable.js'
+import { useCombatEquipmentSnapshot } from '../lib/useCombatEquipmentSnapshot.js'
 import api from '../lib/api'
 import { StateChip } from './CombatInitStateWindow.jsx'
 
@@ -66,25 +67,31 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const [surprisedIds, setSurprisedIds] = useState([])
   const [excludedIds,  setExcludedIds]  = useState([])
   const [iniPreview,   setIniPreview]   = useState({})
-  const [equipment,    setEquipment]    = useState({})   // tokenId → { characterId, weapon, armorPieces }
   const [refWeapons,   setRefWeapons]   = useState([])
   const [refArmors,    setRefArmors]    = useState([])
 
   const inCombat = phase !== null
+
+  // COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE : équipement en main par token, autorité unique partagée
+  // avec CombatGmDeclareWindow.jsx (useCombatEquipmentSnapshot.js) — vivant pendant tout le combat,
+  // plus figé dès son début comme l'ancien fetch ci-dessous (qui ne tournait que pré-combat).
+  const rosterCharacterIds = useMemo(
+    () => new Set(roster.map(r => tokens.find(tk => tk.id === r.token_id)?.character_id).filter(Boolean)),
+    [roster, tokens],
+  )
+  const equipment = useCombatEquipmentSnapshot(battlemapId, rosterCharacterIds)
 
   // ── Fetches parallèles au montage (pré-combat uniquement) ──────────────────
   useEffect(() => {
     if (!battlemapId || inCombat) return
     Promise.all([
       api.get(`/battlemaps/${battlemapId}/combat-ini`),
-      api.get(`/battlemaps/${battlemapId}/combat-equipment`),
       api.get('/equipment?family=Armes'),
       api.get('/equipment?family=Protections'),
-    ]).then(([ini, equip, arms, armors]) => {
+    ]).then(([ini, arms, armors]) => {
       const map = {}
       for (const { token_id, base_ini } of ini.data.iniPreview) map[token_id] = base_ini
       setIniPreview(map)
-      setEquipment(equip.data.equipment ?? {})
       setRefWeapons(arms.data.items.filter(i => !WEAPON_FAMILIES_EXCLUDE.has(i.category)))
       setRefArmors(armors.data.items)
     }).catch(() => {})
@@ -106,12 +113,12 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const handleAnnounceStart = () => socket?.emit(WS.COMBAT_ANNOUNCE_START)
 
   // ── Quick equip ────────────────────────────────────────────────────────────
+  // La route émet déjà INVENTORY_ADDED (char-sheet.js) : useCombatEquipmentSnapshot se rafraîchit
+  // seul dès que l'événement revient par la room de campagne — pas de refetch manuel ici (une seule
+  // source de rafraîchissement, pas deux qui se chevauchent).
   const handleQuickEquip = async (tokenId, characterId, equipmentId, slot) => {
     try {
       await api.post(`/char-sheet/${characterId}/quick-equip`, { equipment_id: equipmentId, slot })
-      // Rafraîchir l'équipement du token localement
-      const res = await api.get(`/battlemaps/${battlemapId}/combat-equipment`)
-      setEquipment(res.data.equipment ?? {})
     } catch (e) {
       console.error('[QuickEquip]', e?.response?.data?.error?.message ?? e.message)
     }

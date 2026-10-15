@@ -11460,3 +11460,49 @@ réelle des 6 contre la base locale, vérification finale par requête directe (
 base, ré-exécuter une version antérieure du script n'aurait aucun effet (idempotence par `MARKER` —
 seule une correction manuelle de `bug_tickets` annulerait l'écriture, non applicable ici puisque le
 contenu ajouté est factuellement correct).
+
+## Session (Claude) — 2026-10-15 — COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE : équipement en main périmé pendant le combat, rework en autorité unique
+
+[VÉRIFIÉ par lecture] Deux fenêtres MJ (`CombatGmDeclareWindow.jsx`, `CombatRosterWindow.jsx`)
+maintenaient chacune sa propre copie locale de `GET /battlemaps/:id/combat-equipment`, chargée UNE
+fois et jamais rafraîchie : `isRanged(tokenId)` et le badge Distance/Contact du roster dans la
+fenêtre de déclaration restaient figés pour tout token hors du PNJ actif ; `CombatRosterWindow`
+chargeait son propre équipement uniquement via le `useEffect` gardé par `if (!battlemapId ||
+inCombat) return` — donc jamais pendant le combat lui-même, seulement avant. Une permutation
+résolue, une grenade lancée ou un quick-equip fait depuis l'AUTRE fenêtre ne se reflétait donc
+jamais sans recharger toute la carte. Trouvaille annexe non citée par le ticket : même le PNJ actif
+restait périmé pour `naturalWeaponsAvailable` (armes naturelles de mutation), qui lisait encore
+`equipment[activeTokenId]` au lieu de la dérivation déjà vivante (`activeHandEquipment`) utilisée
+pour ses armes de catalogue.
+
+**Fix** (rework, pas un patch par site de lecture) : nouveau hook unique
+`client/src/lib/useCombatEquipmentSnapshot.js`, calqué sur le patron déjà établi
+`useModingRefreshSync.js` — fetch initial sans garde `inCombat`, puis rafraîchissement automatique
+sur les événements `INVENTORY_ADDED`/`UPDATED`/`REMOVED` (`shared/events.js`), déjà émis par les
+trois actions en cause (`combatGrabService.js`, `socketCombatAoe.js`, route `quick-equip` de
+`char-sheet.js`) vers la room de campagne — aucun nouvel événement créé. Filtré par l'ensemble des
+`character_id` du roster courant (lu via une ref, patron déjà utilisé dans ce fichier pour `tokensRef`)
+pour ignorer les événements d'inventaire sans rapport avec ce combat (ex. un joueur qui achète
+pendant que la fenêtre MJ reste ouverte). Les deux fenêtres appellent ce même hook à la place de
+leur `useState`+fetch local ; `naturalWeaponsAvailable` et `isRanged` n'ont eu besoin d'aucune
+modification — ils lisaient déjà la même variable `equipment`, qui devient vivante sans que leur
+code change. Le refetch manuel après `handleQuickEquip` (devenu redondant, la route émettant déjà
+`INVENTORY_ADDED`) a été retiré — une seule source de rafraîchissement.
+
+Limite assumée (notée en analyse à charge, pas un oubli) : les deux fenêtres restent deux instances
+indépendantes du hook — si les deux sont ouvertes en même temps, un même événement déclenche deux
+`GET /combat-equipment` au lieu d'un (déjà le cas avant, juste jamais rafraîchi). Un store partagé
+serait plus strict mais hors de proportion avec ce bug — non traité ici.
+
+**Testé** : `npx eslint` ciblé sur les 3 fichiers (0 erreur après correction d'une ref mutée pendant
+le rendu — `cannot access refs during render`, corrigée en déplaçant l'affectation dans un
+`useEffect`, même patron que `tokensRef` dans ce même fichier) ; `npm run build` client complet,
+succès (seul avertissement : taille de chunk, préexistant, sans rapport). Erreur de lint
+préexistante dans `CombatGmDeclareWindow.jsx` (ligne 186 avant modification, `set-state-in-effect`)
+confirmée non introduite par ce correctif (`git stash` + lint avant modification : même erreur, même
+ligne relative) — hors périmètre, pas touchée.
+**Non testé** : scénario réel à deux clients (MJ + joueur) confirmant que les deux fenêtres se
+mettent à jour en direct après une permutation/un lancer de grenade/un quick-equip — nécessite une
+validation manuelle de Saar, ticket laissé `in_progress`.
+**Données** : aucune (changement client pur, aucune migration, aucun nouvel événement).
+**Retour arrière** : `git revert` du commit (fichiers client uniquement).
