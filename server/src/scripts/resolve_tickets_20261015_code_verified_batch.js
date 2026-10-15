@@ -80,6 +80,12 @@ VERIFIED.push({
 }, {
   code: 'STATUT-STUN-PROMPT-ORPHELIN-MORT',
   note: 'Vérifié par lecture, pas de test automatisé disponible (statusService.js sans fichier .test.mjs) : statusService.js:105 émet COMBAT_STUN_PROMPT_CANCEL({tokenId}) pour chaque ligne combat_pending retirée ; useCombatSocket.js onStunPromptCancel ferme le prompt uniquement si p.tokenId === tokenId — code cohérent, logique simple et bien ciblée.',
+}, {
+  code: 'STATUT-EXO-PILOTE-PARITE',
+  note: "Vérifié par lecture (combatTurnEngine.js:127-137, résolution groupée pilot_character_id) + test dédié relancé : 'getDeclarationBlockedTokens — exo bloquée par son pilote étourdi (STATUT-EXO-PILOTE-PARITE), même sans statut propre' vert.",
+}, {
+  code: 'WOUND-PNJ-ECHEANCES-FLOOD',
+  note: 'Correctif de cette même session (2026-10-14) : pnj_healing_mode (défaut simple) dans campaignSettingsService.js:85, gate woundHealingSchedule.js:71 — déjà couvert par 6 tests dédiés (createFixture étendue) au moment du correctif, relus et confirmés en place.',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
