@@ -256,14 +256,22 @@ immédiatement** le mode pose, un fantôme suit le curseur, un clic pose et **re
 pour enchaîner plusieurs poses, jusqu'à ce que l'outil change de mode. Reprendre un objet déjà posé
 (le sélectionner pour le déplacer/modifier/supprimer) est un second mode, décrit en C.
 
-- Choisir une vignette dans la palette (mur ou sol) → `onPatch` fixe directement
-  `mode: 'decal'|'floor-decal'` + l'asset choisi, sans bouton intermédiaire.
+- Choisir une vignette dans la palette → `onPatch` fixe directement `mode: 'decal'` + l'asset
+  choisi, sans bouton intermédiaire. **Mécanique, vérifié sur le code déjà commité (§U,
+  JOURNALANALYSE.md 2026-10-15)** : `SurfaceWallPanel.jsx` a aujourd'hui deux fonctions séparées
+  (`selectDecalAsset` ne fait que choisir l'asset, `startDecalPlacement` ne fait que basculer le
+  mode) déclenchées par deux éléments différents — à fusionner en une seule, déclenchée par le clic
+  sur la vignette ; le bouton « Poser ce décor » et son `disabled` disparaissent.
 - Le fantôme de pose (déjà écrit, `DecalPreview.jsx`) reste valable, juste déclenché plus tôt dans
   le flux.
 - Après une pose réussie, le mode reste actif (même règle déjà appliquée aux portes/connecteurs,
   §12.9 `PLAN_WORLD_BUILDER_REWORK.md`) — enchaîner plusieurs décors sans rouvrir la palette.
 
-### B. Mur ET sol — deux collections séparées, pas une fusionnée
+### B. Mur ET sol — **reporté en v2 (Saar, 2026-10-15)**, v1 reste mur seul
+
+**Décidé par Saar après lecture du coût réel** (nouvelle collection, nouvelle réconciliation, nouvel
+ancrage, pas juste une case à cocher) : **pas de sol en v1**. Analyse gardée ci-dessous telle quelle
+pour une v2 future, non reprise dans le périmètre immédiat.
 
 **Décision, avec sa raison** : `room.floorDecorations[]`, nouveau, à côté de `room.wallDecorations[]`
 (inchangé dans sa forme) — pas un tableau unique `decorations[]` avec un champ `surface`. Un décor
@@ -293,10 +301,20 @@ proche. Ce qui EST partagé entre les deux (et reste un seul endroit) : le catal
 Remis en périmètre (exclu à tort du Lot 3 initial, jamais confirmé avec Saar) : reprendre un décor
 déjà posé pour le déplacer. Patron confirmé par la recherche (Godot/GoPlacer : « mode transformation
 en place pour un nœud de scène déjà posé »). Même mécanisme de sélection que celui déjà choisi pour
-la suppression (liste dans le panneau du mur ou de la salle, pas un clic direct sur l'image en 3D —
-raison inchangée depuis le Lot 2 : apparence pure, jamais une collision) ; déplacer un décor
-sélectionné depuis cette liste rebascule l'outil sur son point d'ancrage pour le reposer ailleurs
-(même geste que la pose initiale, pas un glisser-déposer séparé à inventer).
+la suppression (liste dans le panneau du mur, pas un clic direct sur l'image en 3D — raison
+inchangée depuis le Lot 2 : apparence pure, jamais une collision) ; déplacer un décor sélectionné
+depuis cette liste rebascule l'outil sur son point d'ancrage pour le reposer ailleurs (même geste
+que la pose initiale, pas un glisser-déposer séparé à inventer).
+
+**Précisé après analyse à charge (§V, JOURNALANALYSE.md 2026-10-15)** : le texte ci-dessus élude un
+vrai choix — à quel moment l'ancien décor disparaît-il ? Deux options pesées : retirer l'ancien
+immédiatement au clic « Déplacer » (simple, réutilise `removeRoomWallDecoration` tel quel, aucune
+modification de `wallDecorationsOverlap`) contre un échange atomique seulement à la confirmation du
+nouvel emplacement (plus sûr, mais exige de faire traverser un `excludeDecorationId` à travers 3
+fonctions pour que le décor en déplacement ne se bloque pas lui-même). **Retenu : la première** — ce
+projet a déjà un Annuler/Refaire câblé sur l'éditeur de surface ; si l'utilisateur change d'avis en
+plein déplacement, Ctrl+Z récupère le décor sans rien coder de plus. À signaler à Saar, pas une
+évidence imposée seule.
 
 ### D. Teinte — convention universelle, pas un nouveau mécanisme
 
@@ -312,12 +330,21 @@ d'un coup. Sans effet visible sur une image déjà entièrement blanche/transpar
 catalogue) que si l'image porte réellement du blanc à teindre — à vérifier visuellement par Saar une
 fois codé, pas garanti identique sur toutes les images du pack.
 
+**Précisé après analyse à charge (§W/§X, JOURNALANALYSE.md 2026-10-15)** : le sélecteur de couleur
+n'est pas à inventer — `SurfaceMaterialEditor.jsx` (l.162-163) a déjà exactement le bon contrôle
+(`<input type="color">` + champ texte miroir, repli sur une valeur par défaut si hex invalide), même
+patron à réutiliser pour `decalColor`. Le recléage du cache par `(texture, color)` se fait avec une
+`Map` imbriquée (`Map<texture, Map<couleurHex, material>>`) — même structure que
+`opacityMaterialCache`, déjà présent dans `SurfaceDungeonScene.jsx` pour un besoin identique (une
+variante dérivée d'un matériau de base, mise en cache séparément), pas à réinventer non plus.
+
 ### Statut
 
-Rien de codé pour cette révision — cadrage présenté à Saar, analyse à charge à faire avant tout
-code (même règle que d'habitude), puis Lots 2 et 3 repris en profondeur : nouveaux champs/collection
-(Lot 1 bis), rendu teinté + sol (Lot 2 bis), outil tampon unifié mur/sol + repositionnement (Lot 3
-bis).
+**V1 confirmé par Saar : mur seul, pas de sol** (§B reporté v2). Rien de codé pour cette révision —
+cadrage présenté à Saar, analyse à charge faite (JOURNALANALYSE.md, §U-X, 2026-10-15), **pause
+demandée par Saar après cette analyse** — code à reprendre dans une session suivante : champ
+`color` ajouté au schéma du décor (retouche mineure du Lot 1, pas une réécriture), fusion
+sélection/pose + repositionnement (reprise du Lot 3), teinte + cache reclé (reprise du Lot 2).
 
 ## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15) — conception dépassée, voir « Révision 2026-10-15 » ci-dessus**
 

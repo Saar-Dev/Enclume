@@ -689,3 +689,66 @@ clic direct sur le mesh du connecteur, pas son filet de secours géométrique �
 (aperçu avant clic, absent du premier cadrage, ajouté comme composant à part entière plutôt que comme
 détail mineur). **S** et **T** confirment deux affirmations du cadrage par lecture complète, pas
 supposées — aucune ne nécessite de changement.
+
+## 2026-10-15 (suite) — Analyse à charge de la révision post-test réel (outil tampon, teinte,
+repositionnement — sol reporté v2 par Saar)
+
+Revue critique de la section « Révision 2026-10-15 » du plan, avant tout nouveau code. Sol (point B)
+retiré du périmètre par Saar — non analysé ici, repris tel quel pour une v2 future.
+
+### U. Fusion `selectDecalAsset`/`startDecalPlacement` — le code actuel a deux fonctions, la révision n'en veut qu'une
+
+**[VÉRIFIÉ par lecture du code déjà commité]** — `SurfaceWallPanel.jsx` a aujourd'hui deux actions
+séparées : `selectDecalAsset(asset)` (ne fait que `onPatch({ decalAssetId, decalWidthM,
+decalHeightM })`) et `startDecalPlacement()` (ne fait que `onPatch({ mode: 'decal',
+connectorWallEdgeKeys })`), déclenchées par deux éléments différents (clic vignette vs clic bouton).
+La révision (§A) exige qu'un seul clic sur la vignette déclenche les deux à la fois. Changement
+mécanique mais réel : fusionner les deux patches en un seul appel au clic sur la vignette,
+supprimer le bouton « Poser ce décor » et sa logique de `disabled`.
+
+### V. Repositionner un décor déjà posé — le cadrage dit « même geste que la pose », mais élude un vrai risque de perte
+
+Le texte de la révision (§C) dit : « déplacer un décor sélectionné … rebascule l'outil sur son
+point d'ancrage … même geste que la pose initiale ». Non précisé, et ça change le risque réel :
+**quand l'ancien décor est-il retiré ?**
+- Option 1 (retrait immédiat au clic « Déplacer », avant même d'avoir cliqué le nouvel
+  emplacement) : simple, réutilise `removeRoomWallDecoration` + le flux de pose tel quel sans
+  aucune modification de `addRoomWallDecoration`/`wallDecorationsOverlap`. Risque réel : si
+  l'utilisateur change d'outil avant de cliquer un nouvel emplacement, le décor a disparu — **pas
+  une perte de données réelle**, `[VÉRIFIÉ]` ce projet a un Annuler/Refaire déjà câblé sur l'éditeur
+  de surface (`onSurfaceUndo`/`onSurfaceRedo`, `SurfaceEditorPanel.jsx`) : un Ctrl+Z récupère le
+  décor sans rien coder de plus.
+- Option 2 (retrait seulement au moment où le nouvel emplacement est confirmé, échange atomique) :
+  plus sûr pour l'utilisateur mais exige de faire passer un `excludeDecorationId` à travers
+  `computeDecalPlacement` → `addRoomWallDecoration` → `wallDecorationsOverlap`, pour que le décor en
+  cours de déplacement ne se bloque pas lui-même comme un chevauchement avec sa propre ancienne
+  position pendant l'aperçu.
+**Recommandation** : option 1 — le filet de sécurité existe déjà (Annuler), construire
+l'exclusion de chevauchement de l'option 2 ajouterait un paramètre traversant 3 fonctions pour un
+risque déjà couvert autrement. À confirmer par Saar si le risque « ça disparaît pendant que je
+choisis où le remettre » le gêne malgré le Ctrl+Z disponible.
+
+### W. Teinte — un patron déjà présent dans ce projet, pas à inventer
+
+**[VÉRIFIÉ]** — `SurfaceMaterialEditor.jsx` (l.162-163) a déjà exactement le contrôle qu'il faut
+pour la teinte d'un décor : `<input type="color">` + un champ texte miroir, avec repli sur une
+valeur par défaut si la chaîne n'est pas un hex valide. Même composant visuel à réutiliser pour
+`decalColor`, pas une nouvelle UI de sélecteur de couleur à construire.
+
+### X. Cache de matériau reclé par (texture, couleur) — confirmé nécessaire, portée du changement précisée
+
+Le cache actuel (`decalMaterialCache`, Lot 2) est une `Map` indexée par objet `texture` SEUL. Le
+reclé en `(texture, couleur)` doit se faire SANS recréer tout le cache : une `Map` imbriquée
+(`Map<texture, Map<couleurHex, material>>`), même structure que `opacityMaterialCache` déjà présent
+dans le même fichier (`Map` externe par matériau de base, `Map` interne par variante) — patron déjà
+utilisé dans ce fichier pour un besoin structurellement identique (une variante dérivée d'un
+matériau de base, mise en cache séparément), pas à réinventer.
+
+### Verdict
+
+**U** et **W** sont mécaniques, à appliquer sans discussion. **X** est mécanique mais précise
+l'implémentation exacte (réutiliser le patron `opacityMaterialCache` déjà dans le fichier). **V**
+est le seul point avec une vraie recommandation à confirmer (option 1, retrait immédiat + filet
+Annuler existant) plutôt qu'une construction plus complexe pour un risque déjà couvert — pas
+bloquant, mais à dire explicitement avant de coder puisque ça change le comportement perçu par
+l'utilisateur en cas d'hésitation pendant un déplacement.
