@@ -236,7 +236,90 @@ deux n'existe encore, rien à tester avant eux.
 migration, aucune écriture en base.
 **Retour arrière** : revert des 5 fichiers (pas de migration, pas de donnée persistée à nettoyer).
 
-## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15) — validation visuelle bloquée tant que le Lot 3 n'existe pas**
+## Révision 2026-10-15 — retour du premier test réel de Saar
+
+**Contexte** : premier test réel du Lot 3 par Saar. Trois défauts concrets trouvés (images
+manquantes — corrigé séparément, cf. Historique — flux de clic qui ne fait pas ce qu'on attend) et
+trois manques de fond jamais confirmés avec lui avant de coder (teinte, position libre vs grille,
+mur seul vs mur+sol). Recherche faite (doc + forums + dépôts, demande explicite de Saar) avant de
+corriger. Réponses de Saar aux deux questions ouvertes : **position libre**, **mur et sol**. Cette
+section **remplace** la conception des Lots 2 et 3 ci-dessous (gardés tels quels pour l'historique,
+marqués dépassés) — Lots 2 et 3 doivent être en bonne partie recodés, pas juste patchés.
+
+### A. Modèle d'interaction — outil tampon (« stamp/brush »), pas deux actions séparées
+
+Le flux à deux étapes (choisir une vignette, PUIS cliquer un bouton « Poser » caché plus bas) est
+abandonné. **Confirmé par la recherche** (pas une préférence personnelle) : c'est le patron standard
+de ce genre d'outil — Tiled (éditeur de cartes de référence, open source) et les outils de pose
+d'objets de Godot (GoPlacer) fonctionnent à l'identique : choisir dans la palette **active
+immédiatement** le mode pose, un fantôme suit le curseur, un clic pose et **reste en mode pose**
+pour enchaîner plusieurs poses, jusqu'à ce que l'outil change de mode. Reprendre un objet déjà posé
+(le sélectionner pour le déplacer/modifier/supprimer) est un second mode, décrit en C.
+
+- Choisir une vignette dans la palette (mur ou sol) → `onPatch` fixe directement
+  `mode: 'decal'|'floor-decal'` + l'asset choisi, sans bouton intermédiaire.
+- Le fantôme de pose (déjà écrit, `DecalPreview.jsx`) reste valable, juste déclenché plus tôt dans
+  le flux.
+- Après une pose réussie, le mode reste actif (même règle déjà appliquée aux portes/connecteurs,
+  §12.9 `PLAN_WORLD_BUILDER_REWORK.md`) — enchaîner plusieurs décors sans rouvrir la palette.
+
+### B. Mur ET sol — deux collections séparées, pas une fusionnée
+
+**Décision, avec sa raison** : `room.floorDecorations[]`, nouveau, à côté de `room.wallDecorations[]`
+(inchangé dans sa forme) — pas un tableau unique `decorations[]` avec un champ `surface`. Un décor
+mural et un décor de sol sont adressés structurellement différemment (arêtes de mur pour l'un, case
+de sol pour l'autre) : les fusionner forcerait une branche `if (surface === 'wall') ... else ...`
+dans CHAQUE fonction qui les touche (validateur, réconciliation, rendu, outil) sans rien gagner en
+retour — c'est le même choix déjà fait par ce projet entre `connectors` (adressés par position) et
+`wallAppearanceProfiles` (adressés par arêtes), jamais fusionnés malgré une forme de surface
+proche. Ce qui EST partagé entre les deux (et reste un seul endroit) : le catalogue d'assets (Lot
+0), le rendu du quad texturé/teinté (Lot 2), et le patron d'outil tampon (A ci-dessus).
+
+- **Ancrage sol** : position libre `anchorX/anchorZ` n'importe où dans l'empreinte de la salle (pas
+  d'ancrage sur une arête), normale fixe vers le haut `(0,1,0)`, `rotationY` libre (choisie à la
+  pose, pas déduite d'un mur). Même champs `widthM/heightM/mirror/color` que le mur.
+- **Réconciliation sol** : même esprit que `wallDecorationsSurvivingEdges` (Lot 1) mais par case —
+  un décor de sol disparaît si la case de sol qui le porte (celle qui contient `anchorX/anchorZ`)
+  sort de l'empreinte de la salle (`paintRoomFootprintCells` en mode retrait). Pas de notion de
+  « porte sur cette case » à vérifier contrairement au mur (une porte ne couvre jamais une case de
+  sol entière) — **à confirmer à l'implémentation** si un connecteur de sol existant (trappe,
+  ascenseur) doit bloquer la pose, par analogie avec la porte sur un mur.
+- **Rendu sol** : même technique que le mur (quad orienté, décalage physique — ici vers le haut
+  depuis le sol — pour rester devant le matériau du sol, jamais un artifice de rendu), paramétrée
+  par la normale et la tangente au lieu de les dériver d'un panneau de mur.
+
+### C. Décor déjà posé — repositionnable, pas seulement supprimable
+
+Remis en périmètre (exclu à tort du Lot 3 initial, jamais confirmé avec Saar) : reprendre un décor
+déjà posé pour le déplacer. Patron confirmé par la recherche (Godot/GoPlacer : « mode transformation
+en place pour un nœud de scène déjà posé »). Même mécanisme de sélection que celui déjà choisi pour
+la suppression (liste dans le panneau du mur ou de la salle, pas un clic direct sur l'image en 3D —
+raison inchangée depuis le Lot 2 : apparence pure, jamais une collision) ; déplacer un décor
+sélectionné depuis cette liste rebascule l'outil sur son point d'ancrage pour le reposer ailleurs
+(même geste que la pose initiale, pas un glisser-déposer séparé à inventer).
+
+### D. Teinte — convention universelle, pas un nouveau mécanisme
+
+**Confirmé par la recherche** : Three.js, Godot (`modulate`), Phaser (`tint`) et Unity partagent la
+même convention — une couleur qui se **multiplie** avec la texture, déjà le comportement de
+`material.color` sur le `MeshStandardMaterial` déjà utilisé (Lot 2), laissé à blanc par défaut
+jusqu'ici (= aucune teinte). Nouveau champ `color` (hex) sur chaque décor (mur et sol), exposé par un
+sélecteur de couleur dans le panneau. **Conséquence technique vérifiée par la recherche** (piège
+documenté, pas une supposition) : la teinte exige un matériau non partagé entre décors dès qu'elle
+diffère de blanc — le cache `decalMaterialFor` (partagé par texture, Lot 2) doit être reclé par
+`(texture, color)`, jamais par texture seule, sous peine de teindre tous les décors de la même image
+d'un coup. Sans effet visible sur une image déjà entièrement blanche/transparente (la plupart du
+catalogue) que si l'image porte réellement du blanc à teindre — à vérifier visuellement par Saar une
+fois codé, pas garanti identique sur toutes les images du pack.
+
+### Statut
+
+Rien de codé pour cette révision — cadrage présenté à Saar, analyse à charge à faire avant tout
+code (même règle que d'habitude), puis Lots 2 et 3 repris en profondeur : nouveaux champs/collection
+(Lot 1 bis), rendu teinté + sol (Lot 2 bis), outil tampon unifié mur/sol + repositionnement (Lot 3
+bis).
+
+## Lot 2 — Rendu 3D — **CLOS, partiel ⚠️ (2026-10-15) — conception dépassée, voir « Révision 2026-10-15 » ci-dessus**
 
 **Objectif** : afficher chaque `room.wallDecorations[]` comme une image plate collée sur la face
 intérieure du mur qu'elle référence, toujours visible au-dessus du matériau/motif du mur, sans
@@ -337,7 +420,7 @@ reste la clôture réelle de ce lot, mais elle n'est atteignable qu'après le Lo
 **Retour arrière** : `git revert`/retrait des fichiers listés ci-dessus — aucune donnée persistée,
 aucun risque.
 
-## Lot 3 — Outil d'édition — **CLOS, partiel ⚠️ (2026-10-15) — validation visuelle réelle en attente**
+## Lot 3 — Outil d'édition — **CLOS, partiel ⚠️ (2026-10-15) — conception dépassée, voir « Révision 2026-10-15 » plus haut**
 
 **Objectif** : poser un décor sur un mur déjà sélectionné, le supprimer. Débloque la validation
 visuelle du Lot 2 (premier moyen réel de faire exister un décor dans une carte).
