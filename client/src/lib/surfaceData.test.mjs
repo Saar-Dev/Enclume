@@ -20,6 +20,9 @@ import {
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
   makeDoorConnectorFromWallPoint,
+  makeWallDecorationFromWallPoint,
+  addRoomWallDecoration,
+  removeRoomWallDecoration,
   makeWallsFromDrag,
   classifyRoomFootprintCells,
   paintRoomFootprintCells,
@@ -39,7 +42,7 @@ import {
   roomGeometryArea,
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
-import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
+import { prepareSurfaceData, validateSurfaceData } from '../../../shared/world/surfaceDocument.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -1191,4 +1194,195 @@ test('les tranches verticales d un mur partagent une façade de rendu unique', (
   }
   assert.equal(byFacade.size, 4)
   assert.ok([...byFacade.values()].every(walls => walls.length === 3))
+})
+
+const DECORATION_ASSET_ID = '11111111-1111-4111-8111-111111111111'
+function decorationPayload(geo) {
+  return { ...geo, assetId: DECORATION_ASSET_ID, widthM: 0.5, heightM: 0.5, mirror: false }
+}
+
+test('poser un décor sur un mur droit calcule une géométrie plausible et valide', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  const surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+  assert.ok(geo)
+  assert.ok(Math.abs(Math.hypot(geo.tangentX, geo.tangentZ) - 1) < 1e-6)
+  assert.ok(Math.abs(Math.hypot(geo.normalX, geo.normalZ) - 1) < 1e-6)
+  assert.ok(Math.abs(geo.tangentX * geo.normalX + geo.tangentZ * geo.normalZ) < 1e-6)
+
+  const posed = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo))
+  assert.equal(posed.error, null)
+  assert.equal(posed.surfaceData.rooms.roomA.wallDecorations.length, 1)
+
+  const validation = validateSurfaceData(posed.surfaceData)
+  assert.equal(validation.valid, true, JSON.stringify(validation.errors))
+})
+
+test('poser un décor sur un arc utilise le même patron d ancrage que les portes', () => {
+  const rounded = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const selected = getRoomBoundaryWallRuns(rounded)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const surface = applyRoomBoundaryArc(emptySurface({ rooms: { rounded } }), 'rounded', selected, 90).surfaceData
+  const curvePanel = roomsWallSegments(surface.rooms).find(wall => wall.curveId)
+  const wallPoint = { fx: (Number(curvePanel.x0) + Number(curvePanel.x1)) / 2, fz: (Number(curvePanel.z0) + Number(curvePanel.z1)) / 2 }
+
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'rounded', level: 0, connectorWallEdgeKeys: selected })
+  assert.ok(geo)
+  assert.ok(Math.abs(Math.hypot(geo.tangentX, geo.tangentZ) - 1) < 1e-6)
+  assert.ok(Math.abs(Math.hypot(
+    geo.anchorX - Number(curvePanel.curveCenterX),
+    geo.anchorZ - Number(curvePanel.curveCenterZ),
+  ) - Number(curvePanel.curveRadius)) < 1e-6)
+  assert.equal(geo.sourceEdgeKeys.length > 0, true)
+
+  const posed = addRoomWallDecoration(surface, 'rounded', decorationPayload(geo))
+  assert.equal(posed.error, null)
+  const validation = validateSurfaceData(posed.surfaceData)
+  assert.equal(validation.valid, true, JSON.stringify(validation.errors))
+})
+
+test('deux décors qui se chevauchent sur le même mur : le second est refusé', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  const surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+
+  const first = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo))
+  assert.equal(first.error, null)
+  const second = addRoomWallDecoration(first.surfaceData, 'roomA', decorationPayload(geo))
+  assert.notEqual(second.error, null)
+  assert.equal(second.surfaceData.rooms.roomA.wallDecorations.length, 1)
+})
+
+test('deux décors éloignés sur le même mur sont tous les deux acceptés', () => {
+  const bigRoom = { ...room('roomA', 0), maxX: 5, cells: Array.from({ length: 6 }, (_, x) => `${x}:0`) }
+  const north = getRoomBoundaryWallRuns(bigRoom).find(wall => wall.side === 'north')
+  const surface = emptySurface({ rooms: { roomA: bigRoom } })
+  const panels = roomsWallSegments(surface.rooms).filter(panel => panel.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  assert.ok(panels.length >= 1)
+
+  const wallPointA = { fx: Number(panels[0].x0) + 0.5, fz: Number(panels[0].z0) }
+  const geoA = makeWallDecorationFromWallPoint(surface, wallPointA, { selectedRoomId: 'roomA', level: 0 })
+  const posedA = addRoomWallDecoration(surface, 'roomA', decorationPayload(geoA))
+  assert.equal(posedA.error, null)
+
+  const farPanel = panels[panels.length - 1]
+  const wallPointB = { fx: Number(farPanel.x1) - 0.5, fz: Number(farPanel.z1) }
+  const geoB = makeWallDecorationFromWallPoint(posedA.surfaceData, wallPointB, { selectedRoomId: 'roomA', level: 0 })
+  const posedB = addRoomWallDecoration(posedA.surfaceData, 'roomA', decorationPayload(geoB))
+  assert.equal(posedB.error, null)
+  assert.equal(posedB.surfaceData.rooms.roomA.wallDecorations.length, 2)
+})
+
+test('la pose d un décor est refusée sur un mur qui porte déjà une porte', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  let surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+
+  const door = makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    selectedRoomId: 'roomA', level: 0, connectorModelGeometry: { width: 0.8, depth: 0.2, height: 2 },
+  })
+  surface = { ...surface, connectors: { [door.id]: door } }
+
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+  const posed = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo))
+  assert.notEqual(posed.error, null)
+})
+
+test('effacer la case portant le mur d un décor le supprime (pas de blocage, à la différence d une porte)', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  const surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+  const posed = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo))
+  assert.equal(posed.error, null)
+  assert.equal(posed.surfaceData.rooms.roomA.wallDecorations.length, 1)
+
+  const erased = paintRoomFootprintCells(posed.surfaceData, 'roomA', [{ x: 0, z: 0 }, { x: 1, z: 0 }], 'remove')
+  assert.equal(erased.error, null, erased.error)
+  assert.equal(erased.surfaceData.rooms.roomA.wallDecorations.length, 0)
+})
+
+test('ouvrir un mur vers l extérieur supprime le décor et ne laisse pas d apparence orpheline', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  let surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+  surface = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo)).surfaceData
+
+  const appearance = applyRoomWallAppearance(surface, 'roomA', north.edgeKeys, { interiorMaterial: { material: 'steel', paint: '#ff0000' } })
+  assert.equal(appearance.error, null)
+  surface = appearance.surfaceData
+  assert.equal(surface.rooms.roomA.wallAppearanceProfiles.length, 1)
+
+  const opened = deleteRoomBoundaryWalls(surface, 'roomA', north.edgeKeys)
+  assert.equal(opened.error, null, opened.error)
+  assert.equal(opened.surfaceData.rooms.roomA.wallDecorations.length, 0)
+  assert.equal(opened.surfaceData.rooms.roomA.wallAppearanceProfiles.length, 0, 'régression WALL-APPEARANCE-ORPHAN-ON-EXTERIOR-OPEN')
+})
+
+test('fusionner deux salles supprime le décor du mur partagé et conserve celui d un autre mur', () => {
+  const roomA = { ...room('roomA', 0), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const roomB = { ...room('roomB', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const sharedWall = getRoomBoundaryWallRuns(roomA).find(wall => wall.side === 'east')
+  const outerWallA = getRoomBoundaryWallRuns(roomA).find(wall => wall.side === 'west')
+  let surface = emptySurface({ rooms: { roomA, roomB } })
+
+  const sharedPanel = roomsWallSegments(surface.rooms).find(panel => panel.sourceEdgeKeys?.some(key => sharedWall.edgeKeys.includes(key)))
+  const sharedPoint = { fx: (Number(sharedPanel.x0) + Number(sharedPanel.x1)) / 2, fz: (Number(sharedPanel.z0) + Number(sharedPanel.z1)) / 2 }
+  const sharedGeo = makeWallDecorationFromWallPoint(surface, sharedPoint, { selectedRoomId: 'roomA', level: 0 })
+  surface = addRoomWallDecoration(surface, 'roomA', decorationPayload(sharedGeo)).surfaceData
+
+  const outerPanel = roomsWallSegments(surface.rooms).find(panel => panel.sourceEdgeKeys?.some(key => outerWallA.edgeKeys.includes(key)))
+  const outerPoint = { fx: (Number(outerPanel.x0) + Number(outerPanel.x1)) / 2, fz: (Number(outerPanel.z0) + Number(outerPanel.z1)) / 2 }
+  const outerGeo = makeWallDecorationFromWallPoint(surface, outerPoint, { selectedRoomId: 'roomA', level: 0 })
+  const posedOuter = addRoomWallDecoration(surface, 'roomA', decorationPayload(outerGeo))
+  assert.equal(posedOuter.error, null, posedOuter.error)
+  surface = posedOuter.surfaceData
+  assert.equal(surface.rooms.roomA.wallDecorations.length, 2)
+
+  const merged = deleteRoomBoundaryWalls(surface, 'roomA', sharedWall.edgeKeys)
+  assert.equal(merged.error, null, merged.error)
+  assert.deepEqual(Object.keys(merged.surfaceData.rooms), ['roomA'])
+  assert.equal(merged.surfaceData.rooms.roomA.wallDecorations.length, 1)
+})
+
+test('removeRoomWallDecoration retire un décor par id et signale une erreur sur un id déjà absent', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  const surface = emptySurface({ rooms: { roomA: baseRoom } })
+  const panel = roomsWallSegments(surface.rooms).find(wall => wall.sourceEdgeKeys?.some(key => north.edgeKeys.includes(key)))
+  const wallPoint = { fx: (Number(panel.x0) + Number(panel.x1)) / 2, fz: (Number(panel.z0) + Number(panel.z1)) / 2 }
+  const geo = makeWallDecorationFromWallPoint(surface, wallPoint, { selectedRoomId: 'roomA', level: 0 })
+  const posed = addRoomWallDecoration(surface, 'roomA', decorationPayload(geo))
+
+  const removed = removeRoomWallDecoration(posed.surfaceData, 'roomA', posed.decorationId)
+  assert.equal(removed.error, null)
+  assert.equal(removed.surfaceData.rooms.roomA.wallDecorations.length, 0)
+  const removedAgain = removeRoomWallDecoration(removed.surfaceData, 'roomA', posed.decorationId)
+  assert.notEqual(removedAgain.error, null)
+})
+
+test('le validateur rejette un décor malformé (assetId absent, géométrie non finie)', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const surface = emptySurface({
+    rooms: {
+      roomA: { ...baseRoom, wallDecorations: [{ id: 'x', sourceEdgeKeys: ['e1'] }] },
+    },
+  })
+  const result = validateSurfaceData(surface)
+  assert.equal(result.valid, false)
 })
