@@ -92,6 +92,12 @@ VERIFIED.push({
 }, {
   code: 'COMBAT-DECLARATION-REFUSED-NO-MESSAGE',
   note: 'Commit 642f252a : audit des 12 refus silencieux de COMBAT_ACTION_DECLARE, message ajouté à chacun + aux 2 catch globaux muets. node --env-file=.env --test socketCombatAnnouncementDeclareErrors.test.mjs relancé : 2/2 verts (double déclaration, mauvais propriétaire).',
+}, {
+  code: 'HORLOGE1',
+  note: "Vérifié par lecture : Sidebar.jsx:146 — {mode !== 'combat' && mode !== 'edit' && <GameTimeWidget .../>} — gate simple et correct, conforme à la description du ticket.",
+}, {
+  code: 'GAMETIME-WIDGET-SWALLOWS-ERRORS',
+  note: 'Vérifié bout en bout : GameTimeWidget.jsx:78-79 setError(extractErrorMessage(err,t)) + auto-disparition 4s, ligne 163 {error && <div>...}  réellement rendu. apiError.js#extractErrorMessage existe et est bien importé.',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
