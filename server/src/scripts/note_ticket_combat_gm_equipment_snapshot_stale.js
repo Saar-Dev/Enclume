@@ -1,6 +1,7 @@
-// Script à usage unique — note le correctif codé pour COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE (session
-// du 2026-10-15). Statut reste 'in_progress' (pas 'resolved') : scénario réel à deux clients non
-// testé, la validation en jeu par Saar reste à faire (AGENTS.md § Clôture).
+// Script à usage unique — clôture COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE (session du 2026-10-15).
+// Saar a validé le scénario réel à deux fenêtres (MJ déclaration + Roster ouvertes ensemble,
+// permutation/grenade/quick-equip reflété en direct dans l'autre fenêtre) le jour même — clôturé en
+// 'resolved' directement, pas de statut intermédiaire.
 // Idempotent (skip si déjà noté). Lancement manuel, local, depuis la racine :
 //   node --env-file=.env server/src/scripts/note_ticket_combat_gm_equipment_snapshot_stale.js
 
@@ -28,21 +29,26 @@ fenêtres appellent ce même hook ; aucune ligne de lecture (isRanged, naturalWe
 roster) n'a eu besoin d'être modifiée, elles lisaient déjà la même variable désormais vivante. Le
 refetch manuel après quick-equip a été retiré (redondant avec l'événement déjà émis).
 
-Testé : eslint ciblé (0 erreur), build client complet (succès). Non testé : scénario réel à deux
-clients (MJ + joueur) confirmant la mise à jour en direct des deux fenêtres — à faire par Saar avant
-de clore. Détail complet : docs/JOURNAL8.md (2026-10-15).`
+Testé : eslint ciblé (0 erreur), build client complet (succès). Validé en jeu réel par Saar le
+2026-10-15 (fenêtre MJ déclaration + fenêtre Roster ouvertes ensemble, permutation/grenade/
+quick-equip reflété en direct dans l'autre fenêtre, sans recharger la carte). Détail complet :
+docs/JOURNAL8.md (2026-10-15).`
 
 async function run() {
   const code = 'COMBAT-GM-EQUIPMENT-SNAPSHOT-STALE'
   const ticket = await db('bug_tickets').where({ linked_bug_code: code }).first()
   if (!ticket) { console.log(`[SKIP] ${code} — ticket introuvable`); return }
   if ((ticket.admin_notes || '').includes(MARKER)) { console.log(`[SKIP] ${code} — déjà noté`); return }
+  const admin = await db('users').where({ role: 'admin' }).first('id')
+  if (!admin) throw new Error('Aucun compte admin trouvé.')
   await db('bug_tickets').where({ id: ticket.id }).update({
-    status: 'in_progress',
+    status: 'resolved',
+    reviewed_by: admin.id,
+    reviewed_at: db.fn.now(),
     admin_notes: `${ticket.admin_notes || ''}\n${NOTE}`.trim(),
     updated_at: db.fn.now(),
   })
-  console.log(`[OK] ${code} — note ajoutée, statut -> in_progress`)
+  console.log(`[OK] ${code} — note ajoutée, statut -> resolved`)
 }
 
 run().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1) })
