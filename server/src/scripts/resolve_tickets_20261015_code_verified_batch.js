@@ -134,6 +134,9 @@ VERIFIED.push({
 }, {
   code: 'WIZ31',
   note: "Vérifié par lecture : WizardCreation.jsx:463-465 — body a bien overflowY:'auto', minHeight:0 (plus overflow:'hidden' sans minHeight:0) ; step6/step6Sheet aussi corrigés par précaution. Conforme exactement à la note existante.",
+}, {
+  code: 'WIZ38-UNDOFREE1',
+  note: 'Vérifié par lecture : CareersAllocator.jsx:67-72/302-305/400-404 — floorIsPaid/isReservedUnlearned bien en place, empêche de rejouer gratuitement le déblocage du plancher -3. Pas de test dédié, mais même mécanisme déjà validé par relecture par Saar lui-même ce soir en clôturant WIZ38 (ticket parent, resolve_ticket_wiz38_close.js).',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
