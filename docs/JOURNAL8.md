@@ -11634,3 +11634,31 @@ retirée n'avait aucun test dédié).
 **Non testé** : aucun — pure suppression de code mort, pas de scénario réel à dérouler.
 **Données** : aucune (pas de migration, pas d'effet runtime).
 **Retour arrière** : `git revert` du commit.
+
+## Session (Dev) — 2026-10-15 — MAP-SCALE-NO-AUTHORITY : fuite de données corrigée, question d'autorité laissée ouverte
+
+Ticket à deux volets distincts : (1) `battlemaps.scale_label` jamais lue (2) `surface_data.
+metersPerCell` effacé à chaque sauvegarde de l'éditeur — `normalizeSurfaceData` (`surfaceCore.js`)
+est une liste FERMÉE de clés, `metersPerCell` n'y figurait pas. Même piège déjà vécu une fois pour
+les décorations murales (`PLAN_EDITEUR_CARTE.md §7`).
+
+**Fix (volet 2 seulement — correctif ponctuel, sûr, aucune décision requise)** : `metersPerCell`
+ajouté à la liste préservée de `normalizeSurfaceData`, préservé tel quel (`data.metersPerCell`,
+`undefined` si absent) — **aucun défaut inventé ici** : l'autorité du défaut 1,5 m/case reste
+exclusivement dans `shared/world/surfaceDocument.js#toWorldDocument` (`.claude/rules/world.md`,
+« ne jamais enfouir cette constante dans un calcul métier »). Aucun effet visible aujourd'hui
+(personne n'écrit encore ce champ) — corrige la fuite avant que la première fonctionnalité d'échelle
+par carte ne la découvre à ses dépens.
+
+**Hors périmètre, volontairement** : le volet 1 (`scale_label` mort, quelle autorité d'échelle
+choisir — par carte ? globale ?) reste une question de conception, pas un correctif ponctuel —
+laissé ouvert pour Saar, le ticket reste `in_progress`.
+
+**Testé** : `node --check` (0 erreur), nouveau fichier `client/src/lib/surfaceCore.test.mjs` (3
+tests purs : préservation, pas de défaut local inventé, entrée invalide sans erreur), suite
+transverse `surfaceData.test.mjs` 61/61 (zéro régression), `eslint` (0 erreur), `npm run build`
+client (succès).
+**Non testé** : scénario réel navigateur — sans objet tant que rien n'écrit `metersPerCell` (volet 1
+non tranché).
+**Données** : aucune (champ optionnel du document JSON `surface_data`, pas de migration).
+**Retour arrière** : `git revert` du commit.

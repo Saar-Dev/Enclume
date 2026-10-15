@@ -66,6 +66,13 @@ export function normalizeSurfaceData(data) {
     version: Math.max(SURFACE_DATA_VERSION, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight,
+    // MAP-SCALE-NO-AUTHORITY — préservé tel quel (pas de défaut inventé ici : l'autorité du défaut
+    // 1,5 m/case vit dans shared/world/surfaceDocument.js#toWorldDocument, `.claude/rules/world.md`
+    // « ne jamais enfouir cette constante dans un calcul métier »). Avant ce correctif, cette liste
+    // fermée de clés l'effaçait silencieusement à chaque sauvegarde de l'éditeur (aucun effet visible
+    // aujourd'hui, personne ne l'écrit encore — mais la première fonctionnalité qui l'écrira l'aurait
+    // vu disparaître, même piège déjà vécu une fois pour les décorations murales).
+    metersPerCell: data.metersPerCell,
     rooms,
     floors: data.floors && typeof data.floors === 'object' && !Array.isArray(data.floors) ? data.floors : {},
     walls: data.walls && typeof data.walls === 'object' && !Array.isArray(data.walls) ? data.walls : {},
