@@ -65,6 +65,15 @@ VERIFIED.push({
 }, {
   code: 'STUN-DURATION-CARD-SUCCESS-BADGE',
   note: "Vérifié par lecture : MessageRendererRegistry.jsx:312/314/348 — hasOutcome = msg.cardType !== 'duration' masque bien le badge et la teinte succès/échec pour une carte de valeur (durée d'étourdissement), fix toujours en place.",
+}, {
+  code: 'PLAYER-CLIENT-403-PNJ-WOUNDS',
+  note: 'Vérifié par lecture : useCharacterSocket.js:30/38/46 — les 3 handlers WOUND_* (added/updated/removed) gardent bien woundsByCharId[characterId] === undefined avant de refetch, même patron déjà en place pour l\'inventaire. Fix toujours en place.',
+}, {
+  code: 'COMBAT-WOUNDS-403-PNJ',
+  note: 'Même correctif que PLAYER-CLIENT-403-PNJ-WOUNDS (commit b31156ec, même garde useCharacterSocket.js:30/38/46) — vérifié identiquement.',
+}, {
+  code: 'DRONE-INTEGRITY-LOSS-PER-HIT-RAW',
+  note: 'node --env-file=.env --test socketCombatHelpers.droneIntegrity.test.mjs relancé : 4/4 verts, dont le scénario RAW exact (coup léger sans perte, 1ère Avarie mortelle -1, 2e Avarie mortelle sans perte supplémentaire, destruction).',
 })
 
 // Ticket cluster (cluster_label, pas linked_bug_code) — même MARKER, même boucle.
