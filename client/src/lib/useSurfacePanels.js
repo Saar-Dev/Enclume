@@ -158,10 +158,23 @@ export function useSurfacePanels({ surfaceData, surfaceDataRef, surfaceTool, onS
     const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
       && surfaceTool?.connectorType === 'door'
       && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
+    // Même exception que la porte ci-dessus, pour le même motif : poser un décor (mode 'decal',
+    // PLAN_DECALS.md) reste ancré au mur déjà sélectionné dans ce panneau — le fermer au moment même
+    // où l'outil tampon s'active (clic sur une vignette) cachait la section Décoration pendant toute
+    // la pose, et comme rien ne la rouvrait au retour en 'select' (Échap), ça ressemblait à une
+    // sortie complète du panneau alors que la sélection de mur, elle, n'avait jamais bougé (bug
+    // trouvé par Saar, 2026-10-15).
+    const placingDecalOnSelectedWall = surfaceTool?.mode === 'decal'
+      && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
     // Remodeler (§13.4, PLAN_WORLD_BUILDER_REWORK.md) est un sous-outil du panneau Salle, pas un
     // mode de sidebar indépendant : le panneau doit rester ouvert pendant qu'on peint les cases,
     // même principe que l'exception porte ci-dessus (toujours la même salle sélectionnée).
-    if (surfaceTool?.mode === 'select' || surfaceTool?.mode === 'reshape-room' || placingDoorOnSelectedWall) return
+    if (
+      surfaceTool?.mode === 'select'
+      || surfaceTool?.mode === 'reshape-room'
+      || placingDoorOnSelectedWall
+      || placingDecalOnSelectedWall
+    ) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSurfaceRoomPanel(null)
     setSurfaceWallPanel(null)

@@ -240,6 +240,31 @@ export default function SurfaceWallPanel({
             </div>
           )}
 
+          <label style={S.colorField}>
+            <span style={S.label}>{t('surfaceWallPanel.decalColorLabel')}</span>
+            <input
+              type="color"
+              value={decalColor}
+              onChange={event => onPatch?.({ decalColor: event.target.value })}
+              style={S.colorInput}
+            />
+            <input
+              type="text"
+              value={tool.decalColor || decalColor}
+              onChange={event => onPatch?.({ decalColor: event.target.value })}
+              style={S.input}
+            />
+          </label>
+
+          <label style={S.checkboxField}>
+            <input
+              type="checkbox"
+              checked={!!tool.decalMirror}
+              onChange={event => onPatch?.({ decalMirror: event.target.checked })}
+            />
+            <span style={S.label}>{t('surfaceWallPanel.decalMirrorLabel')}</span>
+          </label>
+
           {Object.entries(decalGroups).map(([catKey, group]) => (
             <div key={catKey} style={S.field}>
               <span style={S.label}>{group.label}</span>
@@ -265,31 +290,6 @@ export default function SurfaceWallPanel({
             </div>
           ))}
           {!canPlaceDecal && <p style={S.hint}>{t('surfaceWallPanel.addDecalHint')}</p>}
-
-          <label style={S.colorField}>
-            <span style={S.label}>{t('surfaceWallPanel.decalColorLabel')}</span>
-            <input
-              type="color"
-              value={decalColor}
-              onChange={event => onPatch?.({ decalColor: event.target.value })}
-              style={S.colorInput}
-            />
-            <input
-              type="text"
-              value={tool.decalColor || decalColor}
-              onChange={event => onPatch?.({ decalColor: event.target.value })}
-              style={S.input}
-            />
-          </label>
-
-          <label style={S.checkboxField}>
-            <input
-              type="checkbox"
-              checked={!!tool.decalMirror}
-              onChange={event => onPatch?.({ decalMirror: event.target.checked })}
-            />
-            <span style={S.label}>{t('surfaceWallPanel.decalMirrorLabel')}</span>
-          </label>
         </FloatingPanelSection>
 
         <FloatingPanelSection title={t('surfaceWallPanel.shapeSection')} defaultOpen storageKey="enclume.surfaceWallPanel.section.shape">
