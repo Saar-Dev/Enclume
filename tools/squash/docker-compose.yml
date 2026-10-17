@@ -1,0 +1,13 @@
+# [SQUASH v3 — 2026-10-17] PostgreSQL 16 jetable pour le pipeline squash.
+# Le volume est anonyme : « docker compose down -v » repart d'une base VIERGE.
+# Port borné à 127.0.0.1 : aucune exposition réseau extérieure.
+name: enclume-squash
+services:
+  pg:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: enclume
+      POSTGRES_PASSWORD: squashpass
+      POSTGRES_DB: enclume_squash
+    ports:
+      - "127.0.0.1:55432:5432"
