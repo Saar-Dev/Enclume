@@ -1,5 +1,20 @@
 // 310_bug_tickets_seed.js — seed bug_tickets (57 lignes, source: vtt, reporter_id/reviewed_by remappés vers le nouvel id admin aba6a66b-9cfd-4909-951b-9971ccee402f — ancien id vtt ced7c308-4366-4388-90df-9d80d6de9b20, même personne (d.lebosse@protonmail.com), aucun autre auteur trouvé)
 export const up = async (knex) => {
+    // Test « base vierge » (audit §6.1) : le compte admin référencé par tous les
+  // tickets n'était créé par AUCUNE migration (il naît à l'inscription via
+  // l'appli) — sur base vierge, la FK bug_tickets_reporter_id_foreign (198)
+  // rejetait tout le seed. On crée donc le compte AVANT les tickets, en
+  // idempotent (ON CONFLICT DO NOTHING : ne touche jamais à un compte existant).
+  await knex("users")
+    .insert({
+      "id": "aba6a66b-9cfd-4909-951b-9971ccee402f",
+      "email": "d.lebosse@protonmail.com",
+      "username": "Saar (admin)",
+      "password_hash": "$2b$12$i49HsBtQJDC8Ty8xyUahjOKfj/VkzK3aQXUJHtYufQTl6vbWtroLC",
+      "role": "admin",
+    })
+    .onConflict()
+    .ignore()
   await knex("bug_tickets").insert([
     { "id": "77e630b2-e112-4219-894f-1982939633b3", "reporter_id": "aba6a66b-9cfd-4909-951b-9971ccee402f", "origin": "admin", "category": "bug", "domain": "combat", "title": "test", "description": "tergdfgfdg", "context": "{\"path\":\"/dashboard\",\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0\"}", "status": "wont_fix", "priority": null, "cluster_label": null, "linked_bug_code": null, "admin_notes": null, "reviewed_by": "aba6a66b-9cfd-4909-951b-9971ccee402f", "reviewed_at": new Date("2026-08-12T12:54:48.186Z"), "created_at": new Date("2026-08-12T12:35:26.096Z"), "updated_at": new Date("2026-08-12T12:54:48.186Z") },
     { "id": "4f23e09d-b2c5-4047-8b86-a2feb6fc81ce", "reporter_id": "aba6a66b-9cfd-4909-951b-9971ccee402f", "origin": "admin", "category": "bug", "domain": "combat", "title": "Couverture totale (tir) inexistante", "description": "« Couverture totale » (tir) n'existe nulle part, ni côté client ni côté serveur.", "context": null, "status": "triaged", "priority": "low", "cluster_label": "Cluster A", "linked_bug_code": "COUVERTURE_TOTALE", "admin_notes": "À regrouper avec le futur chantier Tir en aveugle (trouvé en clôturant TIRIMP).", "reviewed_by": null, "reviewed_at": null, "created_at": new Date("2026-08-12T12:41:25.741Z"), "updated_at": new Date("2026-08-12T12:41:25.741Z") },
